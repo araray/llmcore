@@ -180,6 +180,96 @@ graph TD
 *   **Utilities (`llmcore.utils`):**
     *   Helper functions (e.g., async utilities, data validation helpers).
 
+### **Proposed project directory tree structure**
+
+```bash
+llmcore/
+├── .gitignore          # Git ignore file
+├── LICENSE             # Project license file (e.g., MIT)
+├── README.md           # Project description, usage, setup
+├── pyproject.toml      # Build system configuration, dependencies, project metadata
+├── docs/               # Documentation files (Sphinx, MkDocs, etc.)
+│   ├── conf.py         # Sphinx config (example)
+│   ├── index.rst       # Main doc page (example)
+│   └── ...
+├── examples/           # Example scripts showing how to use the library
+│   ├── simple_chat.py
+│   ├── session_chat.py
+│   ├── streaming_chat.py
+│   └── rag_example.py
+├── src/
+│   └── llmcore/        # Main library source code
+│       ├── __init__.py # Makes llmcore a package, exports main class/functions
+│       ├── api.py      # Could contain the main LLMCore class definition
+│       ├── config/     # Default configurations
+│       │   ├── __init__.py
+│       │   └── default_config.toml
+│       ├── context/    # Context management logic
+│       │   ├── __init__.py
+│       │   └── manager.py # ContextManager class
+│       ├── embedding/  # Embedding model handling
+│       │   ├── __init__.py
+│       │   ├── base.py   # BaseEmbeddingModel ABC
+│       │   ├── sentence_transformer.py # SentenceTransformerEmbedding
+│       │   ├── openai.py # OpenAIEmbedding
+│       │   └── google.py # GoogleAIEmbedding
+│       ├── exceptions.py # Custom exception classes
+│       ├── models.py     # Data models (Message, ChatSession, ContextDocument, Role)
+│       ├── providers/    # LLM Provider implementations
+│       │   ├── __init__.py
+│       │   ├── base.py   # BaseProvider ABC
+│       │   ├── openai_provider.py
+│       │   ├── anthropic_provider.py
+│       │   ├── ollama_provider.py
+│       │   └── gemini_provider.py
+│       ├── sessions/     # Session management logic
+│       │   ├── __init__.py
+│       │   └── manager.py # SessionManager class
+│       ├── storage/      # Storage backend implementations
+│       │   ├── __init__.py
+│       │   ├── base_session.py # BaseSessionStorage ABC
+│       │   ├── base_vector.py  # BaseVectorStorage ABC
+│       │   ├── json_session.py
+│       │   ├── sqlite_session.py
+│       │   ├── postgres_storage.py # Could implement both session & vector
+│       │   └── chromadb_vector.py
+│       └── utils/        # Utility functions
+│           ├── __init__.py
+│           └── async_utils.py # Example utility module
+└── tests/              # Unit and integration tests
+    ├── __init__.py
+    ├── conftest.py     # Pytest fixtures
+    ├── test_api.py     # Tests for the main LLMCore class/API
+    ├── context/
+    │   ├── __init__.py
+    │   └── test_manager.py
+    ├── embedding/
+    │   ├── __init__.py
+    │   └── test_embedding_models.py
+    ├── providers/
+    │   ├── __init__.py
+    │   └── test_providers.py # Test individual providers
+    ├── sessions/
+    │   ├── __init__.py
+    │   └── test_manager.py
+    └── storage/
+        ├── __init__.py
+        └── test_storage_backends.py # Test session and vector stores
+```
+
+**Explanation:**
+
+1.  **Root Directory:** Contains project-level files (`pyproject.toml`, `README.md`, `LICENSE`, `.gitignore`).
+2.  **`src/llmcore/`:** The actual Python package source code resides here, following the `src` layout pattern.
+3.  **`src/llmcore/__init__.py`:** Marks the directory as a package and is the place to expose the main public API elements (like the `LLMCore` class, core models, and exceptions) for easy import (`from llmcore import LLMCore`).
+4.  **Subdirectories within `src/llmcore/`:** Each major component (providers, storage, context, embedding, config, models, exceptions, utils) gets its own subdirectory, promoting modularity.
+5.  **Base Classes:** Abstract base classes (`base.py`, `base_session.py`, `base_vector.py`, `base_embedding.py`) are defined within their respective modules to establish interfaces.
+6.  **Implementations:** Concrete implementations reside in separate files within their module directories (e.g., `openai_provider.py`, `json_session.py`).
+7.  **`config/`:** Holds default configuration files packaged with the library.
+8.  **`tests/`:** Located at the root, parallel to `src/`. It mirrors the source structure to make finding tests easy. `conftest.py` holds shared pytest fixtures.
+9.  **`docs/`:** Standard location for documentation source files.
+10. **`examples/`:** Provides practical scripts demonstrating library usage.
+
 ## 4. Core Components Deep Dive
 
 ### 4.1. Configuration (`confy` Integration)

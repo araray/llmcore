@@ -1,0 +1,177 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmcore"
+version = "0.1.0"
+description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" } # Assuming MIT, can be changed
+authors = [
+    { name = "Araray Velho", email = "araray@gmail.com" }
+]
+keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp"]
+
+# Core dependencies for llmcore
+dependencies = [
+    "confy>=0.2.1", # From the provided confy.full.1746657427.txt
+    "aiohttp>=3.8.0", # As specified
+    "python-dotenv>=1.0.0", # Common version, can be adjusted
+    "typing_extensions>=4.0.0", # For older Python 3.8/3.9 compatibility with newer type hints
+    "pydantic>=2.0.0", # For data models as per spec (section 4.7)
+    # Provider SDKs will be added as optional dependencies or direct ones as needed
+    # For Phase 1, Ollama provider uses aiohttp. Others will be added in Phase 2.
+]
+
+[project.optional-dependencies]
+# Dependencies for specific providers
+openai = ["openai>=1.0.0", "tiktoken>=0.4.0"]
+anthropic = ["anthropic>=0.20.0"] # Check latest stable version
+gemini = ["google-generativeai>=0.4.0"] # Check latest stable version
+# Ollama uses aiohttp (core dependency)
+
+# Dependencies for specific storage backends
+sqlite = [] # sqlite3 is part of standard library
+postgres = ["psycopg2-binary>=2.9.0", "pgvector>=0.2.0"] # pgvector client might be different
+chromadb = ["chromadb-client>=0.4.0"] # Check latest stable version
+
+# Dependencies for specific embedding models
+sentence_transformers = ["sentence-transformers>=2.2.0"] # Requires torch/tensorflow/onnx
+# OpenAI and Google embeddings are usually part of their main SDKs (openai, google-generativeai)
+
+# MCP Support
+mcp = ["modelcontextprotocol>=0.1.0"] # Placeholder, check actual package name and version
+
+# Testing dependencies
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "pytest-cov>=4.0.0", # For coverage
+    "respx>=0.20.0", # For mocking HTTP requests (useful for provider tests)
+    "ruff>=0.1.0" # For linting
+]
+
+# Development dependencies (includes testing and other tools)
+dev = [
+    "llmcore[test]", # Include test dependencies
+    "ruff", # Linter
+    "mypy>=1.0.0", # Type checker
+    "pre-commit>=3.0.0", # For git hooks
+    "tox>=4.0.0" # For testing in different environments
+]
+
+all = [ # To install all optional dependencies
+    "llmcore[openai]",
+    "llmcore[anthropic]",
+    "llmcore[gemini]",
+    "llmcore[sqlite]",
+    "llmcore[postgres]",
+    "llmcore[chromadb]",
+    "llmcore[sentence_transformers]",
+    "llmcore[mcp]",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/araray/llmcore"
+Repository = "https://github.com/araray/llmcore"
+Documentation = "https://araray.github.io/llmcore"
+Issues = "https://github.com/araray/llmcore/issues"
+
+[project.scripts]
+# If llmcore will have a CLI entry point (e.g., for management tasks)
+# llmcore-cli = "llmcore.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]  # Specifies that packages are under the 'src' directory
+
+[tool.setuptools.package_data]
+llmcore = ["config/default_config.toml"] # To include the default config file
+
+# --- Ruff Linter Configuration ---
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "*.egg-info",
+]
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # Pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+    "A",  # flake8-builtins
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501", # Line too long (handled by black)
+    "B008", # Do not perform function calls in argument defaults.
+    "C901", # Too complex.
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# --- MyPy Type Checker Configuration ---
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false # Allow untyped defs in tests
+
+# --- Pytest Configuration ---
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=src/llmcore --cov-report=term-missing --cov-report=xml"
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto" # For pytest-asyncio
+
+# --- Coverage Configuration ---
+[tool.coverage.run]
+source = ["src/llmcore"]
+omit = [
+    "src/llmcore/__main__.py", # If a main for CLI
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
