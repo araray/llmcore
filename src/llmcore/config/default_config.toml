@@ -1,3 +1,4 @@
+# src/llmcore/config/default_config.toml
 # Default configuration structure for LLMCore
 # This file defines the standard settings and can be overridden by user configurations,
 # environment variables, or direct overrides in code.
@@ -9,8 +10,8 @@ default_provider = "ollama"
 
 # Default embedding model for RAG (Retrieval Augmented Generation).
 # This can be a local path to a sentence-transformers model (e.g., "all-MiniLM-L6-v2")
-# or an identifier for a service-based model (e.g., "openai:text-embedding-ada-002").
-default_embedding_model = "all-MiniLM-L6-v2"
+# or an identifier for a service-based model (e.g., "openai:text-embedding-ada-002", "google:models/embedding-001").
+default_embedding_model = "all-MiniLM-L6-v2" # A common sentence-transformer model
 
 # Global flag to enable/disable Model Context Protocol (MCP) formatting.
 # This can be overridden on a per-provider basis in their respective sections.
@@ -111,6 +112,8 @@ log_level = "INFO"
   # Configuration for specific embedding models if they require special setup,
   # like API keys for service-based ones. The 'llmcore.default_embedding_model'
   # setting determines which model is used by default.
+  # If 'llmcore.default_embedding_model' is like "openai:text-embedding-3-small",
+  # then settings from [embedding.openai] might be used.
 
   [embedding.openai]
   # API Key for OpenAI embeddings (if different from chat or if using only embeddings).
