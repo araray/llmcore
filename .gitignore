@@ -18,6 +18,7 @@ tree.txt
 #dev-docs/
 grammars/*
 semantiscan/core/chunking/antlr_parsers/*/
+.python-version
 
 # Distribution / packaging
 .Python

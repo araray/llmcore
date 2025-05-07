@@ -17,7 +17,7 @@ keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp"]
 
 # Core dependencies for llmcore
 dependencies = [
-    "confy>=0.2.1", # From the provided confy.full.1746657427.txt
+    "confy>=0.2.1",
     "aiohttp>=3.8.0", # As specified
     "python-dotenv>=1.0.0", # Common version, can be adjusted
     "typing_extensions>=4.0.0", # For older Python 3.8/3.9 compatibility with newer type hints
