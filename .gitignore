@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # localflow testing/dev artifacts and other uninmportant stuff
-src
+._src
 old-docs/
 .localflow/
 next/
