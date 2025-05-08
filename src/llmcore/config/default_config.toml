@@ -56,7 +56,7 @@ log_level = "INFO"
   [providers.gemini]
   # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_GEMINI_API_KEY
   api_key = "" # Leave empty to rely on environment variable
-  default_model = "gemini-1.5-pro-latest"
+  default_model = "gemini-2.0-flash-lite"
   timeout = 60 # Timeout in seconds for API calls
   # Add other Gemini specific settings if needed (e.g., safety settings).
   # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" }
