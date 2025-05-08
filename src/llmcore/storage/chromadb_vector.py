@@ -12,6 +12,7 @@ import os
 import pathlib
 from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING # Added TYPE_CHECKING
 
+
 # Import chromadb client library conditionally
 try:
     import chromadb
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     # This block is only evaluated by type checkers, not at runtime
     if chromadb_available:
-        from chromadb.api.client import Client as ActualChromaClientType
+        from chromadb.Client import Client as ActualChromaClientType
     else:
         ActualChromaClientType = Any # Fallback type hint for checker if import failed
 

@@ -1100,10 +1100,10 @@ if __name__ == "__main__":
 
 ## 8 Technology Stack Summary
 
-*   **Core Library:** Python 3.8+ (Asyncio heavily used)
+*   **Core Library:** Python 3.11+ (Asyncio heavily used)
 *   **Configuration:** `confy`
-*   **LLM Interactions:** `aiohttp`, `anthropic` SDK, `openai` SDK, `google-generativeai`.
-*   **Vector Stores:** `chromadb-client`, `psycopg2-binary` (for PostgreSQL), `pgvector` (Python client or direct SQL).
+*   **LLM Interactions:** `ollama`, `anthropic` SDK, `openai` SDK, `google-generativeai`.
+*   **Vector Stores:** `chromadb-client`, `psycopg-binary` (for PostgreSQL), `pgvector` (Python client or direct SQL).
 *   **Embedding Models:** `sentence-transformers`. (Requires PyTorch/TensorFlow/ONNX Runtime depending on model).
 *   **MCP Support:** `modelcontextprotocol` (Python SDK).
 *   **Type Hinting:** Standard Python type hints. Pydantic (optional, for models/config validation).

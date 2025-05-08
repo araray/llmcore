@@ -8,7 +8,7 @@ based on configuration.
 
 import asyncio
 import logging
-from typing import Dict, Any, Type, Optional
+from typing import Dict, Any, Type, Optional, List
 
 # Assume ConfyConfig type for hinting
 try:

@@ -13,8 +13,8 @@ from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
 
 # Use the official google-generativeai library
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import GenerationConfig, ContentDict, HarmCategory, HarmBlockThreshold
+    import google.genai as genai
+    from google.genai.types import GenerationConfig, ContentDict, HarmCategory, HarmBlockThreshold
     # Import specific exceptions if available, otherwise use a general one
     try:
         from google.api_core import exceptions as google_exceptions
