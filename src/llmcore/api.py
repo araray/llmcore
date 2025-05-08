@@ -27,7 +27,7 @@ from .context.manager import ContextManager
 from .providers.manager import ProviderManager
 from .providers.base import BaseProvider
 # Embedding
-from .embedding.manager import EmbeddingManager # Import EmbeddingManager
+from .embedding.manager import EmbeddingManager
 
 # confy and tomli/tomllib
 try:
@@ -61,11 +61,10 @@ class LLMCore:
     _provider_manager: ProviderManager
     _session_manager: SessionManager
     _context_manager: ContextManager
-    _embedding_manager: EmbeddingManager # Added EmbeddingManager instance variable
+    _embedding_manager: EmbeddingManager
 
     def __init__(self):
         """Private constructor. Use `create` classmethod for async initialization."""
-        # Initialization logic moved to the `create` classmethod
         pass
 
     @classmethod
@@ -108,12 +107,11 @@ class LLMCore:
 
             default_config_dict = {}
             try:
-                # Load default config using importlib.resources
                 if hasattr(importlib.resources, 'files'): # Python 3.9+
                     default_config_path_obj = importlib.resources.files('llmcore.config').joinpath('default_config.toml')
                     with default_config_path_obj.open('rb') as f: # type: ignore
                         default_config_dict = tomllib.load(f)
-                else: # Fallback for older Python versions (less likely given requires-python >= 3.9)
+                else: # Fallback unlikely given requires-python >= 3.9
                     default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8')
                     default_config_dict = tomllib.loads(default_config_content)
             except Exception as e:
@@ -130,71 +128,59 @@ class LLMCore:
         except Exception as e:
             raise ConfigError(f"Configuration initialization failed: {e}")
 
-        # --- Step 2: Initialize Provider Manager ---
+        # --- Initialize Managers ---
+        # Provider Manager
         try:
             instance._provider_manager = ProviderManager(instance.config)
-            logger.info("ProviderManager initialized successfully.")
+            logger.info("ProviderManager initialized.")
         except (ConfigError, ProviderError) as e:
             logger.error(f"Failed to initialize ProviderManager: {e}", exc_info=True)
             raise
         except Exception as e:
-            logger.error(f"Unexpected error initializing ProviderManager: {e}", exc_info=True)
             raise LLMCoreError(f"ProviderManager initialization failed: {e}")
 
-        # --- Step 3: Initialize Storage Manager ---
+        # Storage Manager
         try:
             instance._storage_manager = StorageManager(instance.config)
-            # Initialize the actual storage backends asynchronously
             await instance._storage_manager.initialize_storages()
-            logger.info("StorageManager initialized successfully.")
+            logger.info("StorageManager initialized.")
         except (ConfigError, StorageError) as e:
             logger.error(f"Failed to initialize StorageManager: {e}", exc_info=True)
             raise
         except Exception as e:
-            logger.error(f"Unexpected error initializing StorageManager: {e}", exc_info=True)
             raise LLMCoreError(f"StorageManager initialization failed: {e}")
 
-        # --- Step 4: Initialize Session Manager ---
+        # Session Manager
         try:
-            # Pass the initialized session storage from the manager
             session_storage = instance._storage_manager.get_session_storage()
             instance._session_manager = SessionManager(session_storage)
-            logger.info("SessionManager initialized successfully.")
-        except StorageError as e: # Catch if session storage wasn't configured/initialized
-             logger.error(f"Cannot initialize SessionManager: {e}")
+            logger.info("SessionManager initialized.")
+        except StorageError as e:
              raise LLMCoreError(f"SessionManager initialization failed due to storage issue: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error initializing SessionManager: {e}", exc_info=True)
             raise LLMCoreError(f"SessionManager initialization failed: {e}")
 
-        # --- Step 5: Initialize Embedding Manager ---
+        # Embedding Manager
         try:
             instance._embedding_manager = EmbeddingManager(instance.config)
-            # Initialize the actual embedding model asynchronously
             await instance._embedding_manager.initialize_embedding_model()
-            logger.info("EmbeddingManager initialized successfully.")
+            logger.info("EmbeddingManager initialized.")
         except (ConfigError, EmbeddingError) as e:
              logger.error(f"Failed to initialize EmbeddingManager: {e}", exc_info=True)
-             # If embedding fails, RAG won't work, but core chat might still be usable.
-             # Decide whether to raise or just log a warning. Raising for clarity.
-             raise
+             raise # Embedding failure is critical for RAG, raise it.
         except Exception as e:
-            logger.error(f"Unexpected error initializing EmbeddingManager: {e}", exc_info=True)
             raise LLMCoreError(f"EmbeddingManager initialization failed: {e}")
 
-
-        # --- Step 6: Initialize Context Manager ---
+        # Context Manager
         try:
-            # Pass ProviderManager, StorageManager, and EmbeddingManager
             instance._context_manager = ContextManager(
                 config=instance.config,
                 provider_manager=instance._provider_manager,
-                storage_manager=instance._storage_manager, # Pass StorageManager
-                embedding_manager=instance._embedding_manager # Pass EmbeddingManager
+                storage_manager=instance._storage_manager,
+                embedding_manager=instance._embedding_manager
             )
-            logger.info("ContextManager initialized successfully.")
+            logger.info("ContextManager initialized.")
         except Exception as e:
-            logger.error(f"Unexpected error initializing ContextManager: {e}", exc_info=True)
             raise LLMCoreError(f"ContextManager initialization failed: {e}")
 
         logger.info("LLMCore asynchronous initialization complete.")
@@ -212,9 +198,9 @@ class LLMCore:
         stream: bool = False,
         save_session: bool = True,
         # RAG parameters
-        enable_rag: bool = False, # Now functional
-        rag_retrieval_k: Optional[int] = None, # Functional
-        rag_collection_name: Optional[str] = None, # Functional
+        enable_rag: bool = False,
+        rag_retrieval_k: Optional[int] = None,
+        rag_collection_name: Optional[str] = None,
         # Provider specific arguments (e.g., temperature, max_tokens for response)
         **provider_kwargs
     ) -> Union[str, AsyncGenerator[str, None]]:
@@ -254,7 +240,7 @@ class LLMCore:
         # --- Provider Selection ---
         try:
             active_provider = self._provider_manager.get_provider(provider_name)
-            provider_actual_name = active_provider.get_name() # Get actual name used
+            provider_actual_name = active_provider.get_name()
         except (ConfigError, ProviderError) as e:
              logger.error(f"Failed to get provider '{provider_name or 'default'}': {e}")
              raise
@@ -277,15 +263,13 @@ class LLMCore:
             logger.debug(f"User message '{user_msg_obj.id}' added to session '{chat_session.id}'")
 
             # 2. Prepare context using ContextManager
-            # ContextManager now handles RAG internally if enabled
             context_payload: List[Message] = await self._context_manager.prepare_context(
                 session=chat_session,
                 provider_name=provider_actual_name,
                 model_name=target_model,
-                rag_enabled=enable_rag, # Pass RAG flag
-                rag_k=rag_retrieval_k, # Pass RAG parameters
+                rag_enabled=enable_rag,
+                rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
-                # Pass MCP flag if implemented
             )
             logger.info(f"Prepared context with {len(context_payload)} messages for model '{target_model}'.")
 
@@ -297,12 +281,14 @@ class LLMCore:
                 **provider_kwargs
             )
 
-            # 4. Process response and save session (Stream/Non-Stream logic remains similar)
+            # 4. Process response and save session
             if stream:
                 # --- Streaming Path ---
                 logger.debug(f"Processing stream response from provider '{provider_actual_name}'")
+                # Ensure the generator type hint matches what the wrapper expects
+                provider_stream: AsyncGenerator[Dict[str, Any], None] = response_data_or_generator # type: ignore
                 return self._stream_response_wrapper(
-                    response_data_or_generator, # type: ignore
+                    provider_stream,
                     active_provider,
                     chat_session,
                     save_session
@@ -325,9 +311,9 @@ class LLMCore:
                 return full_response_content
 
         except (SessionNotFoundError, SessionStorageError, ProviderError, ContextLengthError,
-                ConfigError, EmbeddingError, VectorStorageError, MCPError) as e: # Added RAG errors
+                ConfigError, EmbeddingError, VectorStorageError, MCPError) as e:
              logger.error(f"Chat failed: {e}")
-             raise # Propagate specific, known errors
+             raise
         except Exception as e:
              logger.error(f"Unexpected error during chat execution: {e}", exc_info=True)
              raise LLMCoreError(f"Chat execution failed: {e}")
@@ -344,7 +330,8 @@ class LLMCore:
         full_response_content = ""
         error_occurred = False
         provider_name = provider.get_name()
-        session_id = session.id if session.id else None # Get ID for saving check
+        # Use session.id directly; load_or_create ensures it exists even for temp sessions
+        session_id_for_saving = session.id if save_session else None
 
         try:
             async for chunk_dict in provider_stream:
@@ -352,43 +339,48 @@ class LLMCore:
                     logger.warning(f"Received non-dict chunk in stream: {chunk_dict}")
                     continue
 
+                # Extract delta and check for errors/finish reasons within the chunk
                 text_delta = self._extract_delta_content(chunk_dict, provider)
+                error_message = chunk_dict.get('error')
+                # Adjust finish reason check based on provider specifics if needed
+                finish_reason = chunk_dict.get('finish_reason')
 
                 if text_delta:
                     full_response_content += text_delta
                     yield text_delta
 
-                # Check for potential error messages within the stream
-                if chunk_dict.get('error'):
-                     error_msg = f"Error during stream: {chunk_dict['error']}"
+                if error_message:
+                     error_msg = f"Error during stream: {error_message}"
                      logger.error(error_msg)
                      raise ProviderError(provider_name, error_msg)
-                # Check for finish reason indicating an issue (e.g., safety)
-                finish_reason = chunk_dict.get('finish_reason')
-                if finish_reason and finish_reason not in ["stop", "length", None]: # Adjust based on provider reasons
+
+                # Check for problematic finish reasons
+                if finish_reason and finish_reason not in ["stop", "length", None]:
                      error_msg = f"Stream stopped due to reason: {finish_reason}"
                      logger.warning(error_msg)
-                     # Optionally raise or just stop yielding
-                     raise ProviderError(provider_name, error_msg)
-
+                     raise ProviderError(provider_name, error_msg) # Stop the stream on problematic finish
 
         except Exception as e:
             error_occurred = True
             logger.error(f"Error processing stream from {provider_name}: {e}", exc_info=True)
-            if isinstance(e, ProviderError): raise # Re-raise provider errors
+            if isinstance(e, ProviderError): raise
             raise ProviderError(provider_name, f"Stream processing error: {e}")
         finally:
             logger.debug(f"Stream from {provider_name} finished.")
-            if save_session and session_id:
+            # Save only if save_session was True and a session_id exists (persistent session)
+            if save_session and session.id and not session.id.startswith("temp_"): # Check if it's not a temporary ID if applicable
                 if full_response_content or not error_occurred:
                     assistant_msg = session.add_message(
                         message_content=full_response_content, role=Role.ASSISTANT
                     )
-                    logger.debug(f"Assistant message '{assistant_msg.id}' (length: {len(full_response_content)}) added to session '{session_id}' after stream.")
+                    logger.debug(f"Assistant message '{assistant_msg.id}' (length: {len(full_response_content)}) added to session '{session.id}' after stream.")
                 else:
-                     logger.debug(f"No assistant message added to session '{session_id}' due to stream error or empty response.")
+                     logger.debug(f"No assistant message added to session '{session.id}' due to stream error or empty response.")
                 # Always save the session state (which includes the user message)
-                await self._session_manager.save_session(session)
+                try:
+                    await self._session_manager.save_session(session)
+                except Exception as save_e:
+                     logger.error(f"Failed to save session {session.id} after stream: {save_e}", exc_info=True)
 
 
     def _extract_delta_content(self, chunk: Dict[str, Any], provider: BaseProvider) -> str:
@@ -398,38 +390,37 @@ class LLMCore:
         try:
             if provider_name == "openai":
                 choices = chunk.get('choices', [])
-                if choices and isinstance(choices, list) and choices[0]:
-                    delta = choices[0].get('delta', {})
-                    text_delta = delta.get('content', '') or ""
+                if choices and choices[0].get('delta'):
+                    text_delta = choices[0]['delta'].get('content', '') or ""
             elif provider_name == "anthropic":
                 type = chunk.get("type")
-                if type == "content_block_delta":
-                     delta = chunk.get("delta", {})
-                     if delta.get("type") == "text_delta":
-                          text_delta = delta.get("text", "") or ""
+                if type == "content_block_delta" and chunk.get('delta', {}).get('type') == "text_delta":
+                    text_delta = chunk.get('delta', {}).get('text', "") or ""
+                # Add handling for other Anthropic stream types if necessary
             elif provider_name == "ollama":
                 # Handle official ollama library stream format
                 message_chunk = chunk.get('message', {})
-                if isinstance(message_chunk, dict):
-                     text_delta = message_chunk.get('content', '') or ""
-                # Fallback for older /generate endpoint format if needed
-                elif 'response' in chunk:
-                     text_delta = chunk.get('response', '') or ""
+                if message_chunk:
+                    text_delta = message_chunk.get('content', '') or ""
+                elif 'response' in chunk: # Fallback for older generate stream? Unlikely with new lib.
+                    text_delta = chunk.get('response', '') or ""
             elif provider_name == "gemini":
                  # Handle official google-genai stream format
+                 # The most reliable way seems to be checking the 'message' structure if present,
+                 # otherwise fallback to the OpenAI-like structure if yielded by our wrapper.
                  message_chunk = chunk.get('message', {})
-                 if isinstance(message_chunk, dict):
+                 if message_chunk and isinstance(message_chunk, dict):
                       text_delta = message_chunk.get('content', '') or ""
-                 # Fallback check on choices delta (mimicking OpenAI structure)
                  elif chunk.get('choices') and chunk['choices'][0].get('delta'):
                       text_delta = chunk['choices'][0]['delta'].get('content', '') or ""
-
+                 # Direct text attribute might exist on the raw chunk object before dict conversion,
+                 # but we standardized on dicts. If the dict conversion failed, text_delta remains "".
 
         except Exception as e:
              logger.warning(f"Error extracting delta content from {provider_name} chunk: {e}. Chunk: {chunk}")
-             text_delta = "" # Ensure empty string on error
+             text_delta = ""
 
-        return text_delta
+        return text_delta or "" # Ensure string return
 
 
     def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> str:
@@ -439,50 +430,50 @@ class LLMCore:
         try:
             if provider_name == "openai":
                 choices = response_data.get('choices', [])
-                if choices and isinstance(choices, list) and choices[0]:
-                    message_data = choices[0].get('message', {})
-                    full_response_content = message_data.get('content', '') or ""
+                if choices and choices[0].get('message'):
+                    full_response_content = choices[0]['message'].get('content', '') or ""
             elif provider_name == "anthropic":
                 content_blocks = response_data.get('content', [])
-                if content_blocks and isinstance(content_blocks, list):
-                     if content_blocks[0].get("type") == "text":
-                          full_response_content = content_blocks[0].get("text", "") or ""
+                if content_blocks and content_blocks[0].get("type") == "text":
+                     full_response_content = content_blocks[0].get("text", "") or ""
             elif provider_name == "ollama":
-                # Handle official ollama library response format
                 message_part = response_data.get('message', {})
-                if isinstance(message_part, dict):
+                if message_part:
                     full_response_content = message_part.get('content', '') or ""
-                elif 'response' in response_data: # Fallback for /generate
+                elif 'response' in response_data: # Fallback for generate? Unlikely.
                     full_response_content = response_data.get('response', '') or ""
             elif provider_name == "gemini":
-                 # Handle official google-genai response format
+                 # Handle official google-genai response format (non-streaming)
                  choices = response_data.get('choices', [])
                  if choices and choices[0].get('message'):
                       full_response_content = choices[0]['message'].get('content', '') or ""
-                 # Add other potential extraction paths if the library format differs
+                 # Add fallback if the structure differs significantly in non-streaming
 
             if not full_response_content and response_data:
                  logger.warning(f"Could not extract content from non-streaming {provider_name} response: {response_data}")
-                 full_response_content = str(response_data) # Fallback
+                 full_response_content = f"Response received, but content extraction failed. Data: {str(response_data)[:200]}..." # Fallback
 
         except Exception as e:
              logger.error(f"Error extracting full content from {provider_name} response: {e}. Response: {response_data}", exc_info=True)
-             full_response_content = f"Error: Could not parse response. {e}" # Provide error info
+             full_response_content = f"Error: Could not parse response. {e}"
 
         return full_response_content
 
 
-    # --- Session Management Methods (Delegate to SessionManager/StorageManager) ---
+    # --- Session Management Methods ---
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """Retrieves a specific chat session object (including messages)."""
         logger.debug(f"LLMCore.get_session called for session_id: {session_id}")
         try:
+            # SessionManager handles loading logic using the storage backend
+            # Allow SessionNotFoundError to propagate if session_id is specified but not found
             return await self._session_manager.load_or_create_session(session_id=session_id)
         except SessionNotFoundError:
-             return None
+             logger.warning(f"Session ID '{session_id}' not found.")
+             return None # Return None if not found, consistent with spec
         except StorageError as e:
              logger.error(f"Storage error getting session '{session_id}': {e}")
-             raise
+             raise # Re-raise storage errors
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """Lists available persistent chat sessions (metadata only)."""
@@ -504,14 +495,13 @@ class LLMCore:
             logger.error(f"Storage error deleting session '{session_id}': {e}")
             raise
 
-    # --- RAG / Vector Store Management Methods (Now Implemented) ---
-
+    # --- RAG / Vector Store Management Methods ---
     async def add_document_to_vector_store(
         self,
         content: str,
         *,
         metadata: Optional[Dict] = None,
-        doc_id: Optional[str] = None, # Allow user to provide ID
+        doc_id: Optional[str] = None,
         collection_name: Optional[str] = None
     ) -> str:
         """
@@ -538,28 +528,18 @@ class LLMCore:
         """
         logger.debug(f"Adding document to vector store (Collection: {collection_name or 'default'})...")
         try:
-            # 1. Generate embedding via EmbeddingManager
             embedding = await self._embedding_manager.generate_embedding(content)
-
-            # 2. Create ContextDocument (ID generated if not provided)
-            # Ensure metadata is a dict
             doc_metadata = metadata if metadata is not None else {}
             doc = ContextDocument(id=doc_id, content=content, embedding=embedding, metadata=doc_metadata)
-
-            # 3. Get vector storage and add document
             vector_storage = self._storage_manager.get_vector_storage()
             added_ids = await vector_storage.add_documents([doc], collection_name=collection_name)
-
             if not added_ids:
-                 # This case should ideally not happen if add_documents raises on failure
                  raise VectorStorageError("Failed to add document, no ID returned.")
-
             logger.info(f"Document '{added_ids[0]}' added to vector store collection '{collection_name or 'default'}'.")
-            return added_ids[0] # Return the actual ID used (could be generated)
-
-        except (EmbeddingError, VectorStorageError, ConfigError) as e:
+            return added_ids[0]
+        except (EmbeddingError, VectorStorageError, ConfigError, StorageError) as e:
              logger.error(f"Failed to add document to vector store: {e}")
-             raise # Re-raise specific errors
+             raise
         except Exception as e:
              logger.error(f"Unexpected error adding document: {e}", exc_info=True)
              raise VectorStorageError(f"Unexpected error adding document: {e}")
@@ -584,59 +564,42 @@ class LLMCore:
             A list of IDs assigned to the added documents.
 
         Raises:
-            EmbeddingError: If embedding generation fails for any document.
-            VectorStorageError: If adding documents to the store fails.
-            ConfigError: If vector store or embedding model is not configured/initialized.
-            ValueError: If input document format is invalid.
+            EmbeddingError, VectorStorageError, ConfigError, ValueError.
         """
-        if not documents:
-            return []
-
+        if not documents: return []
         logger.debug(f"Adding batch of {len(documents)} documents to vector store (Collection: {collection_name or 'default'})...")
         try:
-            # 1. Extract content and prepare for batch embedding
             contents = []
             context_docs_to_create = []
             for doc_data in documents:
                 content = doc_data.get("content")
-                if not isinstance(content, str):
-                    raise ValueError(f"Invalid document data: 'content' field missing or not a string in {doc_data}")
+                if not isinstance(content, str): raise ValueError(f"Invalid document data: 'content' missing/not string in {doc_data}")
                 contents.append(content)
-                # Store other data temporarily
                 context_docs_to_create.append({
-                    "id": doc_data.get("id"), # Allow None, ContextDocument generates ID
+                    "id": doc_data.get("id"),
                     "content": content,
-                    "metadata": doc_data.get("metadata", {}) # Ensure metadata is dict
+                    "metadata": doc_data.get("metadata", {})
                 })
 
-            # 2. Generate embeddings in batch via EmbeddingManager
             embeddings = await self._embedding_manager.generate_embeddings(contents)
+            if len(embeddings) != len(documents): raise EmbeddingError("Mismatch between texts and generated embeddings.")
 
-            if len(embeddings) != len(documents):
-                raise EmbeddingError(message="Mismatch between number of texts and generated embeddings.")
+            docs_to_add: List[ContextDocument] = [
+                ContextDocument(
+                    id=doc_data["id"],
+                    content=doc_data["content"],
+                    embedding=embeddings[i],
+                    metadata=doc_data["metadata"]
+                ) for i, doc_data in enumerate(context_docs_to_create)
+            ]
 
-            # 3. Create list of ContextDocument objects with embeddings
-            docs_to_add: List[ContextDocument] = []
-            for i, doc_data in enumerate(context_docs_to_create):
-                docs_to_add.append(
-                    ContextDocument(
-                        id=doc_data["id"],
-                        content=doc_data["content"],
-                        embedding=embeddings[i],
-                        metadata=doc_data["metadata"]
-                    )
-                )
-
-            # 4. Get vector storage and add documents
             vector_storage = self._storage_manager.get_vector_storage()
             added_ids = await vector_storage.add_documents(docs_to_add, collection_name=collection_name)
-
             logger.info(f"Batch of {len(added_ids)} documents added/updated in vector store collection '{collection_name or 'default'}'.")
             return added_ids
-
-        except (EmbeddingError, VectorStorageError, ConfigError, ValueError) as e:
+        except (EmbeddingError, VectorStorageError, ConfigError, StorageError, ValueError) as e:
              logger.error(f"Failed to add documents batch to vector store: {e}")
-             raise # Re-raise specific errors
+             raise
         except Exception as e:
              logger.error(f"Unexpected error adding documents batch: {e}", exc_info=True)
              raise VectorStorageError(f"Unexpected error adding documents batch: {e}")
@@ -653,47 +616,32 @@ class LLMCore:
         """
         Performs a similarity search for relevant documents in the vector store.
 
-        Generates an embedding for the query text and searches the specified
-        collection.
-
         Args:
             query: The text query to search for.
             k: The number of top similar documents to retrieve.
-            collection_name: The target vector store collection. Uses the default
-                             collection from configuration if None.
+            collection_name: The target vector store collection. Uses default if None.
             filter_metadata: Optional dictionary to filter results based on metadata.
 
         Returns:
             A list of ContextDocument objects representing the search results.
 
         Raises:
-            EmbeddingError: If embedding generation for the query fails.
-            VectorStorageError: If the search operation fails.
-            ConfigError: If vector store or embedding model is not configured/initialized.
-            ValueError: If k is not a positive integer.
+            EmbeddingError, VectorStorageError, ConfigError, ValueError.
         """
-        if k <= 0:
-            raise ValueError("'k' must be a positive integer for search.")
-
+        if k <= 0: raise ValueError("'k' must be a positive integer for search.")
         logger.debug(f"Searching vector store (k={k}, Collection: {collection_name or 'default'}) for query: '{query[:50]}...'")
         try:
-            # 1. Generate query embedding via EmbeddingManager
             query_embedding = await self._embedding_manager.generate_embedding(query)
-
-            # 2. Get vector storage and perform search
             vector_storage = self._storage_manager.get_vector_storage()
             results = await vector_storage.similarity_search(
-                query_embedding=query_embedding,
-                k=k,
-                collection_name=collection_name,
-                filter_metadata=filter_metadata
+                query_embedding=query_embedding, k=k,
+                collection_name=collection_name, filter_metadata=filter_metadata
             )
             logger.info(f"Vector store search returned {len(results)} documents.")
             return results
-
-        except (EmbeddingError, VectorStorageError, ConfigError) as e:
+        except (EmbeddingError, VectorStorageError, ConfigError, StorageError) as e:
              logger.error(f"Failed to search vector store: {e}")
-             raise # Re-raise specific errors
+             raise
         except Exception as e:
              logger.error(f"Unexpected error searching vector store: {e}", exc_info=True)
              raise VectorStorageError(f"Unexpected error searching vector store: {e}")
@@ -710,41 +658,34 @@ class LLMCore:
 
         Args:
             document_ids: A list of document IDs to delete.
-            collection_name: The target vector store collection. Uses the default
-                             collection from configuration if None.
+            collection_name: The target vector store collection. Uses default if None.
 
         Returns:
-            True if deletion was attempted successfully (even if some IDs weren't found),
-            False otherwise (indicating a storage backend error).
+            True if deletion was attempted successfully, False otherwise.
 
         Raises:
-            VectorStorageError: If the deletion operation fails fundamentally.
-            ConfigError: If vector store is not configured/initialized or collection is invalid.
-            ValueError: If document_ids list is empty.
+            VectorStorageError, ConfigError, ValueError.
         """
         if not document_ids:
-            # raise ValueError("document_ids list cannot be empty for deletion.")
             logger.warning("delete_documents_from_vector_store called with empty ID list.")
-            return True # No operation needed, considered successful
-
+            return True
         logger.debug(f"Deleting {len(document_ids)} documents from vector store (Collection: {collection_name or 'default'})...")
         try:
             vector_storage = self._storage_manager.get_vector_storage()
             success = await vector_storage.delete_documents(
-                document_ids=document_ids,
-                collection_name=collection_name
+                document_ids=document_ids, collection_name=collection_name
             )
             logger.info(f"Deletion attempt for {len(document_ids)} documents completed (Success: {success}).")
             return success
-        except (VectorStorageError, ConfigError) as e:
+        except (VectorStorageError, ConfigError, StorageError) as e:
              logger.error(f"Failed to delete documents from vector store: {e}")
-             raise # Re-raise specific errors
+             raise
         except Exception as e:
              logger.error(f"Unexpected error deleting documents: {e}", exc_info=True)
              raise VectorStorageError(f"Unexpected error deleting documents: {e}")
 
 
-    # --- Provider Info Methods (Delegate to ProviderManager) ---
+    # --- Provider Info Methods ---
     def get_available_providers(self) -> List[str]:
         """Lists the names of all successfully loaded LLM providers."""
         logger.debug("LLMCore.get_available_providers called.")
@@ -755,7 +696,6 @@ class LLMCore:
         logger.debug(f"LLMCore.get_models_for_provider called for: {provider_name}")
         try:
             provider = self._provider_manager.get_provider(provider_name)
-            # Assuming sync for now as per BaseProvider spec
             # TODO: Consider if this should be async to allow API calls
             return provider.get_available_models()
         except (ConfigError, ProviderError) as e:
@@ -770,29 +710,20 @@ class LLMCore:
     async def close(self):
         """Closes connections for storage backends, providers, and embedding manager."""
         logger.info("LLMCore.close() called. Cleaning up resources...")
-        close_tasks = []
-        # Close providers via ProviderManager
-        if hasattr(self, '_provider_manager') and self._provider_manager:
-            close_tasks.append(self._provider_manager.close_providers())
-        # Close storage backends via StorageManager
-        if hasattr(self, '_storage_manager') and self._storage_manager:
-            close_tasks.append(self._storage_manager.close_storages())
-        # Close embedding manager
-        if hasattr(self, '_embedding_manager') and self._embedding_manager:
-             close_tasks.append(self._embedding_manager.close())
-
-        if close_tasks:
-            results = await asyncio.gather(*close_tasks, return_exceptions=True)
-            for result in results:
-                 if isinstance(result, Exception):
-                      logger.error(f"Error during LLMCore resource cleanup: {result}", exc_info=result)
-
+        close_tasks = [
+            self._provider_manager.close_providers(),
+            self._storage_manager.close_storages(),
+            self._embedding_manager.close(),
+        ]
+        results = await asyncio.gather(*close_tasks, return_exceptions=True)
+        for result in results:
+             if isinstance(result, Exception):
+                  logger.error(f"Error during LLMCore resource cleanup: {result}", exc_info=result)
         logger.info("LLMCore resources cleanup complete.")
 
     # --- Async Context Management ---
     async def __aenter__(self):
         """Enter the runtime context related to this object."""
-        # Initialization is handled by the `create` classmethod.
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
