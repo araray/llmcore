@@ -2,17 +2,26 @@
 """
 Embedding model management for the LLMCore library.
 
-This package will provide a consistent interface for generating text embeddings,
+This package provides a consistent interface for generating text embeddings,
 which are crucial for Retrieval Augmented Generation (RAG) and other
-similarity-based tasks. It will support various embedding models,
+similarity-based tasks. It supports various embedding models,
 both local and service-based.
 """
 
-# This file intentionally left largely blank.
-# Its presence makes 'llmcore.embedding' a Python package.
-# Base classes and specific embedding model implementations will reside here.
+# Import necessary classes to be available when importing the package
+from .base import BaseEmbeddingModel
+from .sentence_transformer import SentenceTransformerEmbedding
+# Import other embedding models when they are created
+# from .openai import OpenAIEmbedding
+# from .google import GoogleAIEmbedding
+from .manager import EmbeddingManager # Import the manager
 
-# Example:
-# from .base import BaseEmbeddingModel
-# from .sentence_transformer import SentenceTransformerEmbedding
-# __all__ = ["BaseEmbeddingModel", "SentenceTransformerEmbedding"]
+# Define what gets imported with 'from llmcore.embedding import *'
+# Or just make them available for direct import: from llmcore.embedding import EmbeddingManager
+__all__ = [
+    "BaseEmbeddingModel",
+    "SentenceTransformerEmbedding",
+    # "OpenAIEmbedding",
+    # "GoogleAIEmbedding",
+    "EmbeddingManager", # Export the manager
+]
