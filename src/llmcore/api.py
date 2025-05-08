@@ -42,6 +42,13 @@ except ImportError:
     except ImportError:
         tomllib = None # type: ignore
 
+# Import Ollama response type for stream checking if available
+try:
+    from ollama import ChatResponse as OllamaChatResponse
+except ImportError:
+    OllamaChatResponse = None # type: ignore
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -293,7 +300,7 @@ class LLMCore:
                 # --- Streaming Path ---
                 logger.debug(f"Processing stream response from provider '{provider_actual_name}'")
                 # Ensure the generator type hint matches what the wrapper expects
-                provider_stream: AsyncGenerator[Dict[str, Any], None] = response_data_or_generator # type: ignore
+                provider_stream: AsyncGenerator[Any, None] = response_data_or_generator # Use Any for broader compatibility initially
                 return self._stream_response_wrapper(
                     provider_stream,
                     active_provider,
@@ -336,7 +343,7 @@ class LLMCore:
 
     async def _stream_response_wrapper(
         self,
-        provider_stream: AsyncGenerator[Dict[str, Any], None],
+        provider_stream: AsyncGenerator[Any, None], # Accept Any type initially
         provider: BaseProvider,
         session: ChatSession,
         save_session: bool
@@ -349,12 +356,28 @@ class LLMCore:
         session_id_for_saving = session.id if save_session else None
 
         try:
-            async for chunk_dict in provider_stream:
-                if not isinstance(chunk_dict, dict):
-                    logger.warning(f"Received non-dict chunk in stream: {chunk_dict}")
+            async for chunk in provider_stream:
+                chunk_dict: Optional[Dict[str, Any]] = None
+
+                # Convert chunk to dict if necessary (specifically for Ollama)
+                if isinstance(chunk, dict):
+                    chunk_dict = chunk
+                elif OllamaChatResponse and isinstance(chunk, OllamaChatResponse):
+                    # Convert Ollama response object to dict
+                    try:
+                        chunk_dict = chunk.model_dump()
+                    except Exception as dump_err:
+                        logger.warning(f"Could not dump Ollama stream object to dict: {dump_err}. Chunk: {chunk}")
+                        continue # Skip this chunk if conversion fails
+                else:
+                    # Handle other potential non-dict types if necessary, or log warning
+                    logger.warning(f"Received non-dict/non-OllamaResponse chunk in stream: {type(chunk)} - {chunk}")
+                    continue # Skip unrecognized chunk types
+
+                if not chunk_dict: # Skip if conversion failed or chunk was invalid
                     continue
 
-                # Extract delta and check for errors/finish reasons within the chunk
+                # Extract delta and check for errors/finish reasons within the chunk dict
                 text_delta = self._extract_delta_content(chunk_dict, provider)
                 error_message = chunk_dict.get('error')
                 # Adjust finish reason check based on provider specifics if needed
@@ -384,7 +407,8 @@ class LLMCore:
         finally:
             logger.debug(f"Stream from {provider_name} finished.")
             # Save only if save_session was True and a session_id exists (persistent session)
-            if save_session and session.id and not session.id.startswith("temp_"): # Check if it's not a temporary ID if applicable
+            # Check if session_id is not None and potentially not temporary
+            if save_session and session.id and not session.id.startswith("temp_"):
                 if full_response_content or not error_occurred:
                     assistant_msg = session.add_message(
                         message_content=full_response_content, role=Role.ASSISTANT
@@ -414,7 +438,7 @@ class LLMCore:
                     text_delta = chunk.get('delta', {}).get('text', "") or ""
                 # Add handling for other Anthropic stream types if necessary
             elif provider_name == "ollama":
-                # Handle official ollama library stream format
+                # Handle official ollama library stream format (now expecting dict)
                 message_chunk = chunk.get('message', {})
                 if message_chunk:
                     text_delta = message_chunk.get('content', '') or ""
