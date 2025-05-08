@@ -17,9 +17,9 @@ except ImportError:
     ConfyConfig = Dict[str, Any] # type: ignore
 
 from ..providers.manager import ProviderManager
-from ..providers.base import BaseProvider # Keep for type hinting provider instance
-from ..storage.manager import StorageManager # Import StorageManager
-from ..embedding.manager import EmbeddingManager # Import EmbeddingManager
+from ..providers.base import BaseProvider
+from ..storage.manager import StorageManager
+from ..embedding.manager import EmbeddingManager
 from ..models import ChatSession, Message, Role, ContextDocument
 from ..exceptions import (
     ContextError, ContextLengthError, ConfigError, ProviderError,
@@ -34,16 +34,17 @@ class ContextManager:
     Manages the context window for LLM interactions.
 
     Selects messages from history, integrates RAG results, and ensures
-    the final payload adheres to the token limits of the target model.
-    Uses ProviderManager, StorageManager, and EmbeddingManager.
+    the final payload adheres to the token limits of the target model,
+    using configurable strategies. Uses ProviderManager, StorageManager,
+    and EmbeddingManager.
     """
 
     def __init__(
         self,
         config: ConfyConfig,
         provider_manager: ProviderManager,
-        storage_manager: StorageManager, # Added StorageManager
-        embedding_manager: EmbeddingManager # Added EmbeddingManager
+        storage_manager: StorageManager,
+        embedding_manager: EmbeddingManager
         ):
         """
         Initializes the ContextManager.
@@ -65,7 +66,6 @@ class ContextManager:
         self._history_selection_strategy: str = cm_config.get('history_selection_strategy', 'last_n_tokens')
         self._truncation_priority: str = cm_config.get('truncation_priority', 'history')
         self._minimum_history_messages: int = cm_config.get('minimum_history_messages', 1)
-        # RAG defaults
         self._default_rag_k: int = cm_config.get('rag_retrieval_k', 3)
         self._rag_combination_strategy: str = cm_config.get('rag_combination_strategy', 'prepend_system')
 
@@ -77,13 +77,18 @@ class ContextManager:
                      f"default_rag_k={self._default_rag_k}, "
                      f"rag_combo_strategy={self._rag_combination_strategy}")
 
-        # Validate strategies
-        if self._history_selection_strategy not in ['last_n_tokens']:
+        # Validate strategies and log warnings if unsupported/fallback needed
+        if self._history_selection_strategy not in ['last_n_tokens', 'last_n_messages']:
              logger.warning(f"Unsupported history_selection_strategy '{self._history_selection_strategy}'. Falling back to 'last_n_tokens'.")
              self._history_selection_strategy = 'last_n_tokens'
+        elif self._history_selection_strategy == 'last_n_messages':
+             logger.warning("'last_n_messages' history strategy is less precise for token limits and may not be fully implemented. Consider 'last_n_tokens'.")
+             # Keep it set, but the selection function might fall back
+
         if self._rag_combination_strategy not in ['prepend_system', 'prepend_user']:
              logger.warning(f"Unsupported rag_combination_strategy '{self._rag_combination_strategy}'. Falling back to 'prepend_system'.")
              self._rag_combination_strategy = 'prepend_system'
+
         if self._truncation_priority not in ['history', 'rag']:
              logger.warning(f"Unsupported truncation_priority '{self._truncation_priority}'. Falling back to 'history'.")
              self._truncation_priority = 'history'
@@ -99,7 +104,7 @@ class ContextManager:
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None,
         # MCP parameters (placeholders for Phase 3)
-        use_mcp: bool = False
+        use_mcp: bool = False # TODO: Implement MCP logic in Phase 3 Task 3.4
     ) -> List[Message]:
         """
         Prepares the list of messages to be sent to the LLM provider.
@@ -114,7 +119,7 @@ class ContextManager:
             rag_enabled: Whether to perform RAG.
             rag_k: Number of documents to retrieve for RAG (overrides default).
             rag_collection: Vector store collection name for RAG (overrides default).
-            use_mcp: Placeholder for MCP flag (Phase 3).
+            use_mcp: Placeholder for MCP flag (Phase 3). If True, attempts MCP formatting.
 
         Returns:
             A list of Message objects representing the final context payload.
@@ -162,25 +167,18 @@ class ContextManager:
                 k = rag_k if rag_k is not None else self._default_rag_k
                 logger.info(f"Performing RAG search (k={k}, Collection: {rag_collection or 'default'}) for query: '{query_text[:50]}...'")
                 try:
-                    # Generate query embedding
                     query_embedding = await self._embedding_manager.generate_embedding(query_text)
-                    # Search vector store
                     vector_storage = self._storage_manager.get_vector_storage()
                     retrieved_docs = await vector_storage.similarity_search(
-                        query_embedding=query_embedding,
-                        k=k,
-                        collection_name=rag_collection,
-                        # filter_metadata=... # Add filter capability if needed
+                        query_embedding=query_embedding, k=k, collection_name=rag_collection
                     )
                     logger.info(f"RAG search returned {len(retrieved_docs)} documents.")
                     if retrieved_docs:
-                        # Format RAG results into a string for context injection
                         rag_context_str = self._format_rag_context(retrieved_docs)
                         rag_tokens = provider.count_tokens(rag_context_str, target_model)
                         logger.debug(f"Formatted RAG context ({rag_tokens} tokens).")
 
                 except (EmbeddingError, VectorStorageError, ConfigError, StorageError) as e:
-                     # Log RAG errors but potentially continue without RAG context
                      logger.error(f"RAG retrieval failed: {e}. Proceeding without RAG context.")
                      retrieved_docs = []
                      rag_context_str = ""
@@ -194,12 +192,11 @@ class ContextManager:
                 logger.warning("RAG enabled, but no user message found in session to use as query.")
         # --- End RAG Retrieval ---
 
-        # Calculate remaining budget for history
         history_token_budget = available_tokens - rag_tokens
         if history_token_budget < 0:
              logger.warning(f"RAG context alone ({rag_tokens} tokens) exceeds available budget ({available_tokens}). "
                             "Attempting to proceed with only RAG context (may fail).")
-             history_token_budget = 0 # No space left for history
+             history_token_budget = 0
 
         # --- History Selection ---
         selected_history: List[Message] = []
@@ -209,8 +206,16 @@ class ContextManager:
                 selected_history, history_tokens = self._select_history_last_n_tokens(
                     session.messages, provider, target_model, history_token_budget
                 )
-            # Add other strategies like 'last_n_messages' here if implemented
-            else: # Fallback
+            elif self._history_selection_strategy == 'last_n_messages':
+                # Placeholder: Implement last_n_messages strategy or fall back
+                logger.warning("Using fallback 'last_n_tokens' strategy for 'last_n_messages' history selection.")
+                selected_history, history_tokens = self._select_history_last_n_tokens(
+                    session.messages, provider, target_model, history_token_budget
+                )
+                # selected_history, history_tokens = self._select_history_last_n_messages(
+                #     session.messages, provider, target_model, history_token_budget, some_n_value
+                # )
+            else: # Fallback if somehow an invalid strategy was set
                 selected_history, history_tokens = self._select_history_last_n_tokens(
                     session.messages, provider, target_model, history_token_budget
                 )
@@ -218,7 +223,7 @@ class ContextManager:
             # Keep only system messages if budget allows, otherwise empty history
             system_messages = [msg for msg in session.messages if msg.role == Role.SYSTEM]
             system_tokens = provider.count_message_tokens(system_messages, target_model) if system_messages else 0
-            if system_tokens <= history_token_budget: # Check budget even if 0
+            if system_tokens <= history_token_budget:
                  selected_history = system_messages
                  history_tokens = system_tokens
             else:
@@ -230,55 +235,61 @@ class ContextManager:
         final_context, final_token_count = self._combine_and_truncate(
             provider=provider,
             model_name=target_model,
-            token_budget=available_tokens, # Use original available budget for combined check
+            token_budget=available_tokens,
             system_messages=[msg for msg in selected_history if msg.role == Role.SYSTEM],
             history_messages=[msg for msg in selected_history if msg.role != Role.SYSTEM],
             rag_context_str=rag_context_str,
-            rag_docs=retrieved_docs # Pass original docs for potential RAG truncation
+            rag_docs=retrieved_docs
         )
 
         logger.info(f"Final context: {len(final_context)} messages, {final_token_count} tokens (Budget: {available_tokens}).")
 
         # Final check: Ensure the last user message is included if possible
         last_original_user_message = next((msg for msg in reversed(session.messages) if msg.role == Role.USER), None)
-        last_message_included = (
-            last_original_user_message and
-            any(m.id == last_original_user_message.id for m in final_context if m.role == Role.USER)
-        )
+        if last_original_user_message:
+            last_message_included = any(m.id == last_original_user_message.id for m in final_context if m.role == Role.USER)
+            if not last_message_included:
+                 logger.error(f"Context length ({final_token_count} tokens) is too short for model '{target_model}' "
+                              f"(limit {available_tokens}). Cannot fit essential messages (system + last user).")
+                 raise ContextLengthError(
+                     model_name=target_model, limit=available_tokens, actual=final_token_count,
+                     message="Context length too short to include essential messages."
+                 )
 
-        if not last_message_included and last_original_user_message:
-             # This is less likely now due to truncation logic, but check defensively
-             logger.error(f"Context length ({final_token_count} tokens) is too short for model '{target_model}' "
-                          f"(limit {available_tokens}). Cannot fit essential messages (system + last user).")
-             raise ContextLengthError(
-                 model_name=target_model, limit=available_tokens, actual=final_token_count,
-                 message="Context length too short to include essential messages."
-             )
-
-        # --- MCP Formatting Placeholder (Phase 3) ---
+        # --- MCP Formatting Placeholder (Phase 3 Task 3.4) ---
         if use_mcp:
             logger.warning("MCP formatting is not yet implemented in prepare_context.")
-            # context_payload = self._format_mcp_context(final_context, rag_results)
-            # return context_payload # Return MCP object
-            pass
+            # try:
+            #     from modelcontextprotocol import Context as MCPContext, Message as MCPMessage, Role as MCPRole, RetrievedKnowledge
+            #     # Map final_context and rag_docs to MCP objects
+            #     # ... implementation ...
+            #     mcp_context = MCPContext(...)
+            #     logger.info("Formatted context using Model Context Protocol.")
+            #     return mcp_context # Return MCP object instead of List[Message]
+            # except ImportError:
+            #     logger.error("MCP SDK 'modelcontextprotocol' not installed. Cannot format context.")
+            #     raise ConfigError("MCP formatting enabled but SDK not installed.")
+            # except Exception as mcp_e:
+            #     logger.error(f"Failed to format context using MCP: {mcp_e}")
+            #     raise MCPError(f"MCP formatting failed: {mcp_e}")
         # --- End MCP Placeholder ---
 
-        return final_context
+        return final_context # Return List[Message] if MCP not used or failed
 
     def _format_rag_context(self, documents: List[ContextDocument]) -> str:
         """Formats retrieved documents into a string for context injection."""
         if not documents:
             return ""
 
-        context_parts = ["Retrieved Context Documents:"]
+        context_parts = ["--- Retrieved Context ---"]
         for i, doc in enumerate(documents):
-            # Include basic metadata like source if available
             source = doc.metadata.get("source", f"Document {i+1}")
-            content_snippet = doc.content.replace('\n', ' ').strip()[:250] # Limit snippet length
-            context_parts.append(f"\n--- Source: {source} ---\n{content_snippet}...")
-            # Consider adding score: f"(Score: {doc.score:.4f})"
+            content_snippet = doc.content.replace('\n', ' ').strip()
+            # Optionally limit snippet length: content_snippet = content_snippet[:500]
+            context_parts.append(f"\n[Source: {source}]\n{content_snippet}")
+            # Consider adding score: f"(Score: {doc.score:.4f})" if available and meaningful
 
-        return "\n".join(context_parts)
+        return "\n".join(context_parts) + "\n--- End Context ---" # Add clear delimiters
 
     def _select_history_last_n_tokens(
         self,
@@ -287,9 +298,10 @@ class ContextManager:
         model_name: str,
         token_budget: int
     ) -> Tuple[List[Message], int]:
-        """Selects history messages based on token count, prioritizing recent ones and system messages."""
-        # This function now focuses *only* on selecting history within its budget.
-        # Combination and final truncation happen in _combine_and_truncate.
+        """
+        Selects history messages based on token count, prioritizing recent ones and system messages.
+        This function focuses *only* on selecting history within its budget.
+        """
         selected_messages: List[Message] = []
         current_tokens = 0
 
@@ -300,18 +312,17 @@ class ContextManager:
             raise ProviderError(provider.get_name(), f"Token counting failed for system messages: {e}")
 
         if system_tokens > token_budget:
-             # If system messages alone exceed the history budget, return only them (or raise earlier)
-             logger.warning(f"System messages ({system_tokens} tokens) exceed history budget ({token_budget}).")
-             # Return only system messages, let combine/truncate handle final fit
-             return system_messages, system_tokens
+             logger.warning(f"System messages ({system_tokens} tokens) alone exceed history budget ({token_budget}). Only including system messages.")
+             return system_messages, system_tokens # Let combine/truncate handle final fit
 
         selected_messages.extend(system_messages)
         current_tokens += system_tokens
 
+        # Iterate through non-system messages in reverse (newest first)
         non_system_messages = [msg for msg in all_messages if msg.role != Role.SYSTEM]
-        # Iterate in reverse (newest first)
         for msg in reversed(non_system_messages):
             try:
+                # Count tokens for this single message
                 message_tokens = provider.count_message_tokens([msg], model_name)
             except Exception as e:
                 raise ProviderError(provider.get_name(), f"Token counting failed for message {msg.id}: {e}")
@@ -320,12 +331,48 @@ class ContextManager:
                 selected_messages.append(msg) # Add to the list (will sort later)
                 current_tokens += message_tokens
             else:
-                break # Stop adding messages once budget is exceeded
+                # Stop adding messages once budget is exceeded for this message
+                logger.debug(f"History token budget ({token_budget}) reached. Stopping selection.")
+                break
 
         # Sort the final list by timestamp to maintain chronological order
         selected_messages.sort(key=lambda m: m.timestamp)
         logger.debug(f"Selected {len(selected_messages)} history messages ({current_tokens} tokens) for budget {token_budget}.")
         return selected_messages, current_tokens
+
+    # Placeholder for last_n_messages strategy (as per spec indicating it's not fully implemented/preferred)
+    # def _select_history_last_n_messages(
+    #     self,
+    #     all_messages: List[Message],
+    #     provider: BaseProvider,
+    #     model_name: str,
+    #     token_budget: int,
+    #     n_messages: int # The 'n' value would need to come from config
+    # ) -> Tuple[List[Message], int]:
+    #     """Selects the last N messages, checking if they fit the token budget."""
+    #     logger.warning("Using 'last_n_messages' strategy - token count may exceed budget.")
+    #     system_messages = [msg for msg in all_messages if msg.role == Role.SYSTEM]
+    #     non_system_messages = [msg for msg in all_messages if msg.role != Role.SYSTEM]
+    #
+    #     selected_non_system = non_system_messages[-n_messages:] # Get last N
+    #     selected_messages = system_messages + selected_non_system
+    #     selected_messages.sort(key=lambda m: m.timestamp)
+    #
+    #     try:
+    #         current_tokens = provider.count_message_tokens(selected_messages, model_name)
+    #     except Exception as e:
+    #         raise ProviderError(provider.get_name(), f"Token counting failed for selected messages: {e}")
+    #
+    #     if current_tokens > token_budget:
+    #          logger.error(f"'last_n_messages' ({n_messages}) resulted in {current_tokens} tokens, exceeding budget {token_budget}. "
+    #                       "This strategy cannot guarantee fitting within limits.")
+    #          # Option: Fallback to last_n_tokens? Or raise error? Let's raise for clarity.
+    #          raise ContextLengthError(model_name, token_budget, current_tokens,
+    #                                   message=f"'last_n_messages' ({n_messages}) exceeded token budget.")
+    #
+    #     logger.debug(f"Selected last {n_messages} messages ({current_tokens} tokens).")
+    #     return selected_messages, current_tokens
+
 
     def _combine_and_truncate(
         self,
@@ -333,44 +380,66 @@ class ContextManager:
         model_name: str,
         token_budget: int,
         system_messages: List[Message],
-        history_messages: List[Message],
+        history_messages: List[Message], # Already selected history (excluding system)
         rag_context_str: str,
-        rag_docs: List[ContextDocument] # Original docs for potential truncation
+        rag_docs: List[ContextDocument]
     ) -> Tuple[List[Message], int]:
-        """Combines history and RAG context, then truncates if necessary."""
+        """
+        Combines history and RAG context based on strategy, then truncates if necessary.
 
+        Args:
+            provider: The LLM provider instance.
+            model_name: The target model name.
+            token_budget: The maximum allowed tokens for the combined context.
+            system_messages: List of system messages selected.
+            history_messages: List of user/assistant messages selected by history strategy.
+            rag_context_str: The formatted string of retrieved RAG documents.
+            rag_docs: The original list of retrieved ContextDocument objects (for RAG truncation).
+
+        Returns:
+            A tuple containing the final list of Message objects and their total token count.
+
+        Raises:
+            ContextLengthError: If the context cannot be truncated below the budget.
+            ProviderError: If token counting fails during truncation.
+        """
         combined_context: List[Message] = []
         rag_message: Optional[Message] = None
 
         # --- Context Combination ---
         if rag_context_str:
             # Create a temporary Message object for the RAG context
-            rag_message = Message(role=Role.SYSTEM, content=rag_context_str, session_id="rag_context") # Use a placeholder session_id
+            rag_message = Message(role=Role.SYSTEM, content=rag_context_str, session_id="rag_context")
             try:
-                 # Pre-calculate RAG message tokens (should match rag_tokens calculated earlier)
                  rag_message.tokens = provider.count_message_tokens([rag_message], model_name)
             except Exception as e:
                  logger.error(f"Failed to count tokens for RAG context message: {e}")
                  rag_message.tokens = 0 # Assume 0 if counting fails
 
+            logger.debug(f"Combining context using strategy: {self._rag_combination_strategy}")
             if self._rag_combination_strategy == "prepend_system":
                 # Add RAG context after original system messages, before history
                 combined_context.extend(system_messages)
                 combined_context.append(rag_message)
                 combined_context.extend(history_messages)
             elif self._rag_combination_strategy == "prepend_user":
-                 # Add RAG context just before the last user message (if history exists)
+                 # Add RAG context just before the *last* user message in the selected history
                  combined_context.extend(system_messages)
-                 user_messages = [m for m in history_messages if m.role == Role.USER]
-                 other_messages = [m for m in history_messages if m.role != Role.USER]
-                 if user_messages:
-                      combined_context.extend(other_messages)
+                 # Find the index of the last user message
+                 last_user_idx = -1
+                 for i in range(len(history_messages) - 1, -1, -1):
+                     if history_messages[i].role == Role.USER:
+                         last_user_idx = i
+                         break
+                 if last_user_idx != -1:
+                      # Insert RAG before the last user message
+                      combined_context.extend(history_messages[:last_user_idx])
                       combined_context.append(rag_message)
-                      combined_context.extend(user_messages) # Add user messages last
-                 else: # No user messages, append RAG after system/assistant
-                      combined_context.extend(other_messages)
+                      combined_context.extend(history_messages[last_user_idx:])
+                 else: # No user messages in history, append RAG after system/assistant
+                      combined_context.extend(history_messages)
                       combined_context.append(rag_message)
-            else: # Default to prepend_system
+            else: # Default/Fallback to prepend_system
                  combined_context.extend(system_messages)
                  combined_context.append(rag_message)
                  combined_context.extend(history_messages)
@@ -380,82 +449,101 @@ class ContextManager:
             combined_context.extend(history_messages)
 
         # --- Truncation ---
-        current_tokens = provider.count_message_tokens(combined_context, model_name)
+        try:
+            current_tokens = provider.count_message_tokens(combined_context, model_name)
+        except Exception as e:
+             raise ProviderError(provider.get_name(), f"Token counting failed for initial combined context: {e}")
+
         logger.debug(f"Combined context before truncation: {len(combined_context)} messages, {current_tokens} tokens (Budget: {token_budget}).")
 
         # Truncate based on priority
         while current_tokens > token_budget:
-            can_truncate_history = len([m for m in combined_context if m.role != Role.SYSTEM and m.id != "rag_context"]) > self._minimum_history_messages
-            can_truncate_rag = rag_message is not None and rag_docs # Check if RAG context exists and we have docs to potentially shorten
+            # Determine if history/RAG can be truncated further
+            # Count non-system, non-RAG messages available for truncation
+            history_msg_indices = [i for i, msg in enumerate(combined_context) if msg.role != Role.SYSTEM and msg.id != "rag_context"]
+            can_truncate_history = len(history_msg_indices) > self._minimum_history_messages
+
+            # Check if RAG context exists and we have docs left to potentially shorten
+            can_truncate_rag = rag_message is not None and rag_docs
 
             logger.warning(f"Truncation needed: {current_tokens}/{token_budget} tokens. "
                            f"Priority: {self._truncation_priority}. Can truncate history: {can_truncate_history}. Can truncate RAG: {can_truncate_rag}.")
 
             truncated_something = False
             if self._truncation_priority == "history" and can_truncate_history:
-                # Remove oldest non-system, non-RAG message
-                for i, msg in enumerate(combined_context):
-                    if msg.role != Role.SYSTEM and msg.id != "rag_context":
-                        removed_msg = combined_context.pop(i)
-                        logger.debug(f"Truncated oldest history message: {removed_msg.id} ({removed_msg.role.value})")
-                        truncated_something = True
-                        break
+                # Remove oldest non-system, non-RAG message (first in the list of indices)
+                if history_msg_indices:
+                    idx_to_remove = history_msg_indices[0]
+                    removed_msg = combined_context.pop(idx_to_remove)
+                    logger.debug(f"Truncated oldest history message: {removed_msg.id} ({removed_msg.role.value})")
+                    truncated_something = True
+
             elif self._truncation_priority == "rag" and can_truncate_rag:
                 # Remove the least relevant RAG document and regenerate RAG context string
                 rag_docs.pop() # Remove last doc (assuming sorted by relevance initially)
                 if rag_docs:
                     rag_context_str = self._format_rag_context(rag_docs)
                     rag_message.content = rag_context_str # Update content in the message object
-                    rag_message.tokens = provider.count_message_tokens([rag_message], model_name) # Recalculate tokens
+                    try:
+                        rag_message.tokens = provider.count_message_tokens([rag_message], model_name) # Recalculate tokens
+                    except Exception as e:
+                        logger.error(f"Failed to count tokens for truncated RAG context: {e}")
+                        rag_message.tokens = 0 # Assume 0 on failure
                     logger.debug(f"Truncated least relevant RAG document. New RAG context tokens: {rag_message.tokens}")
                 else:
                     # Remove the RAG message entirely if no docs left
-                    rag_message_index = -1
-                    for i, msg in enumerate(combined_context):
-                         if msg.id == "rag_context":
-                              rag_message_index = i
-                              break
-                    if rag_message_index != -1:
-                         combined_context.pop(rag_message_index)
+                    try:
+                        rag_message_index = combined_context.index(rag_message)
+                        combined_context.pop(rag_message_index)
+                    except ValueError: # Should not happen if rag_message exists
+                         logger.error("Failed to find RAG message for removal during truncation.")
                     rag_message = None # Signal RAG context is gone
                     logger.debug("Removed RAG context entirely after truncating all docs.")
                 truncated_something = True
 
             elif can_truncate_history: # Fallback to history if priority couldn't be met
-                 for i, msg in enumerate(combined_context):
-                    if msg.role != Role.SYSTEM and msg.id != "rag_context":
-                        removed_msg = combined_context.pop(i)
-                        logger.debug(f"Truncated oldest history message (fallback): {removed_msg.id} ({removed_msg.role.value})")
-                        truncated_something = True
-                        break
+                 if history_msg_indices:
+                    idx_to_remove = history_msg_indices[0]
+                    removed_msg = combined_context.pop(idx_to_remove)
+                    logger.debug(f"Truncated oldest history message (fallback): {removed_msg.id} ({removed_msg.role.value})")
+                    truncated_something = True
+
             elif can_truncate_rag: # Fallback to RAG if history couldn't be truncated
                  rag_docs.pop()
                  if rag_docs:
                     rag_context_str = self._format_rag_context(rag_docs)
                     rag_message.content = rag_context_str
-                    rag_message.tokens = provider.count_message_tokens([rag_message], model_name)
+                    try:
+                        rag_message.tokens = provider.count_message_tokens([rag_message], model_name)
+                    except Exception as e:
+                        logger.error(f"Failed to count tokens for truncated RAG context (fallback): {e}")
+                        rag_message.tokens = 0
                     logger.debug(f"Truncated least relevant RAG document (fallback). New RAG context tokens: {rag_message.tokens}")
                  else:
-                    rag_message_index = -1
-                    for i, msg in enumerate(combined_context):
-                         if msg.id == "rag_context": rag_message_index = i; break
-                    if rag_message_index != -1: combined_context.pop(rag_message_index)
+                    try:
+                        rag_message_index = combined_context.index(rag_message)
+                        combined_context.pop(rag_message_index)
+                    except ValueError:
+                         logger.error("Failed to find RAG message for removal during fallback truncation.")
                     rag_message = None
                     logger.debug("Removed RAG context entirely (fallback).")
                  truncated_something = True
             else:
                 # Cannot truncate further based on rules
                 logger.error(f"Cannot truncate context further. Current tokens {current_tokens} exceed budget {token_budget}. "
-                             f"Minimum history: {self._minimum_history_messages}, RAG docs left: {len(rag_docs)}")
-                break # Exit loop to raise ContextLengthError
+                             f"Minimum history: {self._minimum_history_messages}, RAG docs left: {len(rag_docs) if rag_docs else 0}")
+                break # Exit loop to raise ContextLengthError outside the loop
 
-            # Recalculate total tokens after truncation
-            current_tokens = provider.count_message_tokens(combined_context, model_name)
-            logger.debug(f"Context after truncation step: {len(combined_context)} messages, {current_tokens} tokens.")
-
-            if not truncated_something:
-                 # Safety break if no truncation happened in an iteration
-                 logger.error("Truncation loop failed to remove any message or RAG content.")
+            # Recalculate total tokens ONLY if something was truncated
+            if truncated_something:
+                try:
+                    current_tokens = provider.count_message_tokens(combined_context, model_name)
+                    logger.debug(f"Context after truncation step: {len(combined_context)} messages, {current_tokens} tokens.")
+                except Exception as e:
+                    raise ProviderError(provider.get_name(), f"Token counting failed after truncation step: {e}")
+            else:
+                 # Safety break if no truncation happened in an iteration, means we are stuck
+                 logger.error("Truncation loop failed to remove any message or RAG content, but budget still exceeded.")
                  break
 
 

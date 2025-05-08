@@ -1371,6 +1371,7 @@ This plan breaks down the development of `LLMCore` into logical phases, focusing
         *   Update Click command implementations (`chat`, `session`, `delete`, `models`) to call the corresponding `LLMCore` methods.
         *   Adapt `llmchat`'s CLI argument parsing to pass necessary overrides or parameters to `LLMCore`.
         *   Ensure `llmchat` handles exceptions raised by `LLMCore` gracefully.
+        *   Add support for --interactive/-i for a repl-like functionality implementing proper commands to be called from inside to select and handle configuration. Use of shlex/cmd and prompt_toolkit.
     *   **Deliverables:** A refactored `llmchat` CLI tool that uses `LLMCore` for its core functionality.
 *   **Task 4.4: Packaging & Release Preparation**
 
