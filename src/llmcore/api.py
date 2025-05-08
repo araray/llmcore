@@ -263,14 +263,21 @@ class LLMCore:
             logger.debug(f"User message '{user_msg_obj.id}' added to session '{chat_session.id}'")
 
             # 2. Prepare context using ContextManager
-            context_payload: List[Message] = await self._context_manager.prepare_context(
-                session=chat_session,
-                provider_name=provider_actual_name,
-                model_name=target_model,
-                rag_enabled=enable_rag,
-                rag_k=rag_retrieval_k,
-                rag_collection=rag_collection_name,
-            )
+            # Need to handle potential token counting errors here
+            try:
+                context_payload: List[Message] = await self._context_manager.prepare_context(
+                    session=chat_session,
+                    provider_name=provider_actual_name,
+                    model_name=target_model,
+                    rag_enabled=enable_rag,
+                    rag_k=rag_retrieval_k,
+                    rag_collection=rag_collection_name,
+                )
+            except ProviderError as token_error:
+                # If token counting fails within prepare_context, re-raise as a chat failure
+                logger.error(f"Token counting failed during context preparation: {token_error}")
+                raise ProviderError(provider_actual_name, f"Token counting failed for message {user_msg_obj.id}: {token_error}")
+
             logger.info(f"Prepared context with {len(context_payload)} messages for model '{target_model}'.")
 
             # 3. Call provider's chat_completion
@@ -296,12 +303,20 @@ class LLMCore:
             else:
                 # --- Non-Streaming Path ---
                 if not isinstance(response_data_or_generator, dict):
+                     # This check was causing the issue with Ollama's ChatResponse object
+                     # The provider should now always return a dict
                      logger.error(f"Expected dict response for non-streaming chat, got {type(response_data_or_generator).__name__}")
-                     raise ProviderError(provider_actual_name, "Invalid response format.")
+                     raise ProviderError(provider_actual_name, "Invalid response format (expected dict).")
 
                 response_data = response_data_or_generator
                 full_response_content = self._extract_full_content(response_data, active_provider)
-                logger.debug(f"Received full response content (length: {len(full_response_content)}).")
+                # Check if extraction failed (returned None) vs. returning an empty string
+                if full_response_content is None:
+                     logger.warning(f"Could not extract content from non-streaming {provider_actual_name} response: {response_data}")
+                     full_response_content = f"Response received, but content extraction failed. Data: {str(response_data)[:200]}..."
+                else:
+                     logger.debug(f"Received full response content (length: {len(full_response_content)}).")
+
 
                 if save_session and session_id:
                     assistant_msg = chat_session.add_message(message_content=full_response_content, role=Role.ASSISTANT)
@@ -358,7 +373,8 @@ class LLMCore:
                 if finish_reason and finish_reason not in ["stop", "length", None]:
                      error_msg = f"Stream stopped due to reason: {finish_reason}"
                      logger.warning(error_msg)
-                     raise ProviderError(provider_name, error_msg) # Stop the stream on problematic finish
+                     # Don't raise here, let the stream finish naturally but log the warning
+                     # raise ProviderError(provider_name, error_msg) # Stop the stream on problematic finish
 
         except Exception as e:
             error_occurred = True
@@ -423,41 +439,57 @@ class LLMCore:
         return text_delta or "" # Ensure string return
 
 
-    def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> str:
-        """Extracts the full response content from a non-streaming response dict."""
+    def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> Optional[str]:
+        """
+        Extracts the full response content from a non-streaming response dict.
+        Returns the content string, or None if extraction fails.
+        Handles empty string ('') as valid content.
+        """
         provider_name = provider.get_name()
-        full_response_content = ""
+        full_response_content: Optional[str] = None # Initialize to None
         try:
             if provider_name == "openai":
                 choices = response_data.get('choices', [])
                 if choices and choices[0].get('message'):
-                    full_response_content = choices[0]['message'].get('content', '') or ""
+                    full_response_content = choices[0]['message'].get('content') # Allow None
             elif provider_name == "anthropic":
                 content_blocks = response_data.get('content', [])
                 if content_blocks and content_blocks[0].get("type") == "text":
-                     full_response_content = content_blocks[0].get("text", "") or ""
+                     full_response_content = content_blocks[0].get("text") # Allow None
             elif provider_name == "ollama":
                 message_part = response_data.get('message', {})
                 if message_part:
-                    full_response_content = message_part.get('content', '') or ""
+                    # Use .get() which returns None if 'content' is missing
+                    full_response_content = message_part.get('content')
                 elif 'response' in response_data: # Fallback for generate? Unlikely.
-                    full_response_content = response_data.get('response', '') or ""
+                    full_response_content = response_data.get('response') # Allow None
             elif provider_name == "gemini":
-                 # Handle official google-genai response format (non-streaming)
                  choices = response_data.get('choices', [])
                  if choices and choices[0].get('message'):
-                      full_response_content = choices[0]['message'].get('content', '') or ""
-                 # Add fallback if the structure differs significantly in non-streaming
+                      full_response_content = choices[0]['message'].get('content') # Allow None
 
-            if not full_response_content and response_data:
-                 logger.warning(f"Could not extract content from non-streaming {provider_name} response: {response_data}")
-                 full_response_content = f"Response received, but content extraction failed. Data: {str(response_data)[:200]}..." # Fallback
+            # If content was found but is None, convert it to an empty string
+            if full_response_content is None and response_data:
+                 # Check if the expected path exists but value is None/missing
+                 if provider_name == "openai" and response_data.get('choices', [{}])[0].get('message'):
+                     full_response_content = "" # Assume empty content if structure exists but content is None
+                 elif provider_name == "anthropic" and response_data.get('content', [{}])[0].get("type") == "text":
+                     full_response_content = ""
+                 elif provider_name == "ollama" and response_data.get('message'):
+                     full_response_content = ""
+                 elif provider_name == "gemini" and response_data.get('choices', [{}])[0].get('message'):
+                      full_response_content = ""
+                 else:
+                      # Content path not found, extraction truly failed
+                      logger.warning(f"Could not extract content path from non-streaming {provider_name} response structure: {response_data}")
+                      return None # Indicate failure
+
+            # Ensure return is string or None
+            return str(full_response_content) if full_response_content is not None else None
 
         except Exception as e:
              logger.error(f"Error extracting full content from {provider_name} response: {e}. Response: {response_data}", exc_info=True)
-             full_response_content = f"Error: Could not parse response. {e}"
-
-        return full_response_content
+             return None # Indicate failure
 
 
     # --- Session Management Methods ---
@@ -724,6 +756,8 @@ class LLMCore:
     # --- Async Context Management ---
     async def __aenter__(self):
         """Enter the runtime context related to this object."""
+        # If initialization needs to be async and tied to context entry, move it here.
+        # For now, assuming initialization happens via LLMCore.create()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

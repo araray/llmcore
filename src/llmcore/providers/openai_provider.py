@@ -166,11 +166,12 @@ class OpenAIProvider(BaseProvider):
         """Sends a chat completion request to the OpenAI API."""
         if not self._client:
             raise ProviderError(self.get_name(), "OpenAI client not initialized. API key might be missing.")
-        if not isinstance(context, list):
-            raise ProviderError(self.get_name(), f"OpenAIProvider received unsupported context type: {type(context).__name__}")
+        if not isinstance(context, list) or not all(isinstance(msg, Message) for msg in context):
+            raise ProviderError(self.get_name(), f"OpenAIProvider received unsupported context type: {type(context).__name__}. Expected List[Message].")
 
         model_name = model or self.default_model
-        messages_payload = [{"role": msg.role.value, "content": msg.content} for msg in context]
+        # Use msg.role directly as Role inherits from str
+        messages_payload = [{"role": msg.role, "content": msg.content} for msg in context]
 
         logger.debug(f"Sending request to OpenAI API: model='{model_name}', stream={stream}, num_messages={len(messages_payload)}")
         # logger.debug(f"Payload kwargs: {kwargs}")
@@ -267,11 +268,19 @@ class OpenAIProvider(BaseProvider):
 
         num_tokens = 0
         for message in messages:
-            num_tokens += tokens_per_message
-            # Assuming 'name' field is not used in our Message model for now
-            # If it were, add tokens_per_name if name exists
-            num_tokens += len(self._encoding.encode(message.role.value))
-            num_tokens += len(self._encoding.encode(message.content))
+            try:
+                num_tokens += tokens_per_message
+                # Assuming 'name' field is not used in our Message model for now
+                # If it were, add tokens_per_name if name exists
+                # Use str(message.role) as Role inherits from str
+                role_str = str(message.role)
+                num_tokens += len(self._encoding.encode(role_str))
+                num_tokens += len(self._encoding.encode(message.content))
+            except Exception as e:
+                 logger.error(f"Tiktoken encoding failed for message content/role: {e}. Using approximation for message.")
+                 role_str_for_approx = str(message.role)
+                 num_tokens += (len(message.content) + len(role_str_for_approx) + 15) // 4
+
 
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens

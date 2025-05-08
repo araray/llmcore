@@ -43,7 +43,7 @@ log_level = "INFO"
 
   [providers.ollama]
   base_url = "http://localhost:11434/api" # Base URL for the Ollama API
-  default_model = "falcon3:3b" # Default model to use with Ollama
+  default_model = "gemma3:4b" # Default model to use with Ollama
   timeout = 120 # Timeout in seconds for API calls
   # Optional: Specify tokenizer for Ollama models if default (tiktoken_cl100k_base) is not suitable.
   # Accurate token counting for Ollama can be tricky. Options:
