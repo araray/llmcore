@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import pathlib
+from datetime import datetime, timezone # Import timezone
 from typing import List, Optional, Dict, Any
 
 # Use aiosqlite for native async operations
@@ -87,10 +88,15 @@ class SqliteSessionStorage(BaseSessionStorage):
                     content TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     tokens INTEGER,
-                    selected INTEGER DEFAULT 1, -- Store boolean as INTEGER
+                    -- 'selected' field removed as it's not part of the core Message model anymore
+                    -- selected INTEGER DEFAULT 1,
                     metadata TEXT, -- Store as JSON text
                     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
                 )
+            """)
+            # Add index for faster message lookup by session_id and timestamp
+            await self._conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_messages_session_timestamp ON messages (session_id, timestamp);
             """)
 
             await self._conn.commit() # Commit table creation
@@ -137,6 +143,8 @@ class SqliteSessionStorage(BaseSessionStorage):
             ))
 
             # Efficiently update messages: Delete existing and insert all current messages
+            # This is simpler than checking each message, but potentially less efficient for minor updates.
+            # For high-frequency updates, a more granular approach might be better.
             await self._conn.execute("DELETE FROM messages WHERE session_id = ?", (session.id,))
 
             if session.messages: # Only insert if there are messages
@@ -144,18 +152,19 @@ class SqliteSessionStorage(BaseSessionStorage):
                     (
                         msg.id,
                         session.id, # Use the session's ID
-                        msg.role.value,
+                        str(msg.role), # Use the string value of the Role enum directly
                         msg.content,
                         msg.timestamp.isoformat(),
                         msg.tokens,
-                        1 if msg.selected else 0, # Convert bool to int
+                        # 'selected' field removed
                         json.dumps(msg.metadata or {})
                     )
                     for msg in session.messages
                 ]
+                # Update query to match removed 'selected' field
                 await self._conn.executemany("""
-                    INSERT INTO messages (id, session_id, role, content, timestamp, tokens, selected, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages (id, session_id, role, content, timestamp, tokens, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, messages_data)
 
             await self._conn.commit() # Commit the transaction
@@ -200,8 +209,10 @@ class SqliteSessionStorage(BaseSessionStorage):
 
             # Fetch messages
             messages = []
+            # Update query to match removed 'selected' field
             async with self._conn.execute("""
-                SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC
+                SELECT id, session_id, role, content, timestamp, tokens, metadata
+                FROM messages WHERE session_id = ? ORDER BY timestamp ASC
             """, (session_id,)) as cursor:
                 async for msg_row in cursor:
                     msg_data = dict(msg_row)
@@ -215,33 +226,41 @@ class SqliteSessionStorage(BaseSessionStorage):
 
                     # Convert timestamp string back to datetime
                     try:
-                        msg_data["timestamp"] = datetime.fromisoformat(msg_data["timestamp"])
+                        # Handle potential 'Z' for UTC timezone indication
+                        ts_str = msg_data["timestamp"]
+                        if ts_str.endswith('Z'):
+                            ts_str = ts_str[:-1] + '+00:00'
+                        msg_data["timestamp"] = datetime.fromisoformat(ts_str)
                     except ValueError:
                          logger.warning(f"Invalid timestamp '{msg_data['timestamp']}' found for message {msg_data['id']}. Using current time.")
-                         msg_data["timestamp"] = datetime.now() # Fallback
+                         msg_data["timestamp"] = datetime.now(timezone.utc) # Fallback with timezone
 
-                    # Convert selected int back to bool
-                    msg_data["selected"] = bool(msg_data["selected"])
-
-                    # Create Message object
+                    # Create Message object (removed 'selected')
                     messages.append(Message(**msg_data))
 
             # Create ChatSession object (handle potential datetime parsing errors)
             try:
-                 created_at = datetime.fromisoformat(session_data["created_at"])
-                 updated_at = datetime.fromisoformat(session_data["updated_at"])
+                 # Handle potential 'Z' for UTC timezone indication
+                 created_at_str = session_data["created_at"]
+                 updated_at_str = session_data["updated_at"]
+                 if created_at_str.endswith('Z'): created_at_str = created_at_str[:-1] + '+00:00'
+                 if updated_at_str.endswith('Z'): updated_at_str = updated_at_str[:-1] + '+00:00'
+
+                 created_at = datetime.fromisoformat(created_at_str)
+                 updated_at = datetime.fromisoformat(updated_at_str)
             except ValueError:
                  logger.error(f"Invalid datetime format found for session {session_id}. Cannot load session.")
                  raise SessionStorageError(f"Invalid datetime format in database for session {session_id}.")
 
-            chat_session = ChatSession(
-                session_id=session_data["id"], # Use session_id parameter for constructor
-                name=session_data["name"],
-                created_at=created_at,
-                updated_at=updated_at,
-                metadata=session_data["metadata"],
-                messages=messages
-            )
+            # Use Pydantic validation for creating the final object
+            chat_session = ChatSession.model_validate({
+                "id": session_data["id"],
+                "name": session_data["name"],
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "metadata": session_data["metadata"],
+                "messages": messages
+            })
             logger.debug(f"Session '{session_id}' loaded from SQLite asynchronously.")
             return chat_session
 
@@ -277,7 +296,12 @@ class SqliteSessionStorage(BaseSessionStorage):
             """) as cursor:
                 async for row in cursor:
                     data = dict(row)
-                    data["metadata"] = json.loads(data["metadata"] or '{}')
+                    # Ensure metadata is parsed from JSON string
+                    try:
+                        data["metadata"] = json.loads(data["metadata"] or '{}')
+                    except json.JSONDecodeError:
+                        logger.warning(f"Could not parse metadata JSON for session {data['id']}. Using empty dict.")
+                        data["metadata"] = {}
                     session_metadata_list.append(data)
 
             logger.debug(f"Found {len(session_metadata_list)} sessions in SQLite asynchronously.")
@@ -307,6 +331,7 @@ class SqliteSessionStorage(BaseSessionStorage):
 
         try:
             # Use execute for single operation, check rowcount for success
+            # Deletion cascades to messages table due to FOREIGN KEY ON DELETE CASCADE
             cursor = await self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             await self._conn.commit() # Commit the deletion
             deleted_count = cursor.rowcount # Number of rows affected
