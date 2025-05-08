@@ -13,13 +13,14 @@ from typing import List, Optional, Dict, Any, Tuple
 # Use Type checking block for conditional imports if needed
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
-#     from ..providers.base import BaseProvider
+#     from ..providers.base import BaseProvider # Not needed directly anymore
+#     from ..providers.manager import ProviderManager # Import Manager
 #     from ..models import ChatSession, Message, Role
 #     from confy.loader import Config as ConfyConfig
 
-from ..providers.base import BaseProvider # Direct import should be fine
+from ..providers.manager import ProviderManager # Import Manager
 from ..models import ChatSession, Message, Role
-from ..exceptions import ContextError, ContextLengthError, ConfigError
+from ..exceptions import ContextError, ContextLengthError, ConfigError, ProviderError
 
 # Assume ConfyConfig type for hinting
 try:
@@ -36,17 +37,21 @@ class ContextManager:
 
     Selects messages from history, integrates potential RAG results (future),
     and ensures the final payload adheres to the token limits of the target model.
+    Uses ProviderManager to get provider details.
     """
 
-    def __init__(self, config: ConfyConfig):
+    def __init__(self, config: ConfyConfig, provider_manager: ProviderManager):
         """
         Initializes the ContextManager.
 
         Args:
             config: The main LLMCore configuration object (ConfyConfig instance).
                     Reads settings from the `[context_management]` section.
+            provider_manager: The initialized ProviderManager instance.
         """
         self._config = config
+        self._provider_manager = provider_manager # Store the manager instance
+
         # Load relevant settings from config with defaults
         cm_config = self._config.get('context_management', {})
         self._reserved_response_tokens: int = cm_config.get('reserved_response_tokens', 500)
@@ -68,7 +73,7 @@ class ContextManager:
     async def prepare_context(
         self,
         session: ChatSession,
-        provider: BaseProvider,
+        provider_name: str, # Use provider name to get instance from manager
         model_name: Optional[str] = None,
         # RAG parameters (placeholders for Phase 2)
         rag_results: Optional[List[str]] = None,
@@ -83,7 +88,7 @@ class ContextManager:
 
         Args:
             session: The current ChatSession containing the message history.
-            provider: The target BaseProvider instance for token counting and limits.
+            provider_name: The name of the target provider (used to get instance from manager).
             model_name: The specific model name being used (needed for accurate limits/counting).
             rag_results: Placeholder for retrieved document contents (Phase 2).
             use_mcp: Placeholder for MCP flag (Phase 3).
@@ -95,8 +100,15 @@ class ContextManager:
             ContextLengthError: If the context cannot be reduced below the model's limit
                                 while preserving essential messages (system + latest user).
             ProviderError: If the provider fails during token counting or limit retrieval.
-            ConfigError: If essential configuration is missing.
+            ConfigError: If essential configuration is missing or provider not found.
         """
+        try:
+            # Get the provider instance from the manager
+            provider = self._provider_manager.get_provider(provider_name)
+        except (ConfigError, ProviderError) as e:
+             logger.error(f"ContextManager failed to get provider '{provider_name}': {e}")
+             raise # Re-raise config/provider errors
+
         target_model = model_name or provider.default_model # Use provider's default if not specified
         if not target_model:
              raise ConfigError(f"Could not determine target model for context preparation (provider: {provider.get_name()}).")
@@ -190,7 +202,7 @@ class ContextManager:
     def _select_history_last_n_tokens(
         self,
         all_messages: List[Message],
-        provider: BaseProvider,
+        provider: BaseProvider, # Keep provider instance here for token counting
         model_name: str,
         token_budget: int
     ) -> Tuple[List[Message], int]:
@@ -228,15 +240,7 @@ class ContextManager:
         for msg in reversed(non_system_messages):
             try:
                 # Count tokens for this single message (including overhead)
-                # Note: count_message_tokens might be slightly inaccurate for single messages
-                # depending on implementation, but should be close enough.
-                # A more precise way might involve counting pairs, but adds complexity.
-                # Let's use count_message_tokens on a list containing just this message.
                 message_tokens = provider.count_message_tokens([msg], model_name)
-                # Adjust for base overhead if count_message_tokens includes it
-                # This depends heavily on the provider's count_message_tokens implementation.
-                # Assuming count_message_tokens([msg]) gives a reasonable estimate for now.
-
             except Exception as e:
                 logger.error(f"Failed to count tokens for message ID {msg.id}: {e}")
                 raise ProviderError(provider.get_name(), f"Token counting failed for message {msg.id}: {e}")

@@ -8,7 +8,7 @@ require LLM-driven chat capabilities, session management, context handling,
 and Retrieval Augmented Generation (RAG).
 """
 
-__version__ = "0.1.0"  # Corresponds to Phase 1 development
+__version__ = "0.2.0"  # Updated version reflecting new features
 
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
@@ -32,13 +32,13 @@ from .exceptions import (
     MCPError
 )
 
-# The main LLMCore class will be imported here once defined in api.py
-# from .api import LLMCore
+# Import the main LLMCore class from api.py
+from .api import LLMCore
 
 # Expose specific elements for the public API
 __all__ = [
     "__version__",
-    # "LLMCore", # To be uncommented when LLMCore class is added
+    "LLMCore", # Expose the main class
     # Models
     "Role",
     "Message",
