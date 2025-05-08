@@ -38,8 +38,11 @@ class VectorStorageError(StorageError):
     def __init__(self, message: str = "Vector storage error."):
         super().__init__(message)
 
-class SessionNotFoundError(StorageError): # Or LLMCoreError, spec shows it under LLMCoreError directly
-    """Raised when a specified session ID is not found in storage."""
+class SessionNotFoundError(StorageError):
+    """
+    Raised when a specified session ID is not found in storage.
+    Inherits from StorageError as it's a storage-related lookup failure.
+    """
     def __init__(self, session_id: str, message: str = "Session not found."):
         self.session_id = session_id
         super().__init__(f"{message} Session ID: '{session_id}'")
@@ -68,12 +71,13 @@ class MCPError(LLMCoreError):
     def __init__(self, message: str = "MCP processing error."):
         super().__init__(message)
 
-# We may add more specific exceptions as the library develops.
-# For example:
+# Further specific exceptions can be added as needed, for example:
 # class AuthenticationError(ProviderError):
 #     """Raised for authentication failures with an LLM provider."""
-#     pass
+#     def __init__(self, provider_name: str, message: str = "Authentication failed."):
+#         super().__init__(provider_name, message)
 
 # class RateLimitError(ProviderError):
 #     """Raised when an LLM provider's rate limit is exceeded."""
-#     pass
+#     def __init__(self, provider_name: str, message: str = "Rate limit exceeded."):
+#         super().__init__(provider_name, message)

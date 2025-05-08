@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class Role(str, Enum):
@@ -26,7 +26,7 @@ class Role(str, Enum):
     ASSISTANT = "assistant"
 
     @classmethod
-    def _missing_(cls, value: object): # type: ignore
+    def _missing_(cls, value: object): # type: ignore[misc] # Pydantic uses this signature
         """
         Handles case-insensitive matching and common aliases for roles.
         For example, "Agent" or "AGENT" will be mapped to Role.ASSISTANT.
@@ -65,27 +65,38 @@ class Message(BaseModel):
     content: str = Field(description="The textual content of the message.")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the message was created (UTC).")
     tokens: Optional[int] = Field(default=None, description="Optional token count for the message content.")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional dictionary for additional message metadata.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional dictionary for additional message metadata.") # Changed from Optional[Dict] to Dict
 
     class Config:
         """Pydantic model configuration."""
         use_enum_values = True # Ensures enum values are used in serialization
         validate_assignment = True # Re-validate on assignment
         json_encoders = {
-            datetime: lambda dt: dt.isoformat() # Ensure datetime is ISO formatted in JSON
+            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z') # Ensure datetime is ISO Z-formatted
         }
 
-    @validator('timestamp', pre=True, always=True)
+    @field_validator('timestamp', mode='before')
+    @classmethod
     def ensure_utc_timestamp(cls, v: Any) -> datetime:
         """Ensure the timestamp is timezone-aware and in UTC if naive."""
         if isinstance(v, str):
-            v = datetime.fromisoformat(v.replace('Z', '+00:00')) # Handle 'Z' for UTC
+            # Handle 'Z' for UTC and ensure timezone info
+            if v.endswith('Z'):
+                v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+            else:
+                v_parsed = datetime.fromisoformat(v)
+
+            if v_parsed.tzinfo is None:
+                return v_parsed.replace(tzinfo=timezone.utc)
+            return v_parsed.astimezone(timezone.utc)
         if isinstance(v, datetime):
             if v.tzinfo is None:
                 return v.replace(tzinfo=timezone.utc) # Assume UTC if naive
             return v.astimezone(timezone.utc) # Convert to UTC
         # If default_factory is used, it will already be timezone-aware UTC
-        return v # type: ignore
+        if v is None: # Should be handled by default_factory, but as a safeguard
+            return datetime.now(timezone.utc)
+        return v
 
 
 class ChatSession(BaseModel):
@@ -113,35 +124,57 @@ class ChatSession(BaseModel):
     messages: List[Message] = Field(default_factory=list, description="List of messages in the conversation, ordered chronologically.")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the session was created (UTC).")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the session was last updated (UTC).")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional dictionary for additional session metadata.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional dictionary for additional session metadata.") # Changed from Optional[Dict] to Dict
 
     class Config:
         """Pydantic model configuration."""
         validate_assignment = True
         json_encoders = {
-            datetime: lambda dt: dt.isoformat()
+            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z') # Ensure datetime is ISO Z-formatted
         }
 
-    @validator('created_at', 'updated_at', pre=True, always=True)
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
     def ensure_utc_timestamps(cls, v: Any) -> datetime:
         """Ensure created_at and updated_at timestamps are timezone-aware and in UTC."""
         if isinstance(v, str):
-            v = datetime.fromisoformat(v.replace('Z', '+00:00'))
+            if v.endswith('Z'):
+                v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+            else:
+                v_parsed = datetime.fromisoformat(v)
+
+            if v_parsed.tzinfo is None:
+                return v_parsed.replace(tzinfo=timezone.utc)
+            return v_parsed.astimezone(timezone.utc)
         if isinstance(v, datetime):
             if v.tzinfo is None:
                 return v.replace(tzinfo=timezone.utc)
             return v.astimezone(timezone.utc)
-        return v # type: ignore
+        if v is None: # Should be handled by default_factory
+            return datetime.now(timezone.utc)
+        return v
 
-    def add_message(self, message: Message) -> None:
+    def add_message(self, message_content: str, role: Role, session_id_override: Optional[str] = None) -> Message:
         """
-        Adds a message to the session and updates the `updated_at` timestamp.
+        Creates a new message, adds it to the session, and updates the `updated_at` timestamp.
 
         Args:
-            message: The `Message` object to add to the session.
+            message_content: The content of the message.
+            role: The role of the message sender.
+            session_id_override: Optionally override the session_id for the message.
+                                 Defaults to this session's ID.
+
+        Returns:
+            The created Message object.
         """
-        self.messages.append(message)
+        new_message = Message(
+            content=message_content,
+            role=role,
+            session_id=session_id_override or self.id # Use current session ID by default
+        )
+        self.messages.append(new_message)
         self.updated_at = datetime.now(timezone.utc)
+        return new_message
 
 
 class ContextDocument(BaseModel):
@@ -166,7 +199,7 @@ class ContextDocument(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the context document.")
     content: str = Field(description="The textual content of the document.")
     embedding: Optional[List[float]] = Field(default=None, description="Optional vector embedding of the document content.")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional dictionary for additional document metadata (e.g., source, title).")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional dictionary for additional document metadata (e.g., source, title).") # Changed from Optional[Dict] to Dict
     score: Optional[float] = Field(default=None, description="Optional relevance score from a similarity search.")
 
     class Config:
