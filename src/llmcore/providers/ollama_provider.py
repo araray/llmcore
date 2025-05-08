@@ -1,22 +1,32 @@
 # src/llmcore/providers/ollama_provider.py
 """
-Ollama provider implementation for the LLMCore library.
+Ollama provider implementation for the LLMCore library using the official ollama library.
 
-Interacts with a local Ollama instance via its REST API.
+Interacts with a local Ollama instance.
 Supports streaming and different API endpoints (/api/chat, /api/generate).
 """
 
-import json
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 
-import aiohttp
+# Use the official ollama library
+try:
+    import ollama
+    from ollama import AsyncClient, ResponseError
+    ollama_available = True
+except ImportError:
+    ollama_available = False
+    AsyncClient = None # type: ignore
+    ResponseError = Exception # type: ignore
+
+# Keep tiktoken for token counting
 try:
     import tiktoken
     tiktoken_available = True
 except ImportError:
     tiktoken_available = False
-    tiktoken = None # Placeholder
+    tiktoken = None # type: ignore
 
 from ..models import Message, Role
 from ..exceptions import ProviderError, ConfigError
@@ -26,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Default context lengths for common Ollama models (can be overridden by API in future)
 # Source: Often based on the underlying model's known limits (e.g., Llama 3, Mistral)
+# Keep this map as the ollama library might not provide context lengths directly.
 DEFAULT_OLLAMA_TOKEN_LIMITS = {
     "llama3": 8192,
     "llama3:8b": 8192,
@@ -50,42 +61,64 @@ DEFAULT_OLLAMA_TOKEN_LIMITS = {
     # Add other common models or rely on dynamic fetching if available
 }
 
+# Default model if not specified in config
+DEFAULT_MODEL = "llama3"
+
 class OllamaProvider(BaseProvider):
     """
-    LLMCore provider for interacting with Ollama.
-
-    Connects to a running Ollama instance via HTTP requests.
+    LLMCore provider for interacting with Ollama using the official library.
     """
-    _client_session: Optional[aiohttp.ClientSession] = None
+    _client: Optional[AsyncClient] = None
+    _encoding: Optional[Any] = None # tiktoken encoding object
 
     def __init__(self, config: Dict[str, Any]):
         """
-        Initializes the OllamaProvider.
+        Initializes the OllamaProvider using the official ollama library.
 
         Args:
             config: Configuration dictionary containing:
-                    'base_url': The base URL of the Ollama API (e.g., "http://localhost:11434").
-                    'default_model': The default Ollama model to use (e.g., "llama3").
-                    'timeout' (optional): Request timeout in seconds (default: 120).
-                    'tokenizer' (optional): Tokenizer to use for counting ('tiktoken_cl100k_base',
+                    'host' (optional): Hostname/IP of the Ollama server (default: http://localhost:11434).
+                                       The library handles adding '/api'.
+                    'default_model' (optional): Default Ollama model to use (e.g., "llama3").
+                    'timeout' (optional): Request timeout in seconds (default: library default).
+                    'tokenizer' (optional): Tokenizer for counting ('tiktoken_cl100k_base',
                                             'tiktoken_p50k_base', 'char_div_4'). Default: 'tiktoken_cl100k_base'.
         """
-        self.base_url = config.get("base_url")
-        if not self.base_url:
-            raise ConfigError("Ollama provider 'base_url' is required in configuration.")
-        # Ensure base_url doesn't end with /api or /
-        self.base_url = self.base_url.rstrip('/').replace('/api', '')
+        if not ollama_available:
+            raise ImportError("Ollama library is not installed. Please install `ollama`.")
+        if not tiktoken_available:
+            # Keep tiktoken requirement for now, as ollama lib doesn't count tokens
+            raise ImportError("tiktoken library is not installed but required for token counting. Please install `tiktoken`.")
 
-        self.default_model = config.get("default_model", "llama3")
-        self.timeout = int(config.get("timeout", 120))
+        # The ollama library uses 'host' which defaults internally if None
+        self.host = config.get("host") # Can be None to use library default
+        self.default_model = config.get("default_model", DEFAULT_MODEL)
+        # Timeout can be passed directly to client methods if needed, or set on client init
+        self.timeout = config.get("timeout") # Can be None
+
+        # Initialize the AsyncClient
+        try:
+            # Pass timeout during client initialization if provided
+            client_args = {}
+            if self.host:
+                client_args['host'] = self.host
+            if self.timeout:
+                client_args['timeout'] = float(self.timeout)
+
+            self._client = AsyncClient(**client_args)
+            logger.debug(f"Ollama AsyncClient initialized (Host: {self.host or 'default'})")
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama AsyncClient: {e}", exc_info=True)
+            raise ConfigError(f"Ollama client initialization failed: {e}")
+
+        # --- Tokenizer Setup (using tiktoken) ---
         self.tokenizer_name = config.get("tokenizer", "tiktoken_cl100k_base")
-        self.encoding = None
-
+        self._encoding = None
         if self.tokenizer_name.startswith("tiktoken_"):
-            if tiktoken_available and tiktoken:
+            if tiktoken:
                 try:
                     encoding_name = self.tokenizer_name.split("tiktoken_")[1]
-                    self.encoding = tiktoken.get_encoding(encoding_name)
+                    self._encoding = tiktoken.get_encoding(encoding_name)
                     logger.info(f"OllamaProvider using tiktoken encoding: {encoding_name}")
                 except Exception as e:
                     logger.warning(f"Failed to load tiktoken encoding '{self.tokenizer_name}'. "
@@ -102,68 +135,43 @@ class OllamaProvider(BaseProvider):
 
         if self.tokenizer_name == "char_div_4":
              logger.info("OllamaProvider using character division approximation for token counting.")
-
+        # --- End Tokenizer Setup ---
 
     def get_name(self) -> str:
         """Returns the provider name."""
         return "ollama"
 
-    async def _get_client_session(self) -> aiohttp.ClientSession:
-        """Gets or creates an aiohttp ClientSession."""
-        if self._client_session is None or self._client_session.closed:
-            # You might want to configure the connector with limits, SSL context, etc.
-            connector = aiohttp.TCPConnector(limit_per_host=20) # Example limit
-            self._client_session = aiohttp.ClientSession(connector=connector)
-            logger.debug("Created new aiohttp.ClientSession for OllamaProvider.")
-        return self._client_session
-
-    async def close(self) -> None:
-        """Closes the underlying aiohttp client session."""
-        if self._client_session and not self._client_session.closed:
-            await self._client_session.close()
-            self._client_session = None
-            logger.debug("Closed aiohttp.ClientSession for OllamaProvider.")
-
     async def _fetch_ollama_models(self) -> List[str]:
-        """Fetches the list of models available from the Ollama /api/tags endpoint."""
-        session = await self._get_client_session()
-        api_url = f"{self.base_url}/api/tags"
+        """Fetches the list of models available from the Ollama API using the client."""
+        if not self._client:
+            raise ProviderError(self.get_name(), "Ollama client not initialized.")
         try:
-            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as response: # Shorter timeout for listing
-                response.raise_for_status() # Raise exception for non-2xx status codes
-                data = await response.json()
-                models = [m.get("name") for m in data.get("models", []) if m.get("name")]
-                logger.debug(f"Fetched {len(models)} models from Ollama API: {models}")
-                return models
-        except aiohttp.ClientResponseError as e:
-            logger.warning(f"Failed to fetch models from Ollama API ({api_url}): HTTP {e.status} - {e.message}")
-            return []
-        except aiohttp.ClientError as e:
-            logger.warning(f"Connection error fetching models from Ollama API ({api_url}): {e}")
-            return []
+            models_info = await self._client.list()
+            models = [m.get("name") for m in models_info.get("models", []) if m.get("name")]
+            logger.debug(f"Fetched {len(models)} models from Ollama API via client: {models}")
+            return models
+        except ResponseError as e:
+            logger.warning(f"Failed to fetch models from Ollama API: HTTP {e.status_code} - {e.error}")
+            return [] # Return empty list on error
         except Exception as e:
-            logger.error(f"Unexpected error fetching models from Ollama API ({api_url}): {e}", exc_info=True)
+            logger.error(f"Unexpected error fetching models from Ollama API: {e}", exc_info=True)
             return []
 
     def get_available_models(self) -> List[str]:
         """
-        Returns a list of known default models.
-        Note: Does not dynamically fetch from the API in this synchronous version.
-              Use an async method if dynamic fetching is required at runtime.
+        Returns a static list of known default models.
+        Note: Use an async method like `_fetch_ollama_models` for dynamic fetching.
         """
-        # Consider adding dynamic fetching here if needed, but it makes the sync method complex.
-        # For now, return the static list.
         logger.warning("OllamaProvider.get_available_models() returning static list. "
                        "Use an async method for dynamic fetching if needed.")
         return list(DEFAULT_OLLAMA_TOKEN_LIMITS.keys())
 
     def get_max_context_length(self, model: Optional[str] = None) -> int:
         """Returns the estimated maximum context length for the given Ollama model."""
+        # The ollama library doesn't seem to provide this directly yet. Use static map.
         model_name = model or self.default_model
-        # Base model name (e.g., "llama3" from "llama3:8b")
-        base_model_name = model_name.split(':')[0]
+        base_model_name = model_name.split(':')[0] # Base model name (e.g., "llama3" from "llama3:8b")
 
-        # Check specific model, then base model, then default
         limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(model_name)
         if limit is None:
             limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
@@ -179,127 +187,111 @@ class OllamaProvider(BaseProvider):
         stream: bool = False,
         **kwargs: Any
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-        """Sends a chat completion request to the Ollama API."""
+        """Sends a chat completion request to the Ollama API using the ollama library."""
+        if not self._client:
+            raise ProviderError(self.get_name(), "Ollama client not initialized.")
         if not isinstance(context, list):
-            # Ollama's /api/chat expects a list of messages.
-            # If we receive something else (like an MCP object), it needs conversion.
-            # For now, raise an error if the context is not the expected list.
             raise ProviderError(self.get_name(), f"OllamaProvider received unsupported context type: {type(context).__name__}")
 
         model_name = model or self.default_model
-        session = await self._get_client_session()
-        api_url = f"{self.base_url}/api/chat"
-
-        # Prepare payload for /api/chat
         messages_payload = [{"role": msg.role.value, "content": msg.content} for msg in context]
-        payload = {
-            "model": model_name,
-            "messages": messages_payload,
-            "stream": stream,
-            "options": kwargs, # Pass kwargs like temperature, top_p under 'options'
-        }
-        logger.debug(f"Sending request to Ollama ({api_url}) with model '{model_name}', stream={stream}")
-        # logger.debug(f"Payload (excluding messages): { {k:v for k,v in payload.items() if k != 'messages'} }")
+
+        logger.debug(f"Sending request to Ollama via client: model='{model_name}', stream={stream}, num_messages={len(messages_payload)}")
 
         try:
-            async with session.post(api_url, json=payload, timeout=aiohttp.ClientTimeout(total=self.timeout)) as response:
-                # Check for common errors first
-                if response.status == 404:
-                    logger.warning(f"Ollama API endpoint not found ({api_url}). Is Ollama running and accessible?")
-                    raise ProviderError(self.get_name(), f"API endpoint not found: {api_url}")
-                if response.status == 400:
-                     error_text = await response.text()
-                     logger.error(f"Ollama API Bad Request ({response.status}) for model '{model_name}': {error_text}")
-                     # Check if the model might just not be pulled
-                     if "model not found" in error_text.lower():
-                          raise ProviderError(self.get_name(), f"Model '{model_name}' not found. Pull it using 'ollama pull {model_name}'.")
-                     raise ProviderError(self.get_name(), f"API Bad Request: {error_text}")
+            # Pass kwargs directly to the 'options' parameter if they exist
+            options = kwargs if kwargs else None
 
-                # Raise other non-200 errors
-                response.raise_for_status()
+            # Call the client's chat method
+            response_or_stream = await self._client.chat(
+                model=model_name,
+                messages=messages_payload,
+                stream=stream,
+                options=options,
+                # Timeout can be passed here if needed, overriding client default
+                # timeout=self.timeout if self.timeout else None
+            )
 
-                if stream:
-                    logger.debug(f"Processing stream response from Ollama model '{model_name}'")
-                    return self._process_stream(response, model_name)
-                else:
-                    logger.debug(f"Processing non-stream response from Ollama model '{model_name}'")
-                    result_data = await response.json()
-                    # Ensure the non-streamed response format is consistent
-                    # The actual response might look like:
-                    # {'model': 'llama3', 'created_at': '...', 'message': {'role': 'assistant', 'content': '...'}, 'done': True, ...}
-                    return result_data
+            if stream:
+                logger.debug(f"Processing stream response from Ollama model '{model_name}'")
+                # The ollama library stream yields dictionaries directly
+                return response_or_stream # type: ignore
+            else:
+                logger.debug(f"Processing non-stream response from Ollama model '{model_name}'")
+                # The non-stream response is already a dictionary
+                return response_or_stream # type: ignore
 
-        except aiohttp.ClientConnectorError as e:
-            logger.error(f"Connection error accessing Ollama at {self.base_url}: {e}")
-            raise ProviderError(self.get_name(), f"Could not connect to Ollama at {self.base_url}. Is it running?")
-        except aiohttp.ClientResponseError as e: # Catch non-2xx status codes not handled above
-             logger.error(f"Ollama API request failed ({api_url}): HTTP {e.status} - {e.message}")
-             raise ProviderError(self.get_name(), f"API request failed: {e.status} - {e.message}")
+        except ResponseError as e:
+            logger.error(f"Ollama API error: {e.status_code} - {e.error}", exc_info=True)
+            # Check for model not found error specifically
+            if "model not found" in str(e.error).lower():
+                raise ProviderError(self.get_name(), f"Model '{model_name}' not found. Pull it using 'ollama pull {model_name}'.")
+            raise ProviderError(self.get_name(), f"API Error ({e.status_code}): {e.error}")
         except asyncio.TimeoutError:
-            logger.error(f"Request to Ollama timed out after {self.timeout} seconds ({api_url}).")
-            raise ProviderError(self.get_name(), f"Request timed out after {self.timeout}s.")
+            logger.error(f"Request to Ollama timed out (timeout: {self.timeout or 'default'}).")
+            raise ProviderError(self.get_name(), f"Request timed out.")
         except Exception as e:
+            # Catch potential connection errors or other unexpected issues
             logger.error(f"Unexpected error during Ollama chat completion: {e}", exc_info=True)
+            # Check if it looks like a connection error
+            if "connect" in str(e).lower():
+                 raise ProviderError(self.get_name(), f"Could not connect to Ollama at {self.host or 'default'}. Is it running? Details: {e}")
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
-
-    async def _process_stream(self, response: aiohttp.ClientResponse, model_name: str) -> AsyncGenerator[Dict[str, Any], None]:
-        """Processes the streaming response from Ollama API."""
-        buffer = ""
-        async for line_bytes in response.content:
-            buffer += line_bytes.decode('utf-8', errors='replace')
-            # Ollama streams JSON objects separated by newlines
-            while '\n' in buffer:
-                line, buffer = buffer.split('\n', 1)
-                if line.strip():
-                    try:
-                        chunk_data = json.loads(line)
-                        # Example chunk: {'model': 'llama3', 'created_at': '...', 'message': {'role': 'assistant', 'content': ' response'}, 'done': False}
-                        # Or final chunk: {'model': 'llama3', ..., 'done': True, 'total_duration': ..., 'prompt_eval_count': ..., ...}
-                        yield chunk_data
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to decode JSON stream line from Ollama: {line[:100]}...")
-                    except Exception as e:
-                         logger.error(f"Error processing Ollama stream line: {e} - Line: {line[:100]}...")
-        # Process any remaining data in the buffer
-        if buffer.strip():
-            try:
-                chunk_data = json.loads(buffer)
-                yield chunk_data
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to decode final JSON stream buffer from Ollama: {buffer[:100]}...")
-            except Exception as e:
-                logger.error(f"Error processing final Ollama stream buffer: {e} - Buffer: {buffer[:100]}...")
 
 
     def count_tokens(self, text: str, model: Optional[str] = None) -> int:
-        """Counts tokens using the configured tokenizer or approximation."""
+        """Counts tokens using the configured tokenizer (tiktoken) or approximation."""
+        # The ollama library does not provide token counting. Use tiktoken.
+        if not self._encoding:
+            # Fallback to character approximation if tiktoken failed to load
+            return (len(text) + 3) // 4 if text else 0
+
         if not text:
             return 0
 
-        if self.encoding:
-            try:
-                return len(self.encoding.encode(text))
-            except Exception as e:
-                logger.warning(f"tiktoken encoding failed for model '{model or self.default_model}': {e}. Falling back.")
-                # Fall through to approximation if tiktoken fails unexpectedly
-
-        # Fallback to character approximation
-        # Average ~4 chars/token is a rough estimate
-        return (len(text) + 3) // 4
+        try:
+            return len(self._encoding.encode(text))
+        except Exception as e:
+            logger.error(f"Tiktoken encoding failed: {e}", exc_info=True)
+            # Fallback to approximation if tiktoken fails unexpectedly
+            return (len(text) + 3) // 4
 
     def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
-        """Counts tokens for a list of messages using the configured method."""
-        # Ollama token counting is complex and model-dependent.
-        # We apply a small overhead per message plus the content tokens.
-        # This is a heuristic and may not be perfectly accurate.
+        """
+        Counts tokens for a list of messages using the configured method (tiktoken).
+        Applies a small heuristic overhead per message.
+        """
+        if not self._encoding:
+            logger.warning("Tiktoken encoding not available for token counting. Using approximation.")
+            # Approximate based on character count if no encoder
+            total_chars = sum(len(msg.content) for msg in messages)
+            return (total_chars + (len(messages) * 15)) // 4 # Rough approximation with overhead
+
+        # Use tiktoken with heuristic overhead
         overhead_per_message = 5 # Rough estimate for role/formatting markers
         total_tokens = 0
 
         for msg in messages:
-            content_tokens = self.count_tokens(msg.content, model)
-            total_tokens += content_tokens + overhead_per_message
+            try:
+                content_tokens = len(self._encoding.encode(msg.content))
+                role_tokens = len(self._encoding.encode(msg.role.value)) # Count role tokens too
+                total_tokens += content_tokens + role_tokens + overhead_per_message
+            except Exception as e:
+                logger.error(f"Tiktoken encoding failed for message content/role: {e}. Using approximation for message.")
+                total_tokens += (len(msg.content) + len(msg.role.value) + 15) // 4
 
-        # Add a small buffer for the overall structure/prompting if needed
-        total_tokens += 3 # Similar to OpenAI's final assistant prompt marker
+        total_tokens += 3 # Add a small buffer for the overall structure/prompting
 
         return total_tokens
+
+    async def close(self) -> None:
+        """Closes the underlying Ollama client session if applicable."""
+        # The ollama library's AsyncClient uses httpx internally.
+        # Closing the client explicitly is good practice.
+        if self._client:
+            try:
+                await self._client.close()
+                logger.debug("Ollama AsyncClient closed.")
+            except Exception as e:
+                logger.error(f"Error closing Ollama client: {e}", exc_info=True)
+        self._client = None # Clear the client reference
