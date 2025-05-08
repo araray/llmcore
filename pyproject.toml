@@ -37,12 +37,12 @@ ollama = ["ollama>=0.4.8"]
 
 # Dependencies for specific storage backends
 sqlite = [] # sqlite3 is part of standard library
-postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"] # Use extras for binary, check pgvector client name/version
-chromadb = ["chromadb-client>=1.0.0"] # Check latest stable version
+postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"] # Use extras for binary
+chromadb = ["chromadb>=1.0.0"]
 
 # Dependencies for specific embedding models
-sentence_transformers = ["sentence-transformers>=2.2.0"] # Requires torch/tensorflow/onnx
-# OpenAI and Google embeddings are usually part of their main SDKs (openai, google-generativeai)
+sentence_transformers = ["sentence-transformers>=2.2.0"]
+# OpenAI and Google embeddings are usually part of their main SDKs (openai, google-genai)
 
 # MCP Support
 mcp = ["modelcontextprotocol>=0.1.0"] # Placeholder, check actual package name and version
