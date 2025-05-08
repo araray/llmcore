@@ -13,12 +13,14 @@ from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 # Use the official ollama library
 try:
     import ollama
-    from ollama import AsyncClient, ResponseError
+    from ollama import AsyncClient, ResponseError, ChatResponse
     ollama_available = True
 except ImportError:
     ollama_available = False
     AsyncClient = None # type: ignore
     ResponseError = Exception # type: ignore
+    ChatResponse = None # type: ignore
+
 
 # Keep tiktoken for token counting
 try:
@@ -211,7 +213,7 @@ class OllamaProvider(BaseProvider):
             options = kwargs if kwargs else None
 
             # Call the client's chat method
-            response_or_stream = await self._client.chat(
+            response_or_stream_obj: Union[ChatResponse, AsyncGenerator[Dict[str, Any], None]] = await self._client.chat(
                 model=model_name,
                 messages=messages_payload, # type: ignore
                 stream=stream,
@@ -223,18 +225,28 @@ class OllamaProvider(BaseProvider):
             if stream:
                 logger.debug(f"Processing stream response from Ollama model '{model_name}'")
                 # The ollama library stream yields dictionaries directly
-                return response_or_stream # type: ignore
+                return response_or_stream_obj # type: ignore
             else:
                 logger.debug(f"Processing non-stream response from Ollama model '{model_name}'")
-                # The non-stream response is already a dictionary
-                return response_or_stream # type: ignore
+                # The non-stream response is an ollama.ChatResponse object. Convert to dict.
+                if isinstance(response_or_stream_obj, dict): # Should not happen based on type hint, but defensive
+                    return response_or_stream_obj
+                if ChatResponse and isinstance(response_or_stream_obj, ChatResponse):
+                    # Convert the Pydantic model to a dictionary
+                    return response_or_stream_obj.model_dump()
+                else:
+                    # This case should ideally not be reached if types are correct
+                    logger.error(f"Unexpected response type for non-streaming Ollama chat: {type(response_or_stream_obj)}")
+                    raise ProviderError(self.get_name(), "Invalid or unexpected response format from Ollama client (non-streaming).")
+
 
         except ResponseError as e:
-            logger.error(f"Ollama API error: {e.status_code} - {e.error}", exc_info=True)
+            error_detail = e.error if hasattr(e, 'error') else str(e)
+            logger.error(f"Ollama API error: {e.status_code} - {error_detail}", exc_info=True)
             # Check for model not found error specifically
-            if e.error and "model not found" in str(e.error).lower():
+            if error_detail and "model not found" in str(error_detail).lower():
                 raise ProviderError(self.get_name(), f"Model '{model_name}' not found. Pull it using 'ollama pull {model_name}'.")
-            raise ProviderError(self.get_name(), f"API Error ({e.status_code}): {e.error}")
+            raise ProviderError(self.get_name(), f"API Error ({e.status_code}): {error_detail}")
         except asyncio.TimeoutError:
             logger.error(f"Request to Ollama timed out (timeout: {self.timeout or 'default'}).")
             raise ProviderError(self.get_name(), f"Request timed out.")
