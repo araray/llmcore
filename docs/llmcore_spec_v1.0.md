@@ -2,6 +2,8 @@
 
 > ### Design & Implementation Plan
 
+[TOC]
+
 ## 1. Introduction & Vision
 
 This document outlines the specification for a Python library, **`LLMCore`**, designed to provide a unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs). The primary goal is to refactor the core functionalities of the existing `llmchat` CLI tool into a reusable library/module that can be easily integrated into other Python projects.
