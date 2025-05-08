@@ -381,7 +381,9 @@ class LLMCore:
                 text_delta = self._extract_delta_content(chunk_dict, provider)
                 error_message = chunk_dict.get('error')
                 # Adjust finish reason check based on provider specifics if needed
+                # Use .get() for finish_reason as it might not always be present
                 finish_reason = chunk_dict.get('finish_reason')
+
 
                 if text_delta:
                     full_response_content += text_delta
@@ -586,13 +588,18 @@ class LLMCore:
         try:
             embedding = await self._embedding_manager.generate_embedding(content)
             doc_metadata = metadata if metadata is not None else {}
-            doc = ContextDocument(id=doc_id, content=content, embedding=embedding, metadata=doc_metadata)
+            # Let ContextDocument generate ID if doc_id is None
+            if doc_id:
+                doc = ContextDocument(id=doc_id, content=content, embedding=embedding, metadata=doc_metadata)
+            else:
+                doc = ContextDocument(content=content, embedding=embedding, metadata=doc_metadata)
+
             vector_storage = self._storage_manager.get_vector_storage()
             added_ids = await vector_storage.add_documents([doc], collection_name=collection_name)
             if not added_ids:
                  raise VectorStorageError("Failed to add document, no ID returned.")
             logger.info(f"Document '{added_ids[0]}' added to vector store collection '{collection_name or 'default'}'.")
-            return added_ids[0]
+            return added_ids[0] # Return the actual ID used (might be generated)
         except (EmbeddingError, VectorStorageError, ConfigError, StorageError) as e:
              logger.error(f"Failed to add document to vector store: {e}")
              raise
@@ -626,30 +633,38 @@ class LLMCore:
         logger.debug(f"Adding batch of {len(documents)} documents to vector store (Collection: {collection_name or 'default'})...")
         try:
             contents = []
-            context_docs_to_create = []
+            # Store original data temporarily to build ContextDocuments later
+            original_doc_data = []
             for doc_data in documents:
                 content = doc_data.get("content")
                 if not isinstance(content, str): raise ValueError(f"Invalid document data: 'content' missing/not string in {doc_data}")
                 contents.append(content)
-                context_docs_to_create.append({
-                    "id": doc_data.get("id"),
-                    "content": content,
-                    "metadata": doc_data.get("metadata", {})
-                })
+                original_doc_data.append(doc_data) # Store original dict
 
             embeddings = await self._embedding_manager.generate_embeddings(contents)
             if len(embeddings) != len(documents): raise EmbeddingError("Mismatch between texts and generated embeddings.")
 
-            docs_to_add: List[ContextDocument] = [
-                ContextDocument(
-                    id=doc_data["id"],
-                    content=doc_data["content"],
-                    embedding=embeddings[i],
-                    metadata=doc_data["metadata"]
-                ) for i, doc_data in enumerate(context_docs_to_create)
-            ]
+            docs_to_add: List[ContextDocument] = []
+            for i, doc_data in enumerate(original_doc_data):
+                doc_id = doc_data.get("id") # Get potential ID
+                if doc_id: # If an ID was provided in the input data
+                    doc = ContextDocument(
+                        id=doc_id,
+                        content=doc_data["content"],
+                        embedding=embeddings[i],
+                        metadata=doc_data.get("metadata", {})
+                    )
+                else: # If no ID was provided, let the default factory generate one
+                    doc = ContextDocument(
+                        content=doc_data["content"],
+                        embedding=embeddings[i],
+                        metadata=doc_data.get("metadata", {})
+                    )
+                docs_to_add.append(doc)
+
 
             vector_storage = self._storage_manager.get_vector_storage()
+            # The storage backend should return the actual IDs used (including generated ones)
             added_ids = await vector_storage.add_documents(docs_to_add, collection_name=collection_name)
             logger.info(f"Batch of {len(added_ids)} documents added/updated in vector store collection '{collection_name or 'default'}'.")
             return added_ids
