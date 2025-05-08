@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.2.0"
+version = "0.3.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,19 +25,20 @@ dependencies = [
     "tomli>=2.0.0", # For loading default config
     "aiofiles>=24.0.0", # For async file operations in JsonSessionStorage
     "tiktoken>=0.9.0", # Added for token counting (Ollama, OpenAI)
+    "aiosqlite>=0.21.0",
 ]
 
 [project.optional-dependencies]
 # Dependencies for specific providers
-openai = ["openai>=1.0.0"] # tiktoken is now core
-anthropic = ["anthropic>=0.20.0"] # Check latest stable version
-gemini = ["google-generativeai>=0.4.0"] # Check latest stable version
-# Ollama uses aiohttp and tiktoken (core dependencies)
+openai = ["openai>=1.77.0"]
+anthropic = ["anthropic>=0.51.0"]
+gemini = ["google-genai>=1.14.0"]
+ollama = ["ollama>=0.4.8"]
 
 # Dependencies for specific storage backends
 sqlite = [] # sqlite3 is part of standard library
-postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2.0"] # Use extras for binary, check pgvector client name/version
-chromadb = ["chromadb-client>=0.4.0"] # Check latest stable version
+postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"] # Use extras for binary, check pgvector client name/version
+chromadb = ["chromadb-client>=1.0.0"] # Check latest stable version
 
 # Dependencies for specific embedding models
 sentence_transformers = ["sentence-transformers>=2.2.0"] # Requires torch/tensorflow/onnx
