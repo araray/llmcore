@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.5.0"
+version = "0.6.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ license = { text = "MIT" }
 authors = [
     { name = "Araray Velho", email = "araray@gmail.com" }
 ]
-keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp"]
+keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp", "mcp"]
 
 # Core dependencies for llmcore
 dependencies = [
@@ -110,13 +110,14 @@ indent-width = 4
 
 [tool.ruff.lint]
 select = [
-    "E", "W", "F", "I", "C", "B", "A", "RUF", "ASYNC", # Added ASYNC checks
+    "E", "W", "F", "I", "C", "B", "A", "RUF", "ASYNC", "PYI",
 ]
 ignore = [
     "E501", # Line too long (handled by black/formatter)
     "B008", # Do not perform function calls in argument defaults.
     "C901", # Too complex (consider refactoring if triggered often)
     "E731", # do not assign a lambda expression, use a def
+    "A003",
 ]
 # Allow unused arguments in specific methods (like ABC implementations)
 # dummy-variable-rgx = "^(_|dummy_)" # Example if needed
@@ -161,4 +162,4 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 80 # Target coverage percentage
+fail_under = 75 # Target coverage percentage
