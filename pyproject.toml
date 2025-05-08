@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.1.0"
+version = "0.1.0" # Corresponds to Phase 1 development
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "MIT" } # Assuming MIT, can be changed
+requires-python = ">=3.9" # asyncio.to_thread requires 3.9; tiktoken might need >=3.8, check tiktoken docs if issues arise
+license = { text = "MIT" }
 authors = [
     { name = "Araray Velho", email = "araray@gmail.com" }
 ]
@@ -18,24 +18,25 @@ keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp"]
 # Core dependencies for llmcore
 dependencies = [
     "confy>=0.2.1",
-    "aiohttp>=3.8.0", # As specified
-    "python-dotenv>=1.0.0", # Common version, can be adjusted
-    "typing_extensions>=4.0.0", # For older Python 3.8/3.9 compatibility with newer type hints
-    "pydantic>=2.0.0", # For data models as per spec (section 4.7)
-    # Provider SDKs will be added as optional dependencies or direct ones as needed
-    # For Phase 1, Ollama provider uses aiohttp. Others will be added in Phase 2.
+    "aiohttp>=3.8.0",
+    "python-dotenv>=1.0.0",
+    "typing_extensions>=4.0.0", # For older Python compatibility if needed
+    "pydantic>=2.0.0",
+    "tomli>=2.0.0", # For loading default config
+    "aiofiles>=23.0.0", # For async file operations in JsonSessionStorage
+    "tiktoken>=0.4.0", # Added for token counting (Ollama, OpenAI)
 ]
 
 [project.optional-dependencies]
 # Dependencies for specific providers
-openai = ["openai>=1.0.0", "tiktoken>=0.4.0"]
+openai = ["openai>=1.0.0"] # tiktoken is now core
 anthropic = ["anthropic>=0.20.0"] # Check latest stable version
 gemini = ["google-generativeai>=0.4.0"] # Check latest stable version
-# Ollama uses aiohttp (core dependency)
+# Ollama uses aiohttp and tiktoken (core dependencies)
 
 # Dependencies for specific storage backends
 sqlite = [] # sqlite3 is part of standard library
-postgres = ["psycopg2-binary>=2.9.0", "pgvector>=0.2.0"] # pgvector client might be different
+postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2.0"] # Use extras for binary, check pgvector client name/version
 chromadb = ["chromadb-client>=0.4.0"] # Check latest stable version
 
 # Dependencies for specific embedding models
@@ -60,7 +61,9 @@ dev = [
     "ruff", # Linter
     "mypy>=1.0.0", # Type checker
     "pre-commit>=3.0.0", # For git hooks
-    "tox>=4.0.0" # For testing in different environments
+    "tox>=4.0.0", # For testing in different environments
+    "build", # For building the package
+    "twine" # For uploading to PyPI
 ]
 
 all = [ # To install all optional dependencies
@@ -78,7 +81,7 @@ all = [ # To install all optional dependencies
 [project.urls]
 Homepage = "https://github.com/araray/llmcore"
 Repository = "https://github.com/araray/llmcore"
-Documentation = "https://araray.github.io/llmcore"
+# Documentation = "https://araray.github.io/llmcore" # Add when docs exist
 Issues = "https://github.com/araray/llmcore/issues"
 
 [project.scripts]
@@ -95,47 +98,26 @@ llmcore = ["config/default_config.toml"] # To include the default config file
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
-    "*.egg-info",
+    ".bzr", ".direnv", ".eggs", ".git", ".hg", ".mypy_cache", ".nox",
+    ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
+    "__pypackages__", "_build", "buck-out", "build", "dist",
+    "node_modules", "venv", "*.egg-info",
 ]
 line-length = 88
 indent-width = 4
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # Pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-    "A",  # flake8-builtins
-    "RUF", # Ruff-specific rules
+    "E", "W", "F", "I", "C", "B", "A", "RUF", "ASYNC", # Added ASYNC checks
 ]
 ignore = [
-    "E501", # Line too long (handled by black)
+    "E501", # Line too long (handled by black/formatter)
     "B008", # Do not perform function calls in argument defaults.
-    "C901", # Too complex.
+    "C901", # Too complex (consider refactoring if triggered often)
+    "E731", # do not assign a lambda expression, use a def
 ]
+# Allow unused arguments in specific methods (like ABC implementations)
+# dummy-variable-rgx = "^(_|dummy_)" # Example if needed
 
 [tool.ruff.format]
 quote-style = "double"
@@ -145,12 +127,15 @@ line-ending = "auto"
 
 # --- MyPy Type Checker Configuration ---
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9" # Set to minimum supported version
 warn_return_any = true
 warn_unused_configs = true
-ignore_missing_imports = true
+ignore_missing_imports = true # Ignore missing imports for optional deps initially
 disallow_untyped_defs = true
 check_untyped_defs = true
+# Enable stricter checks gradually
+# disallow_incomplete_defs = true
+# disallow_untyped_decorators = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -169,9 +154,9 @@ asyncio_mode = "auto" # For pytest-asyncio
 [tool.coverage.run]
 source = ["src/llmcore"]
 omit = [
-    "src/llmcore/__main__.py", # If a main for CLI
+    "src/llmcore/__main__.py", # If a main for CLI exists
 ]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 80
+fail_under = 80 # Target coverage percentage
