@@ -2,7 +2,7 @@
 """
 ChromaDB vector storage implementation for the LLMCore library.
 
-Uses the chromadb-client library to interact with a ChromaDB instance
+Uses the chromadb library to interact with a ChromaDB instance
 (either persistent or in-memory).
 """
 
@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import pathlib
+
 from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING # Added TYPE_CHECKING
 
 
@@ -67,7 +68,7 @@ class ChromaVectorStorage(BaseVectorStorage):
         if not chromadb_available:
             # This error should be caught earlier by EmbeddingManager/StorageManager
             # based on config, but double-check here.
-            raise ImportError("ChromaDB client library not installed. Please install `chromadb-client` or `llmcore[chromadb]`.")
+            raise ImportError("ChromaDB client library not installed. Please install `chromadb` or `llmcore[chromadb]`.")
 
         self._storage_path = config.get("path") # Path for persistent storage
         self._default_collection_name = config.get("default_collection", self._default_collection_name)

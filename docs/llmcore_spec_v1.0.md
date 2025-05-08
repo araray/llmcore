@@ -288,166 +288,166 @@ llmcore/
 
 * **Key Configuration Sections (Conceptual `default_config.toml`):**
   ```toml
-  
+
     # Default configuration structure for LLMCore
-  
+
     [llmcore]
-  
+
     # Default provider to use if not specified in API calls
-  
+
     default_provider = "openai"
-  
+
     # Default embedding model for RAG (can be local path or identifier for a service)
-  
+
     default_embedding_model = "all-MiniLM-L6-v2"
-  
+
     # Global flag to enable/disable MCP formatting (can be overridden per provider)
-  
+
     enable_mcp = false
-  
+
     # Log level for the library
-  
+
     log_level = "INFO"
-  
+
     # --- Provider Configurations ---
-  
+
     [providers]
       [providers.openai]
-  
+
       # API Key: Recommend using environment variable LLMCORE_PROVIDERS_OPENAI_API_KEY
-  
+
       api_key = ""
       default_model = "gpt-4-turbo"
       timeout = 60
-  
+
       # use_mcp = false # Provider-specific MCP toggle
-  
+
       [providers.anthropic]
-  
+
       # API Key: Recommend using environment variable LLMCORE_PROVIDERS_ANTHROPIC_API_KEY
-  
+
       api_key = ""
       default_model = "claude-3-opus-20240229"
       timeout = 60
-  
+
       # use_mcp = false
-  
+
       [providers.ollama]
       base_url = "http://localhost:11434/api"
       default_model = "llama3"
       timeout = 120
-  
+
       # Optional: Specify tokenizer for Ollama models (default: 'tiktoken_cl100k_base')
-  
+
       # Options: 'tiktoken_cl100k_base', 'tiktoken_p50k_base', 'char_div_4'
-  
+
       # tokenizer = "tiktoken_cl100k_base"
-  
+
       # use_mcp = false
-  
+
       [providers.gemini]
-  
+
       # API Key: Recommend using environment variable LLMCORE_PROVIDERS_GEMINI_API_KEY
-  
+
       api_key = ""
       default_model = "gemini-1.5-pro-latest"
-  
+
       # Add other Gemini specific settings if needed (e.g., safety settings)
-  
+
       # safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE", ... }
-  
+
       # use_mcp = false
-  
+
     # --- Storage Configurations ---
-  
+
     [storage]
-  
+
       # Session storage configuration
-  
+
       [storage.session]
-  
+
       # Type: 'json', 'sqlite', 'postgres'
-  
+
       type = "sqlite"
-  
+
       # Path for file-based storage (json, sqlite)
-  
+
       path = "~/.llmcore/sessions.db"
-  
+
       # Connection URL for database storage (postgres)
-  
+
       # db_url = "postgresql://user:pass@host:port/dbname" # Use env var LLMCORE_STORAGE_SESSION_DB_URL
-  
+
       # table_name = "llmcore_sessions" # Optional for DB storage
-  
+
       # Vector storage configuration
-  
+
       [storage.vector]
-  
+
       # Type: 'chromadb', 'pgvector'
-  
+
       type = "chromadb"
-  
+
       # Default collection name used for RAG if not specified in API calls
-  
+
       default_collection = "llmcore_default_rag"
-  
+
       # Path for file-based vector stores (chromadb)
-  
+
       path = "~/.llmcore/chroma_db"
-  
+
       # Connection URL for database vector stores (pgvector)
-  
+
       # db_url = "postgresql://user:pass@host:port/dbname" # Use env var LLMCORE_STORAGE_VECTOR_DB_URL
-  
+
       # table_name = "llmcore_vectors" # Optional for DB storage
-  
+
     # --- Embedding Model Configurations ---
-  
+
     [embedding]
-  
+
       # Configuration for specific embedding models if needed (e.g., API keys for service-based ones)
-  
+
       [embedding.openai]
-  
+
       # api_key = "" # Use env var LLMCORE_EMBEDDING_OPENAI_API_KEY
-  
+
       # default_model = "text-embedding-ada-002"
-  
+
       [embedding.google]
-  
+
       # api_key = "" # Use env var LLMCORE_EMBEDDING_GOOGLE_API_KEY
-  
+
       # default_model = "models/embedding-001"
-  
+
     # --- Context Management Configurations ---
-  
+
     [context_management]
-  
+
       # Default number of documents to retrieve for RAG
-  
+
       rag_retrieval_k = 3
-  
+
       # Strategy for combining RAG results with history: 'prepend_system', 'prepend_user'
-  
+
       rag_combination_strategy = "prepend_system"
-  
+
       # Strategy for selecting history messages: 'last_n_tokens', 'last_n_messages'
-  
+
       history_selection_strategy = "last_n_tokens"
-  
+
       # Tokens to reserve for the LLM's response during context calculation
-  
+
       reserved_response_tokens = 500
-  
+
       # Strategy for handling context overflow: 'history' (truncate history first), 'rag' (truncate RAG results first)
-  
+
       truncation_priority = "history"
-  
+
       # Minimum history messages to try and keep during truncation (excluding system)
-  
+
       minimum_history_messages = 1
-  
+
       # mcp_version = "v1" # If MCP versions need specifying
   ```
 
@@ -1103,7 +1103,7 @@ if __name__ == "__main__":
 *   **Core Library:** Python 3.11+ (Asyncio heavily used)
 *   **Configuration:** `confy`
 *   **LLM Interactions:** `ollama`, `anthropic` SDK, `openai` SDK, `google-generativeai`.
-*   **Vector Stores:** `chromadb-client`, `psycopg-binary` (for PostgreSQL), `pgvector` (Python client or direct SQL).
+*   **Vector Stores:** `chromadb`, `psycopg-binary` (for PostgreSQL), `pgvector` (Python client or direct SQL).
 *   **Embedding Models:** `sentence-transformers`. (Requires PyTorch/TensorFlow/ONNX Runtime depending on model).
 *   **MCP Support:** `modelcontextprotocol` (Python SDK).
 *   **Type Hinting:** Standard Python type hints. Pydantic (optional, for models/config validation).
@@ -1237,7 +1237,7 @@ This plan breaks down the development of `LLMCore` into logical phases, focusing
     *   **Purpose:** Define the storage abstraction for vector embeddings and implement the ChromaDB backend.
     *   **Details:**
         *   Define `storage.BaseVectorStorage` abstract base class with methods: `initialize`, `add_documents`, `similarity_search`, `delete_documents`, `close`. Ensure methods are async.
-        *   Implement `storage.ChromaVectorStorage` using the `chromadb-client` library.
+        *   Implement `storage.ChromaVectorStorage` using the `chromadb` library.
         *   Handle client initialization (persistent client using configured `path` or in-memory).
         *   Implement interface methods using `collection.add`, `collection.query`, `collection.delete`. Handle collection creation (`get_or_create_collection`).
         *   Read configuration (`path`, `default_collection`) from `confy`.

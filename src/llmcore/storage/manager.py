@@ -139,7 +139,7 @@ class StorageManager:
             await self._vector_storage.initialize(vector_storage_config)
             logger.info(f"Vector storage backend '{vector_storage_type}' initialized successfully.")
         except ImportError as e:
-             # Catch missing optional dependencies (e.g., chromadb-client)
+             # Catch missing optional dependencies (e.g., chromadb)
              logger.error(f"Failed to initialize vector storage '{vector_storage_type}': Missing required library. "
                           f"Install it using 'pip install llmcore[{vector_storage_type}]'. Error: {e}")
              self._vector_storage = None
