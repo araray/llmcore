@@ -19,21 +19,23 @@ except ImportError:
 from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
-# Import concrete implementations (add more as they are created)
+# Import concrete implementations
 from .sentence_transformer import SentenceTransformerEmbedding
-# from .openai import OpenAIEmbedding # Example for future
-# from .google import GoogleAIEmbedding # Example for future
+from .openai import OpenAIEmbedding # Added for Phase 3
+from .google import GoogleAIEmbedding # Added for Phase 3
+from .ollama import OllamaEmbedding # Added for Phase 3
 
 logger = logging.getLogger(__name__)
 
 # --- Mapping from config identifier prefix to class ---
 # Use prefixes in the 'llmcore.default_embedding_model' string
-# Default (no prefix) maps to SentenceTransformer
+# Default (no prefix or 'sentence-transformers') maps to SentenceTransformer
 EMBEDDING_MAP: Dict[str, Type[BaseEmbeddingModel]] = {
     "sentence-transformers": SentenceTransformerEmbedding, # Explicit prefix
     "default": SentenceTransformerEmbedding, # Default if no prefix
-    # "openai": OpenAIEmbedding, # Add when implemented
-    # "google": GoogleAIEmbedding, # Add when implemented
+    "openai": OpenAIEmbedding, # Added for Phase 3
+    "google": GoogleAIEmbedding, # Added for Phase 3
+    "ollama": OllamaEmbedding, # Added for Phase 3
 }
 # --- End Mapping ---
 
@@ -82,11 +84,10 @@ class EmbeddingManager:
             if not model_identifier:
                 logger.warning("No default embedding model specified ('llmcore.default_embedding_model'). "
                                "RAG functionality will be unavailable.")
-                # Set initialized flag even if no model is loaded, to prevent re-attempts
-                self._is_initialized = True
-                return # No model to load
+                self._is_initialized = True # Mark as initialized (no model)
+                return
 
-            # Parse identifier (e.g., "openai:text-embedding-3-small", "all-MiniLM-L6-v2")
+            # Parse identifier (e.g., "openai:text-embedding-3-small", "ollama:nomic-embed-text", "all-MiniLM-L6-v2")
             model_type_key = "default" # Assume sentence-transformer by default
             model_name_or_path = model_identifier
 
@@ -95,54 +96,65 @@ class EmbeddingManager:
                 prefix = parts[0].lower()
                 if prefix in EMBEDDING_MAP:
                     model_type_key = prefix
-                    model_name_or_path = parts[1]
+                    model_name_or_path = parts[1] # The part after the prefix is the model name/path
                 else:
                     logger.warning(f"Unknown embedding model prefix '{prefix}' in '{model_identifier}'. "
                                    f"Assuming it's a Sentence Transformer model name/path.")
                     # Keep model_type_key as "default" and use full identifier as path
+                    model_name_or_path = model_identifier # Use the full string
+            else:
+                # No prefix, assume it's a sentence-transformer model name/path
+                model_type_key = "default"
+                model_name_or_path = model_identifier
 
             embedding_cls = EMBEDDING_MAP.get(model_type_key)
             if not embedding_cls:
-                # This should not happen if EMBEDDING_MAP is correct, but check defensively
                 raise ConfigError(f"Internal error: No embedding class mapped for type key '{model_type_key}'.")
 
             # Prepare config for the specific embedding model class
-            # For SentenceTransformer, we need 'model_name_or_path' and optional 'device'
-            # For others (like OpenAI), we might need API keys from their specific sections
-            model_config: Dict[str, Any] = {}
+            # Get the relevant section from the main config, e.g., [embedding.openai]
+            # Use the model_type_key (e.g., 'openai', 'google', 'ollama', 'sentence_transformer')
+            # to find the correct config section. Use 'sentence_transformer' for the 'default' key.
+            config_section_key = model_type_key if model_type_key != "default" else "sentence_transformer"
+            model_specific_config = self._config.get(f"embedding.{config_section_key}", {})
+
+            # Add the parsed model name/path to the specific config dict
+            # This ensures the embedding class constructor receives the correct model identifier.
             if embedding_cls == SentenceTransformerEmbedding:
-                model_config["model_name_or_path"] = model_name_or_path
-                # Get device preference from sentence_transformer specific config if available
-                st_config = self._config.get("embedding.sentence_transformer", {})
-                model_config["device"] = st_config.get("device")
-            # Add elif blocks here for other providers (OpenAI, Google)
-            # elif embedding_cls == OpenAIEmbedding:
-            #     oa_config = self._config.get("embedding.openai", {})
-            #     model_config["api_key"] = oa_config.get("api_key") # Or inherit from main provider?
-            #     model_config["model_name"] = model_name_or_path or oa_config.get("default_model")
-            # elif embedding_cls == GoogleAIEmbedding:
-            #     gg_config = self._config.get("embedding.google", {})
-            #     model_config["api_key"] = gg_config.get("api_key")
-            #     model_config["model_name"] = model_name_or_path or gg_config.get("default_model")
+                model_specific_config["model_name_or_path"] = model_name_or_path
+            elif embedding_cls in [OpenAIEmbedding, GoogleAIEmbedding, OllamaEmbedding]:
+                 # For API-based or Ollama models, the part after the prefix is the model name
+                 model_specific_config["default_model"] = model_name_or_path
+                 # We might also need to pass the API key or host if not handled internally by the class
+                 # The embedding classes are designed to look for keys within their passed config dict.
+                 # Example: OpenAIEmbedding needs 'api_key', 'base_url', 'timeout', 'default_model'
+                 # Example: GoogleAIEmbedding needs 'api_key', 'default_model'
+                 # Example: OllamaEmbedding needs 'host', 'timeout', 'default_model'
+                 # The manager copies the relevant section, e.g., [embedding.openai]
+                 # into model_specific_config.
 
             try:
-                logger.info(f"Loading embedding model type '{model_type_key}' with config: {model_config}")
-                self._embedding_model = embedding_cls(model_config)
+                logger.info(f"Loading embedding model type '{config_section_key}' "
+                            f"with model identifier '{model_name_or_path}' "
+                            f"using config: {model_specific_config}")
+
+                # Instantiate the class with its specific config section
+                self._embedding_model = embedding_cls(model_specific_config)
+
                 # Call the model's own async initialize method
                 await self._embedding_model.initialize()
                 logger.info(f"Embedding model '{model_identifier}' initialized successfully.")
                 self._is_initialized = True
             except ImportError as e:
                 logger.error(f"Failed to initialize embedding model '{model_identifier}': Missing required library. "
-                             f"Install dependencies for '{model_type_key}' (e.g., 'pip install llmcore[{model_type_key}]'). Error: {e}")
+                             f"Install dependencies for '{config_section_key}' (e.g., 'pip install llmcore[{config_section_key}]'). Error: {e}")
                 self._embedding_model = None
-                self._is_initialized = True # Mark as initialized (failed) to prevent retries
+                self._is_initialized = True # Mark as initialized (failed)
                 raise EmbeddingError(model_name=model_identifier, message=f"Initialization failed due to missing dependency: {e}")
             except Exception as e:
                 logger.error(f"Failed to initialize embedding model '{model_identifier}': {e}", exc_info=True)
                 self._embedding_model = None
                 self._is_initialized = True # Mark as initialized (failed)
-                # Re-raise as EmbeddingError
                 raise EmbeddingError(model_name=model_identifier, message=f"Initialization failed: {e}")
 
 
@@ -155,10 +167,8 @@ class EmbeddingManager:
                             or failed to initialize. Call `initialize_embedding_model` first.
         """
         if not self._is_initialized:
-             # This indicates initialize_embedding_model was never awaited
              raise EmbeddingError(message="EmbeddingManager is not initialized. Call and await initialize_embedding_model() first.")
         if self._embedding_model is None:
-            # This indicates initialization was attempted but failed, or no model was configured
             model_identifier = self._config.get('llmcore.default_embedding_model', 'None')
             if model_identifier == 'None':
                  raise EmbeddingError(message="No embedding model configured ('llmcore.default_embedding_model'). RAG unavailable.")
