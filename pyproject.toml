@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.1.0" # Corresponds to Phase 1 development
+version = "0.2.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
-requires-python = ">=3.9" # asyncio.to_thread requires 3.9; tiktoken might need >=3.8, check tiktoken docs if issues arise
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Araray Velho", email = "araray@gmail.com" }
@@ -18,13 +18,13 @@ keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp"]
 # Core dependencies for llmcore
 dependencies = [
     "confy>=0.2.1",
-    "aiohttp>=3.8.0",
+    "aiohttp>=3.11.0",
     "python-dotenv>=1.0.0",
     "typing_extensions>=4.0.0", # For older Python compatibility if needed
     "pydantic>=2.0.0",
     "tomli>=2.0.0", # For loading default config
-    "aiofiles>=23.0.0", # For async file operations in JsonSessionStorage
-    "tiktoken>=0.4.0", # Added for token counting (Ollama, OpenAI)
+    "aiofiles>=24.0.0", # For async file operations in JsonSessionStorage
+    "tiktoken>=0.9.0", # Added for token counting (Ollama, OpenAI)
 ]
 
 [project.optional-dependencies]
@@ -91,8 +91,8 @@ Issues = "https://github.com/araray/llmcore/issues"
 [tool.setuptools.packages.find]
 where = ["src"]  # Specifies that packages are under the 'src' directory
 
-[tool.setuptools.package_data]
-llmcore = ["config/default_config.toml"] # To include the default config file
+# [tool.setuptools.package_data]
+# llmcore = ["config/default_config.toml"] # To include the default config file
 
 # --- Ruff Linter Configuration ---
 [tool.ruff]
