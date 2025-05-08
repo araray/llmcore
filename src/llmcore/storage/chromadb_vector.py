@@ -18,7 +18,7 @@ from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING # Added TYPE_
 try:
     import chromadb
     from chromadb.api.models.Collection import Collection as ChromaCollection # Specific type hint
-    from chromadb.errors import IDAlreadyExistsError
+    from chromadb.errors import IDAlreadyExistsError, AuthorizationError # Added AuthorizationError
     chromadb_available = True
     # Define type alias for cleaner hinting if available
     ChromaClientType = chromadb.Client
@@ -27,6 +27,7 @@ except ImportError:
     chromadb = None # type: ignore
     ChromaCollection = None # type: ignore
     IDAlreadyExistsError = Exception # type: ignore
+    AuthorizationError = Exception # type: ignore
     # Use a forward reference string if the library is not available
     ChromaClientType = "chromadb.Client" # type: ignore
 
@@ -160,27 +161,36 @@ class ChromaVectorStorage(BaseVectorStorage):
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=k,
-                where=filter_metadata,
+                where=filter_metadata, # type: ignore # ChromaDB's type hints for where might be stricter
                 include=['metadatas', 'documents', 'distances']
             )
             logger.debug(f"ChromaDB query returned {len(results.get('ids', [[]])[0])} results from collection '{target_collection_name}'.")
 
             context_docs: List[ContextDocument] = []
-            if not results or not results.get('ids') or not results['ids'][0]: return []
+            # Ensure results and their inner lists are not None and not empty before accessing
+            ids_list = results.get('ids')
+            if not ids_list or not ids_list[0]:
+                return []
 
-            ids = results['ids'][0]
-            distances = results.get('distances', [[]])[0]
-            metadatas = results.get('metadatas', [[]])[0]
-            contents = results.get('documents', [[]])[0]
+            ids = ids_list[0]
+            distances_list = results.get('distances')
+            distances = distances_list[0] if distances_list and distances_list[0] is not None else [None] * len(ids)
+
+            metadatas_list = results.get('metadatas')
+            metadatas = metadatas_list[0] if metadatas_list and metadatas_list[0] is not None else [{}] * len(ids)
+
+            contents_list = results.get('documents')
+            contents = contents_list[0] if contents_list and contents_list[0] is not None else [""] * len(ids)
+
 
             for i, doc_id in enumerate(ids):
                 context_docs.append(
                     ContextDocument(
                         id=doc_id,
-                        content=contents[i] if contents and i < len(contents) else "",
-                        metadata=metadatas[i] if metadatas and i < len(metadatas) else {},
-                        score=distances[i] if distances and i < len(distances) else None,
-                        embedding=None
+                        content=contents[i] if i < len(contents) else "",
+                        metadata=metadatas[i] if i < len(metadatas) else {},
+                        score=distances[i] if i < len(distances) else None,
+                        embedding=None # Embeddings are not typically returned by query
                     )
                 )
             return context_docs
@@ -207,17 +217,25 @@ class ChromaVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"ChromaDB delete_documents failed: {e}")
 
     def _sync_close(self) -> None:
-        """Synchronous closing logic."""
+        """
+        Synchronous closing logic for ChromaDB.
+        Removes the client.reset() call as it's often disabled by config and
+        is a destructive operation, not a standard close.
+        ChromaDB PersistentClient typically doesn't require an explicit close method.
+        """
         if self._client:
             try:
-                if hasattr(self._client, 'reset'):
-                    self._client.reset()
-                logger.info("ChromaDB client reset/closed.")
+                # self._client.reset() # Removed: This is destructive and often disabled.
+                logger.info("ChromaDB client cleanup: No explicit reset/close called. Resources are typically managed by the client's lifecycle or garbage collection.")
+            except AuthorizationError as auth_e: # Specifically catch if reset was somehow still called and failed
+                logger.warning(f"ChromaDB client reset is disabled by config and was attempted: {auth_e}")
             except Exception as e:
-                logger.error(f"Error during ChromaDB client reset/close: {e}", exc_info=True)
+                logger.error(f"Error during ChromaDB client resource management (if any explicit close was attempted): {e}", exc_info=True)
             finally:
-                 self._client = None
-                 self._collection_cache.clear()
+                 self._client = None # Dereference the client
+                 self._collection_cache.clear() # Clear collection cache
+        logger.info("ChromaDB vector storage resources cleared/dereferenced.")
+
 
     # --- Async Interface Methods (using asyncio.to_thread) ---
 

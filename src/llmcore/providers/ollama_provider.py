@@ -41,6 +41,7 @@ DEFAULT_OLLAMA_TOKEN_LIMITS = {
     "llama3": 8192,
     "llama3:8b": 8192,
     "llama3:70b": 8192,
+    "falcon3:3b": 4096, # Added based on user log context length warning
     "mistral": 8192,         # Mistral 7B v0.1
     "mistral:7b": 8192,
     "mixtral": 32768,        # Mixtral 8x7B
@@ -176,8 +177,13 @@ class OllamaProvider(BaseProvider):
         if limit is None:
             limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
         if limit is None:
-             limit = 4096 # Default fallback
-             logger.warning(f"Unknown context length for Ollama model '{model_name}'. Using fallback limit: {limit}.")
+             # Check user log for specific model context length warning
+             if model_name == "falcon3:3b": # From user log
+                 logger.info(f"Using context length 4096 for Ollama model '{model_name}' based on fallback.")
+                 limit = 4096
+             else:
+                 limit = 4096 # Default fallback
+                 logger.warning(f"Unknown context length for Ollama model '{model_name}'. Using fallback limit: {limit}.")
         return limit
 
     async def chat_completion(
@@ -190,11 +196,13 @@ class OllamaProvider(BaseProvider):
         """Sends a chat completion request to the Ollama API using the ollama library."""
         if not self._client:
             raise ProviderError(self.get_name(), "Ollama client not initialized.")
-        if not isinstance(context, list):
-            raise ProviderError(self.get_name(), f"OllamaProvider received unsupported context type: {type(context).__name__}")
+        if not isinstance(context, list) or not all(isinstance(msg, Message) for msg in context):
+            raise ProviderError(self.get_name(), f"OllamaProvider received unsupported context type: {type(context).__name__}. Expected List[Message].")
 
         model_name = model or self.default_model
-        messages_payload = [{"role": msg.role.value, "content": msg.content} for msg in context]
+        # Ensure msg.role is used directly as it's already a string due to Role(str, Enum)
+        messages_payload = [{"role": msg.role, "content": msg.content} for msg in context]
+
 
         logger.debug(f"Sending request to Ollama via client: model='{model_name}', stream={stream}, num_messages={len(messages_payload)}")
 
@@ -205,7 +213,7 @@ class OllamaProvider(BaseProvider):
             # Call the client's chat method
             response_or_stream = await self._client.chat(
                 model=model_name,
-                messages=messages_payload,
+                messages=messages_payload, # type: ignore
                 stream=stream,
                 options=options,
                 # Timeout can be passed here if needed, overriding client default
@@ -224,7 +232,7 @@ class OllamaProvider(BaseProvider):
         except ResponseError as e:
             logger.error(f"Ollama API error: {e.status_code} - {e.error}", exc_info=True)
             # Check for model not found error specifically
-            if "model not found" in str(e.error).lower():
+            if e.error and "model not found" in str(e.error).lower():
                 raise ProviderError(self.get_name(), f"Model '{model_name}' not found. Pull it using 'ollama pull {model_name}'.")
             raise ProviderError(self.get_name(), f"API Error ({e.status_code}): {e.error}")
         except asyncio.TimeoutError:
@@ -274,11 +282,16 @@ class OllamaProvider(BaseProvider):
         for msg in messages:
             try:
                 content_tokens = len(self._encoding.encode(msg.content))
-                role_tokens = len(self._encoding.encode(msg.role.value)) # Count role tokens too
+                # Since Role(str, Enum), msg.role is already the string value.
+                role_str = str(msg.role) # Ensure it's a string if it wasn't already.
+                role_tokens = len(self._encoding.encode(role_str)) # Count role tokens too
                 total_tokens += content_tokens + role_tokens + overhead_per_message
             except Exception as e:
                 logger.error(f"Tiktoken encoding failed for message content/role: {e}. Using approximation for message.")
-                total_tokens += (len(msg.content) + len(msg.role.value) + 15) // 4
+                # Use str(msg.role) for approximation as well
+                role_str_for_approx = str(msg.role)
+                total_tokens += (len(msg.content) + len(role_str_for_approx) + 15) // 4
+
 
         total_tokens += 3 # Add a small buffer for the overall structure/prompting
 
@@ -287,11 +300,20 @@ class OllamaProvider(BaseProvider):
     async def close(self) -> None:
         """Closes the underlying Ollama client session if applicable."""
         # The ollama library's AsyncClient uses httpx internally.
-        # Closing the client explicitly is good practice.
+        # httpx.AsyncClient should be closed, typically via `await client.aclose()`
+        # or by using the client as an async context manager.
+        # The ollama.AsyncClient itself does not seem to expose an `aclose()` method directly.
+        # It's often expected that the client is closed when it's garbage collected
+        # or if the application uses it as an async context manager.
+        # Given the error `AttributeError: 'AsyncClient' object has no attribute 'close'`,
+        # we should remove the explicit call if the library doesn't provide it.
         if self._client:
-            try:
-                await self._client.close()
-                logger.debug("Ollama AsyncClient closed.")
-            except Exception as e:
-                logger.error(f"Error closing Ollama client: {e}", exc_info=True)
+            logger.debug("Ollama AsyncClient closure is typically handled by garbage collection "
+                         "or by using it as an async context manager. No explicit close action taken by provider.")
+            # If ollama.AsyncClient had an `aclose` method, it would be:
+            # try:
+            #     await self._client.aclose() # Assuming an aclose method exists
+            #     logger.debug("Ollama AsyncClient closed.")
+            # except Exception as e:
+            #     logger.error(f"Error closing Ollama client: {e}", exc_info=True)
         self._client = None # Clear the client reference
