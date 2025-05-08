@@ -1283,7 +1283,7 @@ This plan breaks down the development of `LLMCore` into logical phases, focusing
 
     *   **Purpose:** Add support for using PostgreSQL for both session storage and vector storage (via pgvector).
     *   **Details:**
-        *   Add `psycopg2-binary` and potentially a `pgvector` client library as optional dependencies.
+        *   Add `psycopg-binary` and potentially a `pgvector` client library as optional dependencies.
         *   Implement `storage.PostgresSessionStorage` inheriting from `BaseSessionStorage`. Use `psycopg2` to connect (using `storage.session.db_url` from config) and perform CRUD operations on session/message tables. Define appropriate table schemas.
         *   Implement `storage.PgVectorStorage` inheriting from `BaseVectorStorage`. Use `psycopg2` and `pgvector` SQL syntax/functions. Handle connection using `storage.vector.db_url`. Implement `add_documents` (inserting embeddings), `similarity_search` (using vector distance operators like `<=>`), `delete_documents`. Define vector table schema, including index creation (e.g., HNSW).
         *   Update `StorageManager` to recognize and load `postgres` / `pgvector` types based on config.
@@ -1307,9 +1307,9 @@ This plan breaks down the development of `LLMCore` into logical phases, focusing
     *   **Deliverables:** More flexible and configurable context assembly and truncation logic within `ContextManager`.
 *   **Task 3.4: Model Context Protocol (MCP) Integration**
 
-    *   **Purpose:** Add optional support for formatting context using the MCP standard.
+    *   **Purpose:** Add support for formatting context using the MCP standard.
     *   **Details:**
-        *   Add `modelcontextprotocol` SDK as an optional dependency.
+        *   Add `modelcontextprotocol` SDK as an dependency.
         *   In `ContextManager.prepare_context`:
             *   Check if MCP is enabled globally (`llmcore.enable_mcp`) or for the specific provider (`providers.<name>.use_mcp`).
             *   If enabled and the SDK is available:
