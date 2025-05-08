@@ -18,7 +18,7 @@ from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING # Added TYPE_
 try:
     import chromadb
     from chromadb.api.models.Collection import Collection as ChromaCollection # Specific type hint
-    from chromadb.errors import IDAlreadyExistsError, CollectionNotFoundError
+    from chromadb.errors import IDAlreadyExistsError
     chromadb_available = True
     # Define type alias for cleaner hinting if available
     ChromaClientType = chromadb.Client
@@ -27,7 +27,6 @@ except ImportError:
     chromadb = None # type: ignore
     ChromaCollection = None # type: ignore
     IDAlreadyExistsError = Exception # type: ignore
-    CollectionNotFoundError = Exception # type: ignore
     # Use a forward reference string if the library is not available
     ChromaClientType = "chromadb.Client" # type: ignore
 
@@ -185,9 +184,6 @@ class ChromaVectorStorage(BaseVectorStorage):
                     )
                 )
             return context_docs
-        except CollectionNotFoundError:
-             logger.error(f"ChromaDB collection '{target_collection_name}' not found during search.")
-             raise ConfigError(f"Collection '{target_collection_name}' not found.")
         except Exception as e:
             logger.error(f"Failed similarity search in ChromaDB collection '{target_collection_name}': {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB similarity_search failed: {e}")
@@ -206,9 +202,6 @@ class ChromaVectorStorage(BaseVectorStorage):
             collection.delete(ids=document_ids)
             logger.info(f"Attempted deletion of {len(document_ids)} documents from ChromaDB collection '{target_collection_name}'.")
             return True
-        except CollectionNotFoundError:
-             logger.error(f"ChromaDB collection '{target_collection_name}' not found during delete.")
-             raise ConfigError(f"Collection '{target_collection_name}' not found for deletion.")
         except Exception as e:
             logger.error(f"Failed to delete documents from ChromaDB collection '{target_collection_name}': {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB delete_documents failed: {e}")

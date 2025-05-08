@@ -71,6 +71,7 @@ all = [ # To install all optional dependencies
     "llmcore[openai]",
     "llmcore[anthropic]",
     "llmcore[gemini]",
+    "llmcore[ollama]",
     "llmcore[sqlite]",
     "llmcore[postgres]",
     "llmcore[chromadb]",
