@@ -9,29 +9,50 @@ chat completions, session management, and Retrieval Augmented Generation (RAG).
 
 import asyncio
 import logging
-from typing import List, Optional, Dict, Any, Union, AsyncGenerator
+import importlib.resources # For loading package data
+import pathlib # For path operations with importlib.resources
+from typing import List, Optional, Dict, Any, Union, AsyncGenerator, Type
 
 # Import models and exceptions for type hinting and user access
 from .models import ChatSession, ContextDocument, Message, Role
 from .exceptions import (
     LLMCoreError, ProviderError, SessionNotFoundError, ConfigError,
-    VectorStorageError, EmbeddingError, ContextLengthError, MCPError # Corrected: VectorStorageError
+    StorageError, SessionStorageError, VectorStorageError, # Added StorageError base
+    EmbeddingError, ContextLengthError, MCPError
 )
+# Import storage base and implementations
+from .storage.base_session import BaseSessionStorage
+from .storage.json_session import JsonSessionStorage
+from .storage.sqlite_session import SqliteSessionStorage
+# Placeholder for vector storage base (will be added later)
+# from .storage.base_vector import BaseVectorStorage
 
 # Import confy.Config for type hinting the config object
-# Assuming confy is installed and accessible.
-# If confy is a local module or part of a different structure, adjust import path.
 try:
     from confy.loader import Config as ConfyConfig
-except ImportError:
-    # Provide a fallback type hint if confy is not available during early dev or linting
-    # This helps avoid linting errors if confy is not yet in the PYTHONPATH
-    # In a full environment, this try-except might not be necessary if confy is a direct dependency.
+    import tomli # For parsing the default TOML config
+except ImportError as e:
     ConfyConfig = Dict[str, Any] # type: ignore
-
+    logging.getLogger(__name__).warning(
+        f"Could not import confy or tomli at module level: {e}. "
+        "LLMCore initialization will fail if they are not installed."
+    )
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
+
+# Mapping for storage types to classes
+SESSION_STORAGE_MAP: Dict[str, Type[BaseSessionStorage]] = {
+    "json": JsonSessionStorage,
+    "sqlite": SqliteSessionStorage,
+    # "postgres": PostgresSessionStorage, # To be added later
+}
+
+# Placeholder for vector storage map
+# VECTOR_STORAGE_MAP: Dict[str, Type[BaseVectorStorage]] = {
+#     "chromadb": ChromaVectorStorage,
+#     "pgvector": PgVectorStorage,
+# }
 
 
 class LLMCore:
@@ -41,84 +62,163 @@ class LLMCore:
     Provides methods for chat completions, session management, and
     Retrieval Augmented Generation (RAG) using configurable providers,
     storage backends, and embedding models.
+
+    Note: The __init__ method is async due to storage initialization.
+          Instantiate using 'instance = await LLMCore(...)'.
     """
 
-    config: ConfyConfig # Publicly accessible resolved config (read-only recommended)
+    config: ConfyConfig # Publicly accessible resolved config
+    _session_storage: BaseSessionStorage # Internal session storage instance
+    # _vector_storage: BaseVectorStorage # Internal vector storage instance (placeholder)
 
-    def __init__(
-        self,
+    # Make __init__ async because storage initialization is async
+    def __init__(self):
+        """Private constructor. Use `create` classmethod for async initialization."""
+        # This constructor should ideally be minimal or private.
+        # The actual async initialization happens in `create`.
+        pass
+
+    @classmethod
+    async def create(
+        cls,
         config_overrides: Optional[Dict[str, Any]] = None,
         config_file_path: Optional[str] = None,
         env_prefix: Optional[str] = "LLMCORE"
-    ):
+    ) -> "LLMCore":
         """
-        Initializes LLMCore with configuration.
+        Asynchronously creates and initializes an LLMCore instance.
 
-        Loads configuration using confy, sets up providers, storage,
-        context manager, and embedding manager based on the loaded config.
+        Loads configuration, initializes storage backends, and prepares managers.
 
         Args:
-            config_overrides: Dictionary of configuration overrides (highest precedence).
-                                Keys use dot-notation (e.g., "providers.openai.default_model").
-            config_file_path: Path to a custom TOML or JSON configuration file.
-            env_prefix: Prefix for environment variable overrides (e.g., "LLMCORE").
-                        Set to "" to consider all non-system env vars, None to disable env var loading.
+            config_overrides: Dictionary of configuration overrides.
+            config_file_path: Path to a custom configuration file.
+            env_prefix: Prefix for environment variable overrides.
+
+        Returns:
+            An initialized LLMCore instance.
 
         Raises:
-            ConfigError: If essential configuration is missing or invalid.
-            ImportError: If required dependencies (e.g., specific provider SDKs,
-                         storage clients) are not installed based on config.
+            ConfigError: If configuration loading or validation fails.
+            StorageError: If storage backend initialization fails.
+            ImportError: If required dependencies are missing.
         """
-        logger.info("Initializing LLMCore...")
+        instance = cls() # Create instance using the minimal __init__
+        logger.info("Initializing LLMCore asynchronously...")
+
         # --- Step 1: Initialize self.config using confy.Config(...) ---
-        # This will be implemented in Task 1.2.
-        # For now, we can set a placeholder or handle it minimally.
         try:
-            # Placeholder for confy initialization
-            # from confy.loader import Config as ActualConfyConfig
-            # self.config = ActualConfyConfig(
-            #     defaults={}, # TODO: Load default_config.toml here
-            #     file_path=config_file_path,
-            #     prefix=env_prefix,
-            #     overrides_dict=config_overrides,
-            #     mandatory=[] # TODO: Define mandatory keys if any at this stage
-            # )
-            # logger.debug("confy configuration loaded.")
-            self.config = {} # Placeholder
-            if config_overrides:
-                self.config.update(config_overrides) # Simplistic override for now
-            logger.warning("LLMCore configuration using placeholder. Full confy integration pending.")
+            from confy.loader import Config as ActualConfyConfig
+            import tomli as actual_tomli
+
+            default_config_dict = {}
+            try:
+                if hasattr(importlib.resources, 'files'):
+                    default_config_path_obj = importlib.resources.files('llmcore.config').joinpath('default_config.toml')
+                    with default_config_path_obj.open('rb') as f: # type: ignore
+                        default_config_dict = actual_tomli.load(f)
+                else:
+                    default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8')
+                    default_config_dict = actual_tomli.loads(default_config_content)
+                logger.debug("Successfully loaded and parsed default_config.toml.")
+            except FileNotFoundError:
+                logger.error("Packaged default_config.toml not found.")
+                raise ConfigError("Critical error: Packaged default configuration is missing.")
+            except actual_tomli.TOMLDecodeError as e:
+                logger.error(f"Error parsing packaged default_config.toml: {e}")
+                raise ConfigError(f"Critical error: Packaged default configuration is malformed: {e}")
+            except Exception as e:
+                logger.error(f"Could not load default_config.toml: {e}")
+                raise ConfigError(f"Failed to load default configuration: {e}")
+
+            instance.config = ActualConfyConfig(
+                defaults=default_config_dict,
+                file_path=config_file_path,
+                prefix=env_prefix,
+                overrides_dict=config_overrides,
+                mandatory=[]
+            )
+            logger.info("confy configuration loaded successfully.")
+            logger.debug(f"Effective default provider: {instance.config.get('llmcore.default_provider')}")
+            logger.debug(f"Effective session storage type: {instance.config.get('storage.session.type')}")
+            logger.debug(f"Effective vector storage type: {instance.config.get('storage.vector.type')}")
 
         except ImportError:
-            logger.error("confy library not found. Please install it.")
+            logger.critical("Essential dependency 'confy' or 'tomli' is not installed.")
+            raise ConfigError("Setup error: 'confy' or 'tomli' library not found.")
+        except ConfigError:
             raise
         except Exception as e:
-            logger.error(f"Failed to initialize confy configuration: {e}")
+            logger.error(f"Failed to initialize LLMCore configuration: {e}", exc_info=True)
             raise ConfigError(f"Configuration initialization failed: {e}")
 
+        # --- Step 2: Initialize Storage Backends ---
+        await instance._initialize_storage()
 
-        # --- Step 2: Initialize Managers ---
-        # These will be initialized in subsequent tasks.
+        # --- Step 3: Initialize Other Managers (Placeholders) ---
         # self.provider_manager = ProviderManager(self.config)
-        # self.storage_manager = StorageManager(self.config) # For session & vector
         # self.embedding_manager = EmbeddingManager(self.config)
-        # self.session_manager = SessionManager(self.storage_manager.session_storage)
-        # self.context_manager = ContextManager(
-        #     provider_manager=self.provider_manager,
-        #     session_manager=self.session_manager,
-        #     vector_storage=self.storage_manager.vector_storage,
-        #     embedding_manager=self.embedding_manager,
-        #     config=self.config.get('context_management', {})
-        # )
-        logger.info("LLMCore managers (placeholders) initialized.")
+        # self.session_manager = SessionManager(self._session_storage) # Pass initialized storage
+        # self.context_manager = ContextManager(...)
+        logger.info("LLMCore managers (placeholders) initialization step.")
 
-        # --- Step 3: Handle potential initialization errors ---
-        # Specific error handling for missing dependencies or invalid configs
-        # will be added as managers are implemented.
+        logger.info("LLMCore asynchronous initialization complete.")
+        return instance
 
-        logger.info("LLMCore initialization complete.")
+    async def _initialize_storage(self) -> None:
+        """Initializes session and vector storage backends based on config."""
+        # --- Initialize Session Storage ---
+        session_storage_config = self.config.get("storage.session", {})
+        session_storage_type = session_storage_config.get("type")
+        logger.info(f"Initializing session storage of type: {session_storage_type}")
 
-    # --- Core Chat Method (Skeleton) ---
+        if not session_storage_type:
+            raise ConfigError("Session storage type ('storage.session.type') not configured.")
+
+        session_storage_cls = SESSION_STORAGE_MAP.get(session_storage_type.lower())
+        if not session_storage_cls:
+            raise ConfigError(f"Unsupported session storage type: '{session_storage_type}'. "
+                              f"Available types: {list(SESSION_STORAGE_MAP.keys())}")
+
+        try:
+            self._session_storage = session_storage_cls() # Instantiate
+            # Pass the specific config section for the type (e.g., storage.session)
+            await self._session_storage.initialize(session_storage_config)
+            logger.info(f"Session storage backend '{session_storage_type}' initialized successfully.")
+        except ConfigError as e: # Catch config errors during init
+             logger.error(f"Configuration error during session storage initialization: {e}")
+             raise ConfigError(f"Session storage config error: {e}")
+        except SessionStorageError as e: # Catch storage-specific init errors
+             logger.error(f"Failed to initialize session storage backend '{session_storage_type}': {e}")
+             raise StorageError(f"Session storage init failed: {e}") # Wrap in generic StorageError
+        except Exception as e:
+             logger.error(f"Unexpected error initializing session storage '{session_storage_type}': {e}", exc_info=True)
+             raise StorageError(f"Unexpected session storage init error: {e}")
+
+        # --- Initialize Vector Storage (Placeholder) ---
+        vector_storage_config = self.config.get("storage.vector", {})
+        vector_storage_type = vector_storage_config.get("type")
+        logger.info(f"Initializing vector storage of type: {vector_storage_type} (placeholder)")
+
+        if not vector_storage_type:
+            logger.warning("Vector storage type ('storage.vector.type') not configured. RAG features will be unavailable.")
+            self._vector_storage = None # type: ignore # Explicitly None if not configured
+        else:
+            # vector_storage_cls = VECTOR_STORAGE_MAP.get(vector_storage_type.lower())
+            # if not vector_storage_cls:
+            #     raise ConfigError(f"Unsupported vector storage type: '{vector_storage_type}'. "
+            #                       f"Available types: {list(VECTOR_STORAGE_MAP.keys())}")
+            # try:
+            #     self._vector_storage = vector_storage_cls()
+            #     await self._vector_storage.initialize(vector_storage_config)
+            #     logger.info(f"Vector storage backend '{vector_storage_type}' initialized successfully.")
+            # except ConfigError as e: ...
+            # except VectorStorageError as e: ...
+            # except Exception as e: ...
+            logger.warning(f"Vector storage type '{vector_storage_type}' configured, but implementation is pending.")
+            self._vector_storage = None # type: ignore # Placeholder
+
+    # --- Core Chat Method (Skeleton - unchanged) ---
     async def chat(
         self,
         message: str,
@@ -136,115 +236,12 @@ class LLMCore:
         # Provider specific arguments (e.g., temperature, max_tokens for response)
         **provider_kwargs
     ) -> Union[str, AsyncGenerator[str, None]]:
-        """
-        Sends a message to the configured LLM, managing context and session.
-
-        Handles conversation history, optional Retrieval Augmented Generation (RAG)
-        from a vector store, provider-specific token counting, context window
-        management (including truncation), and optional MCP formatting.
-
-        Args:
-            message: The user's message content.
-            session_id: ID of the session to use/continue. If None, a temporary
-                        (non-persistent) session is used for this call only.
-            system_message: An optional system message for the LLM. Behavior when
-                            provided for an existing session depends on context strategy
-                            (e.g., it might replace or supplement existing system messages).
-            provider_name: Override the default provider specified in the configuration.
-            model_name: Override the default model for the selected provider.
-            stream: If True, returns an async generator yielding response text chunks (str).
-                    If False (default), returns the complete response content as a string.
-            save_session: If True (default) and session_id is provided, the
-                          conversation turn (user message + assistant response) is
-                          saved to the persistent session storage. Ignored if
-                          session_id is None.
-            enable_rag: If True, enables Retrieval Augmented Generation by searching
-                        the vector store for context relevant to the message.
-            rag_retrieval_k: Number of documents to retrieve for RAG. Overrides the
-                             default from configuration if provided.
-            rag_collection_name: Name of the vector store collection to use for RAG.
-                                 Overrides the default from configuration if provided.
-            **provider_kwargs: Additional keyword arguments passed directly to the
-                               selected provider's chat completion API call
-                               (e.g., temperature=0.7, max_tokens=100). Note: `max_tokens`
-                               here usually refers to the *response* length limit, not
-                               the context window limit.
-
-        Returns:
-            If stream=False: The full response content as a string.
-            If stream=True: An asynchronous generator yielding response text chunks (str).
-
-        Raises:
-            ProviderError: If the LLM provider API call fails.
-            SessionNotFoundError: If a specified session_id is not found.
-            ConfigError: If configuration for the selected provider/model is invalid.
-            VectorStorageError: If RAG retrieval from the vector store fails.
-            EmbeddingError: If embedding generation fails for the RAG query.
-            ContextLengthError: If the essential context exceeds the model's limit.
-            MCPError: If MCP formatting fails (if enabled).
-            LLMCoreError: For other library-specific errors.
-        """
+        """Sends a message to the configured LLM, managing context and session."""
         logger.debug(
             f"LLMCore.chat called with message: '{message[:50]}...', session_id: {session_id}, "
             f"provider: {provider_name}, model: {model_name}, stream: {stream}, RAG: {enable_rag}"
         )
         # --- Placeholder Implementation ---
-        # This will be fully implemented in Task 1.8 and refined in Phase 2.
-        # Orchestrates SessionManager, ContextManager, ProviderManager
-
-        # Example of how it might start:
-        # 1. Get active provider (default or specified)
-        #    active_provider = self.provider_manager.get_provider(provider_name or self.config.llmcore.default_provider)
-        #    active_model = model_name or active_provider.get_default_model()
-
-        # 2. Load or create session
-        #    chat_session = self.session_manager.load_or_create_session(session_id, system_message)
-        #    chat_session.add_message(Message(role=Role.USER, content=message, session_id=chat_session.id))
-
-        # 3. Prepare context (RAG, history, token limits)
-        #    context_payload = self.context_manager.prepare_context(
-        #        session=chat_session,
-        #        latest_user_message_content=message, # Or use the message object
-        #        provider=active_provider,
-        #        model=active_model,
-        #        enable_rag=enable_rag,
-        #        rag_retrieval_k=rag_retrieval_k,
-        #        rag_collection_name=rag_collection_name,
-        #        use_mcp=self.config.llmcore.get('enable_mcp', False) # and provider specific
-        #    )
-
-        # 4. Call provider's chat_completion
-        #    response_data_or_generator = await active_provider.chat_completion(
-        #        context=context_payload,
-        #        model=active_model,
-        #        stream=stream,
-        #        **provider_kwargs
-        #    )
-
-        # 5. Process response (streaming or full) and save assistant message
-        #    if stream:
-        #        async def stream_wrapper():
-        #            full_response_content = ""
-        #            async for chunk in response_data_or_generator:
-        #                # Process chunk (extract text delta)
-        #                text_delta = active_provider.parse_stream_chunk(chunk) # Example method
-        #                full_response_content += text_delta
-        #                yield text_delta
-        #            if save_session and chat_session.id: # Check if session is persistent
-        #                assistant_msg = Message(role=Role.ASSISTANT, content=full_response_content, session_id=chat_session.id)
-        #                chat_session.add_message(assistant_msg)
-        #                self.session_manager.save_session(chat_session)
-        #        return stream_wrapper()
-        #    else:
-        #        # Process full response_data
-        #        full_response_content = active_provider.parse_full_response(response_data) # Example method
-        #        if save_session and chat_session.id:
-        #            assistant_msg = Message(role=Role.ASSISTANT, content=full_response_content, session_id=chat_session.id)
-        #            chat_session.add_message(assistant_msg)
-        #            self.session_manager.save_session(chat_session)
-        #        return full_response_content
-
-        # --- Current Placeholder ---
         if stream:
             async def dummy_stream():
                 yield "Placeholder streamed response chunk 1. "
@@ -252,42 +249,64 @@ class LLMCore:
                 yield "Placeholder streamed response chunk 2."
             return dummy_stream()
         else:
-            await asyncio.sleep(0.1) # Simulate async work
+            await asyncio.sleep(0.1)
             return f"Placeholder response to: '{message}'"
 
-    # --- Session Management Methods (Skeletons) ---
-    def get_session(self, session_id: str) -> Optional[ChatSession]:
+    # --- Session Management Methods (Skeletons - updated to use self._session_storage) ---
+    async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """Retrieves a specific chat session object (including messages)."""
         logger.debug(f"LLMCore.get_session called for session_id: {session_id}")
-        # To be implemented: Calls self.session_manager.get_session(...)
-        # Example: return self.session_manager.get_session(session_id)
-        raise NotImplementedError("Session management not yet implemented.")
+        if not hasattr(self, '_session_storage') or not self._session_storage:
+             raise LLMCoreError("Session storage is not initialized.")
+        try:
+            return await self._session_storage.get_session(session_id)
+        except SessionStorageError as e:
+            logger.error(f"Storage error getting session '{session_id}': {e}")
+            raise # Re-raise specific storage error
+        except Exception as e:
+            logger.error(f"Unexpected error getting session '{session_id}': {e}", exc_info=True)
+            raise LLMCoreError(f"Failed to get session '{session_id}': {e}")
 
-    def list_sessions(self) -> List[Dict[str, Any]]:
+
+    async def list_sessions(self) -> List[Dict[str, Any]]:
         """Lists available persistent chat sessions (metadata only)."""
         logger.debug("LLMCore.list_sessions called.")
-        # To be implemented: Calls self.session_manager.list_sessions(...)
-        # Example: return self.session_manager.list_sessions()
-        raise NotImplementedError("Session management not yet implemented.")
+        if not hasattr(self, '_session_storage') or not self._session_storage:
+             raise LLMCoreError("Session storage is not initialized.")
+        try:
+            return await self._session_storage.list_sessions()
+        except SessionStorageError as e:
+            logger.error(f"Storage error listing sessions: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error listing sessions: {e}", exc_info=True)
+            raise LLMCoreError(f"Failed to list sessions: {e}")
 
-    def delete_session(self, session_id: str) -> bool:
+
+    async def delete_session(self, session_id: str) -> bool:
         """Deletes a persistent chat session from storage."""
         logger.debug(f"LLMCore.delete_session called for session_id: {session_id}")
-        # To be implemented: Calls self.session_manager.delete_session(...)
-        # Example: return self.session_manager.delete_session(session_id)
-        raise NotImplementedError("Session management not yet implemented.")
+        if not hasattr(self, '_session_storage') or not self._session_storage:
+             raise LLMCoreError("Session storage is not initialized.")
+        try:
+            return await self._session_storage.delete_session(session_id)
+        except SessionStorageError as e:
+            logger.error(f"Storage error deleting session '{session_id}': {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error deleting session '{session_id}': {e}", exc_info=True)
+            raise LLMCoreError(f"Failed to delete session '{session_id}': {e}")
 
-    # --- RAG / Vector Store Management Methods (Skeletons) ---
+
+    # --- RAG / Vector Store Management Methods (Skeletons - unchanged) ---
     async def add_document_to_vector_store(
         self, content: str, *, metadata: Optional[Dict] = None,
         doc_id: Optional[str] = None, collection_name: Optional[str] = None
     ) -> str:
         """Adds a single document (text content) to the configured vector store."""
         logger.debug(f"LLMCore.add_document_to_vector_store called for collection: {collection_name}, doc_id: {doc_id}")
-        # To be implemented:
-        # 1. Generate embedding via EmbeddingManager
-        # 2. Create ContextDocument
-        # 3. Call self.storage_manager.vector_storage.add_documents([doc], collection_name)
+        if not hasattr(self, '_vector_storage') or not self._vector_storage:
+             raise LLMCoreError("Vector storage is not initialized or configured.")
         raise NotImplementedError("RAG/Vector store management not yet implemented.")
 
     async def add_documents_to_vector_store(
@@ -295,7 +314,8 @@ class LLMCore:
     ) -> List[str]:
         """Adds multiple documents to the configured vector store in a batch."""
         logger.debug(f"LLMCore.add_documents_to_vector_store called for collection: {collection_name}")
-        # To be implemented
+        if not hasattr(self, '_vector_storage') or not self._vector_storage:
+             raise LLMCoreError("Vector storage is not initialized or configured.")
         raise NotImplementedError("RAG/Vector store management not yet implemented.")
 
     async def search_vector_store(
@@ -304,7 +324,8 @@ class LLMCore:
     ) -> List[ContextDocument]:
         """Performs a similarity search for relevant documents in the vector store."""
         logger.debug(f"LLMCore.search_vector_store called for query: '{query[:50]}...', k: {k}, collection: {collection_name}")
-        # To be implemented
+        if not hasattr(self, '_vector_storage') or not self._vector_storage:
+             raise LLMCoreError("Vector storage is not initialized or configured.")
         raise NotImplementedError("RAG/Vector store management not yet implemented.")
 
     async def delete_documents_from_vector_store(
@@ -312,22 +333,21 @@ class LLMCore:
     ) -> bool:
         """Deletes documents from the vector store by their IDs."""
         logger.debug(f"LLMCore.delete_documents_from_vector_store called for IDs: {document_ids}, collection: {collection_name}")
-        # To be implemented
+        if not hasattr(self, '_vector_storage') or not self._vector_storage:
+             raise LLMCoreError("Vector storage is not initialized or configured.")
         raise NotImplementedError("RAG/Vector store management not yet implemented.")
 
-    # --- Provider Info Methods (Skeletons) ---
+    # --- Provider Info Methods (Skeletons - unchanged) ---
     def get_available_providers(self) -> List[str]:
         """Lists the names of all configured LLM providers."""
         logger.debug("LLMCore.get_available_providers called.")
         # To be implemented: Uses self.provider_manager
-        # Example: return self.provider_manager.get_available_provider_names()
         raise NotImplementedError("Provider info methods not yet implemented.")
 
     def get_models_for_provider(self, provider_name: str) -> List[str]:
         """Lists available models for a specific configured provider."""
         logger.debug(f"LLMCore.get_models_for_provider called for provider: {provider_name}")
         # To be implemented: Uses self.provider_manager
-        # Example: return self.provider_manager.get_provider(provider_name).get_available_models()
         raise NotImplementedError("Provider info methods not yet implemented.")
 
     # --- Utility / Cleanup ---
@@ -337,34 +357,35 @@ class LLMCore:
         Should be called when the application using LLMCore is shutting down.
         """
         logger.info("LLMCore.close() called. Cleaning up resources...")
-        # To be implemented: Calls close() on storage managers, provider clients if needed.
-        # Example:
-        # if hasattr(self, 'storage_manager') and self.storage_manager:
-        #     await self.storage_manager.close() # Assuming storage_manager has an async close
-        # if hasattr(self, 'provider_manager') and self.provider_manager:
-        #     await self.provider_manager.close() # If providers need explicit closing
-        logger.info("LLMCore resources cleanup (placeholder) complete.")
-        await asyncio.sleep(0.01) # Simulate async close
+        # Close session storage
+        if hasattr(self, '_session_storage') and self._session_storage:
+            try:
+                await self._session_storage.close()
+                logger.info("Session storage closed.")
+            except Exception as e:
+                logger.error(f"Error closing session storage: {e}", exc_info=True)
 
-    def __await__(self):
-        """
-        Allows LLMCore instances to be awaited if initialization needs to be async.
-        This is primarily for scenarios where __init__ might perform async operations
-        (e.g., establishing an async database connection pool).
-        If __init__ remains synchronous, this is less critical but harmless.
-        """
-        async def closure():
-            # If __init__ becomes async, perform await operations here.
-            # For now, it just returns self as __init__ is currently synchronous.
-            # Example: await self._async_init_stuff()
-            return self
-        return closure().__await__()
+        # Close vector storage (placeholder)
+        if hasattr(self, '_vector_storage') and self._vector_storage:
+             try:
+                 # await self._vector_storage.close() # Uncomment when implemented
+                 logger.info("Vector storage closed (placeholder).")
+             except Exception as e:
+                 logger.error(f"Error closing vector storage: {e}", exc_info=True)
+
+        # Close provider manager (placeholder)
+        # if hasattr(self, 'provider_manager') and self.provider_manager:
+        #     await self.provider_manager.close()
+        #     logger.info("Provider manager closed (placeholder).")
+
+        logger.info("LLMCore resources cleanup complete.")
+
+    # __await__ is no longer needed as initialization is done via async classmethod `create`
 
     async def __aenter__(self):
         """Allows using LLMCore with `async with`."""
-        # Perform any async setup if needed, or just return self
-        # Potentially call an async version of parts of __init__ if deferred
         logger.debug("LLMCore.__aenter__ called.")
+        # Initialization is now handled by `create`, so just return self
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
