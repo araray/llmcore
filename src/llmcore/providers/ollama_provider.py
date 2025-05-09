@@ -53,7 +53,8 @@ logger = logging.getLogger(__name__)
 
 # Default context lengths (remains the same)
 DEFAULT_OLLAMA_TOKEN_LIMITS = {
-    "llama3": 8192,"llama3:8b": 8192,"llama3:70b": 8192, "falcon3:3b": 4096,
+    "llama3": 8192,"llama3:8b": 8192,"llama3:70b": 8192, "gemma3:4b": 4096, # Added from user log
+    "falcon3:3b": 4096,
     "mistral": 8192,"mistral:7b": 8192,"mixtral": 32768,"mixtral:8x7b": 32768,
     "gemma": 8192,"gemma:7b": 8192,"gemma:2b": 8192,
     "phi3": 4096,"phi3:mini": 4096,
@@ -117,6 +118,7 @@ class OllamaProvider(BaseProvider):
         if limit is None: limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
         if limit is None:
             if model_name == "falcon3:3b": limit = 4096; logger.info(f"Using context length 4096 for Ollama model '{model_name}'.")
+            elif model_name == "gemma3:4b": limit = 4096; logger.info(f"Using context length 4096 for Ollama model '{model_name}'.") # From user log
             else: limit = 4096; logger.warning(f"Unknown context length for Ollama model '{model_name}'. Using fallback limit: {limit}.")
         return limit
 
@@ -220,24 +222,40 @@ class OllamaProvider(BaseProvider):
             if "connect" in str(e).lower(): raise ProviderError(self.get_name(), f"Could not connect to Ollama at {self.host or 'default'}. Is it running? Details: {e}")
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    # --- Token Counting Methods (remain the same) ---
-    def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int: # Changed to async
         """Counts tokens using the configured tokenizer (tiktoken) or approximation."""
-        # (Remains the same)
-        if not self._encoding: return (len(text) + 3) // 4 if text else 0
-        if not text: return 0
-        try: return len(self._encoding.encode(text))
-        except Exception as e: logger.error(f"Tiktoken encoding failed: {e}", exc_info=True); return (len(text) + 3) // 4
+        if not self._encoding:
+            # This part is synchronous, so it's fine within an async method
+            return (len(text) + 3) // 4 if text else 0
+        if not text:
+            return 0
+        try:
+            # This part is synchronous
+            return len(self._encoding.encode(text))
+        except Exception as e:
+            logger.error(f"Tiktoken encoding failed: {e}", exc_info=True)
+            return (len(text) + 3) // 4
 
-    def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int: # Changed to async
         """Counts tokens for List[Message] using the configured method (tiktoken)."""
-        # Note: This method currently only counts tokens for List[Message] format.
-        # (Remains the same)
-        if not self._encoding: logger.warning("Tiktoken encoding not available for token counting. Using approximation."); total_chars = sum(len(msg.content) for msg in messages); return (total_chars + (len(messages) * 15)) // 4
-        overhead_per_message = 5; total_tokens = 0
+        if not self._encoding:
+            logger.warning("Tiktoken encoding not available for token counting. Using approximation.")
+            total_chars = sum(len(msg.content) for msg in messages)
+            return (total_chars + (len(messages) * 15)) // 4 # Synchronous
+
+        overhead_per_message = 5
+        total_tokens = 0
         for msg in messages:
-            try: content_tokens = len(self._encoding.encode(msg.content)); role_str = str(msg.role); role_tokens = len(self._encoding.encode(role_str)); total_tokens += content_tokens + role_tokens + overhead_per_message
-            except Exception as e: logger.error(f"Tiktoken encoding failed for message content/role: {e}. Using approximation."); role_str_for_approx = str(msg.role); total_tokens += (len(msg.content) + len(role_str_for_approx) + 15) // 4
+            try:
+                # Synchronous encoding
+                content_tokens = len(self._encoding.encode(msg.content))
+                role_str = str(msg.role)
+                role_tokens = len(self._encoding.encode(role_str))
+                total_tokens += content_tokens + role_tokens + overhead_per_message
+            except Exception as e:
+                logger.error(f"Tiktoken encoding failed for message content/role: {e}. Using approximation.")
+                role_str_for_approx = str(msg.role)
+                total_tokens += (len(msg.content) + len(role_str_for_approx) + 15) // 4
         total_tokens += 3
         return total_tokens
 

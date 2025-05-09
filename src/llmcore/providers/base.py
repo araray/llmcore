@@ -135,12 +135,12 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int: # Changed to async
         """
-        Count the number of tokens a given text string would consume for a specific model.
+        Asynchronously count the number of tokens a given text string would consume for a specific model.
 
         Uses the provider's specific tokenizer or token counting method.
-        This method is typically synchronous as tokenizers often operate locally.
+        This method is async to accommodate providers that might need API calls for tokenization.
 
         Args:
             text: The text string to count tokens for.
@@ -152,9 +152,8 @@ class BaseProvider(abc.ABC):
         """
         pass
 
-    # --- Updated Method Signature ---
     @abc.abstractmethod
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int: # Remains async
         """
         Asynchronously count the total number of tokens a list of messages would consume.
 
@@ -175,7 +174,6 @@ class BaseProvider(abc.ABC):
             The total estimated token count for the messages.
         """
         pass
-    # --- End Update ---
 
     # Optional: Add an async close method if providers need cleanup
     async def close(self) -> None:

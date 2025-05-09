@@ -256,25 +256,21 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"Unexpected error during OpenAI chat completion: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    # --- Token Counting Methods (remain the same) ---
-    def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int: # Changed to async
         """Counts tokens using the tiktoken tokenizer."""
         if not self._encoding:
             logger.warning("Tiktoken encoding not available for OpenAIProvider. Using character approximation.")
             return (len(text) + 3) // 4
         if not text: return 0
-        try: return len(self._encoding.encode(text))
+        try:
+            # Tiktoken encode is synchronous
+            return len(self._encoding.encode(text))
         except Exception as e:
             logger.error(f"Tiktoken encoding failed: {e}", exc_info=True)
             return (len(text) + 3) // 4
 
-    def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int: # Changed to async
         """Counts tokens for List[Message] using tiktoken, including OpenAI's overhead."""
-        # Note: This method currently only counts tokens for List[Message] format.
-        # Accurate token counting for MCP objects might require adjustments if the
-        # final structure sent to the API differs significantly (e.g., due to how
-        # knowledge is injected). For now, ContextManager uses this method *before*
-        # MCP formatting, so it operates on the List[Message] representation.
         if not self._encoding:
             logger.warning("Tiktoken encoding not available for token counting. Returning 0.")
             return 0
@@ -296,6 +292,7 @@ class OpenAIProvider(BaseProvider):
             try:
                 num_tokens += tokens_per_message
                 role_str = str(message.role)
+                # Synchronous encoding
                 num_tokens += len(self._encoding.encode(role_str))
                 num_tokens += len(self._encoding.encode(message.content))
             except Exception as e:
