@@ -10,6 +10,8 @@ import asyncio
 import logging
 import os
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator
+from enum import Enum # Import Enum for isinstance check
+
 
 # Removed aiohttp as it's not directly used here; openai SDK handles HTTP.
 try:
@@ -30,8 +32,8 @@ except ImportError:
 
 
 from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError # MCPError removed
-from .base import BaseProvider, ContextPayload # ContextPayload is List[Message]
+from ..exceptions import ProviderError, ConfigError
+from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +207,10 @@ class OpenAIProvider(BaseProvider):
         # Convert LLMCore Messages to OpenAI's expected format
         messages_payload: List[Dict[str, str]] = []
         for msg in context:
-            messages_payload.append({"role": str(msg.role.value), "content": msg.content})
+            # Ensure role is a string value
+            role_str = msg.role.value if isinstance(msg.role, Enum) else str(msg.role)
+            messages_payload.append({"role": role_str, "content": msg.content})
+
 
         if not messages_payload:
              raise ProviderError(self.get_name(), "No valid messages to send after context processing.")
@@ -255,34 +260,17 @@ class OpenAIProvider(BaseProvider):
         This method is asynchronous to maintain consistency with the base class,
         though tiktoken itself is synchronous.
         """
-        # Ensure tokenizer is loaded for the relevant model
-        # If model is different from default, we might need to reload, but tiktoken
-        # often uses the same encoding for families of models.
-        # For simplicity, we assume the encoding loaded for default_model is sufficient
-        # or that the model passed here uses a compatible encoding.
-        # A more robust solution might involve caching encodings per model name.
-
-        # If a specific model is passed and it's different from the one used to init _encoding,
-        # it's ideal to load the correct tokenizer. However, _load_tokenizer is sync.
-        # For now, we'll use the existing _encoding.
-        # model_to_use_for_encoding = model or self.default_model
-        # if self._current_encoding_model != model_to_use_for_encoding:
-        #     self._load_tokenizer(model_to_use_for_encoding) # This would need to be async or handled carefully
-
         if not self._encoding:
             logger.warning("Tiktoken encoding not available for OpenAIProvider. "
                            "Using rough character-based approximation for token counting.")
-            return (len(text) + 3) // 4 # Basic approximation: 1 token ~ 4 chars
+            return (len(text) + 3) // 4
         if not text:
             return 0
 
         try:
-            # tiktoken.encode() is synchronous.
-            # If this becomes a bottleneck, consider asyncio.to_thread for very long texts.
             return len(self._encoding.encode(text))
         except Exception as e:
             logger.error(f"Tiktoken encoding failed for text: {e}", exc_info=True)
-            # Fallback to character approximation if encoding fails
             return (len(text) + 3) // 4
 
     async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
@@ -294,12 +282,14 @@ class OpenAIProvider(BaseProvider):
         if not self._encoding:
             logger.warning("Tiktoken encoding not available for OpenAIProvider message token counting. "
                            "Using rough character-based approximation.")
-            total_chars = sum(len(msg.content) + len(msg.role.value) for msg in messages)
-            return (total_chars + (len(messages) * 15)) // 4 # Rough approximation with overhead
+            total_chars = 0
+            for msg in messages:
+                role_str = msg.role.value if isinstance(msg.role, LLMCoreRole) else str(msg.role)
+                total_chars += len(msg.content) + len(role_str)
+            return (total_chars + (len(messages) * 15)) // 4
 
         model_name = model or self.default_model
 
-        # Determine tokens per message and per name based on model, as per OpenAI's cookbook
         if model_name in {
             "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613",
             "gpt-4-0314", "gpt-4-32k-0314", "gpt-4-0613", "gpt-4-32k-0613",
@@ -307,9 +297,9 @@ class OpenAIProvider(BaseProvider):
             tokens_per_message = 3
             tokens_per_name = 1
         elif model_name == "gpt-3.5-turbo-0301":
-            tokens_per_message = 4  # Every message follows <|start|>{role/name}\n{content}<|end|>\n
-            tokens_per_name = -1  # If there's a name, role is omitted
-        elif "gpt-3.5-turbo" in model_name or "gpt-4" in model_name or "gpt-4o" in model_name: # Covers current and future models like gpt-4o, gpt-4-turbo
+            tokens_per_message = 4
+            tokens_per_name = -1
+        elif "gpt-3.5-turbo" in model_name or "gpt-4" in model_name or "gpt-4o" in model_name:
             logger.debug(f"Using modern token counting for model {model_name} (3 tokens_per_message, 1 token_per_name).")
             tokens_per_message = 3
             tokens_per_name = 1
@@ -324,32 +314,29 @@ class OpenAIProvider(BaseProvider):
         for message in messages:
             try:
                 num_tokens += tokens_per_message
-                # Encode role and content separately
-                num_tokens += len(self._encoding.encode(str(message.role.value)))
+                # Correctly handle message.role whether it's an Enum or a string
+                role_str = message.role.value if isinstance(message.role, LLMCoreRole) else str(message.role)
+                num_tokens += len(self._encoding.encode(role_str))
                 num_tokens += len(self._encoding.encode(message.content))
-                # Add tokens for name if applicable (though LLMCore.Message doesn't have a 'name' field currently)
-                # if message.name: # Assuming Message model might have a 'name' field for participant
+                # if message.name: # LLMCore.Message does not have a 'name' field
                 #    num_tokens += tokens_per_name
             except Exception as e:
                  logger.error(f"Tiktoken encoding failed for message content/role during count_message_tokens: {e}. "
                               "Using character approximation for this message.")
-                 role_str_for_approx = str(message.role.value)
-                 # Approximate tokens for this specific message if encoding fails
+                 role_str_for_approx = message.role.value if isinstance(message.role, LLMCoreRole) else str(message.role)
                  num_tokens += (len(message.content) + len(role_str_for_approx) + 15) // 4
 
 
-        num_tokens += 3  # Every reply is primed with <|start|>assistant<|message|>
+        num_tokens += 3
         return num_tokens
 
     async def close(self) -> None:
         """Closes the underlying OpenAI client session if applicable."""
         if self._client:
             try:
-                # For openai SDK v1.x+, AsyncOpenAI uses an httpx.AsyncClient internally.
-                # It's good practice to close it.
                 await self._client.close()
                 logger.info("OpenAIProvider client closed successfully.")
             except Exception as e:
                 logger.error(f"Error closing OpenAIProvider client: {e}", exc_info=True)
             finally:
-                self._client = None # Dereference to allow garbage collection
+                self._client = None
