@@ -10,6 +10,7 @@ Accepts context as List[Message].
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator
+from enum import Enum # Import Enum for isinstance check
 
 # Use the official ollama library
 try:
@@ -224,7 +225,10 @@ class OllamaProvider(BaseProvider):
         messages_payload: List[Dict[str, str]] = []
         for msg in context:
             # Ollama uses 'system', 'user', 'assistant' roles
-            messages_payload.append({"role": str(msg.role.value), "content": msg.content})
+            # Ensure msg.role.value is used if msg.role is an Enum, otherwise convert to string
+            role_value = msg.role.value if isinstance(msg.role, Enum) else str(msg.role)
+            messages_payload.append({"role": role_value, "content": msg.content})
+
 
         if not messages_payload:
              raise ProviderError(self.get_name(), "No valid messages to send after context processing.")
@@ -305,26 +309,29 @@ class OllamaProvider(BaseProvider):
         """
         if not self._encoding: # Using character approximation
             logger.debug(f"Using character approximation for message token counting with Ollama (tokenizer: {self.tokenizer_name}).")
-            total_chars = sum(len(msg.content) + len(msg.role.value) for msg in messages)
+            total_chars = sum(len(msg.content) + len(str(msg.role.value if isinstance(msg.role, Enum) else msg.role)) for msg in messages)
             # Add a small overhead per message for role/separators
             return (total_chars + (len(messages) * 5)) // 4
 
         # Using tiktoken (OpenAI's heuristic is often a good starting point for many models)
         # This heuristic might not be perfectly accurate for all Ollama models.
         tokens_per_message = 3 # Based on OpenAI's typical overhead
-        tokens_per_name_role = 1 # For role token
+        # tokens_per_name_role = 1 # For role token (OpenAI specific, might not apply universally)
         num_tokens = 0
 
         for message in messages:
             try:
                 num_tokens += tokens_per_message
-                num_tokens += len(self._encoding.encode(str(message.role.value)))
+                # Correctly handle message.role whether it's an Enum or a string
+                role_str = message.role.value if isinstance(message.role, Enum) else str(message.role)
+                num_tokens += len(self._encoding.encode(role_str))
                 num_tokens += len(self._encoding.encode(message.content))
             except Exception as e:
                  logger.error(f"Tiktoken encoding failed for message content/role with '{self.tokenizer_name}': {e}. "
                               "Using character approximation for this message.", exc_info=True)
-                 role_str_for_approx = str(message.role.value)
-                 num_tokens += (len(message.content) + len(role_str_for_approx) + 15) // 4
+                 # Correctly derive role_str for approximation in the except block
+                 role_str_for_approx = message.role.value if isinstance(message.role, Enum) else str(message.role)
+                 num_tokens += (len(message.content) + len(role_str_for_approx) + 15) // 4 # Approximation
 
         num_tokens += 3  # Simulating a prime for the assistant's reply, as in OpenAI's guide
         return num_tokens
