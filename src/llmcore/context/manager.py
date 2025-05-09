@@ -244,8 +244,9 @@ class ContextManager:
 
         # --- History Selection ---
         temp_rag_context_str = self._format_rag_context(retrieved_docs) if retrieved_docs else ""
-        # Use synchronous count_tokens for RAG string, as it's just text
-        rag_tokens = provider.count_tokens(temp_rag_context_str, target_model) if temp_rag_context_str else 0
+        # --- FIX: Await the call to count_tokens ---
+        rag_tokens = await provider.count_tokens(temp_rag_context_str, target_model) if temp_rag_context_str else 0
+        # --- End FIX ---
 
         history_token_budget = available_tokens - rag_tokens
         if history_token_budget < 0:
@@ -268,14 +269,16 @@ class ContextManager:
                     session.messages, provider, target_model, history_token_budget
                 )
         else:
+            # If no budget for history, still try to include system messages if they fit
             system_messages = [msg for msg in session.messages if msg.role == LLMCoreRole.SYSTEM]
             # Await the call to count_message_tokens
             system_tokens = await provider.count_message_tokens(system_messages, target_model) if system_messages else 0
-            if system_tokens <= history_token_budget:
+            if system_tokens <= history_token_budget: # This condition will be false if budget is 0 or negative
                  selected_history = system_messages
             else:
                  selected_history = []
                  logger.warning("Not enough token budget even for system messages after RAG context.")
+
 
         # --- Combine and Truncate ---
         final_messages, final_token_count = await self._combine_and_truncate( # Await this call
@@ -366,7 +369,8 @@ class ContextManager:
             raise ProviderError(provider.get_name(), f"Token counting failed for system messages: {e}")
 
         if system_tokens > token_budget:
-             logger.warning(f"System messages ({system_tokens} tokens) alone exceed history budget ({token_budget}). Only including system messages.")
+             logger.warning(f"System messages ({system_tokens} tokens) alone exceed history budget ({token_budget}). Cannot include history.")
+             # Only include system messages if they fit, otherwise return empty
              return system_messages, system_tokens
 
         selected_messages.extend(system_messages)
@@ -416,8 +420,9 @@ class ContextManager:
         if rag_context_str:
             rag_message = Message(role=LLMCoreRole.SYSTEM, content=rag_context_str, session_id="rag_context", id="rag_context")
             try:
-                 # Use synchronous count_tokens for the RAG string itself
-                 rag_message.tokens = provider.count_tokens(rag_context_str, model_name)
+                 # --- FIX: Await token counting ---
+                 rag_message.tokens = await provider.count_tokens(rag_context_str, model_name)
+                 # --- End FIX ---
             except Exception as e:
                  logger.error(f"Failed to count tokens for RAG context message: {e}")
                  rag_message.tokens = 0
@@ -474,7 +479,10 @@ class ContextManager:
                 if rag_docs:
                     rag_context_str = self._format_rag_context(rag_docs)
                     rag_message.content = rag_context_str
-                    try: rag_message.tokens = provider.count_tokens(rag_context_str, model_name) # Sync count
+                    try:
+                        # --- FIX: Await token counting ---
+                        rag_message.tokens = await provider.count_tokens(rag_context_str, model_name)
+                        # --- End FIX ---
                     except Exception as e: logger.error(f"Failed to count tokens for truncated RAG context: {e}"); rag_message.tokens = 0
                     logger.debug(f"Truncated least relevant RAG document. New RAG context tokens: {rag_message.tokens}")
                 else:
@@ -494,7 +502,10 @@ class ContextManager:
                  if rag_docs:
                     rag_context_str = self._format_rag_context(rag_docs)
                     rag_message.content = rag_context_str
-                    try: rag_message.tokens = provider.count_tokens(rag_context_str, model_name) # Sync count
+                    try:
+                        # --- FIX: Await token counting ---
+                        rag_message.tokens = await provider.count_tokens(rag_context_str, model_name)
+                        # --- End FIX ---
                     except Exception as e: logger.error(f"Failed to count tokens for truncated RAG context (fallback): {e}"); rag_message.tokens = 0
                     logger.debug(f"Truncated least relevant RAG document (fallback). New RAG context tokens: {rag_message.tokens}")
                  else:
