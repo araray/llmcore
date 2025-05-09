@@ -1,11 +1,11 @@
 # pyproject.toml
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=70", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.6.1"
+version = "0.6.2"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
