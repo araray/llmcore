@@ -100,11 +100,9 @@ async def main():
                     provider_name=provider_name,
                     stream=True
                 )
-                async for chunk in response_stream:
-                    # Ollama stream chunks often contain the full message object
-                    # We extract the content delta
-                    delta = chunk.get("message", {}).get("content", "")
-                    print(delta, end="", flush=True)
+                # The llm.chat(stream=True) yields string deltas directly
+                async for text_delta in response_stream:
+                    print(text_delta, end="", flush=True)
                 print("\n--- Stream finished ---")
             except ProviderError as e:
                 print(f"\n--- STREAM ERROR: {e} ---", flush=True)
