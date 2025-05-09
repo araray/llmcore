@@ -22,7 +22,7 @@ This document outlines the specification for a Python library, **`LLMCore`**, de
     *   Support for managing conversation sessions/history via configurable storage backends.
     *   Robust mechanisms for managing the LLM's context window, including accurate, provider-specific token counting and intelligent context selection/truncation strategies when exceeding limits.
     *   Support for Retrieval Augmented Generation (RAG) by integrating with persistent and reusable vector store collections (ChromaDB, PostgreSQL+pgvector).
-    *   Support for Model Context Protocol (MCP) to standardize context exchange with models, potentially using the `modelcontextprotocol` Python SDK based on configuration.
+    *   ~~Support for Model Context Protocol (MCP) to standardize context exchange with models, potentially using the `modelcontextprotocol` Python SDK based on configuration.~~
 *   **Developer-Friendly API:** Provide a clear, intuitive, well-documented, and type-hinted Python API for developers, simplifying common LLM interaction patterns.
 *   **Asynchronous Design:** Leverage Python's `asyncio` for non-blocking I/O operations, especially for provider API calls and streaming responses, making it suitable for integration into asynchronous applications.
 
@@ -170,7 +170,7 @@ graph TD
     *   Manages token limits using provider-specific counting via the `ProviderManager`.
     *   Handles RAG: interacts with `EmbeddingManager` and `StorageManager` (`BaseVectorStorage`) for document retrieval.
     *   Implements context combination and truncation strategies based on configuration.
-    *   Optionally formats context using the MCP SDK if enabled.
+    *   ~~Optionally formats context using the MCP SDK if enabled.~~
 *   **Embedding Manager (`llmcore.embedding`):**
     *   `BaseEmbeddingModel`: Abstract interface for embedding generation (`generate_embedding`, `generate_embeddings`).
     *   Concrete implementations (e.g., `SentenceTransformerEmbedding`, `OpenAIEmbedding`, `GoogleAIEmbedding`).
@@ -301,10 +301,6 @@ llmcore/
   
     default_embedding_model = "all-MiniLM-L6-v2"
   
-    # Global flag to enable/disable MCP formatting (can be overridden per provider)
-  
-    enable_mcp = false
-  
     # Log level for the library
   
     log_level = "INFO"
@@ -320,7 +316,6 @@ llmcore/
       default_model = "gpt-4-turbo"
       timeout = 60
   
-      # use_mcp = false # Provider-specific MCP toggle
   
       [providers.anthropic]
   
@@ -329,8 +324,6 @@ llmcore/
       api_key = ""
       default_model = "claude-3-opus-20240229"
       timeout = 60
-  
-      # use_mcp = false
   
       [providers.ollama]
       base_url = "http://localhost:11434/api"
@@ -343,8 +336,6 @@ llmcore/
   
       # tokenizer = "tiktoken_cl100k_base"
   
-      # use_mcp = false
-  
       [providers.gemini]
   
       # API Key: Recommend using environment variable LLMCORE_PROVIDERS_GEMINI_API_KEY
@@ -356,7 +347,6 @@ llmcore/
   
       # safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE", ... }
   
-      # use_mcp = false
   
     # --- Storage Configurations ---
   
@@ -448,7 +438,7 @@ llmcore/
   
       minimum_history_messages = 1
   
-      # mcp_version = "v1" # If MCP versions need specifying
+      
   ```
 
 ### 4.2. Provider Management
@@ -1421,11 +1411,10 @@ This plan breaks down the development of `LLMCore` into logical phases, focusing
     *   **Purpose:** Integrate support for LLMs that can use external tools or call functions.
     *   **Details:** Adapt the `BaseProvider` interface and `chat` API to handle tool definitions, tool calls from the LLM, and tool execution results, feeding them back into the conversation.
     *   **Deliverables:** Ability to leverage LLM function calling capabilities through `LLMCore`.
-*   **Task 5.6: Full MCP Implementation & Validation**
-
-    *   **Purpose:** Fully implement and validate MCP support as the protocol matures.
-    *   **Details:** Stay updated with the MCP specification and SDK. Ensure `LLMCore` correctly generates and potentially consumes MCP context objects. Test interoperability with MCP-compliant models/servers.
-    *   **Deliverables:** Robust and compliant MCP support.
+*   ~~**Task 5.6: Full MCP Implementation & Validation**~~
+    *   ~~**Purpose:** Fully implement and validate MCP support as the protocol matures.~~
+    *   ~~**Details:** Stay updated with the MCP specification and SDK. Ensure `LLMCore` correctly generates and potentially consumes MCP context objects. Test interoperability with MCP-compliant models/servers.~~
+    *   ~~**Deliverables:** Robust and compliant MCP support.~~
 *   **Task 5.7: Enhanced `llmchat` CLI Features**
 
     *   **Purpose:** Leverage new `LLMCore` features in the example CLI.

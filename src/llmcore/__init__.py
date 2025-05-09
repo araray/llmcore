@@ -8,7 +8,7 @@ require LLM-driven chat capabilities, session management, context handling,
 and Retrieval Augmented Generation (RAG).
 """
 
-__version__ = "0.5.0" # Version will be updated as features are added
+__version__ = "0.6.0" # Version will be updated as features are added/removed
 
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
@@ -29,7 +29,7 @@ from .exceptions import (
     ContextLengthError,
     EmbeddingError,
     SessionNotFoundError,
-    MCPError # Added MCPError
+    # MCPError removed
 )
 
 # Import the main LLMCore class from api.py
@@ -55,7 +55,7 @@ __all__ = [
     "ContextLengthError",
     "EmbeddingError",
     "SessionNotFoundError",
-    "MCPError", # Added MCPError
+    # MCPError removed
 ]
 
 # Initialize logging for the library (optional, can be configured by the application)

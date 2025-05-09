@@ -66,10 +66,7 @@ class EmbeddingError(LLMCoreError):
         self.model_name = model_name
         super().__init__(f"Error with embedding model '{model_name}': {message}")
 
-class MCPError(LLMCoreError):
-    """Raised for errors related to Model Context Protocol (MCP) formatting or handling."""
-    def __init__(self, message: str = "MCP processing error."):
-        super().__init__(message)
+# MCPError class definition removed
 
 # Further specific exceptions can be added as needed, for example:
 # class AuthenticationError(ProviderError):

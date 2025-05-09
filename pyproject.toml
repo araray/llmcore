@@ -13,7 +13,7 @@ license = { text = "MIT" }
 authors = [
     { name = "Araray Velho", email = "araray@gmail.com" }
 ]
-keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp", "mcp"]
+keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp", "neural", "networks", "library", "module"]
 
 # Core dependencies for llmcore
 dependencies = [
@@ -44,9 +44,6 @@ chromadb = ["chromadb>=1.0.0"]
 sentence_transformers = ["sentence-transformers>=2.2.0"]
 # OpenAI and Google embeddings are usually part of their main SDKs (openai, google-genai)
 
-# MCP Support
-mcp = ["modelcontextprotocol>=0.1.0"] # Placeholder, check actual package name and version
-
 # Testing dependencies
 test = [
     "pytest>=7.0.0",
@@ -76,7 +73,6 @@ all = [ # To install all optional dependencies
     "llmcore[postgres]",
     "llmcore[chromadb]",
     "llmcore[sentence_transformers]",
-    "llmcore[mcp]",
 ]
 
 

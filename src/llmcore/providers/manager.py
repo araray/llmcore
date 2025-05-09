@@ -24,7 +24,6 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .gemini_provider import GeminiProvider
-from .github_mcp_provider import GithubMCPProvider # Added GithubMCPProvider
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ PROVIDER_MAP: Dict[str, Type[BaseProvider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
-    "github_mcp": GithubMCPProvider, # Added GithubMCPProvider mapping
 }
 # --- End Mapping ---
 

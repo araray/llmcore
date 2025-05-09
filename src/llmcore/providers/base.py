@@ -8,25 +8,14 @@ the LLMCore library.
 """
 
 import abc
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 
 # Import Message for type hinting
 from ..models import Message
 
-# Use TYPE_CHECKING for the MCP import to avoid runtime dependency if SDK not installed
-if TYPE_CHECKING:
-    try:
-        # Attempt to import the specific Context object for type hinting
-        from modelcontextprotocol import Context as MCPContextObject
-    except ImportError:
-        # If import fails, use Any as a fallback type hint
-        MCPContextObject = Any
-else:
-    # At runtime, define MCPContextObject as Any if not checking types
-    MCPContextObject = Any
-
-# Define a type alias for the context payload that can be passed to providers
-ContextPayload = Union[List[Message], MCPContextObject]
+# Define a type alias for the context payload that can be passed to providers.
+# This is now simplified to always be a List of Message objects.
+ContextPayload = List[Message]
 
 
 class BaseProvider(abc.ABC):
@@ -94,7 +83,7 @@ class BaseProvider(abc.ABC):
     @abc.abstractmethod
     async def chat_completion(
         self,
-        context: ContextPayload, # Updated type hint
+        context: ContextPayload, # ContextPayload is now List[Message]
         model: Optional[str] = None,
         stream: bool = False,
         **kwargs: Any
@@ -106,11 +95,7 @@ class BaseProvider(abc.ABC):
         prepared context and receives the model's response.
 
         Args:
-            context: The context payload to send. This can be either:
-                     - A list of `llmcore.models.Message` objects.
-                     - An MCP (Model Context Protocol) Context object, if MCP is enabled
-                       and the `modelcontextprotocol` library is installed.
-                       Providers need to implement logic to handle this object type.
+            context: The context payload to send, as a list of `llmcore.models.Message` objects.
             model: The specific model identifier to use for this completion.
                    If None, the provider's configured default model should be used.
             stream: If True, the method should return an asynchronous generator
@@ -129,13 +114,12 @@ class BaseProvider(abc.ABC):
         Raises:
             ProviderError: If the API call fails due to issues like authentication,
                            rate limits, network errors, or invalid requests.
-            NotImplementedError: If streaming is requested but not supported by the provider,
-                                or if MCP context is received but not handled by the provider.
+            NotImplementedError: If streaming is requested but not supported by the provider.
         """
         pass
 
     @abc.abstractmethod
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int: # Changed to async
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """
         Asynchronously count the number of tokens a given text string would consume for a specific model.
 
@@ -153,17 +137,13 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int: # Remains async
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
         """
         Asynchronously count the total number of tokens a list of messages would consume.
 
         Accounts for the provider's specific formatting overhead (e.g., roles,
         special tokens between messages) in addition to the content tokens.
         This is async because some providers might require an API call for accurate counting.
-        Note: This method currently only supports counting tokens for the standard
-        `List[Message]` format, not directly for MCP objects. MCP token counting
-        might require separate handling or provider-specific methods if the structure
-        significantly differs from a simple message list.
 
         Args:
             messages: A list of `llmcore.models.Message` objects.
@@ -175,7 +155,6 @@ class BaseProvider(abc.ABC):
         """
         pass
 
-    # Optional: Add an async close method if providers need cleanup
     async def close(self) -> None:
          """Clean up resources like network sessions if needed."""
          pass # Default implementation does nothing

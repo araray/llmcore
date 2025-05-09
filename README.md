@@ -15,7 +15,6 @@ Built with `asyncio`, LLMCore is suitable for modern, high-performance Python ap
 * **Context Window Management:** Automatically handles token counting (provider-specific) and context truncation strategies to stay within model limits.
 * **Provider & Storage Abstraction:** Easily extend LLMCore by adding new LLM providers, storage backends (session & vector), or embedding models by implementing simple base classes.
 * **Embedding Model Support:** Integrates with embedding models (Sentence Transformers included; OpenAI, Google AI planned) for RAG functionality.
-* **(Planned) Model Context Protocol (MCP):** Future support for standardized context exchange.
 
 ## 🚀 Quickstart
 
@@ -95,7 +94,7 @@ if __name__ == "__main__":
 
 ## ⚙️ Configuration
 
-LLMCore uses [`confy`](https://github.com/araray/confy) for configuration. Settings are loaded with the following precedence (highest priority last):
+LLMCore uses [`confy`](https://www.google.com/url?sa=E&source=gmail&q=https://github.com/araray/confy) for configuration. Settings are loaded with the following precedence (highest priority last):
 
 1.  **Packaged Defaults:** `src/llmcore/config/default_config.toml`
 2.  **User Config File:** `~/.config/llmcore/config.toml`
@@ -113,7 +112,7 @@ Key configuration areas include:
   * `[embedding.<name>]`: Settings for specific embedding models (API keys, model names).
   * `[context_management]`: Strategies for history selection, RAG combination, and truncation.
 
-See the [**Usage Guide**](docs/USAGE.md%23configuration) for the full configuration structure and details.
+See the [**Usage Guide**](https://www.google.com/search?q=docs/USAGE.md%23configuration) for the full configuration structure and details.
 
 ## 💾 Installation
 
@@ -126,7 +125,7 @@ pip install llmcore
 Or install directly from the source code:
 
 ```bash
-git clone https://github.com/araray/llmcore.git
+git clone [https://github.com/araray/llmcore.git](https://github.com/araray/llmcore.git)
 cd llmcore
 pip install .
 ```
@@ -141,11 +140,11 @@ pip install llmcore[openai,anthropic,chromadb,sentence_transformers]
 pip install llmcore[all]
 ```
 
-See `pyproject.toml` for available extras (`openai`, `anthropic`, `gemini`, `ollama`, `sqlite`, `postgres`, `chromadb`, `sentence_transformers`, `mcp`).
+See `pyproject.toml` for available extras (`openai`, `anthropic`, `gemini`, `ollama`, `sqlite`, `postgres`, `chromadb`, `sentence_transformers`).
 
 ## 📖 Documentation
 
-For detailed instructions, API reference, configuration details, and advanced examples, please refer to the [**Usage Guide**](docs/USAGE.md).
+For detailed instructions, API reference, configuration details, and advanced examples, please refer to the [**Usage Guide**](https://www.google.com/search?q=docs/USAGE.md).
 
 ## 🤝 Contributing
 

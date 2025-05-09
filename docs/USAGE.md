@@ -109,10 +109,6 @@ default_provider = "ollama"
 # or an identifier for a service-based model (e.g., "openai:text-embedding-ada-002", "google:models/embedding-001").
 default_embedding_model = "all-MiniLM-L6-v2" # A common sentence-transformer model
 
-# Global flag to enable/disable Model Context Protocol (MCP) formatting.
-# This can be overridden on a per-provider basis in their respective sections.
-enable_mcp = false
-
 # Log level for the library.
 # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
 log_level = "INFO"
@@ -128,14 +124,12 @@ log_level = "INFO"
   api_key = "" # Leave empty to rely on environment variable
   default_model = "gpt-4o" # Updated default
   timeout = 60 # Timeout in seconds for API calls
-  # use_mcp = false # Provider-specific MCP toggle (overrides llmcore.enable_mcp)
 
   [providers.anthropic]
   # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_ANTHROPIC_API_KEY
   api_key = "" # Leave empty to rely on environment variable
   default_model = "claude-3-opus-20240229"
   timeout = 60 # Timeout in seconds for API calls
-  # use_mcp = false
 
   [providers.ollama]
   # base_url = "http://localhost:11434/api" # Base URL for the Ollama API (host defaults to http://localhost:11434)
@@ -148,7 +142,6 @@ log_level = "INFO"
   # 'tiktoken_p50k_base': Another tiktoken option.
   # 'char_div_4': A very rough estimate (characters / 4). Use if tiktoken is problematic.
   # tokenizer = "tiktoken_cl100k_base"
-  # use_mcp = false
 
   [providers.gemini]
   # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_GEMINI_API_KEY
@@ -157,7 +150,6 @@ log_level = "INFO"
   timeout = 60 # Timeout in seconds for API calls
   # Add other Gemini specific settings if needed (e.g., safety settings).
   # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" }
-  # use_mcp = false
 
 
 # --- Storage Configurations ---
@@ -262,9 +254,6 @@ log_level = "INFO"
   # Minimum number of history messages (excluding system message) to try and keep during truncation.
   # This helps maintain some conversational flow even when context is tight.
   minimum_history_messages = 1
-
-  # If MCP (Model Context Protocol) is enabled, you might specify a version.
-  # mcp_version = "v1"
 ```
 
 ### Environment Variables
@@ -394,7 +383,7 @@ async def specific_model_chat():
 # asyncio.run(specific_model_chat())
 ```
 
------
+---
 
 ## Session Management
 
@@ -740,9 +729,6 @@ LLMCore defines custom exceptions in `llmcore.exceptions` to help you handle spe
   * `ContextError`: Base class for context management errors.
       * `ContextLengthError`: Raised when context exceeds the model's limit even after truncation.
   * `EmbeddingError`: Errors during embedding generation or model loading.
-  * `MCPError`: Errors related to MCP formatting (Phase 3).
-
-<!-- end list -->
 
 ```python
 import asyncio
