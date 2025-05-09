@@ -17,9 +17,19 @@ try:
     import google.genai as genai
     from google.genai import types as genai_types
     from google.genai import errors as genai_errors # Import the errors module
-    # Specific error types that might be useful
-    from google.generativeai.types import StopCandidateException # For blocked content in stream
+    # --- Updated: Import APIError ---
+    from google.generativeai.types import StopCandidateException, GenerateContentResponse
+    from google.genai.errors import APIError as GenAIAPIError # Use correct base error
+    # --- End Update ---
     from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError # Base for some API errors
+    # --- Define type aliases for hinting ---
+    GenAIClientType = genai.Client
+    GenAISafetySettingDictType = genai_types.SafetySettingDict
+    GenAIContentDictType = genai_types.ContentDict
+    GenAIGenerationConfigDictType = genai_types.GenerationConfigDict
+    GenAIPartDictType = genai_types.PartDict
+    GenAIGenerateContentResponseType = genai_types.GenerateContentResponse
+    # --- End Define type aliases ---
     google_genai_available = True
 except ImportError:
     google_genai_available = False
@@ -27,7 +37,18 @@ except ImportError:
     genai_types = None # type: ignore
     genai_errors = None # type: ignore
     StopCandidateException = Exception # type: ignore
+    # --- Updated: Use Exception as fallback for APIError ---
+    GenAIAPIError = Exception # type: ignore
+    # --- End Update ---
     CoreGoogleAPIError = Exception # type: ignore
+    # --- Define fallback type hints ---
+    GenAIClientType = Any # Use Any as fallback type hint
+    GenAISafetySettingDictType = Any
+    GenAIContentDictType = Any
+    GenAIGenerationConfigDictType = Any
+    GenAIPartDictType = Any
+    GenAIGenerateContentResponseType = Any
+    # --- End Define fallback type hints ---
 # --- End new library import ---
 
 # Conditional MCP imports (keep as is)
@@ -57,10 +78,10 @@ DEFAULT_GEMINI_TOKEN_LIMITS = {
     "gemini-1.5-pro-latest": 1048576, "gemini-1.5-flash-latest": 1048576,
     "gemini-1.0-pro": 32768, "gemini-pro": 32768, # Alias for 1.0 pro
     "gemini-1.0-pro-vision-latest": 16384, "gemini-pro-vision": 16384, # Alias
-    "gemini-2.0-flash-lite": 1048576,
+    "gemini-2.0-flash-lite": 1048576, # Added based on user log
 }
 # Default model if not specified in config
-DEFAULT_MODEL = "gemini-2.0-flash-lite"
+DEFAULT_MODEL = "gemini-2.0-flash-lite" # Updated default based on user log
 
 # Mapping from LLMCore Role to Gemini Role string (remains the same)
 LLMCORE_TO_GEMINI_ROLE_MAP = {
@@ -84,8 +105,8 @@ class GeminiProvider(BaseProvider):
     Handles both List[Message] and MCPContextObject context types.
     Requires the `google-genai` library.
     """
-    _client: Optional[genai.Client] = None # Use the new client type
-    _safety_settings: Optional[List[genai_types.SafetySettingDict]] = None # Use new types
+    _client: Optional[GenAIClientType] = None
+    _safety_settings: Optional[List[GenAISafetySettingDictType]] = None
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -119,8 +140,16 @@ class GeminiProvider(BaseProvider):
             # http_options = genai_types.HttpOptions(timeout=self.timeout) if self.timeout else None
             # if http_options: client_options['http_options'] = http_options
 
-            self._client = genai.Client(**client_options)
-            logger.info("Google Gen AI client initialized successfully.")
+            # --- Updated: Use genai.Client directly if available ---
+            if genai:
+                self._client = genai.Client(**client_options)
+                logger.info("Google Gen AI client initialized successfully.")
+            else:
+                # This case should ideally not be reached due to the check at the top,
+                # but handle defensively.
+                raise ConfigError("google.genai module not available at runtime.")
+            # --- End Update ---
+
             # Optional: Test connection or list models if needed
             # models = self._client.models.list() # Example check
         except Exception as e:
@@ -128,11 +157,11 @@ class GeminiProvider(BaseProvider):
             raise ConfigError(f"Google Gen AI client initialization failed: {e}")
         # --- End client initialization ---
 
-    def _parse_safety_settings(self, settings_config: Optional[Dict[str, str]]) -> Optional[List[genai_types.SafetySettingDict]]:
+    def _parse_safety_settings(self, settings_config: Optional[Dict[str, str]]) -> Optional[List[GenAISafetySettingDictType]]: # Updated return type hint
         """Parses safety settings from config string values to genai_types format."""
         # (Parsing logic remains the same)
         if not settings_config or not genai_types: return None
-        parsed_settings: List[genai_types.SafetySettingDict] = []
+        parsed_settings: List[GenAISafetySettingDictType] = [] # Use alias
         for key_str, value_str in settings_config.items():
             try:
                 # Convert string keys/values to the enums expected by the SDK
@@ -146,7 +175,7 @@ class GeminiProvider(BaseProvider):
                 if not category_upper.startswith("HARM_CATEGORY_"): raise ValueError("Invalid category format")
                 if not threshold_upper.startswith("BLOCK_"): raise ValueError("Invalid threshold format")
 
-                setting: genai_types.SafetySettingDict = {
+                setting: GenAISafetySettingDictType = { # Use alias
                     'category': category_upper, # type: ignore # Expects HarmCategory literal
                     'threshold': threshold_upper # type: ignore # Expects HarmBlockThreshold literal
                 }
@@ -183,11 +212,11 @@ class GeminiProvider(BaseProvider):
     def _convert_llmcore_msgs_to_genai_contents(
         self,
         messages: List[Message]
-    ) -> Tuple[Optional[str], List[genai_types.ContentDict]]:
+    ) -> Tuple[Optional[str], List[GenAIContentDictType]]: # Use alias
         """Converts LLMCore List[Message] to Gemini's ContentDict list and extracts system instruction text."""
         if not genai_types: raise ProviderError(self.get_name(), "google-genai types not available.")
 
-        genai_history: List[genai_types.ContentDict] = []
+        genai_history: List[GenAIContentDictType] = [] # Use alias
         system_instruction_text: Optional[str] = None # Store as text
 
         processed_messages = list(messages)
@@ -236,11 +265,11 @@ class GeminiProvider(BaseProvider):
     def _convert_mcp_msgs_to_genai_contents(
         self,
         mcp_messages: List[Any] # List[MCPMessage]
-    ) -> Tuple[Optional[str], List[genai_types.ContentDict]]:
+    ) -> Tuple[Optional[str], List[GenAIContentDictType]]: # Use alias
         """Converts MCPMessage list to Gemini ContentDict list and extracts system instruction text."""
         if not genai_types: raise ProviderError(self.get_name(), "google-genai types not available.")
 
-        genai_history: List[genai_types.ContentDict] = []
+        genai_history: List[GenAIContentDictType] = [] # Use alias
         system_instruction_text: Optional[str] = None # Store as text
 
         processed_mcp_messages = list(mcp_messages)
@@ -305,7 +334,7 @@ class GeminiProvider(BaseProvider):
             raise ProviderError(self.get_name(), "Google Gen AI library or types not available.")
 
         model_name = model or self.default_model
-        genai_contents: List[genai_types.ContentDict] = []
+        genai_contents: List[GenAIContentDictType] = [] # Use alias
         system_instruction_text: Optional[str] = None
         knowledge_string: Optional[str] = None
 
@@ -339,26 +368,24 @@ class GeminiProvider(BaseProvider):
             "stop_sequences": kwargs.get("stop_sequences"), "candidate_count": kwargs.get("candidate_count", 1),
         }
         gen_config_args_filtered = {k: v for k, v in gen_config_args.items() if v is not None}
-        generation_config: Optional[genai_types.GenerationConfigDict] = None
+        generation_config_obj: Optional[GenAIGenerationConfigDictType] = None # Use alias
         if gen_config_args_filtered:
-            try: generation_config = genai_types.GenerationConfigDict(**gen_config_args_filtered) # type: ignore
+            try: generation_config_obj = genai_types.GenerationConfigDict(**gen_config_args_filtered) # type: ignore
             except TypeError as te: logger.warning(f"Invalid argument for GenerationConfig: {te}. Using default.")
 
         # --- Prepare contents for API call ---
         # Prepend system instruction text to the contents list if it exists.
         api_contents = list(genai_contents) # Make a copy
         if final_system_instruction_text:
-             # The new SDK might support a 'system' role in contents, or use system_instruction param
-             # Let's try prepending a 'system' role message if supported by the types
-             # UPDATE: Based on testing, system_instruction kwarg is invalid. Prepending is needed.
              logger.debug("Prepending system instruction to contents list for Gemini API call.")
-             system_content = genai_types.ContentDict(
-                 # Role 'system' might not be valid for all models/API versions.
+             # --- Updated: Use GenAIPartDictType alias ---
+             system_content: GenAIContentDictType = { # Use alias
                  # Using 'user' then 'model' with the instruction might be a safer alternative
                  # if 'system' role causes issues. For now, trying 'system'.
-                 role="system", # This role might need verification depending on model support
-                 parts=[genai_types.PartDict(text=final_system_instruction_text)]
-             )
+                 "role": "system", # This role might need verification depending on model support
+                 "parts": [genai_types.PartDict(text=final_system_instruction_text)] # Use alias if needed
+             }
+             # --- End Update ---
              # Check if the first message is already a system message (e.g., from MCP conversion)
              if api_contents and api_contents[0].get('role') == 'system':
                  logger.warning("Found existing system message in contents, overwriting with combined instruction.")
@@ -374,8 +401,9 @@ class GeminiProvider(BaseProvider):
             response_iterator = await self._client.aio.models.generate_content(
                 model=f"models/{model_name}", # Model name often needs 'models/' prefix
                 contents=api_contents, # Pass the potentially modified contents list
-                # system_instruction=final_system_instruction_text, # REMOVED - Causes TypeError
-                generation_config=generation_config,
+                # --- FIX: Use 'config' instead of 'generation_config' ---
+                config=generation_config_obj,
+                # --- End FIX ---
                 safety_settings=self._safety_settings,
                 stream=stream,
             )
@@ -408,7 +436,7 @@ class GeminiProvider(BaseProvider):
                             full_response_text += chunk_text
                             yield {"model": model_name, "message": {"role": "model", "content": chunk_text}, "choices": [{"delta": {"content": chunk_text}, "index": 0}], "done": False, "finish_reason": finish_reason}
                     # --- Updated Error Catching ---
-                    except genai_errors.GenerativeAIError as e: # Catch base SDK error
+                    except GenAIAPIError as e: # Catch base SDK error
                         logger.error(f"Gemini API error during stream: {e}", exc_info=True)
                         yield {"error": f"Gemini API Error: {e}", "done": True}
                     # --- End Update ---
@@ -417,7 +445,7 @@ class GeminiProvider(BaseProvider):
                 return stream_wrapper()
             else: # Non-streaming response
                 logger.debug(f"Processing non-stream response from Gemini model '{model_name}'")
-                response: genai_types.GenerateContentResponse = response_iterator # type: ignore
+                response: GenAIGenerateContentResponseType = response_iterator # type: ignore # Use alias
                 # (Response processing logic - unchanged from previous correction)
                 try: full_text = response.text
                 except ValueError as e: logger.warning(f"Content blocked in Gemini response: {e}."); block_reason_enum = response.prompt_feedback.block_reason if response.prompt_feedback else None; finish_reason = block_reason_enum.name if block_reason_enum else "BLOCKED"; raise ProviderError(self.get_name(), f"Content generation stopped due to safety settings: {finish_reason}")
@@ -432,7 +460,7 @@ class GeminiProvider(BaseProvider):
                 return result_dict
 
         # --- Updated Error Catching ---
-        except genai_errors.GenerativeAIError as e: # Catch base SDK error
+        except GenAIAPIError as e: # Catch base SDK error
             logger.error(f"Gemini API error: {e}", exc_info=True)
             # Check specific types if needed (e.g., PermissionDenied, InvalidArgument)
             # Use isinstance checks for better reliability
@@ -451,7 +479,7 @@ class GeminiProvider(BaseProvider):
                  logger.error(f"Google Core API error during Gemini call: {e}", exc_info=True)
                  raise ProviderError(self.get_name(), f"Google Core API Error: {e}")
 
-            # Fallback for other GenerativeAIError types
+            # Fallback for other APIError types
             raise ProviderError(self.get_name(), f"API Error: {e}")
         # --- End Update ---
         except asyncio.TimeoutError: logger.error(f"Request to Gemini timed out."); raise ProviderError(self.get_name(), f"Request timed out.")
@@ -467,7 +495,7 @@ class GeminiProvider(BaseProvider):
         try:
             response = await self._client.aio.models.count_tokens(model=f"models/{model_name}", contents=[text])
             return response.total_tokens
-        except genai_errors.GenerativeAIError as e: # Catch base SDK error
+        except GenAIAPIError as e: # Catch base SDK error
             logger.error(f"Gemini API error during token count for model '{model_name}': {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"API Error during token count: {e}")
         except Exception as e: logger.error(f"Failed to count tokens for model '{model_name}': {e}", exc_info=True); return (len(text) + 3) // 4
@@ -480,7 +508,9 @@ class GeminiProvider(BaseProvider):
         model_name = model or self.default_model
         try:
             system_instruction_text, genai_contents = self._convert_llmcore_msgs_to_genai_contents(messages)
-            contents_to_count: List[Union[str, genai_types.ContentDict]] = list(genai_contents) # Type hint allows str
+            # --- Updated: Use GenAIContentDictType alias ---
+            contents_to_count: List[Union[str, GenAIContentDictType]] = list(genai_contents) # Use alias
+            # --- End Update ---
 
             # --- Updated System Instruction Handling for Counting ---
             # Prepend system instruction text if it exists, as count_tokens accepts strings
@@ -500,7 +530,7 @@ class GeminiProvider(BaseProvider):
             # No need for separate handling if only system prompt exists, covered above
 
             return total_tokens
-        except genai_errors.GenerativeAIError as e: # Catch base SDK error
+        except GenAIAPIError as e: # Catch base SDK error
             logger.error(f"Gemini API error during message token count for model '{model_name}': {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"API Error during message token count: {e}")
         except Exception as e: logger.error(f"Failed to count message tokens for model '{model_name}': {e}", exc_info=True); total_text = " ".join([msg.content for msg in messages]); return (len(total_text) + 3 * len(messages)) // 4
