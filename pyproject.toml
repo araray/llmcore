@@ -32,7 +32,7 @@ dependencies = [
 # Dependencies for specific providers
 openai = ["openai>=1.77.0"]
 anthropic = ["anthropic>=0.51.0"]
-gemini = ["google-generativeai>=0.8.0"]
+gemini = ["google-genai>=1.10.0"]
 ollama = ["ollama>=0.4.8"]
 
 # Dependencies for specific storage backends
@@ -105,7 +105,7 @@ exclude = [
     "__pypackages__", "_build", "buck-out", "build", "dist",
     "node_modules", "venv", "*.egg-info",
 ]
-line-length = 88
+line-length = 100
 indent-width = 4
 
 [tool.ruff.lint]

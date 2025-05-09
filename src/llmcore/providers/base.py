@@ -140,6 +140,7 @@ class BaseProvider(abc.ABC):
         Count the number of tokens a given text string would consume for a specific model.
 
         Uses the provider's specific tokenizer or token counting method.
+        This method is typically synchronous as tokenizers often operate locally.
 
         Args:
             text: The text string to count tokens for.
@@ -151,13 +152,15 @@ class BaseProvider(abc.ABC):
         """
         pass
 
+    # --- Updated Method Signature ---
     @abc.abstractmethod
-    def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
         """
-        Count the total number of tokens a list of messages would consume.
+        Asynchronously count the total number of tokens a list of messages would consume.
 
         Accounts for the provider's specific formatting overhead (e.g., roles,
         special tokens between messages) in addition to the content tokens.
+        This is async because some providers might require an API call for accurate counting.
         Note: This method currently only supports counting tokens for the standard
         `List[Message]` format, not directly for MCP objects. MCP token counting
         might require separate handling or provider-specific methods if the structure
@@ -172,8 +175,9 @@ class BaseProvider(abc.ABC):
             The total estimated token count for the messages.
         """
         pass
+    # --- End Update ---
 
     # Optional: Add an async close method if providers need cleanup
-    # async def close(self) -> None:
-    #     """Clean up resources like network sessions if needed."""
-    #     pass
+    async def close(self) -> None:
+         """Clean up resources like network sessions if needed."""
+         pass # Default implementation does nothing
