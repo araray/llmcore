@@ -27,7 +27,7 @@ try:
     GenAIClientType = genai.Client
     GenAISafetySettingDictType = genai_types.SafetySettingDict
     GenAIContentDictType = genai_types.ContentDict
-    GenAIGenerationConfigType = genai_types.GenerateContentConfig
+    GenAIGenerationConfigType = genai_types.GenerateContentConfig # This is the type for the 'config' parameter
     GenAIPartDictType = genai_types.PartDict
     GenAIGenerateContentResponseType = genai_types.GenerateContentResponse
     # --- End Define type aliases ---
@@ -51,8 +51,8 @@ except ImportError:
 
 
 from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError, ContextLengthError # MCPError removed
-from .base import BaseProvider, ContextPayload # ContextPayload is List[Message]
+from ..exceptions import ProviderError, ConfigError, ContextLengthError
+from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +60,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_GEMINI_TOKEN_LIMITS = {
     "gemini-1.5-pro-latest": 1048576,
     "gemini-1.5-flash-latest": 1048576,
-    "gemini-1.0-pro": 32768, # Often refers to gemini-1.0-pro-001 or similar
+    "gemini-1.0-pro": 32768,
     "gemini-pro": 32768, # Alias for 1.0 pro
     "gemini-1.0-pro-vision-latest": 16384, # Check specific vision model names
     "gemini-pro-vision": 16384, # Alias
-    "gemini-2.0-flash-lite": 1048576, # Placeholder, verify actual model name and limits
+    "gemini-2.0-flash-lite": 1048576, # From user log, ensure this model exists or update
 }
 # Default model if not specified in config
 DEFAULT_MODEL = "gemini-1.5-flash-latest" # Updated to a common, capable default
@@ -84,7 +84,7 @@ class GeminiProvider(BaseProvider):
     Requires the `google-genai` library.
     """
     _client: Optional[GenAIClientType] = None
-    _safety_settings: Optional[List[GenAISafetySettingDictType]] = None
+    _safety_settings: Optional[List[GenAISafetySettingDictType]] = None # This is passed as safety_settings argument
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -297,6 +297,7 @@ class GeminiProvider(BaseProvider):
             raise ProviderError(self.get_name(), "Google Gen AI library, types, or errors module not available/initialized.")
 
         model_name = model or self.default_model
+        model_name_for_api = f"models/{model_name}" # Gemini API expects "models/" prefix
 
         # Context is expected to be List[Message]
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
@@ -305,20 +306,8 @@ class GeminiProvider(BaseProvider):
         logger.debug("Processing context as List[Message] for Gemini.")
         system_instruction_text, genai_contents = self._convert_llmcore_msgs_to_genai_contents(context)
 
-        # The last message in `genai_contents` is effectively the current user prompt.
-        # The rest of `genai_contents` (if any) becomes the history.
-        current_prompt_content: List[GenAIContentDictType]
-        history_contents: List[GenAIContentDictType] = []
-
-        if genai_contents:
-            # The new SDK's `generate_content` takes the full conversation as `contents`.
-            # The last message in `contents` is treated as the current prompt.
-            # So, we pass `genai_contents` directly.
-            current_prompt_content = genai_contents # The whole list is passed as `contents`
-            # No separate history needed for the `generate_content` method's `contents` argument.
-        else:
+        if not genai_contents:
             # This case should ideally not happen if there's a user message.
-            logger.warning("No content derived from LLMCore messages for Gemini API call.")
             raise ProviderError(self.get_name(), "Cannot make Gemini API call with no content.")
 
         # Prepare GenerationConfig
@@ -334,62 +323,50 @@ class GeminiProvider(BaseProvider):
         # Filter out None values as SDK expects actual values or omission
         gen_config_args_filtered = {k: v for k, v in gen_config_args.items() if v is not None}
 
-        generation_config_obj: Optional[GenAIGenerationConfigType] = None
+        # This will be the 'config' argument for the SDK call
+        final_generation_config_obj: Optional[GenAIGenerationConfigType] = None
         if gen_config_args_filtered:
             try:
-                generation_config_obj = genai_types.GenerateContentConfig(**gen_config_args_filtered) # type: ignore[arg-type]
+                final_generation_config_obj = genai_types.GenerateContentConfig(**gen_config_args_filtered) # type: ignore[arg-type]
             except TypeError as te:
                 logger.warning(f"Invalid argument provided for Gemini GenerationConfig: {te}. Some parameters might be ignored.")
-                # Attempt to create with valid args only if possible, or log and proceed with None
                 valid_config_args = {k: v for k,v in gen_config_args_filtered.items() if k in genai_types.GenerateContentConfig.__annotations__}
                 if valid_config_args:
-                    generation_config_obj = genai_types.GenerateContentConfig(**valid_config_args) # type: ignore[arg-type]
+                    final_generation_config_obj = genai_types.GenerateContentConfig(**valid_config_args) # type: ignore[arg-type]
 
-
-        # Combine system_instruction, safety_settings into the config object
-        # The new SDK structure uses a single `config` parameter in `generate_content` which is `GenerateContentConfig`
-        # and `system_instruction` is a parameter of `GenerateContentConfig`.
-        # `safety_settings` is a direct parameter to `generate_content`.
-
-        final_sdk_config_params: Dict[str, Any] = {}
-        if generation_config_obj:
-            # If GenerateContentConfig is a Pydantic model, convert to dict for merging if needed,
-            # or pass the object directly if the SDK method expects it.
-            # The `generate_content` method takes `generation_config` (the object) and `safety_settings` separately.
-            final_sdk_config_params['generation_config'] = generation_config_obj
-
+        # Add system_instruction to the generation_config_obj
         if system_instruction_text:
-            # System instruction is now part of generation_config in the new SDK structure
-            if 'generation_config' not in final_sdk_config_params or final_sdk_config_params['generation_config'] is None:
-                final_sdk_config_params['generation_config'] = genai_types.GenerateContentConfig(system_instruction=system_instruction_text) # type: ignore[arg-type]
+            if final_generation_config_obj is None:
+                final_generation_config_obj = genai_types.GenerateContentConfig(system_instruction=system_instruction_text) # type: ignore[arg-type]
             else:
-                # If generation_config object exists, try to set system_instruction on it
-                # This assumes GenerateContentConfig is mutable or can be reconstructed
-                current_gen_conf_dict = final_sdk_config_params['generation_config'].to_dict() if hasattr(final_sdk_config_params['generation_config'], 'to_dict') else {}
+                # If generation_config object exists, reconstruct it with system_instruction
+                current_gen_conf_dict = final_generation_config_obj.to_dict() if hasattr(final_generation_config_obj, 'to_dict') else {}
                 current_gen_conf_dict['system_instruction'] = system_instruction_text
-                final_sdk_config_params['generation_config'] = genai_types.GenerateContentConfig(**current_gen_conf_dict) # type: ignore[arg-type]
+                final_generation_config_obj = genai_types.GenerateContentConfig(**current_gen_conf_dict) # type: ignore[arg-type]
 
+        # Safety settings are passed as a separate argument to the SDK methods
+        final_safety_settings = self._safety_settings
 
-        if self._safety_settings:
-            final_sdk_config_params['safety_settings'] = self._safety_settings
 
         logger.debug(
-            f"Sending request to Gemini API: model='models/{model_name}', stream={stream}, "
-            f"num_contents_passed={len(current_prompt_content)}"
+            f"Sending request to Gemini API: model='{model_name_for_api}', stream={stream}, "
+            f"num_contents_passed={len(genai_contents)}"
         )
 
         try:
-            # Use the asynchronous client's model interface
-            async_model_interface = self._client.aio.models.get(f"models/{model_name}")
-
             if stream:
-                logger.debug(f"Calling generate_content(stream=True) for model 'models/{model_name}'")
-                # The `generate_content` method with stream=True returns an async iterator.
-                response_iterator = await async_model_interface.generate_content(
-                    contents=current_prompt_content, # Pass the full conversation history
-                    stream=True,
-                    **final_sdk_config_params # Pass generation_config and safety_settings
-                )
+                logger.debug(f"Calling generate_content_stream() for model '{model_name_for_api}'")
+                # Pass config and safety_settings as named arguments
+                call_args = {
+                    "model": model_name_for_api,
+                    "contents": genai_contents,
+                }
+                if final_generation_config_obj:
+                    call_args["config"] = final_generation_config_obj
+                if final_safety_settings:
+                    call_args["safety_settings"] = final_safety_settings
+
+                response_iterator = await self._client.aio.models.generate_content_stream(**call_args)
 
                 async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
                     full_response_text = ""
@@ -443,14 +420,20 @@ class GeminiProvider(BaseProvider):
                         logger.debug("Gemini stream finished.")
                 return stream_wrapper()
             else: # Non-streaming
-                logger.debug(f"Calling generate_content(stream=False) for model 'models/{model_name}'")
-                response: GenAIGenerateContentResponseType = await async_model_interface.generate_content(
-                    contents=current_prompt_content, # Pass the full conversation history
-                    stream=False,
-                    **final_sdk_config_params # Pass generation_config and safety_settings
-                )
+                logger.debug(f"Calling generate_content() for model '{model_name_for_api}'")
+                # Pass config and safety_settings as named arguments
+                call_args = {
+                    "model": model_name_for_api,
+                    "contents": genai_contents,
+                }
+                if final_generation_config_obj:
+                    call_args["config"] = final_generation_config_obj
+                if final_safety_settings:
+                    call_args["safety_settings"] = final_safety_settings
 
-                logger.debug(f"Processing non-stream response from Gemini model 'models/{model_name}'")
+                response: GenAIGenerateContentResponseType = await self._client.aio.models.generate_content(**call_args)
+
+                logger.debug(f"Processing non-stream response from Gemini model '{model_name_for_api}'")
 
                 full_text = ""
                 finish_reason_str = None
@@ -468,7 +451,6 @@ class GeminiProvider(BaseProvider):
                         finish_reason_str = f"SAFETY_BLOCK_{response.prompt_feedback.block_reason.name}"
                     else:
                         finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
-                    # full_text will remain empty or as partially extracted if error occurred mid-extraction
                 except StopCandidateException as sce: # Explicit exception for blocked candidate
                     logger.warning(f"Content generation stopped by StopCandidateException (safety filter): {sce}")
                     is_blocked = True
@@ -478,96 +460,77 @@ class GeminiProvider(BaseProvider):
                     raise ProviderError(self.get_name(), f"Failed to extract content from Gemini response: {e_resp_text}")
 
                 if is_blocked:
-                    # Raise a provider error if the whole response is blocked
                     raise ProviderError(self.get_name(), f"Content generation blocked by safety settings. Reason: {finish_reason_str}")
 
-                # Extract usage metadata if available
                 usage_metadata_dict = None
                 if hasattr(response, 'usage_metadata') and response.usage_metadata:
                     usage_metadata_dict = {
                         "prompt_token_count": response.usage_metadata.prompt_token_count,
-                        "candidates_token_count": response.usage_metadata.candidates_token_count, # Sum if multiple candidates
+                        "candidates_token_count": response.usage_metadata.candidates_token_count,
                         "total_token_count": response.usage_metadata.total_token_count
                     }
 
-                # Mimic OpenAI response structure
                 result_dict = {
-                    "id": response.candidates[0].citation_metadata.citation_sources[0].uri if response.candidates and response.candidates[0].citation_metadata and response.candidates[0].citation_metadata.citation_sources else None, # Example ID source
-                    "model": model_name, # Or from response if available
-                    "choices": [{
-                        "index": 0,
-                        "message": {
-                            "role": "model", # Gemini uses "model" for assistant
-                            "content": full_text
-                        },
-                        "finish_reason": finish_reason_str
-                    }],
+                    "id": response.candidates[0].citation_metadata.citation_sources[0].uri if response.candidates and response.candidates[0].citation_metadata and response.candidates[0].citation_metadata.citation_sources else None,
+                    "model": model_name,
+                    "choices": [{"index": 0, "message": {"role": "model", "content": full_text}, "finish_reason": finish_reason_str}],
                     "usage": usage_metadata_dict,
-                    "prompt_feedback": { # Include prompt feedback if available
+                    "prompt_feedback": {
                         "block_reason": response.prompt_feedback.block_reason.name if response.prompt_feedback and response.prompt_feedback.block_reason else None,
                         "safety_ratings": [rating.to_dict() for rating in response.prompt_feedback.safety_ratings] if response.prompt_feedback else []
                     }
                 }
                 return result_dict
 
-        except GenAIAPIError as e_sdk: # Catch SDK's base API error
+        except GenAIAPIError as e_sdk:
             logger.error(f"Gemini API error: {e_sdk}", exc_info=True)
-            # Check for specific error types if needed (e.g., PermissionDenied, InvalidArgumentError)
             if isinstance(e_sdk, genai_errors.PermissionDeniedError): # type: ignore[attr-defined]
                 raise ProviderError(self.get_name(), f"API Key Invalid or Permission Denied for Gemini: {e_sdk}")
             if isinstance(e_sdk, genai_errors.InvalidArgumentError): # type: ignore[attr-defined]
-                # Check if it's a context length error
                 if "context length" in str(e_sdk).lower() or "token limit" in str(e_sdk).lower() or "user input is too long" in str(e_sdk).lower():
-                    # Attempt to count tokens to provide more specific error
                     actual_tokens = 0
-                    try:
-                        actual_tokens = await self.count_message_tokens(context, model_name) # type: ignore[arg-type]
-                    except Exception: # Ignore errors during this recount
-                        pass
+                    try: actual_tokens = await self.count_message_tokens(context, model_name) # type: ignore[arg-type]
+                    except Exception: pass
                     limit = self.get_max_context_length(model_name)
                     raise ContextLengthError(model_name=model_name, limit=limit, actual=actual_tokens, message=f"Context length error with Gemini: {e_sdk}")
                 raise ProviderError(self.get_name(), f"Invalid Argument for Gemini API: {e_sdk}")
-            # StopCandidateException is now handled within stream/non-stream blocks
-            if isinstance(e_sdk, CoreGoogleAPIError): # Catch underlying google-api-core errors
+            if isinstance(e_sdk, CoreGoogleAPIError):
                  logger.error(f"Google Core API error during Gemini call: {e_sdk}", exc_info=True)
                  raise ProviderError(self.get_name(), f"Google Core API Error: {e_sdk}")
             raise ProviderError(self.get_name(), f"Gemini API Error: {e_sdk}")
         except asyncio.TimeoutError:
             logger.error(f"Request to Gemini API timed out.")
             raise ProviderError(self.get_name(), f"Request timed out.")
-        except Exception as e: # Catch-all for other unexpected errors
+        except Exception as e:
             logger.error(f"Unexpected error during Gemini chat completion: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred with Gemini provider: {e}")
 
 
     async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """Counts tokens for a single string using the Gemini API (google-genai)."""
-        if not self._client or not genai_errors: # Check genai_errors as well
+        if not self._client or not genai_errors:
             logger.warning("Gemini client or errors module not available for token counting. Returning rough approximation.")
-            return (len(text) + 3) // 4 # Fallback
+            return (len(text) + 3) // 4
         if not text:
             return 0
 
         model_name_for_api = f"models/{model or self.default_model}"
         try:
-            # Use the asynchronous client's model interface for counting
-            async_model_interface = self._client.aio.models.get(model_name_for_api)
-            response = await async_model_interface.count_tokens(contents=[text]) # Pass content as a list
+            response = await self._client.aio.models.count_tokens(model=model_name_for_api, contents=[text])
             return response.total_tokens
-        except GenAIAPIError as e_sdk: # Catch SDK's base API error
+        except GenAIAPIError as e_sdk:
             logger.error(f"Gemini API error during token count for model '{model_name_for_api}': {e_sdk}", exc_info=True)
             raise ProviderError(self.get_name(), f"API Error during token count: {e_sdk}")
-        except Exception as e: # Fallback for other errors
+        except Exception as e:
             logger.error(f"Failed to count tokens for model '{model_name_for_api}' using Gemini API: {e}", exc_info=True)
-            # Fallback to character approximation if API call fails
             return (len(text) + 3) // 4
 
     async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
         """Counts tokens for a list of LLMCore Messages using the Gemini API (google-genai)."""
-        if not self._client or not genai_errors: # Check genai_errors
+        if not self._client or not genai_errors:
             logger.warning("Gemini client or errors module not available for message token counting. Returning rough approximation.")
             total_text_len = sum(len(msg.content) for msg in messages)
-            return (total_text_len + 3 * len(messages)) // 4 # Fallback
+            return (total_text_len + 3 * len(messages)) // 4
         if not messages:
             return 0
 
@@ -575,43 +538,30 @@ class GeminiProvider(BaseProvider):
         try:
             system_instruction_text, genai_contents = self._convert_llmcore_msgs_to_genai_contents(messages)
 
-            # The `count_tokens` method accepts a list of `Content` objects or strings.
-            # We need to construct the `contents` argument carefully.
-            # If there's a system instruction, it's usually counted as part of the overall prompt.
-            # The SDK might handle this implicitly if system_instruction is part of a config object,
-            # but for direct counting, we might need to include it.
-
             contents_to_count: List[Union[str, GenAIContentDictType]] = []
             if system_instruction_text:
-                # Prepending system instruction as a simple string for counting.
-                # More accurate counting might involve structuring it as a specific Content object if the API expects that.
                 contents_to_count.append(system_instruction_text)
 
-            contents_to_count.extend(genai_contents) # Add the user/model messages
+            contents_to_count.extend(genai_contents)
 
-            if not contents_to_count: # If only a system message was present and it was empty, or no messages
+            if not contents_to_count:
                 return 0
 
-            async_model_interface = self._client.aio.models.get(model_name_for_api)
-            response = await async_model_interface.count_tokens(contents=contents_to_count) # type: ignore[arg-type]
+            response = await self._client.aio.models.count_tokens(model=model_name_for_api, contents=contents_to_count) # type: ignore[arg-type]
             return response.total_tokens
-        except GenAIAPIError as e_sdk: # Catch SDK's base API error
+        except GenAIAPIError as e_sdk:
             logger.error(f"Gemini API error during message token count for model '{model_name_for_api}': {e_sdk}", exc_info=True)
             raise ProviderError(self.get_name(), f"API Error during message token count: {e_sdk}")
-        except Exception as e: # Fallback for other errors
+        except Exception as e:
             logger.error(f"Failed to count message tokens for model '{model_name_for_api}' using Gemini API: {e}", exc_info=True)
-            # Fallback to character approximation
             total_text_len = sum(len(msg.content) for msg in messages)
-            if system_instruction_text: # Add system instruction length to approximation
+            if system_instruction_text:
                 total_text_len += len(system_instruction_text)
             return (total_text_len + 3 * (len(messages) + (1 if system_instruction_text else 0))) // 4
 
 
     async def close(self) -> None:
         """Closes resources associated with the Gemini provider."""
-        # The google-genai SDK's client does not typically require an explicit close method
-        # as it manages HTTP sessions internally, often per-request or with a shared session
-        # that's garbage collected.
         logger.debug("GeminiProvider closed (google-genai client typically does not require explicit close).")
-        self._client = None # Dereference the client to allow GC
+        self._client = None
         pass
