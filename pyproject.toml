@@ -32,7 +32,7 @@ dependencies = [
 # Dependencies for specific providers
 openai = ["openai>=1.77.0"]
 anthropic = ["anthropic>=0.51.0"]
-gemini = ["google-genai>=1.10.0"]
+gemini = ["google-genai>=1.10.0", "google-api-core>=2.20.0"]
 ollama = ["ollama>=0.4.8"]
 
 # Dependencies for specific storage backends

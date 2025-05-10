@@ -14,40 +14,58 @@ import logging
 import os
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
 
-# --- Use the new google-genai library ---
-try:
-    import google.genai as genai
-    from google.genai import types as genai_types
-    from google.genai import errors as genai_errors # Import the errors module
-    from google.generativeai.types import StopCandidateException # Specific exception for blocked content
-    from google.genai.errors import APIError as GenAIAPIError # Use correct base error
-    from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError # Base for some API errors
+# --- Granular import checks for google-genai and its dependencies ---
+google_genai_base_available = False
+google_genai_types_module_available = False # For google.genai.types module
+google_api_core_exceptions_available = False
 
-    # --- Define type aliases for hinting ---
+try:
+    from google import genai
+    from google.genai import types as genai_types # This is 'google.generativeai.types' effectively
+    from google.genai import errors as genai_errors
+    from google.genai.errors import APIError as GenAIAPIError # Specific error from google.genai.errors
+    google_genai_base_available = True
+    google_genai_types_module_available = True # If 'genai_types' imported, the module is there
+
+    # Define GenAIClientType here if base import is successful
     GenAIClientType = genai.Client
     GenAISafetySettingDictType = genai_types.SafetySettingDict
     GenAIContentDictType = genai_types.ContentDict
-    GenAIGenerationConfigType = genai_types.GenerateContentConfig # This is the type for the 'config' parameter
+    GenAIGenerationConfigType = genai_types.GenerateContentConfig
     GenAIPartDictType = genai_types.PartDict
     GenAIGenerateContentResponseType = genai_types.GenerateContentResponse
-    # --- End Define type aliases ---
-    google_genai_available = True
 except ImportError:
-    google_genai_available = False
+    # Fallbacks if 'google.genai' or its submodules fail
     genai = None # type: ignore [assignment]
     genai_types = None # type: ignore [assignment]
     genai_errors = None # type: ignore [assignment]
-    StopCandidateException = Exception # type: ignore [assignment]
     GenAIAPIError = Exception # type: ignore [assignment]
-    CoreGoogleAPIError = Exception # type: ignore [assignment]
-    # --- Define fallback type hints ---
-    GenAIClientType = Any # Use Any as fallback type hint
+
+    # Fallback type hints for client and config types
+    GenAIClientType = Any
     GenAISafetySettingDictType = Any
     GenAIContentDictType = Any
     GenAIGenerationConfigType = Any
     GenAIPartDictType = Any
     GenAIGenerateContentResponseType = Any
-    # --- End Define fallback type hints ---
+
+# Try to import exceptions from 'google.api_core.exceptions'
+try:
+    # CoreGoogleAPIError is the base for many google cloud client library errors
+    from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError, PermissionDenied, InvalidArgument
+    google_api_core_exceptions_available = True
+except ImportError:
+    CoreGoogleAPIError = Exception # type: ignore [assignment] # Fallback type
+    PermissionDenied = Exception   # type: ignore [assignment] # Fallback type
+    InvalidArgument = Exception  # type: ignore [assignment] # Fallback type
+
+# Overall availability depends on all critical parts
+google_genai_available = (
+    google_genai_base_available and
+    google_genai_types_module_available and
+    google_api_core_exceptions_available
+)
+# --- End granular import checks ---
 
 
 from ..models import Message, Role as LLMCoreRole
