@@ -142,8 +142,6 @@ class OpenAIProvider(BaseProvider):
         Returns a static list of known OpenAI models.
         For a dynamic list, an API call would be needed (e.g., client.models.list()).
         """
-        # TODO: Consider implementing dynamic model listing via self._client.models.list()
-        # if performance allows and it's deemed necessary.
         logger.warning("OpenAIProvider.get_available_models() returning static list. "
                        "Refer to OpenAI documentation for the latest models.")
         return list(DEFAULT_OPENAI_TOKEN_LIMITS.keys())
@@ -153,17 +151,15 @@ class OpenAIProvider(BaseProvider):
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
         if limit is None:
-            # Fallback logic for models not in the static list (e.g., fine-tuned models or new ones)
-            # This is a heuristic. For precise limits, OpenAI's documentation or model details API is needed.
             if "gpt-4o" in model_name: limit = 128000
             elif "gpt-4-turbo" in model_name: limit = 128000
             elif "gpt-4-32k" in model_name: limit = 32768
             elif "gpt-4" in model_name: limit = 8192
             elif "gpt-3.5-turbo-16k" in model_name or "gpt-3.5-turbo-0125" in model_name or "gpt-3.5-turbo-1106" in model_name:
                 limit = 16385
-            elif "gpt-3.5-turbo" in model_name: # Catches older 4k gpt-3.5-turbo
+            elif "gpt-3.5-turbo" in model_name:
                 limit = 4096
-            else: # General fallback
+            else:
                 limit = 4096
                 logger.warning(f"Unknown context length for OpenAI model '{model_name}'. "
                                f"Using fallback limit: {limit}. Please verify with OpenAI documentation.")
@@ -194,20 +190,16 @@ class OpenAIProvider(BaseProvider):
             ConfigError: If the provider is not properly configured (e.g., API key issue).
         """
         if not self._client:
-            # This typically means API key was not configured properly or client init failed.
             raise ProviderError(self.get_name(), "OpenAI client not initialized. "
                                 "Ensure API key is set in config or environment (OPENAI_API_KEY).")
 
         model_name = model or self.default_model
 
-        # Context is expected to be List[Message]
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), f"OpenAIProvider received unsupported context type: {type(context).__name__}. Expected List[Message].")
 
-        # Convert LLMCore Messages to OpenAI's expected format
         messages_payload: List[Dict[str, str]] = []
         for msg in context:
-            # Ensure role is a string value
             role_str = msg.role.value if isinstance(msg.role, Enum) else str(msg.role)
             messages_payload.append({"role": role_str, "content": msg.content})
 
@@ -218,39 +210,34 @@ class OpenAIProvider(BaseProvider):
         logger.debug(f"Sending request to OpenAI API: model='{model_name}', stream={stream}, num_messages={len(messages_payload)}")
 
         try:
-            # Use the client's chat.completions.create method
             response_or_stream = await self._client.chat.completions.create(
                 model=model_name,
-                messages=messages_payload, # type: ignore [arg-type] # SDK expects List[ChatCompletionMessageParam]
+                messages=messages_payload, # type: ignore [arg-type]
                 stream=stream,
-                **kwargs # Pass through other OpenAI specific params
+                **kwargs
             )
 
             if stream:
                 logger.debug(f"Processing stream response from OpenAI model '{model_name}'")
                 async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
-                    async for chunk in response_or_stream: # type: ignore [misc] # response_or_stream is AsyncStream[ChatCompletionChunk]
-                        # Convert Pydantic model chunk to dict for consistent output
+                    async for chunk in response_or_stream: # type: ignore [misc]
                         yield chunk.model_dump(exclude_none=True)
                 return stream_wrapper()
             else:
-                # For non-streaming, response_or_stream is a ChatCompletion object
                 logger.debug(f"Processing non-stream response from OpenAI model '{model_name}'")
-                # Convert Pydantic model response to dict
                 return response_or_stream.model_dump(exclude_none=True) # type: ignore [union-attr]
 
-        except OpenAIError as e: # Catch specific OpenAI SDK errors
+        except OpenAIError as e:
             logger.error(f"OpenAI API error: Status {e.status_code} - {e.message}", exc_info=True)
-            # More specific error handling can be added here based on e.type or e.code
-            if e.status_code == 401: # Authentication error
+            if e.status_code == 401:
                 raise ProviderError(self.get_name(), f"Authentication failed (Invalid API Key? Status 401): {e.message}")
-            if e.status_code == 429: # Rate limit error
+            if e.status_code == 429:
                 raise ProviderError(self.get_name(), f"Rate limit exceeded (Status 429): {e.message}")
             raise ProviderError(self.get_name(), f"OpenAI API Error (Status {e.status_code}): {e.message}")
-        except asyncio.TimeoutError: # More specific than general Exception for timeouts
+        except asyncio.TimeoutError:
             logger.error(f"Request to OpenAI API timed out after {self.timeout} seconds.")
             raise ProviderError(self.get_name(), f"Request timed out after {self.timeout}s.")
-        except Exception as e: # Catch other unexpected errors
+        except Exception as e:
             logger.error(f"Unexpected error during OpenAI chat completion: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
@@ -314,18 +301,14 @@ class OpenAIProvider(BaseProvider):
         for message in messages:
             try:
                 num_tokens += tokens_per_message
-                # Correctly handle message.role whether it's an Enum or a string
                 role_str = message.role.value if isinstance(message.role, LLMCoreRole) else str(message.role)
                 num_tokens += len(self._encoding.encode(role_str))
                 num_tokens += len(self._encoding.encode(message.content))
-                # if message.name: # LLMCore.Message does not have a 'name' field
-                #    num_tokens += tokens_per_name
             except Exception as e:
                  logger.error(f"Tiktoken encoding failed for message content/role during count_message_tokens: {e}. "
                               "Using character approximation for this message.")
                  role_str_for_approx = message.role.value if isinstance(message.role, LLMCoreRole) else str(message.role)
                  num_tokens += (len(message.content) + len(role_str_for_approx) + 15) // 4
-
 
         num_tokens += 3
         return num_tokens
@@ -336,6 +319,11 @@ class OpenAIProvider(BaseProvider):
             try:
                 await self._client.close()
                 logger.info("OpenAIProvider client closed successfully.")
+            except RuntimeError as e:
+                if "Event loop is closed" in str(e):
+                    logger.warning(f"OpenAIProvider client close failed as event loop is already closed: {e}")
+                else:
+                    logger.error(f"RuntimeError closing OpenAIProvider client: {e}", exc_info=True)
             except Exception as e:
                 logger.error(f"Error closing OpenAIProvider client: {e}", exc_info=True)
             finally:
