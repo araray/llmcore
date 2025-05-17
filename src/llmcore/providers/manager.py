@@ -56,87 +56,169 @@ class ProviderManager:
             config: The main LLMCore configuration object (ConfyConfig instance).
 
         Raises:
-            ConfigError: If the default provider is not configured or supported.
+            ConfigError: If the default provider is not configured or supported,
+                         or if its configuration is invalid.
             ProviderError: If a configured provider fails to initialize.
         """
         self._config = config
         self._providers = {}
-        self._default_provider_name = self._config.get('llmcore.default_provider', 'ollama')
+        # Ensure default provider name is stored and processed in lowercase
+        self._default_provider_name = self._config.get('llmcore.default_provider', 'ollama').lower()
         logger.info(f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'.")
 
         self._load_configured_providers()
 
+        # Check if the (now lowercased) default provider was successfully loaded
         if self._default_provider_name not in self._providers:
             providers_config = self._config.get('providers', {})
-            if self._default_provider_name in providers_config:
-                 raise ProviderError(self._default_provider_name, "Default provider was configured but failed to initialize.")
+            if not isinstance(providers_config, dict): # Should be a dict
+                providers_config = {}
+
+            default_provider_section_exists = any(
+                key.lower() == self._default_provider_name for key in providers_config.keys()
+            )
+
+            if default_provider_section_exists:
+                 # A section for the default provider was in the config, but it failed to load.
+                 raise ProviderError(self._default_provider_name, "Default provider was configured but failed to initialize (check logs/dependencies).")
             else:
-                 raise ConfigError(f"Default provider '{self._default_provider_name}' is not configured or is not supported. "
-                                   f"Available types: {list(PROVIDER_MAP.keys())}")
+                 # No section for the default provider was found.
+                 # Check if the default provider *type* is known.
+                 is_known_type = self._default_provider_name in PROVIDER_MAP
+
+                 if not is_known_type:
+                    # Additionally, check if any configured provider *declares* its type as the default provider name
+                    # This handles cases like: default_provider = "my_custom_openai" and a section [providers.some_other_name] type = "my_custom_openai"
+                    # However, this check is complex as 'my_custom_openai' itself needs to map to a class.
+                    # The primary check should be if self._default_provider_name is a key in PROVIDER_MAP.
+                    pass # Fall through to the more general error
+
+                 if not is_known_type:
+                    raise ConfigError(f"Default provider type '{self._default_provider_name}' is not a recognized provider type in PROVIDER_MAP.")
+                 else: # It was a known type, but no section was defined for it, and it wasn't loaded implicitly.
+                    raise ConfigError(f"Default provider '{self._default_provider_name}' is not configured in the '[providers]' section or failed to load. "
+                                   f"Available base types: {list(PROVIDER_MAP.keys())}. Loaded provider instances: {list(self._providers.keys())}")
 
 
     def _load_configured_providers(self) -> None:
-        """Loads and initializes all providers defined in the configuration."""
+        """
+        Loads and initializes all providers defined in the [providers] configuration section.
+        It determines the provider class based on a 'type' field within each provider's
+        configuration block, falling back to the section name if 'type' is not specified.
+        """
         providers_config = self._config.get('providers', {})
+        if not isinstance(providers_config, dict):
+            logger.warning("'[providers]' section in config is not a valid dictionary. No providers will be loaded.")
+            providers_config = {}
+
+        # Attempt to implicitly load the default provider if 'providers' is empty
+        # but 'llmcore.default_provider' is set and is a known type.
+        if not providers_config and self._default_provider_name in PROVIDER_MAP:
+            logger.info(f"No '[providers]' section found. Attempting to load default provider '{self._default_provider_name}' implicitly.")
+            # Try to get config for the default provider if it was defined directly under [providers.default_provider_name]
+            # This handles cases where the user might have e.g. [providers.ollama] but not a general [providers] section.
+            # More robustly, it should look for a section named self._default_provider_name
+            # or a section that has type = self._default_provider_name.
+            # For implicit loading, we assume the section name matches the default provider name.
+            default_provider_specific_config = self._config.get(f'providers.{self._default_provider_name}', {})
+            if isinstance(default_provider_specific_config, dict):
+                 providers_config[self._default_provider_name] = default_provider_specific_config
+            else: # Not a dict, treat as empty config for the default provider type
+                 providers_config[self._default_provider_name] = {}
+
+
         if not providers_config:
-            logger.warning("No providers configured in the '[providers]' section.")
-            # Attempt implicit load of default provider if possible (logic remains the same)
-            if self._default_provider_name in PROVIDER_MAP:
-                 provider_config = self._config.get(f'providers.{self._default_provider_name}', {})
-                 if self._config.get('llmcore.default_provider'):
-                      logger.info(f"Attempting implicit load of default provider '{self._default_provider_name}'.")
-                      providers_config[self._default_provider_name] = provider_config
-                 else: logger.error("No providers section and no default provider explicitly set."); return
-            else: logger.error(f"Default provider '{self._default_provider_name}' is not a supported type."); return
+            logger.warning("No providers configured in the '[providers]' section and no default provider could be implicitly loaded.")
+            return
 
         loaded_provider_names = []
-        for name, config_data in providers_config.items():
-            provider_name_lower = name.lower()
-            if provider_name_lower in PROVIDER_MAP:
-                provider_cls = PROVIDER_MAP[provider_name_lower]
-                try:
-                    provider_config_dict = config_data if isinstance(config_data, dict) else {}
-                    self._providers[provider_name_lower] = provider_cls(provider_config_dict)
-                    logger.info(f"Provider '{provider_name_lower}' initialized successfully.")
-                    loaded_provider_names.append(provider_name_lower)
-                except ImportError as e:
-                     logger.error(f"Failed to initialize provider '{provider_name_lower}': Missing required library. "
-                                  f"Install dependencies (e.g., 'pip install llmcore[{provider_name_lower}]'). Error: {e}")
-                except Exception as e:
-                    logger.error(f"Failed to initialize provider '{provider_name_lower}': {e}", exc_info=True)
-            else:
-                logger.warning(f"Configured provider '{name}' is not supported or mapped. Skipping.")
-        logger.debug(f"Successfully loaded providers: {loaded_provider_names}")
+        for section_name, provider_specific_config in providers_config.items():
+            current_section_name_lower = section_name.lower()
+            if not isinstance(provider_specific_config, dict):
+                logger.warning(f"Configuration for provider '{current_section_name_lower}' is not a valid dictionary. Skipping.")
+                continue
+
+            # Determine the provider type: use 'type' field in config, fallback to section_name itself as type key.
+            # Example: [providers.my_openai_clone] type = "openai" -> provider_type_key = "openai"
+            # Example: [providers.ollama] (no type field) -> provider_type_key = "ollama"
+            provider_type_key = provider_specific_config.get("type", current_section_name_lower).lower()
+
+            provider_cls = PROVIDER_MAP.get(provider_type_key)
+            if not provider_cls:
+                logger.warning(f"Provider base type '{provider_type_key}' (for section '{current_section_name_lower}') is not supported or mapped in PROVIDER_MAP. Skipping.")
+                continue
+
+            try:
+                # Instantiate the provider class with its specific configuration block.
+                # The key in self._providers will be the section name from the config (e.g., "my_openai_clone").
+                self._providers[current_section_name_lower] = provider_cls(provider_specific_config)
+                logger.info(f"Provider instance '{current_section_name_lower}' (base type: '{provider_type_key}') initialized successfully.")
+                loaded_provider_names.append(current_section_name_lower)
+            except ImportError as e:
+                logger.error(f"Failed to initialize provider instance '{current_section_name_lower}' (base type: '{provider_type_key}'): Missing required library. "
+                             f"Install dependencies (e.g., 'pip install llmcore[{provider_type_key}]'). Error: {e}")
+            except Exception as e:
+                logger.error(f"Failed to initialize provider instance '{current_section_name_lower}' (base type: '{provider_type_key}'): {e}", exc_info=True)
+
+        logger.debug(f"Successfully attempted to load provider instances: {loaded_provider_names}")
+        if not self._providers:
+            logger.warning("No provider instances were successfully loaded after processing configuration.")
 
 
     def get_provider(self, name: Optional[str] = None) -> BaseProvider:
         """
-        Gets a specific provider instance by name, or the default provider if name is None.
+        Gets a specific provider instance by its configured section name,
+        or the default provider if name is None.
+
+        Args:
+            name: The configuration section name of the provider instance (e.g., "my_openai_clone").
+                  If None, returns the default provider instance.
+
+        Returns:
+            The initialized BaseProvider instance.
+
+        Raises:
+            ConfigError: If the requested provider name or default provider is not configured
+                         or not a recognized type.
+            ProviderError: If the provider was configured but failed to initialize.
         """
-        # (Logic remains the same)
-        target_name = name.lower() if name else self._default_provider_name
-        provider_instance = self._providers.get(target_name)
+        target_name_lower = name.lower() if name else self._default_provider_name
+        # self._default_provider_name is already lowercased in __init__
+
+        provider_instance = self._providers.get(target_name_lower)
+
         if provider_instance is None:
-            providers_config = self._config.get('providers', {})
-            if target_name in providers_config or (target_name == self._default_provider_name and self._config.get('llmcore.default_provider')):
-                 raise ProviderError(target_name, "Provider configured but failed to initialize (check logs/dependencies).")
+            # Check if a section for this name existed in the original config
+            # to distinguish between "not configured" and "configured but failed to load".
+            original_providers_config = self._config.get('providers', {})
+            if not isinstance(original_providers_config, dict): original_providers_config = {}
+
+            section_existed = any(key.lower() == target_name_lower for key in original_providers_config.keys())
+
+            if section_existed:
+                 # It was in the config, but not in self._providers, meaning it failed to load.
+                 raise ProviderError(target_name_lower, "Provider was configured but failed to initialize (check logs/dependencies).")
             else:
-                 raise ConfigError(f"Provider '{target_name}' not configured/supported. Loaded: {list(self._providers.keys())}")
+                 # It was not in the config under this name.
+                 # Could it be a type name that wasn't instantiated?
+                 if target_name_lower in PROVIDER_MAP:
+                      raise ConfigError(f"Provider type '{target_name_lower}' is known, but no instance named '{target_name_lower}' "
+                                        f"is configured or loaded. Loaded instances: {list(self._providers.keys())}")
+                 else:
+                      raise ConfigError(f"Provider instance or type '{target_name_lower}' not configured/supported. "
+                                        f"Loaded instances: {list(self._providers.keys())}")
         return provider_instance
 
     def get_default_provider(self) -> BaseProvider:
         """Gets the instance of the configured default provider."""
-        # (Remains the same)
         return self.get_provider(self._default_provider_name)
 
     def get_available_providers(self) -> List[str]:
-        """Lists the names of all successfully loaded providers."""
-        # (Remains the same)
+        """Lists the names (config section names) of all successfully loaded provider instances."""
         return list(self._providers.keys())
 
     async def close_providers(self) -> None:
         """Closes connections or cleans up resources for all loaded providers."""
-        # (Logic remains the same)
         logger.info("Closing provider connections...")
         close_tasks = [self._close_single_provider(name, provider)
                        for name, provider in self._providers.items()
@@ -149,6 +231,10 @@ class ProviderManager:
 
     async def _close_single_provider(self, name: str, provider: BaseProvider):
         """Helper coroutine to close a single provider and log errors."""
-        # (Remains the same)
-        try: await provider.close(); logger.info(f"Provider '{name}' closed.") # type: ignore
-        except Exception as e: logger.error(f"Error closing provider '{name}': {e}", exc_info=True); raise
+        try:
+            await provider.close() # type: ignore
+            logger.info(f"Provider instance '{name}' closed.")
+        except Exception as e:
+            logger.error(f"Error closing provider instance '{name}': {e}", exc_info=True)
+            # Optionally re-raise or collect errors if critical
+            # For now, just log, as it's a cleanup phase.

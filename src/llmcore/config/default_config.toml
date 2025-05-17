@@ -5,7 +5,8 @@
 
 [llmcore]
 # Default provider to use if not specified in API calls.
-# Options: "openai", "anthropic", "ollama", "gemini", or any custom provider name.
+# This name should correspond to one of the sections under [providers].
+# Example: default_provider = "my_openai_clone" if you define [providers.my_openai_clone]
 default_provider = "ollama"
 
 # Default embedding model for RAG (Retrieval Augmented Generation).
@@ -19,25 +20,46 @@ log_level = "INFO"
 
 
 # --- Provider Configurations ---
-# Each provider has its own section under [providers.<provider_name>].
-# API keys are best set via environment variables (e.g., LLMCORE_PROVIDERS_OPENAI_API_KEY).
+# Each provider instance is defined in its own section under [providers].
+# To use a specific base provider class (like OpenAIProvider), specify `type = "openai"`.
+# API keys are best set via environment variables (e.g., LLMCORE_PROVIDERS_OPENAI__API_KEY for the default OpenAI instance,
+# or LLMCORE_PROVIDERS__MY_CUSTOM_OPENAI_BACKEND__API_KEY for a custom one).
+# However, they can also be set directly in these configuration blocks.
 [providers]
 
   [providers.openai]
-  # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_OPENAI_API_KEY
-  api_key = "" # Leave empty to rely on environment variable
-  default_model = "gpt-4-turbo"
+  # This section configures a provider instance named "openai" that uses the "openai" base type.
+  # The 'type = "openai"' is implicit here because the section name matches a known type.
+  # API Key: Can be set here, or via LLMCORE_PROVIDERS_OPENAI_API_KEY, or OPENAI_API_KEY.
+  # api_key = "sk-your_openai_api_key_here"
+  # base_url = "https://api.openai.com/v1" # Default OpenAI URL, can be overridden for proxies
+  default_model = "gpt-4o" # Updated default
   timeout = 60 # Timeout in seconds for API calls
 
+  # Example of a custom OpenAI-like provider configuration:
+  # [providers.my_custom_openai_backend]
+  # # Explicitly state that this custom backend uses the "openai" provider logic.
+  # type = "openai"
+  # # Specific API key for this custom backend.
+  # # Can also be set via environment variable: LLMCORE_PROVIDERS_MY_CUSTOM_OPENAI_BACKEND_API_KEY
+  # api_key = "your_custom_api_key_for_this_backend"
+  # # The base URL for your OpenAI-compatible API.
+  # base_url = "https://your.openai.like.api/v1"
+  # default_model = "custom-model-name"
+  # timeout = 120
+
+
   [providers.anthropic]
-  # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_ANTHROPIC_API_KEY
-  api_key = "" # Leave empty to rely on environment variable
+  # API Key: Can be set here, or via LLMCORE_PROVIDERS_ANTHROPIC_API_KEY, or ANTHROPIC_API_KEY.
+  # api_key = "sk-ant-your_anthropic_api_key_here"
   default_model = "claude-3-opus-20240229"
   timeout = 60 # Timeout in seconds for API calls
 
   [providers.ollama]
-  base_url = "http://localhost:11434/api" # Base URL for the Ollama API
-  default_model = "gemma3:4b" # Default model to use with Ollama
+  # host = "http://localhost:11434" # Hostname/IP for the ollama library client (library default is usually fine)
+  # base_url = "http://localhost:11434/api" # Base URL for direct API calls if provider used raw HTTP.
+                                          # The official 'ollama' library uses 'host'.
+  default_model = "llama3" # Updated default
   timeout = 120 # Timeout in seconds for API calls
   # Optional: Specify tokenizer for Ollama models if default (tiktoken_cl100k_base) is not suitable.
   # Accurate token counting for Ollama can be tricky. Options:
@@ -47,9 +69,9 @@ log_level = "INFO"
   # tokenizer = "tiktoken_cl100k_base"
 
   [providers.gemini]
-  # API Key: Recommended to use environment variable LLMCORE_PROVIDERS_GEMINI_API_KEY
-  api_key = "" # Leave empty to rely on environment variable
-  default_model = "gemini-2.0-flash-lite"
+  # API Key: Can be set here, or via LLMCORE_PROVIDERS_GEMINI__API_KEY, or GOOGLE_API_KEY.
+  # api_key = "your_google_ai_api_key_here"
+  default_model = "gemini-1.5-pro-latest"
   timeout = 60 # Timeout in seconds for API calls
   # Add other Gemini specific settings if needed (e.g., safety settings).
   # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" }
@@ -114,6 +136,7 @@ log_level = "INFO"
   # api_key = ""
   # Default OpenAI model for embeddings.
   default_model = "text-embedding-3-small" # Example, check latest models
+  # base_url = "..." # Can also be set if using a proxy for embeddings
 
   [embedding.google]
   # API Key for Google AI (Gemini) embeddings.
@@ -122,11 +145,20 @@ log_level = "INFO"
   # Default Google AI model for embeddings.
   default_model = "models/embedding-001" # Example, check latest models
 
+  [embedding.ollama]
+  # Host for the Ollama server if different from the main Ollama provider host for chat.
+  # host = "http://localhost:11434"
+  # Default Ollama model for embeddings (e.g., "mxbai-embed-large", "nomic-embed-text")
+  # Ensure this model is pulled in your Ollama instance.
+  default_model = "mxbai-embed-large"
+  # timeout = 60
+
   # For local sentence-transformers, the model name/path is usually specified directly
   # in 'llmcore.default_embedding_model' (e.g., "all-MiniLM-L6-v2").
-  # No specific section needed here unless you want to group related settings.
-  # [embedding.sentence_transformer]
+  # This section can provide additional parameters if needed by SentenceTransformerEmbedding.
+  [embedding.sentence_transformer]
   # device = "cpu" # Example: "cuda", "cpu", "mps" (device to run model on)
+  # model_name_or_path = "all-MiniLM-L6-v2" # This is usually taken from llmcore.default_embedding_model
 
 
 # --- Context Management Configurations ---
@@ -137,12 +169,12 @@ log_level = "INFO"
 
   # Strategy for combining RAG results with conversation history.
   # 'prepend_system': RAG context is added as part of a system message or preamble.
-  # 'prepend_user': RAG context is added before the latest user message.
+  # 'prepend_user': RAG context is added before the latest user message. (Not fully implemented yet)
   rag_combination_strategy = "prepend_system"
 
   # Strategy for selecting history messages to fit within the token limit.
   # 'last_n_tokens': Prioritizes keeping the most recent messages that fit the token budget.
-  # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits).
+  # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits - Not implemented yet).
   history_selection_strategy = "last_n_tokens"
 
   # Number of tokens to reserve for the LLM's response generation.
