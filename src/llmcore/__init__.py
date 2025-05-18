@@ -13,7 +13,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("llmchat")
 except PackageNotFoundError:
-    from get_version import _get_version_from_pyproject
+    from .get_version import _get_version_from_pyproject
     __version__ = _get_version_from_pyproject()
 
 # Import the main LLMCore class from api.py
