@@ -35,6 +35,7 @@ log_level = "INFO"
   # base_url = "https://api.openai.com/v1" # Default OpenAI URL, can be overridden for proxies
   default_model = "gpt-4o" # Updated default
   timeout = 60 # Timeout in seconds for API calls
+  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
 
   # Example of a custom OpenAI-like provider configuration:
   # [providers.my_custom_openai_backend]
@@ -53,6 +54,7 @@ log_level = "INFO"
   # API Key: Can be set here, or via LLMCORE_PROVIDERS_ANTHROPIC_API_KEY, or ANTHROPIC_API_KEY.
   # api_key = "sk-ant-your_anthropic_api_key_here"
   default_model = "claude-3-opus-20240229"
+# fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
   timeout = 60 # Timeout in seconds for API calls
 
   [providers.ollama]
@@ -61,6 +63,7 @@ log_level = "INFO"
                                           # The official 'ollama' library uses 'host'.
   default_model = "llama3" # Updated default
   timeout = 120 # Timeout in seconds for API calls
+  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
   # Optional: Specify tokenizer for Ollama models if default (tiktoken_cl100k_base) is not suitable.
   # Accurate token counting for Ollama can be tricky. Options:
   # 'tiktoken_cl100k_base': (Default) Good general-purpose tokenizer (used by GPT-3.5/4).
@@ -71,6 +74,7 @@ log_level = "INFO"
   [providers.gemini]
   # API Key: Can be set here, or via LLMCORE_PROVIDERS_GEMINI__API_KEY, or GOOGLE_API_KEY.
   # api_key = "your_google_ai_api_key_here"
+  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
   default_model = "gemini-1.5-pro-latest"
   timeout = 60 # Timeout in seconds for API calls
   # Add other Gemini specific settings if needed (e.g., safety settings).
