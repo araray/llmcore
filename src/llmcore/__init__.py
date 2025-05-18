@@ -8,7 +8,13 @@ require LLM-driven chat capabilities, session management, context handling,
 and Retrieval Augmented Generation (RAG).
 """
 
-__version__ = "0.10.2"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("llmchat")
+except PackageNotFoundError:
+    from get_version import _get_version_from_pyproject
+    __version__ = _get_version_from_pyproject()
 
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
