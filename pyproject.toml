@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.10.4"
+version = "0.10.5"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -127,7 +127,7 @@ line-ending = "auto"
 
 # --- MyPy Type Checker Configuration ---
 [tool.mypy]
-python_version = "3.9" # Set to minimum supported version
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true # Ignore missing imports for optional deps initially
