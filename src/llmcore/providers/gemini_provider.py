@@ -76,16 +76,13 @@ logger = logging.getLogger(__name__)
 
 # Default context lengths for common Gemini models
 DEFAULT_GEMINI_TOKEN_LIMITS = {
-    "gemini-1.5-pro-latest": 1048576,
-    "gemini-1.5-flash-latest": 1048576,
-    "gemini-1.0-pro": 32768,
-    "gemini-pro": 32768, # Alias for 1.0 pro
-    "gemini-1.0-pro-vision-latest": 16384, # Check specific vision model names
-    "gemini-pro-vision": 16384, # Alias
-    "gemini-2.0-flash-lite": 1048576, # From user log, ensure this model exists or update
+    "gemini-2.0-flash-lite": 1000000,
+    "gemini-2.5-pro-preview-05-06": 2000000,
+    "gemini-2.0-flash": 1000000,
+    "gemini-2.5-flash-preview-04-17": 1000000,
 }
 # Default model if not specified in config
-DEFAULT_MODEL = "gemini-1.5-flash-latest" # Updated to a common, capable default
+DEFAULT_MODEL = "gemini-2.0-flash-lite" # Updated to a common, capable default
 
 # Mapping from LLMCore Role to Gemini Role string
 LLMCORE_TO_GEMINI_ROLE_MAP = {

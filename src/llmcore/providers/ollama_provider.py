@@ -40,18 +40,19 @@ logger = logging.getLogger(__name__)
 
 # Default context lengths for common Ollama models
 DEFAULT_OLLAMA_TOKEN_LIMITS = {
-    "llama3": 8192, "llama3:8b": 8192, "llama3:70b": 8192,
-    "gemma3:4b": 4096,
-    "gemma:latest": 8192, "gemma:7b": 8192, "gemma:2b": 8192,
-    "mistral": 8192, "mistral:7b": 8192,
-    "mixtral": 32768, "mixtral:8x7b": 32768,
-    "phi3": 4096, "phi3:mini": 4096,
-    "codellama": 16384,
-    "codellama:7b": 16384, "codellama:13b": 16384, "codellama:34b": 16384,
-    "llama2": 4096,
-    "llama2:7b": 4096, "llama2:13b": 4096, "llama2:70b": 4096,
+    "llama3": 8000, "llama3:8b": 8000, "llama3:70b": 8000,
+    "gemma3:4b": 128000,
+    "falcon3:3b": 8000,
+    "gemma:latest": 8000, "gemma:7b": 8000, "gemma:2b": 8000,
+    "mistral": 8000, "mistral:7b": 8000,
+    "mixtral": 32000, "mixtral:8x7b": 32000,
+    "phi3": 4000, "phi3:mini": 4000,
+    "codellama": 16000,
+    "codellama:7b": 16000, "codellama:13b": 16000, "codellama:34b": 16000,
+    "llama2": 4000,
+    "llama2:7b": 4000, "llama2:13b": 4000, "llama2:70b": 4000,
 }
-DEFAULT_MODEL = "llama3" # A common and capable default for Ollama
+DEFAULT_MODEL = "gemma3:4b" # A common and capable default for Ollama
 
 
 class OllamaProvider(BaseProvider):

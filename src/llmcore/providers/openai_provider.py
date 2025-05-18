@@ -46,17 +46,17 @@ DEFAULT_OPENAI_TOKEN_LIMITS = {
     "gpt-4-0125-preview": 128000,
     "gpt-4-1106-preview": 128000,
     "gpt-4-vision-preview": 128000, # Vision model, context includes image tokens
-    "gpt-4": 8192,
-    "gpt-4-0613": 8192,
-    "gpt-4-32k": 32768,
-    "gpt-4-32k-0613": 32768,
-    "gpt-3.5-turbo-0125": 16385, # Updated 3.5 turbo
-    "gpt-3.5-turbo": 16385, # Often points to the latest 3.5 turbo version
-    "gpt-3.5-turbo-1106": 16385, # Older 16k variant
+    "gpt-4": 8000,
+    "gpt-4-0613": 8000,
+    "gpt-4-32k": 32000,
+    "gpt-4-32k-0613": 32000,
+    "gpt-3.5-turbo-0125": 16000, # Updated 3.5 turbo
+    "gpt-3.5-turbo": 16000, # Often points to the latest 3.5 turbo version
+    "gpt-3.5-turbo-1106": 16000, # Older 16k variant
     # Older models, less common now but kept for reference
-    "gpt-3.5-turbo-0613": 4096,
-    "gpt-3.5-turbo-16k": 16385, # Alias for gpt-3.5-turbo-16k-0613
-    "gpt-3.5-turbo-16k-0613": 16385,
+    "gpt-3.5-turbo-0613": 4000,
+    "gpt-3.5-turbo-16k": 16000, # Alias for gpt-3.5-turbo-16k-0613
+    "gpt-3.5-turbo-16k-0613": 16000,
 }
 DEFAULT_MODEL = "gpt-4o" # Updated to the latest recommended model
 
