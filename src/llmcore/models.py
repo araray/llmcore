@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Role(str, Enum):
@@ -106,10 +106,20 @@ class ContextItemType(str, Enum):
     """
     Enumeration of types for items that can be part of the LLM context pool.
     """
-    HISTORY_MESSAGE = "history_message" # Represents a message from the chat history (less used directly as ContextItem)
-    USER_TEXT = "user_text"             # User-added arbitrary text snippet
-    USER_FILE = "user_file"             # Content from a user-added file
-    RAG_SNIPPET = "rag_snippet"         # A snippet retrieved from RAG and pinned by the user
+    HISTORY_MESSAGE = "history_message"
+    USER_TEXT = "user_text"
+    USER_FILE = "user_file"
+    RAG_SNIPPET = "rag_snippet"
+
+    @classmethod
+    def _missing_(cls, value: object): # type: ignore[misc]
+        """Handle case-insensitive matching for ContextItemType."""
+        if isinstance(value, str):
+            lower_value = value.lower()
+            for member in cls:
+                if member.value == lower_value:
+                    return member
+        return None
 
 
 class ContextItem(BaseModel):
@@ -125,6 +135,7 @@ class ContextItem(BaseModel):
         content: The textual content of the item.
         tokens: Estimated or actual token count for the content (potentially after truncation).
         original_tokens: Optional original token count for the content before any truncation by ContextManager.
+        is_truncated: Flag indicating if the content was truncated by the ContextManager.
         metadata: Additional metadata (e.g., filename for USER_FILE, source for RAG_SNIPPET).
         timestamp: Timestamp of creation or relevance for ordering.
     """
@@ -133,13 +144,14 @@ class ContextItem(BaseModel):
     source_id: Optional[str] = Field(default=None, description="Identifier of the original source (e.g., file path, original RAG doc ID).")
     content: str = Field(description="Textual content of the context item.")
     tokens: Optional[int] = Field(default=None, description="Token count for the content, possibly after truncation.")
-    original_tokens: Optional[int] = Field(default=None, description="Original token count before any truncation by ContextManager.") # New field
+    original_tokens: Optional[int] = Field(default=None, description="Original token count before any truncation by ContextManager.")
+    is_truncated: bool = Field(default=False, description="Flag indicating if the content was truncated by ContextManager.") # New field
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata (e.g., filename, RAG source info).")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of item creation/relevance.")
 
     class Config:
         """Pydantic model configuration."""
-        use_enum_values = True
+        use_enum_values = True # Important for serialization
         validate_assignment = True
         json_encoders = {
             datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
@@ -176,6 +188,20 @@ class ContextItem(BaseModel):
             return datetime.now(timezone.utc)
         return v
 
+    # Ensure 'type' is correctly parsed into ContextItemType enum
+    @field_validator('type', mode='before')
+    @classmethod
+    def validate_type_enum(cls, value: Any) -> ContextItemType:
+        if isinstance(value, ContextItemType):
+            return value
+        if isinstance(value, str):
+            try:
+                return ContextItemType(value.lower())
+            except ValueError:
+                raise ValueError(f"Invalid ContextItemType: '{value}'. Must be one of {[e.value for e in ContextItemType]}.")
+        raise TypeError(f"Invalid type for ContextItemType: {type(value)}. Must be str or ContextItemType enum.")
+
+
 class ChatSession(BaseModel):
     """
     Represents a single conversation or chat session.
@@ -201,6 +227,7 @@ class ChatSession(BaseModel):
     class Config:
         """Pydantic model configuration."""
         validate_assignment = True
+        use_enum_values = True # Ensure enums are serialized as their values
         json_encoders = {
             datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
         }
