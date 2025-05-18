@@ -7,10 +7,10 @@ def _get_version_from_pyproject() -> str:
     Read and return the 'version' from pyproject.toml.
     - Supports PEP 621 [project] tables or Poetry [tool.poetry].
     """
-    project_root = pathlib.Path(__file__).parent.parent
+    project_root = pathlib.Path(__file__).parent.parent.parent
     pyproject = project_root / "pyproject.toml"
     content = pyproject.read_bytes()
-    data = tomllib.loads(content)
+    data = tomllib.loads(str(content))
     # PEP 621:
     if "project" in data and "version" in data["project"]:
         return data["project"]["version"]
