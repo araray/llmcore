@@ -8,7 +8,7 @@ require LLM-driven chat capabilities, session management, context handling,
 and Retrieval Augmented Generation (RAG).
 """
 
-__version__ = "0.9.5"
+__version__ = "0.10.0"
 
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
