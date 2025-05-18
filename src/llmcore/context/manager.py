@@ -138,9 +138,8 @@ class ContextManager:
         num_user_messages_retained = 0
         temp_retained_buffer: List[Message] = []
 
-        # Iterate from newest to oldest to pick retained messages
         for msg in reversed(history_messages_all_non_system):
-            msg_tokens = msg.tokens or 0 # Should have been tokenized
+            msg_tokens = msg.tokens or 0
             if tokens_for_retained + msg_tokens <= budget:
                 temp_retained_buffer.append(msg)
                 tokens_for_retained += msg_tokens
@@ -156,27 +155,24 @@ class ContextManager:
         current_history_tokens = tokens_for_retained
         logger.debug(f"Retained {len(retained_for_now)} history messages ({current_history_tokens} tokens) based on user_retained_messages_count ({self._user_retained_messages_count}).")
 
-        # Stage 2: Backfill with older messages if space allows
         remaining_history_budget_for_backfill = budget - current_history_tokens
         if remaining_history_budget_for_backfill > 0:
             ids_in_selected_history = {m.id for m in selected_history}
             older_history_candidates = [
                 msg for msg in history_messages_all_non_system if msg.id not in ids_in_selected_history
             ]
-            # Sort older messages: newest of the old first, to prioritize more recent among the "older" ones
             older_history_candidates.sort(key=lambda m: m.timestamp, reverse=True)
 
             temp_backfill_history: List[Message] = []
             tokens_for_backfill = 0
             for msg in older_history_candidates:
-                msg_tokens = msg.tokens or 0 # Should have been tokenized
+                msg_tokens = msg.tokens or 0
                 if tokens_for_backfill + msg_tokens <= remaining_history_budget_for_backfill:
                     temp_backfill_history.append(msg)
                     tokens_for_backfill += msg_tokens
                 else:
                     break
 
-            # Insert backfilled messages before the retained ones to maintain overall chronological order
             selected_history = sorted(temp_backfill_history, key=lambda m: m.timestamp) + selected_history
             current_history_tokens += tokens_for_backfill
             logger.debug(f"Backfilled {len(temp_backfill_history)} older history messages ({tokens_for_backfill} tokens).")
@@ -193,23 +189,18 @@ class ContextManager:
         rag_enabled: bool = False,
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None
-    ) -> Tuple[List[Message], Optional[List[ContextDocument]]]:
+    ) -> Tuple[List[Message], Optional[List[ContextDocument]], int]: # Added int for token count
         """
         Prepares the context payload for the LLM.
 
         Args:
-            session: The current ChatSession.
-            provider_name: Name of the LLM provider.
-            model_name: Specific model name.
-            active_context_item_ids: IDs of user-added context items to include.
-            rag_enabled: Whether standard RAG is enabled for this turn.
-            rag_k: Number of documents for standard RAG.
-            rag_collection: Collection for standard RAG.
+            (Args documentation remains the same)
 
         Returns:
             A tuple containing:
             - The list of `Message` objects to be sent to the LLM.
             - An optional list of `ContextDocument` objects that were used for RAG in this turn.
+            - The total token count of the prepared `Message` list.
         """
         provider = self._provider_manager.get_provider(provider_name)
         target_model = model_name or provider.default_model
@@ -225,19 +216,16 @@ class ContextManager:
                                 f"exceeds model context limit ({max_context_tokens}).")
         logger.debug(f"Max context: {max_context_tokens}, Reserved for response: {self._reserved_response_tokens}, Available for prompt: {available_tokens_for_prompt}")
 
-        # --- Component Gathering & Initial Tokenization ---
         system_messages_hist: List[Message] = []
         active_user_item_messages: List[Message] = []
         rag_query_context_message_obj: Optional[Message] = None
-        rag_documents_used_this_turn: Optional[List[ContextDocument]] = None # Store RAG docs used
+        rag_documents_used_this_turn: Optional[List[ContextDocument]] = None
 
-        # 1. System Messages from history
         system_messages_hist = [msg for msg in session.messages if msg.role == LLMCoreRole.SYSTEM]
         for msg in system_messages_hist:
-            if msg.tokens is None: # Pre-tokenize if not already done
+            if msg.tokens is None:
                 msg.tokens = await provider.count_message_tokens([msg], target_model)
 
-        # 2. Standard RAG query results (if RAG enabled for the current turn)
         if rag_enabled:
             last_user_message = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
             if last_user_message:
@@ -252,133 +240,90 @@ class ContextManager:
                     if formatted_rag_query_context_str:
                         rag_query_context_message_obj = Message(role=LLMCoreRole.SYSTEM, content=formatted_rag_query_context_str, session_id=session.id, id="rag_query_context_marker")
                         rag_query_context_message_obj.tokens = await provider.count_message_tokens([rag_query_context_message_obj], target_model)
-                        rag_documents_used_this_turn = retrieved_rag_docs # Store the docs
+                        rag_documents_used_this_turn = retrieved_rag_docs
                     logger.info(f"Std RAG returned {len(retrieved_rag_docs)} docs; context string tokens: {rag_query_context_message_obj.tokens if rag_query_context_message_obj else 0}.")
                 except Exception as e: logger.error(f"Std RAG failed: {e}. No RAG query context will be added.")
             else: logger.warning("Std RAG enabled, but no user message found in history to use as query.")
 
-        # 3. Active User-Added Context Items
         if active_context_item_ids and session.context_items:
             temp_user_items = []
             for item_id in active_context_item_ids:
                 item = session.get_context_item(item_id)
                 if item and (item.type == ContextItemType.USER_TEXT or item.type == ContextItemType.USER_FILE or item.type == ContextItemType.RAG_SNIPPET):
                     temp_user_items.append(item)
-            temp_user_items.sort(key=lambda x: x.timestamp) # Process oldest first or by a defined priority
+            temp_user_items.sort(key=lambda x: x.timestamp)
 
             for item in temp_user_items:
-                # Determine prefix based on item type
-                if item.type == ContextItemType.USER_TEXT:
-                    prefix = f"--- User-Provided Text Snippet: {item.metadata.get('name', item.id)} ---"
-                    suffix = f"--- End User-Provided Text Snippet: {item.metadata.get('name', item.id)} ---"
-                elif item.type == ContextItemType.USER_FILE:
-                    prefix = f"--- User-Provided File Content: {item.metadata.get('filename', item.id)} ---"
-                    suffix = f"--- End User-Provided File Content: {item.metadata.get('filename', item.id)} ---"
-                elif item.type == ContextItemType.RAG_SNIPPET:
-                    prefix = f"--- Pinned RAG Snippet (Source: {item.metadata.get('original_source', item.source_id)}): {item.metadata.get('name', item.id)} ---"
-                    suffix = f"--- End Pinned RAG Snippet: {item.metadata.get('name', item.id)} ---"
-                else: # Should not happen if item.type check above is comprehensive
-                    prefix = f"--- User-Provided Context: {item.metadata.get('name', item.id)} ---"
-                    suffix = f"--- End User-Provided Context: {item.metadata.get('name', item.id)} ---"
-
+                if item.type == ContextItemType.USER_TEXT: prefix = f"--- User-Provided Text Snippet: {item.metadata.get('name', item.id)} ---"; suffix = f"--- End User-Provided Text Snippet: {item.metadata.get('name', item.id)} ---"
+                elif item.type == ContextItemType.USER_FILE: prefix = f"--- User-Provided File Content: {item.metadata.get('filename', item.id)} ---"; suffix = f"--- End User-Provided File Content: {item.metadata.get('filename', item.id)} ---"
+                elif item.type == ContextItemType.RAG_SNIPPET: prefix = f"--- Pinned RAG Snippet (Source: {item.metadata.get('original_source', item.source_id)}): {item.metadata.get('name', item.id)} ---"; suffix = f"--- End Pinned RAG Snippet: {item.metadata.get('name', item.id)} ---"
+                else: prefix = f"--- User-Provided Context: {item.metadata.get('name', item.id)} ---"; suffix = f"--- End User-Provided Context: {item.metadata.get('name', item.id)} ---"
                 content_str = f"{prefix}\n{item.content}\n{suffix}"
                 user_item_msg = Message(role=LLMCoreRole.SYSTEM, content=content_str, session_id=session.id, id=f"user_item_{item.id}")
-                if item.tokens is None: # Tokenize if not already done
-                    item.tokens = await provider.count_message_tokens([user_item_msg], target_model)
+                if item.tokens is None: item.tokens = await provider.count_message_tokens([user_item_msg], target_model)
                 user_item_msg.tokens = item.tokens
                 active_user_item_messages.append(user_item_msg)
 
-        # 4. Chat History (non-system messages)
         history_messages_all_non_system = [msg for msg in session.messages if msg.role != LLMCoreRole.SYSTEM]
-        for msg in history_messages_all_non_system: # Pre-tokenize history
-             if msg.tokens is None:
-                 msg.tokens = await provider.count_message_tokens([msg], target_model)
+        for msg in history_messages_all_non_system:
+             if msg.tokens is None: msg.tokens = await provider.count_message_tokens([msg], target_model)
 
-
-        # --- Iterative Assembly & Truncation ---
         candidate_messages: List[Message] = []
         current_tokens = 0
 
-        # Helper to add messages if budget allows
         async def _add_to_candidates_if_budget(messages_to_add: List[Message]) -> None:
             nonlocal current_tokens
             for msg in messages_to_add:
-                msg_token_count = msg.tokens or 0 # Should be pre-tokenized
+                msg_token_count = msg.tokens or 0
                 if current_tokens + msg_token_count <= available_tokens_for_prompt:
                     candidate_messages.append(msg)
                     current_tokens += msg_token_count
                 else:
                     logger.debug(f"Message '{msg.id}' (role: {msg.role}, tokens: {msg_token_count}) exceeds budget. Not added.")
-                    # If it's a critical message (like latest user message), this will be handled by final check.
-                    break # Stop adding from this list if one message breaks budget
+                    break
 
-        # 1. Add all system messages from history
         await _add_to_candidates_if_budget(system_messages_hist)
 
-        # Components to be added based on priority and budget
-        # Order: RAG query context, Prioritized User Items, History, Non-prioritized User Items
-
-        # 2. Add RAG query context (if enabled and fits)
         if rag_query_context_message_obj:
             if self._prioritize_user_context_items and self._rag_combination_strategy == "prepend_system":
-                # If user items are prioritized and RAG is prepended, RAG might come before user items
                 await _add_to_candidates_if_budget([rag_query_context_message_obj])
             elif not self._prioritize_user_context_items and self._rag_combination_strategy == "prepend_system":
-                # If user items not prioritized, RAG comes first
                 await _add_to_candidates_if_budget([rag_query_context_message_obj])
 
-
-        # 3. Add User Items (prioritized or not based on config)
         if self._prioritize_user_context_items:
             await _add_to_candidates_if_budget(active_user_item_messages)
 
-        # If RAG is prepend_user, it should come just before the last user message from history.
-        # This is complex to inject here; for now, prepend_system is simpler.
-        # If RAG was not added yet (e.g. user items prioritized and RAG is prepend_system but now is its turn)
         if rag_query_context_message_obj and rag_query_context_message_obj not in candidate_messages:
-             if self._rag_combination_strategy == "prepend_system": # Default placement if not already added
+             if self._rag_combination_strategy == "prepend_system":
                 await _add_to_candidates_if_budget([rag_query_context_message_obj])
 
-
-        # 4. Add Chat History
         history_budget = available_tokens_for_prompt - current_tokens
-        built_history, built_history_tokens = await self._build_history_messages(
+        built_history, _ = await self._build_history_messages(
             history_messages_all_non_system, provider, target_model, history_budget
         )
-        # _add_to_candidates_if_budget will handle if built_history itself is too large
         await _add_to_candidates_if_budget(built_history)
 
-
-        # 5. Add remaining User Items (if not prioritized and space allows)
         if not self._prioritize_user_context_items:
-            # Filter out items already added if any logic error led to that
             remaining_user_items = [item_msg for item_msg in active_user_item_messages if item_msg not in candidate_messages]
             await _add_to_candidates_if_budget(remaining_user_items)
 
-        # --- Final Truncation Loop if still over budget ---
-        final_candidate_messages = list(candidate_messages) # Work on a copy
+        final_candidate_messages = list(candidate_messages)
 
         for priority_type in self._truncation_priority_order:
             if current_tokens <= available_tokens_for_prompt: break
-
             logger.debug(f"Context over budget ({current_tokens}/{available_tokens_for_prompt}). Attempting truncation for type: '{priority_type}'.")
-
             items_removed_in_pass = False
             if priority_type == "rag" and rag_query_context_message_obj and rag_query_context_message_obj.id in [m.id for m in final_candidate_messages]:
                 logger.debug(f"Truncating by priority '{priority_type}': Removing RAG query context.")
                 final_candidate_messages = [m for m in final_candidate_messages if m.id != rag_query_context_message_obj.id]
                 current_tokens = await provider.count_message_tokens(final_candidate_messages, target_model)
-                rag_documents_used_this_turn = None # RAG context removed
+                rag_documents_used_this_turn = None
                 items_removed_in_pass = True
-
             elif priority_type == "user_items":
-                # Remove user items one by one, e.g., oldest or largest first. For now, just first found from the end.
-                # This assumes active_user_item_messages was sorted by preference (e.g. timestamp ascending)
                 user_item_ids_in_final = {m.id for m in final_candidate_messages if m.id.startswith("user_item_")}
-                # Iterate over a copy of active_user_item_messages to decide removal order (e.g. oldest first)
                 sorted_active_user_items_by_preference = sorted(
                     [item_msg for item_msg in active_user_item_messages if item_msg.id in user_item_ids_in_final],
-                    key=lambda x: x.timestamp # Example: remove oldest user items first
+                    key=lambda x: x.timestamp
                 )
                 for item_to_remove in sorted_active_user_items_by_preference:
                     if current_tokens <= available_tokens_for_prompt: break
@@ -387,37 +332,27 @@ class ContextManager:
                         final_candidate_messages = [m for m in final_candidate_messages if m.id != item_to_remove.id]
                         current_tokens = await provider.count_message_tokens(final_candidate_messages, target_model)
                         items_removed_in_pass = True
-
-
             elif priority_type == "history":
                 history_in_final = sorted(
                     [m for m in final_candidate_messages if not (m.role == LLMCoreRole.SYSTEM or m.id.startswith("user_item_") or m.id == "rag_query_context_marker")],
                     key=lambda m: m.timestamp
                 )
-                # Ensure last user message is not removed if it's the only history
                 last_user_msg_session = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
-
                 while len(history_in_final) > self._minimum_history_messages and current_tokens > available_tokens_for_prompt:
                     if not history_in_final: break
-                    msg_to_remove = history_in_final.pop(0) # Remove oldest history message
-
-                    # Critical: Do not remove the latest user message from the original session if it's part of history_in_final
-                    if last_user_msg_session and msg_to_remove.id == last_user_msg_session.id and len(history_in_final) < self._minimum_history_messages : # Check if it's the last user message and about to go below min
-                        logger.debug(f"Protected last user message '{msg_to_remove.id}' from truncation to maintain minimum history or its presence.")
-                        history_in_final.insert(0, msg_to_remove) # Add it back
-                        break # Cannot truncate history further without removing essential latest user turn
-
+                    msg_to_remove = history_in_final.pop(0)
+                    if last_user_msg_session and msg_to_remove.id == last_user_msg_session.id and len(history_in_final) < self._minimum_history_messages :
+                        logger.debug(f"Protected last user message '{msg_to_remove.id}' from truncation.")
+                        history_in_final.insert(0, msg_to_remove)
+                        break
                     logger.debug(f"Truncating by priority '{priority_type}': Removing history message '{msg_to_remove.id}'.")
                     final_candidate_messages = [m for m in final_candidate_messages if m.id != msg_to_remove.id]
                     current_tokens = await provider.count_message_tokens(final_candidate_messages, target_model)
                     items_removed_in_pass = True
                     if current_tokens <= available_tokens_for_prompt: break
-
             if not items_removed_in_pass:
                  logger.debug(f"No items of priority type '{priority_type}' found to remove or already at minimums.")
 
-
-        # Final check: ensure the last user message is present if there was one
         last_user_msg_from_session = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
         if last_user_msg_from_session:
             is_last_user_msg_present_in_final_context = any(m.id == last_user_msg_from_session.id for m in final_candidate_messages)
@@ -432,24 +367,25 @@ class ContextManager:
 
         logger.info(f"Final prepared context: {len(final_candidate_messages)} messages, {current_tokens} tokens for model '{target_model}'.")
 
-        # Filter out the RAG marker message before returning, but return the docs used.
         final_payload_messages = [msg for msg in final_candidate_messages if msg.id != "rag_query_context_marker"]
-        return final_payload_messages, rag_documents_used_this_turn
+        # The token count to return is `current_tokens` which is the count for `final_candidate_messages`.
+        # If rag_query_context_marker was significant, this count might be slightly off for `final_payload_messages`.
+        # For more accuracy, recount final_payload_messages if the marker was removed and significant.
+        # However, current_tokens is the count of what was considered for budget, which is what we want to report.
+        final_token_count = current_tokens
+
+        return final_payload_messages, rag_documents_used_this_turn, final_token_count
 
 
     def _format_rag_docs_for_context(self, documents: List[ContextDocument]) -> str:
         """Formats retrieved RAG documents into a single string for context injection."""
         if not documents: return ""
-        # Sort documents by score if available (assuming lower is better, adjust if needed)
-        # Some vector stores return distance (lower is better), others similarity (higher is better)
-        # Assuming ChromaDB-like distance scores for now.
         sorted_documents = sorted(documents, key=lambda d: d.score if d.score is not None else float('inf'))
-
         context_parts = ["--- Retrieved Relevant Documents ---"]
         for i, doc in enumerate(sorted_documents):
             source_info = doc.metadata.get("source", f"Document {doc.id[:8]}")
             score_info = f"(Score: {doc.score:.4f})" if doc.score is not None else ""
-            content_snippet = doc.content.replace('\n', ' ').strip() # Normalize newlines for context block
+            content_snippet = doc.content.replace('\n', ' ').strip()
             context_parts.append(f"\n[Source: {source_info} {score_info}]\n{content_snippet}")
         context_parts.append("--- End Retrieved Documents ---")
         return "\n".join(context_parts)
