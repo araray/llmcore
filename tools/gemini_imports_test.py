@@ -10,6 +10,7 @@ like 'google-api-core' are correctly installed and accessible.
 
 import sys
 
+
 def run_import_tests():
     """Runs a series of import tests and prints the results."""
     print("--- Starting Google Gemini API Import Test ---")
@@ -31,6 +32,7 @@ def run_import_tests():
         # Test genai.types
         try:
             from google.genai import types as genai_types
+
             # Try accessing a type to be sure
             _ = genai_types.ContentDict 
             print("  SUCCESS: 'google.genai.types' (as genai_types) imported and accessible.")
@@ -79,7 +81,10 @@ def run_import_tests():
     permission_denied_class_available = False
     invalid_argument_class_available = False
     try:
-        from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError, PermissionDenied, InvalidArgument
+        from google.api_core.exceptions import \
+            GoogleAPIError as CoreGoogleAPIError
+        from google.api_core.exceptions import (InvalidArgument,
+                                                PermissionDenied)
         print("  SUCCESS: 'google.api_core.exceptions' imported (CoreGoogleAPIError, PermissionDenied, InvalidArgument).")
         google_api_core_exceptions_available = True
         

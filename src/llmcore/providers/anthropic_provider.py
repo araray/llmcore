@@ -10,13 +10,14 @@ Accepts context as List[Message].
 import asyncio
 import logging
 import os
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 # Use the official anthropic library
 try:
     import anthropic
-    from anthropic import AsyncAnthropic, AnthropicError
-    from anthropic.types import MessageParam, TextBlockParam # For constructing messages
+    from anthropic import AnthropicError, AsyncAnthropic
+    from anthropic.types import (MessageParam,  # For constructing messages
+                                 TextBlockParam)
     anthropic_available = True
 except ImportError:
     anthropic_available = False
@@ -26,9 +27,11 @@ except ImportError:
     TextBlockParam = Dict[str, Any] # type: ignore [assignment]
 
 
-from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError # MCPError removed
-from .base import BaseProvider, ContextPayload # ContextPayload is List[Message]
+from ..exceptions import ConfigError, ProviderError  # MCPError removed
+from ..models import Message
+from ..models import Role as LLMCoreRole
+from .base import (BaseProvider,  # ContextPayload is List[Message]
+                   ContextPayload)
 
 logger = logging.getLogger(__name__)
 

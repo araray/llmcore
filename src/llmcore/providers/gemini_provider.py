@@ -12,7 +12,7 @@ https://googleapis.github.io/python-genai/
 import asyncio
 import logging
 import os
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 # --- Granular import checks for google-genai and its dependencies ---
 google_genai_base_available = False
@@ -21,9 +21,11 @@ google_api_core_exceptions_available = False
 
 try:
     from google import genai
-    from google.genai import types as genai_types # This is 'google.generativeai.types' effectively
     from google.genai import errors as genai_errors
-    from google.genai.errors import APIError as GenAIAPIError # Specific error from google.genai.errors
+    from google.genai import \
+        types as genai_types  # This is 'google.generativeai.types' effectively
+    from google.genai.errors import \
+        APIError as GenAIAPIError  # Specific error from google.genai.errors
     google_genai_base_available = True
     google_genai_types_module_available = True # If 'genai_types' imported, the module is there
 
@@ -52,7 +54,8 @@ except ImportError:
 # Try to import exceptions from 'google.api_core.exceptions'
 try:
     # CoreGoogleAPIError is the base for many google cloud client library errors
-    from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError, PermissionDenied, InvalidArgument
+    from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError
+    from google.api_core.exceptions import InvalidArgument, PermissionDenied
     google_api_core_exceptions_available = True
 except ImportError:
     CoreGoogleAPIError = Exception # type: ignore [assignment] # Fallback type
@@ -68,8 +71,9 @@ google_genai_available = (
 # --- End granular import checks ---
 
 
-from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError, ContextLengthError
+from ..exceptions import ConfigError, ContextLengthError, ProviderError
+from ..models import Message
+from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)

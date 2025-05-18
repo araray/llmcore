@@ -15,15 +15,16 @@ import logging
 import os
 import pathlib
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, AsyncIterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional
 
 if TYPE_CHECKING:
     try:
-        import psycopg # type: ignore
-        from psycopg.rows import dict_row # type: ignore
-        from psycopg.types.json import Jsonb # type: ignore
-        from psycopg_pool import AsyncConnectionPool # type: ignore
-        from psycopg.abc import AsyncConnection as PsycopgAsyncConnectionType # type: ignore
+        import psycopg  # type: ignore
+        from psycopg.abc import \
+            AsyncConnection as PsycopgAsyncConnectionType  # type: ignore
+        from psycopg.rows import dict_row  # type: ignore
+        from psycopg.types.json import Jsonb  # type: ignore
+        from psycopg_pool import AsyncConnectionPool  # type: ignore
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -35,10 +36,10 @@ if TYPE_CHECKING:
 else:
     try:
         import psycopg
+        from psycopg.abc import AsyncConnection as PsycopgAsyncConnectionType
         from psycopg.rows import dict_row
         from psycopg.types.json import Jsonb
         from psycopg_pool import AsyncConnectionPool
-        from psycopg.abc import AsyncConnection as PsycopgAsyncConnectionType
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -49,14 +50,15 @@ else:
         psycopg_available = False
 
 try:
-    from pgvector.psycopg import register_vector # type: ignore
+    from pgvector.psycopg import register_vector  # type: ignore
     pgvector_available = True
 except ImportError:
     pgvector_available = False
     register_vector = None
 
-from ..models import ChatSession, Message, Role, ContextDocument, ContextItem, ContextItemType
-from ..exceptions import SessionStorageError, VectorStorageError, ConfigError
+from ..exceptions import ConfigError, SessionStorageError, VectorStorageError
+from ..models import (ChatSession, ContextDocument, ContextItem,
+                      ContextItemType, Message, Role)
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
 

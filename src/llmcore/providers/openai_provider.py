@@ -9,9 +9,8 @@ Accepts context as List[Message].
 import asyncio
 import logging
 import os
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator
-from enum import Enum # Import Enum for isinstance check
-
+from enum import Enum  # Import Enum for isinstance check
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 # Removed aiohttp as it's not directly used here; openai SDK handles HTTP.
 try:
@@ -31,8 +30,9 @@ except ImportError:
     tiktoken = None # type: ignore [assignment]
 
 
-from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError
+from ..exceptions import ConfigError, ProviderError
+from ..models import Message
+from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)

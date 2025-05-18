@@ -5,13 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
-from pydantic import (
-  BaseModel,
-  ByteSize,
-  ConfigDict,
-  Field,
-  model_serializer,
-)
+from pydantic import BaseModel, ByteSize, ConfigDict, Field, model_serializer
 from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Annotated, Literal
 

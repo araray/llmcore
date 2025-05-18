@@ -5,9 +5,9 @@ Provider Manager for LLMCore.
 Handles the dynamic loading and management of LLM provider instances based on configuration.
 """
 
-import logging
 import asyncio
-from typing import Dict, Any, Type, Optional, List
+import logging
+from typing import Any, Dict, List, Optional, Type
 
 # Assume ConfyConfig type for hinting
 try:
@@ -17,13 +17,12 @@ except ImportError:
 
 
 from ..exceptions import ConfigError, ProviderError
+from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
-
+from .gemini_provider import GeminiProvider
 # Import concrete implementations
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
-from .anthropic_provider import AnthropicProvider
-from .gemini_provider import GeminiProvider
 
 logger = logging.getLogger(__name__)
 

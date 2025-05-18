@@ -4,7 +4,6 @@ print(genai.__version__)
 
 from google.genai import errors
 
-
 client = genai.Client()
 try:
   client.models.generate_content(

@@ -7,7 +7,7 @@ Uses the official ollama library to generate embeddings via a local Ollama insta
 
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Use the official ollama library
 try:
@@ -20,7 +20,7 @@ except ImportError:
     ResponseError = Exception # type: ignore
 
 
-from ..exceptions import EmbeddingError, ConfigError
+from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
 logger = logging.getLogger(__name__)

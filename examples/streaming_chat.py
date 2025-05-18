@@ -18,10 +18,11 @@ To run this example:
 
 import asyncio
 import logging
-import uuid # For unique session ID
+import uuid  # For unique session ID
 
 # Import the main class and relevant exceptions
-from llmcore import LLMCore, LLMCoreError, ProviderError, ConfigError, SessionNotFoundError
+from llmcore import (ConfigError, LLMCore, LLMCoreError, ProviderError,
+                     SessionNotFoundError)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

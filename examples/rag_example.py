@@ -23,15 +23,10 @@ import logging
 import uuid
 
 # Import the main class and relevant exceptions/models
-from llmcore import (
-    LLMCore,
-    LLMCoreError,
-    ProviderError,
-    ConfigError,
-    VectorStorageError,
-    EmbeddingError,
-    ContextDocument # Import ContextDocument if needed for direct search result inspection
-)
+from llmcore import \
+    ContextDocument  # Import ContextDocument if needed for direct search result inspection
+from llmcore import (ConfigError, EmbeddingError, LLMCore, LLMCoreError,
+                     ProviderError, VectorStorageError)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

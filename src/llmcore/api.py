@@ -4,35 +4,34 @@ Core API Facade for the LLMCore library.
 """
 
 import asyncio
-import logging
 import importlib.resources
-import pathlib # For file operations
-import json # For parsing stream chunks if needed
-import uuid # For generating IDs
-from datetime import datetime, timezone # For ContextItem timestamp
-from typing import List, Optional, Dict, Any, Union, AsyncGenerator, Type, Tuple
+import json  # For parsing stream chunks if needed
+import logging
+import pathlib  # For file operations
+import uuid  # For generating IDs
+from datetime import datetime, timezone  # For ContextItem timestamp
+from typing import (Any, AsyncGenerator, Dict, List, Optional, Tuple, Type,
+                    Union)
 
 import aiofiles
 
-# Models and Exceptions
-from .models import ChatSession, ContextDocument, Message, Role, ContextItem, ContextItemType
-from .exceptions import (
-    LLMCoreError, ProviderError, SessionNotFoundError, ConfigError,
-    StorageError, SessionStorageError, VectorStorageError,
-    EmbeddingError, ContextLengthError
-)
-# Storage
-from .storage.manager import StorageManager
-# Sessions
-from .sessions.manager import SessionManager
 # Context
 from .context.manager import ContextManager
-# Providers
-from .providers.manager import ProviderManager
-from .providers.base import BaseProvider
 # Embedding
 from .embedding.manager import EmbeddingManager
-
+from .exceptions import (ConfigError, ContextLengthError, EmbeddingError,
+                         LLMCoreError, ProviderError, SessionNotFoundError,
+                         SessionStorageError, StorageError, VectorStorageError)
+# Models and Exceptions
+from .models import (ChatSession, ContextDocument, ContextItem,
+                     ContextItemType, Message, Role)
+from .providers.base import BaseProvider
+# Providers
+from .providers.manager import ProviderManager
+# Sessions
+from .sessions.manager import SessionManager
+# Storage
+from .storage.manager import StorageManager
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -47,7 +46,7 @@ except ImportError:
         tomllib = None # type: ignore [assignment]
 
 try:
-    from ollama import ChatResponse as OllamaChatResponse # type: ignore
+    from ollama import ChatResponse as OllamaChatResponse  # type: ignore
 except ImportError:
     OllamaChatResponse = None # type: ignore [assignment]
 

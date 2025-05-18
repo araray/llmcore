@@ -8,7 +8,7 @@ based on configuration.
 
 import asyncio
 import logging
-from typing import Dict, Any, Type, Optional, List
+from typing import Any, Dict, List, Optional, Type
 
 # Assume ConfyConfig type for hinting
 try:
@@ -18,12 +18,11 @@ except ImportError:
 
 from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
-
+from .google import GoogleAIEmbedding  # Added for Phase 3
+from .ollama import OllamaEmbedding  # Added for Phase 3
+from .openai import OpenAIEmbedding  # Added for Phase 3
 # Import concrete implementations
 from .sentence_transformer import SentenceTransformerEmbedding
-from .openai import OpenAIEmbedding # Added for Phase 3
-from .google import GoogleAIEmbedding # Added for Phase 3
-from .ollama import OllamaEmbedding # Added for Phase 3
 
 logger = logging.getLogger(__name__)
 

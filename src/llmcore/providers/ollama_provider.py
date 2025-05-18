@@ -9,13 +9,14 @@ Accepts context as List[Message].
 
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator
-from enum import Enum # Import Enum for isinstance check
+from enum import Enum  # Import Enum for isinstance check
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 # Use the official ollama library
 try:
     import ollama
-    from ollama import AsyncClient, ResponseError, ChatResponse # ChatResponse for type checking
+    from ollama import (AsyncClient,  # ChatResponse for type checking
+                        ChatResponse, ResponseError)
     ollama_available = True
 except ImportError:
     ollama_available = False
@@ -32,8 +33,9 @@ except ImportError:
     tiktoken = None # type: ignore [assignment]
 
 
-from ..models import Message, Role as LLMCoreRole
-from ..exceptions import ProviderError, ConfigError
+from ..exceptions import ConfigError, ProviderError
+from ..models import Message
+from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)

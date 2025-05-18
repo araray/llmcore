@@ -10,15 +10,16 @@ import asyncio
 import logging
 import os
 import pathlib
-
-from typing import List, Optional, Dict, Any, Tuple, TYPE_CHECKING # Added TYPE_CHECKING
-
+from typing import (TYPE_CHECKING, Any, Dict, List,  # Added TYPE_CHECKING
+                    Optional, Tuple)
 
 # Import chromadb client library conditionally
 try:
     import chromadb
-    from chromadb.api.models.Collection import Collection as ChromaCollection # Specific type hint
-    from chromadb.errors import IDAlreadyExistsError, AuthorizationError # Added AuthorizationError
+    from chromadb.api.models.Collection import \
+        Collection as ChromaCollection  # Specific type hint
+    from chromadb.errors import (  # Added AuthorizationError
+        AuthorizationError, IDAlreadyExistsError)
     chromadb_available = True
     # Define type alias for cleaner hinting if available
     ChromaClientType = chromadb.Client
@@ -32,8 +33,8 @@ except ImportError:
     ChromaClientType = "chromadb.Client" # type: ignore
 
 
+from ..exceptions import ConfigError, VectorStorageError
 from ..models import ContextDocument
-from ..exceptions import VectorStorageError, ConfigError
 from .base_vector import BaseVectorStorage
 
 logger = logging.getLogger(__name__)

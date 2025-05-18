@@ -10,9 +10,11 @@ and saving to a configured storage backend provided by StorageManager.
 import logging
 from typing import Optional
 
+from ..exceptions import (LLMCoreError, SessionNotFoundError,
+                          SessionStorageError)
 from ..models import ChatSession, Message, Role
-from ..storage.base_session import BaseSessionStorage # Keep BaseSessionStorage for type hint
-from ..exceptions import SessionNotFoundError, SessionStorageError, LLMCoreError
+from ..storage.base_session import \
+    BaseSessionStorage  # Keep BaseSessionStorage for type hint
 
 logger = logging.getLogger(__name__)
 

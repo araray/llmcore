@@ -7,7 +7,7 @@ Uses the sentence-transformers library to generate embeddings locally.
 
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Import sentence-transformers library
 try:
@@ -17,7 +17,7 @@ except ImportError:
     sentence_transformers_available = False
     SentenceTransformer = None # type: ignore
 
-from ..exceptions import EmbeddingError, ConfigError
+from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
 logger = logging.getLogger(__name__)

@@ -8,13 +8,14 @@ Uses the google-genai Python SDK (v0.8.0+) to generate embeddings via their API.
 import asyncio
 import logging
 import os
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # --- Use the new google-genai library ---
 try:
     import google.genai as genai
-    from google.genai import types as genai_types # Keep types import for other potential uses
     from google.genai import errors as genai_errors
+    from google.genai import \
+        types as genai_types  # Keep types import for other potential uses
     google_genai_available = True
 except ImportError:
     google_genai_available = False
@@ -24,7 +25,7 @@ except ImportError:
 # --- End new library import ---
 
 
-from ..exceptions import EmbeddingError, ConfigError
+from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
 logger = logging.getLogger(__name__)

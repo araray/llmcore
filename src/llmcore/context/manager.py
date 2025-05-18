@@ -8,7 +8,7 @@ token limits, history selection, RAG integration, and user-added context items.
 
 import asyncio
 import logging
-from typing import List, Optional, Dict, Any, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -16,15 +16,15 @@ except ImportError:
     ConfyConfig = Dict[str, Any] # type: ignore [no-redef]
 
 
-from ..providers.manager import ProviderManager
-from ..providers.base import BaseProvider
-from ..storage.manager import StorageManager
 from ..embedding.manager import EmbeddingManager
-from ..models import ChatSession, Message, Role as LLMCoreRole, ContextDocument, ContextItem, ContextItemType
-from ..exceptions import (
-    ContextError, ContextLengthError, ConfigError, ProviderError,
-    EmbeddingError, VectorStorageError
-)
+from ..exceptions import (ConfigError, ContextError, ContextLengthError,
+                          EmbeddingError, ProviderError, VectorStorageError)
+from ..models import (ChatSession, ContextDocument, ContextItem,
+                      ContextItemType, Message)
+from ..models import Role as LLMCoreRole
+from ..providers.base import BaseProvider
+from ..providers.manager import ProviderManager
+from ..storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
 

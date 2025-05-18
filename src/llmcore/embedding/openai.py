@@ -8,7 +8,7 @@ Uses the OpenAI Python SDK to generate embeddings via their API.
 import asyncio
 import logging
 import os
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Import OpenAI library
 try:
@@ -21,7 +21,7 @@ except ImportError:
     OpenAIError = Exception # type: ignore
 
 
-from ..exceptions import EmbeddingError, ConfigError
+from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
 logger = logging.getLogger(__name__)

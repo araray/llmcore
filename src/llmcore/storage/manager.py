@@ -6,9 +6,9 @@ Handles the dynamic loading and management of session and vector storage backend
 based on the application's configuration.
 """
 
-import logging
 import asyncio
-from typing import Dict, Any, Type, Optional
+import logging
+from typing import Any, Dict, Optional, Type
 
 # Assume ConfyConfig type for hinting
 try:
@@ -20,16 +20,13 @@ except ImportError:
 from ..exceptions import ConfigError, StorageError
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
-
-# Import concrete session storage implementations
-from .json_session import JsonSessionStorage
-from .sqlite_session import SqliteSessionStorage
-from .postgres_storage import PostgresSessionStorage # Added for Phase 3
-
 # Import concrete vector storage implementations
 from .chromadb_vector import ChromaVectorStorage
-from .postgres_storage import PgVectorStorage # Added for Phase 3
-
+# Import concrete session storage implementations
+from .json_session import JsonSessionStorage
+from .postgres_storage import PgVectorStorage  # Added for Phase 3
+from .postgres_storage import PostgresSessionStorage  # Added for Phase 3
+from .sqlite_session import SqliteSessionStorage
 
 logger = logging.getLogger(__name__)
 
