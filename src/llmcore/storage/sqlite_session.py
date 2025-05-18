@@ -4,16 +4,17 @@ SQLite database storage for ChatSession objects using aiosqlite.
 
 This module implements the BaseSessionStorage interface using the
 aiosqlite library for native asynchronous database operations.
+It now includes support for storing and retrieving `ContextItem` objects
+associated with each session in a separate table.
 """
 
 import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timezone # Import timezone
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
-# Use aiosqlite for native async operations
 try:
     import aiosqlite
     aiosqlite_available = True
@@ -21,58 +22,60 @@ except ImportError:
     aiosqlite_available = False
     aiosqlite = None # type: ignore
 
-from ..models import ChatSession, Message, Role
+from ..models import ChatSession, Message, Role, ContextItem, ContextItemType # Added ContextItem, ContextItemType
 from ..exceptions import SessionStorageError, ConfigError
 from .base_session import BaseSessionStorage
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CONTEXT_ITEMS_TABLE = "context_items"
 
 class SqliteSessionStorage(BaseSessionStorage):
     """
     Manages persistence of ChatSession objects in a SQLite database using aiosqlite.
 
-    Stores session and message data in tables within a single DB file.
+    Stores session, message, and context_item data in tables within a single DB file.
     """
     _db_path: pathlib.Path
-    _conn: Optional[aiosqlite.Connection] = None # Use aiosqlite connection type
+    _conn: Optional[aiosqlite.Connection] = None
+    _sessions_table_name: str = "sessions" # Default, can be overridden by config in future if needed
+    _messages_table_name: str = "messages" # Default
+    _context_items_table_name: str # Will be set from config or default
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
         Initialize the SQLite database asynchronously using aiosqlite.
+        Creates tables for sessions, messages, and context_items if they don't exist.
 
         Args:
             config: Configuration dictionary. Expected keys:
                     'path': The directory path for storing the database file.
+                    'context_items_table_name' (optional): Name for the context_items table.
 
         Raises:
-            ConfigError: If the 'path' is not provided in the config.
-            SessionStorageError: If the database cannot be initialized.
-            ImportError: If aiosqlite is not installed.
+            ConfigError: If 'path' is not provided or aiosqlite is not installed.
+            SessionStorageError: If the database cannot be initialized or tables created.
         """
         if not aiosqlite_available:
-            raise ImportError("aiosqlite library is not installed. Please install `aiosqlite` or `llmcore[sqlite]`.")
+            raise ConfigError("aiosqlite library is not installed. Please install `aiosqlite` or `llmcore[sqlite]`.")
 
-        db_path_str = config.get("path") # Reuse 'path' key like JsonStorage
+        db_path_str = config.get("path")
         if not db_path_str:
             raise ConfigError("SQLite session storage 'path' not specified in configuration.")
 
         self._db_path = pathlib.Path(os.path.expanduser(db_path_str))
+        self._context_items_table_name = config.get("context_items_table_name", DEFAULT_CONTEXT_ITEMS_TABLE)
+
 
         try:
-            # Ensure parent directory exists (synchronous part is ok here)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Connect asynchronously
             self._conn = await aiosqlite.connect(self._db_path)
-            self._conn.row_factory = aiosqlite.Row # Use aiosqlite's Row factory
-
-            # Enable foreign keys (important!)
+            self._conn.row_factory = aiosqlite.Row
             await self._conn.execute("PRAGMA foreign_keys = ON;")
 
-            # Create tables if they don't exist (use await for execute)
-            await self._conn.execute("""
-                CREATE TABLE IF NOT EXISTS sessions (
+            # Sessions table
+            await self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._sessions_table_name} (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     created_at TEXT NOT NULL,
@@ -80,32 +83,50 @@ class SqliteSessionStorage(BaseSessionStorage):
                     metadata TEXT -- Store as JSON text
                 )
             """)
-            await self._conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
+            # Messages table
+            await self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._messages_table_name} (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     tokens INTEGER,
-                    -- 'selected' field removed as it's not part of the core Message model anymore
-                    -- selected INTEGER DEFAULT 1,
                     metadata TEXT, -- Store as JSON text
-                    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                    FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
                 )
             """)
-            # Add index for faster message lookup by session_id and timestamp
-            await self._conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_messages_session_timestamp ON messages (session_id, timestamp);
+            await self._conn.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_messages_session_timestamp ON {self._messages_table_name} (session_id, timestamp);
             """)
 
-            await self._conn.commit() # Commit table creation
-            logger.info(f"SQLite session storage initialized asynchronously at: {self._db_path.resolve()}")
+            # ContextItems table
+            await self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._context_items_table_name} (
+                    id TEXT NOT NULL, -- ID of the context item itself
+                    session_id TEXT NOT NULL,
+                    item_type TEXT NOT NULL, -- Stores ContextItemType enum value (e.g., "user_text")
+                    source_id TEXT,
+                    content TEXT NOT NULL,
+                    tokens INTEGER,
+                    metadata TEXT, -- Store as JSON text
+                    timestamp TEXT NOT NULL,
+                    PRIMARY KEY (session_id, id), -- Item ID should be unique within a session
+                    FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
+                )
+            """)
+            await self._conn.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_context_items_session_id ON {self._context_items_table_name} (session_id);
+            """)
+
+            await self._conn.commit()
+            logger.info(f"SQLite session storage initialized at: {self._db_path.resolve()} with tables: "
+                        f"{self._sessions_table_name}, {self._messages_table_name}, {self._context_items_table_name}")
 
         except aiosqlite.Error as e:
             logger.error(f"Failed to initialize aiosqlite database at {self._db_path}: {e}")
-            if self._conn: await self._conn.close() # Attempt to close connection on error
-            self._conn = None # Ensure connection is None on failure
+            if self._conn: await self._conn.close()
+            self._conn = None
             raise SessionStorageError(f"Could not initialize SQLite database: {e}")
         except Exception as e:
             logger.error(f"Unexpected error during SQLite initialization: {e}", exc_info=True)
@@ -115,13 +136,13 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def save_session(self, session: ChatSession) -> None:
         """
-        Save or update a chat session in the database asynchronously.
+        Save or update a chat session, its messages, and its context_items in the database.
+        Uses UPSERT for session metadata and replaces messages/context_items for simplicity.
 
         Args:
             session: The ChatSession object to save.
-
         Raises:
-            SessionStorageError: If the database connection is not initialized or saving fails.
+            SessionStorageError: If DB connection isn't initialized or saving fails.
         """
         if not self._conn:
             raise SessionStorageError("Database connection is not initialized. Call initialize() first.")
@@ -129,139 +150,115 @@ class SqliteSessionStorage(BaseSessionStorage):
         session_metadata_json = json.dumps(session.metadata or {})
 
         try:
-            # Use execute for single operations, executemany for batch inserts
-            # Use INSERT OR REPLACE (UPSERT) for session metadata
-            await self._conn.execute("""
-                INSERT OR REPLACE INTO sessions (id, name, created_at, updated_at, metadata)
+            await self._conn.execute("BEGIN;") # Start transaction
+
+            # UPSERT session metadata
+            await self._conn.execute(f"""
+                INSERT OR REPLACE INTO {self._sessions_table_name} (id, name, created_at, updated_at, metadata)
                 VALUES (?, ?, ?, ?, ?)
             """, (
-                session.id,
-                session.name,
-                session.created_at.isoformat(),
-                session.updated_at.isoformat(),
-                session_metadata_json
+                session.id, session.name, session.created_at.isoformat(),
+                session.updated_at.isoformat(), session_metadata_json
             ))
 
-            # Efficiently update messages: Delete existing and insert all current messages
-            # This is simpler than checking each message, but potentially less efficient for minor updates.
-            # For high-frequency updates, a more granular approach might be better.
-            await self._conn.execute("DELETE FROM messages WHERE session_id = ?", (session.id,))
-
-            if session.messages: # Only insert if there are messages
-                messages_data = [
-                    (
-                        msg.id,
-                        session.id, # Use the session's ID
-                        str(msg.role), # Use the string value of the Role enum directly
-                        msg.content,
-                        msg.timestamp.isoformat(),
-                        msg.tokens,
-                        # 'selected' field removed
-                        json.dumps(msg.metadata or {})
-                    )
-                    for msg in session.messages
-                ]
-                # Update query to match removed 'selected' field
-                await self._conn.executemany("""
-                    INSERT INTO messages (id, session_id, role, content, timestamp, tokens, metadata)
+            # Replace messages
+            await self._conn.execute(f"DELETE FROM {self._messages_table_name} WHERE session_id = ?", (session.id,))
+            if session.messages:
+                messages_data = [(msg.id, session.id, str(msg.role), msg.content,
+                                  msg.timestamp.isoformat(), msg.tokens, json.dumps(msg.metadata or {}))
+                                 for msg in session.messages]
+                await self._conn.executemany(f"""
+                    INSERT INTO {self._messages_table_name} (id, session_id, role, content, timestamp, tokens, metadata)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, messages_data)
 
-            await self._conn.commit() # Commit the transaction
-            logger.debug(f"Session '{session.id}' saved to SQLite asynchronously.")
+            # Replace context_items
+            await self._conn.execute(f"DELETE FROM {self._context_items_table_name} WHERE session_id = ?", (session.id,))
+            if session.context_items:
+                context_items_data = [(item.id, session.id, str(item.type.value), item.source_id, item.content,
+                                       item.tokens, json.dumps(item.metadata or {}), item.timestamp.isoformat())
+                                      for item in session.context_items]
+                await self._conn.executemany(f"""
+                    INSERT INTO {self._context_items_table_name} (id, session_id, item_type, source_id, content, tokens, metadata, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, context_items_data)
+
+            await self._conn.commit()
+            logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to SQLite.")
         except aiosqlite.Error as e:
             logger.error(f"aiosqlite error saving session '{session.id}': {e}")
-            # Consider attempting rollback, though commit might have failed partially
-            # await self._conn.rollback() # Rollback might not be needed or possible depending on error
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Database error saving session '{session.id}': {e}")
         except Exception as e:
             logger.error(f"Unexpected error saving session '{session.id}': {e}", exc_info=True)
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Unexpected error saving session '{session.id}': {e}")
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """
-        Retrieve a specific chat session by its ID asynchronously.
+        Retrieve a specific chat session, its messages, and its context_items by ID.
 
         Args:
             session_id: The ID of the session to retrieve.
-
         Returns:
             The ChatSession object if found, otherwise None.
-
         Raises:
-            SessionStorageError: If the database connection is not initialized or retrieval fails.
+            SessionStorageError: If DB connection isn't initialized or retrieval fails.
         """
         if not self._conn:
             raise SessionStorageError("Database connection is not initialized.")
 
         try:
-            # Use execute for single query, fetchone for single result
-            async with self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)) as cursor:
+            async with self._conn.execute(f"SELECT * FROM {self._sessions_table_name} WHERE id = ?", (session_id,)) as cursor:
                 session_row = await cursor.fetchone()
-
             if not session_row:
                 logger.debug(f"Session '{session_id}' not found in SQLite.")
                 return None
 
-            # Convert row to dictionary (aiosqlite.Row behaves like a dict)
             session_data = dict(session_row)
             session_data["metadata"] = json.loads(session_data["metadata"] or '{}')
 
             # Fetch messages
-            messages = []
-            # Update query to match removed 'selected' field
-            async with self._conn.execute("""
+            messages: List[Message] = []
+            async with self._conn.execute(f"""
                 SELECT id, session_id, role, content, timestamp, tokens, metadata
-                FROM messages WHERE session_id = ? ORDER BY timestamp ASC
+                FROM {self._messages_table_name} WHERE session_id = ? ORDER BY timestamp ASC
             """, (session_id,)) as cursor:
-                async for msg_row in cursor:
-                    msg_data = dict(msg_row)
-                    msg_data["metadata"] = json.loads(msg_data["metadata"] or '{}')
-                    # Convert role string back to Enum
+                async for msg_row_data in cursor:
+                    msg_dict = dict(msg_row_data)
                     try:
-                        msg_data["role"] = Role(msg_data["role"])
-                    except ValueError:
-                         logger.warning(f"Invalid role '{msg_data['role']}' found in database for message {msg_data['id']}. Skipping message.")
-                         continue # Skip message with invalid role
+                        msg_dict["metadata"] = json.loads(msg_dict["metadata"] or '{}')
+                        msg_dict["role"] = Role(msg_dict["role"])
+                        ts_str = msg_dict["timestamp"]
+                        msg_dict["timestamp"] = datetime.fromisoformat(ts_str.replace('Z', '+00:00')) if ts_str else datetime.now(timezone.utc)
+                        messages.append(Message.model_validate(msg_dict))
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
+                        logger.warning(f"Skipping invalid message data for session {session_id}, msg_id {msg_dict.get('id')}: {e}")
+            session_data["messages"] = messages
 
-                    # Convert timestamp string back to datetime
+            # Fetch context_items
+            context_items: List[ContextItem] = []
+            async with self._conn.execute(f"""
+                SELECT id, session_id, item_type, source_id, content, tokens, metadata, timestamp
+                FROM {self._context_items_table_name} WHERE session_id = ? ORDER BY timestamp ASC
+            """, (session_id,)) as cursor:
+                async for item_row_data in cursor:
+                    item_dict = dict(item_row_data)
                     try:
-                        # Handle potential 'Z' for UTC timezone indication
-                        ts_str = msg_data["timestamp"]
-                        if ts_str.endswith('Z'):
-                            ts_str = ts_str[:-1] + '+00:00'
-                        msg_data["timestamp"] = datetime.fromisoformat(ts_str)
-                    except ValueError:
-                         logger.warning(f"Invalid timestamp '{msg_data['timestamp']}' found for message {msg_data['id']}. Using current time.")
-                         msg_data["timestamp"] = datetime.now(timezone.utc) # Fallback with timezone
+                        item_dict["metadata"] = json.loads(item_dict["metadata"] or '{}')
+                        item_dict["type"] = ContextItemType(item_dict.pop("item_type")) # Rename column to match model
+                        ts_str = item_dict["timestamp"]
+                        item_dict["timestamp"] = datetime.fromisoformat(ts_str.replace('Z', '+00:00')) if ts_str else datetime.now(timezone.utc)
+                        context_items.append(ContextItem.model_validate(item_dict))
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
+                        logger.warning(f"Skipping invalid context_item data for session {session_id}, item_id {item_dict.get('id')}: {e}")
+            session_data["context_items"] = context_items
 
-                    # Create Message object (removed 'selected')
-                    messages.append(Message(**msg_data))
-
-            # Create ChatSession object (handle potential datetime parsing errors)
-            try:
-                 # Handle potential 'Z' for UTC timezone indication
-                 created_at_str = session_data["created_at"]
-                 updated_at_str = session_data["updated_at"]
-                 if created_at_str.endswith('Z'): created_at_str = created_at_str[:-1] + '+00:00'
-                 if updated_at_str.endswith('Z'): updated_at_str = updated_at_str[:-1] + '+00:00'
-
-                 created_at = datetime.fromisoformat(created_at_str)
-                 updated_at = datetime.fromisoformat(updated_at_str)
-            except ValueError:
-                 logger.error(f"Invalid datetime format found for session {session_id}. Cannot load session.")
-                 raise SessionStorageError(f"Invalid datetime format in database for session {session_id}.")
-
-            # Use Pydantic validation for creating the final object
-            chat_session = ChatSession.model_validate({
-                "id": session_data["id"],
-                "name": session_data["name"],
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "metadata": session_data["metadata"],
-                "messages": messages
-            })
-            logger.debug(f"Session '{session_id}' loaded from SQLite asynchronously.")
+            # Validate and create ChatSession object
+            chat_session = ChatSession.model_validate(session_data)
+            logger.debug(f"Session '{session_id}' loaded from SQLite with {len(messages)} messages and {len(context_items)} context items.")
             return chat_session
 
         except aiosqlite.Error as e:
@@ -273,38 +270,33 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """
-        List available persistent chat sessions asynchronously, returning metadata only.
+        List available persistent chat sessions, returning metadata only.
+        Includes count of messages and context_items.
 
         Returns:
             A list of dictionaries, each representing session metadata.
-
-        Raises:
-            SessionStorageError: If the database connection is not initialized or listing fails.
         """
         if not self._conn:
             raise SessionStorageError("Database connection is not initialized.")
 
         session_metadata_list: List[Dict[str, Any]] = []
         try:
-            # Query includes message count for efficiency
-            async with self._conn.execute("""
-                SELECT s.id, s.name, s.created_at, s.updated_at, s.metadata, COUNT(m.id) as message_count
-                FROM sessions s
-                LEFT JOIN messages m ON s.id = m.session_id
-                GROUP BY s.id
+            async with self._conn.execute(f"""
+                SELECT
+                    s.id, s.name, s.created_at, s.updated_at, s.metadata,
+                    (SELECT COUNT(*) FROM {self._messages_table_name} m WHERE m.session_id = s.id) as message_count,
+                    (SELECT COUNT(*) FROM {self._context_items_table_name} ci WHERE ci.session_id = s.id) as context_item_count
+                FROM {self._sessions_table_name} s
                 ORDER BY s.updated_at DESC
             """) as cursor:
                 async for row in cursor:
                     data = dict(row)
-                    # Ensure metadata is parsed from JSON string
                     try:
                         data["metadata"] = json.loads(data["metadata"] or '{}')
                     except json.JSONDecodeError:
-                        logger.warning(f"Could not parse metadata JSON for session {data['id']}. Using empty dict.")
                         data["metadata"] = {}
                     session_metadata_list.append(data)
-
-            logger.debug(f"Found {len(session_metadata_list)} sessions in SQLite asynchronously.")
+            logger.debug(f"Found {len(session_metadata_list)} sessions in SQLite.")
             return session_metadata_list
         except aiosqlite.Error as e:
             logger.error(f"aiosqlite error listing sessions: {e}")
@@ -314,45 +306,31 @@ class SqliteSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error listing sessions: {e}")
 
     async def delete_session(self, session_id: str) -> bool:
-        """
-        Delete a specific chat session asynchronously.
-
-        Args:
-            session_id: The ID of the session to delete.
-
-        Returns:
-            True if the session was found and deleted successfully, False otherwise.
-
-        Raises:
-            SessionStorageError: If the database connection is not initialized or deletion fails.
-        """
+        """Delete a specific chat session. Cascades to messages and context_items."""
         if not self._conn:
             raise SessionStorageError("Database connection is not initialized.")
-
         try:
-            # Use execute for single operation, check rowcount for success
-            # Deletion cascades to messages table due to FOREIGN KEY ON DELETE CASCADE
-            cursor = await self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-            await self._conn.commit() # Commit the deletion
-            deleted_count = cursor.rowcount # Number of rows affected
-
+            cursor = await self._conn.execute(f"DELETE FROM {self._sessions_table_name} WHERE id = ?", (session_id,))
+            await self._conn.commit()
+            deleted_count = cursor.rowcount
             if deleted_count > 0:
-                logger.info(f"Session '{session_id}' deleted from SQLite asynchronously.")
+                logger.info(f"Session '{session_id}' and its associated messages/context_items deleted from SQLite.")
                 return True
-            else:
-                logger.warning(f"Attempted to delete non-existent session '{session_id}' from SQLite.")
-                return False
+            logger.warning(f"Attempted to delete non-existent session '{session_id}' from SQLite.")
+            return False
         except aiosqlite.Error as e:
             logger.error(f"aiosqlite error deleting session '{session_id}': {e}")
-            # Consider rollback if needed, though commit might have failed
-            # await self._conn.rollback()
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Database error deleting session '{session_id}': {e}")
         except Exception as e:
             logger.error(f"Unexpected error deleting session '{session_id}': {e}", exc_info=True)
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Unexpected error deleting session '{session_id}': {e}")
 
     async def close(self) -> None:
-        """Close the database connection asynchronously."""
+        """Close the database connection."""
         if self._conn:
             try:
                 await self._conn.close()
@@ -360,4 +338,3 @@ class SqliteSessionStorage(BaseSessionStorage):
                 logger.info("aiosqlite session storage connection closed.")
             except aiosqlite.Error as e:
                 logger.error(f"Error closing aiosqlite connection: {e}")
-                # Log error during cleanup, but don't raise
