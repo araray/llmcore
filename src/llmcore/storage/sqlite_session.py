@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone # Ensure timezone is imported
 from typing import List, Optional, Dict, Any
 
 try:
@@ -22,7 +22,7 @@ except ImportError:
     aiosqlite_available = False
     aiosqlite = None # type: ignore
 
-from ..models import ChatSession, Message, Role, ContextItem, ContextItemType # Added ContextItem, ContextItemType
+from ..models import ChatSession, Message, Role, ContextItem, ContextItemType
 from ..exceptions import SessionStorageError, ConfigError
 from .base_session import BaseSessionStorage
 
@@ -38,9 +38,9 @@ class SqliteSessionStorage(BaseSessionStorage):
     """
     _db_path: pathlib.Path
     _conn: Optional[aiosqlite.Connection] = None
-    _sessions_table_name: str = "sessions" # Default, can be overridden by config in future if needed
-    _messages_table_name: str = "messages" # Default
-    _context_items_table_name: str # Will be set from config or default
+    _sessions_table_name: str = "sessions"
+    _messages_table_name: str = "messages"
+    _context_items_table_name: str
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
@@ -70,7 +70,7 @@ class SqliteSessionStorage(BaseSessionStorage):
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = await aiosqlite.connect(self._db_path)
-            self._conn.row_factory = aiosqlite.Row
+            self._conn.row_factory = aiosqlite.Row # type: ignore
             await self._conn.execute("PRAGMA foreign_keys = ON;")
 
             # Sessions table
@@ -103,15 +103,15 @@ class SqliteSessionStorage(BaseSessionStorage):
             # ContextItems table
             await self._conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self._context_items_table_name} (
-                    id TEXT NOT NULL, -- ID of the context item itself
+                    id TEXT NOT NULL,
                     session_id TEXT NOT NULL,
-                    item_type TEXT NOT NULL, -- Stores ContextItemType enum value (e.g., "user_text")
+                    item_type TEXT NOT NULL,
                     source_id TEXT,
                     content TEXT NOT NULL,
                     tokens INTEGER,
-                    metadata TEXT, -- Store as JSON text
+                    metadata TEXT,
                     timestamp TEXT NOT NULL,
-                    PRIMARY KEY (session_id, id), -- Item ID should be unique within a session
+                    PRIMARY KEY (session_id, id),
                     FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
                 )
             """)
@@ -123,7 +123,7 @@ class SqliteSessionStorage(BaseSessionStorage):
             logger.info(f"SQLite session storage initialized at: {self._db_path.resolve()} with tables: "
                         f"{self._sessions_table_name}, {self._messages_table_name}, {self._context_items_table_name}")
 
-        except aiosqlite.Error as e:
+        except aiosqlite.Error as e: # type: ignore
             logger.error(f"Failed to initialize aiosqlite database at {self._db_path}: {e}")
             if self._conn: await self._conn.close()
             self._conn = None
@@ -150,9 +150,8 @@ class SqliteSessionStorage(BaseSessionStorage):
         session_metadata_json = json.dumps(session.metadata or {})
 
         try:
-            await self._conn.execute("BEGIN;") # Start transaction
+            await self._conn.execute("BEGIN;")
 
-            # UPSERT session metadata
             await self._conn.execute(f"""
                 INSERT OR REPLACE INTO {self._sessions_table_name} (id, name, created_at, updated_at, metadata)
                 VALUES (?, ?, ?, ?, ?)
@@ -161,7 +160,6 @@ class SqliteSessionStorage(BaseSessionStorage):
                 session.updated_at.isoformat(), session_metadata_json
             ))
 
-            # Replace messages
             await self._conn.execute(f"DELETE FROM {self._messages_table_name} WHERE session_id = ?", (session.id,))
             if session.messages:
                 messages_data = [(msg.id, session.id, str(msg.role), msg.content,
@@ -172,10 +170,10 @@ class SqliteSessionStorage(BaseSessionStorage):
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, messages_data)
 
-            # Replace context_items
             await self._conn.execute(f"DELETE FROM {self._context_items_table_name} WHERE session_id = ?", (session.id,))
             if session.context_items:
-                context_items_data = [(item.id, session.id, str(item.type.value), item.source_id, item.content,
+                context_items_data = [(item.id, session.id, str(item.type), # Corrected: Use str(item.type)
+                                       item.source_id, item.content,
                                        item.tokens, json.dumps(item.metadata or {}), item.timestamp.isoformat())
                                       for item in session.context_items]
                 await self._conn.executemany(f"""
@@ -185,7 +183,7 @@ class SqliteSessionStorage(BaseSessionStorage):
 
             await self._conn.commit()
             logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to SQLite.")
-        except aiosqlite.Error as e:
+        except aiosqlite.Error as e: # type: ignore
             logger.error(f"aiosqlite error saving session '{session.id}': {e}")
             try: await self._conn.rollback()
             except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
@@ -218,9 +216,11 @@ class SqliteSessionStorage(BaseSessionStorage):
                 return None
 
             session_data = dict(session_row)
-            session_data["metadata"] = json.loads(session_data["metadata"] or '{}')
+            session_data["metadata"] = json.loads(session_data.get("metadata") or '{}')
+            session_data["created_at"] = datetime.fromisoformat(session_data["created_at"].replace('Z', '+00:00')) if session_data.get("created_at") else datetime.now(timezone.utc)
+            session_data["updated_at"] = datetime.fromisoformat(session_data["updated_at"].replace('Z', '+00:00')) if session_data.get("updated_at") else datetime.now(timezone.utc)
 
-            # Fetch messages
+
             messages: List[Message] = []
             async with self._conn.execute(f"""
                 SELECT id, session_id, role, content, timestamp, tokens, metadata
@@ -229,7 +229,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                 async for msg_row_data in cursor:
                     msg_dict = dict(msg_row_data)
                     try:
-                        msg_dict["metadata"] = json.loads(msg_dict["metadata"] or '{}')
+                        msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or '{}')
                         msg_dict["role"] = Role(msg_dict["role"])
                         ts_str = msg_dict["timestamp"]
                         msg_dict["timestamp"] = datetime.fromisoformat(ts_str.replace('Z', '+00:00')) if ts_str else datetime.now(timezone.utc)
@@ -238,7 +238,6 @@ class SqliteSessionStorage(BaseSessionStorage):
                         logger.warning(f"Skipping invalid message data for session {session_id}, msg_id {msg_dict.get('id')}: {e}")
             session_data["messages"] = messages
 
-            # Fetch context_items
             context_items: List[ContextItem] = []
             async with self._conn.execute(f"""
                 SELECT id, session_id, item_type, source_id, content, tokens, metadata, timestamp
@@ -247,8 +246,8 @@ class SqliteSessionStorage(BaseSessionStorage):
                 async for item_row_data in cursor:
                     item_dict = dict(item_row_data)
                     try:
-                        item_dict["metadata"] = json.loads(item_dict["metadata"] or '{}')
-                        item_dict["type"] = ContextItemType(item_dict.pop("item_type")) # Rename column to match model
+                        item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                        item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
                         ts_str = item_dict["timestamp"]
                         item_dict["timestamp"] = datetime.fromisoformat(ts_str.replace('Z', '+00:00')) if ts_str else datetime.now(timezone.utc)
                         context_items.append(ContextItem.model_validate(item_dict))
@@ -256,12 +255,11 @@ class SqliteSessionStorage(BaseSessionStorage):
                         logger.warning(f"Skipping invalid context_item data for session {session_id}, item_id {item_dict.get('id')}: {e}")
             session_data["context_items"] = context_items
 
-            # Validate and create ChatSession object
             chat_session = ChatSession.model_validate(session_data)
             logger.debug(f"Session '{session_id}' loaded from SQLite with {len(messages)} messages and {len(context_items)} context items.")
             return chat_session
 
-        except aiosqlite.Error as e:
+        except aiosqlite.Error as e: # type: ignore
             logger.error(f"aiosqlite error retrieving session '{session_id}': {e}")
             raise SessionStorageError(f"Database error retrieving session '{session_id}': {e}")
         except Exception as e:
@@ -292,13 +290,13 @@ class SqliteSessionStorage(BaseSessionStorage):
                 async for row in cursor:
                     data = dict(row)
                     try:
-                        data["metadata"] = json.loads(data["metadata"] or '{}')
+                        data["metadata"] = json.loads(data.get("metadata") or '{}')
                     except json.JSONDecodeError:
                         data["metadata"] = {}
                     session_metadata_list.append(data)
             logger.debug(f"Found {len(session_metadata_list)} sessions in SQLite.")
             return session_metadata_list
-        except aiosqlite.Error as e:
+        except aiosqlite.Error as e: # type: ignore
             logger.error(f"aiosqlite error listing sessions: {e}")
             raise SessionStorageError(f"Database error listing sessions: {e}")
         except Exception as e:
@@ -318,7 +316,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                 return True
             logger.warning(f"Attempted to delete non-existent session '{session_id}' from SQLite.")
             return False
-        except aiosqlite.Error as e:
+        except aiosqlite.Error as e: # type: ignore
             logger.error(f"aiosqlite error deleting session '{session_id}': {e}")
             try: await self._conn.rollback()
             except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
@@ -336,5 +334,5 @@ class SqliteSessionStorage(BaseSessionStorage):
                 await self._conn.close()
                 self._conn = None
                 logger.info("aiosqlite session storage connection closed.")
-            except aiosqlite.Error as e:
+            except aiosqlite.Error as e: # type: ignore
                 logger.error(f"Error closing aiosqlite connection: {e}")

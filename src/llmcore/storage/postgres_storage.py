@@ -19,17 +19,17 @@ from typing import List, Optional, Dict, Any, AsyncIterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     try:
-        import psycopg
-        from psycopg.rows import dict_row
-        from psycopg.types.json import Jsonb
-        from psycopg_pool import AsyncConnectionPool
-        from psycopg.abc import AsyncConnection as PsycopgAsyncConnectionType
+        import psycopg # type: ignore
+        from psycopg.rows import dict_row # type: ignore
+        from psycopg.types.json import Jsonb # type: ignore
+        from psycopg_pool import AsyncConnectionPool # type: ignore
+        from psycopg.abc import AsyncConnection as PsycopgAsyncConnectionType # type: ignore
         psycopg_available = True
     except ImportError:
-        psycopg = None # type: ignore
-        dict_row = None # type: ignore
-        Jsonb = None # type: ignore
-        AsyncConnectionPool = None # type: ignore
+        psycopg = None
+        dict_row = None
+        Jsonb = None
+        AsyncConnectionPool = None
         PsycopgAsyncConnectionType = Any
         psycopg_available = False
 else:
@@ -53,9 +53,9 @@ try:
     pgvector_available = True
 except ImportError:
     pgvector_available = False
-    register_vector = None # type: ignore
+    register_vector = None
 
-from ..models import ChatSession, Message, Role, ContextDocument, ContextItem, ContextItemType # Added ContextItem, ContextItemType
+from ..models import ChatSession, Message, Role, ContextDocument, ContextItem, ContextItemType
 from ..exceptions import SessionStorageError, VectorStorageError, ConfigError
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SESSIONS_TABLE = "llmcore_sessions"
 DEFAULT_MESSAGES_TABLE = "llmcore_messages"
-DEFAULT_CONTEXT_ITEMS_TABLE = "llmcore_context_items" # New default table name
+DEFAULT_CONTEXT_ITEMS_TABLE = "llmcore_context_items"
 DEFAULT_VECTORS_TABLE = "llmcore_vectors"
 DEFAULT_COLLECTIONS_TABLE = "llmcore_vector_collections"
 
@@ -74,10 +74,10 @@ class PostgresSessionStorage(BaseSessionStorage):
     using asynchronous connections via psycopg and connection pooling.
     Includes storage for messages and context_items.
     """
-    _pool: Optional[AsyncConnectionPool] = None
+    _pool: Optional["AsyncConnectionPool"] = None
     _sessions_table: str
     _messages_table: str
-    _context_items_table: str # New table name attribute
+    _context_items_table: str
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
@@ -100,14 +100,14 @@ class PostgresSessionStorage(BaseSessionStorage):
 
         self._sessions_table = config.get("sessions_table_name", DEFAULT_SESSIONS_TABLE)
         self._messages_table = config.get("messages_table_name", DEFAULT_MESSAGES_TABLE)
-        self._context_items_table = config.get("context_items_table_name", DEFAULT_CONTEXT_ITEMS_TABLE) # Get table name from config
+        self._context_items_table = config.get("context_items_table_name", DEFAULT_CONTEXT_ITEMS_TABLE)
         min_pool_size = config.get("min_pool_size", 2)
         max_pool_size = config.get("max_pool_size", 10)
 
         try:
             logger.debug(f"Initializing PostgreSQL connection pool for session storage (min: {min_pool_size}, max: {max_pool_size})...")
             self._pool = AsyncConnectionPool(conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size)
-            async with self._pool.connection() as conn: # Test connection
+            async with self._pool.connection() as conn:
                 async with conn.cursor() as cur: await cur.execute("SELECT 1;")
                 if not await cur.fetchone(): raise SessionStorageError("DB connection test failed.")
                 logger.debug("PostgreSQL connection test successful.")
@@ -127,23 +127,22 @@ class PostgresSessionStorage(BaseSessionStorage):
                         )""")
                     await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{self._messages_table}_session_timestamp ON {self._messages_table} (session_id, timestamp);")
 
-                    # ContextItems table
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._context_items_table} (
-                            id TEXT NOT NULL, -- ID of the context item
+                            id TEXT NOT NULL,
                             session_id TEXT NOT NULL REFERENCES {self._sessions_table}(id) ON DELETE CASCADE,
-                            item_type TEXT NOT NULL, -- ContextItemType enum value
+                            item_type TEXT NOT NULL,
                             source_id TEXT,
                             content TEXT NOT NULL,
                             tokens INTEGER,
                             metadata JSONB,
                             timestamp TIMESTAMPTZ NOT NULL,
-                            PRIMARY KEY (session_id, id) -- Item ID unique within a session
+                            PRIMARY KEY (session_id, id)
                         )""")
                     await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{self._context_items_table}_session_id ON {self._context_items_table} (session_id);")
 
             logger.info(f"PostgreSQL session storage initialized. Tables: '{self._sessions_table}', '{self._messages_table}', '{self._context_items_table}'.")
-        except psycopg.Error as e:
+        except psycopg.Error as e: # type: ignore
             logger.error(f"Failed to initialize PostgreSQL session storage: {e}", exc_info=True)
             if self._pool: await self._pool.close()
             self._pool = None; raise SessionStorageError(f"Could not initialize PostgreSQL session storage: {e}")
@@ -177,13 +176,14 @@ class PostgresSessionStorage(BaseSessionStorage):
 
                     await conn.execute(f"DELETE FROM {self._context_items_table} WHERE session_id = %s", (session.id,))
                     if session.context_items:
-                        context_items_data = [(item.id, session.id, str(item.type.value), item.source_id, item.content,
+                        context_items_data = [(item.id, session.id, str(item.type), # Corrected: Use str(item.type)
+                                               item.source_id, item.content,
                                                item.tokens, Jsonb(item.metadata or {}), item.timestamp)
                                               for item in session.context_items]
                         async with conn.cursor() as cur:
                             await cur.executemany(f"INSERT INTO {self._context_items_table} (id, session_id, item_type, source_id, content, tokens, metadata, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", context_items_data)
             logger.info(f"Session '{session.id}' saved successfully to PostgreSQL.")
-        except psycopg.Error as e:
+        except psycopg.Error as e: # type: ignore
             logger.error(f"PostgreSQL error saving session '{session.id}': {e}", exc_info=True)
             raise SessionStorageError(f"Database error saving session '{session.id}': {e}")
         except Exception as e:
@@ -198,7 +198,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Loading session '{session_id}' from PostgreSQL...")
         try:
             async with self._pool.connection() as conn:
-                conn.row_factory = dict_row
+                conn.row_factory = dict_row # type: ignore
                 async with conn.cursor() as cur:
                     await cur.execute(f"SELECT * FROM {self._sessions_table} WHERE id = %s", (session_id,))
                     session_row = await cur.fetchone()
@@ -206,8 +206,11 @@ class PostgresSessionStorage(BaseSessionStorage):
 
                     session_data = dict(session_row)
                     session_data["metadata"] = session_data.get("metadata") or {}
+                    # Ensure datetimes are timezone-aware UTC
+                    session_data["created_at"] = session_data["created_at"].replace(tzinfo=timezone.utc) if session_data.get("created_at") else datetime.now(timezone.utc)
+                    session_data["updated_at"] = session_data["updated_at"].replace(tzinfo=timezone.utc) if session_data.get("updated_at") else datetime.now(timezone.utc)
 
-                    # Fetch messages
+
                     messages: List[Message] = []
                     await cur.execute(f"SELECT * FROM {self._messages_table} WHERE session_id = %s ORDER BY timestamp ASC", (session_id,))
                     async for msg_row_data in cur:
@@ -215,12 +218,11 @@ class PostgresSessionStorage(BaseSessionStorage):
                         try:
                             msg_dict["metadata"] = msg_dict.get("metadata") or {}
                             msg_dict["role"] = Role(msg_dict["role"])
-                            # TIMESTAMPTZ from postgres is already timezone-aware
+                            msg_dict["timestamp"] = msg_dict["timestamp"].replace(tzinfo=timezone.utc) if msg_dict.get("timestamp") else datetime.now(timezone.utc)
                             messages.append(Message.model_validate(msg_dict))
                         except (ValueError, TypeError) as e: logger.warning(f"Skipping invalid message {msg_dict.get('id')} in session {session_id}: {e}")
                     session_data["messages"] = messages
 
-                    # Fetch context_items
                     context_items: List[ContextItem] = []
                     await cur.execute(f"SELECT * FROM {self._context_items_table} WHERE session_id = %s ORDER BY timestamp ASC", (session_id,))
                     async for item_row_data in cur:
@@ -228,6 +230,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                         try:
                             item_dict["metadata"] = item_dict.get("metadata") or {}
                             item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
+                            item_dict["timestamp"] = item_dict["timestamp"].replace(tzinfo=timezone.utc) if item_dict.get("timestamp") else datetime.now(timezone.utc)
                             context_items.append(ContextItem.model_validate(item_dict))
                         except (ValueError, TypeError) as e: logger.warning(f"Skipping invalid context_item {item_dict.get('id')} in session {session_id}: {e}")
                     session_data["context_items"] = context_items
@@ -235,7 +238,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             chat_session = ChatSession.model_validate(session_data)
             logger.info(f"Session '{session_id}' loaded from PostgreSQL ({len(messages)} msgs, {len(context_items)} ctx items).")
             return chat_session
-        except psycopg.Error as e:
+        except psycopg.Error as e: # type: ignore
             logger.error(f"PostgreSQL error retrieving session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"Database error retrieving session '{session_id}': {e}")
         except Exception as e:
@@ -251,7 +254,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug("Listing session metadata from PostgreSQL...")
         try:
             async with self._pool.connection() as conn:
-                conn.row_factory = dict_row
+                conn.row_factory = dict_row # type: ignore
                 async with conn.cursor() as cur:
                     await cur.execute(f"""
                         SELECT s.id, s.name, s.created_at, s.updated_at, s.metadata,
@@ -266,7 +269,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                         session_metadata_list.append(data)
             logger.info(f"Found {len(session_metadata_list)} sessions in PostgreSQL.")
             return session_metadata_list
-        except psycopg.Error as e:
+        except psycopg.Error as e: # type: ignore
             logger.error(f"PostgreSQL error listing sessions: {e}", exc_info=True)
             raise SessionStorageError(f"Database error listing sessions: {e}")
         except Exception as e:
@@ -279,8 +282,9 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Deleting session '{session_id}' from PostgreSQL...")
         try:
             async with self._pool.connection() as conn:
-                async with conn.transaction():
+                async with conn.transaction(): # Ensures atomicity
                     async with conn.cursor() as cur:
+                        # CASCADE DELETE on foreign keys handles messages and context_items
                         await cur.execute(f"DELETE FROM {self._sessions_table} WHERE id = %s", (session_id,))
                         deleted_count = cur.rowcount
             if deleted_count > 0:
@@ -288,7 +292,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                 return True
             logger.warning(f"Attempted to delete session '{session_id}', but it was not found.")
             return False
-        except psycopg.Error as e:
+        except psycopg.Error as e: # type: ignore
             logger.error(f"PostgreSQL error deleting session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"Database error deleting session '{session_id}': {e}")
         except Exception as e:
@@ -298,7 +302,7 @@ class PostgresSessionStorage(BaseSessionStorage):
     async def close(self) -> None:
         """Closes the PostgreSQL connection pool."""
         if self._pool:
-            pool_ref = self._pool; self._pool = None
+            pool_ref = self._pool; self._pool = None # Avoid race conditions on close
             try:
                 logger.info("Closing PostgreSQL session storage connection pool...")
                 await pool_ref.close()
@@ -310,17 +314,20 @@ class PgVectorStorage(BaseVectorStorage):
     """
     Manages persistence and retrieval of vector embeddings using PostgreSQL
     with the pgvector extension. Requires asynchronous connections via psycopg.
-    (Implementation remains largely the same as previous version, ensure it's compatible
-     with the shared pool if db_url is the same as session storage, or uses its own pool).
-    For simplicity, this example assumes it manages its own pool based on its config.
     """
-    _pool: Optional[AsyncConnectionPool] = None
+    _pool: Optional["AsyncConnectionPool"] = None
     _vectors_table: str
     _collections_table: str
     _default_collection_name: str = "llmcore_default_rag"
-    _default_vector_dimension: int = 384
+    _default_vector_dimension: int = 384 # Default, should be configurable or inferred
 
     async def initialize(self, config: Dict[str, Any]) -> None:
+        """
+        Initialize PgVector storage: set up pool, ensure pgvector extension and tables.
+        Args:
+            config: Keys: 'db_url', 'vectors_table_name' (opt), 'collections_table_name' (opt),
+                    'default_collection' (opt), 'default_vector_dimension' (opt), pool sizes.
+        """
         if not psycopg_available: raise ConfigError("psycopg library not installed for PgVector.")
         if not pgvector_available: raise ConfigError("pgvector library not installed for PgVector.")
 
@@ -330,15 +337,15 @@ class PgVectorStorage(BaseVectorStorage):
         self._vectors_table = config.get("vectors_table_name", DEFAULT_VECTORS_TABLE)
         self._collections_table = config.get("collections_table_name", DEFAULT_COLLECTIONS_TABLE)
         self._default_collection_name = config.get("default_collection", self._default_collection_name)
-        self._default_vector_dimension = config.get("default_vector_dimension", 384)
-        min_pool_size = config.get("min_pool_size", 2)
-        max_pool_size = config.get("max_pool_size", 10)
+        self._default_vector_dimension = int(config.get("default_vector_dimension", 384))
+        min_pool_size = int(config.get("min_pool_size", 2))
+        max_pool_size = int(config.get("max_pool_size", 10))
 
         try:
             logger.debug(f"Initializing PostgreSQL connection pool for PgVector (min: {min_pool_size}, max: {max_pool_size})...")
             self._pool = AsyncConnectionPool(conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size)
             async with self._pool.connection() as conn:
-                if register_vector: await register_vector(conn)
+                if register_vector: await register_vector(conn) # type: ignore
                 else: raise VectorStorageError("pgvector register_vector not available.")
 
                 async with conn.transaction():
@@ -348,28 +355,27 @@ class PgVectorStorage(BaseVectorStorage):
                             id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, vector_dimension INTEGER NOT NULL,
                             description TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);""")
                     await self._ensure_collection_exists(conn, self._default_collection_name, self._default_vector_dimension)
+
+                    # Note: Ensure vector_dimension matches the embeddings you'll store.
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._vectors_table} (
-                            id TEXT NOT NULL, collection_name TEXT NOT NULL REFERENCES {self._collections_table}(name) ON DELETE CASCADE,
-                            content TEXT, embedding VECTOR, metadata JSONB, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                            id TEXT NOT NULL,
+                            collection_name TEXT NOT NULL REFERENCES {self._collections_table}(name) ON DELETE CASCADE,
+                            content TEXT,
+                            embedding VECTOR({self._default_vector_dimension}), -- Specify dimension here or ensure collection specific dimension
+                            metadata JSONB,
+                            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                             PRIMARY KEY (id, collection_name));""")
-                    index_name = f"idx_embedding_cosine_{self._vectors_table}"
-                    # Note: Index creation on vector columns depends on the pgvector version and desired index type.
-                    # The following is a generic example. Specific tuning might be needed.
-                    # Example for HNSW index (pgvector 0.5.0+):
-                    # await conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {self._vectors_table} USING hnsw (embedding vector_cosine_ops);")
-                    # Example for IVFFlat index (older versions or specific needs):
-                    # await conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {self._vectors_table} USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);")
-                    # For simplicity, we'll use a basic GIN index if HNSW/IVFFlat syntax is complex or version-dependent here.
-                    # Or, recommend manual index creation. For now, let's use a common cosine GIN index example.
+
+                    # Example for HNSW index (pgvector 0.5.0+). Adjust index type as needed.
+                    # For cosine distance, use vector_cosine_ops. For L2, vector_l2_ops.
+                    index_name = f"idx_embedding_hnsw_cosine_{self._vectors_table}"
                     await conn.execute(f"""
                         CREATE INDEX IF NOT EXISTS {index_name}
-                        ON {self._vectors_table} USING gin (embedding vector_cosine_ops);
+                        ON {self._vectors_table} USING hnsw (embedding vector_cosine_ops);
                     """)
-
-
-            logger.info(f"PgVector storage initialized. Tables: '{self._vectors_table}', '{self._collections_table}'.")
-        except psycopg.Error as e:
+            logger.info(f"PgVector storage initialized. Tables: '{self._vectors_table}', '{self._collections_table}'. Default dimension: {self._default_vector_dimension}")
+        except psycopg.Error as e: # type: ignore
             logger.error(f"Failed to initialize PgVector storage: {e}", exc_info=True)
             if self._pool: await self._pool.close()
             self._pool = None; raise VectorStorageError(f"Could not initialize PgVector: {e}")
@@ -378,50 +384,62 @@ class PgVectorStorage(BaseVectorStorage):
             if self._pool: await self._pool.close()
             self._pool = None; raise VectorStorageError(f"Unexpected PgVector init error: {e}")
 
-    async def _ensure_collection_exists(self, conn: PsycopgAsyncConnectionType, name: str, dimension: int, description: Optional[str] = None) -> None:
+    async def _ensure_collection_exists(self, conn: "PsycopgAsyncConnectionType", name: str, dimension: int, description: Optional[str] = None) -> None:
         logger.debug(f"Ensuring vector collection '{name}' (dim: {dimension}) exists...")
         async with conn.cursor() as cur:
             await cur.execute(f"INSERT INTO {self._collections_table} (name, vector_dimension, description) VALUES (%s, %s, %s) ON CONFLICT (name) DO NOTHING", (name, dimension, description))
             if cur.rowcount > 0: logger.info(f"Created new vector collection '{name}' dim {dimension}.")
-            else:
+            else: # Collection already exists, verify dimension
                  await cur.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (name,))
                  existing_info = await cur.fetchone()
                  if existing_info and existing_info[0] != dimension:
-                      raise ConfigError(f"Dimension mismatch for collection '{name}'. DB has {existing_info[0]}, requested {dimension}.")
+                      raise ConfigError(f"Dimension mismatch for collection '{name}'. DB has {existing_info[0]}, but current operation/default implies {dimension}.")
 
     async def add_documents(self, documents: List[ContextDocument], collection_name: Optional[str] = None) -> List[str]:
         if not self._pool: raise VectorStorageError("PgVector pool not initialized.")
         if not documents: return []
         if not Jsonb: raise VectorStorageError("psycopg Jsonb adapter not available.")
+
         target_collection = collection_name or self._default_collection_name
         doc_ids_added: List[str] = []
+
         try:
             async with self._pool.connection() as conn:
-                if register_vector: await register_vector(conn)
+                if register_vector: await register_vector(conn) # type: ignore
                 async with conn.transaction():
-                    async with conn.cursor() as cur:
-                        await cur.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
-                        coll_info = await cur.fetchone()
-                        if not coll_info:
-                            first_doc_dim = len(documents[0].embedding) if documents and documents[0].embedding else self._default_vector_dimension
-                            await self._ensure_collection_exists(conn, target_collection, first_doc_dim)
-                            collection_dimension = first_doc_dim
-                        else: collection_dimension = coll_info[0]
+                    # Determine collection dimension
+                    collection_dimension = self._default_vector_dimension
+                    async with conn.cursor() as cur_coll_dim:
+                        await cur_coll_dim.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
+                        coll_info = await cur_coll_dim.fetchone()
+                        if coll_info:
+                            collection_dimension = coll_info[0]
+                        else: # Collection doesn't exist, create it with dimension from first doc
+                            if documents and documents[0].embedding:
+                                collection_dimension = len(documents[0].embedding)
+                                await self._ensure_collection_exists(conn, target_collection, collection_dimension)
+                            else: # No embedding to infer dimension, use default
+                                await self._ensure_collection_exists(conn, target_collection, self._default_vector_dimension)
+                                # collection_dimension remains self._default_vector_dimension
 
                     docs_to_insert = []
                     for doc in documents:
-                        if not doc.id or not doc.embedding or len(doc.embedding) != collection_dimension:
-                            raise VectorStorageError(f"Invalid doc or embedding dimension for doc '{doc.id}' in collection '{target_collection}'. Expected {collection_dimension}.")
+                        if not doc.id or not doc.embedding:
+                            raise VectorStorageError(f"Document '{doc.id}' must have an ID and an embedding.")
+                        if len(doc.embedding) != collection_dimension:
+                            raise VectorStorageError(f"Embedding dimension mismatch for doc '{doc.id}' in collection '{target_collection}'. Expected {collection_dimension}, got {len(doc.embedding)}.")
                         docs_to_insert.append((doc.id, target_collection, doc.content, doc.embedding, Jsonb(doc.metadata or {})))
                         doc_ids_added.append(doc.id)
 
                     if docs_to_insert:
                         async with conn.cursor() as cur:
-                            sql = f"INSERT INTO {self._vectors_table} (id, collection_name, content, embedding, metadata) VALUES (%s, %s, %s, %s::vector, %s) ON CONFLICT (id, collection_name) DO UPDATE SET content = EXCLUDED.content, embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata, created_at = CURRENT_TIMESTAMP"
+                            # Use correct type cast for vector: embedding::vector({dimension}) or just %s if register_vector handles it.
+                            # register_vector should allow direct passing of list[float].
+                            sql = f"INSERT INTO {self._vectors_table} (id, collection_name, content, embedding, metadata) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (id, collection_name) DO UPDATE SET content = EXCLUDED.content, embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata, created_at = CURRENT_TIMESTAMP"
                             await cur.executemany(sql, docs_to_insert)
             logger.info(f"Upserted {len(doc_ids_added)} docs into PgVector collection '{target_collection}'.")
             return doc_ids_added
-        except psycopg.Error as e: logger.error(f"PgVector DB error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error adding docs: {e}")
+        except psycopg.Error as e: logger.error(f"PgVector DB error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error adding docs: {e}") # type: ignore
         except VectorStorageError: raise
         except Exception as e: logger.error(f"Unexpected error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error adding docs: {e}")
 
@@ -433,24 +451,46 @@ class PgVectorStorage(BaseVectorStorage):
         query_dimension = len(query_embedding)
         try:
             async with self._pool.connection() as conn:
-                if register_vector: await register_vector(conn)
-                conn.row_factory = dict_row
-                distance_operator = "<=>" # Cosine distance
-                sql_query = f"SELECT id, content, metadata, embedding {distance_operator} %s::vector({query_dimension}) AS distance FROM {self._vectors_table} WHERE collection_name = %s"
+                if register_vector: await register_vector(conn) # type: ignore
+                conn.row_factory = dict_row # type: ignore
+                distance_operator = "<=>" # Cosine distance for vector_cosine_ops index
+
+                # Get collection dimension
+                collection_dimension = self._default_vector_dimension
+                async with conn.cursor() as cur_coll_dim:
+                    await cur_coll_dim.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
+                    coll_info = await cur_coll_dim.fetchone()
+                    if coll_info: collection_dimension = coll_info[0]
+                    else: raise VectorStorageError(f"Collection '{target_collection}' not found for similarity search.")
+
+                if query_dimension != collection_dimension:
+                    raise VectorStorageError(f"Query embedding dimension ({query_dimension}) does not match collection '{target_collection}' dimension ({collection_dimension}).")
+
+                sql_query = f"SELECT id, content, metadata, embedding {distance_operator} %s AS distance FROM {self._vectors_table} WHERE collection_name = %s"
                 params: List[Any] = [query_embedding, target_collection]
-                if filter_metadata:
-                    filter_clauses = [f"metadata->>%s = %s" for key in filter_metadata.keys()]
-                    sql_query += " AND " + " AND ".join(filter_clauses)
-                    for key, value in filter_metadata.items(): params.extend([key, str(value)])
+
+                if filter_metadata: # Basic JSONB key-value filtering
+                    # Example: metadata @> '{"key": "value"}'::jsonb
+                    # This requires filter_metadata to be a dict that can be dumped to JSON.
+                    # For more complex filtering, direct SQL might be needed or a more advanced ORM.
+                    # This example assumes simple equality checks for top-level keys.
+                    filter_conditions = []
+                    for key, value in filter_metadata.items():
+                        filter_conditions.append(f"metadata->>%s = %s")
+                        params.extend([key, str(value)]) # Cast value to string for text comparison
+                    if filter_conditions:
+                        sql_query += " AND " + " AND ".join(filter_conditions)
+
                 sql_query += f" ORDER BY distance ASC LIMIT %s"
                 params.append(k)
+
                 async with conn.cursor() as cur:
                     await cur.execute(sql_query, tuple(params))
                     async for row in cur:
                         results.append(ContextDocument(id=row["id"], content=row.get("content", ""), metadata=row.get("metadata") or {}, score=float(row["distance"]) if row.get("distance") is not None else None))
             logger.info(f"PgVector search in '{target_collection}' returned {len(results)} docs.")
             return results
-        except psycopg.Error as e: logger.error(f"PgVector DB error searching '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error searching: {e}")
+        except psycopg.Error as e: logger.error(f"PgVector DB error searching '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error searching: {e}") # type: ignore
         except Exception as e: logger.error(f"Unexpected error searching '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error searching: {e}")
 
     async def delete_documents(self, document_ids: List[str], collection_name: Optional[str] = None) -> bool:
@@ -461,11 +501,12 @@ class PgVectorStorage(BaseVectorStorage):
             async with self._pool.connection() as conn:
                 async with conn.transaction():
                     async with conn.cursor() as cur:
-                        await cur.execute(f"DELETE FROM {self._vectors_table} WHERE collection_name = %s AND id = ANY(%s)", (target_collection, document_ids))
+                        # Ensure collection_name is also part of the WHERE clause for safety
+                        await cur.execute(f"DELETE FROM {self._vectors_table} WHERE collection_name = %s AND id = ANY(%s::TEXT[])", (target_collection, document_ids))
                         deleted_count = cur.rowcount
             logger.info(f"PgVector delete affected {deleted_count} rows in '{target_collection}'.")
-            return True
-        except psycopg.Error as e: logger.error(f"PgVector DB error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error deleting: {e}")
+            return True # Returns true if operation attempted, rowcount indicates actual deletions
+        except psycopg.Error as e: logger.error(f"PgVector DB error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error deleting: {e}") # type: ignore
         except Exception as e: logger.error(f"Unexpected error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error deleting: {e}")
 
     async def close(self) -> None:
