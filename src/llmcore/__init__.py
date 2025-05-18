@@ -8,7 +8,7 @@ require LLM-driven chat capabilities, session management, context handling,
 and Retrieval Augmented Generation (RAG).
 """
 
-__version__ = "0.6.0" # Version will be updated as features are added/removed
+__version__ = "0.8.8" # Version will be updated as features are added/removed
 
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
@@ -16,7 +16,9 @@ from .models import (
     Role,
     Message,
     ChatSession,
-    ContextDocument
+    ContextDocument,
+    ContextItem,       # Ensure ContextItem is imported
+    ContextItemType    # Ensure ContextItemType is imported
 )
 from .exceptions import (
     LLMCoreError,
@@ -44,6 +46,8 @@ __all__ = [
     "Message",
     "ChatSession",
     "ContextDocument",
+    "ContextItem",       # Add ContextItem to __all__
+    "ContextItemType",   # Add ContextItemType to __all__
     # Exceptions
     "LLMCoreError",
     "ConfigError",
