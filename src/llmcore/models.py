@@ -123,7 +123,8 @@ class ContextItem(BaseModel):
         source_id: Optional ID linking back to the original source (e.g., file path for user_file,
                    or original RAG document ID for rag_snippet).
         content: The textual content of the item.
-        tokens: Estimated or actual token count for the content.
+        tokens: Estimated or actual token count for the content (potentially after truncation).
+        original_tokens: Optional original token count for the content before any truncation by ContextManager.
         metadata: Additional metadata (e.g., filename for USER_FILE, source for RAG_SNIPPET).
         timestamp: Timestamp of creation or relevance for ordering.
     """
@@ -131,7 +132,8 @@ class ContextItem(BaseModel):
     type: ContextItemType = Field(description="Type of the context item.")
     source_id: Optional[str] = Field(default=None, description="Identifier of the original source (e.g., file path, original RAG doc ID).")
     content: str = Field(description="Textual content of the context item.")
-    tokens: Optional[int] = Field(default=None, description="Token count for the content.")
+    tokens: Optional[int] = Field(default=None, description="Token count for the content, possibly after truncation.")
+    original_tokens: Optional[int] = Field(default=None, description="Original token count before any truncation by ContextManager.") # New field
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata (e.g., filename, RAG source info).")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of item creation/relevance.")
 

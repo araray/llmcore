@@ -16,6 +16,7 @@ config.toml
 tree.txt
 .auto
 #dev-docs/
+docs/references
 grammars/*
 semantiscan/core/chunking/antlr_parsers/*/
 .python-version
