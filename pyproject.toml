@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.8.9"
+version = "0.8.10"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ keywords = ["llm", "ai", "language-model", "chat", "rag", "nlp", "neural", "netw
 dependencies = [
     "confy>=0.2.1",
     "aiohttp>=3.11.0",
+    "aiofiles>=24.0.0",
     "python-dotenv>=1.0.0",
     "typing_extensions>=4.0.0", # For older Python compatibility if needed
     "pydantic>=2.0.0",

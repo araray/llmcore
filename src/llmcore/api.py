@@ -31,6 +31,8 @@ from .providers.base import BaseProvider
 # Embedding
 from .embedding.manager import EmbeddingManager
 
+import aiofiles
+
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
