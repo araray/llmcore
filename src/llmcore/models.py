@@ -75,10 +75,22 @@ class Message(BaseModel):
     def ensure_utc_timestamp(cls, v: Any) -> datetime:
         """Ensure the timestamp is timezone-aware and in UTC if naive."""
         if isinstance(v, str):
-            if v.endswith('Z'):
-                v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
-            else:
-                v_parsed = datetime.fromisoformat(v)
+            try:
+                if v.endswith('Z'):
+                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                else:
+                    v_parsed = datetime.fromisoformat(v)
+            except ValueError:
+                 # Attempt to parse common formats if fromisoformat fails
+                for fmt in ("%Y-%m-%d %H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        v_parsed = datetime.strptime(v, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else: # If all formats fail
+                    raise ValueError(f"Invalid datetime format: {v}")
+
             if v_parsed.tzinfo is None:
                 return v_parsed.replace(tzinfo=timezone.utc)
             return v_parsed.astimezone(timezone.utc)
@@ -86,7 +98,7 @@ class Message(BaseModel):
             if v.tzinfo is None:
                 return v.replace(tzinfo=timezone.utc)
             return v.astimezone(timezone.utc)
-        if v is None:
+        if v is None: # Should not happen with default_factory, but defensive
             return datetime.now(timezone.utc)
         return v
 
@@ -94,40 +106,33 @@ class ContextItemType(str, Enum):
     """
     Enumeration of types for items that can be part of the LLM context pool.
     """
-    HISTORY_MESSAGE = "history_message" # Represents a message from the chat history
+    HISTORY_MESSAGE = "history_message" # Represents a message from the chat history (less used directly as ContextItem)
     USER_TEXT = "user_text"             # User-added arbitrary text snippet
     USER_FILE = "user_file"             # Content from a user-added file
-    RAG_SNIPPET = "rag_snippet"         # A snippet retrieved from RAG
+    RAG_SNIPPET = "rag_snippet"         # A snippet retrieved from RAG and pinned by the user
 
 
 class ContextItem(BaseModel):
     """
     Represents an individual item that can be part of the LLM's context pool.
-    This can include chat history messages, user-provided text, file contents, or RAG snippets.
+    This can include user-provided text, file contents, or RAG snippets pinned by the user.
 
     Attributes:
         id: Unique identifier for this context item.
-        type: The type of context item (e.g., history, user_text, user_file).
-        source_id: Optional ID linking back to the original source (e.g., Message ID for history,
-                   file path for user_file, or RAG document ID for rag_snippet).
+        type: The type of context item (e.g., user_text, user_file, rag_snippet).
+        source_id: Optional ID linking back to the original source (e.g., file path for user_file,
+                   or original RAG document ID for rag_snippet).
         content: The textual content of the item.
         tokens: Estimated or actual token count for the content.
-        enabled: Whether this item is currently enabled by the user to be included in the context.
-                 This is typically managed by the client application (e.g., llmchat REPL).
         metadata: Additional metadata (e.g., filename for USER_FILE, source for RAG_SNIPPET).
         timestamp: Timestamp of creation or relevance for ordering.
     """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the context item.")
     type: ContextItemType = Field(description="Type of the context item.")
-    source_id: Optional[str] = Field(default=None, description="Identifier of the original source (e.g., Message ID, file path).")
+    source_id: Optional[str] = Field(default=None, description="Identifier of the original source (e.g., file path, original RAG doc ID).")
     content: str = Field(description="Textual content of the context item.")
     tokens: Optional[int] = Field(default=None, description="Token count for the content.")
-    # 'enabled' state is more of a client-side concern for constructing the 'active_context_item_ids'
-    # list passed to LLMCore.chat(). LLMCore itself will receive the list of active IDs.
-    # However, storing it here can be useful if LLMCore manages the pool directly for a session.
-    # For now, let's assume the client (llmchat) manages the enabled state and passes IDs.
-    # We can add 'enabled' here if LLMCore takes on more direct pool management.
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata (e.g., filename, RAG source).")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata (e.g., filename, RAG source info).")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of item creation/relevance.")
 
     class Config:
@@ -143,10 +148,21 @@ class ContextItem(BaseModel):
     def ensure_utc_timestamp(cls, v: Any) -> datetime:
         """Ensure the timestamp is timezone-aware and in UTC if naive."""
         if isinstance(v, str):
-            if v.endswith('Z'):
-                v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
-            else:
-                v_parsed = datetime.fromisoformat(v)
+            try:
+                if v.endswith('Z'):
+                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                else:
+                    v_parsed = datetime.fromisoformat(v)
+            except ValueError:
+                for fmt in ("%Y-%m-%d %H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        v_parsed = datetime.strptime(v, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else: # If all formats fail
+                    raise ValueError(f"Invalid datetime format: {v}")
+
             if v_parsed.tzinfo is None:
                 return v_parsed.replace(tzinfo=timezone.utc)
             return v_parsed.astimezone(timezone.utc)
@@ -166,13 +182,7 @@ class ChatSession(BaseModel):
         id: Unique identifier for the chat session.
         name: Optional human-readable name for the session.
         messages: List of `Message` objects (chat history).
-        context_items: List of user-added `ContextItem` objects (e.g., text snippets, files).
-                       These are items explicitly added by the user to the session's context pool,
-                       separate from the direct chat history or RAG results from a query.
-        active_context_item_ids: List of IDs of `ContextItem`s (from `context_items`) that are
-                                 currently marked as "active" or "enabled" by the user to be
-                                 considered for the next LLM interaction. This is primarily managed
-                                 by the client application (like llmchat).
+        context_items: List of user-added `ContextItem` objects (e.g., text snippets, files, pinned RAG snippets).
         created_at: Timestamp of session creation.
         updated_at: Timestamp of last session modification.
         metadata: Additional session metadata.
@@ -181,12 +191,6 @@ class ChatSession(BaseModel):
     name: Optional[str] = Field(default=None, description="Optional human-readable name for the session.")
     messages: List[Message] = Field(default_factory=list, description="List of messages in the conversation, ordered chronologically.")
     context_items: List[ContextItem] = Field(default_factory=list, description="List of user-added items to the context pool for this session.")
-    # active_context_item_ids is more of a transient state for a given llm.chat() call,
-    # typically managed by the client. Storing it persistently on the session might lead to
-    # staleness if the client's view of "active" changes without saving the session.
-    # It's better passed into llm.chat() by the client.
-    # Let's remove it from persistent ChatSession model for now.
-    # active_context_item_ids: List[str] = Field(default_factory=list, description="IDs of context_items currently enabled by the user.")
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the session was created (UTC).")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the session was last updated (UTC).")
@@ -204,10 +208,20 @@ class ChatSession(BaseModel):
     def ensure_utc_timestamps(cls, v: Any) -> datetime:
         """Ensure created_at and updated_at timestamps are timezone-aware and in UTC."""
         if isinstance(v, str):
-            if v.endswith('Z'):
-                v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
-            else:
-                v_parsed = datetime.fromisoformat(v)
+            try:
+                if v.endswith('Z'):
+                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                else:
+                    v_parsed = datetime.fromisoformat(v)
+            except ValueError:
+                for fmt in ("%Y-%m-%d %H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        v_parsed = datetime.strptime(v, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else: # If all formats fail
+                    raise ValueError(f"Invalid datetime format: {v}")
             if v_parsed.tzinfo is None:
                 return v_parsed.replace(tzinfo=timezone.utc)
             return v_parsed.astimezone(timezone.utc)
@@ -244,10 +258,10 @@ class ChatSession(BaseModel):
     def add_context_item(self, item: ContextItem) -> None:
         """Adds a ContextItem to the session's context pool and updates timestamp."""
         # Ensure item ID is unique within this session's context_items
-        if any(ci.id == item.id for ci in self.context_items):
-            # Overwrite if ID exists, or raise error - for now, let's overwrite
-            self.context_items = [ci for ci in self.context_items if ci.id != item.id]
+        # Remove existing item with the same ID before adding the new one (effectively an upsert)
+        self.context_items = [ci for ci in self.context_items if ci.id != item.id]
         self.context_items.append(item)
+        self.context_items.sort(key=lambda x: x.timestamp) # Keep them sorted if desired
         self.updated_at = datetime.now(timezone.utc)
 
     def remove_context_item(self, item_id: str) -> bool:
