@@ -182,10 +182,24 @@ log_level = "INFO"
   reserved_response_tokens = 500
 
   # Strategy for handling context overflow when total tokens (history + RAG + prompt) exceed the limit.
-  # 'history': Truncate older history messages first.
-  # 'rag': Truncate less relevant RAG documents first.
-  truncation_priority = "history"
+  # The order defines which type of context is truncated first.
+  # Options: 'history', 'rag', 'user_items'.
+  # Example: "history,rag,user_items" means history is truncated first, then RAG, then user-added items.
+  truncation_priority = "history,rag,user_items"
 
   # Minimum number of history messages (excluding system message) to try and keep during truncation.
   # This helps maintain some conversational flow even when context is tight.
   minimum_history_messages = 1
+
+  # Number of most recent user messages (and their preceding assistant messages) to prioritize keeping in context.
+  # Set to 0 to disable this specific retention and rely solely on last_n_tokens/last_n_messages for history.
+  user_retained_messages_count = 5
+
+  # If true, user-added context items (from /context add) are prioritized over RAG results
+  # when initially filling the context budget (before overall truncation).
+  prioritize_user_context_items = true
+
+  # Maximum character length for any single user-added context item (text, file, pinned RAG).
+  # Items exceeding this will be truncated by the ContextManager.
+  # Approximately 10,000 tokens (1 token ~ 4 chars).
+  max_chars_per_user_item = 40000
