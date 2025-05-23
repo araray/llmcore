@@ -16,8 +16,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 try:
     import anthropic
     from anthropic import AnthropicError, AsyncAnthropic
-    from anthropic.types import (MessageParam,  # For constructing messages
-                                 TextBlockParam)
+    from anthropic.types import MessageParam  # For constructing messages
+    from anthropic.types import TextBlockParam
     anthropic_available = True
 except ImportError:
     anthropic_available = False
@@ -30,8 +30,8 @@ except ImportError:
 from ..exceptions import ConfigError, ProviderError  # MCPError removed
 from ..models import Message
 from ..models import Role as LLMCoreRole
-from .base import (BaseProvider,  # ContextPayload is List[Message]
-                   ContextPayload)
+from .base import BaseProvider  # ContextPayload is List[Message]
+from .base import ContextPayload
 
 logger = logging.getLogger(__name__)
 

@@ -15,8 +15,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 # Use the official ollama library
 try:
     import ollama
-    from ollama import (AsyncClient,  # ChatResponse for type checking
-                        ChatResponse, ResponseError)
+    from ollama import AsyncClient  # ChatResponse for type checking
+    from ollama import ChatResponse, ResponseError
     ollama_available = True
 except ImportError:
     ollama_available = False
