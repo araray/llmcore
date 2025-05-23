@@ -12,7 +12,7 @@ default_provider = "ollama"
 # Default embedding model for RAG (Retrieval Augmented Generation).
 # This can be a local path to a sentence-transformers model (e.g., "all-MiniLM-L6-v2")
 # or an identifier for a service-based model (e.g., "openai:text-embedding-ada-002", "google:models/embedding-001").
-default_embedding_model = "all-MiniLM-L6-v2" # A common sentence-transformer model
+default_embedding_model = "all-MiniLM-L6-v2" # A common sentence-transformer model [cite: 61]
 
 # Log level for the library.
 # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
@@ -22,8 +22,8 @@ log_level = "INFO"
 # --- Provider Configurations ---
 # Each provider instance is defined in its own section under [providers].
 # To use a specific base provider class (like OpenAIProvider), specify `type = "openai"`.
-# API keys are best set via environment variables (e.g., LLMCORE_PROVIDERS_OPENAI__API_KEY for the default OpenAI instance,
-# or LLMCORE_PROVIDERS__MY_CUSTOM_OPENAI_BACKEND__API_KEY for a custom one).
+# API keys are best set via environment variables (e.g., LLMCORE_PROVIDERS_OPENAI_API_KEY for the default OpenAI instance,
+# or LLMCORE_PROVIDERS_MY_CUSTOM_OPENAI_BACKEND_API_KEY for a custom one).
 # However, they can also be set directly in these configuration blocks.
 [providers]
 
@@ -33,7 +33,7 @@ log_level = "INFO"
   # API Key: Can be set here, or via LLMCORE_PROVIDERS_OPENAI_API_KEY, or OPENAI_API_KEY.
   # api_key = "sk-your_openai_api_key_here"
   # base_url = "https://api.openai.com/v1" # Default OpenAI URL, can be overridden for proxies
-  default_model = "gpt-4o" # Updated default
+  default_model = "gpt-4o" # Updated default [cite: 64]
   timeout = 60 # Timeout in seconds for API calls
   # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
 
@@ -53,157 +53,249 @@ log_level = "INFO"
   [providers.anthropic]
   # API Key: Can be set here, or via LLMCORE_PROVIDERS_ANTHROPIC_API_KEY, or ANTHROPIC_API_KEY.
   # api_key = "sk-ant-your_anthropic_api_key_here"
-  default_model = "claude-3-opus-20240229"
-# fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
-  timeout = 60 # Timeout in seconds for API calls
+  default_model = "claude-3-opus-20240229" # [cite: 65]
+  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
+  timeout = 60 # Timeout in seconds for API calls [cite: 65]
 
   [providers.ollama]
-  # host = "http://localhost:11434" # Hostname/IP for the ollama library client (library default is usually fine)
+  # host = "http://localhost:11434" # Hostname/IP for the ollama library client (library default is usually fine) [cite: 65]
   # base_url = "http://localhost:11434/api" # Base URL for direct API calls if provider used raw HTTP.
-                                          # The official 'ollama' library uses 'host'.
-  default_model = "llama3" # Updated default
-  timeout = 120 # Timeout in seconds for API calls
+  # The official 'ollama' library uses 'host'.
+  default_model = "llama3" # Updated default [cite: 65]
+  timeout = 120 # Timeout in seconds for API calls [cite: 65]
   # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
   # Optional: Specify tokenizer for Ollama models if default (tiktoken_cl100k_base) is not suitable.
   # Accurate token counting for Ollama can be tricky. Options:
   # 'tiktoken_cl100k_base': (Default) Good general-purpose tokenizer (used by GPT-3.5/4).
   # 'tiktoken_p50k_base': Another tiktoken option.
   # 'char_div_4': A very rough estimate (characters / 4). Use if tiktoken is problematic.
-  # tokenizer = "tiktoken_cl100k_base"
+  # tokenizer = "tiktoken_cl100k_base" [cite: 68]
 
   [providers.gemini]
   # API Key: Can be set here, or via LLMCORE_PROVIDERS_GEMINI__API_KEY, or GOOGLE_API_KEY.
   # api_key = "your_google_ai_api_key_here"
   # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
-  default_model = "gemini-1.5-pro-latest"
-  timeout = 60 # Timeout in seconds for API calls
+  default_model = "gemini-1.5-pro-latest" # [cite: 68]
+  timeout = 60 # Timeout in seconds for API calls [cite: 68]
   # Add other Gemini specific settings if needed (e.g., safety settings).
-  # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" }
+  # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" } [cite: 69]
 
 
 # --- Storage Configurations ---
 # Defines where and how session history and vector embeddings are stored.
-[storage]
+[storage] # [cite: 70]
 
   # Session storage configuration: for conversation history.
-  [storage.session]
+  [storage.session] # [cite: 70]
   # Type: 'json', 'sqlite', 'postgres'
-  type = "sqlite"
+  type = "sqlite" # [cite: 70]
 
   # Path for file-based storage (json, sqlite).
   # '~' will be expanded to the user's home directory.
-  path = "~/.llmcore/sessions.db" # For SQLite, this is the DB file. For JSON, this is the directory.
-
+  path = "~/.llmcore/sessions.db" # For SQLite, this is the DB file. For JSON, this is the directory. [cite: 72]
   # Connection URL for database storage (e.g., postgres).
   # Recommended to use environment variable: LLMCORE_STORAGE_SESSION_DB_URL
   # Example: db_url = "postgresql://user:pass@host:port/dbname"
-  db_url = ""
+  db_url = "" # [cite: 73]
 
   # Optional table name for database storage.
-  # table_name = "llmcore_sessions"
+  # table_name = "llmcore_sessions" [cite: 74]
 
   # Vector storage configuration: for RAG documents and embeddings.
-  [storage.vector]
+  [storage.vector] # [cite: 75]
   # Type: 'chromadb', 'pgvector' (PostgreSQL with pgvector extension)
-  type = "chromadb"
+  type = "chromadb" # [cite: 75]
 
   # Default collection name used for RAG if not specified in API calls.
   # Collections in vector stores are reusable across different sessions or applications.
-  default_collection = "llmcore_default_rag"
+  default_collection = "llmcore_default_rag" # [cite: 77]
 
   # Path for file-based vector stores (e.g., chromadb persistent client).
   # '~' will be expanded to the user's home directory.
-  path = "~/.llmcore/chroma_db"
+  path = "~/.llmcore/chroma_db" # [cite: 79]
 
   # Connection URL for database vector stores (e.g., pgvector).
   # Recommended to use environment variable: LLMCORE_STORAGE_VECTOR_DB_URL
   # Example: db_url = "postgresql://user:pass@host:port/dbname"
-  db_url = ""
+  db_url = "" # [cite: 80]
 
   # Optional table name for database vector storage.
-  # table_name = "llmcore_vectors"
+  # table_name = "llmcore_vectors" [cite: 81]
 
 
 # --- Embedding Model Configurations ---
 # Configures embedding models used for RAG.
-[embedding]
+[embedding] # [cite: 82]
   # Configuration for specific embedding models if they require special setup,
-  # like API keys for service-based ones. The 'llmcore.default_embedding_model'
+  # like API keys for service-based ones.
+  # The 'llmcore.default_embedding_model'
   # setting determines which model is used by default.
   # If 'llmcore.default_embedding_model' is like "openai:text-embedding-3-small",
   # then settings from [embedding.openai] might be used.
-
-  [embedding.openai]
+  [embedding.openai] # [cite: 85]
   # API Key for OpenAI embeddings (if different from chat or if using only embeddings).
   # Recommended to use environment variable: LLMCORE_EMBEDDING_OPENAI_API_KEY
   # If empty and providers.openai.api_key is set, that might be reused by the provider logic.
-  # api_key = ""
+  # api_key = "" [cite: 87]
   # Default OpenAI model for embeddings.
-  default_model = "text-embedding-3-small" # Example, check latest models
+  default_model = "text-embedding-3-small" # Example, check latest models [cite: 88]
   # base_url = "..." # Can also be set if using a proxy for embeddings
 
-  [embedding.google]
+  [embedding.google] # [cite: 88]
   # API Key for Google AI (Gemini) embeddings.
   # Recommended to use environment variable: LLMCORE_EMBEDDING_GOOGLE_API_KEY
-  # api_key = ""
+  # api_key = "" [cite: 89]
   # Default Google AI model for embeddings.
-  default_model = "models/embedding-001" # Example, check latest models
+  default_model = "models/embedding-001" # Example, check latest models [cite: 90]
 
-  [embedding.ollama]
+  [embedding.ollama] # [cite: 1357]
   # Host for the Ollama server if different from the main Ollama provider host for chat.
-  # host = "http://localhost:11434"
+  # host = "http://localhost:11434" [cite: 1358]
   # Default Ollama model for embeddings (e.g., "mxbai-embed-large", "nomic-embed-text")
   # Ensure this model is pulled in your Ollama instance.
-  default_model = "mxbai-embed-large"
-  # timeout = 60
+  default_model = "mxbai-embed-large" # [cite: 1359]
+  # timeout = 60 [cite: 1359]
 
   # For local sentence-transformers, the model name/path is usually specified directly
   # in 'llmcore.default_embedding_model' (e.g., "all-MiniLM-L6-v2").
   # This section can provide additional parameters if needed by SentenceTransformerEmbedding.
-  [embedding.sentence_transformer]
-  # device = "cpu" # Example: "cuda", "cpu", "mps" (device to run model on)
-  # model_name_or_path = "all-MiniLM-L6-v2" # This is usually taken from llmcore.default_embedding_model
+  [embedding.sentence_transformer] # [cite: 1361]
+  # device = "cpu" # Example: "cuda", "cpu", "mps" (device to run model on) [cite: 1361]
+  # model_name_or_path = "all-MiniLM-L6-v2" # This is usually taken from llmcore.default_embedding_model [cite: 1361]
 
 
 # --- Context Management Configurations ---
 # Defines strategies for how context is built and managed for LLM prompts.
-[context_management]
+[context_management] # [cite: 93]
   # Default number of documents to retrieve for RAG.
-  rag_retrieval_k = 3
+  rag_retrieval_k = 3 # [cite: 94]
 
   # Strategy for combining RAG results with conversation history.
   # 'prepend_system': RAG context is added as part of a system message or preamble.
-  # 'prepend_user': RAG context is added before the latest user message. (Not fully implemented yet)
-  rag_combination_strategy = "prepend_system"
+  # 'prepend_user': RAG context is added before the latest user message.
+  # (Not fully implemented yet)
+  rag_combination_strategy = "prepend_system" # [cite: 97]
 
   # Strategy for selecting history messages to fit within the token limit.
   # 'last_n_tokens': Prioritizes keeping the most recent messages that fit the token budget.
   # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits - Not implemented yet).
-  history_selection_strategy = "last_n_tokens"
+  history_selection_strategy = "last_n_tokens" # [cite: 100]
 
   # Number of tokens to reserve for the LLM's response generation.
   # This ensures there's space for the model to actually write its answer.
-  reserved_response_tokens = 500
+  reserved_response_tokens = 500 # [cite: 102]
 
   # Strategy for handling context overflow when total tokens (history + RAG + prompt) exceed the limit.
   # The order defines which type of context is truncated first.
   # Options: 'history', 'rag', 'user_items'.
   # Example: "history,rag,user_items" means history is truncated first, then RAG, then user-added items.
-  truncation_priority = "history,rag,user_items"
+  truncation_priority = "history,rag,user_items" # [cite: 1374]
 
   # Minimum number of history messages (excluding system message) to try and keep during truncation.
   # This helps maintain some conversational flow even when context is tight.
-  minimum_history_messages = 1
+  minimum_history_messages = 1 # [cite: 106]
 
   # Number of most recent user messages (and their preceding assistant messages) to prioritize keeping in context.
   # Set to 0 to disable this specific retention and rely solely on last_n_tokens/last_n_messages for history.
-  user_retained_messages_count = 5
+  user_retained_messages_count = 5 # [cite: 1378]
 
   # If true, user-added context items (from /context add) are prioritized over RAG results
   # when initially filling the context budget (before overall truncation).
-  prioritize_user_context_items = true
+  prioritize_user_context_items = true # [cite: 1379]
 
   # Maximum character length for any single user-added context item (text, file, pinned RAG).
   # Items exceeding this will be truncated by the ContextManager.
   # Approximately 10,000 tokens (1 token ~ 4 chars).
-  max_chars_per_user_item = 40000
+  max_chars_per_user_item = 40000 # [cite: 1381]
+
+
+# --- Apykatu Integration Settings ---
+# This section configures how LLMCore instructs the apykatu library
+# when invoking it for ingestion tasks (e.g., via llmchat's /ingest command).
+# These settings will be passed to apykatu, overriding apykatu's own defaults.
+[apykatu]
+
+  # Note: apykatu.database.path and apykatu.database.collection_name will primarily be
+  # determined by llmchat's /ingest command arguments and LLMCore's main `storage.vector.path`.
+  # The values here can serve as defaults if not specified by the /ingest command.
+  [apykatu.database]
+  type = "chromadb" # Default type for apykatu's vector store interaction
+  # collection_name = "apykatu_default_via_llmcore" # Default collection if /ingest doesn't provide one
+
+  # Embedding model configuration specific to apykatu's ingestion process.
+  # This allows apykatu to use a specific embedding model for ingestion,
+  # which might differ from LLMCore's `default_embedding_model` used for other RAG.
+  [apykatu.embeddings]
+  # default_model should match a key under [apykatu.embeddings.models]
+  default_model = "apykatu_default_st_embedder"
+
+    [apykatu.embeddings.models]
+      [apykatu.embeddings.models.apykatu_default_st_embedder]
+      # Settings for apykatu's default sentence-transformer model
+      provider = "sentence-transformers"
+      model_name = "all-MiniLM-L6-v2"
+      device = "cpu"
+      # max_request_tokens = 30000 # Optional, apykatu's internal default is high
+
+      # Example: Configuring an Ollama model for apykatu ingestion
+      # [apykatu.embeddings.models.apykatu_ollama_embedder]
+      # provider = "ollama"
+      # model_name = "nomic-embed-text"
+      # base_url = "http://localhost:11434" # Ensure Ollama is running here
+      # max_request_tokens = 2048 # Example, as nomic has smaller window
+
+  # Apykatu's chunking configuration.
+  # Mirrors apykatu.config.models.ChunkingConfig structure.
+  [apykatu.chunking]
+  default_strategy = "RecursiveSplitter"
+
+    [apykatu.chunking.strategies]
+      [apykatu.chunking.strategies.python_code]
+      extensions = [".py", ".pyw"]
+      grammar = "Python3"
+      entry_points = ["classDef", "functionDef", "decorated"]
+
+      [apykatu.chunking.strategies.yaml_config]
+      extensions = [".yaml", ".yml"]
+      parser = "PyYAML"
+
+      [apykatu.chunking.strategies.markdown_docs]
+      extensions = [".md", ".mkd", ".mdx"]
+      method = "RecursiveSplitter"
+
+    [apykatu.chunking.parameters]
+      [apykatu.chunking.parameters.RecursiveSplitter]
+      chunk_size = 800
+      chunk_overlap = 100
+      [apykatu.chunking.parameters.LineSplitter]
+      lines_per_chunk = 50
+      [apykatu.chunking.parameters.SubChunker] # For oversized chunks
+      chunk_size = 500
+      chunk_overlap = 50
+
+  # Apykatu's file discovery settings.
+  [apykatu.discovery]
+  use_gitignore = true
+  excluded_dirs = ["__pycache__", "node_modules", "build", "dist", "venv", ".venv", "target", ".git"]
+  excluded_files = [".DS_Store", "*.lock", "*.bkp"]
+
+  # Apykatu's Git-specific ingestion settings.
+  [apykatu.ingestion.git]
+  default_ref = "main"
+  enable_commit_llm_analysis = false
+  # commit_llm_provider_key: Refers to a provider name defined in LLMCore's [providers.<name>]
+  # commit_llm_provider_key = "ollama" # Example: use the 'ollama' provider defined above
+
+  # Apykatu's Khipu export hints.
+  [apykatu.khipu_export_settings]
+  item_type_mapping = { "Python3.functionDef" = "python_function_code_snippet", "Python3.classDef" = "python_class_code_snippet" }
+  default_hint = "text_chunk"
+
+  # Apykatu's optional SQLite metadata store settings.
+  # If enabled, path should be managed carefully.
+  [apykatu.metadata_store]
+  enable = false # Default to false; can be overridden by user
+  type = "sqlite"
+  # path = "~/.llmcore/apykatu_metadata.sqlite" # Example path if enabled
+  # table_name = "chunk_metadata_apykatu"
+  # processed_refs_log_table_name = "processed_refs_log_apykatu"
