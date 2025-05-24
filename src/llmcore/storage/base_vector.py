@@ -142,6 +142,34 @@ class BaseVectorStorage(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    async def get_collection_metadata(
+        self,
+        collection_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve the metadata associated with a specific collection.
+
+        This metadata is expected to include details about the embedding model
+        used for the collection, such as 'embedding_model_provider',
+        'embedding_model_name', and 'embedding_dimension', if stored by the
+        ingestion process (e.g., by Apykatu).
+
+        Args:
+            collection_name: The name of the collection whose metadata is to be retrieved.
+                             If None, the implementation might use a default collection
+                             defined in its configuration.
+
+        Returns:
+            A dictionary containing the collection's metadata if the collection
+            exists and metadata is available, otherwise None.
+
+        Raises:
+            VectorStorageError: If retrieving collection metadata fails.
+            ConfigError: If the specified collection is invalid or cannot be accessed.
+        """
+        pass
+
     # --- Optional Collection Management Methods ---
     # These might be useful but are not strictly required by the core RAG flow
 
