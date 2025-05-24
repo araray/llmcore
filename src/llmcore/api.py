@@ -79,7 +79,7 @@ class LLMCore:
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
-        (Implementation unchanged)
+        (Implementation unchanged from previous versions, focused on loading config and managers)
         """
         instance = cls()
         logger.info("Initializing LLMCore asynchronously...")
@@ -91,12 +91,12 @@ class LLMCore:
 
             default_config_dict = {}
             try:
-                if hasattr(importlib.resources, 'files'):
+                if hasattr(importlib.resources, 'files'): # Python 3.9+
                     default_config_path_obj = importlib.resources.files('llmcore.config').joinpath('default_config.toml')
                     with default_config_path_obj.open('rb') as f:
                         default_config_dict = tomllib.load(f)
-                else:
-                    default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8')
+                else: # Fallback for Python 3.8 (importlib.resources.read_text)
+                    default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8') # type: ignore
                     default_config_dict = tomllib.loads(default_config_content) # type: ignore
             except Exception as e:
                  raise ConfigError(f"Failed to load default configuration: {e}")
@@ -133,7 +133,7 @@ class LLMCore:
         except Exception as e: raise LLMCoreError(f"SessionManager initialization failed: {e}")
         try:
             instance._embedding_manager = EmbeddingManager(instance.config)
-            await instance._embedding_manager.initialize_embedding_model()
+            await instance._embedding_manager.initialize_embedding_model() # Ensure default model is ready
             logger.info("EmbeddingManager initialized.")
         except (ConfigError, EmbeddingError) as e:
              logger.error(f"Failed to initialize EmbeddingManager: {e}", exc_info=True); raise
@@ -154,7 +154,7 @@ class LLMCore:
     async def chat(
         self,
         message: str,
-        *,
+        *, # Force subsequent arguments to be keyword-only
         session_id: Optional[str] = None,
         system_message: Optional[str] = None,
         provider_name: Optional[str] = None,
@@ -162,24 +162,57 @@ class LLMCore:
         stream: bool = False,
         save_session: bool = True,
         active_context_item_ids: Optional[List[str]] = None,
+        explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None, # New parameter
         enable_rag: bool = False,
         rag_retrieval_k: Optional[int] = None,
         rag_collection_name: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None, # Added for Phase 3
-        prompt_template_values: Optional[Dict[str, str]] = None, # Added for Phase 3
+        rag_metadata_filter: Optional[Dict[str, Any]] = None,
+        prompt_template_values: Optional[Dict[str, str]] = None,
         **provider_kwargs
     ) -> Union[str, AsyncGenerator[str, None]]:
         """
-        Sends a message to the LLM, managing history, user-added context, and RAG.
-        (Docstring updated to include new RAG/Prompt params)
+        Sends a message to the LLM, managing history, user-added context, RAG, and explicitly staged items.
+
         Args:
-            ...
+            message: The user's input message content.
+            session_id: ID of the session to use/continue. If None, a temporary
+                        (non-persistent) session is used for this call only.
+            system_message: An optional system message for the LLM. Behavior when
+                            provided for an existing session depends on context strategy.
+            provider_name: Override the default provider specified in the configuration.
+            model_name: Override the default model for the selected provider.
+            stream: If True, returns an async generator yielding response text chunks (str).
+                    If False (default), returns the complete response content as a string.
+            save_session: If True (default) and session_id is provided, the
+                          conversation turn (user message + assistant response) is
+                          saved to the persistent session storage. Ignored if
+                          session_id is None.
+            active_context_item_ids: A list of IDs for user-added context items (from the
+                                     session's context pool, e.g., "workspace" items)
+                                     to be considered for inclusion in the LLM's context.
+            explicitly_staged_items: A list of `Message` or `ContextItem` objects
+                                     that are explicitly chosen to be included in the
+                                     context, potentially overriding or supplementing
+                                     other context sources like history or RAG.
+            enable_rag: If True, enables Retrieval Augmented Generation by searching
+                        the vector store for context relevant to the message.
+            rag_retrieval_k: Number of documents to retrieve for RAG. Overrides the
+                             default from configuration if provided.
+            rag_collection_name: Name of the vector store collection to use for RAG.
+                                 Overrides the default from configuration if provided.
             rag_metadata_filter: Optional dictionary for metadata filtering in RAG.
             prompt_template_values: Optional dictionary of values for custom prompt template placeholders.
-            ...
-        (Implementation of chat method, _stream_response_wrapper, _extract_delta_content,
-         _extract_full_content remains largely the same but would now use
-         rag_metadata_filter and prompt_template_values when calling ContextManager)
+            **provider_kwargs: Additional keyword arguments passed directly to the
+                               selected provider's chat completion API call
+                               (e.g., temperature=0.7, max_tokens=100).
+
+        Returns:
+            If stream=False: The full response content as a string.
+            If stream=True: An asynchronous generator yielding response text chunks (str).
+
+        Raises:
+            ProviderError, SessionNotFoundError, ConfigError, VectorStorageError,
+            EmbeddingError, ContextLengthError, LLMCoreError.
         """
         active_provider = self._provider_manager.get_provider(provider_name)
         provider_actual_name = active_provider.get_name()
@@ -191,13 +224,14 @@ class LLMCore:
             f"LLMCore.chat: session='{session_id}', save_session={save_session}, provider='{provider_actual_name}', "
             f"model='{target_model}', stream={stream}, RAG={enable_rag}, "
             f"RAG_filter={rag_metadata_filter}, prompt_values_count={len(prompt_template_values) if prompt_template_values else 0}, "
-            f"active_user_items_count={len(active_context_item_ids) if active_context_item_ids else 0}"
+            f"active_user_items_count={len(active_context_item_ids) if active_context_item_ids else 0}, "
+            f"explicitly_staged_items_count={len(explicitly_staged_items) if explicitly_staged_items else 0}" # Log new param
         )
 
         try:
             chat_session: ChatSession
             if session_id:
-                if not save_session:
+                if not save_session: # Transient session logic
                     if session_id in self._transient_sessions_cache:
                         chat_session = self._transient_sessions_cache[session_id]
                         logger.debug(f"Using transient session '{session_id}' from cache.")
@@ -213,9 +247,9 @@ class LLMCore:
                             chat_session.add_message(message_content=system_message, role=Role.SYSTEM)
                         self._transient_sessions_cache[session_id] = chat_session
                         logger.debug(f"Created new transient session '{session_id}' and cached it.")
-                else:
+                else: # Persistent session
                     chat_session = await self._session_manager.load_or_create_session(session_id, system_message)
-            else:
+            else: # Stateless call
                 chat_session = ChatSession(id=f"temp_stateless_{uuid.uuid4().hex[:8]}")
                 if system_message:
                     chat_session.add_message(message_content=system_message, role=Role.SYSTEM)
@@ -228,15 +262,16 @@ class LLMCore:
                 provider_name=provider_actual_name,
                 model_name=target_model,
                 active_context_item_ids=active_context_item_ids,
+                explicitly_staged_items=explicitly_staged_items, # Pass new parameter
                 rag_enabled=enable_rag,
                 rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
-                rag_metadata_filter=rag_metadata_filter, # Pass through
-                prompt_template_values=prompt_template_values # Pass through
+                rag_metadata_filter=rag_metadata_filter,
+                prompt_template_values=prompt_template_values
             )
             logger.info(f"Prepared context with {len(context_payload)} messages ({prepared_context_token_count} tokens) for model '{target_model}'.")
 
-            if session_id:
+            if session_id: # Cache interaction info for both transient and persistent sessions by ID
                 self._transient_last_interaction_info_cache[session_id] = {
                     "token_count": prepared_context_token_count,
                     "rag_documents_used": rag_docs_used_this_turn or []
@@ -253,13 +288,13 @@ class LLMCore:
                 return self._stream_response_wrapper(
                     provider_stream, active_provider, chat_session, (save_session and session_id is not None)
                 )
-            else:
+            else: # Non-streaming
                 if not isinstance(response_data_or_generator, dict):
                      logger.error(f"Expected dict response for non-streaming chat, got {type(response_data_or_generator).__name__}")
                      raise ProviderError(provider_actual_name, "Invalid response format (expected dict).")
                 response_data = response_data_or_generator
                 full_response_content = self._extract_full_content(response_data, active_provider)
-                if full_response_content is None:
+                if full_response_content is None: # If content extraction failed
                      full_response_content = f"Response received, but content extraction failed. Data: {str(response_data)[:200]}..."
                 else:
                      logger.debug(f"Received full response content (length: {len(full_response_content)}).")
@@ -267,7 +302,7 @@ class LLMCore:
                 assistant_msg = chat_session.add_message(message_content=full_response_content, role=Role.ASSISTANT)
                 logger.debug(f"Assistant message '{assistant_msg.id}' added to session '{chat_session.id}'.")
 
-                if save_session and session_id:
+                if save_session and session_id: # Only save if session_id was provided and save_session is true
                     await self._session_manager.save_session(chat_session)
                 return full_response_content
 
@@ -275,7 +310,7 @@ class LLMCore:
                 ConfigError, EmbeddingError, VectorStorageError) as e:
              logger.error(f"Chat failed: {e}")
              if session_id and not save_session and session_id in self._transient_sessions_cache:
-                 del self._transient_sessions_cache[session_id]
+                 del self._transient_sessions_cache[session_id] # Clean up failed transient session
                  logger.debug(f"Cleared failed transient session '{session_id}' from cache.")
              raise
         except Exception as e:
@@ -290,11 +325,11 @@ class LLMCore:
         provider_stream: AsyncGenerator[Any, None],
         provider: BaseProvider,
         session: ChatSession,
-        do_save_session: bool
+        do_save_session: bool # Explicit flag whether to save (persistent session)
     ) -> AsyncGenerator[str, None]:
         """
         Wraps provider's stream, yields text chunks, and handles session saving.
-        (Implementation unchanged)
+        (Implementation unchanged from previous versions)
         """
         full_response_content = ""
         error_occurred = False
@@ -312,16 +347,29 @@ class LLMCore:
 
                 text_delta = self._extract_delta_content(chunk_dict, provider)
                 error_message = chunk_dict.get('error')
-                finish_reason = None
+                finish_reason = None # Initialize finish_reason
+                # Try to extract finish_reason from OpenAI-like or Anthropic-like structures
                 if 'choices' in chunk_dict and chunk_dict['choices'] and isinstance(chunk_dict['choices'][0], dict):
                     finish_reason = chunk_dict['choices'][0].get('finish_reason')
-                elif 'finish_reason' in chunk_dict:
+                elif 'finish_reason' in chunk_dict: # Direct finish_reason (e.g., Ollama)
                     finish_reason = chunk_dict.get('finish_reason')
+                # For Anthropic message_delta type
+                elif chunk_dict.get("type") == "message_delta" and chunk_dict.get("delta"):
+                    finish_reason = chunk_dict["delta"].get("stop_reason")
+
 
                 if text_delta: full_response_content += text_delta; yield text_delta
                 if error_message: logger.error(f"Error during stream: {error_message}"); raise ProviderError(provider_name, error_message)
-                if finish_reason and finish_reason not in ["stop", "length", None, "STOP_SEQUENCE", "MAX_TOKENS", "TOOL_USE", "stop_token", "max_tokens"]:
+                # Check if finish_reason indicates the end of the stream
+                # Common finish reasons: "stop", "length", "tool_calls", "content_filter" (OpenAI)
+                # "stop_sequence", "max_tokens" (Anthropic)
+                # "stop" (Ollama)
+                # "SAFETY" (Gemini, if blocked)
+                if finish_reason and finish_reason not in ["stop", "length", None, "STOP_SEQUENCE", "MAX_TOKENS", "TOOL_USE", "stop_token", "max_tokens", "NOT_SET", "OTHER"]: # Adjust if needed
+                    # "NOT_SET" and "OTHER" for Gemini are not terminal reasons for the stream itself
                     logger.warning(f"Stream stopped due to reason: {finish_reason}")
+                    # Depending on the reason, you might want to break or continue if more chunks are expected
+                    # For now, we assume these are terminal for content generation.
         except Exception as e:
             error_occurred = True
             logger.error(f"Error processing stream from {provider_name}: {e}", exc_info=True)
@@ -329,13 +377,13 @@ class LLMCore:
             raise ProviderError(provider_name, f"Stream processing error: {e}")
         finally:
             logger.debug(f"Stream from {provider_name} finished.")
-            if full_response_content or not error_occurred:
+            if full_response_content or not error_occurred: # Add assistant message if content or no error
                 assistant_msg = session.add_message(message_content=full_response_content, role=Role.ASSISTANT)
                 logger.debug(f"Assistant message '{assistant_msg.id}' (len: {len(full_response_content)}) added to session '{session.id}' (in-memory) after stream.")
             else:
                  logger.debug(f"No assistant message added to session '{session.id}' due to stream error or empty response and error flag.")
 
-            if do_save_session:
+            if do_save_session: # Only save if it was a persistent session
                 try:
                     await self._session_manager.save_session(session)
                     logger.debug(f"Session '{session.id}' persisted after stream.")
@@ -347,7 +395,7 @@ class LLMCore:
         provider_name = provider.get_name()
         text_delta = ""
         try:
-            if provider_name == "openai" or provider_name == "gemini":
+            if provider_name == "openai" or provider_name == "gemini": # Gemini stream chunks are similar
                 choices = chunk.get('choices', [])
                 if choices and isinstance(choices[0], dict) and choices[0].get('delta'):
                     text_delta = choices[0]['delta'].get('content', '') or ""
@@ -356,47 +404,57 @@ class LLMCore:
                 if type_val == "content_block_delta" and chunk.get('delta', {}).get('type') == "text_delta":
                     text_delta = chunk.get('delta', {}).get('text', "") or ""
             elif provider_name == "ollama":
-                message_chunk = chunk.get('message', {})
+                message_chunk = chunk.get('message', {}) # From ollama library stream
                 if message_chunk and isinstance(message_chunk, dict): text_delta = message_chunk.get('content', '') or ""
-                elif 'response' in chunk and isinstance(chunk['response'], str):
+                elif 'response' in chunk and isinstance(chunk['response'], str): # Fallback for raw Ollama API stream
                     text_delta = chunk.get('response', '') or ""
         except Exception as e: logger.warning(f"Error extracting delta from {provider_name} chunk: {e}. Chunk: {str(chunk)[:200]}"); text_delta = ""
-        return text_delta or ""
+        return text_delta or "" # Ensure it's always a string
 
     def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> Optional[str]:
         """Extracts full response content based on provider. (Implementation unchanged)"""
         provider_name = provider.get_name()
         full_response_content: Optional[str] = None
         try:
-            if provider_name == "openai" or provider_name == "gemini":
+            if provider_name == "openai":
                 choices = response_data.get('choices', [])
                 if choices and isinstance(choices[0], dict) and choices[0].get('message'):
                     full_response_content = choices[0]['message'].get('content')
+            elif provider_name == "gemini": # Gemini non-streamed response structure
+                candidates = response_data.get('candidates', [])
+                if candidates and isinstance(candidates[0], dict) and candidates[0].get('content'):
+                    content_parts = candidates[0]['content'].get('parts', [])
+                    if content_parts and isinstance(content_parts[0], dict):
+                        full_response_content = content_parts[0].get('text')
             elif provider_name == "anthropic":
                 content_blocks = response_data.get('content', [])
                 if content_blocks and isinstance(content_blocks, list) and content_blocks[0].get("type") == "text":
                     full_response_content = content_blocks[0].get("text")
-            elif provider_name == "ollama":
+            elif provider_name == "ollama": # From ollama library non-streamed
                 message_part = response_data.get('message', {})
                 if message_part and isinstance(message_part, dict): full_response_content = message_part.get('content')
-                elif 'response' in response_data and isinstance(response_data['response'], str):
+                elif 'response' in response_data and isinstance(response_data['response'], str): # Fallback for raw
                     full_response_content = response_data.get('response')
 
-            if full_response_content is None and response_data:
+            if full_response_content is None and response_data: # If no content extracted but response exists
                  logger.warning(f"Could not extract content from {provider_name} response: {str(response_data)[:200]}"); return None
             return str(full_response_content) if full_response_content is not None else None
         except Exception as e: logger.error(f"Error extracting full content from {provider_name}: {e}. Response: {str(response_data)[:200]}", exc_info=True); return None
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
-        """Retrieves a session. (Implementation unchanged)"""
+        """Retrieves a session, checking transient cache first, then persistent storage. (Implementation unchanged)"""
         logger.debug(f"LLMCore.get_session for ID: {session_id}")
         if session_id in self._transient_sessions_cache:
             logger.debug(f"Returning session '{session_id}' from transient cache.")
             return self._transient_sessions_cache[session_id]
         try:
+            # load_or_create_session with system_message=None will load if exists, or create empty if not.
+            # If it creates, it's an empty session that will be returned.
+            # This behavior is fine for 'get_session' as it effectively ensures a ChatSession object is returned
+            # if the ID is valid, even if it's new and empty from persistent store's perspective.
             return await self._session_manager.load_or_create_session(session_id=session_id, system_message=None)
-        except SessionNotFoundError:
-            logger.warning(f"Session ID '{session_id}' not found in persistent storage.")
+        except SessionNotFoundError: # Should not be raised by load_or_create_session if it creates
+            logger.warning(f"Session ID '{session_id}' not found by SessionManager (this is unexpected if load_or_create_session always returns a session).")
             return None
         except StorageError as e:
             logger.error(f"Storage error getting session '{session_id}': {e}")
@@ -413,24 +471,27 @@ class LLMCore:
             raise
 
     async def delete_session(self, session_id: str) -> bool:
-        """Deletes a session. (Implementation unchanged)"""
+        """Deletes a session from transient cache and persistent storage. (Implementation unchanged)"""
         logger.debug(f"LLMCore.delete_session for ID: {session_id}")
-        was_in_transient = self._transient_sessions_cache.pop(session_id, None)
+        was_in_transient = self._transient_sessions_cache.pop(session_id, None) is not None
         if was_in_transient:
             logger.debug(f"Removed session '{session_id}' from transient cache during delete.")
+
+        # Also clear any last interaction info for this session
         self._transient_last_interaction_info_cache.pop(session_id, None)
+
         try:
             session_storage = self._storage_manager.get_session_storage()
             deleted_persistent = await session_storage.delete_session(session_id)
             if deleted_persistent:
                 logger.info(f"Session '{session_id}' deleted from persistent storage.")
-            elif not was_in_transient:
+            elif not was_in_transient: # If not in transient and not deleted from persistent
                 logger.warning(f"Session '{session_id}' not found for deletion in persistent storage.")
-            return deleted_persistent or bool(was_in_transient)
+            return deleted_persistent or was_in_transient # True if deleted from either
         except StorageError as e:
             logger.error(f"Storage error deleting session '{session_id}': {e}")
             raise
-        return bool(was_in_transient)
+        return was_in_transient # Fallback if persistent deletion fails but was in transient
 
     async def add_document_to_vector_store(self, content: str, *, metadata: Optional[Dict]=None, doc_id: Optional[str]=None, collection_name: Optional[str]=None) -> str:
         """Adds a single document to the vector store. (Implementation unchanged)"""
@@ -494,18 +555,12 @@ class LLMCore:
         except Exception as e: logger.error(f"Unexpected error deleting documents: {e}", exc_info=True); raise VectorStorageError(f"Unexpected error: {e}")
 
     async def list_rag_collections(self) -> List[str]:
-        """
-        Lists the names of all available RAG collections from the vector store.
-        """
+        """Lists the names of all available RAG collections. (Implementation unchanged)"""
         logger.debug("LLMCore.list_rag_collections called.")
         try:
             return await self._storage_manager.list_vector_collection_names()
-        except StorageError as e:
-            logger.error(f"Storage error listing RAG collections: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error listing RAG collections: {e}", exc_info=True)
-            raise LLMCoreError(f"Failed to list RAG collections: {e}")
+        except StorageError as e: logger.error(f"Storage error listing RAG collections: {e}"); raise
+        except Exception as e: logger.error(f"Unexpected error listing RAG collections: {e}", exc_info=True); raise LLMCoreError(f"Failed to list RAG collections: {e}")
 
 
     async def add_text_context_item(self, session_id: str, content: str, item_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None, ignore_char_limit: bool = False) -> ContextItem:
@@ -516,22 +571,20 @@ class LLMCore:
 
         item_id_actual = item_id or str(uuid.uuid4())
         item_metadata = metadata or {}
-        if ignore_char_limit:
-            item_metadata['ignore_char_limit'] = True
+        if ignore_char_limit: item_metadata['ignore_char_limit'] = True # Store this preference
 
         item = ContextItem(
             id=item_id_actual, type=ContextItemType.USER_TEXT,
             source_id=item_id_actual, content=content, metadata=item_metadata
         )
-        try:
+        try: # Estimate tokens (can be refined by ContextManager if needed)
             provider = self._provider_manager.get_default_provider()
             item.tokens = await provider.count_tokens(content, model=provider.default_model)
-            item.original_tokens = item.tokens
+            item.original_tokens = item.tokens # Initially, tokens and original_tokens are same
         except Exception as e: logger.warning(f"Could not count tokens for user text item '{item.id}': {e}. Tokens set to None."); item.tokens = None; item.original_tokens = None
 
         session.add_context_item(item)
-        if not is_transient:
-            await self._session_manager.save_session(session)
+        if not is_transient: await self._session_manager.save_session(session)
         logger.info(f"Added text context item '{item.id}' to session '{session_id}' (is_transient={is_transient}, ignore_limit={ignore_char_limit}).")
         return item
 
@@ -550,10 +603,8 @@ class LLMCore:
         except Exception as e: raise LLMCoreError(f"Failed to read file content from {path_obj}: {e}")
 
         file_metadata = metadata or {}
-        file_metadata.setdefault("filename", path_obj.name)
-        file_metadata.setdefault("original_path", str(path_obj))
-        if ignore_char_limit:
-            file_metadata['ignore_char_limit'] = True
+        file_metadata.setdefault("filename", path_obj.name); file_metadata.setdefault("original_path", str(path_obj))
+        if ignore_char_limit: file_metadata['ignore_char_limit'] = True
 
         item_id_actual = item_id or str(uuid.uuid4())
         item = ContextItem(
@@ -567,8 +618,7 @@ class LLMCore:
         except Exception as e: logger.warning(f"Could not count tokens for file item '{item.id}': {e}. Tokens set to None."); item.tokens = None; item.original_tokens = None
 
         session.add_context_item(item)
-        if not is_transient:
-            await self._session_manager.save_session(session)
+        if not is_transient: await self._session_manager.save_session(session)
         logger.info(f"Added file context item '{item.id}' (from {path_obj}) to session '{session_id}' (is_transient={is_transient}, ignore_limit={ignore_char_limit}).")
         return item
 
@@ -584,24 +634,24 @@ class LLMCore:
         updated = False
         if content is not None:
             item_to_update.content = content
-            item_to_update.is_truncated = False
-            try:
+            item_to_update.is_truncated = False # Reset truncation status on content update
+            try: # Re-estimate tokens
                 provider = self._provider_manager.get_default_provider()
                 item_to_update.tokens = await provider.count_tokens(content, model=provider.default_model)
-                item_to_update.original_tokens = item_to_update.tokens
+                item_to_update.original_tokens = item_to_update.tokens # Update original too
             except Exception: item_to_update.tokens = None; item_to_update.original_tokens = None
             updated = True
         if metadata is not None:
             existing_ignore_limit = item_to_update.metadata.get('ignore_char_limit')
             item_to_update.metadata.update(metadata)
+            # Preserve ignore_char_limit if not explicitly changed by new metadata
             if 'ignore_char_limit' not in metadata and existing_ignore_limit is not None:
                 item_to_update.metadata['ignore_char_limit'] = existing_ignore_limit
             updated = True
 
         if updated:
             item_to_update.timestamp = datetime.now(timezone.utc)
-            if not is_transient:
-                await self._session_manager.save_session(session)
+            if not is_transient: await self._session_manager.save_session(session)
         logger.info(f"Updated context item '{item_id}' in session '{session_id}' (is_transient={is_transient}).")
         return item_to_update
 
@@ -611,23 +661,19 @@ class LLMCore:
         is_transient = session_id in self._transient_sessions_cache
         session_obj_to_modify: Optional[ChatSession] = self._transient_sessions_cache.get(session_id) if is_transient else await self._session_manager.load_or_create_session(session_id, system_message=None)
 
-        if not session_obj_to_modify:
-             logger.warning(f"Session '{session_id}' not found for removing context item.")
-             return False
+        if not session_obj_to_modify: logger.warning(f"Session '{session_id}' not found for removing context item."); return False
 
         removed = session_obj_to_modify.remove_context_item(item_id)
         if removed:
-            if not is_transient:
-                await self._session_manager.save_session(session_obj_to_modify)
+            if not is_transient: await self._session_manager.save_session(session_obj_to_modify)
             logger.info(f"Removed context item '{item_id}' from session '{session_id}' (is_transient={is_transient}).")
-        else:
-            logger.warning(f"Context item '{item_id}' not found in session '{session_id}' for removal.")
+        else: logger.warning(f"Context item '{item_id}' not found in session '{session_id}' for removal.")
         return removed
 
     async def get_session_context_items(self, session_id: str) -> List[ContextItem]:
         """Retrieves all context items for a given session. (Implementation unchanged)"""
         if not session_id: raise ValueError("session_id is required.")
-        session = await self.get_session(session_id)
+        session = await self.get_session(session_id) # Uses the updated get_session logic
         if not session: raise SessionNotFoundError(session_id=session_id, message="Session not found when trying to list its context items.")
         return session.context_items
 
@@ -640,9 +686,7 @@ class LLMCore:
 
     async def get_last_interaction_context_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Gets cached information about the last context preparation for a session. (Implementation unchanged)"""
-        if not session_id:
-            logger.warning("get_last_interaction_context_info called without session_id.")
-            return None
+        if not session_id: logger.warning("get_last_interaction_context_info called without session_id."); return None
         cached_info = self._transient_last_interaction_info_cache.get(session_id)
         if cached_info: logger.debug(f"Retrieved last interaction info from transient cache for session '{session_id}'.")
         else: logger.debug(f"No interaction info found in transient cache for session '{session_id}'.")
@@ -651,16 +695,11 @@ class LLMCore:
     async def get_last_used_rag_documents(self, session_id: str) -> Optional[List[ContextDocument]]:
         """Gets RAG documents used in the last turn for a session from cache. (Implementation unchanged)"""
         context_info = await self.get_last_interaction_context_info(session_id)
-        if context_info:
-            return context_info.get("rag_documents_used")
-        return None
+        return context_info.get("rag_documents_used") if context_info else None
 
     async def pin_rag_document_as_context_item(
-        self,
-        session_id: str,
-        original_rag_doc_id: str,
-        custom_item_id: Optional[str] = None,
-        custom_metadata: Optional[Dict[str, Any]] = None
+        self, session_id: str, original_rag_doc_id: str,
+        custom_item_id: Optional[str] = None, custom_metadata: Optional[Dict[str, Any]] = None
     ) -> ContextItem:
         """Pins a RAG document from the last turn as a new user-added context item. (Implementation unchanged)"""
         if not session_id: raise ValueError("session_id is required.")
@@ -672,12 +711,9 @@ class LLMCore:
         interaction_info = await self.get_last_interaction_context_info(session_id)
         last_rag_docs = interaction_info.get("rag_documents_used") if interaction_info else None
 
-        if not last_rag_docs:
-            raise LLMCoreError(f"No RAG documents from the last turn found in cache for session '{session_id}'. Cannot pin.")
-
+        if not last_rag_docs: raise LLMCoreError(f"No RAG documents from last turn in cache for session '{session_id}'. Cannot pin.")
         doc_to_pin: Optional[ContextDocument] = next((doc for doc in last_rag_docs if doc.id == original_rag_doc_id), None)
-        if not doc_to_pin:
-            raise LLMCoreError(f"RAG document with ID '{original_rag_doc_id}' not found among last used RAG documents for session '{session_id}'.")
+        if not doc_to_pin: raise LLMCoreError(f"RAG document ID '{original_rag_doc_id}' not found among last used RAG docs for session '{session_id}'.")
 
         new_item_id = custom_item_id or str(uuid.uuid4())
         new_item_metadata = {
@@ -699,8 +735,7 @@ class LLMCore:
         except Exception as e: logger.warning(f"Could not count tokens for pinned RAG snippet '{pinned_item.id}': {e}. Tokens set to None."); pinned_item.tokens = None; pinned_item.original_tokens = None
 
         session.add_context_item(pinned_item)
-        if not is_transient_session:
-            await self._session_manager.save_session(session)
+        if not is_transient_session: await self._session_manager.save_session(session)
         logger.info(f"Pinned RAG document '{original_rag_doc_id}' as new context item '{pinned_item.id}' in session '{session_id}' (is_transient={is_transient_session}).")
         return pinned_item
 
@@ -715,12 +750,8 @@ class LLMCore:
         try:
             provider = self._provider_manager.get_provider(provider_name)
             return provider.get_available_models()
-        except (ConfigError, ProviderError) as e:
-            logger.error(f"Error getting models for provider '{provider_name}': {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error for provider '{provider_name}': {e}", exc_info=True)
-            raise ProviderError(provider_name, f"Failed to retrieve models: {e}")
+        except (ConfigError, ProviderError) as e: logger.error(f"Error getting models for provider '{provider_name}': {e}"); raise
+        except Exception as e: logger.error(f"Unexpected error for provider '{provider_name}': {e}", exc_info=True); raise ProviderError(provider_name, f"Failed to retrieve models: {e}")
 
     async def close(self):
         """Closes all managed resources. (Implementation unchanged)"""
