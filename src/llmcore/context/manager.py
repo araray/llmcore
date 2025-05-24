@@ -68,12 +68,6 @@ class ContextManager:
         self._user_retained_messages_count: int = cm_config.get('user_retained_messages_count', 5)
         self._prioritize_user_context_items: bool = cm_config.get('prioritize_user_context_items', True)
         self._max_chars_per_user_item: int = cm_config.get('max_chars_per_user_item', 40000)
-        # New: Parameter to allow ignoring max_chars_per_user_item for specific items
-        # This is not a global config but would be passed per item if needed,
-        # or handled by a flag in add_file_context_item.
-        # For now, the ContextManager itself doesn't have a global override for this.
-        # The `ignore_char_limit` will be a parameter to `add_file_context_item` in `llmcore.api`.
-
 
         logger.info("ContextManager initialized.")
         logger.debug(f"Context settings: reserved_tokens={self._reserved_response_tokens}, "
@@ -223,11 +217,8 @@ class ContextManager:
         rag_enabled: bool = False,
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None,
-        # New parameter to control truncation for specific items,
-        # though the primary control is `item.metadata.get('ignore_char_limit', False)`
-        # This is more for future extensibility if a global override is needed at call time.
-        # For now, we rely on the item's metadata.
-        # ignore_item_char_limit_ids: Optional[List[str]] = None
+        rag_metadata_filter: Optional[Dict[str, Any]] = None, # Added
+        prompt_template_values: Optional[Dict[str, str]] = None # Added
     ) -> Tuple[List[Message], Optional[List[ContextDocument]], int]:
         """
         Prepares the context payload for the LLM, including history, RAG, and user-added items.
@@ -242,6 +233,9 @@ class ContextManager:
             rag_enabled: Whether to perform RAG.
             rag_k: Number of documents for RAG retrieval.
             rag_collection: Vector store collection for RAG.
+            rag_metadata_filter: Optional dictionary for metadata filtering in RAG.
+            prompt_template_values: Optional dictionary of values for custom prompt template placeholders.
+                                    (Currently accepted, usage planned for Phase 4).
 
         Returns:
             A tuple: (final list of Messages for LLM, list of RAG docs used, total token count of final messages).
@@ -252,6 +246,11 @@ class ContextManager:
              raise ConfigError(f"Target model undetermined for context (provider: {provider.get_name()}).")
 
         logger.debug(f"Preparing context for model '{target_model}' (Provider: {provider.get_name()}, RAG: {rag_enabled}). Session: {session.id}")
+        if rag_metadata_filter:
+            logger.debug(f"RAG metadata filter active: {rag_metadata_filter}")
+        if prompt_template_values:
+            logger.debug(f"Custom prompt template values provided: {prompt_template_values}")
+
 
         max_context_tokens = provider.get_max_context_length(target_model)
         available_tokens_for_prompt = max_context_tokens - self._reserved_response_tokens
@@ -284,7 +283,6 @@ class ContextManager:
 
             for item in temp_user_items_to_process:
                 item.is_truncated = False # Reset truncation flag
-                # Check if this item should ignore the character limit
                 ignore_this_item_char_limit = item.metadata.get('ignore_char_limit', False)
 
                 if item.original_tokens is None:
@@ -297,12 +295,11 @@ class ContextManager:
 
                 if not ignore_this_item_char_limit and len(item.content) > self._max_chars_per_user_item:
                     original_char_len = len(item.content)
-                    # Ensure item.type is an enum member before accessing .value
                     item_type_value = item.type.value if isinstance(item.type, ContextItemType) else str(item.type)
                     truncated_content = item.content[:self._max_chars_per_user_item] + \
                                         f"\n[...content of item '{item.id}' (type: {item_type_value}) truncated due to character limit...]"
                     item.content = truncated_content
-                    item.is_truncated = True # Set the flag
+                    item.is_truncated = True
 
                     temp_msg_for_trunc_count = Message(role=LLMCoreRole.SYSTEM, content=item.content, session_id=session.id, id=f"temp_trunc_count_{item.id}")
                     try:
@@ -320,12 +317,10 @@ class ContextManager:
                 if ignore_this_item_char_limit:
                     logger.info(f"User context item '{item.id}' (type: {item.type.value if isinstance(item.type, ContextItemType) else str(item.type)}) is ignoring character limit ({self._max_chars_per_user_item} chars). Full content included.")
 
-
                 item_type_str = item.type.value if isinstance(item.type, ContextItemType) else str(item.type)
                 source_desc = item.metadata.get('filename', item.id) if item.type == ContextItemType.USER_FILE else \
                               (item.metadata.get('original_source', item.source_id) if item.type == ContextItemType.RAG_SNIPPET else item.id)
                 truncation_status_msg = " (TRUNCATED)" if item.is_truncated else ""
-
 
                 prefix = f"--- User-Provided Context Item (ID: {item.id}, Type: {item_type_str}, Source: {source_desc}, Original Tokens: {item.original_tokens or 'N/A'}{truncation_status_msg}) ---"
                 suffix = f"--- End User-Provided Context Item (ID: {item.id}) ---"
@@ -350,10 +345,16 @@ class ContextManager:
             if last_user_message:
                 query_text = last_user_message.content
                 k_val = rag_k if rag_k is not None else self._default_rag_k
+                rag_collection_name_actual = rag_collection or self._storage_manager.get_vector_storage()._default_collection_name # type: ignore
                 try:
                     query_embedding = await self._embedding_manager.generate_embedding(query_text)
                     vector_storage = self._storage_manager.get_vector_storage()
-                    retrieved_rag_docs = await vector_storage.similarity_search(query_embedding=query_embedding, k=k_val, collection_name=rag_collection)
+                    retrieved_rag_docs = await vector_storage.similarity_search(
+                        query_embedding=query_embedding,
+                        k=k_val,
+                        collection_name=rag_collection_name_actual,
+                        filter_metadata=rag_metadata_filter # Pass the filter here
+                    )
 
                     formatted_rag_query_context_str = self._format_rag_docs_for_context(retrieved_rag_docs)
                     if formatted_rag_query_context_str:
