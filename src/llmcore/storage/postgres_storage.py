@@ -350,7 +350,7 @@ class PgVectorStorage(BaseVectorStorage):
 
                 async with conn.transaction(): # type: ignore
                     await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-                    # Updated collections table to store more metadata, though not fully used by get_collection_metadata yet
+                    # Updated collections table to store more metadata
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._collections_table} (
                             id SERIAL PRIMARY KEY,
@@ -365,15 +365,6 @@ class PgVectorStorage(BaseVectorStorage):
                     # Ensure default collection exists with the default dimension
                     await self._ensure_collection_exists(conn, self._default_collection_name, self._default_vector_dimension)
 
-                    # Vectors table schema needs to refer to the collection's actual dimension
-                    # This is tricky if dimension is dynamic per collection. For now, use default.
-                    # A better approach might be to create tables per collection or use JSONB for embeddings
-                    # if dimensions vary wildly and a single table is used.
-                    # For simplicity, assuming a common dimension or that collections are pre-configured.
-                    # The CREATE TABLE for vectors_table should ideally use the specific collection's dimension.
-                    # This example uses a fixed dimension from default_vector_dimension for the table schema.
-                    # If different dimensions are needed per collection, this schema needs adjustment
-                    # or multiple tables, or a schema-less vector column type if supported.
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._vectors_table} (
                             id TEXT NOT NULL,
@@ -384,8 +375,6 @@ class PgVectorStorage(BaseVectorStorage):
                             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                             PRIMARY KEY (id, collection_name));""") # Composite primary key
 
-                    # Example HNSW index for cosine distance. Adjust as needed.
-                    # The dimension in the index should match the table's embedding column.
                     index_name = f"idx_embedding_hnsw_cosine_{self._vectors_table}"
                     await conn.execute(f"""
                         CREATE INDEX IF NOT EXISTS {index_name}
@@ -402,28 +391,47 @@ class PgVectorStorage(BaseVectorStorage):
             self._pool = None; raise VectorStorageError(f"Unexpected PgVector init error: {e}")
 
     async def _ensure_collection_exists(self, conn: "PsycopgAsyncConnectionType", name: str, dimension: int, description: Optional[str] = None, provider: Optional[str] = None, model_name: Optional[str] = None, collection_meta: Optional[Dict[str,Any]] = None) -> None:
-        """Ensures a collection record exists, creating or verifying its dimension."""
+        """Ensures a collection record exists, creating or verifying its dimension and other metadata."""
         logger.debug(f"Ensuring vector collection '{name}' (dim: {dimension}) exists...")
         async with conn.cursor(row_factory=dict_row) as cur: # type: ignore
-            await cur.execute(f"SELECT vector_dimension, metadata FROM {self._collections_table} WHERE name = %s", (name,))
+            await cur.execute(f"SELECT vector_dimension, embedding_model_provider, embedding_model_name, metadata FROM {self._collections_table} WHERE name = %s", (name,))
             existing_coll = await cur.fetchone()
             if existing_coll:
                 if existing_coll["vector_dimension"] != dimension:
                     raise ConfigError(f"Dimension mismatch for collection '{name}'. DB has {existing_coll['vector_dimension']}, operation requires {dimension}.")
-                # Optionally update description or other metadata if provided
-                # For now, we don't update existing collection's description/provider/model_name via _ensure_collection_exists
-                # This method primarily ensures it exists with the correct dimension.
-                # A separate method would be needed to update collection metadata like provider/model.
+                # Optionally update other metadata if it's changed.
+                # For simplicity, we'll focus on creation here. A separate update method could be added.
+                # However, if provider/model_name are newly provided, we could update them.
+                update_fields = {}
+                if description is not None and existing_coll.get("description") != description:
+                    update_fields["description"] = description
+                if provider is not None and existing_coll.get("embedding_model_provider") != provider:
+                    update_fields["embedding_model_provider"] = provider
+                if model_name is not None and existing_coll.get("embedding_model_name") != model_name:
+                    update_fields["embedding_model_name"] = model_name
+                if collection_meta is not None and existing_coll.get("metadata") != collection_meta:
+                     # Basic merge: new keys in collection_meta are added, existing keys are updated.
+                     # More sophisticated merge might be needed depending on desired behavior.
+                    merged_meta = (existing_coll.get("metadata") or {}).copy()
+                    merged_meta.update(collection_meta)
+                    if merged_meta != existing_coll.get("metadata"):
+                         update_fields["metadata"] = Jsonb(merged_meta)
+
+                if update_fields:
+                    set_clauses = ", ".join([f"{k} = %s" for k in update_fields.keys()])
+                    values = list(update_fields.values()) + [name]
+                    await cur.execute(f"UPDATE {self._collections_table} SET {set_clauses} WHERE name = %s", tuple(values))
+                    logger.info(f"Updated metadata for existing collection '{name}': {update_fields.keys()}")
+
             else:
                 # Collection doesn't exist, create it
                 final_collection_meta = collection_meta or {}
-                # Add specific embedding info if provided, otherwise they remain NULL
                 await cur.execute(f"""
                     INSERT INTO {self._collections_table}
                     (name, vector_dimension, description, embedding_model_provider, embedding_model_name, metadata)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (name, dimension, description, provider, model_name, Jsonb(final_collection_meta)))
-                logger.info(f"Created new vector collection '{name}' with dimension {dimension}.")
+                logger.info(f"Created new vector collection '{name}' with dimension {dimension}, provider '{provider}', model '{model_name}'.")
 
     async def add_documents(self, documents: List[ContextDocument], collection_name: Optional[str] = None) -> List[str]:
         """Adds or updates documents in the specified PgVector collection."""
@@ -438,19 +446,24 @@ class PgVectorStorage(BaseVectorStorage):
             async with self._pool.connection() as conn:
                 if register_vector: await register_vector(conn) # type: ignore
                 async with conn.transaction(): # type: ignore
-                    # Determine collection dimension, create collection if it doesn't exist
                     collection_dimension = self._default_vector_dimension
                     first_doc_embedding = documents[0].embedding if documents and documents[0].embedding else None
                     if first_doc_embedding:
                         collection_dimension = len(first_doc_embedding)
 
-                    # Extract embedding model info from the first document's metadata if available (e.g., from apykatu)
-                    # This is a convention for this method.
                     first_doc_meta = documents[0].metadata or {}
+                    # Extract embedding model info from the first document's metadata (convention)
+                    # This info is used to ensure the collection record in _collections_table is up-to-date
                     emb_provider = first_doc_meta.get("embedding_model_provider")
                     emb_model_name = first_doc_meta.get("embedding_model_name")
+                    # Pass along any other metadata that might be stored at collection level
+                    # For now, we only explicitly handle provider/model name for _ensure_collection_exists
+                    # A more generic 'collection_metadata_to_store' could be derived if needed.
 
-                    await self._ensure_collection_exists(conn, target_collection, collection_dimension, provider=emb_provider, model_name=emb_model_name)
+                    await self._ensure_collection_exists(
+                        conn, target_collection, collection_dimension,
+                        provider=emb_provider, model_name=emb_model_name
+                    )
 
                     docs_to_insert = []
                     for doc in documents:
@@ -458,12 +471,19 @@ class PgVectorStorage(BaseVectorStorage):
                             raise VectorStorageError(f"Document '{doc.id}' must have an ID and an embedding.")
                         if len(doc.embedding) != collection_dimension:
                             raise VectorStorageError(f"Embedding dimension mismatch for doc '{doc.id}' in collection '{target_collection}'. Expected {collection_dimension}, got {len(doc.embedding)}.")
-                        docs_to_insert.append((doc.id, target_collection, doc.content, doc.embedding, Jsonb(doc.metadata or {})))
+
+                        # Prepare metadata for JSONB, ensuring it's a dict
+                        doc_metadata_for_db = doc.metadata or {}
+                        # Remove keys that are now top-level in the collections table to avoid redundancy if they were in doc.metadata
+                        doc_metadata_for_db.pop("embedding_model_provider", None)
+                        doc_metadata_for_db.pop("embedding_model_name", None)
+                        doc_metadata_for_db.pop("embedding_dimension", None) # Dimension is a table column
+
+                        docs_to_insert.append((doc.id, target_collection, doc.content, doc.embedding, Jsonb(doc_metadata_for_db)))
                         doc_ids_added.append(doc.id)
 
                     if docs_to_insert:
                         async with conn.cursor() as cur: # type: ignore
-                            # Use ON CONFLICT to perform an UPSERT
                             sql = f"""
                                 INSERT INTO {self._vectors_table} (id, collection_name, content, embedding, metadata, created_at)
                                 VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
@@ -477,7 +497,7 @@ class PgVectorStorage(BaseVectorStorage):
             logger.info(f"Upserted {len(doc_ids_added)} docs into PgVector collection '{target_collection}'.")
             return doc_ids_added
         except psycopg.Error as e: logger.error(f"PgVector DB error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error adding docs: {e}") # type: ignore
-        except VectorStorageError: raise # Re-raise specific errors
+        except VectorStorageError: raise
         except Exception as e: logger.error(f"Unexpected error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error adding docs: {e}")
 
     async def similarity_search(self, query_embedding: List[float], k: int, collection_name: Optional[str] = None, filter_metadata: Optional[Dict[str, Any]] = None) -> List[ContextDocument]:
@@ -492,8 +512,7 @@ class PgVectorStorage(BaseVectorStorage):
                 if register_vector: await register_vector(conn) # type: ignore
                 conn.row_factory = dict_row # type: ignore
 
-                # Verify collection dimension against query embedding dimension
-                collection_dimension = self._default_vector_dimension # Fallback
+                collection_dimension = self._default_vector_dimension
                 async with conn.cursor() as cur_coll_dim: # type: ignore
                     await cur_coll_dim.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
                     coll_info = await cur_coll_dim.fetchone()
@@ -503,25 +522,20 @@ class PgVectorStorage(BaseVectorStorage):
                 if query_dimension != collection_dimension:
                     raise VectorStorageError(f"Query embedding dimension ({query_dimension}) does not match collection '{target_collection}' dimension ({collection_dimension}).")
 
-                # Using vector_cosine_ops for cosine distance (smaller is better)
-                # Other options: vector_l2_ops (Euclidean), vector_ip_ops (inner product, larger is better)
-                # For inner product, order by "embedding <#> %s DESC"
-                distance_operator = "<=>" # Cosine distance
+                distance_operator = "<=>"
 
                 sql_query = f"SELECT id, content, metadata, embedding {distance_operator} %s AS distance FROM {self._vectors_table} WHERE collection_name = %s"
                 params: List[Any] = [query_embedding, target_collection]
 
                 if filter_metadata:
                     filter_conditions = []
-                    # Note: JSONB filter syntax for specific keys. Example: metadata->>'key' = 'value'
                     for key, value in filter_metadata.items():
-                        # Ensure value is string for text comparison in JSONB, adjust if other types needed
                         filter_conditions.append(f"metadata->>%s = %s")
                         params.extend([key, str(value)])
                     if filter_conditions:
                         sql_query += " AND " + " AND ".join(filter_conditions)
 
-                sql_query += f" ORDER BY distance ASC LIMIT %s" # ASC for cosine distance
+                sql_query += f" ORDER BY distance ASC LIMIT %s"
                 params.append(k)
 
                 async with conn.cursor() as cur: # type: ignore
@@ -531,7 +545,7 @@ class PgVectorStorage(BaseVectorStorage):
                             id=row["id"],
                             content=row.get("content", ""),
                             metadata=row.get("metadata") or {},
-                            score=float(row["distance"]) if row.get("distance") is not None else None # Distance as score
+                            score=float(row["distance"]) if row.get("distance") is not None else None
                         ))
             logger.info(f"PgVector search in '{target_collection}' returned {len(results)} docs.")
             return results
@@ -541,17 +555,16 @@ class PgVectorStorage(BaseVectorStorage):
     async def delete_documents(self, document_ids: List[str], collection_name: Optional[str] = None) -> bool:
         """Deletes documents from PgVector by their IDs."""
         if not self._pool: raise VectorStorageError("PgVector pool not initialized.")
-        if not document_ids: return True # Nothing to delete
+        if not document_ids: return True
         target_collection = collection_name or self._default_collection_name
         try:
             async with self._pool.connection() as conn:
                 async with conn.transaction(): # type: ignore
                     async with conn.cursor() as cur: # type: ignore
-                        # Delete from vectors table where ID is in the list and collection matches
                         await cur.execute(f"DELETE FROM {self._vectors_table} WHERE collection_name = %s AND id = ANY(%s::TEXT[])", (target_collection, document_ids))
                         deleted_count = cur.rowcount
             logger.info(f"PgVector delete affected {deleted_count} rows in '{target_collection}'.")
-            return True # Operation attempted, success determined by rowcount or lack of error
+            return True
         except psycopg.Error as e: logger.error(f"PgVector DB error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error deleting: {e}") # type: ignore
         except Exception as e: logger.error(f"Unexpected error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error deleting: {e}")
 
@@ -559,7 +572,7 @@ class PgVectorStorage(BaseVectorStorage):
         """Lists the names of all available vector collections from PostgreSQL."""
         if not self._pool:
             raise VectorStorageError("PgVector connection pool not initialized.")
-        if not dict_row: # Ensure dict_row is available
+        if not dict_row:
             raise VectorStorageError("psycopg dict_row factory not available.")
 
         collection_names: List[str] = []
@@ -568,7 +581,6 @@ class PgVectorStorage(BaseVectorStorage):
             async with self._pool.connection() as conn:
                 conn.row_factory = dict_row # type: ignore
                 async with conn.cursor() as cur: # type: ignore
-                    # Query the dedicated collections table
                     await cur.execute(f"SELECT name FROM {self._collections_table} ORDER BY name ASC")
                     async for row in cur:
                         collection_names.append(row["name"])
@@ -584,9 +596,8 @@ class PgVectorStorage(BaseVectorStorage):
     async def get_collection_metadata(self, collection_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Retrieves metadata for a specific vector collection from PostgreSQL.
-        Currently returns name, vector_dimension (as embedding_dimension), description, and created_at.
-        Does NOT return embedding_model_provider or embedding_model_name as they are not
-        part of the current _collections_table schema in a queryable way for this purpose.
+        This includes name, vector_dimension (as embedding_dimension), description, created_at,
+        and any stored embedding model provider/name details, plus other JSONB metadata.
         """
         if not self._pool:
             raise VectorStorageError("PgVector connection pool not initialized.")
@@ -600,7 +611,6 @@ class PgVectorStorage(BaseVectorStorage):
             async with self._pool.connection() as conn:
                 conn.row_factory = dict_row # type: ignore
                 async with conn.cursor() as cur: # type: ignore
-                    # Query the collections table for the specified name
                     await cur.execute(f"""
                         SELECT name, vector_dimension, description, created_at,
                                embedding_model_provider, embedding_model_name, metadata
@@ -610,19 +620,15 @@ class PgVectorStorage(BaseVectorStorage):
 
                     if row:
                         # Construct metadata dictionary from available fields
-                        # Map vector_dimension to embedding_dimension for consistency
-                        # with what ContextManager might expect.
                         metadata_dict = {
                             "name": row["name"],
-                            "embedding_dimension": row["vector_dimension"],
+                            "embedding_dimension": row["vector_dimension"], # Mapped for consistency
                             "description": row.get("description"),
                             "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
                             "embedding_model_provider": row.get("embedding_model_provider"),
                             "embedding_model_name": row.get("embedding_model_name"),
                             "additional_metadata": row.get("metadata") or {} # Stored JSONB metadata
                         }
-                        # Filter out None values for cleaner output if desired, but often better to include them
-                        # metadata_dict = {k: v for k, v in metadata_dict.items() if v is not None}
                         logger.info(f"Retrieved metadata for PgVector collection '{target_collection}': {metadata_dict}")
                         return metadata_dict
                     else:
