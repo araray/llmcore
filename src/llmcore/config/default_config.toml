@@ -173,23 +173,41 @@ log_level = "INFO"
   # Strategy for combining RAG results with conversation history.
   # 'prepend_system': RAG context is added as part of a system message or preamble.
   # 'prepend_user': RAG context is added before the latest user message.
-  # (Not fully implemented yet)
-  rag_combination_strategy = "prepend_system" # [cite: 12]
+  # This is less relevant when using full prompt templating for RAG.
+  # rag_combination_strategy = "prepend_system" # [cite: 12]
 
   # Strategy for selecting history messages to fit within the token limit.
   # 'last_n_tokens': Prioritizes keeping the most recent messages that fit the token budget.
-  # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits - Not implemented yet).
+  # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits).
   history_selection_strategy = "last_n_tokens" # [cite: 12]
 
   # Number of tokens to reserve for the LLM's response generation.
   # This ensures there's space for the model to actually write its answer.
   reserved_response_tokens = 500 # [cite: 12]
 
-  # Strategy for handling context overflow when total tokens (history + RAG + prompt) exceed the limit.
-  # The order defines which type of context is truncated first.
-  # Options: 'history', 'rag', 'user_items'.
-  # Example: "history,rag,user_items" means history is truncated first, then RAG, then user-added items.
-  truncation_priority = "history,rag,user_items" # [cite: 13]
+  # NEW: Order in which different context components are added to the prompt,
+  # before overall truncation. Comma-separated list.
+  # Valid components:
+  #   "system_history": System messages from the session's history.
+  #   "final_user_query": The current user's query, potentially rendered with RAG context via template.
+  #   "explicitly_staged": Items passed via LLMCore.chat(explicitly_staged_items=...).
+  #   "user_items_active": Items from the session's context pool (workspace) marked as active.
+  #   "history_chat": Regular user/assistant messages from the session's history.
+  # Default order prioritizes system messages, then the main query, then explicitly chosen items.
+  inclusion_priority = "system_history,final_user_query,explicitly_staged,user_items_active,history_chat"
+
+  # UPDATED: Strategy for handling context overflow when total tokens exceed the limit.
+  # The order defines which type of context is truncated first. Comma-separated list.
+  # Valid components for truncation:
+  #   "history_chat": Regular user/assistant messages from chat history (oldest first).
+  #   "user_items_active": Active items from the session's context pool (oldest/least relevant first).
+  #   "rag_in_query": If RAG is enabled and part of the final_user_query (via template),
+  #                   truncating this means attempting to use a plain query without RAG.
+  #   "explicitly_staged": Explicitly staged items (oldest/least relevant first).
+  # System messages and the core final_user_query (without RAG) are generally not truncated by this mechanism,
+  # but if they alone exceed limits, a ContextLengthError will occur.
+  # Legacy values "history", "rag", "user_items" will be mapped to their new equivalents.
+  truncation_priority = "history_chat,user_items_active,rag_in_query,explicitly_staged" # [cite: 13]
 
   # Minimum number of history messages (excluding system message) to try and keep during truncation.
   # This helps maintain some conversational flow even when context is tight.
@@ -199,17 +217,18 @@ log_level = "INFO"
   # Set to 0 to disable this specific retention and rely solely on last_n_tokens/last_n_messages for history.
   user_retained_messages_count = 5 # [cite: 13]
 
-  # If true, user-added context items (from /context add) are prioritized over RAG results
+  # If true, user-added context items (from session pool/workspace) are prioritized over RAG results
   # when initially filling the context budget (before overall truncation).
+  # Note: `inclusion_priority` now offers more direct control over this.
   prioritize_user_context_items = true # [cite: 13]
 
   # Maximum character length for any single user-added context item (text, file, pinned RAG).
-  # Items exceeding this will be truncated by the ContextManager.
+  # Items exceeding this will be truncated by the ContextManager unless 'ignore_char_limit' is set on the item.
   # Approximately 10,000 tokens (1 token ~ 4 chars).
   max_chars_per_user_item = 40000 # [cite: 13]
 
   # Default prompt template string for RAG. Used if prompt_template_path is not set or file not found.
-  # This template will be formatted with {context} and {question} placeholders.
+  # This template will be formatted with {context} (RAG documents) and {question} (user's query) placeholders.
   # Custom placeholders can be added and filled via prompt_template_values in LLMCore.chat().
   default_prompt_template = """You are an AI assistant specialized in answering questions about codebases based on provided context.
 Use ONLY the following pieces of retrieved context to answer the user's question.
