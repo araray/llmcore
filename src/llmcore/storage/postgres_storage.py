@@ -110,12 +110,12 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.debug(f"Initializing PostgreSQL connection pool for session storage (min: {min_pool_size}, max: {max_pool_size})...")
             self._pool = AsyncConnectionPool(conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size)
             async with self._pool.connection() as conn:
-                async with conn.cursor() as cur: await cur.execute("SELECT 1;")
-                if not await cur.fetchone(): raise SessionStorageError("DB connection test failed.")
+                async with conn.cursor() as cur: await cur.execute("SELECT 1;") # type: ignore
+                if not await cur.fetchone(): raise SessionStorageError("DB connection test failed.") # type: ignore
                 logger.debug("PostgreSQL connection test successful.")
 
                 logger.debug(f"Ensuring session tables '{self._sessions_table}', '{self._messages_table}', and '{self._context_items_table}' exist...")
-                async with conn.transaction():
+                async with conn.transaction(): # type: ignore
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._sessions_table} (
                             id TEXT PRIMARY KEY, name TEXT, created_at TIMESTAMPTZ NOT NULL,
@@ -161,7 +161,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Saving session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items to PostgreSQL...")
         try:
             async with self._pool.connection() as conn:
-                async with conn.transaction():
+                async with conn.transaction(): # type: ignore
                     await conn.execute(f"""
                         INSERT INTO {self._sessions_table} (id, name, created_at, updated_at, metadata)
                         VALUES (%s, %s, %s, %s, %s)
@@ -173,7 +173,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                     if session.messages:
                         messages_data = [(msg.id, session.id, str(msg.role), msg.content, msg.timestamp,
                                           msg.tokens, Jsonb(msg.metadata or {})) for msg in session.messages]
-                        async with conn.cursor() as cur:
+                        async with conn.cursor() as cur: # type: ignore
                             await cur.executemany(f"INSERT INTO {self._messages_table} (id, session_id, role, content, timestamp, tokens, metadata) VALUES (%s, %s, %s, %s, %s, %s, %s)", messages_data)
 
                     await conn.execute(f"DELETE FROM {self._context_items_table} WHERE session_id = %s", (session.id,))
@@ -182,7 +182,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                                                item.source_id, item.content,
                                                item.tokens, Jsonb(item.metadata or {}), item.timestamp)
                                               for item in session.context_items]
-                        async with conn.cursor() as cur:
+                        async with conn.cursor() as cur: # type: ignore
                             await cur.executemany(f"INSERT INTO {self._context_items_table} (id, session_id, item_type, source_id, content, tokens, metadata, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", context_items_data)
             logger.info(f"Session '{session.id}' saved successfully to PostgreSQL.")
         except psycopg.Error as e: # type: ignore
@@ -201,7 +201,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         try:
             async with self._pool.connection() as conn:
                 conn.row_factory = dict_row # type: ignore
-                async with conn.cursor() as cur:
+                async with conn.cursor() as cur: # type: ignore
                     await cur.execute(f"SELECT * FROM {self._sessions_table} WHERE id = %s", (session_id,))
                     session_row = await cur.fetchone()
                     if not session_row: logger.debug(f"Session '{session_id}' not found."); return None
@@ -255,7 +255,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         try:
             async with self._pool.connection() as conn:
                 conn.row_factory = dict_row # type: ignore
-                async with conn.cursor() as cur:
+                async with conn.cursor() as cur: # type: ignore
                     await cur.execute(f"""
                         SELECT s.id, s.name, s.created_at, s.updated_at, s.metadata,
                                (SELECT COUNT(*) FROM {self._messages_table} m WHERE m.session_id = s.id) as message_count,
@@ -282,8 +282,8 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Deleting session '{session_id}' from PostgreSQL...")
         try:
             async with self._pool.connection() as conn:
-                async with conn.transaction(): # Ensures atomicity
-                    async with conn.cursor() as cur:
+                async with conn.transaction(): # type: ignore # Ensures atomicity
+                    async with conn.cursor() as cur: # type: ignore
                         # CASCADE DELETE on foreign keys handles messages and context_items
                         await cur.execute(f"DELETE FROM {self._sessions_table} WHERE id = %s", (session_id,))
                         deleted_count = cur.rowcount
@@ -302,10 +302,10 @@ class PostgresSessionStorage(BaseSessionStorage):
     async def close(self) -> None:
         """Closes the PostgreSQL connection pool."""
         if self._pool:
-            pool_ref = self._pool; self._pool = None
+            pool_ref = self._pool; self._pool = None # type: ignore
             try:
                 logger.info("Closing PostgreSQL session storage connection pool...")
-                await pool_ref.close()
+                await pool_ref.close() # type: ignore
                 logger.info("PostgreSQL session storage connection pool closed.")
             except Exception as e: logger.error(f"Error closing PostgreSQL pool: {e}", exc_info=True)
 
@@ -319,7 +319,7 @@ class PgVectorStorage(BaseVectorStorage):
     _vectors_table: str
     _collections_table: str
     _default_collection_name: str = "llmcore_default_rag"
-    _default_vector_dimension: int = 384
+    _default_vector_dimension: int = 384 # Default, e.g., for all-MiniLM-L6-v2
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
@@ -348,30 +348,50 @@ class PgVectorStorage(BaseVectorStorage):
                 if register_vector: await register_vector(conn) # type: ignore
                 else: raise VectorStorageError("pgvector register_vector not available.")
 
-                async with conn.transaction():
+                async with conn.transaction(): # type: ignore
                     await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                    # Updated collections table to store more metadata, though not fully used by get_collection_metadata yet
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._collections_table} (
-                            id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, vector_dimension INTEGER NOT NULL,
-                            description TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);""")
+                            id SERIAL PRIMARY KEY,
+                            name TEXT UNIQUE NOT NULL,
+                            vector_dimension INTEGER NOT NULL,
+                            description TEXT,
+                            embedding_model_provider TEXT,
+                            embedding_model_name TEXT,
+                            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                            metadata JSONB DEFAULT '{{}}'::jsonb
+                        );""")
+                    # Ensure default collection exists with the default dimension
                     await self._ensure_collection_exists(conn, self._default_collection_name, self._default_vector_dimension)
 
+                    # Vectors table schema needs to refer to the collection's actual dimension
+                    # This is tricky if dimension is dynamic per collection. For now, use default.
+                    # A better approach might be to create tables per collection or use JSONB for embeddings
+                    # if dimensions vary wildly and a single table is used.
+                    # For simplicity, assuming a common dimension or that collections are pre-configured.
+                    # The CREATE TABLE for vectors_table should ideally use the specific collection's dimension.
+                    # This example uses a fixed dimension from default_vector_dimension for the table schema.
+                    # If different dimensions are needed per collection, this schema needs adjustment
+                    # or multiple tables, or a schema-less vector column type if supported.
                     await conn.execute(f"""
                         CREATE TABLE IF NOT EXISTS {self._vectors_table} (
                             id TEXT NOT NULL,
                             collection_name TEXT NOT NULL REFERENCES {self._collections_table}(name) ON DELETE CASCADE,
                             content TEXT,
-                            embedding VECTOR({self._default_vector_dimension}),
+                            embedding VECTOR({self._default_vector_dimension}), -- Dimension set at table creation
                             metadata JSONB,
                             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY (id, collection_name));""")
+                            PRIMARY KEY (id, collection_name));""") # Composite primary key
 
+                    # Example HNSW index for cosine distance. Adjust as needed.
+                    # The dimension in the index should match the table's embedding column.
                     index_name = f"idx_embedding_hnsw_cosine_{self._vectors_table}"
                     await conn.execute(f"""
                         CREATE INDEX IF NOT EXISTS {index_name}
                         ON {self._vectors_table} USING hnsw (embedding vector_cosine_ops);
                     """)
-            logger.info(f"PgVector storage initialized. Tables: '{self._vectors_table}', '{self._collections_table}'. Default dimension: {self._default_vector_dimension}")
+            logger.info(f"PgVector storage initialized. Tables: '{self._vectors_table}', '{self._collections_table}'. Default dimension for new tables: {self._default_vector_dimension}")
         except psycopg.Error as e: # type: ignore
             logger.error(f"Failed to initialize PgVector storage: {e}", exc_info=True)
             if self._pool: await self._pool.close()
@@ -381,18 +401,32 @@ class PgVectorStorage(BaseVectorStorage):
             if self._pool: await self._pool.close()
             self._pool = None; raise VectorStorageError(f"Unexpected PgVector init error: {e}")
 
-    async def _ensure_collection_exists(self, conn: "PsycopgAsyncConnectionType", name: str, dimension: int, description: Optional[str] = None) -> None:
+    async def _ensure_collection_exists(self, conn: "PsycopgAsyncConnectionType", name: str, dimension: int, description: Optional[str] = None, provider: Optional[str] = None, model_name: Optional[str] = None, collection_meta: Optional[Dict[str,Any]] = None) -> None:
+        """Ensures a collection record exists, creating or verifying its dimension."""
         logger.debug(f"Ensuring vector collection '{name}' (dim: {dimension}) exists...")
-        async with conn.cursor() as cur:
-            await cur.execute(f"INSERT INTO {self._collections_table} (name, vector_dimension, description) VALUES (%s, %s, %s) ON CONFLICT (name) DO NOTHING", (name, dimension, description))
-            if cur.rowcount > 0: logger.info(f"Created new vector collection '{name}' dim {dimension}.")
+        async with conn.cursor(row_factory=dict_row) as cur: # type: ignore
+            await cur.execute(f"SELECT vector_dimension, metadata FROM {self._collections_table} WHERE name = %s", (name,))
+            existing_coll = await cur.fetchone()
+            if existing_coll:
+                if existing_coll["vector_dimension"] != dimension:
+                    raise ConfigError(f"Dimension mismatch for collection '{name}'. DB has {existing_coll['vector_dimension']}, operation requires {dimension}.")
+                # Optionally update description or other metadata if provided
+                # For now, we don't update existing collection's description/provider/model_name via _ensure_collection_exists
+                # This method primarily ensures it exists with the correct dimension.
+                # A separate method would be needed to update collection metadata like provider/model.
             else:
-                 await cur.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (name,))
-                 existing_info = await cur.fetchone()
-                 if existing_info and existing_info[0] != dimension:
-                      raise ConfigError(f"Dimension mismatch for collection '{name}'. DB has {existing_info[0]}, but current operation/default implies {dimension}.")
+                # Collection doesn't exist, create it
+                final_collection_meta = collection_meta or {}
+                # Add specific embedding info if provided, otherwise they remain NULL
+                await cur.execute(f"""
+                    INSERT INTO {self._collections_table}
+                    (name, vector_dimension, description, embedding_model_provider, embedding_model_name, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (name, dimension, description, provider, model_name, Jsonb(final_collection_meta)))
+                logger.info(f"Created new vector collection '{name}' with dimension {dimension}.")
 
     async def add_documents(self, documents: List[ContextDocument], collection_name: Optional[str] = None) -> List[str]:
+        """Adds or updates documents in the specified PgVector collection."""
         if not self._pool: raise VectorStorageError("PgVector pool not initialized.")
         if not documents: return []
         if not Jsonb: raise VectorStorageError("psycopg Jsonb adapter not available.")
@@ -403,19 +437,20 @@ class PgVectorStorage(BaseVectorStorage):
         try:
             async with self._pool.connection() as conn:
                 if register_vector: await register_vector(conn) # type: ignore
-                async with conn.transaction():
+                async with conn.transaction(): # type: ignore
+                    # Determine collection dimension, create collection if it doesn't exist
                     collection_dimension = self._default_vector_dimension
-                    async with conn.cursor() as cur_coll_dim:
-                        await cur_coll_dim.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
-                        coll_info = await cur_coll_dim.fetchone()
-                        if coll_info:
-                            collection_dimension = coll_info[0]
-                        else:
-                            if documents and documents[0].embedding:
-                                collection_dimension = len(documents[0].embedding)
-                                await self._ensure_collection_exists(conn, target_collection, collection_dimension)
-                            else:
-                                await self._ensure_collection_exists(conn, target_collection, self._default_vector_dimension)
+                    first_doc_embedding = documents[0].embedding if documents and documents[0].embedding else None
+                    if first_doc_embedding:
+                        collection_dimension = len(first_doc_embedding)
+
+                    # Extract embedding model info from the first document's metadata if available (e.g., from apykatu)
+                    # This is a convention for this method.
+                    first_doc_meta = documents[0].metadata or {}
+                    emb_provider = first_doc_meta.get("embedding_model_provider")
+                    emb_model_name = first_doc_meta.get("embedding_model_name")
+
+                    await self._ensure_collection_exists(conn, target_collection, collection_dimension, provider=emb_provider, model_name=emb_model_name)
 
                     docs_to_insert = []
                     for doc in documents:
@@ -427,16 +462,26 @@ class PgVectorStorage(BaseVectorStorage):
                         doc_ids_added.append(doc.id)
 
                     if docs_to_insert:
-                        async with conn.cursor() as cur:
-                            sql = f"INSERT INTO {self._vectors_table} (id, collection_name, content, embedding, metadata) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (id, collection_name) DO UPDATE SET content = EXCLUDED.content, embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata, created_at = CURRENT_TIMESTAMP"
+                        async with conn.cursor() as cur: # type: ignore
+                            # Use ON CONFLICT to perform an UPSERT
+                            sql = f"""
+                                INSERT INTO {self._vectors_table} (id, collection_name, content, embedding, metadata, created_at)
+                                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                                ON CONFLICT (id, collection_name) DO UPDATE SET
+                                    content = EXCLUDED.content,
+                                    embedding = EXCLUDED.embedding,
+                                    metadata = EXCLUDED.metadata,
+                                    created_at = CURRENT_TIMESTAMP
+                            """
                             await cur.executemany(sql, docs_to_insert)
             logger.info(f"Upserted {len(doc_ids_added)} docs into PgVector collection '{target_collection}'.")
             return doc_ids_added
         except psycopg.Error as e: logger.error(f"PgVector DB error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error adding docs: {e}") # type: ignore
-        except VectorStorageError: raise
+        except VectorStorageError: raise # Re-raise specific errors
         except Exception as e: logger.error(f"Unexpected error adding docs to '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error adding docs: {e}")
 
     async def similarity_search(self, query_embedding: List[float], k: int, collection_name: Optional[str] = None, filter_metadata: Optional[Dict[str, Any]] = None) -> List[ContextDocument]:
+        """Performs similarity search in PgVector."""
         if not self._pool: raise VectorStorageError("PgVector pool not initialized.")
         if not dict_row: raise VectorStorageError("psycopg dict_row factory not available.")
         target_collection = collection_name or self._default_collection_name
@@ -446,61 +491,75 @@ class PgVectorStorage(BaseVectorStorage):
             async with self._pool.connection() as conn:
                 if register_vector: await register_vector(conn) # type: ignore
                 conn.row_factory = dict_row # type: ignore
-                distance_operator = "<=>"
 
-                collection_dimension = self._default_vector_dimension
-                async with conn.cursor() as cur_coll_dim:
+                # Verify collection dimension against query embedding dimension
+                collection_dimension = self._default_vector_dimension # Fallback
+                async with conn.cursor() as cur_coll_dim: # type: ignore
                     await cur_coll_dim.execute(f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (target_collection,))
                     coll_info = await cur_coll_dim.fetchone()
-                    if coll_info: collection_dimension = coll_info[0]
+                    if coll_info: collection_dimension = coll_info["vector_dimension"]
                     else: raise VectorStorageError(f"Collection '{target_collection}' not found for similarity search.")
 
                 if query_dimension != collection_dimension:
                     raise VectorStorageError(f"Query embedding dimension ({query_dimension}) does not match collection '{target_collection}' dimension ({collection_dimension}).")
+
+                # Using vector_cosine_ops for cosine distance (smaller is better)
+                # Other options: vector_l2_ops (Euclidean), vector_ip_ops (inner product, larger is better)
+                # For inner product, order by "embedding <#> %s DESC"
+                distance_operator = "<=>" # Cosine distance
 
                 sql_query = f"SELECT id, content, metadata, embedding {distance_operator} %s AS distance FROM {self._vectors_table} WHERE collection_name = %s"
                 params: List[Any] = [query_embedding, target_collection]
 
                 if filter_metadata:
                     filter_conditions = []
+                    # Note: JSONB filter syntax for specific keys. Example: metadata->>'key' = 'value'
                     for key, value in filter_metadata.items():
+                        # Ensure value is string for text comparison in JSONB, adjust if other types needed
                         filter_conditions.append(f"metadata->>%s = %s")
                         params.extend([key, str(value)])
                     if filter_conditions:
                         sql_query += " AND " + " AND ".join(filter_conditions)
 
-                sql_query += f" ORDER BY distance ASC LIMIT %s"
+                sql_query += f" ORDER BY distance ASC LIMIT %s" # ASC for cosine distance
                 params.append(k)
 
-                async with conn.cursor() as cur:
+                async with conn.cursor() as cur: # type: ignore
                     await cur.execute(sql_query, tuple(params))
                     async for row in cur:
-                        results.append(ContextDocument(id=row["id"], content=row.get("content", ""), metadata=row.get("metadata") or {}, score=float(row["distance"]) if row.get("distance") is not None else None))
+                        results.append(ContextDocument(
+                            id=row["id"],
+                            content=row.get("content", ""),
+                            metadata=row.get("metadata") or {},
+                            score=float(row["distance"]) if row.get("distance") is not None else None # Distance as score
+                        ))
             logger.info(f"PgVector search in '{target_collection}' returned {len(results)} docs.")
             return results
         except psycopg.Error as e: logger.error(f"PgVector DB error searching '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error searching: {e}") # type: ignore
         except Exception as e: logger.error(f"Unexpected error searching '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error searching: {e}")
 
     async def delete_documents(self, document_ids: List[str], collection_name: Optional[str] = None) -> bool:
+        """Deletes documents from PgVector by their IDs."""
         if not self._pool: raise VectorStorageError("PgVector pool not initialized.")
-        if not document_ids: return True
+        if not document_ids: return True # Nothing to delete
         target_collection = collection_name or self._default_collection_name
         try:
             async with self._pool.connection() as conn:
-                async with conn.transaction():
-                    async with conn.cursor() as cur:
+                async with conn.transaction(): # type: ignore
+                    async with conn.cursor() as cur: # type: ignore
+                        # Delete from vectors table where ID is in the list and collection matches
                         await cur.execute(f"DELETE FROM {self._vectors_table} WHERE collection_name = %s AND id = ANY(%s::TEXT[])", (target_collection, document_ids))
                         deleted_count = cur.rowcount
             logger.info(f"PgVector delete affected {deleted_count} rows in '{target_collection}'.")
-            return True
+            return True # Operation attempted, success determined by rowcount or lack of error
         except psycopg.Error as e: logger.error(f"PgVector DB error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"DB error deleting: {e}") # type: ignore
         except Exception as e: logger.error(f"Unexpected error deleting from '{target_collection}': {e}", exc_info=True); raise VectorStorageError(f"Unexpected error deleting: {e}")
 
     async def list_collection_names(self) -> List[str]:
-        """Lists the names of all available collections in PgVector."""
+        """Lists the names of all available vector collections from PostgreSQL."""
         if not self._pool:
             raise VectorStorageError("PgVector connection pool not initialized.")
-        if not dict_row:
+        if not dict_row: # Ensure dict_row is available
             raise VectorStorageError("psycopg dict_row factory not available.")
 
         collection_names: List[str] = []
@@ -508,7 +567,8 @@ class PgVectorStorage(BaseVectorStorage):
         try:
             async with self._pool.connection() as conn:
                 conn.row_factory = dict_row # type: ignore
-                async with conn.cursor() as cur:
+                async with conn.cursor() as cur: # type: ignore
+                    # Query the dedicated collections table
                     await cur.execute(f"SELECT name FROM {self._collections_table} ORDER BY name ASC")
                     async for row in cur:
                         collection_names.append(row["name"])
@@ -521,8 +581,68 @@ class PgVectorStorage(BaseVectorStorage):
             logger.error(f"Unexpected error listing vector collections: {e}", exc_info=True)
             raise VectorStorageError(f"Unexpected error listing vector collections: {e}")
 
+    async def get_collection_metadata(self, collection_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves metadata for a specific vector collection from PostgreSQL.
+        Currently returns name, vector_dimension (as embedding_dimension), description, and created_at.
+        Does NOT return embedding_model_provider or embedding_model_name as they are not
+        part of the current _collections_table schema in a queryable way for this purpose.
+        """
+        if not self._pool:
+            raise VectorStorageError("PgVector connection pool not initialized.")
+        if not dict_row:
+            raise VectorStorageError("psycopg dict_row factory not available.")
+
+        target_collection = collection_name or self._default_collection_name
+        logger.debug(f"Getting metadata for PgVector collection '{target_collection}'...")
+
+        try:
+            async with self._pool.connection() as conn:
+                conn.row_factory = dict_row # type: ignore
+                async with conn.cursor() as cur: # type: ignore
+                    # Query the collections table for the specified name
+                    await cur.execute(f"""
+                        SELECT name, vector_dimension, description, created_at,
+                               embedding_model_provider, embedding_model_name, metadata
+                        FROM {self._collections_table} WHERE name = %s
+                    """, (target_collection,))
+                    row = await cur.fetchone()
+
+                    if row:
+                        # Construct metadata dictionary from available fields
+                        # Map vector_dimension to embedding_dimension for consistency
+                        # with what ContextManager might expect.
+                        metadata_dict = {
+                            "name": row["name"],
+                            "embedding_dimension": row["vector_dimension"],
+                            "description": row.get("description"),
+                            "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+                            "embedding_model_provider": row.get("embedding_model_provider"),
+                            "embedding_model_name": row.get("embedding_model_name"),
+                            "additional_metadata": row.get("metadata") or {} # Stored JSONB metadata
+                        }
+                        # Filter out None values for cleaner output if desired, but often better to include them
+                        # metadata_dict = {k: v for k, v in metadata_dict.items() if v is not None}
+                        logger.info(f"Retrieved metadata for PgVector collection '{target_collection}': {metadata_dict}")
+                        return metadata_dict
+                    else:
+                        logger.warning(f"PgVector collection '{target_collection}' not found in {self._collections_table}.")
+                        return None
+        except psycopg.Error as e: # type: ignore
+            logger.error(f"PostgreSQL error getting metadata for collection '{target_collection}': {e}", exc_info=True)
+            raise VectorStorageError(f"Database error getting collection metadata: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error getting metadata for collection '{target_collection}': {e}", exc_info=True)
+            raise VectorStorageError(f"Unexpected error getting collection metadata: {e}")
+
+
     async def close(self) -> None:
+        """Closes the PgVector storage connection pool."""
         if self._pool:
-            pool_ref = self._pool; self._pool = None
-            try: logger.info("Closing PgVector storage pool..."); await pool_ref.close(); logger.info("PgVector pool closed.")
-            except Exception as e: logger.error(f"Error closing PgVector pool: {e}", exc_info=True)
+            pool_ref = self._pool; self._pool = None # type: ignore
+            try:
+                logger.info("Closing PgVector storage connection pool...")
+                await pool_ref.close() # type: ignore
+                logger.info("PgVector storage connection pool closed.")
+            except Exception as e:
+                logger.error(f"Error closing PgVector storage connection pool: {e}", exc_info=True)
