@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.16.0"
+version = "0.16.1"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,7 @@ dependencies = [
     "aiofiles>=24.0.0", # For async file operations in JsonSessionStorage
     "tiktoken>=0.9.0", # Added for token counting (Ollama, OpenAI)
     "aiosqlite>=0.21.0",
+    "deepdiff>=8.5.0",
 ]
 
 [project.optional-dependencies]
