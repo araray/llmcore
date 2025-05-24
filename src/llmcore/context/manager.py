@@ -36,6 +36,7 @@ class ContextManager:
     Selects messages from history, integrates RAG results and user-added context items,
     and ensures the final payload adheres to token limits using configurable strategies.
     Includes per-item truncation for user-added context.
+    Dynamically selects embedding models for RAG queries based on collection metadata.
     """
 
     def __init__(
@@ -173,7 +174,7 @@ class ContextManager:
                 # Not enough budget for this message, so this turn (or part of it) cannot be included
                 break # Stop collecting retained messages
 
-        retained_for_now = temp_retained_buffer # temp_retained_buffer is already sorted chronologically
+        retained_for_now = temp_retained_buffer
         selected_history.extend(retained_for_now)
         current_history_tokens = tokens_for_retained
         logger.debug(f"Retained {len(retained_for_now)} recent history messages ({current_history_tokens} tokens) "
@@ -182,12 +183,10 @@ class ContextManager:
         # Stage 2: Backfill with older messages if budget allows
         remaining_history_budget_for_backfill = budget - current_history_tokens
         if remaining_history_budget_for_backfill > 0:
-            # Get messages not already selected, these are older
             ids_in_selected_history = {m.id for m in selected_history}
             older_history_candidates = [
                 msg for msg in history_messages_all_non_system if msg.id not in ids_in_selected_history
             ]
-            # Sort older candidates from newest to oldest to prioritize more recent ones for backfill
             older_history_candidates.sort(key=lambda m: m.timestamp, reverse=True)
 
             temp_backfill_history: List[Message] = []
@@ -195,12 +194,11 @@ class ContextManager:
             for msg in older_history_candidates:
                 msg_tokens = msg.tokens or 0
                 if tokens_for_backfill + msg_tokens <= remaining_history_budget_for_backfill:
-                    temp_backfill_history.insert(0, msg) # Insert at beginning to maintain order
+                    temp_backfill_history.insert(0, msg)
                     tokens_for_backfill += msg_tokens
                 else:
-                    break # No more budget for backfill
+                    break
 
-            # Prepend backfilled messages (which are now sorted) to the already selected history
             selected_history = temp_backfill_history + selected_history
             current_history_tokens += tokens_for_backfill
             logger.debug(f"Backfilled {len(temp_backfill_history)} older history messages ({tokens_for_backfill} tokens).")
@@ -217,13 +215,14 @@ class ContextManager:
         rag_enabled: bool = False,
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None, # Added
-        prompt_template_values: Optional[Dict[str, str]] = None # Added
+        rag_metadata_filter: Optional[Dict[str, Any]] = None,
+        prompt_template_values: Optional[Dict[str, str]] = None
     ) -> Tuple[List[Message], Optional[List[ContextDocument]], int]:
         """
         Prepares the context payload for the LLM, including history, RAG, and user-added items.
         User-added items are truncated if they exceed `max_chars_per_user_item`, unless
         `item.metadata.get('ignore_char_limit', False)` is True.
+        Dynamically selects embedding model for RAG queries based on collection metadata.
 
         Args:
             session: The current ChatSession object.
@@ -248,7 +247,7 @@ class ContextManager:
         logger.debug(f"Preparing context for model '{target_model}' (Provider: {provider.get_name()}, RAG: {rag_enabled}). Session: {session.id}")
         if rag_metadata_filter:
             logger.debug(f"RAG metadata filter active: {rag_metadata_filter}")
-        if prompt_template_values:
+        if prompt_template_values: # Log if provided, actual use is for prompt rendering later
             logger.debug(f"Custom prompt template values provided: {prompt_template_values}")
 
 
@@ -259,20 +258,18 @@ class ContextManager:
                                 f"exceeds model context limit ({max_context_tokens}).")
         logger.debug(f"Max context: {max_context_tokens}, Reserved for response: {self._reserved_response_tokens}, Available for prompt: {available_tokens_for_prompt}")
 
-        # --- Initialize components of the context ---
         system_messages_hist: List[Message] = []
         active_user_item_messages: List[Message] = []
         rag_query_context_message_obj: Optional[Message] = None
         rag_documents_used_this_turn: Optional[List[ContextDocument]] = None
+        query_embedding_model_identifier: Optional[str] = None # For RAG query embedding
 
-        # 1. Extract and tokenize historical system messages from the session
         system_messages_from_session = [msg for msg in session.messages if msg.role == LLMCoreRole.SYSTEM]
         for msg in system_messages_from_session:
-            if msg.tokens is None: # Ensure tokens are counted
+            if msg.tokens is None:
                 msg.tokens = await provider.count_message_tokens([msg], target_model)
-            system_messages_hist.append(msg) # Add to our list for context building
+            system_messages_hist.append(msg)
 
-        # 2. Process User-Added Context Items (with potential per-item truncation)
         if active_context_item_ids and session.context_items:
             temp_user_items_to_process: List[ContextItem] = []
             for item_id in active_context_item_ids:
@@ -282,7 +279,7 @@ class ContextManager:
             temp_user_items_to_process.sort(key=lambda x: x.timestamp)
 
             for item in temp_user_items_to_process:
-                item.is_truncated = False # Reset truncation flag
+                item.is_truncated = False
                 ignore_this_item_char_limit = item.metadata.get('ignore_char_limit', False)
 
                 if item.original_tokens is None:
@@ -339,21 +336,70 @@ class ContextManager:
                     user_item_msg.tokens = len(user_item_msg.content) // 4
                 active_user_item_messages.append(user_item_msg)
 
-        # 3. Perform RAG if enabled
         if rag_enabled:
             last_user_message = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
             if last_user_message:
                 query_text = last_user_message.content
                 k_val = rag_k if rag_k is not None else self._default_rag_k
-                rag_collection_name_actual = rag_collection or self._storage_manager.get_vector_storage()._default_collection_name # type: ignore
+                actual_rag_collection_name = rag_collection or self._storage_manager.get_vector_storage()._default_collection_name # type: ignore
+
+                # --- Dynamic Embedding Model Selection for RAG Query ---
                 try:
-                    query_embedding = await self._embedding_manager.generate_embedding(query_text)
+                    collection_meta = await self._storage_manager.get_vector_storage().get_collection_metadata(actual_rag_collection_name)
+                    if collection_meta:
+                        coll_emb_provider = collection_meta.get("embedding_model_provider")
+                        coll_emb_model_name = collection_meta.get("embedding_model_name")
+                        coll_emb_dim_str = collection_meta.get("embedding_dimension")
+
+                        if coll_emb_provider and coll_emb_model_name:
+                            # Construct identifier: "provider:model_name" or just "model_name" for sentence-transformers
+                            if coll_emb_provider.lower() == "sentence-transformers":
+                                query_embedding_model_identifier = coll_emb_model_name
+                            else:
+                                query_embedding_model_identifier = f"{coll_emb_provider}:{coll_emb_model_name}"
+
+                            logger.info(f"RAG: Using collection-specific embedding model for query: '{query_embedding_model_identifier}' (from collection '{actual_rag_collection_name}' metadata).")
+
+                            # Optional: Dimension validation (future enhancement if BaseEmbeddingModel exposes get_dimension)
+                            if coll_emb_dim_str:
+                                try:
+                                    coll_emb_dim = int(coll_emb_dim_str)
+                                    # Placeholder for future check:
+                                    # loaded_model_instance = await self._embedding_manager.get_model(query_embedding_model_identifier)
+                                    # if hasattr(loaded_model_instance, 'get_dimension') and loaded_model_instance.get_dimension() != coll_emb_dim:
+                                    #     logger.error(f"CRITICAL: Dimension mismatch for RAG query model! Collection '{actual_rag_collection_name}' expects dim {coll_emb_dim}, "
+                                    #                  f"but loaded model '{query_embedding_model_identifier}' has dim {loaded_model_instance.get_dimension()}. "
+                                    #                  "This WILL lead to poor RAG results. Falling back to default embedding model.")
+                                    #     query_embedding_model_identifier = None # Force fallback
+                                    logger.debug(f"Collection '{actual_rag_collection_name}' expects embedding dimension: {coll_emb_dim}.")
+                                except ValueError:
+                                    logger.warning(f"Could not parse embedding_dimension '{coll_emb_dim_str}' from collection metadata for '{actual_rag_collection_name}'.")
+                        else:
+                            logger.warning(f"RAG: Collection '{actual_rag_collection_name}' metadata missing 'embedding_model_provider' or 'embedding_model_name'. "
+                                           "Falling back to default LLMCore embedding model for query.")
+                            query_embedding_model_identifier = None # Fallback to default
+                    else:
+                        logger.warning(f"RAG: Could not retrieve metadata for collection '{actual_rag_collection_name}'. "
+                                       "Falling back to default LLMCore embedding model for query.")
+                        query_embedding_model_identifier = None # Fallback to default
+
+                except Exception as e_meta:
+                    logger.error(f"RAG: Error retrieving collection metadata for '{actual_rag_collection_name}': {e_meta}. "
+                                 "Falling back to default LLMCore embedding model for query.", exc_info=True)
+                    query_embedding_model_identifier = None # Fallback to default
+                # --- End Dynamic Embedding Model Selection ---
+
+                try:
+                    # Use the determined model_identifier (specific or None for default)
+                    query_embedding = await self._embedding_manager.generate_embedding(
+                        query_text, model_identifier=query_embedding_model_identifier
+                    )
                     vector_storage = self._storage_manager.get_vector_storage()
                     retrieved_rag_docs = await vector_storage.similarity_search(
                         query_embedding=query_embedding,
                         k=k_val,
-                        collection_name=rag_collection_name_actual,
-                        filter_metadata=rag_metadata_filter # Pass the filter here
+                        collection_name=actual_rag_collection_name,
+                        filter_metadata=rag_metadata_filter
                     )
 
                     formatted_rag_query_context_str = self._format_rag_docs_for_context(retrieved_rag_docs)
@@ -362,15 +408,15 @@ class ContextManager:
                         rag_query_context_message_obj.tokens = await provider.count_message_tokens([rag_query_context_message_obj], target_model)
                         rag_documents_used_this_turn = retrieved_rag_docs
                     logger.info(f"Std RAG returned {len(retrieved_rag_docs)} docs; RAG context message tokens: {rag_query_context_message_obj.tokens if rag_query_context_message_obj else 0}.")
-                except Exception as e: logger.error(f"Std RAG failed: {e}. No RAG query context will be added.")
-            else: logger.warning("Std RAG enabled, but no user message found in history to use as query.")
+                except Exception as e:
+                    logger.error(f"Std RAG failed: {e}. No RAG query context will be added.", exc_info=True) # Added exc_info
+            else:
+                logger.warning("Std RAG enabled, but no user message found in history to use as query.")
 
-        # 4. Get non-system messages from history and ensure they have token counts
         history_messages_all_non_system = [msg for msg in session.messages if msg.role != LLMCoreRole.SYSTEM]
         for msg in history_messages_all_non_system:
              if msg.tokens is None: msg.tokens = await provider.count_message_tokens([msg], target_model)
 
-        # --- Assemble candidate messages and manage token budget ---
         candidate_messages: List[Message] = []
         current_tokens = 0
 
@@ -389,7 +435,7 @@ class ContextManager:
                     current_tokens += msg_token_count
                 else:
                     logger.debug(f"Message '{msg.id}' (role: {msg.role.value if isinstance(msg.role, LLMCoreRole) else str(msg.role)}, tokens: {msg_token_count}) exceeds budget ({current_tokens + msg_token_count} > {available_tokens_for_prompt}). Not added.")
-                    break
+                    break # Stop adding if budget exceeded for this group
 
         await _add_to_candidates_if_budget(system_messages_hist)
         if self._prioritize_user_context_items:
@@ -407,56 +453,87 @@ class ContextManager:
         )
         await _add_to_candidates_if_budget(built_history)
 
-        # --- Final Truncation Pass based on _truncation_priority_order ---
-        final_candidate_messages = list(candidate_messages)
+        final_candidate_messages = list(candidate_messages) # Start with what fit so far
 
         for priority_type_to_truncate in self._truncation_priority_order:
             if current_tokens <= available_tokens_for_prompt: break
             logger.debug(f"Context over budget ({current_tokens}/{available_tokens_for_prompt}). Attempting truncation for type: '{priority_type_to_truncate}'.")
             items_removed_in_this_pass = False
-            temp_final_candidates = list(final_candidate_messages)
+
+            # Create a mutable copy for modification within this priority type's logic
+            temp_final_candidates_for_priority_pass = list(final_candidate_messages)
 
             if priority_type_to_truncate == "rag":
-                if rag_query_context_message_obj and rag_query_context_message_obj.id in [m.id for m in temp_final_candidates]:
+                if rag_query_context_message_obj and rag_query_context_message_obj.id in [m.id for m in temp_final_candidates_for_priority_pass]:
                     logger.debug(f"Truncating by priority '{priority_type_to_truncate}': Removing RAG query context message.")
-                    temp_final_candidates = [m for m in temp_final_candidates if m.id != rag_query_context_message_obj.id]
-                    rag_documents_used_this_turn = None
+                    temp_final_candidates_for_priority_pass = [m for m in temp_final_candidates_for_priority_pass if m.id != rag_query_context_message_obj.id]
+                    rag_documents_used_this_turn = None # RAG context got removed
                     items_removed_in_this_pass = True
             elif priority_type_to_truncate == "user_items":
-                user_item_message_ids_in_context = {m.id for m in temp_final_candidates if m.id.startswith("user_item_")}
+                user_item_message_ids_in_context = {m.id for m in temp_final_candidates_for_priority_pass if m.id.startswith("user_item_")}
+                # Sort user items by timestamp (oldest first) for removal, if needed
                 sorted_active_user_item_msgs_for_trunc = sorted(
                     [msg for msg in active_user_item_messages if msg.id in user_item_message_ids_in_context],
-                    key=lambda m: session.get_context_item(m.id.replace("user_item_","")).timestamp if session.get_context_item(m.id.replace("user_item_","")) else datetime.min.replace(tzinfo=timezone.utc)
+                    key=lambda m: session.get_context_item(m.id.replace("user_item_","")).timestamp if session.get_context_item(m.id.replace("user_item_","")) else datetime.min.replace(tzinfo=timezone.utc) # type: ignore
                 )
                 for item_msg_to_remove in sorted_active_user_item_msgs_for_trunc:
-                    if current_tokens <= available_tokens_for_prompt: break
-                    if item_msg_to_remove.id in user_item_message_ids_in_context:
+                    current_tokens_after_potential_removal = await provider.count_message_tokens(
+                        [m for m in temp_final_candidates_for_priority_pass if m.id != item_msg_to_remove.id], target_model
+                    )
+                    if current_tokens_after_potential_removal <= available_tokens_for_prompt or \
+                       (current_tokens - (item_msg_to_remove.tokens or 0)) <= available_tokens_for_prompt : # Check if removing this one item is enough
+                        if item_msg_to_remove.id in user_item_message_ids_in_context:
+                            logger.debug(f"Truncating by priority '{priority_type_to_truncate}': Removing user item message '{item_msg_to_remove.id}'.")
+                            temp_final_candidates_for_priority_pass = [m for m in temp_final_candidates_for_priority_pass if m.id != item_msg_to_remove.id]
+                            items_removed_in_this_pass = True
+                            # Recalculate current_tokens based on the modified list
+                            current_tokens = await provider.count_message_tokens(temp_final_candidates_for_priority_pass, target_model)
+                            if current_tokens <= available_tokens_for_prompt: break # Stop if budget met
+                    # If removing one isn't enough, and we are still over budget, this loop continues removing oldest user items.
+                    # This logic might need refinement if we want to remove user items one by one until budget is met.
+                    # For now, if removing one user item doesn't solve it, and we are still over, it will remove more in next iterations if any.
+                    # A more precise approach:
+                    if item_msg_to_remove.id in user_item_message_ids_in_context and current_tokens > available_tokens_for_prompt:
                         logger.debug(f"Truncating by priority '{priority_type_to_truncate}': Removing user item message '{item_msg_to_remove.id}'.")
-                        temp_final_candidates = [m for m in temp_final_candidates if m.id != item_msg_to_remove.id]
+                        temp_final_candidates_for_priority_pass = [m for m in temp_final_candidates_for_priority_pass if m.id != item_msg_to_remove.id]
                         items_removed_in_this_pass = True
-                        current_tokens = await provider.count_message_tokens(temp_final_candidates, target_model)
+                        current_tokens = await provider.count_message_tokens(temp_final_candidates_for_priority_pass, target_model)
+                        if current_tokens <= available_tokens_for_prompt: break
+
+
             elif priority_type_to_truncate == "history":
+                # Get non-system, non-user_item, non-RAG messages from the current candidates
                 history_in_final_context = sorted(
-                    [m for m in temp_final_candidates if not (m.role == LLMCoreRole.SYSTEM or m.id.startswith("user_item_") or m.id == "rag_query_context_marker")],
-                    key=lambda m: m.timestamp
+                    [m for m in temp_final_candidates_for_priority_pass if not (m.role == LLMCoreRole.SYSTEM or m.id.startswith("user_item_") or m.id == "rag_query_context_marker")],
+                    key=lambda m: m.timestamp # Sort oldest to newest for removal
                 )
                 last_user_msg_from_session = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
-                while len(history_in_final_context) > self._minimum_history_messages and current_tokens > available_tokens_for_prompt:
-                    if not history_in_final_context: break
-                    msg_to_remove_from_history = history_in_final_context.pop(0)
+
+                num_history_to_remove_target = len(history_in_final_context) - self._minimum_history_messages
+                removed_count_this_pass = 0
+
+                for i in range(num_history_to_remove_target):
+                    if not history_in_final_context or current_tokens <= available_tokens_for_prompt: break
+
+                    msg_to_remove_from_history = history_in_final_context.pop(0) # Remove oldest
+
+                    # Protect the very last user message if it's about to be removed and would violate min_history
                     if last_user_msg_from_session and msg_to_remove_from_history.id == last_user_msg_from_session.id and \
-                       len(history_in_final_context) < self._minimum_history_messages :
+                       len(history_in_final_context) < self._minimum_history_messages: # Check against remaining after pop
                         logger.debug(f"Protected last user message '{msg_to_remove_from_history.id}' from history truncation as it would violate minimum history count.")
-                        history_in_final_context.insert(0, msg_to_remove_from_history)
-                        break
+                        history_in_final_context.insert(0, msg_to_remove_from_history) # Put it back
+                        break # Stop removing history
+
                     logger.debug(f"Truncating by priority '{priority_type_to_truncate}': Removing history message '{msg_to_remove_from_history.id}'.")
-                    temp_final_candidates = [m for m in temp_final_candidates if m.id != msg_to_remove_from_history.id]
+                    temp_final_candidates_for_priority_pass = [m for m in temp_final_candidates_for_priority_pass if m.id != msg_to_remove_from_history.id]
                     items_removed_in_this_pass = True
-                    current_tokens = await provider.count_message_tokens(temp_final_candidates, target_model)
+                    removed_count_this_pass +=1
+                    current_tokens = await provider.count_message_tokens(temp_final_candidates_for_priority_pass, target_model)
                     if current_tokens <= available_tokens_for_prompt: break
 
             if items_removed_in_this_pass:
-                final_candidate_messages = temp_final_candidates
+                final_candidate_messages = temp_final_candidates_for_priority_pass
+                # Recalculate current_tokens accurately after modifications in this pass
                 current_tokens = await provider.count_message_tokens(final_candidate_messages, target_model)
             else:
                  logger.debug(f"No items of priority type '{priority_type_to_truncate}' found to remove or already at minimums for that type.")
@@ -464,7 +541,7 @@ class ContextManager:
         last_user_msg_session = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
         if last_user_msg_session:
             is_last_user_msg_present_in_final_context = any(m.id == last_user_msg_session.id for m in final_candidate_messages)
-            if not is_last_user_msg_present_in_final_context:
+            if not is_last_user_msg_present_in_final_context and current_tokens > 0 : # Ensure there was some context to begin with
                 error_detail_msg = "Context length too short. Latest user message could not be included after all truncation attempts."
                 logger.error(error_detail_msg + f" Limit: {available_tokens_for_prompt}, Current after truncation: {current_tokens}")
                 raise ContextLengthError(model_name=target_model, limit=available_tokens_for_prompt, actual=current_tokens, message=error_detail_msg)
@@ -474,19 +551,36 @@ class ContextManager:
             raise ContextLengthError(model_name=target_model, limit=available_tokens_for_prompt, actual=current_tokens, message="Context exceeds token limit after all truncation attempts.")
 
         logger.info(f"Final prepared context: {len(final_candidate_messages)} messages, {current_tokens} tokens for model '{target_model}'.")
+        # Filter out the RAG marker message before sending to LLM, if it was added.
         final_payload_messages = [msg for msg in final_candidate_messages if msg.id != "rag_query_context_marker"]
-        final_token_count = await provider.count_message_tokens(final_payload_messages, target_model)
-        return final_payload_messages, rag_documents_used_this_turn, final_token_count
+        # Final token count for the actual payload sent to LLM
+        final_token_count_for_payload = await provider.count_message_tokens(final_payload_messages, target_model)
+        return final_payload_messages, rag_documents_used_this_turn, final_token_count_for_payload
 
     def _format_rag_docs_for_context(self, documents: List[ContextDocument]) -> str:
         """Formats retrieved RAG documents into a single string for context injection."""
         if not documents: return ""
+        # Sort by score if available (lower is better for distance, higher for similarity)
+        # Assuming score is distance-like for now (common with ChromaDB)
         sorted_documents = sorted(documents, key=lambda d: d.score if d.score is not None else float('inf'))
+
         context_parts = ["--- Retrieved Relevant Documents ---"]
         for i, doc in enumerate(sorted_documents):
-            source_info = doc.metadata.get("source", f"Document {doc.id[:8]}")
+            source_info_parts = []
+            if doc.metadata and doc.metadata.get("source_file_path_relative"):
+                source_info_parts.append(f"File: {doc.metadata.get('source_file_path_relative')}")
+            elif doc.metadata and doc.metadata.get("source"): # Generic source
+                source_info_parts.append(f"Source: {doc.metadata.get('source')}")
+            else:
+                source_info_parts.append(f"DocID: {doc.id[:12]}") # Fallback to ID
+
+            if doc.metadata and doc.metadata.get("start_line"):
+                 source_info_parts.append(f"Line: {doc.metadata.get('start_line')}")
+
             score_info = f"(Score: {doc.score:.4f})" if doc.score is not None else ""
-            content_snippet = ' '.join(doc.content.splitlines()).strip()
-            context_parts.append(f"\n[Source: {source_info} {score_info}]\n{content_snippet}")
-        context_parts.append("--- End Retrieved Documents ---")
+            header = f"Context Document {i+1}: [{', '.join(source_info_parts)}] {score_info}"
+
+            content_snippet = ' '.join(doc.content.splitlines()).strip() # Normalize whitespace
+            context_parts.append(f"\n{header}\n{content_snippet}")
+        context_parts.append("\n--- End Retrieved Documents ---")
         return "\n".join(context_parts)
