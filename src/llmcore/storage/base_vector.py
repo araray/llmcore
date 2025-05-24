@@ -129,6 +129,19 @@ class BaseVectorStorage(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    async def list_collection_names(self) -> List[str]:
+        """
+        List the names of all available collections in the vector store.
+
+        Returns:
+            A list of collection name strings.
+
+        Raises:
+            VectorStorageError: If listing collections fails.
+        """
+        pass
+
     # --- Optional Collection Management Methods ---
     # These might be useful but are not strictly required by the core RAG flow
 
@@ -140,11 +153,6 @@ class BaseVectorStorage(abc.ABC):
     # @abc.abstractmethod
     # async def delete_collection(self, collection_name: str) -> None:
     #     """Delete an entire collection."""
-    #     pass
-
-    # @abc.abstractmethod
-    # async def list_collections(self) -> List[str]:
-    #     """List all available collection names."""
     #     pass
 
     @abc.abstractmethod

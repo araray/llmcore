@@ -8,7 +8,7 @@ based on the application's configuration.
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, List # Added List
 
 # Assume ConfyConfig type for hinting
 try:
@@ -24,8 +24,8 @@ from .base_vector import BaseVectorStorage
 from .chromadb_vector import ChromaVectorStorage
 # Import concrete session storage implementations
 from .json_session import JsonSessionStorage
-from .postgres_storage import PgVectorStorage  # Added for Phase 3
-from .postgres_storage import PostgresSessionStorage  # Added for Phase 3
+from .postgres_storage import PgVectorStorage
+from .postgres_storage import PostgresSessionStorage
 from .sqlite_session import SqliteSessionStorage
 
 logger = logging.getLogger(__name__)
@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 SESSION_STORAGE_MAP: Dict[str, Type[BaseSessionStorage]] = {
     "json": JsonSessionStorage,
     "sqlite": SqliteSessionStorage,
-    "postgres": PostgresSessionStorage, # Added for Phase 3
+    "postgres": PostgresSessionStorage,
 }
 
 VECTOR_STORAGE_MAP: Dict[str, Type[BaseVectorStorage]] = {
     "chromadb": ChromaVectorStorage,
-    "pgvector": PgVectorStorage, # Added for Phase 3
+    "pgvector": PgVectorStorage,
 }
 # --- End Mappings ---
 
@@ -160,6 +160,28 @@ class StorageManager:
             else:
                  raise StorageError("Vector storage failed to initialize (check logs for details). RAG is unavailable.")
         return self._vector_storage
+
+    async def list_vector_collection_names(self) -> List[str]:
+        """
+        Lists the names of all available collections in the configured vector store.
+
+        Returns:
+            A list of collection name strings.
+
+        Raises:
+            StorageError: If vector storage is not configured, failed to initialize,
+                          or if the backend fails to list collections.
+        """
+        vector_storage = self.get_vector_storage() # Will raise if not configured/initialized
+        try:
+            return await vector_storage.list_collection_names()
+        except NotImplementedError: # Should not happen if BaseVectorStorage mandates it
+            logger.error(f"Vector storage backend {type(vector_storage).__name__} does not implement list_collection_names.")
+            raise StorageError(f"Listing collections not supported by {type(vector_storage).__name__}.")
+        except Exception as e:
+            logger.error(f"Error listing vector collections via {type(vector_storage).__name__}: {e}", exc_info=True)
+            raise StorageError(f"Failed to list vector collections: {e}")
+
 
     async def close_storages(self) -> None:
         """Closes connections for all initialized storage backends."""

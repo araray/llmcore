@@ -10,18 +10,17 @@ import asyncio
 import logging
 import os
 import pathlib
-from typing import (TYPE_CHECKING, Any, Dict, List,  # Added TYPE_CHECKING
+from typing import (TYPE_CHECKING, Any, Dict, List,
                     Optional, Tuple)
 
 # Import chromadb client library conditionally
 try:
     import chromadb
     from chromadb.api.models.Collection import \
-        Collection as ChromaCollection  # Specific type hint
-    from chromadb.errors import (  # Added AuthorizationError
+        Collection as ChromaCollection
+    from chromadb.errors import (
         AuthorizationError, IDAlreadyExistsError)
     chromadb_available = True
-    # Define type alias for cleaner hinting if available
     ChromaClientType = chromadb.Client
 except ImportError:
     chromadb_available = False
@@ -29,7 +28,6 @@ except ImportError:
     ChromaCollection = None # type: ignore
     IDAlreadyExistsError = Exception # type: ignore
     AuthorizationError = Exception # type: ignore
-    # Use a forward reference string if the library is not available
     ChromaClientType = "chromadb.Client" # type: ignore
 
 
@@ -39,13 +37,11 @@ from .base_vector import BaseVectorStorage
 
 logger = logging.getLogger(__name__)
 
-# Use TYPE_CHECKING to allow type hint without runtime error if chromadb is missing
 if TYPE_CHECKING:
-    # This block is only evaluated by type checkers, not at runtime
     if chromadb_available:
         from chromadb.Client import Client as ActualChromaClientType
     else:
-        ActualChromaClientType = Any # Fallback type hint for checker if import failed
+        ActualChromaClientType = Any
 
 
 class ChromaVectorStorage(BaseVectorStorage):
@@ -56,36 +52,30 @@ class ChromaVectorStorage(BaseVectorStorage):
     Operations are run in threads using asyncio.to_thread as the chromadb
     client is primarily synchronous.
     """
-    # Use the type alias or string literal for the hint
     _client: Optional[ChromaClientType] = None
     _storage_path: Optional[str] = None
     _default_collection_name: str = "llmcore_default_rag"
-    _collection_cache: Dict[str, ChromaCollection] = {} # Cache for collection objects
-
-    # --- Synchronous Helper Methods (to be run in thread) ---
+    _collection_cache: Dict[str, ChromaCollection] = {}
 
     def _sync_initialize(self, config: Dict[str, Any]) -> None:
         """Synchronous initialization logic for ChromaDB client."""
         if not chromadb_available:
-            # This error should be caught earlier by EmbeddingManager/StorageManager
-            # based on config, but double-check here.
             raise ImportError("ChromaDB client library not installed. Please install `chromadb` or `llmcore[chromadb]`.")
 
-        self._storage_path = config.get("path") # Path for persistent storage
+        self._storage_path = config.get("path")
         self._default_collection_name = config.get("default_collection", self._default_collection_name)
 
         try:
             if self._storage_path:
                 expanded_path = os.path.expanduser(self._storage_path)
-                # Ensure parent directory exists (sync is ok here)
                 pathlib.Path(expanded_path).parent.mkdir(parents=True, exist_ok=True)
                 self._client = chromadb.PersistentClient(path=expanded_path)
                 logger.info(f"ChromaDB persistent client initialized at: {expanded_path}")
             else:
-                self._client = chromadb.Client() # In-memory client
+                self._client = chromadb.Client()
                 logger.info("ChromaDB in-memory client initialized.")
 
-            self._client.heartbeat() # Check connection
+            self._client.heartbeat()
             logger.debug("ChromaDB client connection confirmed.")
 
         except Exception as e:
@@ -106,7 +96,6 @@ class ChromaVectorStorage(BaseVectorStorage):
             return self._collection_cache[target_collection_name]
 
         try:
-            # get_or_create_collection handles thread safety internally for client interactions
             collection = self._client.get_or_create_collection(name=target_collection_name)
             logger.debug(f"Accessed ChromaDB collection: '{target_collection_name}'")
             self._collection_cache[target_collection_name] = collection
@@ -162,13 +151,12 @@ class ChromaVectorStorage(BaseVectorStorage):
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=k,
-                where=filter_metadata, # type: ignore # ChromaDB's type hints for where might be stricter
+                where=filter_metadata, # type: ignore
                 include=['metadatas', 'documents', 'distances']
             )
             logger.debug(f"ChromaDB query returned {len(results.get('ids', [[]])[0])} results from collection '{target_collection_name}'.")
 
             context_docs: List[ContextDocument] = []
-            # Ensure results and their inner lists are not None and not empty before accessing
             ids_list = results.get('ids')
             if not ids_list or not ids_list[0]:
                 return []
@@ -183,7 +171,6 @@ class ChromaVectorStorage(BaseVectorStorage):
             contents_list = results.get('documents')
             contents = contents_list[0] if contents_list and contents_list[0] is not None else [""] * len(ids)
 
-
             for i, doc_id in enumerate(ids):
                 context_docs.append(
                     ContextDocument(
@@ -191,7 +178,7 @@ class ChromaVectorStorage(BaseVectorStorage):
                         content=contents[i] if i < len(contents) else "",
                         metadata=metadatas[i] if i < len(metadatas) else {},
                         score=distances[i] if i < len(distances) else None,
-                        embedding=None # Embeddings are not typically returned by query
+                        embedding=None
                     )
                 )
             return context_docs
@@ -217,31 +204,32 @@ class ChromaVectorStorage(BaseVectorStorage):
             logger.error(f"Failed to delete documents from ChromaDB collection '{target_collection_name}': {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB delete_documents failed: {e}")
 
+    def _sync_list_collection_names(self) -> List[str]:
+        """Synchronous logic to list collection names."""
+        if not self._client:
+            raise VectorStorageError("ChromaDB client is not initialized.")
+        try:
+            collections = self._client.list_collections()
+            return [col.name for col in collections]
+        except Exception as e:
+            logger.error(f"Failed to list ChromaDB collections: {e}", exc_info=True)
+            raise VectorStorageError(f"ChromaDB list_collections failed: {e}")
+
     def _sync_close(self) -> None:
-        """
-        Synchronous closing logic for ChromaDB.
-        Removes the client.reset() call as it's often disabled by config and
-        is a destructive operation, not a standard close.
-        ChromaDB PersistentClient typically doesn't require an explicit close method.
-        """
+        """Synchronous closing logic for ChromaDB."""
         if self._client:
             try:
-                # self._client.reset() # Removed: This is destructive and often disabled.
                 logger.info("ChromaDB client cleanup: No explicit reset/close called. Resources are typically managed by the client's lifecycle or garbage collection.")
-            except AuthorizationError as auth_e: # Specifically catch if reset was somehow still called and failed
+            except AuthorizationError as auth_e:
                 logger.warning(f"ChromaDB client reset is disabled by config and was attempted: {auth_e}")
             except Exception as e:
                 logger.error(f"Error during ChromaDB client resource management (if any explicit close was attempted): {e}", exc_info=True)
             finally:
-                 self._client = None # Dereference the client
-                 self._collection_cache.clear() # Clear collection cache
+                 self._client = None
+                 self._collection_cache.clear()
         logger.info("ChromaDB vector storage resources cleared/dereferenced.")
 
-
-    # --- Async Interface Methods (using asyncio.to_thread) ---
-
     async def initialize(self, config: Dict[str, Any]) -> None:
-        """Initialize the ChromaDB client asynchronously."""
         await asyncio.to_thread(self._sync_initialize, config)
 
     async def add_documents(
@@ -249,7 +237,6 @@ class ChromaVectorStorage(BaseVectorStorage):
         documents: List[ContextDocument],
         collection_name: Optional[str] = None
     ) -> List[str]:
-        """Add or update multiple documents asynchronously."""
         return await asyncio.to_thread(self._sync_add_documents, documents, collection_name)
 
     async def similarity_search(
@@ -259,7 +246,6 @@ class ChromaVectorStorage(BaseVectorStorage):
         collection_name: Optional[str] = None,
         filter_metadata: Optional[Dict[str, Any]] = None
     ) -> List[ContextDocument]:
-        """Perform a similarity search asynchronously."""
         return await asyncio.to_thread(
             self._sync_similarity_search,
             query_embedding, k, collection_name, filter_metadata
@@ -270,9 +256,11 @@ class ChromaVectorStorage(BaseVectorStorage):
         document_ids: List[str],
         collection_name: Optional[str] = None
     ) -> bool:
-        """Delete documents asynchronously."""
         return await asyncio.to_thread(self._sync_delete_documents, document_ids, collection_name)
 
+    async def list_collection_names(self) -> List[str]:
+        """Lists the names of all available collections in the vector store asynchronously."""
+        return await asyncio.to_thread(self._sync_list_collection_names)
+
     async def close(self) -> None:
-        """Clean up resources asynchronously."""
         await asyncio.to_thread(self._sync_close)
