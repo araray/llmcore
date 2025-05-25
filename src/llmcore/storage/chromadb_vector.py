@@ -11,38 +11,102 @@ import logging
 import os
 import pathlib
 from typing import (TYPE_CHECKING, Any, Dict, List,
-                    Optional, Tuple)
+                    Optional, Tuple, Type)
 
-# Import chromadb client library conditionally
+logger = logging.getLogger(__name__)
+
+# --- Conditional Import for ChromaDB ---
+_chromadb_module = None
+_ChromaCollection_class = None
+_ChromaClient_class = None
+chromadb_available = False
+
+# Base error types, default to generic Exception. These will be updated if specific imports succeed.
+ChromaError: Type[Exception] = Exception
+AuthorizationError: Type[Exception] = Exception
+IDAlreadyExistsError: Type[Exception] = Exception
+CollectionNotFoundError: Type[Exception] = Exception # Primary target for robust fallback
+
 try:
-    import chromadb
-    from chromadb.api.models.Collection import \
-        Collection as ChromaCollection
-    from chromadb.errors import ( # type: ignore[attr-defined] # errors module exists
-        AuthorizationError, IDAlreadyExistsError, CollectionNotFoundError) # Added CollectionNotFoundError
+    import chromadb as _chromadb_module_imported
+    _chromadb_module = _chromadb_module_imported
+    logger.debug("Successfully imported 'chromadb' module.")
+
+    from chromadb.api.models.Collection import Collection as _ChromaCollection_imported
+    _ChromaCollection_class = _ChromaCollection_imported
+    logger.debug("Successfully imported 'chromadb.api.models.Collection'.")
+
+    _ChromaClient_class = _chromadb_module.Client # Access Client after chromadb is confirmed imported
     chromadb_available = True
-    ChromaClientType = chromadb.Client
+    logger.info("Core ChromaDB components ('chromadb' module and 'Collection' model) imported successfully. ChromaDB is considered available.")
+
+    # Attempt to import specific error types from chromadb.errors
+    # These are best-effort imports; if they fail, the broader Exception type will be used.
+    try:
+        from chromadb.errors import ChromaError as ActualChromaError
+        ChromaError = ActualChromaError # type: ignore[misc, no-redef]
+        logger.debug("Successfully imported 'chromadb.errors.ChromaError'.")
+    except ImportError:
+        logger.warning("'chromadb.errors.ChromaError' not found. Using base 'Exception' for ChromaError.")
+
+    try:
+        from chromadb.errors import AuthorizationError as ActualAuthorizationError
+        AuthorizationError = ActualAuthorizationError # type: ignore[misc, no-redef]
+        logger.debug("Successfully imported 'chromadb.errors.AuthorizationError'.")
+    except ImportError:
+        logger.warning("'chromadb.errors.AuthorizationError' not found. Using base 'Exception' for AuthorizationError.")
+
+    try:
+        from chromadb.errors import IDAlreadyExistsError as ActualIDAlreadyExistsError
+        IDAlreadyExistsError = ActualIDAlreadyExistsError # type: ignore[misc, no-redef]
+        logger.debug("Successfully imported 'chromadb.errors.IDAlreadyExistsError'.")
+    except ImportError:
+        logger.warning("'chromadb.errors.IDAlreadyExistsError' not found. Using base 'Exception' for IDAlreadyExistsError.")
+
+    try:
+        from chromadb.errors import CollectionNotFoundError as ActualCollectionNotFoundError
+        CollectionNotFoundError = ActualCollectionNotFoundError # type: ignore[misc, no-redef]
+        logger.debug("Successfully imported 'chromadb.errors.CollectionNotFoundError'.")
+    except ImportError:
+        logger.warning("'chromadb.errors.CollectionNotFoundError' not found directly.")
+        # Fallback for CollectionNotFoundError: try NotFoundError, then ChromaError, then Exception
+        try:
+            from chromadb.errors import NotFoundError as ActualNotFoundError
+            CollectionNotFoundError = ActualNotFoundError # type: ignore[misc, no-redef]
+            logger.info("Aliased 'CollectionNotFoundError' to 'chromadb.errors.NotFoundError'.")
+        except ImportError:
+            logger.warning(
+                "'chromadb.errors.NotFoundError' also not found. "
+                "Aliasing 'CollectionNotFoundError' to 'ChromaError' (if available and not base Exception) or base 'Exception'."
+            )
+            if ChromaError is not Exception: # Check if ChromaError was successfully imported
+                CollectionNotFoundError = ChromaError # type: ignore[misc, no-redef]
+            # else CollectionNotFoundError remains Exception (its default)
+
 except ImportError:
+    # This block is hit if 'import chromadb' or 'from chromadb.api.models.Collection import Collection' fails.
+    logger.error(
+        "Failed to import core 'chromadb' library or 'Collection' model. "
+        "ChromaDB functionality will be unavailable."
+    )
     chromadb_available = False
-    chromadb = None # type: ignore
-    ChromaCollection = None # type: ignore
-    IDAlreadyExistsError = Exception # type: ignore
-    AuthorizationError = Exception # type: ignore
-    CollectionNotFoundError = Exception # type: ignore
-    ChromaClientType = "chromadb.Client" # type: ignore
+    _chromadb_module = None
+    _ChromaCollection_class = None
+    _ChromaClient_class = None
+    # All error types remain their default 'Exception' as defined above.
+
+# --- End Conditional Import ---
 
 
 from ..exceptions import ConfigError, VectorStorageError
 from ..models import ContextDocument
 from .base_vector import BaseVectorStorage
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:
-    if chromadb_available:
-        from chromadb.Client import Client as ActualChromaClientType
+    if _chromadb_module and _ChromaClient_class:
+        ActualChromaClientType = _ChromaClient_class
     else:
-        ActualChromaClientType = Any
+        ActualChromaClientType = Any # Fallback for type checker if imports failed
 
 
 class ChromaVectorStorage(BaseVectorStorage):
@@ -53,15 +117,15 @@ class ChromaVectorStorage(BaseVectorStorage):
     Operations are run in threads using asyncio.to_thread as the chromadb
     client is primarily synchronous.
     """
-    _client: Optional[ChromaClientType] = None
+    _client: Optional[Any] = None # Use Any for client type due to conditional import
     _storage_path: Optional[str] = None
     _default_collection_name: str = "llmcore_default_rag"
-    _collection_cache: Dict[str, ChromaCollection] = {}
+    _collection_cache: Dict[str, Any] = {} # Use Any for collection type
 
     def _sync_initialize(self, config: Dict[str, Any]) -> None:
         """Synchronous initialization logic for ChromaDB client."""
-        if not chromadb_available:
-            raise ImportError("ChromaDB client library not installed. Please install `chromadb` or `llmcore[chromadb]`.")
+        if not chromadb_available or not _chromadb_module or not _ChromaClient_class:
+            raise ImportError("Core ChromaDB client library components not installed or accessible. Please install/reinstall `chromadb` or `llmcore[chromadb]`.")
 
         self._storage_path = config.get("path")
         self._default_collection_name = config.get("default_collection", self._default_collection_name)
@@ -69,37 +133,28 @@ class ChromaVectorStorage(BaseVectorStorage):
         try:
             if self._storage_path:
                 expanded_path = os.path.expanduser(self._storage_path)
-                # Ensure the parent directory exists for ChromaDB's persistent storage path
                 pathlib.Path(expanded_path).mkdir(parents=True, exist_ok=True)
-                self._client = chromadb.PersistentClient(path=expanded_path)
+                self._client = _chromadb_module.PersistentClient(path=expanded_path)
                 logger.info(f"ChromaDB persistent client initialized at: {expanded_path}")
             else:
-                self._client = chromadb.Client() # In-memory client
+                self._client = _ChromaClient_class() # In-memory client
                 logger.info("ChromaDB in-memory client initialized.")
 
-            # Test connection (heartbeat might not be available for all client types or versions)
-            # A simple way to test is to try listing collections.
             if self._client:
-                self._client.list_collections() # This will raise if client is not properly connected/configured
+                self._client.list_collections()
                 logger.debug("ChromaDB client connection confirmed via list_collections().")
             else:
-                # This case should ideally be caught by the client instantiation itself.
                 raise VectorStorageError("ChromaDB client object is None after initialization attempt.")
-
 
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB client (path: {self._storage_path}): {e}", exc_info=True)
             self._client = None
             raise VectorStorageError(f"Could not initialize ChromaDB client: {e}")
 
-    def _sync_get_collection(self, collection_name: Optional[str]) -> ChromaCollection:
+    def _sync_get_collection(self, collection_name: Optional[str]) -> Any: # Return Any for collection
         """
         Synchronously gets or creates a ChromaDB collection.
         Caches retrieved collection objects.
-
-        Raises:
-            VectorStorageError: If client not initialized.
-            ConfigError: If collection name is invalid or access fails.
         """
         if not self._client:
             raise VectorStorageError("ChromaDB client is not initialized.")
@@ -112,13 +167,8 @@ class ChromaVectorStorage(BaseVectorStorage):
             return self._collection_cache[target_collection_name]
 
         try:
-            # get_or_create_collection is idempotent and suitable here.
-            # Default distance metric (cosine) is often set at collection creation.
-            # If apykatu sets it, this will just retrieve it.
-            # If LLMCore is the first to access, it might create with ChromaDB's default.
             collection = self._client.get_or_create_collection(
                 name=target_collection_name,
-                # metadata={"hnsw:space": "cosine"} # Example if creating new
             )
             logger.debug(f"Accessed ChromaDB collection: '{target_collection_name}'")
             self._collection_cache[target_collection_name] = collection
@@ -134,7 +184,7 @@ class ChromaVectorStorage(BaseVectorStorage):
     ) -> List[str]:
         """Synchronous logic to add documents."""
         collection = self._sync_get_collection(collection_name)
-        target_collection_name = collection.name # Use actual name from collection object
+        target_collection_name = collection.name
 
         doc_ids: List[str] = []
         embeddings: List[List[float]] = []
@@ -146,20 +196,15 @@ class ChromaVectorStorage(BaseVectorStorage):
             if not doc.embedding: raise VectorStorageError(f"Document '{doc.id}' must have an embedding.")
             doc_ids.append(doc.id)
             embeddings.append(doc.embedding)
-            # Ensure metadata is a flat dictionary of supported types by ChromaDB
-            # (str, int, float, bool). Pydantic models or complex nested structures
-            # in doc.metadata need to be serialized or flattened appropriately.
-            # For now, assume doc.metadata is already compliant or ChromaDB handles simple dicts.
             serializable_meta = {}
             if doc.metadata:
                 for k, v in doc.metadata.items():
                     if isinstance(v, (str, int, float, bool)):
                         serializable_meta[k] = v
                     else:
-                        # Attempt to serialize other types, log warning if complex
                         try:
-                            serializable_meta[k] = str(v) # Simple string conversion
-                            if not isinstance(v, (list, dict)): # Avoid logging for simple lists/dicts
+                            serializable_meta[k] = str(v)
+                            if not isinstance(v, (list, dict)):
                                 logger.debug(f"Metadata value for key '{k}' in doc '{doc.id}' was converted to string: '{str(v)[:50]}...'")
                         except:
                             logger.warning(f"Metadata value for key '{k}' in doc '{doc.id}' is complex and could not be easily serialized to string. Skipping this metadata field.")
@@ -189,10 +234,12 @@ class ChromaVectorStorage(BaseVectorStorage):
 
         try:
             # ChromaDB's query method expects query_embeddings as List[List[float]]
+            # The 'where' filter in ChromaDB expects a specific format, e.g., {"source": "wiki"}
+            # or more complex ones like {"$and": [...]}. Ensure filter_metadata matches this.
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=k,
-                where=filter_metadata, # type: ignore [arg-type] # ChromaDB expects Dict[str, WhereValue]
+                where=filter_metadata, # Pass filter_metadata directly
                 include=['metadatas', 'documents', 'distances']
             )
             logger.debug(f"ChromaDB query returned {len(results.get('ids', [[]])[0])} results from collection '{target_collection_name}'.")
@@ -214,7 +261,6 @@ class ChromaVectorStorage(BaseVectorStorage):
             contents = contents_list[0] if contents_list and contents_list[0] is not None else [""] * len(ids)
 
             for i, doc_id_val in enumerate(ids):
-                # Ensure all components exist for the current index before creating ContextDocument
                 doc_content = contents[i] if i < len(contents) and contents[i] is not None else ""
                 doc_metadata = metadatas[i] if i < len(metadatas) and metadatas[i] is not None else {}
                 doc_distance = distances[i] if i < len(distances) and distances[i] is not None else None
@@ -246,7 +292,7 @@ class ChromaVectorStorage(BaseVectorStorage):
         try:
             collection.delete(ids=document_ids)
             logger.info(f"Attempted deletion of {len(document_ids)} documents from ChromaDB collection '{target_collection_name}'.")
-            return True # ChromaDB delete doesn't return specific success/fail count per ID easily
+            return True
         except Exception as e:
             logger.error(f"Failed to delete documents from ChromaDB collection '{target_collection_name}': {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB delete_documents failed: {e}")
@@ -266,17 +312,14 @@ class ChromaVectorStorage(BaseVectorStorage):
         """Synchronous logic to get collection metadata."""
         try:
             collection = self._sync_get_collection(collection_name) # This handles default name
-            # The .metadata attribute of a ChromaCollection object holds its metadata
             if collection.metadata is not None:
-                # Ensure it's a plain dict for consistent return type
                 return dict(collection.metadata)
-            return None # Return None if metadata is explicitly None
-        except CollectionNotFoundError: # Specific ChromaDB error if collection doesn't exist
+            return None
+        except CollectionNotFoundError:
             logger.warning(f"Collection '{collection_name or self._default_collection_name}' not found when trying to get metadata.")
             return None
         except Exception as e:
             logger.error(f"Failed to get metadata for ChromaDB collection '{collection_name or self._default_collection_name}': {e}", exc_info=True)
-            # Re-raise as VectorStorageError for consistent API error type
             raise VectorStorageError(f"ChromaDB get_collection_metadata failed: {e}")
 
 
@@ -284,22 +327,17 @@ class ChromaVectorStorage(BaseVectorStorage):
         """Synchronous closing logic for ChromaDB."""
         if self._client:
             try:
-                # ChromaDB's PersistentClient doesn't have an explicit close().
-                # It relies on its __del__ for cleanup or the underlying SQLite connection
-                # being closed if it's using duckdb. For server-based clients, reset() might be used.
-                # For PersistentClient, simply dereferencing might be enough.
-                # However, if reset is available and safe, it can be called.
-                if hasattr(self._client, 'reset'): # Check if reset method exists
+                if hasattr(self._client, 'reset'):
                     logger.info("Calling ChromaDB client.reset() to clear in-memory state.")
-                    self._client.reset() # Resets the client's state, including heartbeat
+                    self._client.reset()
                 else:
-                    logger.info("ChromaDB client (PersistentClient) does not have a direct close/reset method. Resources are typically managed by its lifecycle.")
-            except AuthorizationError as auth_e: # Specific ChromaDB error
+                    logger.info("ChromaDB client does not have a direct close/reset method. Resources are typically managed by its lifecycle.")
+            except AuthorizationError as auth_e:
                 logger.warning(f"ChromaDB client reset/cleanup might be restricted by config or permissions: {auth_e}")
             except Exception as e:
                 logger.error(f"Error during ChromaDB client resource management: {e}", exc_info=True)
             finally:
-                 self._client = None # Dereference to allow GC
+                 self._client = None
                  self._collection_cache.clear()
         logger.info("ChromaDB vector storage resources cleared/dereferenced.")
 
