@@ -64,24 +64,17 @@ try:
         logger.warning("'chromadb.errors.IDAlreadyExistsError' not found. Using base 'Exception' for IDAlreadyExistsError.")
 
     try:
-        from chromadb.errors import CollectionNotFoundError as ActualCollectionNotFoundError
-        CollectionNotFoundError = ActualCollectionNotFoundError # type: ignore[misc, no-redef]
-        logger.debug("Successfully imported 'chromadb.errors.CollectionNotFoundError'.")
+        from chromadb.errors import NotFoundError as ActualNotFoundError
+        CollectionNotFoundError = ActualNotFoundError # type: ignore[misc, no-redef]
+        logger.info("Aliased 'CollectionNotFoundError' to 'chromadb.errors.NotFoundError'.")
     except ImportError:
-        logger.warning("'chromadb.errors.CollectionNotFoundError' not found directly.")
-        # Fallback for CollectionNotFoundError: try NotFoundError, then ChromaError, then Exception
-        try:
-            from chromadb.errors import NotFoundError as ActualNotFoundError
-            CollectionNotFoundError = ActualNotFoundError # type: ignore[misc, no-redef]
-            logger.info("Aliased 'CollectionNotFoundError' to 'chromadb.errors.NotFoundError'.")
-        except ImportError:
-            logger.warning(
-                "'chromadb.errors.NotFoundError' also not found. "
-                "Aliasing 'CollectionNotFoundError' to 'ChromaError' (if available and not base Exception) or base 'Exception'."
-            )
-            if ChromaError is not Exception: # Check if ChromaError was successfully imported
-                CollectionNotFoundError = ChromaError # type: ignore[misc, no-redef]
-            # else CollectionNotFoundError remains Exception (its default)
+        logger.warning(
+            "'chromadb.errors.NotFoundError' also not found. "
+            "Aliasing 'CollectionNotFoundError' to 'ChromaError' (if available and not base Exception) or base 'Exception'."
+        )
+        if ChromaError is not Exception: # Check if ChromaError was successfully imported
+            CollectionNotFoundError = ChromaError # type: ignore[misc, no-redef]
+
 
 except ImportError:
     # This block is hit if 'import chromadb' or 'from chromadb.api.models.Collection import Collection' fails.
