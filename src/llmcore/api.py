@@ -189,13 +189,23 @@ class LLMCore:
 
         try:
             instance._embedding_manager = EmbeddingManager(instance.config)
-            await instance._embedding_manager.initialize_embedding_model() # Initialize default model
-            logger.info("EmbeddingManager initialized.")
+            # --- MODIFIED BLOCK START ---
+            # Initialize the default embedding model if configured.
+            # The EmbeddingManager initializes models on demand via get_model().
+            default_embedding_model_id = instance.config.get('llmcore.default_embedding_model')
+            if default_embedding_model_id:
+                logger.info(f"Pre-initializing default embedding model: {default_embedding_model_id}")
+                await instance._embedding_manager.get_model(default_embedding_model_id)
+                logger.info(f"Default embedding model '{default_embedding_model_id}' initialized successfully.")
+            else:
+                logger.info("No default_embedding_model configured in 'llmcore' section. Skipping pre-initialization.")
+            # --- MODIFIED BLOCK END ---
+            logger.info("EmbeddingManager setup complete.")
         except (ConfigError, EmbeddingError) as e:
-             logger.error(f"Failed to initialize EmbeddingManager: {e}", exc_info=True)
+             logger.error(f"Failed to initialize EmbeddingManager or default model: {e}", exc_info=True)
              raise
         except Exception as e:
-            raise LLMCoreError(f"EmbeddingManager initialization failed unexpectedly: {e}")
+            raise LLMCoreError(f"EmbeddingManager initialization or default model setup failed unexpectedly: {e}")
 
         try:
             instance._context_manager = ContextManager(
@@ -249,7 +259,7 @@ class LLMCore:
             provider_name: Override the default provider specified in the configuration.
             model_name: Override the default model for the selected provider.
             stream: If True, returns an async generator yielding response text chunks (str).
-                    If False (default), returns the complete response content as a string.
+                    If False (default), returns the complete response content as a single string.
             save_session: If True (default) and session_id is provided, the
                           conversation turn (user message + assistant response) is
                           saved to the persistent session storage. Ignored if
@@ -675,12 +685,7 @@ class LLMCore:
             # load_or_create_session will create a new *empty* one.
             # For get_session, we strictly want to return None if not found persistently.
             # This requires a change in SessionManager or a new method there.
-            # For now, assuming SessionManager.load_or_create_session(..., system_message=None)
-            # might return a new empty session if not found.
-            # A more accurate get_session would be:
-            # session = await self._session_manager._storage.get_session(session_id)
-            # but that bypasses SessionManager logic.
-            # Let's assume SessionManager.load_or_create_session is the entry point.
+            # For now, assuming SessionManager.load_or_create_session is the entry point.
             # If it creates one, it's effectively "not found" for a pure "get" operation
             # if it wasn't in transient cache.
             # The original spec for SessionManager.load_or_create_session implies it creates.
