@@ -24,9 +24,9 @@ from .exceptions import (ConfigError, ContextError,  # MCPError removed
                          SessionStorageError, StorageError, VectorStorageError)
 # Import core models and exceptions for easier access by library users
 # as per the API specification.
-from .models import ContextItem  # Ensure ContextItem is imported
-from .models import ContextItemType  # Ensure ContextItemType is imported
-from .models import ChatSession, ContextDocument, Message, Role
+from .models import (ChatSession, ContextDocument, ContextItem,
+                     ContextItemType, Message, Role, ContextPreparationDetails, # Added ContextPreparationDetails
+                     ContextPreset, ContextPresetItem) # Added ContextPreset and ContextPresetItem
 
 # Expose specific elements for the public API
 __all__ = [
@@ -37,8 +37,11 @@ __all__ = [
     "Message",
     "ChatSession",
     "ContextDocument",
-    "ContextItem",       # Add ContextItem to __all__
-    "ContextItemType",   # Add ContextItemType to __all__
+    "ContextItem",
+    "ContextItemType",
+    "ContextPreparationDetails", # Added ContextPreparationDetails to __all__
+    "ContextPreset",             # Added ContextPreset to __all__
+    "ContextPresetItem",         # Added ContextPresetItem to __all__
     # Exceptions
     "LLMCoreError",
     "ConfigError",
