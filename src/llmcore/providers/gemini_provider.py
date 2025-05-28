@@ -55,12 +55,13 @@ except ImportError:
 try:
     # CoreGoogleAPIError is the base for many google cloud client library errors
     from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError
-    from google.api_core.exceptions import InvalidArgument, PermissionDenied
+    from google.api_core.exceptions import InvalidArgument, PermissionDenied, FailedPrecondition
     google_api_core_exceptions_available = True
 except ImportError:
     CoreGoogleAPIError = Exception # type: ignore [assignment] # Fallback type
     PermissionDenied = Exception   # type: ignore [assignment] # Fallback type
     InvalidArgument = Exception  # type: ignore [assignment] # Fallback type
+    FailedPrecondition = Exception  # type: ignore [assignment] # Fallback type
 
 # Overall availability depends on all critical parts
 google_genai_available = (
@@ -68,6 +69,7 @@ google_genai_available = (
     google_genai_types_module_available and
     google_api_core_exceptions_available
 )
+from google.ai.generativelanguage_v1.types import Candidate
 # --- End granular import checks ---
 
 
@@ -396,25 +398,58 @@ class GeminiProvider(BaseProvider):
                             is_blocked = False
 
                             try:
-                                # Accessing chunk.text can raise ValueError if content is blocked
+                                # Accessing chunk.text can still raise ValueError if blocked at HTTP/text layer
                                 chunk_text = chunk.text
-                                if chunk.candidates and chunk.candidates[0].finish_reason:
-                                    finish_reason_str = chunk.candidates[0].finish_reason.name
-                            except ValueError as ve: # Often indicates blocked content
-                                logger.warning(f"ValueError accessing chunk text (likely blocked by safety settings): {ve}. Chunk: {chunk}")
-                                is_blocked = True
-                                if chunk.prompt_feedback and chunk.prompt_feedback.block_reason:
-                                    finish_reason_str = f"SAFETY_BLOCK_{chunk.prompt_feedback.block_reason.name}"
+
+                                if chunk.candidates:
+                                    fr = chunk.candidates[0].finish_reason
+                                    # Normal stop on provided or natural stop sequence
+                                    if fr == Candidate.FinishReason.STOP_SEQUENCE:
+                                        finish_reason_str = fr.name
+                                    # Safety “recitation” block at candidate level
+                                    elif fr == Candidate.FinishReason.RECITATION:
+                                        is_blocked = True
+                                        finish_reason_str = "SAFETY_RECITATION"
+                                    else:
+                                        finish_reason_str = fr.name
                                 else:
-                                    finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
-                            except StopCandidateException as sce: # Explicit exception for blocked candidate
-                                logger.warning(f"Content generation stopped by StopCandidateException (safety filter): {sce}")
+                                    # No candidates at all → prompt was blocked before candidate generation
+                                    is_blocked = True
+                                    fb = getattr(chunk, "prompt_feedback", None)
+                                    if fb and fb.block_reason:
+                                        finish_reason_str = f"SAFETY_BLOCK_{fb.block_reason.name}"
+                                    else:
+                                        finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
+
+                                yield {"text": chunk_text, "finish_reason": finish_reason_str}
+
+                            except ValueError as ve:
+                                # HTTP/text‐layer block (e.g. network‐level filter)
+                                logger.warning(f"ValueError accessing chunk text (blocked?): {ve}. Chunk: {chunk!r}")
                                 is_blocked = True
-                                finish_reason_str = "SAFETY_CANDIDATE_STOP"
+                                fb = getattr(chunk, "prompt_feedback", None)
+                                finish_reason_str = (
+                                    f"SAFETY_BLOCK_{fb.block_reason.name}"
+                                    if fb and fb.block_reason
+                                    else "SAFETY_UNKNOWN_BLOCK"
+                                )
+                                yield {"text": None, "finish_reason": finish_reason_str}
+
+                            except (InvalidArgument, FailedPrecondition) as api_err:
+                                # Bad request, safety precondition failures, etc.
+                                logger.error(f"API error: {api_err}", exc_info=True)
+                                raise  # or: raise ProviderError(...) from api_err
+
+                            except CoreGoogleAPIError as api_err:
+                                # Catch-all for other HTTP/gRPC errors (rate limits, server errors, etc.)
+                                logger.error(f"Cloud API call failed: {api_err}", exc_info=True)
+                                raise  # or: raise ProviderError(...) from api_err
+
                             except Exception as e_chunk:
-                                logger.error(f"Unexpected error processing stream chunk: {e_chunk}. Chunk: {chunk}", exc_info=True)
+                                # Unexpected error in processing this chunk—skip it but continue stream
+                                logger.error(f"Unexpected error processing stream chunk: {e_chunk}. Chunk: {chunk!r}", exc_info=True)
                                 yield {"error": f"Unexpected stream error: {e_chunk}"}
-                                continue # Skip this problematic chunk
+                                continue
 
                             if is_blocked:
                                 logger.warning(f"Stream chunk blocked due to safety settings. Finish reason: {finish_reason_str}")
@@ -459,24 +494,53 @@ class GeminiProvider(BaseProvider):
                 is_blocked = False
 
                 try:
-                    # Accessing response.text can raise ValueError if content is blocked
+                    # Accessing response.text can still raise ValueError if underlying content is blocked
                     full_text = response.text
-                    if response.candidates and response.candidates[0].finish_reason:
-                        finish_reason_str = response.candidates[0].finish_reason.name
-                except ValueError as ve: # Often indicates blocked content
-                    logger.warning(f"Content blocked in Gemini response (ValueError accessing .text): {ve}")
-                    is_blocked = True
-                    if response.prompt_feedback and response.prompt_feedback.block_reason:
-                        finish_reason_str = f"SAFETY_BLOCK_{response.prompt_feedback.block_reason.name}"
+                    if response.candidates:
+                        # Inspect finish_reason enum instead of catching StopCandidateException
+                        fr = response.candidates[0].finish_reason
+                        if fr == Candidate.FinishReason.STOP_SEQUENCE:
+                            finish_reason_str = fr.name
+                        elif fr == Candidate.FinishReason.RECITATION:
+                            # e.g. safety recitation block
+                            is_blocked = True
+                            finish_reason_str = "SAFETY_RECITATION"
+                        else:
+                            finish_reason_str = fr.name
                     else:
-                        finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
-                except StopCandidateException as sce: # Explicit exception for blocked candidate
-                    logger.warning(f"Content generation stopped by StopCandidateException (safety filter): {sce}")
+                        # No candidates → prompt was fully blocked
+                        fb = response.prompt_feedback
+                        is_blocked = True
+                        if fb and fb.block_reason:
+                            finish_reason_str = f"SAFETY_BLOCK_{fb.block_reason.name}"
+                        else:
+                            finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
+
+                except ValueError as ve:
+                    logger.warning(f"Content blocked in Gemini response: {ve}")
                     is_blocked = True
-                    finish_reason_str = "SAFETY_CANDIDATE_STOP"
+                    fb = getattr(response, "prompt_feedback", None)
+                    finish_reason_str = (
+                        f"SAFETY_BLOCK_{fb.block_reason.name}"
+                        if fb and fb.block_reason
+                        else "SAFETY_UNKNOWN_BLOCK"
+                    )
+
+                except (InvalidArgument, FailedPrecondition) as api_err:
+                    logger.error(f"API invocation error: {api_err}")
+                    # Chain the original API error for full context:
+                    raise ProviderError(self.get_name(), f"Gemini API error: {api_err}") from api_err
+
+                except CoreGoogleAPIError as api_err:
+                    logger.error(f"Cloud API error: {api_err}", exc_info=True)
+                    # Suppress the original cause if you don't want the long stack:
+                    raise ProviderError(self.get_name(), f"Gemini API call failed: {api_err}") from None
+
                 except Exception as e_resp_text:
-                    logger.error(f"Error accessing Gemini response content (response.text): {e_resp_text}.", exc_info=True)
-                    raise ProviderError(self.get_name(), f"Failed to extract content from Gemini response: {e_resp_text}")
+                    logger.error(f"Error extracting Gemini response: {e_resp_text}", exc_info=True)
+                    # Chain to preserve the unexpected exception’s traceback:
+                    raise ProviderError(self.get_name(), f"Failed to extract content: {e_resp_text}") from e_resp_text
+
 
                 if is_blocked:
                     raise ProviderError(self.get_name(), f"Content generation blocked by safety settings. Reason: {finish_reason_str}")
@@ -504,25 +568,25 @@ class GeminiProvider(BaseProvider):
         except GenAIAPIError as e_sdk:
             logger.error(f"Gemini API error: {e_sdk}", exc_info=True)
             if isinstance(e_sdk, genai_errors.PermissionDeniedError): # type: ignore[attr-defined]
-                raise ProviderError(self.get_name(), f"API Key Invalid or Permission Denied for Gemini: {e_sdk}")
+                raise ProviderError(self.get_name(), f"API Key Invalid or Permission Denied for Gemini: {e_sdk}") from e_sdk
             if isinstance(e_sdk, genai_errors.InvalidArgumentError): # type: ignore[attr-defined]
                 if "context length" in str(e_sdk).lower() or "token limit" in str(e_sdk).lower() or "user input is too long" in str(e_sdk).lower():
                     actual_tokens = 0
                     try: actual_tokens = await self.count_message_tokens(context, model_name) # type: ignore[arg-type]
                     except Exception: pass
                     limit = self.get_max_context_length(model_name)
-                    raise ContextLengthError(model_name=model_name, limit=limit, actual=actual_tokens, message=f"Context length error with Gemini: {e_sdk}")
-                raise ProviderError(self.get_name(), f"Invalid Argument for Gemini API: {e_sdk}")
+                    raise ContextLengthError(model_name=model_name, limit=limit, actual=actual_tokens, message=f"Context length error with Gemini: {e_sdk}") from None
+                raise ProviderError(self.get_name(), f"Invalid Argument for Gemini API: {e_sdk}") from e_sdk
             if isinstance(e_sdk, CoreGoogleAPIError):
                  logger.error(f"Google Core API error during Gemini call: {e_sdk}", exc_info=True)
-                 raise ProviderError(self.get_name(), f"Google Core API Error: {e_sdk}")
+                 raise ProviderError(self.get_name(), f"Google Core API Error: {e_sdk}") from e_sdk
             raise ProviderError(self.get_name(), f"Gemini API Error: {e_sdk}")
         except asyncio.TimeoutError:
             logger.error(f"Request to Gemini API timed out.")
-            raise ProviderError(self.get_name(), f"Request timed out.")
+            raise ProviderError(self.get_name(), f"Request timed out.") from asyncio.TimeoutError
         except Exception as e:
             logger.error(f"Unexpected error during Gemini chat completion: {e}", exc_info=True)
-            raise ProviderError(self.get_name(), f"An unexpected error occurred with Gemini provider: {e}")
+            raise ProviderError(self.get_name(), f"An unexpected error occurred with Gemini provider: {e}") from None
 
 
     async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
