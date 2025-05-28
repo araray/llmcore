@@ -72,9 +72,11 @@ class ContextManager:
         self._reserved_response_tokens: int = cm_config.get('reserved_response_tokens', 500)
         self._history_selection_strategy: str = cm_config.get('history_selection_strategy', 'last_n_tokens')
 
+        # --- MODIFIED DEFAULT INCLUSION PRIORITY ---
         self._inclusion_priority_order: List[str] = self._parse_inclusion_priority(
-            cm_config.get('inclusion_priority', "system_history,final_user_query,explicitly_staged,user_items_active,history_chat")
+            cm_config.get('inclusion_priority', "system_history,explicitly_staged,user_items_active,history_chat,final_user_query")
         )
+        # --- END MODIFICATION ---
         self._truncation_priority_order: List[str] = self._parse_truncation_priority(
             cm_config.get('truncation_priority', 'history_chat,user_items_active,rag_in_query,explicitly_staged')
         )
@@ -130,7 +132,9 @@ class ContextManager:
             invalid_found = set(priorities) - set(ordered_priorities)
             logger.warning(f"Invalid items in 'inclusion_priority': {invalid_found}. Using valid: {ordered_priorities}")
         if not ordered_priorities:
-            default_priority = ["system_history", "final_user_query", "explicitly_staged", "user_items_active", "history_chat"]
+            # --- MODIFIED DEFAULT FALLBACK INCLUSION PRIORITY ---
+            default_priority = ["system_history", "explicitly_staged", "user_items_active", "history_chat", "final_user_query"]
+            # --- END MODIFICATION ---
             logger.warning(f"No valid 'inclusion_priority' items. Defaulting to: {default_priority}")
             return default_priority
         return ordered_priorities
@@ -444,7 +448,14 @@ class ContextManager:
                     if current_tokens_in_payload + msg_tokens <= available_tokens_for_prompt:
                         final_payload_messages.append(msg)
                         current_tokens_in_payload += msg_tokens
-                    else: break
+                    else: break # Stop adding from this category if budget exceeded
+                # Check if budget exceeded *within* this category's loop before moving to next category
+                if current_tokens_in_payload > available_tokens_for_prompt:
+                    logger.debug(f"Budget exceeded while processing category '{category_key}'. Further categories in inclusion_priority might be skipped.")
+                    # This break is important: if a high-priority category fills the budget,
+                    # lower-priority ones won't be added, which is correct.
+                    # However, the truncation logic above should have already handled this.
+                    # This re-assembly is more about respecting the order after truncation.
 
         if current_tokens_in_payload > available_tokens_for_prompt:
             logger.error(f"Context still too long ({current_tokens_in_payload}/{available_tokens_for_prompt}) after all truncation.")

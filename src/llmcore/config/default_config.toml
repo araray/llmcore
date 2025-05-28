@@ -194,7 +194,10 @@ log_level = "INFO"
   #   "user_items_active": Items from the session's context pool (workspace) marked as active.
   #   "history_chat": Regular user/assistant messages from the session's history.
   # Default order prioritizes system messages, then the main query, then explicitly chosen items.
-  inclusion_priority = "system_history,final_user_query,explicitly_staged,user_items_active,history_chat"
+  # --- MODIFIED DEFAULT INCLUSION PRIORITY ---
+  inclusion_priority = "system_history,explicitly_staged,user_items_active,history_chat,final_user_query"
+  # --- END MODIFICATION ---
+
 
   # UPDATED: Strategy for handling context overflow when total tokens exceed the limit.
   # The order defines which type of context is truncated first. Comma-separated list.
