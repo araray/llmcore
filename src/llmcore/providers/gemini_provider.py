@@ -404,7 +404,9 @@ class GeminiProvider(BaseProvider):
                                 if chunk.candidates:
                                     fr = chunk.candidates[0].finish_reason
                                     # Normal stop on provided or natural stop sequence
-                                    if fr == Candidate.FinishReason.STOP_SEQUENCE:
+                                    if fr is None:
+                                        finish_reason_str = "UNKNOWN_FINISH_REASON"
+                                    elif fr == Candidate.FinishReason.STOP:
                                         finish_reason_str = fr.name
                                     # Safety “recitation” block at candidate level
                                     elif fr == Candidate.FinishReason.RECITATION:
@@ -499,7 +501,7 @@ class GeminiProvider(BaseProvider):
                     if response.candidates:
                         # Inspect finish_reason enum instead of catching StopCandidateException
                         fr = response.candidates[0].finish_reason
-                        if fr == Candidate.FinishReason.STOP_SEQUENCE:
+                        if fr == Candidate.FinishReason.STOP:
                             finish_reason_str = fr.name
                         elif fr == Candidate.FinishReason.RECITATION:
                             # e.g. safety recitation block
