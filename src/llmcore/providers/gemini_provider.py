@@ -226,7 +226,7 @@ class GeminiProvider(BaseProvider):
     ) -> Tuple[Optional[str], List[GenAIContentDictType]]:
         """
         Converts a list of LLMCore `Message` objects to Gemini's `ContentDict` list format
-        and extracts the system instruction text.
+        and extracts the system instruction text. Skips messages with empty or whitespace-only content.
 
         Args:
             messages: A list of `llmcore.models.Message` objects.
@@ -255,6 +255,22 @@ class GeminiProvider(BaseProvider):
                 logger.warning(f"Skipping message with unmappable role '{msg.role}' for Gemini.")
                 continue
 
+            # --- Start Rationale Block ---
+            # Pre-state: Messages were converted to ContentDict without checking if msg.content was empty.
+            # Limitation: The Gemini API returns a 400 INVALID_ARGUMENT error if a PartDict has empty text.
+            # Decision Path:
+            #   1. Allow empty content and let API fail: Not user-friendly.
+            #   2. Replace empty content with a placeholder (e.g., " "): Might alter LLM behavior or still be invalid for some APIs.
+            #   3. Skip messages with empty content: This is the chosen path. It prevents the API error.
+            #      Empty messages usually don't contribute to LLM understanding. If they were critical,
+            #      this might alter conversation flow, but that's an edge case.
+            # Post-state: Messages with empty or whitespace-only content are logged and skipped,
+            #             preventing the "empty text parameter" error from the Gemini API.
+            # --- End Rationale Block ---
+            if not msg.content or not msg.content.strip():
+                logger.warning(f"Skipping message ID '{msg.id}' (role: {msg.role}) with empty or whitespace-only content for Gemini API call.")
+                continue
+
             # Gemini API requires alternating user/model roles.
             # If consecutive messages have the same role after mapping, merge them.
             if genai_role == last_role_added_to_api:
@@ -263,7 +279,7 @@ class GeminiProvider(BaseProvider):
                     # Append content to the last part of the last message
                     last_genai_msg_parts = genai_history[-1].get('parts')
                     if isinstance(last_genai_msg_parts, list) and last_genai_msg_parts:
-                        # Assuming text parts for simplicity
+                        # Assuming text parts for simplicity. msg.content is now guaranteed non-empty.
                         last_genai_msg_parts[-1]['text'] += f"\n{msg.content}" # type: ignore[typeddict-item]
                     else: # If parts somehow don't exist or are not a list, create a new part
                         genai_history[-1]['parts'] = [genai_types.PartDict(text=msg.content)]
@@ -276,6 +292,7 @@ class GeminiProvider(BaseProvider):
 
             # Create a new ContentDict for the message
             # For simplicity, assuming all content is text. Multi-modal content would require PartDict for images etc.
+            # msg.content is now guaranteed non-empty.
             genai_history.append(genai_types.ContentDict(
                 role=genai_role,
                 parts=[genai_types.PartDict(text=msg.content)]
@@ -329,7 +346,9 @@ class GeminiProvider(BaseProvider):
 
         if not genai_contents:
             # This case should ideally not happen if there's a user message.
-            raise ProviderError(self.get_name(), "Cannot make Gemini API call with no content.")
+            # _convert_llmcore_msgs_to_genai_contents now filters empty messages,
+            # so if all messages were empty, genai_contents could be empty.
+            raise ProviderError(self.get_name(), "Cannot make Gemini API call with no valid content after filtering empty messages.")
 
         # Prepare GenerationConfig
         # SDK uses GenerateContentConfig for these parameters
@@ -423,7 +442,8 @@ class GeminiProvider(BaseProvider):
                                     else:
                                         finish_reason_str = "SAFETY_UNKNOWN_BLOCK"
 
-                                yield {"text": chunk_text, "finish_reason": finish_reason_str}
+                                # This yield was incorrect, it should yield the OpenAI-like structure
+                                # yield {"text": chunk_text, "finish_reason": finish_reason_str}
 
                             except ValueError as ve:
                                 # HTTP/text‐layer block (e.g. network‐level filter)
@@ -435,27 +455,28 @@ class GeminiProvider(BaseProvider):
                                     if fb and fb.block_reason
                                     else "SAFETY_UNKNOWN_BLOCK"
                                 )
-                                yield {"text": None, "finish_reason": finish_reason_str}
+                                # This yield was incorrect
+                                # yield {"text": None, "finish_reason": finish_reason_str}
 
                             except (InvalidArgument, FailedPrecondition) as api_err:
                                 # Bad request, safety precondition failures, etc.
                                 logger.error(f"API error: {api_err}", exc_info=True)
-                                raise  # or: raise ProviderError(...) from api_err
+                                raise ProviderError(self.get_name(), f"Gemini API error: {api_err}") from api_err
 
                             except CoreGoogleAPIError as api_err:
                                 # Catch-all for other HTTP/gRPC errors (rate limits, server errors, etc.)
                                 logger.error(f"Cloud API call failed: {api_err}", exc_info=True)
-                                raise  # or: raise ProviderError(...) from api_err
+                                raise ProviderError(self.get_name(), f"Gemini API call failed: {api_err}") from api_err
 
                             except Exception as e_chunk:
                                 # Unexpected error in processing this chunk—skip it but continue stream
                                 logger.error(f"Unexpected error processing stream chunk: {e_chunk}. Chunk: {chunk!r}", exc_info=True)
-                                yield {"error": f"Unexpected stream error: {e_chunk}"}
+                                yield {"error": f"Unexpected stream error: {e_chunk}"} # Yield error structure
                                 continue
 
                             if is_blocked:
                                 logger.warning(f"Stream chunk blocked due to safety settings. Finish reason: {finish_reason_str}")
-                                yield {"error": f"Content blocked by safety settings. Reason: {finish_reason_str}", "finish_reason": "SAFETY"}
+                                yield {"error": f"Content blocked by safety settings. Reason: {finish_reason_str}", "finish_reason": "SAFETY", "done": True}
                                 return # Stop streaming if content is blocked
 
                             full_response_text += chunk_text
