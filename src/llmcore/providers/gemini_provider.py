@@ -69,7 +69,7 @@ google_genai_available = (
     google_genai_types_module_available and
     google_api_core_exceptions_available
 )
-from google.ai.generativelanguage_v1.types import Candidate
+from google.cloud.aiplatform_v1.types import Candidate
 # --- End granular import checks ---
 
 
