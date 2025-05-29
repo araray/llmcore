@@ -15,6 +15,8 @@ import logging
 import os
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
+logger = logging.getLogger(__name__)
+
 # --- Granular import checks for google-genai and its dependencies ---
 # This section helps in providing more specific error messages if parts of
 # the google-genai SDK or its dependencies are missing or incorrectly installed.
@@ -104,8 +106,6 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..models import Message
 from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload # ContextPayload is List[Message]
-
-logger = logging.getLogger(__name__)
 
 # Default context lengths for common Gemini models.
 # These values should be periodically verified against official Google documentation.
@@ -617,7 +617,11 @@ class GeminiProvider(BaseProvider):
             if isinstance(e_sdk, genai_errors.InvalidArgumentError): # type: ignore[attr-defined]
                 # Check if it's a context length error
                 if "context length" in str(e_sdk).lower() or "token limit" in str(e_sdk).lower() or "user input is too long" in str(e_sdk).lower():
-                    actual_tokens = 0; try: actual_tokens = await self.count_message_tokens(context, model_name); except Exception: pass # type: ignore
+                    actual_tokens = 0
+                    try:
+                        actual_tokens = await self.count_message_tokens(context, model_name)
+                    except Exception:
+                        pass # type: ignore
                     raise ContextLengthError(model_name=model_name, limit=self.get_max_context_length(model_name), actual=actual_tokens, message=f"Context length error with Gemini: {e_sdk}") from None
                 raise ProviderError(self.get_name(), f"Invalid Argument for Gemini API: {e_sdk}") from e_sdk
             # Handle other CoreGoogleAPIError types if they are distinct and relevant
