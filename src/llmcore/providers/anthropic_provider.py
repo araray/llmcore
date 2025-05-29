@@ -8,6 +8,7 @@ Accepts context as List[Message].
 """
 
 import asyncio
+import json # Added for logging raw payloads
 import logging
 import os
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
@@ -18,6 +19,8 @@ try:
     from anthropic import AnthropicError, AsyncAnthropic
     from anthropic.types import MessageParam  # For constructing messages
     from anthropic.types import TextBlockParam
+    # For stream event type hinting
+    from anthropic.types.message_stream_event import MessageStreamEvent
     anthropic_available = True
 except ImportError:
     anthropic_available = False
@@ -25,12 +28,13 @@ except ImportError:
     AnthropicError = Exception # type: ignore [assignment]
     MessageParam = Dict[str, Any] # type: ignore [assignment]
     TextBlockParam = Dict[str, Any] # type: ignore [assignment]
+    MessageStreamEvent = Any # type: ignore [assignment]
 
 
-from ..exceptions import ConfigError, ProviderError  # MCPError removed
+from ..exceptions import ConfigError, ProviderError
 from ..models import Message
 from ..models import Role as LLMCoreRole
-from .base import BaseProvider  # ContextPayload is List[Message]
+from .base import BaseProvider
 from .base import ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -55,7 +59,7 @@ class AnthropicProvider(BaseProvider):
     _client: Optional[AsyncAnthropic] = None
     _sync_client_for_counting: Optional[anthropic.Anthropic] = None # For token counting
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the AnthropicProvider.
 
@@ -65,7 +69,9 @@ class AnthropicProvider(BaseProvider):
                     'base_url' (optional): Custom Anthropic API endpoint URL.
                     'default_model' (optional): Default model to use.
                     'timeout' (optional): Request timeout in seconds.
+            log_raw_payloads: Whether to log raw request/response payloads.
         """
+        super().__init__(config, log_raw_payloads)
         if not anthropic_available:
             raise ImportError("Anthropic library is not installed. Please install `anthropic` or `llmcore[anthropic]`.")
 
@@ -104,7 +110,6 @@ class AnthropicProvider(BaseProvider):
 
     def get_available_models(self) -> List[str]:
         """Returns a static list of known default models for Anthropic."""
-        # TODO: Consider implementing dynamic model listing if the Anthropic API supports it easily.
         logger.warning("AnthropicProvider.get_available_models() returning static list. "
                        "Refer to Anthropic documentation for the latest models.")
         return list(DEFAULT_ANTHROPIC_TOKEN_LIMITS.keys())
@@ -114,8 +119,7 @@ class AnthropicProvider(BaseProvider):
         model_name = model or self.default_model
         limit = DEFAULT_ANTHROPIC_TOKEN_LIMITS.get(model_name)
         if limit is None:
-            # Fallback for unknown models; Anthropic models generally have large context windows.
-            limit = 100000 # Default to a common large context window
+            limit = 100000
             logger.warning(f"Unknown context length for Anthropic model '{model_name}'. "
                            f"Using fallback limit: {limit}. Please verify with Anthropic documentation.")
         return limit
@@ -139,8 +143,7 @@ class AnthropicProvider(BaseProvider):
         anthropic_messages: List[MessageParam] = []
         system_prompt: Optional[str] = None
 
-        # Process messages, extracting system prompt first
-        processed_messages = list(messages) # Make a copy to modify
+        processed_messages = list(messages)
         if processed_messages and processed_messages[0].role == LLMCoreRole.SYSTEM:
             system_prompt = processed_messages.pop(0).content
             logger.debug("System prompt extracted for Anthropic request.")
@@ -173,7 +176,7 @@ class AnthropicProvider(BaseProvider):
                     last_content_block = anthropic_messages[-1]["content"][0] # type: ignore[index]
                     if last_content_block["type"] == "text": # type: ignore[typeddict-item]
                         last_content_block["text"] += f"\n{msg.content}" # type: ignore[typeddict-item]
-                        continue # Skip adding a new message, content merged
+                        continue
 
             # Create the content block for the message
             content_block: TextBlockParam = {"type": "text", "text": msg.content}
@@ -238,6 +241,27 @@ class AnthropicProvider(BaseProvider):
         # 'max_tokens_to_sample' was an older parameter name.
         max_tokens_val = kwargs.pop("max_tokens", kwargs.pop("max_tokens_to_sample", 2048))
 
+        # Log raw request payload if enabled
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            try:
+                # messages_payload is List[MessageParam (Dict)]
+                request_log_data = {
+                    "model": model_name,
+                    "messages": messages_payload,
+                    "system": system_prompt,
+                    "max_tokens": max_tokens_val,
+                    "stream": stream,
+                    "temperature": kwargs.get("temperature"),
+                    "top_p": kwargs.get("top_p"),
+                    "top_k": kwargs.get("top_k"),
+                    "stop_sequences": kwargs.get("stop_sequences")
+                }
+                # Filter out None values from kwargs for cleaner logging
+                provider_specific_kwargs = {k:v for k,v in request_log_data.items() if v is not None}
+                logger.debug(f"RAW LLM REQUEST ({self.get_name()} @ {model_name}): {json.dumps(provider_specific_kwargs, indent=2)}")
+            except Exception as e_req_log:
+                logger.warning(f"Failed to serialize Anthropic raw request for logging: {type(e_req_log).__name__} - {str(e_req_log)[:100]}")
+
         logger.debug(
             f"Sending request to Anthropic API: model='{model_name}', stream={stream}, "
             f"num_messages={len(messages_payload)}, system_prompt_present={bool(system_prompt)}"
@@ -258,15 +282,20 @@ class AnthropicProvider(BaseProvider):
                 logger.debug(f"Processing stream response from Anthropic model '{model_name}'")
                 async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
                     try:
-                        async for event in response_stream:
+                        async for event in response_stream: # event is MessageStreamEvent
+                            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                                try:
+                                    logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()} @ {model_name}): {event.model_dump_json()}")
+                                except Exception as e_chunk_log:
+                                    logger.warning(f"Failed to serialize Anthropic raw stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]}")
+
                             event_dict = {}
-                            # Map Anthropic stream events to a more generic OpenAI-like chunk structure if possible
                             if event.type == "message_start":
                                 event_dict = {
                                     "type": "message_start",
-                                    "message": { # Replicating OpenAI structure for consistency
+                                    "message": {
                                         "id": event.message.id,
-                                        "role": event.message.role, # Should be 'assistant'
+                                        "role": event.message.role,
                                         "model": event.message.model,
                                         "usage": event.message.usage.model_dump() if event.message.usage else None
                                     }
@@ -284,14 +313,14 @@ class AnthropicProvider(BaseProvider):
                                 event_dict = {
                                     "type": "message_delta",
                                     "delta": {"stop_reason": event.delta.stop_reason, "stop_sequence": event.delta.stop_sequence},
-                                    "usage": event.usage.model_dump(),
-                                    "choices": [{"finish_reason": event.delta.stop_reason}] # Add finish_reason to choices
+                                    "usage": event.usage.model_dump(), # type: ignore [attr-defined] # usage is on MessageDeltaEvent
+                                    "choices": [{"finish_reason": event.delta.stop_reason}]
                                 }
                             elif event.type == "message_stop":
                                 event_dict = {
                                     "type": "message_stop",
-                                    "reason": "stop_event", # Generic stop reason
-                                    "choices": [{"finish_reason": "stop"}] # Explicitly mark as stop
+                                    "reason": "stop_event",
+                                    "choices": [{"finish_reason": "stop"}]
                                 }
 
                             if event_dict:
@@ -321,8 +350,13 @@ class AnthropicProvider(BaseProvider):
                     stop_sequences=kwargs.get("stop_sequences")
                 )
                 logger.debug(f"Processing non-stream response from Anthropic model '{model_name}'")
-                # Convert Anthropic response to a dictionary similar to OpenAI's for consistency
-                # This helps the LLMCore.chat method handle responses more uniformly.
+
+                if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                    try:
+                        logger.debug(f"RAW LLM RESPONSE ({self.get_name()} @ {model_name}): {response.model_dump_json(indent=2)}")
+                    except Exception as e_resp_log:
+                        logger.warning(f"Failed to serialize Anthropic raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]}")
+
                 response_dict = response.model_dump()
                 # Extract the primary text content
                 main_content = ""
@@ -347,7 +381,6 @@ class AnthropicProvider(BaseProvider):
                     "model": response_dict.get("model"),
                     "choices": choices,
                     "usage": usage,
-                    # Add other relevant fields if needed
                 }
 
         except AnthropicError as e: # Catch base Anthropic SDK error

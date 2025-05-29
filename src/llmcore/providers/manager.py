@@ -41,7 +41,8 @@ class ProviderManager:
     Manages the initialization and access to LLM providers.
 
     Reads configuration, instantiates configured providers, and provides
-    access to them.
+    access to them. It passes the global raw payload logging setting
+    to each provider instance.
     """
     _providers: Dict[str, BaseProvider]
     _config: ConfyConfig
@@ -53,6 +54,8 @@ class ProviderManager:
 
         Args:
             config: The main LLMCore configuration object (ConfyConfig instance).
+                    This config is expected to contain the 'llmcore.log_raw_payloads'
+                    setting which will be passed to individual providers.
 
         Raises:
             ConfigError: If the default provider is not configured or supported,
@@ -104,6 +107,7 @@ class ProviderManager:
         Loads and initializes all providers defined in the [providers] configuration section.
         It determines the provider class based on a 'type' field within each provider's
         configuration block, falling back to the section name if 'type' is not specified.
+        It also passes the global `log_raw_payloads` setting to each provider.
         """
         providers_config = self._config.get('providers', {})
         if not isinstance(providers_config, dict):
@@ -131,6 +135,10 @@ class ProviderManager:
             return
 
         loaded_provider_names = []
+        # Get the global setting for raw payload logging from the main LLMCore config
+        log_raw_payloads_global = self._config.get('llmcore.log_raw_payloads', False)
+        logger.debug(f"Global 'log_raw_payloads' setting to be passed to providers: {log_raw_payloads_global}")
+
         for section_name, provider_specific_config in providers_config.items():
             current_section_name_lower = section_name.lower()
             if not isinstance(provider_specific_config, dict):
@@ -141,17 +149,20 @@ class ProviderManager:
             # Example: [providers.my_openai_clone] type = "openai" -> provider_type_key = "openai"
             # Example: [providers.ollama] (no type field) -> provider_type_key = "ollama"
             provider_type_key = provider_specific_config.get("type", current_section_name_lower).lower()
-
             provider_cls = PROVIDER_MAP.get(provider_type_key)
+
             if not provider_cls:
                 logger.warning(f"Provider base type '{provider_type_key}' (for section '{current_section_name_lower}') is not supported or mapped in PROVIDER_MAP. Skipping.")
                 continue
 
             try:
-                # Instantiate the provider class with its specific configuration block.
-                # The key in self._providers will be the section name from the config (e.g., "my_openai_clone").
-                self._providers[current_section_name_lower] = provider_cls(provider_specific_config)
-                logger.info(f"Provider instance '{current_section_name_lower}' (base type: '{provider_type_key}') initialized successfully.")
+                # Instantiate the provider class with its specific configuration block
+                # AND the global raw payload logging flag.
+                self._providers[current_section_name_lower] = provider_cls(
+                    provider_specific_config,
+                    log_raw_payloads=log_raw_payloads_global # Pass the flag here
+                )
+                logger.info(f"Provider instance '{current_section_name_lower}' (base type: '{provider_type_key}') initialized successfully. Raw payload logging: {log_raw_payloads_global}.")
                 loaded_provider_names.append(current_section_name_lower)
             except ImportError as e:
                 logger.error(f"Failed to initialize provider instance '{current_section_name_lower}' (base type: '{provider_type_key}'): Missing required library. "

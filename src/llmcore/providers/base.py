@@ -28,9 +28,10 @@ class BaseProvider(abc.ABC):
     - Performing chat completions (supporting streaming).
     - Counting tokens accurately according to the provider's model.
     """
+    log_raw_payloads_enabled: bool # Added attribute to control raw payload logging
 
     @abc.abstractmethod
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
         """
         Initialize the provider with its specific configuration.
 
@@ -38,8 +39,11 @@ class BaseProvider(abc.ABC):
             config: A dictionary containing provider-specific settings loaded
                     from the main LLMCore configuration (e.g., api_key,
                     base_url, default_model, timeout).
+            log_raw_payloads: A boolean flag indicating whether raw request/response
+                              payloads should be logged by this provider instance.
+                              This is typically passed down from LLMCore's global setting.
         """
-        pass
+        self.log_raw_payloads_enabled = log_raw_payloads # Store the flag
 
     @abc.abstractmethod
     def get_name(self) -> str:
@@ -93,6 +97,8 @@ class BaseProvider(abc.ABC):
 
         This is the core method for interacting with the LLM. It sends the
         prepared context and receives the model's response.
+        Implementations should check `self.log_raw_payloads_enabled` and
+        log request/response payloads at DEBUG level if enabled.
 
         Args:
             context: The context payload to send, as a list of `llmcore.models.Message` objects.
