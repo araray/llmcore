@@ -94,6 +94,7 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..models import Message
 from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload # ContextPayload is List[Message]
+from ..utils.info import list_class_members
 
 # Default context lengths for common Gemini models.
 # These values should be periodically verified against official Google documentation.
@@ -281,7 +282,7 @@ class GeminiProvider(BaseProvider):
         processed_messages = list(messages) # Make a copy to avoid modifying the original list
         # Extract system message first, as it's handled separately by Gemini API
         if processed_messages and processed_messages[0].role == LLMCoreRole.SYSTEM:
-            system_instruction_text = processed_messages.pop(0).content
+            system_instruction_text = getattr(self, 'system_instruction_text', None)
             logger.debug("System instruction text extracted for Gemini request.")
 
         last_role_added_to_api = None
@@ -419,7 +420,7 @@ class GeminiProvider(BaseProvider):
 
         # --- MODIFICATION START: Get GenerativeModel instance and use it for calls ---
         try:
-            actual_model_object = self._client.models.get_model(model_name_for_api)
+            actual_model_object = self._client.models.get(model=model_name_for_api)
         except Exception as e_get_model:
             logger.error(f"Failed to get Gemini model instance '{model_name_for_api}': {e_get_model}", exc_info=True)
             raise ProviderError(self.get_name(), f"Could not retrieve Gemini model '{model_name_for_api}': {e_get_model}")
@@ -462,9 +463,11 @@ class GeminiProvider(BaseProvider):
 
         try:
             if stream:
-                logger.debug(f"Calling model.aio.generate_content_stream() for model '{model_name_for_api}' with args: {list(sdk_call_args.keys())}")
+                logger.debug(f"Calling self._client.aio.models.generate_content_stream() for model '{model_name_for_api}' with args: {list(sdk_call_args.keys())}")
                 # --- MODIFIED CALL ---
-                response_iterator = await actual_model_object.aio.generate_content_stream(**sdk_call_args)
+                #response_iterator = await actual_model_object.aio.generate_content_stream(**sdk_call_args)
+                #print(sdk_call_args)
+                response_iterator = await self._client.aio.models.generate_content_stream(model = model_name_for_api, contents = genai_contents)
                 # --- END MODIFIED CALL ---
 
                 async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
@@ -684,7 +687,8 @@ class GeminiProvider(BaseProvider):
         model_name_for_api = f"models/{model or self.default_model}"
         try:
             # --- MODIFIED CALL: Use actual_model_object ---
-            actual_model_object = self._client.models.get_model(model_name_for_api)
+            actual_model_object = self._client.models.get(model=model_name_for_api)
+            # list_class_members(actual_model_object)
             system_instruction_text, genai_contents = self._convert_llmcore_msgs_to_genai_contents(messages)
 
             # Prepare contents for the count_tokens API
@@ -699,7 +703,12 @@ class GeminiProvider(BaseProvider):
             if not contents_to_count: # If all messages were filtered out (e.g., empty)
                 return 0
 
-            response = await actual_model_object.aio.count_tokens(contents=contents_to_count) # type: ignore[arg-type]
+            #response = await actual_model_object.aio.compute_tokens(contents=contents_to_count) # type: ignore[arg-type]
+            #response = await actual_model_object.aio.compute_tokens(contents=contents_to_count)
+            response = await self._client.aio.models.count_tokens(
+                model = actual_model_object.name,
+                contents = contents_to_count,
+            )
             # --- END MODIFIED CALL ---
             return response.total_tokens
         except GenAIAPIError as e_sdk: # Catch google.genai.errors.APIError
