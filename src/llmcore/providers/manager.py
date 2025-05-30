@@ -227,6 +227,22 @@ class ProviderManager:
         """Lists the names (config section names) of all successfully loaded provider instances."""
         return list(self._providers.keys())
 
+    def update_log_raw_payloads_setting(self, enable: bool) -> None:
+        """
+        Updates the `log_raw_payloads_enabled` setting for all managed provider instances.
+
+        Args:
+            enable: True to enable raw payload logging, False to disable.
+        """
+        logger.info(f"ProviderManager updating raw payload logging for all providers to: {enable}")
+        for provider_name, provider_instance in self._providers.items():
+            try:
+                provider_instance.log_raw_payloads_enabled = enable
+                logger.debug(f"Updated raw_payload_logging for provider '{provider_name}' to {enable}.")
+            except Exception as e_update:
+                logger.error(f"Error updating raw_payload_logging for provider '{provider_name}': {e_update}")
+
+
     async def close_providers(self) -> None:
         """Closes connections or cleans up resources for all loaded providers."""
         logger.info("Closing provider connections...")

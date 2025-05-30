@@ -64,7 +64,7 @@ class LLMCore:
     context, embedding) to deliver its functionalities.
     """
 
-    config: ConfyConfig
+    config: ConfyConfig # The loaded confy config object
     _storage_manager: StorageManager
     _provider_manager: ProviderManager
     _session_manager: SessionManager
@@ -72,7 +72,11 @@ class LLMCore:
     _embedding_manager: EmbeddingManager
     _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
     _transient_sessions_cache: Dict[str, ChatSession]
-    _log_raw_payloads_enabled: bool # New attribute for raw payload logging state
+
+    # Instance attributes for dynamic settings, initialized from config
+    _log_raw_payloads_enabled: bool
+    _llmcore_log_level_str: str
+
 
     def __init__(self):
         """
@@ -82,8 +86,7 @@ class LLMCore:
         """
         self._transient_last_interaction_info_cache = {}
         self._transient_sessions_cache = {}
-        self._log_raw_payloads_enabled = False # Default, will be properly set in create()
-        # Initialization of managers is handled by the `create` method.
+        # Initialization of managers and dynamic settings is handled by the `create` method.
         pass
 
     @classmethod
@@ -161,26 +164,29 @@ class LLMCore:
         except Exception as e: # Catch any other unexpected error during config init
             raise ConfigError(f"LLMCore configuration initialization failed: {e}")
 
-        # --- Logging Enhancements: Initialize from config ---
-        # Set raw payload logging status from config
+        # --- Initialize dynamic settings from config ---
         instance._log_raw_payloads_enabled = instance.config.get('llmcore.log_raw_payloads', False)
+        instance._llmcore_log_level_str = instance.config.get('llmcore.log_level', 'INFO').upper()
+        # --- End Dynamic Settings Initialization ---
+
+
+        # --- Logging Enhancements: Initialize from instance attributes ---
         logger.info(f"Raw payload logging initially set to: {instance._log_raw_payloads_enabled}")
 
-        # Initialize LLMCore's own logger level based on config
-        llmcore_log_level_str = instance.config.get('llmcore.log_level', 'INFO').upper()
-        llmcore_log_level_int = logging.getLevelName(llmcore_log_level_str)
+        llmcore_log_level_int = logging.getLevelName(instance._llmcore_log_level_str)
         if isinstance(llmcore_log_level_int, int):
             logging.getLogger("llmcore").setLevel(llmcore_log_level_int)
-            logger.info(f"LLMCore base logger level set to: {llmcore_log_level_str}")
+            logger.info(f"LLMCore base logger level set to: {instance._llmcore_log_level_str}")
         else:
             logging.getLogger("llmcore").setLevel(logging.INFO) # Default if invalid
-            logger.warning(f"Invalid llmcore.log_level '{llmcore_log_level_str}' in config, defaulting LLMCore logger to INFO.")
+            logger.warning(f"Invalid llmcore.log_level '{instance._llmcore_log_level_str}' in config, defaulting LLMCore logger to INFO.")
         # --- End Logging Enhancements Initialization ---
 
         # 2. Initialize Managers, passing self.config
         # ProviderManager will now implicitly use instance.config['llmcore.log_raw_payloads']
         # when initializing individual providers.
         try:
+            # ProviderManager now gets the initial log_raw_payloads state directly
             instance._provider_manager = ProviderManager(instance.config)
             logger.info("ProviderManager initialized.")
         except (ConfigError, ProviderError) as e:
@@ -226,7 +232,7 @@ class LLMCore:
 
         try:
             instance._context_manager = ContextManager(
-                config=instance.config,
+                config=instance.config, # Pass the main confy object
                 provider_manager=instance._provider_manager,
                 storage_manager=instance._storage_manager,
                 embedding_manager=instance._embedding_manager
@@ -242,49 +248,31 @@ class LLMCore:
     def set_raw_payload_logging(self, enable: bool):
         """
         Dynamically enables or disables raw payload logging for all providers.
-        This setting is applied to currently initialized providers and stored
-        in the runtime config. Raw payloads are logged at DEBUG level.
+        This updates an internal LLMCore state and propagates the change to
+        all currently initialized provider instances. Raw payloads are logged
+        at DEBUG level by providers.
 
         Args:
             enable: True to enable raw payload logging, False to disable.
         """
         self._log_raw_payloads_enabled = enable
-        # Update the runtime configuration using Confy's dictionary-like access
-        # or its specific methods if available for nested updates.
-        if self.config:
-            # Ensure 'llmcore' key exists
-            if 'llmcore' not in self.config:
-                self.config.set_values({'llmcore': {}}, merge_strategy='merge')
+        logger.info(f"LLMCore raw payload logging has been {'ENABLED' if enable else 'DISABLED'}.")
 
-            current_llmcore_config = self.config.get('llmcore', {})
-            if not isinstance(current_llmcore_config, dict):
-                current_llmcore_config = {}
-            current_llmcore_config['log_raw_payloads'] = enable
-            self.config.set_values({'llmcore': current_llmcore_config}, merge_strategy='merge')
-        else:
-            logger.warning("Cannot update runtime config for raw_payload_logging: self.config is not set.")
-
-        # Propagate to already initialized providers
-        # This requires ProviderManager to expose a way to iterate or update its providers,
-        # and BaseProvider to have a 'log_raw_payloads_enabled' attribute.
+        # Propagate to already initialized providers via ProviderManager
         if hasattr(self, '_provider_manager') and self._provider_manager:
-            for provider_name_key in self._provider_manager.get_available_providers():
-                try:
-                    provider_instance = self._provider_manager.get_provider(provider_name_key)
-                    # Assuming BaseProvider instances will have this attribute
-                    provider_instance.log_raw_payloads_enabled = enable
-                    logger.debug(f"Updated raw_payload_logging for provider '{provider_name_key}' to {enable}.")
-                except Exception as e_prov_update:
-                    logger.error(f"Error updating raw_payload_logging for provider instance '{provider_name_key}': {e_prov_update}")
+            self._provider_manager.update_log_raw_payloads_setting(enable)
+        else:
+            logger.warning("ProviderManager not available to propagate raw payload logging setting.")
 
         logger.info(f"LLMCore raw payload logging has been {'ENABLED' if enable else 'DISABLED'}.")
         if enable and logging.getLogger("llmcore").getEffectiveLevel() > logging.DEBUG:
-            logger.warning("Raw payload logging enabled, but LLMCore log level is not DEBUG. Raw payloads may not appear unless LLMCore log level is also set to DEBUG.")
+            logger.warning("Raw payload logging enabled, but LLMCore log level is not DEBUG. "
+                           "Raw payloads may not appear unless LLMCore log level is also set to DEBUG.")
 
     def set_log_level(self, level_name: str):
         """
         Dynamically sets the log level for the 'llmcore' logger and its children.
-        Also updates the 'llmcore.log_level' in the runtime configuration.
+        Also updates an internal state attribute reflecting this level.
 
         Args:
             level_name: The desired log level string (e.g., "DEBUG", "INFO", "ERROR").
@@ -297,26 +285,15 @@ class LLMCore:
             logger.error(f"Invalid log level name: '{level_name}'. No change made to log levels.")
             return
 
-        # Set for the main 'llmcore' logger. Children will inherit unless explicitly set otherwise.
+        # Set for the main 'llmcore' logger. Children will inherit.
         logging.getLogger("llmcore").setLevel(log_level_int)
-
-        # Update the runtime configuration
-        if self.config:
-            if 'llmcore' not in self.config:
-                self.config.set_values({'llmcore': {}}, merge_strategy='merge')
-
-            current_llmcore_config = self.config.get('llmcore', {})
-            if not isinstance(current_llmcore_config, dict):
-                current_llmcore_config = {}
-            current_llmcore_config['log_level'] = level_name_upper
-            self.config.set_values({'llmcore': current_llmcore_config}, merge_strategy='merge')
-        else:
-            logger.warning("Cannot update runtime config for log_level: self.config is not set.")
+        self._llmcore_log_level_str = level_name_upper # Update instance state
 
         logger.info(f"LLMCore log level set to: {level_name_upper}.")
         # Add a warning if raw payload logging is enabled but level is not DEBUG
         if self._log_raw_payloads_enabled and log_level_int > logging.DEBUG:
-            logger.warning("Raw payload logging is currently enabled, but LLMCore log level is not DEBUG. Raw payloads may not appear in logs.")
+            logger.warning("Raw payload logging is currently enabled, but LLMCore log level is not DEBUG. "
+                           "Raw payloads may not appear in logs.")
 
     # --- Core Chat Method ---
     async def chat(
@@ -605,8 +582,9 @@ class LLMCore:
             # will create a new (empty) ChatSession object with this ID.
             # The system_message provided to this preview method will be handled below.
             try:
-                # Pass system_message_if_new=None because we'll handle system_message explicitly for preview
-                loaded_session = await self._session_manager.load_or_create_session(session_id, system_message_if_new=None)
+                # Pass system_message=None because we'll handle system_message explicitly for preview
+                # This call might create a new session if ID doesn't exist.
+                loaded_session = await self._session_manager.load_or_create_session(session_id, system_message=None)
                 preview_session = loaded_session
 
                 # If a system_message is specifically provided for the preview,
@@ -694,7 +672,7 @@ class LLMCore:
 
                 if text_delta: full_response_content += text_delta; yield text_delta
                 if error_message: logger.error(f"Error during stream: {error_message}"); raise ProviderError(provider_name, error_message)
-                if finish_reason and finish_reason not in ["stop", "length", None, "STOP_SEQUENCE", "MAX_TOKENS", "TOOL_USE", "stop_token", "max_tokens", "NOT_SET", "OTHER"]:
+                if finish_reason and finish_reason not in ["stop", "length", None, "STOP_SEQUENCE", "MAX_TOKENS", "TOOL_USE", "stop_token", "max_tokens", "NOT_SET", "FINISH_REASON_UNSPECIFIED"]:
                     logger.warning(f"Stream stopped due to reason: {finish_reason}")
         except Exception as e:
             error_occurred = True
