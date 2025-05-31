@@ -33,9 +33,9 @@ try:
     GenAIClientType = genai.Client
     GenAISafetySettingDictType = genai_types.SafetySettingDict
     GenAIContentDictType = genai_types.ContentDict
-    GenAIGenerationConfigType = genai_types.GenerationConfig # CORRECTED: Was GenerateContentConfig
-    GenAICountTokensConfig = genai_types.CountTokensConfig # For count_tokens
-    GenAIHttpOptions = genai_types.HttpOptions # For timeout configuration
+    GenAIGenerationConfigType = genai_types.GenerateContentConfig
+    GenAICountTokensConfig = genai_types.CountTokensConfig
+    GenAIHttpOptions = genai_types.HttpOptions
     GenAIPartDictType = genai_types.PartDict
     GenAIGenerateContentResponseType = genai_types.GenerateContentResponse
 except ImportError:
@@ -47,7 +47,7 @@ except ImportError:
     GenAIClientType = Any
     GenAISafetySettingDictType = Any
     GenAIContentDictType = Any
-    GenAIGenerationConfigType = Any
+    GenAIGenerationConfigType = Any # type: ignore
     GenAICountTokensConfig = Any # type: ignore
     GenAIHttpOptions = Any # type: ignore
     GenAIPartDictType = Any
@@ -279,17 +279,17 @@ class GeminiProvider(BaseProvider):
 
         # --- Rationale Block for System Instruction & Timeout Handling (Recommendations 1 & 4) ---
         # Pre-state (System Instruction): System instruction text was wrapped in a ContentDict with role="user".
-        # Limitation (System Instruction): google.genai.types.GenerationConfig.system_instruction accepts a direct string.
-        # Decision Path (System Instruction): Verified SDK documentation (google-geanai_api_modules.html, types.GenerationConfig)
+        # Limitation (System Instruction): google.genai.types.GenerateContentConfig.system_instruction accepts a direct string.
+        # Decision Path (System Instruction): Verified SDK documentation (google-geanai_api_modules.html, types.GenerateContentConfig)
         #                                   confirms `str` is a valid type for system_instruction.
-        # Post-state (System Instruction): Pass system_instruction_text directly as a string to GenerationConfig.
+        # Post-state (System Instruction): Pass system_instruction_text directly as a string to GenerateContentConfig.
         #
         # Pre-state (Timeout): No per-request timeout handling. Relied on SDK/HTTP client defaults.
         # Limitation (Timeout): Lack of fine-grained timeout control for specific requests.
-        # Decision Path (Timeout): google.genai.types.GenerationConfig accepts `http_options: HttpOptions`.
+        # Decision Path (Timeout): google.genai.types.GenerateContentConfig accepts `http_options: HttpOptions`.
         #                          google.genai.types.HttpOptions accepts `timeout: float`.
         # Post-state (Timeout): Extract 'timeout' from kwargs. If valid, create HttpOptions
-        #                       and pass it to GenerationConfig. Remove 'timeout' from kwargs
+        #                       and pass it to GenerateContentConfig. Remove 'timeout' from kwargs
         #                       to prevent it from being passed elsewhere.
         # --- End Rationale Block ---
 
@@ -302,7 +302,8 @@ class GeminiProvider(BaseProvider):
             gen_config_params["stop_sequences"] = kwargs["stop_sequences"]
 
         if system_instruction_text:
-            gen_config_params["system_instruction"] = system_instruction_text # Direct string assignment
+            # Pass system_instruction directly as a string
+            gen_config_params["system_instruction"] = system_instruction_text
 
         # Handle timeout kwarg for HttpOptions
         timeout_kwarg = kwargs.pop("timeout", None) # Extract and remove from general kwargs
@@ -316,15 +317,17 @@ class GeminiProvider(BaseProvider):
             else:
                 logger.warning(f"Invalid timeout value '{timeout_kwarg}' in chat kwargs for Gemini, ignoring.")
 
-        final_generation_config_obj: Optional[GenAIGenerationConfigType] = None
+        final_config_obj: Optional[GenAIGenerationConfigType] = None # Type alias is now GenerateContentConfig
         if gen_config_params:
             try:
-                final_generation_config_obj = GenAIGenerationConfigType(**gen_config_params) # type: ignore
+                # Use the corrected GenAIGenerationConfigType (should be genai_types.GenerateContentConfig)
+                final_config_obj = GenAIGenerationConfigType(**gen_config_params) # type: ignore
             except TypeError as te:
-                logger.warning(f"Invalid argument for Gemini GenerationConfig: {te}. Some parameters might be ignored.")
+                logger.warning(f"Invalid argument for Gemini GenerateContentConfig: {te}. Some parameters might be ignored.")
+                # Attempt to create config with only valid arguments
                 valid_config_args = {k: v for k,v in gen_config_params.items() if k in GenAIGenerationConfigType.__annotations__} # type: ignore
                 if valid_config_args:
-                    final_generation_config_obj = GenAIGenerationConfigType(**valid_config_args) # type: ignore
+                    final_config_obj = GenAIGenerationConfigType(**valid_config_args) # type: ignore
 
         final_safety_settings = self._safety_settings
         if "safety_settings" in kwargs:
@@ -334,9 +337,11 @@ class GeminiProvider(BaseProvider):
                 logger.debug(f"Overriding provider safety settings with those from kwargs: {final_safety_settings}")
 
         sdk_call_args: Dict[str, Any] = {"contents": genai_contents}
-        if final_generation_config_obj:
-            sdk_call_args["generation_config"] = final_generation_config_obj
+        if final_config_obj:
+            # CORRECTED: The keyword argument for the SDK call should be "config"
+            sdk_call_args["config"] = final_config_obj
         if final_safety_settings:
+            # safety_settings is a top-level parameter for the SDK methods
             sdk_call_args["safety_settings"] = final_safety_settings
 
         logger.debug(
@@ -348,11 +353,15 @@ class GeminiProvider(BaseProvider):
             try:
                 loggable_sdk_call_args = sdk_call_args.copy()
                 if "contents" in loggable_sdk_call_args:
-                    loggable_sdk_call_args["contents"] = [c.to_dict() if hasattr(c, 'to_dict') else c for c in loggable_sdk_call_args["contents"]]
-                if "generation_config" in loggable_sdk_call_args and hasattr(loggable_sdk_call_args["generation_config"], 'to_dict'):
-                    loggable_sdk_call_args["generation_config"] = loggable_sdk_call_args["generation_config"].to_dict()
+                    loggable_sdk_call_args["contents"] = [c.model_dump() if hasattr(c, 'model_dump') else c for c in loggable_sdk_call_args["contents"]]
+                if "config" in loggable_sdk_call_args and hasattr(loggable_sdk_call_args["config"], 'model_dump'):
+                    loggable_sdk_call_args["config"] = loggable_sdk_call_args["config"].model_dump()
                 if "safety_settings" in loggable_sdk_call_args and loggable_sdk_call_args["safety_settings"] is not None:
-                    loggable_sdk_call_args["safety_settings"] = [s.to_dict() if hasattr(s, 'to_dict') else s for s in loggable_sdk_call_args["safety_settings"]] # type: ignore
+                    # SafetySettingDictType is already a dict, but ensure inner parts are serializable if they were complex objects
+                    loggable_sdk_call_args["safety_settings"] = [
+                        s.model_dump() if hasattr(s, 'model_dump') else s
+                        for s in loggable_sdk_call_args["safety_settings"]
+                    ]
 
                 request_log_data = {"model_for_api_call": model_name_for_api, "sdk_method_args": loggable_sdk_call_args, "stream_flag_for_method": stream}
                 logger.debug(f"RAW LLM REQUEST ({self.get_name()} @ {model_name_for_api}): {json.dumps(request_log_data, indent=2, default=str)}")
@@ -366,10 +375,15 @@ class GeminiProvider(BaseProvider):
                 async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
                     full_response_text = ""
                     try:
-                        async for chunk in response_iterator:
+                        async for chunk in response_iterator: # chunk is GenerateContentResponse
                             if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                                try: logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()} @ {model_name_for_api}): {json.dumps(chunk.to_dict(), indent=2, default=str)}")
-                                except Exception as e_chunk_log: logger.warning(f"Failed to serialize raw Gemini stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]}")
+                                try:
+                                    # Use model_dump_json for Pydantic models
+                                    raw_chunk_str = chunk.model_dump_json(indent=2)
+                                    logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()} @ {model_name_for_api}): {raw_chunk_str}")
+                                except Exception as e_chunk_log:
+                                    logger.warning(f"Failed to serialize raw Gemini stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]}")
+
                             chunk_text = ""; finish_reason_str = None; is_blocked = False
                             try:
                                 chunk_text = chunk.text
@@ -414,8 +428,11 @@ class GeminiProvider(BaseProvider):
                 response_obj: GenAIGenerateContentResponseType = await self._client.aio.models.generate_content(model=model_name_for_api, **sdk_call_args)
                 logger.debug(f"Processing non-stream response from Gemini model '{model_name_for_api}'")
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    try: logger.debug(f"RAW LLM RESPONSE ({self.get_name()} @ {model_name_for_api}): {json.dumps(response_obj.to_dict(), indent=2, default=str)}")
-                    except Exception as e_resp_log: logger.warning(f"Failed to serialize Gemini raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]}")
+                    try:
+                        # Use model_dump_json for Pydantic models
+                        logger.debug(f"RAW LLM RESPONSE ({self.get_name()} @ {model_name_for_api}): {response_obj.model_dump_json(indent=2)}")
+                    except Exception as e_resp_log:
+                        logger.warning(f"Failed to serialize Gemini raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]}")
                 full_text = ""; finish_reason_str = None; is_blocked = False
                 try:
                     full_text = response_obj.text
@@ -443,7 +460,7 @@ class GeminiProvider(BaseProvider):
                 usage_metadata_dict = None
                 if hasattr(response_obj, 'usage_metadata') and response_obj.usage_metadata:
                     usage_metadata_dict = {"prompt_token_count": response_obj.usage_metadata.prompt_token_count, "candidates_token_count": response_obj.usage_metadata.candidates_token_count, "total_token_count": response_obj.usage_metadata.total_token_count}
-                result_dict = {"id": response_obj.candidates[0].citation_metadata.citation_sources[0].uri if response_obj.candidates and response_obj.candidates[0].citation_metadata and response_obj.candidates[0].citation_metadata.citation_sources else None, "model": model_name, "choices": [{"index": 0, "message": {"role": "model", "content": full_text}, "finish_reason": finish_reason_str}], "usage": usage_metadata_dict, "prompt_feedback": {"block_reason": response_obj.prompt_feedback.block_reason.name if response_obj.prompt_feedback and response_obj.prompt_feedback.block_reason else None, "safety_ratings": [rating.to_dict() for rating in response_obj.prompt_feedback.safety_ratings] if response_obj.prompt_feedback else []}} # type: ignore
+                result_dict = {"id": response_obj.candidates[0].citation_metadata.citation_sources[0].uri if response_obj.candidates and response_obj.candidates[0].citation_metadata and response_obj.candidates[0].citation_metadata.citation_sources else None, "model": model_name, "choices": [{"index": 0, "message": {"role": "model", "content": full_text}, "finish_reason": finish_reason_str}], "usage": usage_metadata_dict, "prompt_feedback": {"block_reason": response_obj.prompt_feedback.block_reason.name if response_obj.prompt_feedback and response_obj.prompt_feedback.block_reason else None, "safety_ratings": [rating.model_dump() for rating in response_obj.prompt_feedback.safety_ratings] if response_obj.prompt_feedback else []}} # type: ignore
                 return result_dict
         except GenAIAPIError as e_sdk:
             logger.error(f"Gemini SDK API error: {e_sdk}", exc_info=True)
@@ -462,7 +479,7 @@ class GeminiProvider(BaseProvider):
                 if "context length" in str(e_sdk).lower() or \
                    "token limit" in str(e_sdk).lower() or \
                    "user input is too long" in str(e_sdk).lower() or \
-                   "resource has been exhausted" in str(e_sdk).lower(): # Added another common phrase
+                   "resource has been exhausted" in str(e_sdk).lower():
                     # Note: The string matching for context length errors is fragile.
                     # A more robust solution would be a specific error code or type from the SDK.
                     actual_tokens = 0; limit_from_provider = self.get_max_context_length(model_name)
@@ -525,17 +542,12 @@ class GeminiProvider(BaseProvider):
                 count_config_obj = GenAICountTokensConfig(system_instruction=system_instruction_text) # type: ignore
                 sdk_count_tokens_args["config"] = count_config_obj
                 logger.debug(f"Using CountTokensConfig with system_instruction for model '{model_name_for_api}'.")
-            elif not genai_contents_for_counting: # If only system instruction was present and now it's handled by config
+            elif not genai_contents_for_counting:
                 logger.debug(f"No regular contents to count for model '{model_name_for_api}' after extracting system instruction. "
                              f"If system_instruction_text is present, its tokens will be counted via config.")
-                # If only system_instruction_text exists, and genai_contents_for_counting is empty,
-                # we still need to make the call if system_instruction_text is to be counted.
-                if not system_instruction_text: return 0 # No content at all
-                # Ensure 'contents' is not empty if config is the only thing, API might require it.
-                # However, SDK docs for count_tokens show 'contents' is optional if other fields are set.
-                # Let's ensure contents is at least an empty list if system_instruction is primary.
+                if not system_instruction_text: return 0
                 if "contents" not in sdk_count_tokens_args or not sdk_count_tokens_args["contents"]:
-                    sdk_count_tokens_args["contents"] = [] # API might need it even if empty
+                    sdk_count_tokens_args["contents"] = []
 
             if not sdk_count_tokens_args.get("contents") and not sdk_count_tokens_args.get("config"):
                 logger.debug(f"No contents or system instruction to count for model '{model_name_for_api}'. Returning 0 tokens.")
