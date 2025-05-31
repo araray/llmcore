@@ -1,0 +1,1997 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>google-api-core documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=437829e0" />
+    <script src="_static/documentation_options.js?v=d6d90d09"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+          	<div class="admonition" id="python2-eol"> 
+          	 As of January 1, 2020 this library no longer supports Python 2 on the latest released version. 
+          	 Library versions released prior to that date will continue to be available. For more information please
+          	 visit <a href="https://cloud.google.com/python/docs/python2-sunset/">Python 2 support on Google Cloud</a>.
+          	</div>
+            
+  <p>The <code class="docutils literal notranslate"><span class="pre">google-cloud-core</span></code> package contains helpers common to all
+<code class="docutils literal notranslate"><span class="pre">google-cloud-*</span></code> packages. In an attempt to reach a stable API,
+much of the functionality has been split out into this package,
+<code class="docutils literal notranslate"><span class="pre">google-api-core</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Because this client uses <a class="reference external" href="https://grpc.github.io/grpc/python/grpc.html#module-grpc" title="(in gRPC Python v1.71.0)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">grpc</span></code></a> library, it is safe to
+share instances across threads. In multiprocessing scenarios, the best
+practice is to create client instances <em>after</em> the invocation of
+<a class="reference external" href="https://docs.python.org/3/library/os.html#os.fork" title="(in Python v3.13)"><code class="xref py py-func docutils literal notranslate"><span class="pre">os.fork()</span></code></a> by <a class="reference external" href="https://docs.python.org/3/library/multiprocessing.html#multiprocessing.pool.Pool" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">multiprocessing.pool.Pool</span></code></a> or
+<a class="reference external" href="https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Process" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">multiprocessing.Process</span></code></a>.</p>
+</div>
+<section id="core">
+<h1>Core<a class="headerlink" href="#core" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<span id="document-auth"></span><section id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Link to this heading">¶</a></h2>
+<section id="overview">
+<span id="id1"></span><h3>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h3>
+<p>For a language agnostic overview of authentication on Google Cloud, see <a class="reference external" href="https://cloud.google.com/docs/authentication">Authentication Overview</a>.</p>
+<ul>
+<li><p><strong>If you’re running in a Google Virtual Machine Environment (Compute Engine, App Engine, Cloud Run, Cloud Functions)</strong>,
+authentication should “just work”.</p></li>
+<li><p><strong>If you’re developing locally</strong>,
+the easiest way to authenticate is using the <a class="reference external" href="http://cloud.google.com/sdk">Google Cloud SDK</a>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<span class="w"> </span>login
+</pre></div>
+</div>
+<p>Note that this command generates credentials for client libraries. To authenticate the CLI itself, use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>gcloud<span class="w"> </span>auth<span class="w"> </span>login
+</pre></div>
+</div>
+<p>Previously, <code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">auth</span> <span class="pre">login</span></code> was used for both use cases. If
+your <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> installation does not support the new command,
+please update it:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>gcloud<span class="w"> </span>components<span class="w"> </span>update
+</pre></div>
+</div>
+</li>
+</ul>
+<ul>
+<li><p><strong>If you’re running your application elsewhere</strong>,
+you should download a <a class="reference external" href="https://cloud.google.com/iam/docs/creating-managing-service-accounts#creating">service account</a> JSON keyfile
+and point to it using an environment variable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_APPLICATION_CREDENTIALS</span><span class="o">=</span><span class="s2">&quot;/path/to/keyfile.json&quot;</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</section>
+<section id="client-provided-authentication">
+<h3>Client-Provided Authentication<a class="headerlink" href="#client-provided-authentication" title="Link to this heading">¶</a></h3>
+<p>Every package uses a <code class="xref py py-class docutils literal notranslate"><span class="pre">Client</span></code>
+as a base for interacting with an API.
+For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud</span><span class="w"> </span><span class="kn">import</span> <span class="n">datastore</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">datastore</span><span class="o">.</span><span class="n">Client</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Passing no arguments at all will “just work” if you’ve followed the
+instructions in the <a class="reference internal" href="#overview"><span class="std std-ref">Overview</span></a>.
+The credentials are inferred from your local environment by using
+Google <a class="reference external" href="https://developers.google.com/identity/protocols/application-default-credentials">Application Default Credentials</a>.</p>
+<section id="credential-discovery-precedence">
+<span id="precedence"></span><h4>Credential Discovery Precedence<a class="headerlink" href="#credential-discovery-precedence" title="Link to this heading">¶</a></h4>
+<p>When loading the <a class="reference external" href="https://developers.google.com/identity/protocols/application-default-credentials">Application Default Credentials</a>,
+the library will check for credentials in your environment by following the
+precedence outlined by <a class="reference external" href="https://googleapis.dev/python/google-auth/latest/reference/google.auth.html#google.auth.default" title="(in google-auth v2.40.2)"><code class="xref py py-func docutils literal notranslate"><span class="pre">google.auth.default()</span></code></a>.</p>
+</section>
+</section>
+<section id="explicit-credentials">
+<h3>Explicit Credentials<a class="headerlink" href="#explicit-credentials" title="Link to this heading">¶</a></h3>
+<p>The Application Default Credentials discussed above can be useful
+if your code needs to run in many different environments or
+if you just don’t want authentication to be a focus in your code.</p>
+<p>However, you may want to be explicit because</p>
+<ul class="simple">
+<li><p>your code will only run in one place</p></li>
+<li><p>you may have code which needs to be run as a specific service account
+every time (rather than with the locally inferred credentials)</p></li>
+<li><p>you may want to use two separate accounts to simultaneously access data
+from different projects</p></li>
+</ul>
+<p>In these situations, you can create an explicit
+<a class="reference external" href="https://googleapis.dev/python/google-auth/latest/reference/google.auth.credentials.html#google.auth.credentials.Credentials" title="(in google-auth v2.40.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Credentials</span></code></a> object suited to your environment.
+After creation, you can pass it directly to a <code class="xref py py-class docutils literal notranslate"><span class="pre">Client</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">credentials</span><span class="o">=</span><span class="n">credentials</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>To create a credentials object, follow the <a class="reference external" href="https://googleapis.dev/python/google-auth/latest/user-guide.html#service-account-private-key-files">google-auth-guide</a>.</p>
+</div>
+<section id="google-compute-engine-environment">
+<h4>Google Compute Engine Environment<a class="headerlink" href="#google-compute-engine-environment" title="Link to this heading">¶</a></h4>
+<p>These credentials are used in Google Virtual Machine Environments.
+This includes most App Engine runtimes, Compute Engine, Cloud
+Functions, and Cloud Run.</p>
+<p>To create
+<a class="reference external" href="https://googleapis.dev/python/google-auth/latest/reference/google.auth.compute_engine.html#google.auth.compute_engine.Credentials" title="(in google-auth v2.40.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">credentials</span></code></a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">google.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_engine</span>
+<span class="n">credentials</span> <span class="o">=</span> <span class="n">compute_engine</span><span class="o">.</span><span class="n">Credentials</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="service-accounts">
+<h4>Service Accounts<a class="headerlink" href="#service-accounts" title="Link to this heading">¶</a></h4>
+<p>A <a class="reference external" href="https://cloud.google.com/iam/docs/creating-managing-service-accounts#creating">service account</a> is stored in a JSON keyfile.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">google.oauth2</span><span class="w"> </span><span class="kn">import</span> <span class="n">service_account</span>
+
+<span class="n">credentials</span> <span class="o">=</span> <span class="n">service_account</span><span class="o">.</span><span class="n">Credentials</span><span class="o">.</span><span class="n">from_service_account_file</span><span class="p">(</span>
+    <span class="s1">&#39;/path/to/key.json&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A JSON string or dictionary:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.oauth2</span><span class="w"> </span><span class="kn">import</span> <span class="n">service_account</span>
+
+<span class="n">json_account_info</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  <span class="c1"># convert JSON to dictionary</span>
+<span class="n">credentials</span> <span class="o">=</span> <span class="n">service_account</span><span class="o">.</span><span class="n">Credentials</span><span class="o">.</span><span class="n">from_service_account_info</span><span class="p">(</span>
+    <span class="n">json_account_info</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Previously the Google Cloud Console would issue a PKCS12/P12 key for your
+service account. This library does not support that key format. You can
+generate a new JSON key for the same service account from the console.</p>
+</div>
+</section>
+<section id="user-accounts-3-legged-oauth-2-0-with-a-refresh-token">
+<h4>User Accounts (3-legged OAuth 2.0) with a refresh token<a class="headerlink" href="#user-accounts-3-legged-oauth-2-0-with-a-refresh-token" title="Link to this heading">¶</a></h4>
+<p>The majority of cases are intended to authenticate machines or
+workers rather than actual user accounts. However, it’s also
+possible to call Google Cloud APIs with a user account via
+<a class="reference external" href="https://developers.google.com/identity/protocols/OAuth2">OAuth 2.0</a>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>A production application should <strong>use a service account</strong>,
+but you may wish to use your own personal user account when first
+getting started with the <code class="docutils literal notranslate"><span class="pre">google-cloud-*</span></code> library.</p>
+</div>
+<p>The simplest way to use credentials from a user account is via
+Application Default Credentials using <code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">auth</span> <span class="pre">application-default</span> <span class="pre">login</span></code>
+(as mentioned above) and <a class="reference external" href="https://googleapis.dev/python/google-auth/latest/reference/google.auth.html#google.auth.default" title="(in google-auth v2.40.2)"><code class="xref py py-func docutils literal notranslate"><span class="pre">google.auth.default()</span></code></a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">google.auth</span>
+
+<span class="n">credentials</span><span class="p">,</span> <span class="n">project</span> <span class="o">=</span> <span class="n">google</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">default</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This will still follow the <a class="reference internal" href="#precedence"><span class="std std-ref">precedence</span></a>
+described above,
+so be sure none of the other possible environments conflict
+with your user provided credentials.</p>
+</section>
+</section>
+<section id="troubleshooting">
+<h3>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h3>
+<section id="setting-up-a-service-account">
+<h4>Setting up a Service Account<a class="headerlink" href="#setting-up-a-service-account" title="Link to this heading">¶</a></h4>
+<p>If your application is not running on a Google Virtual Machine Environment,
+you need a Service Account. See <a class="reference external" href="https://cloud.google.com/iam/docs/creating-managing-service-accounts#creating">Creating a Service Account</a>.</p>
+</section>
+<section id="using-google-compute-engine">
+<h4>Using Google Compute Engine<a class="headerlink" href="#using-google-compute-engine" title="Link to this heading">¶</a></h4>
+<p>If your code is running on Google Compute Engine,
+using the inferred Google <a class="reference external" href="https://developers.google.com/identity/protocols/application-default-credentials">Application Default Credentials</a>
+will be sufficient for retrieving credentials.</p>
+<p>However, by default your credentials may not grant you
+access to the services you intend to use.
+Be sure when you <a class="reference external" href="https://cloud.google.com/compute/docs/authentication#using">set up the GCE instance</a>,
+you add the correct scopes for the APIs you want to access:</p>
+<ul>
+<li><p><strong>All APIs</strong></p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">https://www.googleapis.com/auth/cloud-platform</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">https://www.googleapis.com/auth/cloud-platform.read-only</span></code></p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<p>For scopes for specific APIs see <a class="reference external" href="https://developers.google.com/identity/protocols/oauth2/scopes">OAuth 2.0 Scopes for Google APIs</a></p>
+</section>
+</section>
+</section>
+<span id="document-client_info"></span><section id="module-google.api_core.client_info">
+<span id="client-information-helpers"></span><h2>Client Information Helpers<a class="headerlink" href="#module-google.api_core.client_info" title="Link to this heading">¶</a></h2>
+<p>Helpers for providing client information.</p>
+<p>Client information is used to send information about the calling client,
+such as the library and Python version, to API services.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.client_info.ClientInfo">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.client_info.</span></span><span class="sig-name descname"><span class="pre">ClientInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">python_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'3.10.12'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grpc_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">api_core_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2.25.0'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gapic_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client_library_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_agent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rest_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">protobuf_runtime_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.client_info.ClientInfo" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Client information used to generate a user-agent for API calls.</p>
+<p>This user-agent information is sent along with API calls to allow the
+receiving service to do analytics on which versions of Python and Google
+libraries are being used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>python_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The Python interpreter version, for example,
+<code class="docutils literal notranslate"><span class="pre">'3.9.6'</span></code>.</p></li>
+<li><p><strong>grpc_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The gRPC library version.</p></li>
+<li><p><strong>api_core_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The google-api-core library version.</p></li>
+<li><p><strong>gapic_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The version of gapic-generated client
+library, if the library was generated by gapic.</p></li>
+<li><p><strong>client_library_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The version of the client
+library, generally used if the client library was not generated
+by gapic or if additional functionality was built on top of
+a gapic client library.</p></li>
+<li><p><strong>user_agent</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – Prefix to the user agent header. This is
+used to supply information such as application name or partner tool.
+Recommended format: <code class="docutils literal notranslate"><span class="pre">application-or-tool-ID/major.minor.version</span></code>.</p></li>
+<li><p><strong>rest_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – A string with labeled versions of the
+dependencies used for REST transport.</p></li>
+<li><p><strong>protobuf_runtime_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The protobuf runtime version.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.client_info.ClientInfo.to_user_agent">
+<span class="sig-name descname"><span class="pre">to_user_agent</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.client_info.ClientInfo.to_user_agent" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the user-agent string for this client info.</p>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-google.api_core.gapic_v1.client_info">Helpers for providing client information.</p>
+<p>Client information is used to send information about the calling client,
+such as the library and Python version, to API services.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.gapic_v1.client_info.ClientInfo">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.gapic_v1.client_info.</span></span><span class="sig-name descname"><span class="pre">ClientInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">python_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'3.10.12'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grpc_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">api_core_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2.25.0'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gapic_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client_library_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_agent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rest_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">protobuf_runtime_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.gapic_v1.client_info.ClientInfo" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#google.api_core.client_info.ClientInfo" title="google.api_core.client_info.ClientInfo"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClientInfo</span></code></a></p>
+<p>Client information used to generate a user-agent for API calls.</p>
+<p>This user-agent information is sent along with API calls to allow the
+receiving service to do analytics on which versions of Python and Google
+libraries are being used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>python_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The Python interpreter version, for example,
+<code class="docutils literal notranslate"><span class="pre">'3.9.6'</span></code>.</p></li>
+<li><p><strong>grpc_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The gRPC library version.</p></li>
+<li><p><strong>api_core_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The google-api-core library version.</p></li>
+<li><p><strong>gapic_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The version of gapic-generated client
+library, if the library was generated by gapic.</p></li>
+<li><p><strong>client_library_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The version of the client
+library, generally used if the client library was not generated
+by gapic or if additional functionality was built on top of
+a gapic client library.</p></li>
+<li><p><strong>user_agent</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – Prefix to the user agent header. This is
+used to supply information such as application name or partner tool.
+Recommended format: <code class="docutils literal notranslate"><span class="pre">application-or-tool-ID/major.minor.version</span></code>.</p></li>
+<li><p><strong>rest_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – A string with labeled versions of the
+dependencies used for REST transport.</p></li>
+<li><p><strong>protobuf_runtime_version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The protobuf runtime version.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.gapic_v1.client_info.ClientInfo.to_grpc_metadata">
+<span class="sig-name descname"><span class="pre">to_grpc_metadata</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.gapic_v1.client_info.ClientInfo.to_grpc_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the gRPC metadata for this client info.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<span id="document-client_options"></span><section id="module-google.api_core.client_options">
+<span id="client-options"></span><h2>Client Options<a class="headerlink" href="#module-google.api_core.client_options" title="Link to this heading">¶</a></h2>
+<p>Client options class.</p>
+<p>Client options provide a consistent interface for user options to be defined
+across clients.</p>
+<p>You can pass a client options object to a client.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.client_options</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientOptions</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.vision_v1</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageAnnotatorClient</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_client_cert</span><span class="p">():</span>
+    <span class="c1"># code to load client certificate and private key.</span>
+    <span class="k">return</span> <span class="n">client_cert_bytes</span><span class="p">,</span> <span class="n">client_private_key_bytes</span>
+
+<span class="n">options</span> <span class="o">=</span> <span class="n">ClientOptions</span><span class="p">(</span><span class="n">api_endpoint</span><span class="o">=</span><span class="s2">&quot;foo.googleapis.com&quot;</span><span class="p">,</span>
+    <span class="n">client_cert_source</span><span class="o">=</span><span class="n">get_client_cert</span><span class="p">)</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">ImageAnnotatorClient</span><span class="p">(</span><span class="n">client_options</span><span class="o">=</span><span class="n">options</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can also pass a mapping object.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.vision_v1</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageAnnotatorClient</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">ImageAnnotatorClient</span><span class="p">(</span>
+    <span class="n">client_options</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;api_endpoint&quot;</span><span class="p">:</span> <span class="s2">&quot;foo.googleapis.com&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;client_cert_source&quot;</span> <span class="p">:</span> <span class="n">get_client_cert</span>
+    <span class="p">})</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.client_options.ClientOptions">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.client_options.</span></span><span class="sig-name descname"><span class="pre">ClientOptions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">api_endpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client_cert_source</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><span class="pre">bytes</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client_encrypted_cert_source</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quota_project_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">credentials_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scopes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.13)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">api_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">api_audience</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">universe_domain</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.client_options.ClientOptions" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Client Options used to set options on clients.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>api_endpoint</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The desired API endpoint, e.g.,
+compute.googleapis.com</p></li>
+<li><p><strong>client_cert_source</strong> (<em>Optional</em><em>[</em><em>Callable</em><em>[</em><em>[</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><em>bytes</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><em>bytes</em></a><em>]</em><em>]</em><em>]</em>) – A callback
+which returns client certificate bytes and private key bytes both in
+PEM format. <code class="docutils literal notranslate"><span class="pre">client_cert_source</span></code> and <code class="docutils literal notranslate"><span class="pre">client_encrypted_cert_source</span></code>
+are mutually exclusive.</p></li>
+<li><p><strong>client_encrypted_cert_source</strong> (<em>Optional</em><em>[</em><em>Callable</em><em>[</em><em>[</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.13)"><em>bytes</em></a><em>]</em><em>]</em><em>]</em>) – A callback which returns client certificate file path, encrypted
+private key file path, and the passphrase bytes.``client_cert_source``
+and <code class="docutils literal notranslate"><span class="pre">client_encrypted_cert_source</span></code> are mutually exclusive.</p></li>
+<li><p><strong>quota_project_id</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – A project name that a client’s
+quota belongs to.</p></li>
+<li><p><strong>credentials_file</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – <p>A path to a file storing credentials.
+<code class="docutils literal notranslate"><span class="pre">credentials_file`</span> <span class="pre">and</span> <span class="pre">``api_key</span></code> are mutually exclusive.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Important: If you accept a credential configuration (credential JSON/File/Stream)
+from an external source for authentication to Google Cloud Platform, you must
+validate it before providing it to any Google API or client library. Providing an
+unvalidated credential configuration to Google APIs or libraries can compromise
+the security of your systems and data. For more information, refer to
+<a class="reference internal" href="#validate-credential-configurations-from-external-sources">Validate credential configurations from external sources</a>.</p>
+</div>
+<span class="target" id="validate-credential-configurations-from-external-sources"></span><p><a class="reference external" href="https://cloud.google.com/docs/authentication/external/externally-sourced-credentials">https://cloud.google.com/docs/authentication/external/externally-sourced-credentials</a></p>
+</p></li>
+<li><p><strong>scopes</strong> (<em>Optional</em><em>[</em><em>Sequence</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em><em>]</em>) – OAuth access token override scopes.</p></li>
+<li><p><strong>api_key</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – Google API key. <code class="docutils literal notranslate"><span class="pre">credentials_file</span></code> and
+<code class="docutils literal notranslate"><span class="pre">api_key</span></code> are mutually exclusive.</p></li>
+<li><p><strong>api_audience</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The intended audience for the API calls
+to the service that will be set when using certain 3rd party
+authentication flows. Audience is typically a resource identifier.
+If not set, the service endpoint value will be used as a default.
+An example of a valid <code class="docutils literal notranslate"><span class="pre">api_audience</span></code> is: “<a class="reference external" href="https://language.googleapis.com">https://language.googleapis.com</a>”.</p></li>
+<li><p><strong>universe_domain</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The desired universe domain. This must match
+the one in credentials. If not set, the default universe domain is
+<cite>googleapis.com</cite>. If both <cite>api_endpoint</cite> and <cite>universe_domain</cite> are set,
+then <cite>api_endpoint</cite> is used as the service endpoint. If <cite>api_endpoint</cite> is
+not specified, the format will be <cite>{service}.{universe_domain}</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If both <code class="docutils literal notranslate"><span class="pre">client_cert_source</span></code> and <code class="docutils literal notranslate"><span class="pre">client_encrypted_cert_source</span></code>
+    are provided, or both <code class="docutils literal notranslate"><span class="pre">credentials_file</span></code> and <code class="docutils literal notranslate"><span class="pre">api_key</span></code> are provided.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.client_options.from_dict">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.client_options.</span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Mapping" title="(in Python v3.13)"><span class="pre">Mapping</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><span class="pre">object</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#google.api_core.client_options.ClientOptions" title="google.api_core.client_options.ClientOptions"><span class="pre">ClientOptions</span></a></span></span><a class="headerlink" href="#google.api_core.client_options.from_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Construct a client options object from a mapping object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>options</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.13)"><em>collections.abc.Mapping</em></a>) – A mapping object with client options.
+See the docstring for ClientOptions for details on valid arguments.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<span id="document-exceptions"></span><section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading">¶</a></h2>
+</section>
+<span id="document-futures"></span><section id="module-google.api_core.future">
+<span id="futures"></span><h2>Futures<a class="headerlink" href="#module-google.api_core.future" title="Link to this heading">¶</a></h2>
+<p>Futures for dealing with asynchronous operations.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.future.Future">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.future.</span></span><span class="sig-name descname"><span class="pre">Future</span></span><a class="headerlink" href="#google.api_core.future.Future" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Future interface.</p>
+<p>This interface is based on <a class="reference external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Future" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">concurrent.futures.Future</span></code></a>.</p>
+</dd></dl>
+
+</section>
+<span id="document-helpers"></span><section id="helpers">
+<h2>Helpers<a class="headerlink" href="#helpers" title="Link to this heading">¶</a></h2>
+<section id="module-google.api_core.general_helpers">
+<span id="general-helpers"></span><h3>General Helpers<a class="headerlink" href="#module-google.api_core.general_helpers" title="Link to this heading">¶</a></h3>
+</section>
+<section id="module-google.api_core.datetime_helpers">
+<span id="datetime-helpers"></span><h3>Datetime Helpers<a class="headerlink" href="#module-google.api_core.datetime_helpers" title="Link to this heading">¶</a></h3>
+<p>Helpers for <a class="reference external" href="https://docs.python.org/3/library/datetime.html#module-datetime" title="(in Python v3.13)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">datetime</span></code></a>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">DatetimeWithNanoseconds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kw</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">datetime</span></code></a></p>
+<p>Track nanosecond in addition to normal datetime attrs.</p>
+<p>Nanosecond can be passed only as a keyword argument.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds.from_rfc3339">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_rfc3339</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stamp</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds.from_rfc3339" title="Link to this definition">¶</a></dt>
+<dd><p>Parse RFC3339-compliant timestamp, preserving nanoseconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>stamp</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – RFC3339 stamp, with up to nanosecond precision</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>an instance matching the timestamp string</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds" title="google.api_core.datetime_helpers.DatetimeWithNanoseconds"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatetimeWithNanoseconds</span></code></a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – if <cite>stamp</cite> does not match the expected format</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds.from_timestamp_pb">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_timestamp_pb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stamp</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds.from_timestamp_pb" title="Link to this definition">¶</a></dt>
+<dd><p>Parse RFC3339-compliant timestamp, preserving nanoseconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>stamp</strong> (<a class="reference external" href="https://googleapis.dev/python/protobuf/latest/google/protobuf/timestamp_pb2.html#google.protobuf.timestamp_pb2.Timestamp" title="(in Protocol Buffers)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Timestamp</span></code></a>) – timestamp message</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>an instance matching the timestamp message</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds" title="google.api_core.datetime_helpers.DatetimeWithNanoseconds"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatetimeWithNanoseconds</span></code></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds.nanosecond">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">nanosecond</span></span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds.nanosecond" title="Link to this definition">¶</a></dt>
+<dd><p>nanosecond precision.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Read-only</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds.rfc3339">
+<span class="sig-name descname"><span class="pre">rfc3339</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds.rfc3339" title="Link to this definition">¶</a></dt>
+<dd><p>Return an RFC3339-compliant timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Timestamp string according to RFC3339 spec.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>(<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.DatetimeWithNanoseconds.timestamp_pb">
+<span class="sig-name descname"><span class="pre">timestamp_pb</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.DatetimeWithNanoseconds.timestamp_pb" title="Link to this definition">¶</a></dt>
+<dd><p>Return a timestamp message.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Timestamp message</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>(<a class="reference external" href="https://googleapis.dev/python/protobuf/latest/google/protobuf/timestamp_pb2.html#google.protobuf.timestamp_pb2.Timestamp" title="(in Protocol Buffers)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Timestamp</span></code></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.from_iso8601_date">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">from_iso8601_date</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.from_iso8601_date" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a ISO8601 date string to a date.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The ISO8601 date string.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A date equivalent to the date string.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.date" title="(in Python v3.13)">datetime.date</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.from_iso8601_time">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">from_iso8601_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.from_iso8601_time" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a zoneless ISO8601 time string to a time.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The ISO8601 time string.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A time equivalent to the time string.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.time" title="(in Python v3.13)">datetime.time</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.from_microseconds">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">from_microseconds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.from_microseconds" title="Link to this definition">¶</a></dt>
+<dd><p>Convert timestamp in microseconds since the unix epoch to datetime.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The timestamp to convert, in microseconds.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>The datetime object equivalent to the timestamp in</dt><dd><p>UTC.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)">datetime.datetime</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.from_rfc3339">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">from_rfc3339</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.from_rfc3339" title="Link to this definition">¶</a></dt>
+<dd><p>Convert an RFC3339-format timestamp to a native datetime.</p>
+<p>Supported formats include those without fractional seconds, or with
+any fraction up to nanosecond precision.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Python datetimes do not support nanosecond precision; this function
+therefore truncates such values to microseconds.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The RFC3339 string to convert.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The datetime object equivalent to the timestamp
+in UTC.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)">datetime.datetime</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the timestamp does not match the RFC3339
+    regular expression.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.from_rfc3339_nanos">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">from_rfc3339_nanos</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.from_rfc3339_nanos" title="Link to this definition">¶</a></dt>
+<dd><p>Convert an RFC3339-format timestamp to a native datetime.</p>
+<p>Supported formats include those without fractional seconds, or with
+any fraction up to nanosecond precision.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Python datetimes do not support nanosecond precision; this function
+therefore truncates such values to microseconds.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The RFC3339 string to convert.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The datetime object equivalent to the timestamp
+in UTC.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)">datetime.datetime</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the timestamp does not match the RFC3339
+    regular expression.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.to_microseconds">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">to_microseconds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.to_microseconds" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a datetime to microseconds since the unix epoch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><em>datetime.datetime</em></a>) – The datetime to covert.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Microseconds since the unix epoch.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.to_milliseconds">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">to_milliseconds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.to_milliseconds" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a zone-aware datetime to milliseconds since the unix epoch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><em>datetime.datetime</em></a>) – The datetime to covert.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Milliseconds since the unix epoch.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.to_rfc3339">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">to_rfc3339</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_zone</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.to_rfc3339" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a datetime to an RFC3339 timestamp string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><em>datetime.datetime</em></a>) – The datetime object to be converted to a string.</p></li>
+<li><p><strong>ignore_zone</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – If True, then the timezone (if any) of the
+datetime object is ignored and the datetime is treated as UTC.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The RFC3339 formatted string representing the datetime.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.datetime_helpers.utcnow">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.datetime_helpers.</span></span><span class="sig-name descname"><span class="pre">utcnow</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.datetime_helpers.utcnow" title="Link to this definition">¶</a></dt>
+<dd><p>A <a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime.utcnow" title="(in Python v3.13)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">datetime.datetime.utcnow()</span></code></a> alias to allow mocking in tests.</p>
+</dd></dl>
+
+</section>
+<section id="grpc-helpers">
+<h3>gRPC Helpers<a class="headerlink" href="#grpc-helpers" title="Link to this heading">¶</a></h3>
+</section>
+</section>
+<span id="document-iam"></span><section id="module-google.api_core.iam">
+<span id="identity-and-access-management"></span><h2>Identity and Access Management<a class="headerlink" href="#module-google.api_core.iam" title="Link to this heading">¶</a></h2>
+<p>Non-API-specific IAM policy definitions</p>
+<p>For allowed roles / permissions, see:
+<a class="reference external" href="https://cloud.google.com/iam/docs/understanding-roles">https://cloud.google.com/iam/docs/understanding-roles</a></p>
+<p>Example usage:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ``get_iam_policy`` returns a :class:&#39;~google.api_core.iam.Policy`.</span>
+<span class="n">policy</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get_iam_policy</span><span class="p">(</span><span class="n">requested_policy_version</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="n">phred</span> <span class="o">=</span> <span class="s2">&quot;user:phred@example.com&quot;</span>
+<span class="n">admin_group</span> <span class="o">=</span> <span class="s2">&quot;group:admins@groups.example.com&quot;</span>
+<span class="n">account</span> <span class="o">=</span> <span class="s2">&quot;serviceAccount:account-1234@accounts.example.com&quot;</span>
+
+<span class="n">policy</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">policy</span><span class="o">.</span><span class="n">bindings</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;roles/owner&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;members&quot;</span><span class="p">:</span> <span class="p">{</span><span class="n">phred</span><span class="p">,</span> <span class="n">admin_group</span><span class="p">,</span> <span class="n">account</span><span class="p">}</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;roles/editor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;members&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;allAuthenticatedUsers&quot;</span><span class="p">}</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;roles/viewer&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;members&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;allUsers&quot;</span><span class="p">}</span>
+        <span class="s2">&quot;condition&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;request_time&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Requests made before 2021-01-01T00:00:00Z&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;expression&quot;</span><span class="p">:</span> <span class="s2">&quot;request.time &lt; timestamp(&quot;</span><span class="mi">2021</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span><span class="n">Z</span><span class="s2">&quot;)&quot;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+
+<span class="n">resource</span><span class="o">.</span><span class="n">set_iam_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py data">
+<dt class="sig sig-object py" id="google.api_core.iam.OWNER_ROLE">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.iam.</span></span><span class="sig-name descname"><span class="pre">OWNER_ROLE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'roles/owner'</span></em><a class="headerlink" href="#google.api_core.iam.OWNER_ROLE" title="Link to this definition">¶</a></dt>
+<dd><p>Generic role implying all rights to an object.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="google.api_core.iam.EDITOR_ROLE">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.iam.</span></span><span class="sig-name descname"><span class="pre">EDITOR_ROLE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'roles/editor'</span></em><a class="headerlink" href="#google.api_core.iam.EDITOR_ROLE" title="Link to this definition">¶</a></dt>
+<dd><p>Generic role implying rights to modify an object.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="google.api_core.iam.VIEWER_ROLE">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.iam.</span></span><span class="sig-name descname"><span class="pre">VIEWER_ROLE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'roles/viewer'</span></em><a class="headerlink" href="#google.api_core.iam.VIEWER_ROLE" title="Link to this definition">¶</a></dt>
+<dd><p>Generic role implying rights to access an object.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="google.api_core.iam.InvalidOperationException">
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.iam.</span></span><span class="sig-name descname"><span class="pre">InvalidOperationException</span></span><a class="headerlink" href="#google.api_core.iam.InvalidOperationException" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#Exception" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Exception</span></code></a></p>
+<p>Raised when trying to use Policy class as a dict.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.iam.</span></span><span class="sig-name descname"><span class="pre">Policy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">etag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.MutableMapping" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MutableMapping</span></code></a></p>
+<p>IAM Policy</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>etag</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – ETag used to identify a unique of the policy</p></li>
+<li><p><strong>version</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>]</em>) – The syntax schema version of the policy.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Using conditions in bindings requires the policy’s version to be set
+to <cite>3</cite> or greater, depending on the versions that are currently supported.</p>
+<p>Accessing the policy using dict operations will raise InvalidOperationException
+when the policy’s version is set to 3.</p>
+<p>Use the policy.bindings getter/setter to retrieve and modify the policy’s bindings.</p>
+</div>
+<dl class="simple">
+<dt>See:</dt><dd><p>IAM Policy <a class="reference external" href="https://cloud.google.com/iam/reference/rest/v1/Policy">https://cloud.google.com/iam/reference/rest/v1/Policy</a>
+Policy versions <a class="reference external" href="https://cloud.google.com/iam/docs/policies#versions">https://cloud.google.com/iam/docs/policies#versions</a>
+Conditions overview <a class="reference external" href="https://cloud.google.com/iam/docs/conditions-overview">https://cloud.google.com/iam/docs/conditions-overview</a>.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.__check_version__">
+<span class="sig-name descname"><span class="pre">__check_version__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.__check_version__" title="Link to this definition">¶</a></dt>
+<dd><p>Raise InvalidOperationException if version is greater than 1 or policy contains conditions.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.bindings">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">bindings</span></span><a class="headerlink" href="#google.api_core.iam.Policy.bindings" title="Link to this definition">¶</a></dt>
+<dd><p>The policy’s list of bindings.</p>
+<p>A binding is specified by a dictionary with keys:</p>
+<ul class="simple">
+<li><p>role (str): Role that is assigned to <cite>members</cite>.</p></li>
+<li><p>members (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set</span></code></a> of str): Specifies the identities associated to this binding.</p></li>
+<li><p>condition (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dict</span></code></a> of str:str): Specifies a condition under which this binding will apply.</p>
+<ul>
+<li><p>title (str): Title for the condition.</p></li>
+<li><p>description (:obj:str, optional): Description of the condition.</p></li>
+<li><p>expression: A CEL expression.</p></li>
+</ul>
+</li>
+</ul>
+<dl class="simple">
+<dt>Type:</dt><dd><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">list</span></code></a> of <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dict</span></code></a></p>
+</dd>
+<dt>See:</dt><dd><p>Policy versions <a class="reference external" href="https://cloud.google.com/iam/docs/policies#versions">https://cloud.google.com/iam/docs/policies#versions</a>
+Conditions overview <a class="reference external" href="https://cloud.google.com/iam/docs/conditions-overview">https://cloud.google.com/iam/docs/conditions-overview</a>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">USER</span> <span class="o">=</span> <span class="s2">&quot;user:phred@example.com&quot;</span>
+<span class="n">ADMIN_GROUP</span> <span class="o">=</span> <span class="s2">&quot;group:admins@groups.example.com&quot;</span>
+<span class="n">SERVICE_ACCOUNT</span> <span class="o">=</span> <span class="s2">&quot;serviceAccount:account-1234@accounts.example.com&quot;</span>
+<span class="n">CONDITION</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;request_time&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Requests made before 2021-01-01T00:00:00Z&quot;</span><span class="p">,</span> <span class="c1"># Optional</span>
+    <span class="s2">&quot;expression&quot;</span><span class="p">:</span> <span class="s2">&quot;request.time &lt; timestamp(&quot;</span><span class="mi">2021</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span><span class="n">Z</span><span class="s2">&quot;)&quot;</span>
+<span class="p">}</span>
+
+<span class="c1"># Set policy&#39;s version to 3 before setting bindings containing conditions.</span>
+<span class="n">policy</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="n">policy</span><span class="o">.</span><span class="n">bindings</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;roles/viewer&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;members&quot;</span><span class="p">:</span> <span class="p">{</span><span class="n">USER</span><span class="p">,</span> <span class="n">ADMIN_GROUP</span><span class="p">,</span> <span class="n">SERVICE_ACCOUNT</span><span class="p">},</span>
+        <span class="s2">&quot;condition&quot;</span><span class="p">:</span> <span class="n">CONDITION</span>
+    <span class="p">},</span>
+    <span class="o">...</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.owners">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">owners</span></span><a class="headerlink" href="#google.api_core.iam.Policy.owners" title="Link to this definition">¶</a></dt>
+<dd><p>Legacy access to owner role.</p>
+<p>Raise InvalidOperationException if version is greater than 1 or policy contains conditions.</p>
+<p>DEPRECATED:  use <cite>policy.bindings</cite> to access bindings instead.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.editors">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">editors</span></span><a class="headerlink" href="#google.api_core.iam.Policy.editors" title="Link to this definition">¶</a></dt>
+<dd><p>Legacy access to editor role.</p>
+<p>Raise InvalidOperationException if version is greater than 1 or policy contains conditions.</p>
+<p>DEPRECATED:  use <cite>policy.bindings</cite> to access bindings instead.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.viewers">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">viewers</span></span><a class="headerlink" href="#google.api_core.iam.Policy.viewers" title="Link to this definition">¶</a></dt>
+<dd><p>Legacy access to viewer role.</p>
+<p>Raise InvalidOperationException if version is greater than 1 or policy contains conditions.</p>
+<p>DEPRECATED:  use <cite>policy.bindings</cite> to modify bindings instead.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.user">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.user" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a user member.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – E-mail for this particular user.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A member string corresponding to the given user.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.service_account">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">service_account</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.service_account" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a service account member.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – E-mail for this particular service account.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A member string corresponding to the given service account.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.group">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.group" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a group member.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – An id or e-mail for this particular group.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A member string corresponding to the given group.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.domain">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.domain" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a domain member.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The domain for this member.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A member string corresponding to the given domain.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.all_users">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">all_users</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.all_users" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a member representing all users.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A member string representing all users.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.authenticated_users">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">authenticated_users</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.authenticated_users" title="Link to this definition">¶</a></dt>
+<dd><p>Factory method for a member representing all authenticated users.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A member string representing all authenticated users.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.from_api_repr">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_api_repr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">resource</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.from_api_repr" title="Link to this definition">¶</a></dt>
+<dd><p>Factory: create a policy from a JSON resource.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>resource</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a>) – policy resource returned by <code class="docutils literal notranslate"><span class="pre">getIamPolicy</span></code> API.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the parsed policy</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#google.api_core.iam.Policy" title="google.api_core.iam.Policy"><code class="xref py py-class docutils literal notranslate"><span class="pre">Policy</span></code></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.iam.Policy.to_api_repr">
+<span class="sig-name descname"><span class="pre">to_api_repr</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.iam.Policy.to_api_repr" title="Link to this definition">¶</a></dt>
+<dd><p>Render a JSON policy resource.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a resource to be passed to the <code class="docutils literal notranslate"><span class="pre">setIamPolicy</span></code> API.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<span id="document-operation"></span><section id="long-running-operations">
+<h2>Long-Running Operations<a class="headerlink" href="#long-running-operations" title="Link to this heading">¶</a></h2>
+<section id="long-running-operations-in-asyncio">
+<h3>Long-Running Operations in AsyncIO<a class="headerlink" href="#long-running-operations-in-asyncio" title="Link to this heading">¶</a></h3>
+</section>
+</section>
+<span id="document-operations_client"></span><section id="long-running-operations-client">
+<h2>Long-Running Operations Client<a class="headerlink" href="#long-running-operations-client" title="Link to this heading">¶</a></h2>
+</section>
+<span id="document-page_iterator"></span><section id="module-google.api_core.page_iterator">
+<span id="page-iterators"></span><h2>Page Iterators<a class="headerlink" href="#module-google.api_core.page_iterator" title="Link to this heading">¶</a></h2>
+<p>Iterators for paging through paged API methods.</p>
+<p>These iterators simplify the process of paging through API responses
+where the request takes a page token and the response is a list of results with
+a token for the next page. See <a class="reference external" href="https://cloud.google.com/apis/design/design_patterns#list_pagination">list pagination</a> in the Google API Style Guide
+for more details.</p>
+<p>API clients that have methods that follow the list pagination pattern can
+return an <a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code></a>. You can use this iterator to get <strong>all</strong> of
+the results across all pages:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">results_iterator</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_resources</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">results_iterator</span><span class="p">)</span>  <span class="c1"># Convert to a list (consumes all values).</span>
+</pre></div>
+</div>
+<p>Or you can walk your way through items and call off the search early if
+you find what you’re looking for (resulting in possibly fewer requests):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="ow">not</span> <span class="n">resource</span><span class="o">.</span><span class="n">is_valid</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">break</span>
+</pre></div>
+</div>
+<p>At any point, you may check the number of items consumed by referencing the
+<code class="docutils literal notranslate"><span class="pre">num_results</span></code> property of the iterator:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">my_item</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">results_iterator</span><span class="o">.</span><span class="n">num_results</span> <span class="o">&gt;=</span> <span class="mi">10</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">break</span>
+</pre></div>
+</div>
+<p>When iterating, not every new item will send a request to the server.
+To iterate based on each page of items (where a page corresponds to
+a request):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="o">.</span><span class="n">pages</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    Page number: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iterator</span><span class="o">.</span><span class="n">page_number</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;  Items in page: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">page</span><span class="o">.</span><span class="n">num_items</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;     First item: </span><span class="si">{!r}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">page</span><span class="p">)))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Items remaining: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">page</span><span class="o">.</span><span class="n">remaining</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Next page token: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iterator</span><span class="o">.</span><span class="n">next_page_token</span><span class="p">))</span>
+<span class="go">====================</span>
+<span class="go">    Page number: 1</span>
+<span class="go">  Items in page: 1</span>
+<span class="go">     First item: &lt;MyItemClass at 0x7f1d3cccf690&gt;</span>
+<span class="go">Items remaining: 0</span>
+<span class="go">Next page token: eav1OzQB0OM8rLdGXOEsyQWSG</span>
+<span class="go">====================</span>
+<span class="go">    Page number: 2</span>
+<span class="go">  Items in page: 19</span>
+<span class="go">     First item: &lt;MyItemClass at 0x7f1d3cccffd0&gt;</span>
+<span class="go">Items remaining: 18</span>
+<span class="go">Next page token: None</span>
+</pre></div>
+</div>
+<p>Then, for each page you can get all the resources on that page by iterating
+through it or using <code class="xref py py-func docutils literal notranslate"><span class="pre">list()</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">page</span><span class="p">)</span>
+<span class="go">[</span>
+<span class="go">    &lt;MyItemClass at 0x7fd64a098ad0&gt;,</span>
+<span class="go">    &lt;MyItemClass at 0x7fd64a098ed0&gt;,</span>
+<span class="go">    &lt;MyItemClass at 0x7fd64a098e90&gt;,</span>
+<span class="go">]</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.GRPCIterator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator.</span></span><span class="sig-name descname"><span class="pre">GRPCIterator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items_field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value=&lt;function</span> <span class="pre">_item_to_value_identity&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_token_field='page_token'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_token_field='next_page_token'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.GRPCIterator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code></a></p>
+<p>A generic class for iterating through gRPC list responses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The class does not take a <code class="docutils literal notranslate"><span class="pre">page_token</span></code> argument because it can
+just be specified in the <code class="docutils literal notranslate"><span class="pre">request</span></code>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>google.cloud.client.Client</em>) – The API client. This unused by
+this class, but kept to satisfy the <a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code></a> interface.</p></li>
+<li><p><strong>method</strong> (<em>Callable</em><em>[</em><em>protobuf.Message</em><em>]</em>) – A bound gRPC method that should
+take a single message for the request.</p></li>
+<li><p><strong>request</strong> (<em>protobuf.Message</em>) – The request message.</p></li>
+<li><p><strong>items_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the response message that has the
+items for the page.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator.GRPCIterator" title="google.api_core.page_iterator.GRPCIterator"><em>GRPCIterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an
+item from the type in the JSON response into a native object. Will
+be called with the iterator and a single item.</p></li>
+<li><p><strong>request_token_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the request message used to
+specify the page token.</p></li>
+<li><p><strong>response_token_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the response message that has
+the token for the next page.</p></li>
+<li><p><strong>max_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.GRPCIterator.pages">
+<span class="sig-name descname"><span class="pre">pages</span></span><a class="headerlink" href="#google.api_core.page_iterator.GRPCIterator.pages" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator of pages in the response.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A</dt><dd><p>generator of page instances.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[<a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page">google.api_core.page_iterator.Page</a>]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.HTTPIterator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator.</span></span><span class="sig-name descname"><span class="pre">HTTPIterator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">api_request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items_key='items'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_token=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_size=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_params=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_start=&lt;function</span> <span class="pre">_do_nothing_page_start&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">next_token='nextPageToken'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.HTTPIterator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code></a></p>
+<p>A generic class for iterating through HTTP/JSON API list responses.</p>
+<p>To make an iterator work, you’ll need to provide a way to convert a JSON
+item returned from the API into the object of your choice (via
+<code class="docutils literal notranslate"><span class="pre">item_to_value</span></code>). You also may need to specify a custom <code class="docutils literal notranslate"><span class="pre">items_key</span></code> so
+that a given response (containing a page of results) can be parsed into an
+iterable page of the actual objects you want.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>google.cloud.client.Client</em>) – The API client.</p></li>
+<li><p><strong>api_request</strong> (<em>Callable</em>) – The function to use to make API requests.
+Generally, this will be
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">google.cloud._http.JSONConnection.api_request()</span></code>.</p></li>
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The method path to query for the list of items.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><em>google.api_core.page_iterator.Iterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an item from the type in the JSON response into
+a native object. Will be called with the iterator and a single
+item.</p></li>
+<li><p><strong>items_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The key in the API response where the list of items
+can be found.</p></li>
+<li><p><strong>page_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – A token identifying a page in a result set to start
+fetching results from.</p></li>
+<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch per page</p></li>
+<li><p><strong>max_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch</p></li>
+<li><p><strong>extra_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a>) – Extra query string parameters for the
+API call.</p></li>
+<li><p><strong>(</strong><strong>Callable</strong><strong>[</strong> (<em>page_start</em>) – google.api_core.page_iterator.Iterator,
+google.api_core.page_iterator.Page, dict]): Callable to provide
+any special behavior after a new page has been created. Assumed
+signature takes the <a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code></a> that started the page,
+the <a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page"><code class="xref py py-class docutils literal notranslate"><span class="pre">Page</span></code></a> that was started and the dictionary containing
+the page response.</p></li>
+<li><p><strong>next_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the field used in the response for page
+tokens.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.HTTPIterator.pages">
+<span class="sig-name descname"><span class="pre">pages</span></span><a class="headerlink" href="#google.api_core.page_iterator.HTTPIterator.pages" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator of pages in the response.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A</dt><dd><p>generator of page instances.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[<a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page">google.api_core.page_iterator.Page</a>]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator.</span></span><span class="sig-name descname"><span class="pre">Iterator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value=&lt;function</span> <span class="pre">_item_to_value_identity&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_token=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.Iterator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A generic class for iterating through API list responses.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>google.cloud.client.Client</em>) – The API client.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><em>google.api_core.page_iterator.Iterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an item from the type in the raw API response
+into the native object. Will be called with the iterator and a
+single item.</p></li>
+<li><p><strong>page_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – A token identifying a page in a result set to start
+fetching results from.</p></li>
+<li><p><strong>max_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.__iter__">
+<span class="sig-name descname"><span class="pre">__iter__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.__iter__" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator for each item returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A generator of items from the API.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[Any]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.client">
+<span class="sig-name descname"><span class="pre">client</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.client" title="Link to this definition">¶</a></dt>
+<dd><p>The client that created this iterator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Optional[Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.item_to_value">
+<span class="sig-name descname"><span class="pre">item_to_value</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.item_to_value" title="Link to this definition">¶</a></dt>
+<dd><p>Callable to convert an item from the type
+in the raw API response into the native object. Will be called with
+the iterator and a
+single item.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Callable[<a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator">Iterator</a>, Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.max_results">
+<span class="sig-name descname"><span class="pre">max_results</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.max_results" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of results to fetch</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.next_page_token">
+<span class="sig-name descname"><span class="pre">next_page_token</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.next_page_token" title="Link to this definition">¶</a></dt>
+<dd><p>The token for the next page of results. If this is set before
+the iterator starts, it effectively offsets the iterator to a
+specific starting point.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.num_results">
+<span class="sig-name descname"><span class="pre">num_results</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.num_results" title="Link to this definition">¶</a></dt>
+<dd><p>The total number of results fetched so far.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.page_number">
+<span class="sig-name descname"><span class="pre">page_number</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.page_number" title="Link to this definition">¶</a></dt>
+<dd><p>The current page of results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Iterator.pages">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pages</span></span><a class="headerlink" href="#google.api_core.page_iterator.Iterator.pages" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator of pages in the response.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A</dt><dd><p>generator of page instances.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[<a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page">google.api_core.page_iterator.Page</a>]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator.</span></span><span class="sig-name descname"><span class="pre">Page</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parent</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">raw_page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.Page" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Single page of results in an iterator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>parent</strong> (<a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><em>google.api_core.page_iterator.Iterator</em></a>) – The iterator that owns
+the current page.</p></li>
+<li><p><strong>items</strong> (<em>Sequence</em><em>[</em><em>Any</em><em>]</em>) – An iterable (that also defines __len__) of items
+from a raw API response.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator"><em>google.api_core.page_iterator.Iterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an item from the type in the raw API response
+into the native object. Will be called with the iterator and a
+single item.</p></li>
+<li><p><strong>Optional</strong><strong>[</strong><strong>google.protobuf.message.Message</strong><strong>]</strong> (<em>raw_page</em>) – The raw page response.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page.__iter__">
+<span class="sig-name descname"><span class="pre">__iter__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.Page.__iter__" title="Link to this definition">¶</a></dt>
+<dd><p>The <a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page"><code class="xref py py-class docutils literal notranslate"><span class="pre">Page</span></code></a> is an iterator of items.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page.__next__">
+<span class="sig-name descname"><span class="pre">__next__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator.Page.__next__" title="Link to this definition">¶</a></dt>
+<dd><p>Get the next value in the page.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page.num_items">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_items</span></span><a class="headerlink" href="#google.api_core.page_iterator.Page.num_items" title="Link to this definition">¶</a></dt>
+<dd><p>Total items in the page.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page.raw_page">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">raw_page</span></span><a class="headerlink" href="#google.api_core.page_iterator.Page.raw_page" title="Link to this definition">¶</a></dt>
+<dd><p>google.protobuf.message.Message</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.page_iterator.Page.remaining">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">remaining</span></span><a class="headerlink" href="#google.api_core.page_iterator.Page.remaining" title="Link to this definition">¶</a></dt>
+<dd><p>Remaining items in the page.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<section id="module-google.api_core.page_iterator_async">
+<span id="page-iterators-in-asyncio"></span><h3>Page Iterators in AsyncIO<a class="headerlink" href="#module-google.api_core.page_iterator_async" title="Link to this heading">¶</a></h3>
+<p>AsyncIO iterators for paging through paged API methods.</p>
+<p>These iterators simplify the process of paging through API responses
+where the request takes a page token and the response is a list of results with
+a token for the next page. See <a class="reference external" href="https://cloud.google.com/apis/design/design_patterns#list_pagination">list pagination</a> in the Google API Style Guide
+for more details.</p>
+<p>API clients that have methods that follow the list pagination pattern can
+return an <a class="reference internal" href="#google.api_core.page_iterator_async.AsyncIterator" title="google.api_core.page_iterator_async.AsyncIterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncIterator</span></code></a>:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">results_iterator</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">list_resources</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Or you can walk your way through items and call off the search early if
+you find what you’re looking for (resulting in possibly fewer requests):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">async</span> <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="ow">not</span> <span class="n">resource</span><span class="o">.</span><span class="n">is_valid</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">break</span>
+</pre></div>
+</div>
+<p>At any point, you may check the number of items consumed by referencing the
+<code class="docutils literal notranslate"><span class="pre">num_results</span></code> property of the iterator:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">async</span> <span class="k">for</span> <span class="n">my_item</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">results_iterator</span><span class="o">.</span><span class="n">num_results</span> <span class="o">&gt;=</span> <span class="mi">10</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">break</span>
+</pre></div>
+</div>
+<p>When iterating, not every new item will send a request to the server.
+To iterate based on each page of items (where a page corresponds to
+a request):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">async</span> <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="n">results_iterator</span><span class="o">.</span><span class="n">pages</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    Page number: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iterator</span><span class="o">.</span><span class="n">page_number</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;  Items in page: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">page</span><span class="o">.</span><span class="n">num_items</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;     First item: </span><span class="si">{!r}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">page</span><span class="p">)))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Items remaining: </span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">page</span><span class="o">.</span><span class="n">remaining</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Next page token: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iterator</span><span class="o">.</span><span class="n">next_page_token</span><span class="p">))</span>
+<span class="go">====================</span>
+<span class="go">    Page number: 1</span>
+<span class="go">  Items in page: 1</span>
+<span class="go">     First item: &lt;MyItemClass at 0x7f1d3cccf690&gt;</span>
+<span class="go">Items remaining: 0</span>
+<span class="go">Next page token: eav1OzQB0OM8rLdGXOEsyQWSG</span>
+<span class="go">====================</span>
+<span class="go">    Page number: 2</span>
+<span class="go">  Items in page: 19</span>
+<span class="go">     First item: &lt;MyItemClass at 0x7f1d3cccffd0&gt;</span>
+<span class="go">Items remaining: 18</span>
+<span class="go">Next page token: None</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncGRPCIterator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator_async.</span></span><span class="sig-name descname"><span class="pre">AsyncGRPCIterator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items_field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value=&lt;function</span> <span class="pre">_item_to_value_identity&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_token_field='page_token'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_token_field='next_page_token'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncGRPCIterator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#google.api_core.page_iterator_async.AsyncIterator" title="google.api_core.page_iterator_async.AsyncIterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncIterator</span></code></a></p>
+<p>A generic class for iterating through gRPC list responses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The class does not take a <code class="docutils literal notranslate"><span class="pre">page_token</span></code> argument because it can
+just be specified in the <code class="docutils literal notranslate"><span class="pre">request</span></code>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>google.cloud.client.Client</em>) – The API client. This unused by
+this class, but kept to satisfy the <code class="xref py py-class docutils literal notranslate"><span class="pre">Iterator</span></code> interface.</p></li>
+<li><p><strong>method</strong> (<em>Callable</em><em>[</em><em>protobuf.Message</em><em>]</em>) – A bound gRPC method that should
+take a single message for the request.</p></li>
+<li><p><strong>request</strong> (<em>protobuf.Message</em>) – The request message.</p></li>
+<li><p><strong>items_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the response message that has the
+items for the page.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator.GRPCIterator" title="google.api_core.page_iterator.GRPCIterator"><em>GRPCIterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an
+item from the type in the JSON response into a native object. Will
+be called with the iterator and a single item.</p></li>
+<li><p><strong>request_token_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the request message used to
+specify the page token.</p></li>
+<li><p><strong>response_token_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The field in the response message that has
+the token for the next page.</p></li>
+<li><p><strong>max_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncGRPCIterator.pages">
+<span class="sig-name descname"><span class="pre">pages</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncGRPCIterator.pages" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator of pages in the response.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A</dt><dd><p>generator of page instances.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[<a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page">google.api_core.page_iterator.Page</a>]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.page_iterator_async.</span></span><span class="sig-name descname"><span class="pre">AsyncIterator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_to_value=&lt;function</span> <span class="pre">_item_to_value_identity&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_token=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>A generic class for iterating through API list responses.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>google.cloud.client.Client</em>) – The API client.</p></li>
+<li><p><strong>item_to_value</strong> (<em>Callable</em><em>[</em><a class="reference internal" href="#google.api_core.page_iterator_async.AsyncIterator" title="google.api_core.page_iterator_async.AsyncIterator"><em>google.api_core.page_iterator_async.AsyncIterator</em></a><em>, </em><em>Any</em><em>]</em>) – Callable to convert an item from the type in the raw API response
+into the native object. Will be called with the iterator and a
+single item.</p></li>
+<li><p><strong>page_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – A token identifying a page in a result set to start
+fetching results from.</p></li>
+<li><p><strong>max_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The maximum number of results to fetch.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.__aiter__">
+<span class="sig-name descname"><span class="pre">__aiter__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.__aiter__" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator for each item returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A generator of items from the API.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[Any]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.client">
+<span class="sig-name descname"><span class="pre">client</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.client" title="Link to this definition">¶</a></dt>
+<dd><p>The client that created this iterator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Optional[Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.item_to_value">
+<span class="sig-name descname"><span class="pre">item_to_value</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.item_to_value" title="Link to this definition">¶</a></dt>
+<dd><p>Callable to convert an item from the type
+in the raw API response into the native object. Will be called with
+the iterator and a
+single item.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Callable[<a class="reference internal" href="#google.api_core.page_iterator.Iterator" title="google.api_core.page_iterator.Iterator">Iterator</a>, Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.max_results">
+<span class="sig-name descname"><span class="pre">max_results</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.max_results" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of results to fetch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.next_page_token">
+<span class="sig-name descname"><span class="pre">next_page_token</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.next_page_token" title="Link to this definition">¶</a></dt>
+<dd><p>The token for the next page of results. If this is set before
+the iterator starts, it effectively offsets the iterator to a
+specific starting point.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.num_results">
+<span class="sig-name descname"><span class="pre">num_results</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.num_results" title="Link to this definition">¶</a></dt>
+<dd><p>The total number of results fetched so far.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.page_number">
+<span class="sig-name descname"><span class="pre">page_number</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.page_number" title="Link to this definition">¶</a></dt>
+<dd><p>The current page of results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="google.api_core.page_iterator_async.AsyncIterator.pages">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pages</span></span><a class="headerlink" href="#google.api_core.page_iterator_async.AsyncIterator.pages" title="Link to this definition">¶</a></dt>
+<dd><p>Iterator of pages in the response.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A</dt><dd><p>generator of page instances.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>types.GeneratorType[<a class="reference internal" href="#google.api_core.page_iterator.Page" title="google.api_core.page_iterator.Page">google.api_core.page_iterator.Page</a>]</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the iterator has already been started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+<span id="document-path_template"></span><section id="module-google.api_core.path_template">
+<span id="path-templates"></span><h2>Path Templates<a class="headerlink" href="#module-google.api_core.path_template" title="Link to this heading">¶</a></h2>
+<p>Expand and validate URL path templates.</p>
+<p>This module provides the <a class="reference internal" href="#google.api_core.path_template.expand" title="google.api_core.path_template.expand"><code class="xref py py-func docutils literal notranslate"><span class="pre">expand()</span></code></a> and <a class="reference internal" href="#google.api_core.path_template.validate" title="google.api_core.path_template.validate"><code class="xref py py-func docutils literal notranslate"><span class="pre">validate()</span></code></a> functions for
+interacting with Google-style URL <a class="reference external" href="https://github.com/googleapis/googleapis/blob/57e2d376ac7ef48681554204a3ba78a414f2c533/google/api/http.proto#L212">path templates</a> which are commonly used
+in Google APIs for <a class="reference external" href="https://cloud.google.com/apis/design/resource_names">resource names</a>.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.path_template.delete_field">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.path_template.</span></span><span class="sig-name descname"><span class="pre">delete_field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.path_template.delete_field" title="Link to this definition">¶</a></dt>
+<dd><p>Delete the value of a field from a given dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em> | </em><em>Message</em>) – A dictionary object or a Message.</p></li>
+<li><p><strong>field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The key to the request in dot notation.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.path_template.expand">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.path_template.</span></span><span class="sig-name descname"><span class="pre">expand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tmpl</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.path_template.expand" title="Link to this definition">¶</a></dt>
+<dd><p>Expand a path template with the given variables.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">expand</span><span class="p">(</span><span class="s1">&#39;users/*/messages/*&#39;</span><span class="p">,</span> <span class="s1">&#39;me&#39;</span><span class="p">,</span> <span class="s1">&#39;123&#39;</span><span class="p">)</span>
+<span class="go">users/me/messages/123</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">expand</span><span class="p">(</span><span class="s1">&#39;/v1/{name=shelves/*/books/*}&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;shelves/1/books/3&#39;</span><span class="p">)</span>
+<span class="go">/v1/shelves/1/books/3</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tmpl</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The path template.</p></li>
+<li><p><strong>args</strong> – The positional variables for the path.</p></li>
+<li><p><strong>kwargs</strong> – The named variables for the path.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The expanded path</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If a positional or named variable is required by the
+    template but not specified or if an unexpected template expression
+    is encountered.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.path_template.get_field">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.path_template.</span></span><span class="sig-name descname"><span class="pre">get_field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.path_template.get_field" title="Link to this definition">¶</a></dt>
+<dd><p>Get the value of a field from a given dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em> | </em><em>Message</em>) – A dictionary or a Message object.</p></li>
+<li><p><strong>field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The key to the request in dot notation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The value of the field.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.path_template.transcode">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.path_template.</span></span><span class="sig-name descname"><span class="pre">transcode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">http_options</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">request_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.path_template.transcode" title="Link to this definition">¶</a></dt>
+<dd><p>Transcodes a grpc request pattern into a proper HTTP request following the rules outlined here,
+<a class="reference external" href="https://github.com/googleapis/googleapis/blob/master/google/api/http.proto#L44-L312">https://github.com/googleapis/googleapis/blob/master/google/api/http.proto#L44-L312</a></p>
+<blockquote>
+<div><dl>
+<dt>Args:</dt><dd><dl class="simple">
+<dt>http_options (list(dict)): A list of dicts which consist of these keys,</dt><dd><p>‘method’    (str): The http method
+‘uri’       (str): The path template
+‘body’      (str): The body field name (optional)
+(This is a simplified representation of the proto option <cite>google.api.http</cite>)</p>
+</dd>
+</dl>
+<p>message (Message) : A request object (optional)
+request_kwargs (dict) : A dict representing the request object</p>
+</dd>
+<dt>Returns:</dt><dd><dl class="simple">
+<dt>dict: The transcoded request with these keys,</dt><dd><p>‘method’        (str)   : The http method
+‘uri’           (str)   : The expanded uri
+‘body’          (dict | Message)  : A dict or a Message representing the body (optional)
+‘query_params’  (dict | Message)  : A dict or Message mapping query parameter variables and values</p>
+</dd>
+</dl>
+</dd>
+<dt>Raises:</dt><dd><p>ValueError: If the request does not match the given template.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="google.api_core.path_template.validate">
+<span class="sig-prename descclassname"><span class="pre">google.api_core.path_template.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tmpl</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.path_template.validate" title="Link to this definition">¶</a></dt>
+<dd><p>Validate a path against the path template.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">validate</span><span class="p">(</span><span class="s1">&#39;users/*/messages/*&#39;</span><span class="p">,</span> <span class="s1">&#39;users/me/messages/123&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">validate</span><span class="p">(</span><span class="s1">&#39;users/*/messages/*&#39;</span><span class="p">,</span> <span class="s1">&#39;users/me/drafts/123&#39;</span><span class="p">)</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">validate</span><span class="p">(</span><span class="s1">&#39;/v1/{name=shelves/*/books/*}&#39;</span><span class="p">,</span> <span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">shelves</span><span class="o">/</span><span class="mi">1</span><span class="o">/</span><span class="n">books</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">validate</span><span class="p">(</span><span class="s1">&#39;/v1/{name=shelves/*/books/*}&#39;</span><span class="p">,</span> <span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">shelves</span><span class="o">/</span><span class="mi">1</span><span class="o">/</span><span class="n">tapes</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tmpl</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The path template.</p></li>
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The expanded path.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if the path matches.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<span id="document-retry"></span><section id="retry">
+<h2>Retry<a class="headerlink" href="#retry" title="Link to this heading">¶</a></h2>
+<section id="retry-in-asyncio">
+<h3>Retry in AsyncIO<a class="headerlink" href="#retry-in-asyncio" title="Link to this heading">¶</a></h3>
+</section>
+</section>
+<span id="document-timeout"></span><section id="module-google.api_core.timeout">
+<span id="timeout"></span><h2>Timeout<a class="headerlink" href="#module-google.api_core.timeout" title="Link to this heading">¶</a></h2>
+<p>Decorators for applying timeout arguments to functions.</p>
+<p>These decorators are used to wrap API methods to apply either a
+Deadline-dependent (recommended), constant (DEPRECATED) or exponential
+(DEPRECATED) timeout argument.</p>
+<p>For example, imagine an API method that can take a while to return results,
+such as one that might block until a resource is ready:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">is_thing_ready</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;https://example.com/is_thing_ready&#39;</span><span class="p">)</span>
+    <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This module allows a function like this to be wrapped so that timeouts are
+automatically determined, for example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">timeout_</span> <span class="o">=</span> <span class="n">timeout</span><span class="o">.</span><span class="n">ExponentialTimeout</span><span class="p">()</span>
+<span class="n">is_thing_ready_with_timeout</span> <span class="o">=</span> <span class="n">timeout_</span><span class="p">(</span><span class="n">is_thing_ready</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">is_thing_ready_with_timeout</span><span class="p">({</span><span class="s1">&#39;example&#39;</span><span class="p">:</span> <span class="s1">&#39;data&#39;</span><span class="p">})</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<p>In this example the first call to <code class="docutils literal notranslate"><span class="pre">is_thing_ready</span></code> will have a relatively
+small timeout (like 1 second). If the resource is available and the request
+completes quickly, the loop exits. But, if the resource isn’t yet available
+and the request times out, it’ll be retried - this time with a larger timeout.</p>
+<p>In the broader context these decorators are typically combined with
+<a class="reference external" href="https://googleapis.dev/python/google-api-core/latest/retry.html#module-google.api_core.retry" title="(in google-api-core)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">google.api_core.retry</span></code></a> to implement API methods with a signature that
+matches <code class="docutils literal notranslate"><span class="pre">api_method(request,</span> <span class="pre">timeout=None,</span> <span class="pre">retry=None)</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.timeout.ConstantTimeout">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.timeout.</span></span><span class="sig-name descname"><span class="pre">ConstantTimeout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.ConstantTimeout" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A decorator that adds a constant timeout argument.</p>
+<p>DEPRECATED: use <code class="docutils literal notranslate"><span class="pre">TimeToDeadlineTimeout</span></code> instead.</p>
+<p>This is effectively equivalent to
+<code class="docutils literal notranslate"><span class="pre">functools.partial(func,</span> <span class="pre">timeout=timeout)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>]</em>) – the timeout (in seconds) to applied to the
+wrapped function. If <cite>None</cite>, the target function is expected to
+never timeout.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.timeout.ConstantTimeout.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.ConstantTimeout.__call__" title="Link to this definition">¶</a></dt>
+<dd><p>Apply the timeout decorator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>func</strong> (<em>Callable</em>) – The function to apply the timeout argument to.
+This function must accept a timeout keyword argument.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The wrapped function.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Callable</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.timeout.ExponentialTimeout">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.timeout.</span></span><span class="sig-name descname"><span class="pre">ExponentialTimeout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">initial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maximum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deadline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.ExponentialTimeout" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A decorator that adds an exponentially increasing timeout argument.</p>
+<p>DEPRECATED: the concept of incrementing timeout exponentially has been
+deprecated. Use <code class="docutils literal notranslate"><span class="pre">TimeToDeadlineTimeout</span></code> instead.</p>
+<p>This is useful if a function is called multiple times. Each time the
+function is called this decorator will calculate a new timeout parameter
+based on the the number of times the function has been called.</p>
+<p>For example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>initial</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The initial timeout to pass.</p></li>
+<li><p><strong>maximum</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The maximum timeout for any one call.</p></li>
+<li><p><strong>multiplier</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The multiplier applied to the timeout for each
+invocation.</p></li>
+<li><p><strong>deadline</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>]</em>) – The overall deadline across all
+invocations. This is used to prevent a very large calculated
+timeout from pushing the overall execution time over the deadline.
+This is especially useful in conjunction with
+<a class="reference external" href="https://googleapis.dev/python/google-api-core/latest/retry.html#module-google.api_core.retry" title="(in google-api-core)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">google.api_core.retry</span></code></a>. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, the timeouts will not
+be adjusted to accommodate an overall deadline.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.timeout.ExponentialTimeout.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.ExponentialTimeout.__call__" title="Link to this definition">¶</a></dt>
+<dd><p>Apply the timeout decorator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>func</strong> (<em>Callable</em>) – The function to apply the timeout argument to.
+This function must accept a timeout keyword argument.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The wrapped function.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Callable</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.timeout.ExponentialTimeout.with_deadline">
+<span class="sig-name descname"><span class="pre">with_deadline</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deadline</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.ExponentialTimeout.with_deadline" title="Link to this definition">¶</a></dt>
+<dd><p>Return a copy of this timeout with the given deadline.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>deadline</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The overall deadline across all invocations.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A new instance with the given deadline.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#google.api_core.timeout.ExponentialTimeout" title="google.api_core.timeout.ExponentialTimeout">ExponentialTimeout</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="google.api_core.timeout.TimeToDeadlineTimeout">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">google.api_core.timeout.</span></span><span class="sig-name descname"><span class="pre">TimeToDeadlineTimeout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clock=&lt;function</span> <span class="pre">utcnow&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.TimeToDeadlineTimeout" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A decorator that decreases timeout set for an RPC based on how much time
+has left till its deadline. The deadline is calculated as
+<code class="docutils literal notranslate"><span class="pre">now</span> <span class="pre">+</span> <span class="pre">initial_timeout</span></code> when this decorator is first called for an rpc.</p>
+<p>In other words this decorator implements deadline semantics in terms of a
+sequence of decreasing timeouts t0 &gt; t1 &gt; t2 … tn &gt;= 0.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>]</em>) – the timeout (in seconds) to applied to the
+wrapped function. If <cite>None</cite>, the target function is expected to
+never timeout.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="google.api_core.timeout.TimeToDeadlineTimeout.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#google.api_core.timeout.TimeToDeadlineTimeout.__call__" title="Link to this definition">¶</a></dt>
+<dd><p>Apply the timeout decorator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>func</strong> (<em>Callable</em>) – The function to apply the timeout argument to.
+This function must accept a timeout keyword argument.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The wrapped function.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Callable</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</div>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">google-api-core</a></h1>
+
+
+
+<p class="blurb">Google Cloud Client Libraries for google-api-core</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=googleapis&repo=python-api-core&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="#document-auth">Authentication</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-client_info">Client Information Helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-client_options">Client Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-exceptions">Exceptions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-futures">Futures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-helpers">Helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-iam">Identity and Access Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-operation">Long-Running Operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-operations_client">Long-Running Operations Client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-page_iterator">Page Iterators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-path_template">Path Templates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-retry">Retry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-timeout">Timeout</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2019, Google.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+    <a href="https://github.com/googleapis/python-api-core" class="github">
+        <img src="_static/github-banner.svg" alt="Fork me on GitHub" class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>
