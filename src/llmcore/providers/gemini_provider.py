@@ -357,7 +357,6 @@ class GeminiProvider(BaseProvider):
                 if "config" in loggable_sdk_call_args and hasattr(loggable_sdk_call_args["config"], 'model_dump'):
                     loggable_sdk_call_args["config"] = loggable_sdk_call_args["config"].model_dump()
                 if "safety_settings" in loggable_sdk_call_args and loggable_sdk_call_args["safety_settings"] is not None:
-                    # SafetySettingDictType is already a dict, but ensure inner parts are serializable if they were complex objects
                     loggable_sdk_call_args["safety_settings"] = [
                         s.model_dump() if hasattr(s, 'model_dump') else s
                         for s in loggable_sdk_call_args["safety_settings"]
@@ -376,13 +375,23 @@ class GeminiProvider(BaseProvider):
                     full_response_text = ""
                     try:
                         async for chunk in response_iterator: # chunk is GenerateContentResponse
+                            # --- Diagnostic Logging ---
+                            gemini_provider_logger_level = logger.getEffectiveLevel()
+                            logger.debug(
+                                f"GEMINI_PROVIDER_STREAM_CHUNK_DEBUG_INFO: "
+                                f"log_raw_payloads_enabled={self.log_raw_payloads_enabled}, "
+                                f"logger.name={logger.name}, "
+                                f"logger.level_int={gemini_provider_logger_level}, "
+                                f"logger.level_name={logging.getLevelName(gemini_provider_logger_level)}, "
+                                f"logger.isEnabledFor(DEBUG)={logger.isEnabledFor(logging.DEBUG)}"
+                            )
+                            # --- End Diagnostic Logging ---
                             if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
                                 try:
-                                    # Use model_dump_json for Pydantic models
                                     raw_chunk_str = chunk.model_dump_json(indent=2)
                                     logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()} @ {model_name_for_api}): {raw_chunk_str}")
                                 except Exception as e_chunk_log:
-                                    logger.warning(f"Failed to serialize raw Gemini stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]}")
+                                    logger.warning(f"Failed to serialize raw Gemini stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]} - Chunk type: {type(chunk).__name__}")
 
                             chunk_text = ""; finish_reason_str = None; is_blocked = False
                             try:
@@ -427,12 +436,24 @@ class GeminiProvider(BaseProvider):
                 logger.debug(f"Calling self._client.aio.models.generate_content() for model '{model_name_for_api}' with args: {list(sdk_call_args.keys())}")
                 response_obj: GenAIGenerateContentResponseType = await self._client.aio.models.generate_content(model=model_name_for_api, **sdk_call_args)
                 logger.debug(f"Processing non-stream response from Gemini model '{model_name_for_api}'")
+
+                # --- Diagnostic Logging ---
+                gemini_provider_logger_level_full = logger.getEffectiveLevel()
+                logger.debug(
+                    f"GEMINI_PROVIDER_FULL_RESPONSE_DEBUG_INFO: "
+                    f"log_raw_payloads_enabled={self.log_raw_payloads_enabled}, "
+                    f"logger.name={logger.name}, "
+                    f"logger.level_int={gemini_provider_logger_level_full}, "
+                    f"logger.level_name={logging.getLevelName(gemini_provider_logger_level_full)}, "
+                    f"logger.isEnabledFor(DEBUG)={logger.isEnabledFor(logging.DEBUG)}"
+                )
+                # --- End Diagnostic Logging ---
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
                     try:
-                        # Use model_dump_json for Pydantic models
                         logger.debug(f"RAW LLM RESPONSE ({self.get_name()} @ {model_name_for_api}): {response_obj.model_dump_json(indent=2)}")
                     except Exception as e_resp_log:
-                        logger.warning(f"Failed to serialize Gemini raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]}")
+                        logger.warning(f"Failed to serialize Gemini raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]} - Response type: {type(response_obj).__name__}")
+
                 full_text = ""; finish_reason_str = None; is_blocked = False
                 try:
                     full_text = response_obj.text
