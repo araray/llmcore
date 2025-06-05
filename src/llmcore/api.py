@@ -817,8 +817,10 @@ class LLMCore:
         if not path_obj.is_file(): raise FileNotFoundError(f"File not found: {path_obj}")
         is_transient = session_id in self._transient_sessions_cache
         session = self._transient_sessions_cache[session_id] if is_transient else await self._session_manager.load_or_create_session(session_id)
-        try: async with aiofiles.open(path_obj, "r", encoding="utf-8", errors="ignore") as f: content = await f.read()
-        except Exception as e: raise LLMCoreError(f"Failed to read file content from {path_obj}: {e}")
+        try:
+            async with aiofiles.open(path_obj, "r", encoding="utf-8", errors="ignore") as f: content = await f.read()
+        except Exception as e:
+            raise LLMCoreError(f"Failed to read file content from {path_obj}: {e}")
         file_metadata = metadata or {}; file_metadata.setdefault("filename", path_obj.name); file_metadata.setdefault("original_path", str(path_obj))
         if ignore_char_limit: file_metadata['ignore_char_limit'] = True
         item_id_actual = item_id or str(uuid.uuid4())
