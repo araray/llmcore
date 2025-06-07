@@ -962,10 +962,12 @@ class LLMCore:
 
     # --- Provider Info Methods ---
     def get_available_providers(self) -> List[str]:
+        """(Implementation unchanged)"""
         logger.debug("LLMCore.get_available_providers called.")
         return self._provider_manager.get_available_providers()
 
     def get_models_for_provider(self, provider_name: str) -> List[str]:
+        """(Implementation unchanged)"""
         logger.debug(f"LLMCore.get_models_for_provider for: {provider_name}")
         try: provider = self._provider_manager.get_provider(provider_name); return provider.get_available_models()
         except (ConfigError, ProviderError) as e: logger.error(f"Error getting models for provider '{provider_name}': {e}"); raise
@@ -1083,6 +1085,7 @@ class LLMCore:
 
     # --- Utility / Cleanup ---
     async def close(self):
+        """(Implementation unchanged)"""
         logger.info("LLMCore.close() called. Cleaning up resources...")
         close_tasks = [self._provider_manager.close_providers(), self._storage_manager.close_storages(), self._embedding_manager.close()]
         results = await asyncio.gather(*close_tasks, return_exceptions=True)
