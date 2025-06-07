@@ -309,6 +309,7 @@ class LLMCore:
         save_session: bool = True,
         active_context_item_ids: Optional[List[str]] = None,
         explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
+        message_inclusion_map: Optional[Dict[str, bool]] = None, # Added parameter
         enable_rag: bool = False,            # RAG setting for THIS call
         rag_retrieval_k: Optional[int] = None,
         rag_collection_name: Optional[str] = None,
@@ -321,7 +322,38 @@ class LLMCore:
         The operational settings used for this call (provider, model, RAG config, system message, prompt values)
         are persisted into the ChatSession's metadata if `save_session` is True and `session_id` is provided.
 
-        (Args docstring largely unchanged, see previous versions for full details)
+        Args:
+            message (str): The user's input message content.
+            session_id (Optional[str]): The ID of the conversation session.
+            system_message (Optional[str]): A message defining the LLM's behavior.
+            provider_name (Optional[str]): Overrides the default LLM provider for this call.
+            model_name (Optional[str]): Overrides the default model for the chosen provider.
+            stream (bool): If True, returns an async generator yielding text chunks.
+            save_session (bool): If True, saves the conversation turn to persistent storage.
+            active_context_item_ids (Optional[List[str]]): IDs of workspace items to include.
+            explicitly_staged_items (Optional[List[Union[Message, ContextItem]]]): A list of items to
+                                       force into the context for this turn.
+            message_inclusion_map (Optional[Dict[str, bool]]): A map of message IDs to a boolean
+                                       indicating whether to include them in the context.
+                                       If a message ID is not in the map, it is included by default.
+            enable_rag (bool): Enables Retrieval Augmented Generation for this call.
+            rag_retrieval_k (Optional[int]): Number of documents to retrieve for RAG.
+            rag_collection_name (Optional[str]): Vector store collection to use for RAG.
+            rag_metadata_filter (Optional[Dict[str, Any]]): Metadata filter for the RAG query.
+            prompt_template_values (Optional[Dict[str, str]]): Values to fill in custom RAG prompt templates.
+            **provider_kwargs: Additional arguments passed directly to the provider's API.
+
+        Returns:
+            Union[str, AsyncGenerator[str, None]]: The full response string or a stream of response chunks.
+
+        Raises:
+            ProviderError: If the provider API call fails.
+            ContextLengthError: If the context exceeds the model's limit.
+            ConfigError: If configuration is invalid.
+            SessionNotFoundError: If the specified session_id is not found.
+            VectorStorageError: If RAG retrieval fails.
+            EmbeddingError: If RAG query embedding fails.
+            LLMCoreError: For other library-specific errors.
         """
         # Determine the actual provider and model to use for this interaction
         actual_provider_name_for_call = provider_name or self._provider_manager.get_default_provider().get_name()
@@ -337,7 +369,8 @@ class LLMCore:
             f"RAG_filter_keys_for_call={list(rag_metadata_filter.keys()) if rag_metadata_filter else 'None'}, "
             f"prompt_values_count_for_call={len(prompt_template_values) if prompt_template_values else 0}, "
             f"active_user_items_count={len(active_context_item_ids) if active_context_item_ids else 0}, "
-            f"explicitly_staged_items_count={len(explicitly_staged_items) if explicitly_staged_items else 0}"
+            f"explicitly_staged_items_count={len(explicitly_staged_items) if explicitly_staged_items else 0}, "
+            f"message_inclusion_map_present={message_inclusion_map is not None}" # Log new parameter presence
         )
 
         try:
@@ -400,6 +433,7 @@ class LLMCore:
                 model_name=actual_model_name_for_call,
                 active_context_item_ids=active_context_item_ids,
                 explicitly_staged_items=explicitly_staged_items,
+                message_inclusion_map=message_inclusion_map, # Pass new parameter
                 rag_enabled=enable_rag,
                 rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
@@ -433,7 +467,8 @@ class LLMCore:
                         "rag_collection_name": rag_collection_name,
                         "rag_k_value": rag_retrieval_k,
                         "rag_filter": rag_metadata_filter,
-                        "prompt_template_values": prompt_template_values
+                        "prompt_template_values": prompt_template_values,
+                        "message_inclusion_map": message_inclusion_map, # Also save the inclusion map
                     }
                 )
             else: # Non-streaming
@@ -465,6 +500,12 @@ class LLMCore:
                     if rag_retrieval_k is not None: chat_session.metadata["rag_k_value"] = rag_retrieval_k
                     if rag_metadata_filter is not None: chat_session.metadata["rag_filter"] = rag_metadata_filter
                     if prompt_template_values is not None: chat_session.metadata["prompt_template_values"] = prompt_template_values
+                    if message_inclusion_map is not None: # Also save the inclusion map
+                        # This map is often large and part of UI state. A client-specific key is better.
+                        # For now, storing directly. In webapp, this would go into client_data.
+                        client_data = chat_session.metadata.get("client_data", {})
+                        client_data["message_inclusion_map"] = message_inclusion_map
+                        chat_session.metadata["client_data"] = client_data
                     chat_session.updated_at = datetime.now(timezone.utc) # Ensure updated_at is set before save
                     await self._session_manager.save_session(chat_session)
                     logger.info(f"Persistent session '{session_id}' saved with operational metadata.")
@@ -495,6 +536,7 @@ class LLMCore:
         model_name: Optional[str] = None,
         active_context_item_ids: Optional[List[str]] = None,
         explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
+        message_inclusion_map: Optional[Dict[str, bool]] = None, # Added parameter
         enable_rag: bool = False,
         rag_retrieval_k: Optional[int] = None,
         rag_collection_name: Optional[str] = None,
@@ -505,7 +547,25 @@ class LLMCore:
         Previews the context that would be prepared for an LLM chat call
         without making the actual API call to the LLM provider.
 
-        (Docstring largely unchanged, see previous versions for full details)
+        Args:
+            current_user_query (str): The user's next query text for accurate preview.
+            session_id (Optional[str]): The ID of the session to preview context for.
+            system_message (Optional[str]): An optional system message to include in the preview.
+            provider_name (Optional[str]): The provider to use for token counting in the preview.
+            model_name (Optional[str]): The model to use for token counting.
+            active_context_item_ids (Optional[List[str]]): IDs of workspace items to include.
+            explicitly_staged_items (Optional[List[Union[Message, ContextItem]]]): A list of items to
+                                       force into the preview context.
+            message_inclusion_map (Optional[Dict[str, bool]]): A map of message IDs to a boolean
+                                       indicating whether to include them in the preview.
+            enable_rag (bool): Enables RAG for the preview.
+            rag_retrieval_k (Optional[int]): Number of documents to retrieve for the RAG preview.
+            rag_collection_name (Optional[str]): Vector store collection to use for the RAG preview.
+            rag_metadata_filter (Optional[Dict[str, Any]]): Metadata filter for the RAG preview query.
+            prompt_template_values (Optional[Dict[str, str]]): Values to fill in custom RAG prompt templates.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the `ContextPreparationDetails` model.
         """
         actual_provider_name_for_preview = provider_name or self._provider_manager.get_default_provider().get_name()
         active_provider = self._provider_manager.get_provider(actual_provider_name_for_preview)
@@ -548,6 +608,7 @@ class LLMCore:
                 model_name=actual_model_name_for_preview,
                 active_context_item_ids=active_context_item_ids,
                 explicitly_staged_items=explicitly_staged_items,
+                message_inclusion_map=message_inclusion_map, # Pass new parameter
                 rag_enabled=enable_rag,
                 rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
@@ -619,7 +680,13 @@ class LLMCore:
                         if session.metadata is None: session.metadata = {}
                         for key, value in operational_settings_for_metadata.items():
                             if value is not None: # Only store non-None values
-                                session.metadata[key] = value
+                                if key == "message_inclusion_map":
+                                    # Store message_inclusion_map under a client-specific key
+                                    client_data = session.metadata.get("client_data", {})
+                                    client_data["message_inclusion_map"] = value
+                                    session.metadata["client_data"] = client_data
+                                else:
+                                    session.metadata[key] = value
                             elif key in session.metadata: # Remove key if value is None and key exists
                                 del session.metadata[key]
                         logger.debug(f"Updated session metadata for '{session.id}' with operational settings: {list(operational_settings_for_metadata.keys())}")
