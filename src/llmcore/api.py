@@ -687,7 +687,6 @@ class LLMCore:
 
 
     # --- Session Management Methods ---
-    # (get_session, list_sessions, delete_session - implementations largely unchanged)
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """
         Retrieves a specific chat session object (including messages and context items).
@@ -729,10 +728,60 @@ class LLMCore:
         except StorageError as e: logger.error(f"Storage error deleting session '{session_id}': {e}"); raise
         return was_in_transient
 
+    async def update_session_metadata(
+        self,
+        session_id: str,
+        client_metadata: Dict[str, Any],
+        client_key: str = "client_data"
+    ) -> bool:
+        """
+        Updates a specific key within a persistent session's metadata.
+
+        This method provides a clean way for client applications to store their
+        own state (e.g., UI settings, context selections) within an LLMCore session
+        without overwriting other metadata.
+
+        Args:
+            session_id: The ID of the persistent session to update.
+            client_metadata: The dictionary of data to save.
+            client_key: The top-level key under which to store the client_metadata
+                        within the session's main `metadata` dictionary.
+                        Default is "client_data".
+
+        Returns:
+            True if the session was found and successfully updated, False otherwise.
+
+        Raises:
+            SessionStorageError: If there's an error interacting with storage.
+        """
+        if not session_id:
+            raise ValueError("session_id must be provided to update metadata.")
+
+        logger.info(f"Updating metadata for session '{session_id}' under key '{client_key}'.")
+        session = await self.get_session(session_id)
+        if not session:
+            logger.warning(f"Cannot update metadata: session '{session_id}' not found.")
+            return False
+
+        if session.metadata is None:
+            session.metadata = {}
+
+        session.metadata[client_key] = client_metadata
+        session.updated_at = datetime.now(timezone.utc)
+
+        try:
+            await self._session_manager.save_session(session)
+            logger.info(f"Successfully updated and saved metadata for session '{session_id}'.")
+            return True
+        except SessionStorageError:
+            # The session manager already logs the error, re-raise it.
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error saving session '{session_id}' after metadata update: {e}", exc_info=True)
+            raise SessionStorageError(f"Unexpected error saving session after metadata update: {e}")
+
 
     # --- RAG / Vector Store Management Methods ---
-    # (add_document_to_vector_store, add_documents_to_vector_store, search_vector_store,
-    #  delete_documents_from_vector_store, list_rag_collections - implementations largely unchanged)
     async def add_document_to_vector_store(self, content: str, *, metadata: Optional[Dict]=None, doc_id: Optional[str]=None, collection_name: Optional[str]=None) -> str:
         logger.debug(f"Adding document to vector store (Collection: {collection_name or 'default'})...")
         try:
@@ -795,8 +844,6 @@ class LLMCore:
 
 
     # --- User Context Item Management Methods (Session Pool / Workspace) ---
-    # (add_text_context_item, add_file_context_item, update_context_item, remove_context_item,
-    #  get_session_context_items, get_context_item - implementations largely unchanged)
     async def add_text_context_item(self, session_id: str, content: str, item_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None, ignore_char_limit: bool = False) -> ContextItem:
         if not session_id: raise ValueError("session_id is required to add a context item.")
         is_transient = session_id in self._transient_sessions_cache
@@ -914,7 +961,6 @@ class LLMCore:
         return pinned_item
 
     # --- Provider Info Methods ---
-    # (get_available_providers, get_models_for_provider - implementations largely unchanged)
     def get_available_providers(self) -> List[str]:
         logger.debug("LLMCore.get_available_providers called.")
         return self._provider_manager.get_available_providers()
@@ -925,9 +971,45 @@ class LLMCore:
         except (ConfigError, ProviderError) as e: logger.error(f"Error getting models for provider '{provider_name}': {e}"); raise
         except Exception as e: logger.error(f"Unexpected error getting models for provider '{provider_name}': {e}", exc_info=True); raise ProviderError(provider_name, f"Failed to retrieve models due to an unexpected error: {e}")
 
+    async def estimate_tokens(
+        self,
+        text: str,
+        provider_name: str,
+        model_name: Optional[str] = None
+    ) -> int:
+        """
+        Provides an on-demand estimation of the token count for a given text
+        using a specific provider and model's tokenizer.
+
+        Args:
+            text: The text string to tokenize.
+            provider_name: The name of the provider whose tokenizer should be used.
+            model_name: Optional specific model name for context. If not provided,
+                        the provider's default model is used.
+
+        Returns:
+            The estimated number of tokens as an integer.
+
+        Raises:
+            ProviderError: If the specified provider is not available or fails.
+            ConfigError: If configuration for the provider/model is invalid.
+        """
+        if not text:
+            return 0
+        try:
+            provider = self._provider_manager.get_provider(provider_name)
+            target_model = model_name or provider.default_model
+            token_count = await provider.count_tokens(text, model=target_model)
+            logger.debug(f"Estimated tokens for text (len: {len(text)}) with provider '{provider_name}' (model: '{target_model}'): {token_count}")
+            return token_count
+        except (ConfigError, ProviderError) as e:
+            logger.error(f"Failed to estimate tokens with provider '{provider_name}': {e}", exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during token estimation with provider '{provider_name}': {e}", exc_info=True)
+            raise LLMCoreError(f"Token estimation failed unexpectedly: {e}")
+
     # --- Context Preset Management API Methods ---
-    # (save_context_preset, load_context_preset, list_context_presets, delete_context_preset,
-    #  update_context_preset_description, rename_context_preset - implementations largely unchanged)
     async def save_context_preset(self, preset_name: str, items: List[ContextPresetItem], description: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> ContextPreset:
         logger.info(f"Saving context preset '{preset_name}' with {len(items)} items.")
         try:
@@ -1000,7 +1082,6 @@ class LLMCore:
 
 
     # --- Utility / Cleanup ---
-    # (close, __aenter__, __aexit__ - implementations unchanged)
     async def close(self):
         logger.info("LLMCore.close() called. Cleaning up resources...")
         close_tasks = [self._provider_manager.close_providers(), self._storage_manager.close_storages(), self._embedding_manager.close()]
