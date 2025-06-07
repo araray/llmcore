@@ -268,6 +268,7 @@ class ContextManager:
         model_name: Optional[str] = None,
         active_context_item_ids: Optional[List[str]] = None,
         explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
+        message_inclusion_map: Optional[Dict[str, bool]] = None, # Added parameter
         rag_enabled: bool = False,
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None,
@@ -276,7 +277,15 @@ class ContextManager:
     ) -> ContextPreparationDetails: # Changed return type
         """
         Prepares the context payload for the LLM, returning detailed information.
-        (Docstring updated for new return type and refined description)
+        This now respects the message_inclusion_map to filter chat history before
+        any other history selection logic is applied.
+
+        Args:
+            (Args docstring is extensive, see previous versions or api.py for full details)
+            message_inclusion_map: A map where keys are message IDs and values are booleans.
+                                   If a message ID from history is in the map with a value
+                                   of `False`, it will be excluded from the context.
+                                   If a message ID is not in the map, it is included by default.
 
         Returns:
             A `ContextPreparationDetails` object containing the final messages,
@@ -304,7 +313,7 @@ class ContextManager:
         rendered_rag_query_content: Optional[str] = None
 
 
-        # --- 1. Gather and Prepare All Potential Components (existing logic adapted) ---
+        # --- 1. Gather and Prepare All Potential Components ---
         # System messages from session history
         for msg in session.messages:
             if msg.role == LLMCoreRole.SYSTEM:
@@ -340,7 +349,7 @@ class ContextManager:
         final_user_query_content = actual_query_for_llm
 
         if rag_enabled:
-            # (RAG retrieval logic - unchanged from previous version)
+            # (RAG retrieval logic)
             query_text_for_rag = actual_query_for_llm
             k_val = rag_k if rag_k is not None else self._default_rag_k
             actual_rag_collection_name = rag_collection or self._storage_manager.get_vector_storage()._default_collection_name # type: ignore
@@ -369,7 +378,24 @@ class ContextManager:
         components["final_user_query"] = [final_query_message]
         component_tokens["final_user_query"] = final_query_message.tokens or 0
 
-        # --- 2. Initial Assembly & Budget for History (existing logic adapted) ---
+
+        # --- 2. Initial Assembly & Budget for History ---
+        history_chat_messages_all_non_system = [msg for msg in session.messages if msg.role != LLMCoreRole.SYSTEM and msg.id != last_user_message_obj.id]
+
+        # --- FEAT-01 Implementation: Filter history based on inclusion map ---
+        if message_inclusion_map:
+            initial_history_count = len(history_chat_messages_all_non_system)
+            history_chat_messages_all_non_system = [
+                msg for msg in history_chat_messages_all_non_system
+                if message_inclusion_map.get(msg.id, True)  # Default to True (include) if not in map
+            ]
+            final_history_count = len(history_chat_messages_all_non_system)
+            logger.info(
+                f"Filtered chat history using message_inclusion_map. "
+                f"Retained {final_history_count} of {initial_history_count} messages for context selection."
+            )
+        # --- End FEAT-01 Implementation ---
+
         final_payload_messages: List[Message] = []
         current_tokens_in_payload = 0
 
@@ -380,7 +406,6 @@ class ContextManager:
 
         budget_for_history = available_tokens_for_prompt - tokens_for_non_history_components
 
-        history_chat_messages_all_non_system = [msg for msg in session.messages if msg.role != LLMCoreRole.SYSTEM and msg.id != last_user_message_obj.id]
         built_history_messages, built_history_tokens = await self._build_history_messages(history_chat_messages_all_non_system, provider, target_model, budget_for_history)
         components["history_chat"] = built_history_messages
         component_tokens["history_chat"] = built_history_tokens
@@ -449,7 +474,6 @@ class ContextManager:
                         final_payload_messages.append(msg)
                         current_tokens_in_payload += msg_tokens
                     else: break # Stop adding from this category if budget exceeded
-                # Check if budget exceeded *within* this category's loop before moving to next category
                 if current_tokens_in_payload > available_tokens_for_prompt:
                     logger.debug(f"Budget exceeded while processing category '{category_key}'. Further categories in inclusion_priority might be skipped.")
                     # This break is important: if a high-priority category fills the budget,
