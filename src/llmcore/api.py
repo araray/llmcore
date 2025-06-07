@@ -937,7 +937,7 @@ class LLMCore:
         except Exception as e: logger.error(f"Unexpected error adding documents batch: {e}", exc_info=True); raise VectorStorageError(f"Unexpected error: {e}")
 
     async def search_vector_store(self, query: str, *, k: int, collection_name: Optional[str]=None, filter_metadata: Optional[Dict]=None) -> List[ContextDocument]:
-        if k &lt;= 0: raise ValueError("'k' must be positive.")
+        if k <= 0: raise ValueError("'k' must be positive.")
         logger.debug(f"Searching vector store (k={k}, Collection: {collection_name or 'default'}) for query: '{query[:50]}...'")
         try:
             query_embedding = await self._embedding_manager.generate_embedding(query)
