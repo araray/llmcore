@@ -1,4 +1,3 @@
-# src/llmcore/api.py
 """
 Core API Facade for the LLMCore library.
 """
@@ -36,7 +35,7 @@ try:
     import tomllib # Python 3.11+
 except ImportError:
     try:
-        import tomli as tomllib # Fallback for Python < 3.11
+        import tomli as tomllib # Fallback for Python &lt; 3.11
     except ImportError:
         tomllib = None # type: ignore [assignment]
 
@@ -133,7 +132,7 @@ class LLMCore:
         try:
             from confy.loader import Config as ActualConfyConfig # Ensure it's the actual class
             if not tomllib:
-                raise ImportError("tomli (for Python < 3.11) or tomllib is required for loading default_config.toml.")
+                raise ImportError("tomli (for Python &lt; 3.11) or tomllib is required for loading default_config.toml.")
 
             default_config_dict = {}
             try:
@@ -307,9 +306,10 @@ class LLMCore:
         model_name: Optional[str] = None,    # This is the model for THIS call
         stream: bool = False,
         save_session: bool = True,
+        context_override: Optional[List[Message]] = None,
         active_context_item_ids: Optional[List[str]] = None,
         explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
-        message_inclusion_map: Optional[Dict[str, bool]] = None, # Added parameter
+        message_inclusion_map: Optional[Dict[str, bool]] = None,
         enable_rag: bool = False,            # RAG setting for THIS call
         rag_retrieval_k: Optional[int] = None,
         rag_collection_name: Optional[str] = None,
@@ -330,6 +330,10 @@ class LLMCore:
             model_name (Optional[str]): Overrides the default model for the chosen provider.
             stream (bool): If True, returns an async generator yielding text chunks.
             save_session (bool): If True, saves the conversation turn to persistent storage.
+            context_override (Optional[List[Message]]): If provided, this exact list of messages
+                                       will be sent to the provider, bypassing all of llmcore's
+                                       internal context assembly (history, RAG, staging).
+                                       The `message` parameter is still used for session history.
             active_context_item_ids (Optional[List[str]]): IDs of workspace items to include.
             explicitly_staged_items (Optional[List[Union[Message, ContextItem]]]): A list of items to
                                        force into the context for this turn.
@@ -370,7 +374,8 @@ class LLMCore:
             f"prompt_values_count_for_call={len(prompt_template_values) if prompt_template_values else 0}, "
             f"active_user_items_count={len(active_context_item_ids) if active_context_item_ids else 0}, "
             f"explicitly_staged_items_count={len(explicitly_staged_items) if explicitly_staged_items else 0}, "
-            f"message_inclusion_map_present={message_inclusion_map is not None}" # Log new parameter presence
+            f"message_inclusion_map_present={message_inclusion_map is not None}, "
+            f"context_override_present={context_override is not None}"
         )
 
         try:
@@ -427,20 +432,71 @@ class LLMCore:
             logger.debug(f"User message '{user_msg_obj.id}' added to session '{chat_session.id}' (is_transient={not save_session and bool(session_id)}, is_new_persistent={is_new_persistent_session})")
 
             # --- Prepare context ---
-            context_details: ContextPreparationDetails = await self._context_manager.prepare_context(
-                session=chat_session,
-                provider_name=actual_provider_name_for_call,
-                model_name=actual_model_name_for_call,
-                active_context_item_ids=active_context_item_ids,
-                explicitly_staged_items=explicitly_staged_items,
-                message_inclusion_map=message_inclusion_map, # Pass new parameter
-                rag_enabled=enable_rag,
-                rag_k=rag_retrieval_k,
-                rag_collection=rag_collection_name,
-                rag_metadata_filter=rag_metadata_filter,
-                prompt_template_values=prompt_template_values
-            )
-            context_payload = context_details.prepared_messages
+            context_payload: List[Message]
+            context_details: ContextPreparationDetails
+
+            # --- Rationale Block: FEAT-03 - Direct Context Override ---
+            # Pre-state: The chat method always called the internal ContextManager to build the
+            #            prompt payload from session history, RAG, and staged items.
+            # Limitation: There was no way for an expert user or a client application to
+            #             bypass this automated context building and send a handcrafted,
+            #             raw prompt directly to the LLM provider for fine-grained control.
+            # Decision Path: The spec (FEAT-03) requires a `context_override` parameter.
+            #                When this parameter is provided, it must completely bypass the
+            #                `ContextManager.prepare_context` call. A new conditional block is added
+            #                to check for `context_override`. If it exists, its value is used as the
+            #                final `context_payload`. A token limit check is still performed on this
+            #                override content as a safeguard. If it's None, the original logic path
+            #                of calling the ContextManager is executed.
+            # Post-state: The `chat` method now supports a `context_override` parameter,
+            #             allowing "UI Managed" context mode where the client has full control
+            #             over the prompt sent to the LLM.
+            if context_override is not None:
+                if not isinstance(context_override, list) or not all(isinstance(m, Message) for m in context_override):
+                    raise TypeError("`context_override` must be a list of `llmcore.models.Message` objects.")
+
+                context_payload = context_override
+                logger.info(f"Using provided 'context_override' with {len(context_payload)} messages. Bypassing ContextManager.")
+
+                # Perform a final token limit check on the override context.
+                max_model_tokens = active_provider.get_max_context_length(actual_model_name_for_call)
+                final_token_count = await active_provider.count_message_tokens(context_payload, actual_model_name_for_call)
+
+                if final_token_count > max_model_tokens:
+                    raise ContextLengthError(
+                        model_name=actual_model_name_for_call,
+                        limit=max_model_tokens,
+                        actual=final_token_count,
+                        message=f"Provided 'context_override' ({final_token_count} tokens) exceeds model's maximum limit ({max_model_tokens})."
+                    )
+
+                # Create a minimal ContextPreparationDetails object for post-chat metadata retrieval
+                context_details = ContextPreparationDetails(
+                    prepared_messages=context_payload,
+                    final_token_count=final_token_count,
+                    max_tokens_for_model=max_model_tokens,
+                    rag_documents_used=None,
+                    rendered_rag_template_content=None,
+                    truncation_actions_taken={"details": ["ContextManager bypassed due to context_override."]}
+                )
+            else:
+                # --- Original Logic ---
+                context_details = await self._context_manager.prepare_context(
+                    session=chat_session,
+                    provider_name=actual_provider_name_for_call,
+                    model_name=actual_model_name_for_call,
+                    active_context_item_ids=active_context_item_ids,
+                    explicitly_staged_items=explicitly_staged_items,
+                    message_inclusion_map=message_inclusion_map,
+                    rag_enabled=enable_rag,
+                    rag_k=rag_retrieval_k,
+                    rag_collection=rag_collection_name,
+                    rag_metadata_filter=rag_metadata_filter,
+                    prompt_template_values=prompt_template_values
+                )
+                context_payload = context_details.prepared_messages
+
+
             logger.info(f"Prepared context with {len(context_payload)} messages ({context_details.final_token_count} tokens) for model '{actual_model_name_for_call}'.")
 
             if session_id:
@@ -881,7 +937,7 @@ class LLMCore:
         except Exception as e: logger.error(f"Unexpected error adding documents batch: {e}", exc_info=True); raise VectorStorageError(f"Unexpected error: {e}")
 
     async def search_vector_store(self, query: str, *, k: int, collection_name: Optional[str]=None, filter_metadata: Optional[Dict]=None) -> List[ContextDocument]:
-        if k <= 0: raise ValueError("'k' must be positive.")
+        if k &lt;= 0: raise ValueError("'k' must be positive.")
         logger.debug(f"Searching vector store (k={k}, Collection: {collection_name or 'default'}) for query: '{query[:50]}...'")
         try:
             query_embedding = await self._embedding_manager.generate_embedding(query)
