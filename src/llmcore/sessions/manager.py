@@ -23,8 +23,8 @@ class SessionManager:
     """
     Manages ChatSession objects, interacting with a storage backend.
 
-    Coordinates loading, creating, and saving conversation sessions using
-    the storage instance provided during initialization.
+    Coordinates loading, creating, saving, and renaming conversation sessions
+    using the storage instance provided during initialization.
     """
 
     def __init__(self, storage: BaseSessionStorage):
@@ -181,3 +181,35 @@ class SessionManager:
             logger.error(f"Unexpected error saving session '{session.id}': {e}", exc_info=True)
             # Wrap unexpected errors in SessionStorageError
             raise SessionStorageError(f"Failed to save session '{session.id}': {e}")
+
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the name of a specific session in the storage backend by
+        delegating to the underlying storage provider.
+
+        Args:
+            session_id: The ID of the session to rename.
+            new_name: The new human-readable name for the session.
+
+        Returns:
+            True if the session was found and the name was updated, False otherwise.
+
+        Raises:
+            SessionStorageError: If there's an error interacting with the storage layer.
+            ValueError: If `session_id` is empty or `new_name` is empty or only whitespace.
+        """
+        if not session_id or not new_name.strip():
+            raise ValueError("A valid session_id and a non-empty new_name must be provided.")
+
+        logger.debug(f"SessionManager attempting to update name for session '{session_id}' to '{new_name}'.")
+        try:
+            # Delegate the call directly to the storage backend
+            return await self._storage.update_session_name(session_id, new_name)
+        except SessionStorageError:
+            # Log and re-raise to allow the API layer to handle it
+            logger.error(f"SessionManager encountered a storage error while updating name for session '{session_id}'.", exc_info=True)
+            raise
+        except Exception as e:
+            # Wrap any other unexpected errors from the storage layer in a SessionStorageError
+            logger.error(f"SessionManager encountered an unexpected error updating name for session '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"An unexpected error occurred while updating session name: {e}")
