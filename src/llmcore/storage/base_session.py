@@ -4,7 +4,7 @@ Abstract Base Class for Session Storage backends.
 
 This module defines the interface that all session storage implementations
 must adhere to within the LLMCore library. It now also includes
-methods for managing Context Presets.
+methods for managing Context Presets and updating session names.
 """
 
 import abc
@@ -90,6 +90,20 @@ class BaseSessionStorage(abc.ABC):
 
         Returns:
             True if the session was found and deleted successfully, False otherwise.
+        """
+        pass
+
+    @abc.abstractmethod
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the human-readable name of an existing session.
+
+        Args:
+            session_id: The ID of the session to update.
+            new_name: The new name for the session.
+
+        Returns:
+            True if the session was found and updated, False otherwise.
         """
         pass
 
