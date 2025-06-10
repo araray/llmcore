@@ -812,24 +812,49 @@ class LLMCore:
     # --- Session Management Methods ---
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """
-        Retrieves a specific chat session object (including messages and context items).
-        Checks transient cache first, then persistent storage.
-        If not found in persistent storage via SessionManager, this method will now
-        ensure it returns None, rather than SessionManager potentially creating a new one.
+        Retrieves a specific chat session object by its ID.
+
+        This method first checks for an active transient (in-memory) session
+        with the given ID. If not found, it queries the persistent storage
+        backend via the SessionManager.
+
+        Args:
+            session_id: The unique identifier of the session to retrieve.
+
+        Returns:
+            The `ChatSession` object if found in either the transient cache or
+            persistent storage, otherwise `None`.
+
+        Raises:
+            SessionStorageError: If an error occurs while interacting with the
+                                 persistent storage backend.
         """
         logger.debug(f"LLMCore.get_session for ID: {session_id}")
         if session_id in self._transient_sessions_cache:
             logger.debug(f"Returning session '{session_id}' from transient cache.")
             return self._transient_sessions_cache[session_id]
         try:
-            # Use a more direct "get if exists" from SessionManager
+            # Use the more direct "get if exists" from SessionManager
             return await self._session_manager.get_session_if_exists(session_id)
-        except SessionStorageError as e: # Changed from StorageError to SessionStorageError
+        except SessionStorageError as e:
             logger.error(f"SessionStorageError getting session '{session_id}': {e}")
             raise # Re-raise to be handled by caller
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
-        """(Implementation unchanged)"""
+        """
+        Lists metadata for all available persistent chat sessions.
+
+        This method queries the persistent storage backend via the SessionManager
+        and returns a list of dictionaries, where each dictionary contains
+        summary information about a session (e.g., id, name, timestamps,
+        message count), but not the full message history, for performance.
+
+        Returns:
+            A list of dictionaries, each representing session metadata.
+
+        Raises:
+            StorageError: If interaction with the session storage fails.
+        """
         logger.debug("LLMCore.list_sessions called (persistent sessions only).")
         try:
             session_storage = self._storage_manager.get_session_storage()
@@ -837,7 +862,19 @@ class LLMCore:
         except StorageError as e: logger.error(f"Storage error listing sessions: {e}"); raise
 
     async def delete_session(self, session_id: str) -> bool:
-        """(Implementation unchanged)"""
+        """
+        Deletes a chat session from both transient cache and persistent storage.
+
+        Args:
+            session_id: The unique identifier of the session to delete.
+
+        Returns:
+            `True` if the session was found and deleted from either transient
+            cache or persistent storage, `False` otherwise.
+
+        Raises:
+            StorageError: If an error occurs while deleting from persistent storage.
+        """
         logger.debug(f"LLMCore.delete_session for ID: {session_id}")
         was_in_transient = self._transient_sessions_cache.pop(session_id, None) is not None
         if was_in_transient: logger.debug(f"Removed session '{session_id}' from transient cache during delete.")
@@ -850,6 +887,37 @@ class LLMCore:
             return deleted_persistent or was_in_transient
         except StorageError as e: logger.error(f"Storage error deleting session '{session_id}': {e}"); raise
         return was_in_transient
+
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the human-readable name of a persistent chat session.
+
+        This method delegates the renaming operation to the SessionManager,
+        which in turn calls the configured storage backend. This will not affect
+        transient (in-memory) sessions.
+
+        Args:
+            session_id: The unique identifier of the persistent session to rename.
+            new_name: The new name for the session. Must not be empty or only whitespace.
+
+        Returns:
+            `True` if the session was found in persistent storage and its name
+            was successfully updated, `False` otherwise.
+
+        Raises:
+            SessionStorageError: If an error occurs during the storage operation.
+            ValueError: If `session_id` or `new_name` are invalid.
+        """
+        logger.info(f"LLMCore API: Request to update name for session '{session_id}' to '{new_name}'.")
+        try:
+            return await self._session_manager.update_session_name(session_id, new_name)
+        except (ValueError, SessionStorageError) as e:
+            logger.error(f"LLMCore API: Failed to update session name for '{session_id}': {e}")
+            raise # Re-raise the specific, handled exception
+        except Exception as e:
+            logger.error(f"LLMCore API: Unexpected error updating session name for '{session_id}': {e}", exc_info=True)
+            # Wrap unexpected errors for consistent API error handling
+            raise LLMCoreError(f"An unexpected error occurred during session name update: {e}")
 
     async def update_session_metadata(
         self,
