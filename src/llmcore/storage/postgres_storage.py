@@ -9,6 +9,7 @@ This module provides:
 
 Requires `psycopg` (for async PostgreSQL interaction) and `pgvector` (for vector operations).
 Ensure the pgvector extension is enabled in your PostgreSQL database: `CREATE EXTENSION IF NOT EXISTS vector;`
+
 """
 
 import json
