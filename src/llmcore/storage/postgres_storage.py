@@ -176,7 +176,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             self._pool = None; raise SessionStorageError(f"Unexpected initialization error: {e}")
 
     async def save_session(self, session: ChatSession) -> None:
-        """Saves/updates a session, its messages, and session_context_items to PostgreSQL. (Docstring updated)"""
+        """Saves/updates a session, its messages, and session_context_items to PostgreSQL."""
         if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
         if not Jsonb: raise SessionStorageError("psycopg Jsonb adapter not available.")
 
@@ -215,7 +215,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error saving session '{session.id}': {e}")
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
-        """Retrieves a session with messages and session_context_items from PostgreSQL. (Docstring updated)"""
+        """Retrieves a session with messages and session_context_items from PostgreSQL."""
         if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
         if not dict_row: raise SessionStorageError("psycopg dict_row factory not available.")
 
@@ -268,7 +268,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error retrieving session '{session_id}': {e}")
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
-        """Lists session metadata from PostgreSQL, including message and session_context_item counts. (Docstring updated)"""
+        """Lists session metadata from PostgreSQL, including message and session_context_item counts."""
         if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
         if not dict_row: raise SessionStorageError("psycopg dict_row factory not available.")
         session_metadata_list: List[Dict[str, Any]] = []
@@ -297,7 +297,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error listing sessions: {e}")
 
     async def delete_session(self, session_id: str) -> bool:
-        """Deletes a session and its associated messages/session_context_items from PostgreSQL. (Docstring updated)"""
+        """Deletes a session and its associated messages/session_context_items from PostgreSQL."""
         if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
         logger.debug(f"Deleting session '{session_id}' from PostgreSQL...")
         try:
@@ -317,6 +317,45 @@ class PostgresSessionStorage(BaseSessionStorage):
         except Exception as e:
             logger.error(f"Unexpected error deleting session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"Unexpected error deleting session '{session_id}': {e}")
+
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the name and updated_at timestamp for a specific session in PostgreSQL.
+
+        Args:
+            session_id: The ID of the session to update.
+            new_name: The new name for the session.
+
+        Returns:
+            True if a session was found and updated, False otherwise.
+
+        Raises:
+            SessionStorageError: If there's a database error during the update.
+        """
+        if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
+        new_updated_at = datetime.now(timezone.utc)
+        logger.debug(f"Updating name for session '{session_id}' to '{new_name}' in PostgreSQL.")
+        try:
+            async with self._pool.connection() as conn: # type: ignore
+                async with conn.transaction(): # type: ignore
+                    async with conn.cursor() as cur: # type: ignore
+                        await cur.execute(
+                            f"UPDATE {self._sessions_table} SET name = %s, updated_at = %s WHERE id = %s",
+                            (new_name, new_updated_at, session_id)
+                        )
+                        updated_count = cur.rowcount
+            if updated_count > 0:
+                logger.info(f"Session '{session_id}' name updated successfully.")
+                return True
+            else:
+                logger.warning(f"Attempted to update name for non-existent session '{session_id}'.")
+                return False
+        except psycopg.Error as e: # type: ignore
+            logger.error(f"PostgreSQL error updating session name for '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Database error updating session name for '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error updating session name for '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Unexpected error updating session name for '{session_id}': {e}")
 
     # --- New methods for Context Preset Management ---
 
