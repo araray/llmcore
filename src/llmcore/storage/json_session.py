@@ -13,13 +13,14 @@ import logging
 import os
 import pathlib
 import re # For validating preset names as filenames
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiofiles
 import aiofiles.os as aios
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
-from ..models import ChatSession, ContextItem, ContextItemType, Message, Role, ContextPreset
+from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role, ContextPreset, ContextPresetItem)
 from .base_session import BaseSessionStorage
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,12 @@ class JsonSessionStorage(BaseSessionStorage):
     async def save_session(self, session: ChatSession) -> None:
         """
         Save or update a chat session to a JSON file asynchronously.
-        (Implementation largely unchanged, docstring updated for clarity)
+
+        Args:
+            session: The ChatSession object to save.
+
+        Raises:
+            SessionStorageError: If serialization or file I/O fails.
         """
         session_file_path = self._get_session_path(session.id)
         try:
@@ -107,8 +113,16 @@ class JsonSessionStorage(BaseSessionStorage):
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """
-        Retrieve a specific chat session by its ID asynchronously.
-        (Implementation largely unchanged, docstring updated for clarity)
+        Retrieve a specific chat session by its ID asynchronously from its JSON file.
+
+        Args:
+            session_id: The ID of the session to retrieve.
+
+        Returns:
+            The ChatSession object if found, otherwise None.
+
+        Raises:
+            SessionStorageError: If the file is corrupted or another I/O or validation error occurs.
         """
         session_file_path = self._get_session_path(session_id)
         try:
@@ -133,8 +147,13 @@ class JsonSessionStorage(BaseSessionStorage):
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """
-        List available persistent chat sessions, returning metadata only.
-        (Implementation largely unchanged, docstring updated for clarity)
+        List available persistent chat sessions, returning metadata only from each JSON file.
+
+        Returns:
+            A list of dictionaries, each representing session metadata.
+
+        Raises:
+            SessionStorageError: If there's an error listing files in the storage directory.
         """
         session_metadata_list: List[Dict[str, Any]] = []
         try:
@@ -172,7 +191,15 @@ class JsonSessionStorage(BaseSessionStorage):
     async def delete_session(self, session_id: str) -> bool:
         """
         Delete a specific chat session file asynchronously.
-        (Implementation largely unchanged, docstring updated for clarity)
+
+        Args:
+            session_id: The ID of the session to delete.
+
+        Returns:
+            True if the session file was found and deleted, False otherwise.
+
+        Raises:
+            SessionStorageError: If there's an error during the file deletion.
         """
         session_file_path = self._get_session_path(session_id)
         try:
@@ -189,6 +216,37 @@ class JsonSessionStorage(BaseSessionStorage):
         except Exception as e:
             logger.error(f"An unexpected error occurred while deleting session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"Unexpected error deleting session '{session_id}': {e}")
+
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the human-readable name of an existing session by loading it,
+        modifying the name, and saving it back to its JSON file.
+
+        Args:
+            session_id: The ID of the session to update.
+            new_name: The new name for the session.
+
+        Returns:
+            True if the session was found and updated successfully, False otherwise.
+
+        Raises:
+            SessionStorageError: If loading or saving the session fails.
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            logger.warning(f"Cannot update name: session '{session_id}' not found.")
+            return False
+
+        session.name = new_name
+        session.updated_at = datetime.now(timezone.utc)
+        try:
+            await self.save_session(session)
+            logger.info(f"Session '{session_id}' name updated to '{new_name}'.")
+            return True
+        except SessionStorageError as e:
+            logger.error(f"Failed to save session '{session_id}' after updating name: {e}")
+            # Re-raise the original storage error
+            raise
 
     # --- New methods for Context Preset Management ---
 
