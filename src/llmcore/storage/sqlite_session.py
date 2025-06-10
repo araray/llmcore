@@ -156,7 +156,15 @@ class SqliteSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected initialization error: {e}")
 
     async def save_session(self, session: ChatSession) -> None:
-        """Saves/updates session, messages, and session_context_items. (Docstring updated)"""
+        """
+        Saves or updates a session, its messages, and its context items to the SQLite database.
+
+        Args:
+            session: The ChatSession object to save.
+
+        Raises:
+            SessionStorageError: If there's a database error during the transaction.
+        """
         if not self._conn: raise SessionStorageError("Database connection not initialized.")
         session_metadata_json = json.dumps(session.metadata or {})
         try:
@@ -193,7 +201,18 @@ class SqliteSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error saving session '{session.id}': {e}")
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
-        """Retrieves session, messages, and session_context_items. (Docstring updated)"""
+        """
+        Retrieves a complete session (including messages and context items) from SQLite.
+
+        Args:
+            session_id: The ID of the session to retrieve.
+
+        Returns:
+            The ChatSession object if found, otherwise None.
+
+        Raises:
+            SessionStorageError: If there is a database or data validation error.
+        """
         if not self._conn: raise SessionStorageError("Database connection not initialized.")
         try:
             async with self._conn.execute(f"SELECT * FROM {self._sessions_table_name} WHERE id = ?", (session_id,)) as cursor:
@@ -240,7 +259,15 @@ class SqliteSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error retrieving session '{session_id}': {e}")
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
-        """Lists session metadata, including message and session_context_item counts. (Docstring updated)"""
+        """
+        Lists session metadata from SQLite, including message and context item counts.
+
+        Returns:
+            A list of dictionaries representing session metadata.
+
+        Raises:
+            SessionStorageError: For database errors.
+        """
         if not self._conn: raise SessionStorageError("Database connection is not initialized.")
         session_metadata_list: List[Dict[str, Any]] = []
         try:
@@ -265,7 +292,18 @@ class SqliteSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error listing sessions: {e}")
 
     async def delete_session(self, session_id: str) -> bool:
-        """Deletes session and associated messages/session_context_items. (Docstring updated)"""
+        """
+        Deletes a session and its associated data (cascaded by foreign keys) from SQLite.
+
+        Args:
+            session_id: The ID of the session to delete.
+
+        Returns:
+            True if the session was deleted, False if not found.
+
+        Raises:
+            SessionStorageError: For database errors.
+        """
         if not self._conn: raise SessionStorageError("Database connection is not initialized.")
         try:
             cursor = await self._conn.execute(f"DELETE FROM {self._sessions_table_name} WHERE id = ?", (session_id,))
@@ -283,6 +321,46 @@ class SqliteSessionStorage(BaseSessionStorage):
             try: await self._conn.rollback()
             except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Unexpected error deleting session '{session_id}': {e}")
+
+    async def update_session_name(self, session_id: str, new_name: str) -> bool:
+        """
+        Updates the name and updated_at timestamp for a specific session in SQLite.
+
+        Args:
+            session_id: The ID of the session to update.
+            new_name: The new name for the session.
+
+        Returns:
+            True if a session was found and updated, False otherwise.
+
+        Raises:
+            SessionStorageError: If there's a database error during the update.
+        """
+        if not self._conn: raise SessionStorageError("Database connection is not initialized.")
+        new_updated_at = datetime.now(timezone.utc).isoformat()
+        try:
+            cursor = await self._conn.execute(
+                f"UPDATE {self._sessions_table_name} SET name = ?, updated_at = ? WHERE id = ?",
+                (new_name, new_updated_at, session_id)
+            )
+            await self._conn.commit()
+            updated_count = cursor.rowcount
+            if updated_count > 0:
+                logger.info(f"Session '{session_id}' name updated to '{new_name}' in SQLite.")
+                return True
+            else:
+                logger.warning(f"Attempted to update name for non-existent session '{session_id}'.")
+                return False
+        except aiosqlite.Error as e: # type: ignore
+            logger.error(f"aiosqlite error updating session name for '{session_id}': {e}")
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed for update_session_name: {rb_e}")
+            raise SessionStorageError(f"Database error updating session name for '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error updating session name for '{session_id}': {e}", exc_info=True)
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed for update_session_name: {rb_e}")
+            raise SessionStorageError(f"Unexpected error updating session name for '{session_id}': {e}")
 
     # --- New methods for Context Preset Management ---
 
