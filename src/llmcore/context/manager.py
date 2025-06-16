@@ -203,7 +203,8 @@ class ContextManager:
         header = f"--- {header_prefix} (ID: {item.id}, Type: {item_type_str}, Source: {source_desc}{trunc_status_msg}) ---"
         footer = f"--- End {header_prefix} (ID: {item.id}) ---"
         formatted_content = f"{header}\n{content_for_llm}\n{footer}"
-        msg = Message(role=LLMCoreRole.SYSTEM, content=formatted_content, session_id=item.metadata.get("session_id_for_message", "context_item_session"), id=f"{item_category}_{item.id}")
+        #msg = Message(role=LLMCoreRole.SYSTEM, content=formatted_content, session_id=item.metadata.get("session_id_for_message", "context_item_session"), id=f"{item_category}_{item.id}")
+        msg = Message(role=LLMCoreRole.USER, content=formatted_content, session_id=item.metadata.get("session_id_for_message", "context_item_session"), id=f"{item_category}_{item.id}")
         msg.tokens = await provider.count_message_tokens([msg], target_model)
         if item.original_tokens is None:
             if item.is_truncated:
