@@ -10,11 +10,10 @@ the LLMCore library.
 import abc
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
-# Import Message for type hinting
-from ..models import Message
+# Import models for type hinting
+from ..models import Message, ModelDetails, Tool
 
 # Define a type alias for the context payload that can be passed to providers.
-# This is now simplified to always be a List of Message objects.
 ContextPayload = List[Message]
 
 
@@ -24,11 +23,11 @@ class BaseProvider(abc.ABC):
 
     Ensures all providers offer a consistent set of core functionalities:
     - Initialization with configuration.
-    - Getting provider metadata (name, available models, context limits).
-    - Performing chat completions (supporting streaming).
+    - Dynamic discovery of model details and supported parameters.
+    - Performing chat completions, with standardized support for streaming and tool calling.
     - Counting tokens accurately according to the provider's model.
     """
-    log_raw_payloads_enabled: bool # Added attribute to control raw payload logging
+    log_raw_payloads_enabled: bool
 
     @abc.abstractmethod
     def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
@@ -41,9 +40,8 @@ class BaseProvider(abc.ABC):
                     base_url, default_model, timeout).
             log_raw_payloads: A boolean flag indicating whether raw request/response
                               payloads should be logged by this provider instance.
-                              This is typically passed down from LLMCore's global setting.
         """
-        self.log_raw_payloads_enabled = log_raw_payloads # Store the flag
+        self.log_raw_payloads_enabled = log_raw_payloads
 
     @abc.abstractmethod
     def get_name(self) -> str:
@@ -58,15 +56,34 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_available_models(self) -> List[str]:
+    async def get_models_details(self) -> List[ModelDetails]:
         """
-        Return a list of known or potentially available model names for this provider.
+        Asynchronously discover and return detailed information about available models.
 
-        This might involve an API call in some implementations or return a
-        statically defined list based on the provider's known offerings.
+        This method should query the provider's API to get a list of models
+        and their capabilities, such as context length and feature support.
+        Implementations should consider caching the results to avoid excessive API calls.
 
         Returns:
-            A list of model name strings.
+            A list of `ModelDetails` objects, each describing an available model.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Return a schema describing the supported inference parameters for a model.
+
+        This allows for pre-flight validation of parameters passed to chat_completion.
+        The schema can be a simplified JSON Schema-like dictionary.
+
+        Args:
+            model: The specific model name. If None, returns parameters for the
+                   provider's default model.
+
+        Returns:
+            A dictionary describing the supported parameters and their types/constraints.
+            Example: {"temperature": {"type": "number"}, "top_p": {"type": "number"}}
         """
         pass
 
@@ -74,6 +91,9 @@ class BaseProvider(abc.ABC):
     def get_max_context_length(self, model: Optional[str] = None) -> int:
         """
         Return the maximum context length (in tokens) for a specific model.
+
+        This may use a combination of dynamically discovered data from `get_models_details`
+        and internal fallback values.
 
         Args:
             model: The specific model name. If None, should return the limit
@@ -87,50 +107,45 @@ class BaseProvider(abc.ABC):
     @abc.abstractmethod
     async def chat_completion(
         self,
-        context: ContextPayload, # ContextPayload is now List[Message]
+        context: ContextPayload,
         model: Optional[str] = None,
         stream: bool = False,
+        tools: Optional[List[Tool]] = None,
+        tool_choice: Optional[str] = None,
         **kwargs: Any
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Perform a chat completion request to the provider's API.
 
         This is the core method for interacting with the LLM. It sends the
-        prepared context and receives the model's response.
-        Implementations should check `self.log_raw_payloads_enabled` and
-        log request/response payloads at DEBUG level if enabled.
+        prepared context and receives the model's response. It now includes
+        standardized parameters for tool calling.
 
         Args:
             context: The context payload to send, as a list of `llmcore.models.Message` objects.
             model: The specific model identifier to use for this completion.
                    If None, the provider's configured default model should be used.
             stream: If True, the method should return an asynchronous generator
-                    yielding raw response chunks (dictionaries) from the API as
-                    they arrive. If False, it should return the complete, final
-                    response dictionary after the API call finishes.
-            **kwargs: Additional provider-specific parameters (e.g., temperature,
-                      max_tokens for the response, top_p, stop sequences).
+                    yielding raw response chunks (dictionaries) from the API.
+            tools: An optional list of `llmcore.models.Tool` objects available for the LLM to call.
+            tool_choice: An optional string to control how the model uses tools (e.g., "auto", "any").
+            **kwargs: Additional provider-specific parameters (e.g., temperature, top_p).
+                      These should be validated against `get_supported_parameters`.
 
         Returns:
             - If stream=False: A dictionary representing the complete API response.
-              The structure depends on the provider (e.g., OpenAI's format).
-            - If stream=True: An asynchronous generator yielding dictionaries,
-              where each dictionary is a raw chunk received from the streaming API.
+            - If stream=True: An asynchronous generator yielding dictionaries of raw stream chunks.
 
         Raises:
-            ProviderError: If the API call fails due to issues like authentication,
-                           rate limits, network errors, or invalid requests.
-            NotImplementedError: If streaming is requested but not supported by the provider.
+            ProviderError: For any provider-specific errors (API, connection, etc.).
+            ValueError: If an unsupported parameter is passed in `kwargs`.
         """
         pass
 
     @abc.abstractmethod
     async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """
-        Asynchronously count the number of tokens a given text string would consume for a specific model.
-
-        Uses the provider's specific tokenizer or token counting method.
-        This method is async to accommodate providers that might need API calls for tokenization.
+        Asynchronously count the number of tokens for a given text string.
 
         Args:
             text: The text string to count tokens for.
@@ -138,18 +153,17 @@ class BaseProvider(abc.ABC):
                    uses the provider's default model.
 
         Returns:
-            The number of tokens.
+            The number of tokens as an integer.
         """
         pass
 
     @abc.abstractmethod
     async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
         """
-        Asynchronously count the total number of tokens a list of messages would consume.
+        Asynchronously count the total tokens for a list of messages.
 
-        Accounts for the provider's specific formatting overhead (e.g., roles,
-        special tokens between messages) in addition to the content tokens.
-        This is async because some providers might require an API call for accurate counting.
+        This should account for the provider's specific formatting overhead
+        (e.g., roles, special tokens between messages).
 
         Args:
             messages: A list of `llmcore.models.Message` objects.
@@ -162,5 +176,9 @@ class BaseProvider(abc.ABC):
         pass
 
     async def close(self) -> None:
-         """Clean up resources like network sessions if needed."""
-         pass # Default implementation does nothing
+         """
+         Clean up any resources used by the provider, such as network sessions.
+         This is an optional method; providers that do not need explicit cleanup
+         can use this default pass-through implementation.
+         """
+         pass
