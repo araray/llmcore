@@ -4,38 +4,34 @@ Anthropic API provider implementation for the LLMCore library.
 
 Handles interactions with the Anthropic API (Claude models).
 Uses the official 'anthropic' Python SDK.
-Accepts context as List[Message].
+Accepts context as List[Message] and supports standardized tool-calling.
 """
 
 import asyncio
-import json # Added for logging raw payloads
+import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 # Use the official anthropic library
 try:
     import anthropic
     from anthropic import AnthropicError, AsyncAnthropic
-    from anthropic.types import MessageParam  # For constructing messages
-    from anthropic.types import TextBlockParam
-    # For stream event type hinting
+    from anthropic.types import MessageParam, TextBlockParam
     from anthropic.types.message_stream_event import MessageStreamEvent
     anthropic_available = True
 except ImportError:
     anthropic_available = False
-    AsyncAnthropic = None # type: ignore [assignment]
-    AnthropicError = Exception # type: ignore [assignment]
-    MessageParam = Dict[str, Any] # type: ignore [assignment]
-    TextBlockParam = Dict[str, Any] # type: ignore [assignment]
-    MessageStreamEvent = Any # type: ignore [assignment]
-
+    AsyncAnthropic = None # type: ignore
+    AnthropicError = Exception # type: ignore
+    MessageParam = Dict[str, Any] # type: ignore
+    TextBlockParam = Dict[str, Any] # type: ignore
+    MessageStreamEvent = Any # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
-from ..models import Message
+from ..models import Message, ModelDetails, Tool
 from ..models import Role as LLMCoreRole
-from .base import BaseProvider
-from .base import ContextPayload
+from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +50,11 @@ DEFAULT_MODEL = "claude-3-haiku-20240307"
 class AnthropicProvider(BaseProvider):
     """
     LLMCore provider for interacting with the Anthropic API (Claude models).
-    Handles List[Message] context type.
+    Handles List[Message] context type and standardized tool-calling.
     """
     _client: Optional[AsyncAnthropic] = None
-    _sync_client_for_counting: Optional[anthropic.Anthropic] = None # For token counting
+    _sync_client_for_counting: Optional[anthropic.Anthropic] = None
+    _api_key_env_var: Optional[str] = None
 
     def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
         """
@@ -65,7 +62,8 @@ class AnthropicProvider(BaseProvider):
 
         Args:
             config: Configuration dictionary from `[providers.anthropic]` containing:
-                    'api_key' (optional): Anthropic API key. Defaults to env var ANTHROPIC_API_KEY.
+                    'api_key' (optional): Anthropic API key.
+                    'api_key_env_var' (optional): Environment variable to read the API key from.
                     'base_url' (optional): Custom Anthropic API endpoint URL.
                     'default_model' (optional): Default model to use.
                     'timeout' (optional): Request timeout in seconds.
@@ -73,33 +71,27 @@ class AnthropicProvider(BaseProvider):
         """
         super().__init__(config, log_raw_payloads)
         if not anthropic_available:
-            raise ImportError("Anthropic library is not installed. Please install `anthropic` or `llmcore[anthropic]`.")
+            raise ImportError("Anthropic library not installed. Please install `anthropic` or `llmcore[anthropic]`.")
 
-        self.api_key = config.get('api_key') or os.environ.get('ANTHROPIC_API_KEY')
+        self._api_key_env_var = config.get('api_key_env_var')
+        api_key = config.get('api_key')
+        if not api_key and self._api_key_env_var:
+            api_key = os.environ.get(self._api_key_env_var)
+        if not api_key:
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+
+        self.api_key = api_key
         self.base_url = config.get('base_url')
         self.default_model = config.get('default_model', DEFAULT_MODEL)
         self.timeout = float(config.get('timeout', 60.0))
 
         if not self.api_key:
-            # This is a warning because the SDK might still work if the key is set
-            # directly in the environment in a way the SDK picks up but os.environ.get doesn't.
-            logger.warning("Anthropic API key not found in config or environment variable ANTHROPIC_API_KEY. "
-                           "Ensure it is set for the provider to function.")
+            logger.warning("Anthropic API key not found. Provider will likely fail.")
 
         try:
-            # Initialize the asynchronous client for API calls
-            self._client = AsyncAnthropic(
-                api_key=self.api_key,
-                base_url=self.base_url,
-                timeout=self.timeout
-            )
-            # Initialize a synchronous client specifically for token counting, as it's a sync operation
-            self._sync_client_for_counting = anthropic.Anthropic(
-                api_key=self.api_key,
-                base_url=self.base_url,
-                timeout=self.timeout
-            )
-            logger.debug("AsyncAnthropic and sync Anthropic clients initialized.")
+            self._client = AsyncAnthropic(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+            self._sync_client_for_counting = anthropic.Anthropic(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+            logger.debug("Anthropic clients initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize Anthropic clients: {e}", exc_info=True)
             raise ConfigError(f"Anthropic client initialization failed: {e}")
@@ -108,11 +100,39 @@ class AnthropicProvider(BaseProvider):
         """Returns the provider name: 'anthropic'."""
         return "anthropic"
 
-    def get_available_models(self) -> List[str]:
-        """Returns a static list of known default models for Anthropic."""
-        logger.warning("AnthropicProvider.get_available_models() returning static list. "
-                       "Refer to Anthropic documentation for the latest models.")
-        return list(DEFAULT_ANTHROPIC_TOKEN_LIMITS.keys())
+    async def get_models_details(self) -> List[ModelDetails]:
+        """
+        Returns a list of `ModelDetails` for known Anthropic models.
+
+        Note: The official Anthropic SDK does not currently provide a public
+        method to list models dynamically. This implementation relies on a
+        static, internal list of known models and their capabilities.
+        """
+        logger.warning("AnthropicProvider.get_models_details() returning static list due to SDK limitations.")
+        details_list = []
+        for model_id, context_length in DEFAULT_ANTHROPIC_TOKEN_LIMITS.items():
+            # All modern Claude 3 models support tool use.
+            supports_tools = "claude-3" in model_id
+            details = ModelDetails(
+                id=model_id,
+                context_length=context_length,
+                supports_streaming=True,
+                supports_tools=supports_tools,
+                provider_name=self.get_name(),
+                metadata={}
+            )
+            details_list.append(details)
+        return details_list
+
+    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+        """Returns a schema of supported inference parameters for Anthropic models."""
+        return {
+            "max_tokens": {"type": "integer", "minimum": 1},
+            "temperature": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "top_p": {"type": "number"},
+            "top_k": {"type": "integer"},
+            "stop_sequences": {"type": "array", "items": {"type": "string"}},
+        }
 
     def get_max_context_length(self, model: Optional[str] = None) -> int:
         """Returns the maximum context length (tokens) for the given Anthropic model."""
@@ -120,25 +140,12 @@ class AnthropicProvider(BaseProvider):
         limit = DEFAULT_ANTHROPIC_TOKEN_LIMITS.get(model_name)
         if limit is None:
             limit = 100000
-            logger.warning(f"Unknown context length for Anthropic model '{model_name}'. "
-                           f"Using fallback limit: {limit}. Please verify with Anthropic documentation.")
+            logger.warning(f"Unknown context length for Anthropic model '{model_name}'. Using fallback: {limit}.")
         return limit
 
-    def _convert_llmcore_msgs_to_anthropic(
-        self,
-        messages: List[Message]
-    ) -> tuple[Optional[str], List[MessageParam]]:
+    def _convert_llmcore_msgs_to_anthropic(self, messages: List[Message]) -> tuple[Optional[str], List[MessageParam]]:
         """
         Converts a list of LLMCore `Message` objects to the format expected by the Anthropic API.
-        Extracts the system prompt and formats user/assistant messages.
-
-        Args:
-            messages: A list of `llmcore.models.Message` objects.
-
-        Returns:
-            A tuple containing:
-            - An optional system prompt string.
-            - A list of `MessageParam` dictionaries for the Anthropic API.
         """
         anthropic_messages: List[MessageParam] = []
         system_prompt: Optional[str] = None
@@ -146,14 +153,6 @@ class AnthropicProvider(BaseProvider):
         processed_messages = list(messages)
         if processed_messages and processed_messages[0].role == LLMCoreRole.SYSTEM:
             system_prompt = processed_messages.pop(0).content
-            logger.debug("System prompt extracted for Anthropic request.")
-
-        # Anthropic API requires conversations to start with a 'user' role after system prompt.
-        if not processed_messages or processed_messages[0].role != LLMCoreRole.USER:
-            # This situation should ideally be handled by the ContextManager ensuring valid sequence.
-            # If it still occurs, log a warning. The API call might fail.
-            logger.warning("Anthropic conversation (after system prompt) should start with a 'user' role. "
-                           "The current sequence might lead to API errors.")
 
         last_role_added_to_api = None
         for msg in processed_messages:
@@ -162,316 +161,170 @@ class AnthropicProvider(BaseProvider):
                 anthropic_role_str = "user"
             elif msg.role == LLMCoreRole.ASSISTANT:
                 anthropic_role_str = "assistant"
+            elif msg.role == LLMCoreRole.TOOL:
+                # Anthropic tool results are added to the assistant's turn.
+                # This logic should be handled by the caller who constructs the context.
+                # For now, we'll skip tool messages here as they are handled differently.
+                logger.warning(f"Skipping message with role 'tool' during conversion. Tool results should be part of an assistant message.")
+                continue
             else:
                 logger.warning(f"Skipping message with unmappable role for Anthropic: {msg.role}")
                 continue
 
-            # Anthropic API requires alternating user/assistant roles.
-            # If consecutive messages have the same role, attempt to merge or log warning.
             if anthropic_role_str == last_role_added_to_api:
-                logger.warning(f"Duplicate consecutive role '{anthropic_role_str}' for Anthropic API. "
-                               "Attempting to merge content. This might not be ideal for all use cases.")
+                logger.warning(f"Merging consecutive '{anthropic_role_str}' messages for Anthropic API.")
                 if anthropic_messages and isinstance(anthropic_messages[-1]["content"], list):
-                    # Assuming content is a list of TextBlockParam
-                    last_content_block = anthropic_messages[-1]["content"][0] # type: ignore[index]
-                    if last_content_block["type"] == "text": # type: ignore[typeddict-item]
-                        last_content_block["text"] += f"\n{msg.content}" # type: ignore[typeddict-item]
+                    last_content_block = anthropic_messages[-1]["content"][0] # type: ignore
+                    if last_content_block["type"] == "text": # type: ignore
+                        last_content_block["text"] += f"\n{msg.content}" # type: ignore
                         continue
 
-            # Create the content block for the message
             content_block: TextBlockParam = {"type": "text", "text": msg.content}
-            anthropic_messages.append({"role": anthropic_role_str, "content": [content_block]}) # type: ignore[typeddict-item]
+            anthropic_messages.append({"role": anthropic_role_str, "content": [content_block]}) # type: ignore
             last_role_added_to_api = anthropic_role_str
 
         return system_prompt, anthropic_messages
 
-
     async def chat_completion(
         self,
-        context: ContextPayload, # ContextPayload is List[Message]
+        context: ContextPayload,
         model: Optional[str] = None,
         stream: bool = False,
+        tools: Optional[List[Tool]] = None,
+        tool_choice: Optional[str] = None,
         **kwargs: Any
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
-        Sends a chat completion request to the Anthropic API.
-
-        Args:
-            context: The context payload to send, as a list of `llmcore.models.Message` objects.
-            model: The specific model identifier to use. Defaults to provider's default.
-            stream: If True, returns an async generator of response chunks. Otherwise, returns the full response.
-            **kwargs: Additional provider-specific parameters.
-
-        Returns:
-            A dictionary for full response or an async generator for streamed response.
-
-        Raises:
-            ProviderError: If the API call fails.
-            ConfigError: If the provider is not properly configured.
+        Sends a chat completion request to the Anthropic API with standardized tool support.
         """
         if not self._client:
             raise ProviderError(self.get_name(), "Anthropic client not initialized.")
 
+        supported_params = self.get_supported_parameters()
+        for key in kwargs:
+            if key not in supported_params:
+                raise ValueError(f"Unsupported parameter '{key}' for Anthropic provider.")
+
         model_name = model or self.default_model
-
-        # Context is expected to be List[Message]
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
-            raise ProviderError(self.get_name(), f"AnthropicProvider received unsupported context type: {type(context).__name__}. Expected List[Message].")
+            raise ProviderError(self.get_name(), "Unsupported context type.")
 
-        logger.debug("Processing context as List[Message] for Anthropic.")
         system_prompt, messages_payload = self._convert_llmcore_msgs_to_anthropic(context)
-
         if not messages_payload:
-             raise ProviderError(self.get_name(), "No valid messages to send after context processing.")
+            raise ProviderError(self.get_name(), "No valid messages to send after context processing.")
 
-        # Anthropic requires the first message in the 'messages' list to be 'user'
-        # (after any system prompt which is passed separately).
-        if messages_payload[0]['role'] != 'user':
-             logger.warning(f"Anthropic API requires the first message in 'messages' payload to be 'user'. "
-                            f"Current first role: {messages_payload[0]['role']}. Attempting to proceed, but API may error.")
-             # Optionally, one could try to prepend a dummy user message if it starts with assistant,
-             # but this should ideally be handled by the ContextManager.
-             # Example:
-             # if messages_payload[0]['role'] == 'assistant':
-             #     logger.info("Prepending dummy 'user' message as Anthropic requires conversation to start with user.")
-             #     messages_payload.insert(0, {"role": "user", "content": [{"type": "text", "text": "(Context provided)"}]})
+        api_kwargs = kwargs.copy()
+        api_kwargs["max_tokens"] = api_kwargs.pop("max_tokens", 2048) # Anthropic requires max_tokens
 
+        if tools:
+            api_kwargs["tools"] = [tool.model_dump() for tool in tools]
+        if tool_choice:
+            # Anthropic tool_choice is more complex, e.g. {"type": "any"} or {"type": "tool", "name": ...}
+            # This is a simplified mapping for now.
+            if tool_choice == "auto":
+                api_kwargs["tool_choice"] = {"type": "auto"}
+            elif tool_choice == "any":
+                api_kwargs["tool_choice"] = {"type": "any"}
+            else: # Assume it's a specific tool name
+                api_kwargs["tool_choice"] = {"type": "tool", "name": tool_choice}
 
-        # Anthropic uses 'max_tokens' for the response length limit.
-        # 'max_tokens_to_sample' was an older parameter name.
-        max_tokens_val = kwargs.pop("max_tokens", kwargs.pop("max_tokens_to_sample", 2048))
-
-        # Log raw request payload if enabled
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-            try:
-                # messages_payload is List[MessageParam (Dict)]
-                request_log_data = {
-                    "model": model_name,
-                    "messages": messages_payload,
-                    "system": system_prompt,
-                    "max_tokens": max_tokens_val,
-                    "stream": stream,
-                    "temperature": kwargs.get("temperature"),
-                    "top_p": kwargs.get("top_p"),
-                    "top_k": kwargs.get("top_k"),
-                    "stop_sequences": kwargs.get("stop_sequences")
-                }
-                # Filter out None values from kwargs for cleaner logging
-                provider_specific_kwargs = {k:v for k,v in request_log_data.items() if v is not None}
-                logger.debug(f"RAW LLM REQUEST ({self.get_name()} @ {model_name}): {json.dumps(provider_specific_kwargs, indent=2)}")
-            except Exception as e_req_log:
-                logger.warning(f"Failed to serialize Anthropic raw request for logging: {type(e_req_log).__name__} - {str(e_req_log)[:100]}")
-
-        logger.debug(
-            f"Sending request to Anthropic API: model='{model_name}', stream={stream}, "
-            f"num_messages={len(messages_payload)}, system_prompt_present={bool(system_prompt)}"
-        )
+            log_data = {"model": model_name, "messages": messages_payload, "system": system_prompt, "stream": stream, **api_kwargs}
+            logger.debug(f"RAW LLM REQUEST ({self.get_name()}): {json.dumps(log_data, indent=2)}")
 
         try:
             if stream:
                 response_stream = await self._client.messages.stream(
                     model=model_name,
-                    messages=messages_payload, # type: ignore [arg-type]
+                    messages=messages_payload, # type: ignore
                     system=system_prompt,
-                    max_tokens=max_tokens_val,
-                    temperature=kwargs.get("temperature"),
-                    top_p=kwargs.get("top_p"),
-                    top_k=kwargs.get("top_k"),
-                    stop_sequences=kwargs.get("stop_sequences")
+                    **api_kwargs
                 )
-                logger.debug(f"Processing stream response from Anthropic model '{model_name}'")
-                async def stream_wrapper() -> AsyncGenerator[Dict[str, Any], None]:
-                    try:
-                        async for event in response_stream: # event is MessageStreamEvent
-                            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                                try:
-                                    logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()} @ {model_name}): {event.model_dump_json()}")
-                                except Exception as e_chunk_log:
-                                    logger.warning(f"Failed to serialize Anthropic raw stream chunk for logging: {type(e_chunk_log).__name__} - {str(e_chunk_log)[:100]}")
-
-                            event_dict = {}
-                            if event.type == "message_start":
-                                event_dict = {
-                                    "type": "message_start",
-                                    "message": {
-                                        "id": event.message.id,
-                                        "role": event.message.role,
-                                        "model": event.message.model,
-                                        "usage": event.message.usage.model_dump() if event.message.usage else None
-                                    }
-                                }
-                            elif event.type == "content_block_delta":
-                                if event.delta.type == "text_delta":
-                                    event_dict = {
-                                        "type": "content_block_delta",
-                                        "index": event.index,
-                                        "delta": {"type": "text", "text": event.delta.text},
-                                        # Mimic OpenAI stream structure for easier processing in LLMCore.chat
-                                        "choices": [{"delta": {"content": event.delta.text}, "index": event.index, "finish_reason": None}]
-                                    }
-                            elif event.type == "message_delta":
-                                event_dict = {
-                                    "type": "message_delta",
-                                    "delta": {"stop_reason": event.delta.stop_reason, "stop_sequence": event.delta.stop_sequence},
-                                    "usage": event.usage.model_dump(), # type: ignore [attr-defined] # usage is on MessageDeltaEvent
-                                    "choices": [{"finish_reason": event.delta.stop_reason}]
-                                }
-                            elif event.type == "message_stop":
-                                event_dict = {
-                                    "type": "message_stop",
-                                    "reason": "stop_event",
-                                    "choices": [{"finish_reason": "stop"}]
-                                }
-
-                            if event_dict:
-                                yield event_dict
-                    except anthropic.APIConnectionError as e_conn:
-                        logger.error(f"Anthropic API connection error during stream: {e_conn}", exc_info=True)
-                        yield {"error": f"Anthropic API Connection Error: {e_conn}", "done": True}
-                        # No need to raise here, error is yielded
-                    except anthropic.APIStatusError as e_stat:
-                        logger.error(f"Anthropic API status error during stream: {e_stat.status_code} - {e_stat.message}", exc_info=True)
-                        yield {"error": f"Anthropic API Status Error ({e_stat.status_code}): {e_stat.message}", "done": True}
-                    except Exception as e_stream:
-                        logger.error(f"Unexpected error processing Anthropic stream: {e_stream}", exc_info=True)
-                        yield {"error": f"Unexpected stream processing error: {e_stream}", "done": True}
-                    finally:
-                        logger.debug("Anthropic stream finished.")
+                async def stream_wrapper():
+                    async for event in response_stream:
+                        if self.log_raw_payloads_enabled:
+                            logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()}): {event.model_dump_json()}")
+                        event_dict = event.model_dump(exclude_none=True)
+                        # Adapt to a more consistent choice/delta structure if possible
+                        if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                            event_dict["choices"] = [{"delta": {"content": event.delta.text}}]
+                        elif event.type == "message_delta":
+                            event_dict["choices"] = [{"finish_reason": event.delta.stop_reason}]
+                        yield event_dict
                 return stream_wrapper()
-            else: # Non-streaming
+            else:
                 response = await self._client.messages.create(
                     model=model_name,
-                    messages=messages_payload, # type: ignore [arg-type]
+                    messages=messages_payload, # type: ignore
                     system=system_prompt,
-                    max_tokens=max_tokens_val,
-                    temperature=kwargs.get("temperature"),
-                    top_p=kwargs.get("top_p"),
-                    top_k=kwargs.get("top_k"),
-                    stop_sequences=kwargs.get("stop_sequences")
+                    **api_kwargs
                 )
-                logger.debug(f"Processing non-stream response from Anthropic model '{model_name}'")
+                response_dict = response.model_dump(exclude_none=True)
+                if self.log_raw_payloads_enabled:
+                    logger.debug(f"RAW LLM RESPONSE ({self.get_name()}): {json.dumps(response_dict, indent=2)}")
 
-                if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    try:
-                        logger.debug(f"RAW LLM RESPONSE ({self.get_name()} @ {model_name}): {response.model_dump_json(indent=2)}")
-                    except Exception as e_resp_log:
-                        logger.warning(f"Failed to serialize Anthropic raw response for logging: {type(e_resp_log).__name__} - {str(e_resp_log)[:100]}")
+                # Normalize to OpenAI-like structure for consistency
+                main_content = "".join([block.get("text", "") for block in response_dict.get("content", []) if block.get("type") == "text"])
+                tool_calls = [block for block in response_dict.get("content", []) if block.get("type") == "tool_use"]
 
-                response_dict = response.model_dump()
-                # Extract the primary text content
-                main_content = ""
-                if response_dict.get("content"):
-                    for block in response_dict["content"]:
-                        if block.get("type") == "text":
-                            main_content += block.get("text", "")
-
-                # Construct an OpenAI-like choices structure
-                choices = [{
+                normalized_choices = [{
                     "index": 0,
                     "message": {
                         "role": "assistant",
-                        "content": main_content
+                        "content": main_content if not tool_calls else None,
+                        "tool_calls": tool_calls if tool_calls else None
                     },
                     "finish_reason": response_dict.get("stop_reason")
                 }]
-                usage = response_dict.get("usage")
 
                 return {
                     "id": response_dict.get("id"),
                     "model": response_dict.get("model"),
-                    "choices": choices,
-                    "usage": usage,
+                    "choices": normalized_choices,
+                    "usage": response_dict.get("usage"),
                 }
 
-        except AnthropicError as e: # Catch base Anthropic SDK error
-            status_code = getattr(e, 'status_code', None)
-            error_message = str(e)
-            logger.error(f"Anthropic API error (Status: {status_code}): {error_message}", exc_info=True)
-            raise ProviderError(self.get_name(), f"API Error (Status: {status_code}): {error_message}")
-        except asyncio.TimeoutError:
-            logger.error(f"Request to Anthropic timed out after {self.timeout} seconds.")
-            raise ProviderError(self.get_name(), f"Request timed out after {self.timeout}s.")
+        except AnthropicError as e:
+            logger.error(f"Anthropic API error: {e}", exc_info=True)
+            raise ProviderError(self.get_name(), f"API Error (Status: {getattr(e, 'status_code', 'N/A')}): {e}")
         except Exception as e:
-            logger.error(f"Unexpected error during Anthropic chat completion: {e}", exc_info=True)
+            logger.error(f"Unexpected error during Anthropic chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int: # Changed to async
-        """Counts tokens using the Anthropic client (synchronous call wrapped)."""
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+        """Counts tokens using the synchronous Anthropic client wrapped in a thread."""
         if not self._sync_client_for_counting:
-            logger.warning("Anthropic sync client for token counting not initialized. Using char approximation.")
-            return (len(text) + 3) // 4 # Rough fallback
+            logger.warning("Anthropic sync client not available. Approximating token count.")
+            return (len(text) + 3) // 4
         if not text:
             return 0
         try:
-            # Run the synchronous count_tokens in a thread
             return await asyncio.to_thread(self._sync_client_for_counting.count_tokens, text)
-        except AnthropicError as e:
-            logger.error(f"Anthropic API error during token count: {e}", exc_info=True)
-            raise ProviderError(self.get_name(), f"API Error during token count: {e}")
         except Exception as e:
             logger.error(f"Failed to count tokens with Anthropic client: {e}", exc_info=True)
-            # Fallback to character approximation if API call fails
             return (len(text) + 3) // 4
 
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int: # Changed to async
-        """
-        Counts tokens for a list of LLMCore Messages using the Anthropic client.
-        This involves formatting messages as the API would expect them (approximately)
-        and then counting tokens on the resulting string.
-        """
-        if not self._sync_client_for_counting:
-            logger.warning("Anthropic sync client for token counting not initialized. Using char approximation.")
-            total_text_len = sum(len(msg.content) + len(msg.role.value) for msg in messages)
-            # Rough approximation for message overhead
-            return (total_text_len + (len(messages) * 5)) // 4
-
-        # Convert LLMCore messages to a string representation similar to how Anthropic might process them.
-        # This is an approximation. For exact counts, Anthropic's API might be needed,
-        # but that's too slow for frequent context checks.
+    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+        """Approximates token count for a list of messages for Anthropic models."""
+        # Anthropic's token counting is complex. A simple sum is a rough approximation.
+        # For better accuracy, one would construct the full prompt string.
         prompt_str = ""
         system_prompt, anthropic_msgs_list = self._convert_llmcore_msgs_to_anthropic(messages)
-
         if system_prompt:
-            prompt_str += f"System: {system_prompt}\n\n" # Approximate system prompt formatting
-
+            prompt_str += f"System: {system_prompt}\n\n"
         for msg_param in anthropic_msgs_list:
             role = msg_param["role"]
-            content_str = ""
-            if isinstance(msg_param["content"], list) and msg_param["content"]:
-                first_block = msg_param["content"][0] # type: ignore[index]
-                if first_block.get("type") == "text": # type: ignore[typeddict-item]
-                    content_str = first_block.get("text", "") # type: ignore[typeddict-item]
-            prompt_str += f"{str(role).capitalize()}: {content_str}\n" # e.g., User: Hello\nAssistant: Hi\n
-
-        # Anthropic API might add a final "Assistant:" prompt implicitly.
+            content_str = "".join([block.get("text", "") for block in msg_param.get("content", []) if block.get("type") == "text"])
+            prompt_str += f"{str(role).capitalize()}: {content_str}\n"
         if prompt_str and anthropic_msgs_list and anthropic_msgs_list[-1]["role"] == "user":
-            prompt_str += "Assistant:" # Simulate the prompt for the assistant's turn
+            prompt_str += "Assistant:"
 
-        if not prompt_str:
-            return 0
-
-        # Use the async count_tokens method which wraps the sync call
         return await self.count_tokens(prompt_str, model)
-
 
     async def close(self) -> None:
         """Closes the underlying Anthropic client sessions."""
-        closed_async = False
         if self._client:
-            try:
-                await self._client.close()
-                logger.debug("AsyncAnthropic client closed.")
-                closed_async = True
-            except Exception as e:
-                logger.error(f"Error closing AsyncAnthropic client: {e}", exc_info=True)
-
+            await self._client.close()
         if self._sync_client_for_counting:
-            try:
-                # The synchronous client's close method is not async
-                self._sync_client_for_counting.close()
-                logger.debug("Anthropic synchronous client for counting closed.")
-            except Exception as e:
-                logger.error(f"Error closing Anthropic synchronous client: {e}", exc_info=True)
-
-        self._client = None
-        self._sync_client_for_counting = None
+            self._sync_client_for_counting.close()
+        logger.info("AnthropicProvider clients closed.")
