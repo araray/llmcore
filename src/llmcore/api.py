@@ -15,7 +15,7 @@ from typing import (Any, AsyncGenerator, Dict, List, Optional, Tuple, Type,
 
 import aiofiles
 
-from ..context.manager import ContextManager
+from ..memory.manager import MemoryManager
 from ..embedding.manager import EmbeddingManager
 from ..exceptions import (ConfigError, ContextLengthError, EmbeddingError,
                          LLMCoreError, ProviderError, SessionNotFoundError,
@@ -55,7 +55,7 @@ class LLMCore:
     _storage_manager: StorageManager
     _provider_manager: ProviderManager
     _session_manager: SessionManager
-    _context_manager: ContextManager
+    _memory_manager: MemoryManager
     _embedding_manager: EmbeddingManager
     _transient_sessions_cache: Dict[str, ChatSession]
     _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
@@ -130,7 +130,7 @@ class LLMCore:
         default_embedding_model = self.config.get('llmcore.default_embedding_model')
         if default_embedding_model:
             await self._embedding_manager.get_model(default_embedding_model)
-        self._context_manager = ContextManager(
+        self._memory_manager = MemoryManager(
             config=self.config,
             provider_manager=self._provider_manager,
             storage_manager=self._storage_manager,
@@ -232,7 +232,7 @@ class LLMCore:
         chat_session.add_message(message, Role.USER)
 
         # Context preparation logic... (remains largely the same)
-        context_details = await self._context_manager.prepare_context(
+        context_details = await self._memory_manager.prepare_context(
             session=chat_session,
             provider_name=active_provider.get_name(),
             model_name=actual_model
