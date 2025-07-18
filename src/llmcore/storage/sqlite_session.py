@@ -26,7 +26,7 @@ except ImportError:
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
 from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role,
-                      ContextPreset, ContextPresetItem) # Added ContextPreset, ContextPresetItem
+                      ContextPreset, ContextPresetItem, Episode, EpisodeType) # Added Episode, EpisodeType
 from .base_session import BaseSessionStorage
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ DEFAULT_MESSAGES_TABLE = "messages"
 DEFAULT_SESSION_CONTEXT_ITEMS_TABLE = "session_context_items" # Renamed for clarity
 DEFAULT_CONTEXT_PRESETS_TABLE = "context_presets"
 DEFAULT_CONTEXT_PRESET_ITEMS_TABLE = "context_preset_items"
+DEFAULT_EPISODES_TABLE = "episodes" # New table for episodes
 
 
 class SqliteSessionStorage(BaseSessionStorage):
@@ -54,12 +55,13 @@ class SqliteSessionStorage(BaseSessionStorage):
     _session_context_items_table_name: str # Table for ContextItems linked to ChatSessions
     _context_presets_table_name: str # New table for ContextPresets
     _context_preset_items_table_name: str # New table for ContextPresetItems
+    _episodes_table_name: str # New table for Episodes
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
         Initialize the SQLite database asynchronously using aiosqlite.
         Creates tables for sessions, messages, session context items,
-        context presets, and context preset items if they don't exist.
+        context presets, context preset items, and episodes if they don't exist.
 
         Args:
             config: Configuration dictionary. Expected keys:
@@ -69,6 +71,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                     'session_context_items_table_name' (optional)
                     'context_presets_table_name' (optional)
                     'context_preset_items_table_name' (optional)
+                    'episodes_table_name' (optional)
 
         Raises:
             ConfigError: If 'path' is not provided or aiosqlite is not installed.
@@ -87,6 +90,7 @@ class SqliteSessionStorage(BaseSessionStorage):
         self._session_context_items_table_name = config.get("session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE)
         self._context_presets_table_name = config.get("context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE)
         self._context_preset_items_table_name = config.get("context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE)
+        self._episodes_table_name = config.get("episodes_table_name", DEFAULT_EPISODES_TABLE)
 
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,10 +145,23 @@ class SqliteSessionStorage(BaseSessionStorage):
             """)
             await self._conn.execute(f"CREATE INDEX IF NOT EXISTS idx_context_preset_items_preset_name ON {self._context_preset_items_table_name} (preset_name);")
 
+            # Episodes table
+            await self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._episodes_table_name} (
+                    episode_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
+                )
+            """)
+            await self._conn.execute(f"CREATE INDEX IF NOT EXISTS idx_episodes_session_timestamp ON {self._episodes_table_name} (session_id, timestamp);")
+
             await self._conn.commit()
             logger.info(f"SQLite storage initialized at: {self._db_path.resolve()} with tables: "
                         f"{self._sessions_table_name}, {self._messages_table_name}, {self._session_context_items_table_name}, "
-                        f"{self._context_presets_table_name}, {self._context_preset_items_table_name}")
+                        f"{self._context_presets_table_name}, {self._context_preset_items_table_name}, {self._episodes_table_name}")
 
         except aiosqlite.Error as e: # type: ignore
             logger.error(f"Failed to initialize aiosqlite database at {self._db_path}: {e}")
@@ -190,7 +207,21 @@ class SqliteSessionStorage(BaseSessionStorage):
             await self._conn.commit()
             logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to SQLite.")
         except aiosqlite.Error as e: # type: ignore
-            logger.error(f"aiosqlite error saving session '{session.id}': {e}")
+            logger.error(f"aiosqlite error retrieving episodes for session '{session_id}': {e}")
+            raise StorageError(f"Database error retrieving episodes for session '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error retrieving episodes for session '{session_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error retrieving episodes for session '{session_id}': {e}")
+
+    async def close(self) -> None:
+        """Close the database connection."""
+        if self._conn:
+            try:
+                await self._conn.close()
+                self._conn = None
+                logger.info("aiosqlite storage connection (sessions, presets & episodes) closed.")
+            except aiosqlite.Error as e: # type: ignore
+                logger.error(f"Error closing aiosqlite connection: {e}")iosqlite error saving session '{session.id}': {e}")
             try: await self._conn.rollback()
             except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Database error saving session '{session.id}': {e}")
@@ -307,7 +338,7 @@ class SqliteSessionStorage(BaseSessionStorage):
         if not self._conn: raise SessionStorageError("Database connection is not initialized.")
         try:
             cursor = await self._conn.execute(f"DELETE FROM {self._sessions_table_name} WHERE id = ?", (session_id,))
-            await self._conn.commit() # CASCADE DELETE handles related tables
+            await self._conn.commit() # CASCADE DELETE handles related tables including episodes
             deleted_count = cursor.rowcount
             if deleted_count > 0: logger.info(f"Session '{session_id}' and associated data deleted from SQLite."); return True
             logger.warning(f"Attempted to delete non-existent session '{session_id}' from SQLite."); return False
@@ -537,13 +568,74 @@ class SqliteSessionStorage(BaseSessionStorage):
             except Exception as rb_e: logger.error(f"Rollback failed for preset rename: {rb_e}")
             raise StorageError(f"Unexpected error renaming context preset: {e}")
 
+    # --- New methods for Episodic Memory Management ---
 
-    async def close(self) -> None:
-        """Close the database connection."""
-        if self._conn:
-            try:
-                await self._conn.close()
-                self._conn = None
-                logger.info("aiosqlite storage connection (sessions & presets) closed.")
-            except aiosqlite.Error as e: # type: ignore
-                logger.error(f"Error closing aiosqlite connection: {e}")
+    async def add_episode(self, episode: Episode) -> None:
+        """
+        Adds a new episode to the episodic memory log for a session.
+
+        Args:
+            episode: The Episode object to add.
+
+        Raises:
+            StorageError: If an error occurs during database insertion.
+        """
+        if not self._conn: raise StorageError("Database connection not initialized for episodes.")
+        try:
+            episode_data_json = json.dumps(episode.data)
+            await self._conn.execute(f"""
+                INSERT INTO {self._episodes_table_name} (episode_id, session_id, timestamp, event_type, data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (episode.episode_id, episode.session_id, episode.timestamp.isoformat(), str(episode.event_type), episode_data_json))
+            await self._conn.commit()
+            logger.debug(f"Episode '{episode.episode_id}' for session '{episode.session_id}' saved to SQLite.")
+        except aiosqlite.Error as e: # type: ignore
+            logger.error(f"aiosqlite error saving episode '{episode.episode_id}': {e}")
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed for episode save: {rb_e}")
+            raise StorageError(f"Database error saving episode '{episode.episode_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error saving episode '{episode.episode_id}': {e}", exc_info=True)
+            try: await self._conn.rollback()
+            except Exception as rb_e: logger.error(f"Rollback failed for episode save: {rb_e}")
+            raise StorageError(f"Unexpected error saving episode '{episode.episode_id}': {e}")
+
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+        """
+        Retrieves a list of episodes for a given session, ordered by timestamp.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects.
+
+        Raises:
+            StorageError: If an error occurs during database query or data validation.
+        """
+        if not self._conn: raise StorageError("Database connection not initialized for episodes.")
+        episodes: List[Episode] = []
+        try:
+            async with self._conn.execute(f"""
+                SELECT * FROM {self._episodes_table_name}
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+            """, (session_id, limit, offset)) as cursor:
+                async for episode_row_data in cursor:
+                    episode_dict = dict(episode_row_data)
+                    try:
+                        episode_dict["data"] = json.loads(episode_dict.get("data") or '{}')
+                        episode_dict["event_type"] = EpisodeType(episode_dict["event_type"])
+                        ts_str = episode_dict["timestamp"]
+                        episode_dict["timestamp"] = datetime.fromisoformat(ts_str.replace('Z', '+00:00')) if ts_str else datetime.now(timezone.utc)
+                        episodes.append(Episode.model_validate(episode_dict))
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
+                        logger.warning(f"Skipping invalid episode data for session {session_id}, episode_id {episode_dict.get('episode_id')}: {e}")
+
+            logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' (offset={offset}, limit={limit})")
+            return episodes
+        except aiosqlite.Error as e: # type: ignore
+            logger.error(f"a

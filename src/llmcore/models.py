@@ -150,6 +150,71 @@ class ContextItem(BaseModel):
         }
 
 
+class EpisodeType(str, Enum):
+    """Enumeration of possible event types in an agent's episodic memory."""
+    THOUGHT = "thought"
+    ACTION = "action"
+    OBSERVATION = "observation"
+    USER_INTERACTION = "user_interaction"
+    AGENT_REFLECTION = "agent_reflection"
+
+    @classmethod
+    def _missing_(cls, value: object): # type: ignore[misc]
+        if isinstance(value, str):
+            lower_value = value.lower()
+            for member in cls:
+                if member.value == lower_value:
+                    return member
+        return None
+
+
+class Episode(BaseModel):
+    """Represents a single event in an agent's experience log (Episodic Memory)."""
+    episode_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the episode.")
+    session_id: str = Field(description="The session this episode belongs to.")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of the event (UTC).")
+    event_type: EpisodeType = Field(description="The type of event that occurred.")
+    data: Dict[str, Any] = Field(description="A JSON blob containing the structured data of the event.")
+
+    class Config:
+        use_enum_values = True
+        validate_assignment = True
+        json_encoders = {
+            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
+        }
+
+    @field_validator('timestamp', mode='before')
+    @classmethod
+    def ensure_utc_timestamp(cls, v: Any) -> datetime:
+        """Ensure the timestamp is timezone-aware and in UTC if naive."""
+        if isinstance(v, str):
+            try:
+                if v.endswith('Z'):
+                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                else:
+                    v_parsed = datetime.fromisoformat(v)
+            except ValueError:
+                for fmt in ("%Y-%m-%d %H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        v_parsed = datetime.strptime(v, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    raise ValueError(f"Invalid datetime format: {v}")
+
+            if v_parsed.tzinfo is None:
+                return v_parsed.replace(tzinfo=timezone.utc)
+            return v_parsed.astimezone(timezone.utc)
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                return v.replace(tzinfo=timezone.utc)
+            return v.astimezone(timezone.utc)
+        if v is None:
+            return datetime.now(timezone.utc)
+        return v
+
+
 class ChatSession(BaseModel):
     """
     Represents a single conversation or chat session.

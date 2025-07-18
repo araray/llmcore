@@ -3,7 +3,8 @@
 Storage Manager for LLMCore.
 
 Handles the dynamic loading and management of session and vector storage backends
-based on the application's configuration.
+based on the application's configuration. Now includes episodic memory management
+through the session storage backends.
 """
 
 import asyncio
@@ -18,6 +19,7 @@ except ImportError:
 
 
 from ..exceptions import ConfigError, StorageError
+from ..models import Episode # Added Episode import
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
 # Import concrete vector storage implementations
@@ -49,7 +51,8 @@ class StorageManager:
     Manages the initialization and access to storage backends.
 
     Reads configuration and instantiates the appropriate session and
-    vector storage classes.
+    vector storage classes. Provides unified access to episodic memory
+    functionality through session storage backends.
     """
     _session_storage: Optional[BaseSessionStorage] = None
     _vector_storage: Optional[BaseVectorStorage] = None
@@ -160,6 +163,78 @@ class StorageManager:
             else:
                  raise StorageError("Vector storage failed to initialize (check logs for details). RAG is unavailable.")
         return self._vector_storage
+
+    # --- New methods for Episodic Memory Management ---
+
+    async def add_episode(self, episode: Episode) -> None:
+        """
+        Adds a new episode to the episodic memory log through the session storage backend.
+
+        Args:
+            episode: The Episode object to add.
+
+        Raises:
+            StorageError: If session storage is not configured or if the operation fails.
+        """
+        session_storage = self.get_session_storage()
+        await session_storage.add_episode(episode)
+        logger.debug(f"Episode '{episode.episode_id}' added to session '{episode.session_id}' via StorageManager.")
+
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+        """
+        Retrieves episodes for a given session through the session storage backend.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects.
+
+        Raises:
+            StorageError: If session storage is not configured or if the operation fails.
+        """
+        session_storage = self.get_session_storage()
+        episodes = await session_storage.get_episodes(session_id, limit, offset)
+        logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' via StorageManager.")
+        return episodes
+
+    async def get_episode_count(self, session_id: str) -> int:
+        """
+        Gets the total count of episodes for a session.
+        This is a convenience method that retrieves episodes with limit=1 and uses metadata.
+
+        Args:
+            session_id: The ID of the session to count episodes for.
+
+        Returns:
+            The total number of episodes for the session.
+
+        Raises:
+            StorageError: If session storage is not configured or if the operation fails.
+        """
+        # Note: This is a simple implementation. For large episode logs,
+        # storage backends could implement a more efficient count method.
+        session_storage = self.get_session_storage()
+
+        # Get episodes in batches to count total without loading all into memory
+        total_count = 0
+        batch_size = 1000
+        offset = 0
+
+        while True:
+            batch = await session_storage.get_episodes(session_id, limit=batch_size, offset=offset)
+            batch_count = len(batch)
+            total_count += batch_count
+
+            if batch_count < batch_size:
+                # We've reached the end
+                break
+            offset += batch_size
+
+        logger.debug(f"Total episode count for session '{session_id}': {total_count}")
+        return total_count
 
     async def list_vector_collection_names(self) -> List[str]:
         """

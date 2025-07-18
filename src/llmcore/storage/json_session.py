@@ -20,7 +20,7 @@ import aiofiles
 import aiofiles.os as aios
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
-from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role, ContextPreset, ContextPresetItem)
+from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role, ContextPreset, ContextPresetItem, Episode, EpisodeType)
 from .base_session import BaseSessionStorage
 
 logger = logging.getLogger(__name__)
@@ -37,15 +37,17 @@ class JsonSessionStorage(BaseSessionStorage):
     """
     _storage_dir: pathlib.Path
     _presets_dir: pathlib.Path # Directory for context presets
+    _episodes_dir: pathlib.Path # Directory for episodes
     _file_extension: str
     _presets_dir_name: str = "context_presets" # Standardized subdirectory name
+    _episodes_dir_name: str = "episodes" # Standardized subdirectory name for episodes
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
         Initialize the JSON session and preset storage.
 
-        Creates the main storage directory and a subdirectory for context presets
-        if they don't exist.
+        Creates the main storage directory and subdirectories for context presets
+        and episodes if they don't exist.
 
         Args:
             config: Configuration dictionary. Expected keys:
@@ -62,6 +64,7 @@ class JsonSessionStorage(BaseSessionStorage):
 
         self._storage_dir = pathlib.Path(os.path.expanduser(storage_path_str))
         self._presets_dir = self._storage_dir / self._presets_dir_name
+        self._episodes_dir = self._storage_dir / self._episodes_dir_name
         self._file_extension = config.get("file_extension", ".json")
         if not self._file_extension.startswith('.'):
             self._file_extension = f".{self._file_extension}"
@@ -69,40 +72,12 @@ class JsonSessionStorage(BaseSessionStorage):
         try:
             await aios.makedirs(self._storage_dir, exist_ok=True)
             await aios.makedirs(self._presets_dir, exist_ok=True) # Create presets subdirectory
+            await aios.makedirs(self._episodes_dir, exist_ok=True) # Create episodes subdirectory
             logger.info(f"JSON session storage initialized at: {self._storage_dir.resolve()}")
             logger.info(f"JSON context preset storage initialized at: {self._presets_dir.resolve()}")
+            logger.info(f"JSON episode storage initialized at: {self._episodes_dir.resolve()}")
         except OSError as e:
-            logger.error(f"Failed to create JSON storage directories (main: {self._storage_dir}, presets: {self._presets_dir}): {e}")
-            raise SessionStorageError(f"Could not create storage directories: {e}")
-
-    def _get_session_path(self, session_id: str) -> pathlib.Path:
-        """Constructs the file path for a given session ID."""
-        return self._storage_dir / f"{session_id}{self._file_extension}"
-
-    def _get_preset_path(self, preset_name: str) -> pathlib.Path:
-        """Constructs the file path for a given context preset name."""
-        # Basic sanitization for filename from preset_name, though Pydantic model should validate 'name'
-        sane_filename = re.sub(r'[^\w\-. ]', '_', preset_name)
-        return self._presets_dir / f"{sane_filename}{self._file_extension}"
-
-    async def save_session(self, session: ChatSession) -> None:
-        """
-        Save or update a chat session to a JSON file asynchronously.
-
-        Args:
-            session: The ChatSession object to save.
-
-        Raises:
-            SessionStorageError: If serialization or file I/O fails.
-        """
-        session_file_path = self._get_session_path(session.id)
-        try:
-            session_json = session.model_dump_json(indent=2)
-            async with aiofiles.open(session_file_path, mode="w", encoding="utf-8") as f:
-                await f.write(session_json)
-            logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to {session_file_path}")
-        except TypeError as e:
-            logger.error(f"Error serializing session '{session.id}' to JSON: {e}")
+            logger.error(f"Failed to create JSON storage directories (main: {self._storage_dir}, presets: {self._presets_dir}, episodes: {self._episodes_dir}): {e}")
             raise SessionStorageError(f"Failed to serialize session data for '{session.id}': {e}")
         except IOError as e:
             logger.error(f"Error writing session '{session.id}' to file {session_file_path}: {e}")
@@ -206,6 +181,13 @@ class JsonSessionStorage(BaseSessionStorage):
             if await aios.path.exists(session_file_path):
                 await aios.remove(session_file_path)
                 logger.info(f"Session '{session_id}' deleted from {session_file_path}")
+
+                # Also delete associated episodes file if it exists
+                episode_file_path = self._get_episode_path(session_id)
+                if await aios.path.exists(episode_file_path):
+                    await aios.remove(episode_file_path)
+                    logger.debug(f"Episodes file for session '{session_id}' deleted from {episode_file_path}")
+
                 return True
             else:
                 logger.warning(f"Attempted to delete non-existent session '{session_id}' at {session_file_path}")
@@ -466,10 +448,135 @@ class JsonSessionStorage(BaseSessionStorage):
             logger.error(f"Unexpected error renaming preset '{old_name}' to '{new_name}': {e}", exc_info=True)
             raise StorageError(f"Unexpected error during preset rename: {e}")
 
+    # --- New methods for Episodic Memory Management ---
+
+    async def add_episode(self, episode: Episode) -> None:
+        """
+        Adds a new episode to the episodic memory log for a session.
+        Episodes are stored in JSON Lines format for efficient append operations.
+
+        Args:
+            episode: The Episode object to add.
+
+        Raises:
+            StorageError: If an error occurs during file writing or JSON serialization.
+        """
+        episode_file_path = self._get_episode_path(episode.session_id)
+        try:
+            episode_json = episode.model_dump_json()
+            async with aiofiles.open(episode_file_path, mode="a", encoding="utf-8") as f:
+                await f.write(episode_json + "\n")
+            logger.debug(f"Episode '{episode.episode_id}' for session '{episode.session_id}' appended to {episode_file_path}")
+        except TypeError as e:
+            logger.error(f"Error serializing episode '{episode.episode_id}' to JSON: {e}")
+            raise StorageError(f"Failed to serialize episode data for '{episode.episode_id}': {e}")
+        except IOError as e:
+            logger.error(f"Error writing episode '{episode.episode_id}' to file {episode_file_path}: {e}")
+            raise StorageError(f"Failed to write episode file for '{episode.episode_id}': {e}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while saving episode '{episode.episode_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error saving episode '{episode.episode_id}': {e}")
+
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+        """
+        Retrieves a list of episodes for a given session, ordered by timestamp.
+        Reads from JSON Lines format and applies pagination.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects.
+
+        Raises:
+            StorageError: If an error occurs during file reading or JSON deserialization.
+        """
+        episode_file_path = self._get_episode_path(session_id)
+        episodes: List[Episode] = []
+
+        try:
+            if not await aios.path.exists(episode_file_path):
+                logger.debug(f"Episode file not found for session '{session_id}' at {episode_file_path}")
+                return []
+
+            async with aiofiles.open(episode_file_path, mode="r", encoding="utf-8") as f:
+                content = await f.read()
+
+            lines = content.strip().split("\n")
+            if not lines or (len(lines) == 1 and not lines[0]):
+                logger.debug(f"No episodes found for session '{session_id}'")
+                return []
+
+            # Parse each JSON line and create Episode objects
+            for line_num, line in enumerate(lines, 1):
+                if not line.strip():
+                    continue
+                try:
+                    episode_data = json.loads(line)
+                    episode = Episode.model_validate(episode_data)
+                    episodes.append(episode)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON on line {line_num} in episode file for session '{session_id}': {e}")
+                except Exception as e:
+                    logger.warning(f"Error parsing episode on line {line_num} for session '{session_id}': {e}")
+
+            # Sort by timestamp (most recent first for consistency with other list methods)
+            episodes.sort(key=lambda ep: ep.timestamp, reverse=True)
+
+            # Apply pagination
+            start_idx = offset
+            end_idx = offset + limit
+            paginated_episodes = episodes[start_idx:end_idx]
+
+            logger.debug(f"Retrieved {len(paginated_episodes)} episodes for session '{session_id}' (offset={offset}, limit={limit})")
+            return paginated_episodes
+
+        except IOError as e:
+            logger.error(f"Error reading episode file '{episode_file_path}' for session '{session_id}': {e}")
+            raise StorageError(f"Failed to read episode file for session '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while loading episodes for session '{session_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error loading episodes for session '{session_id}': {e}")
 
     async def close(self) -> None:
         """
         Clean up resources. For JSON storage, no explicit closing action is typically needed.
         """
-        logger.debug("JSONSessionStorage (including presets) closed (no specific action needed).")
-        pass
+        logger.debug("JSONSessionStorage (including presets and episodes) closed (no specific action needed).")
+        pass(f"Could not create storage directories: {e}")
+
+    def _get_session_path(self, session_id: str) -> pathlib.Path:
+        """Constructs the file path for a given session ID."""
+        return self._storage_dir / f"{session_id}{self._file_extension}"
+
+    def _get_preset_path(self, preset_name: str) -> pathlib.Path:
+        """Constructs the file path for a given context preset name."""
+        # Basic sanitization for filename from preset_name, though Pydantic model should validate 'name'
+        sane_filename = re.sub(r'[^\w\-. ]', '_', preset_name)
+        return self._presets_dir / f"{sane_filename}{self._file_extension}"
+
+    def _get_episode_path(self, session_id: str) -> pathlib.Path:
+        """Constructs the file path for episodes of a given session ID using JSON Lines format."""
+        return self._episodes_dir / f"{session_id}_episodes.jsonl"
+
+    async def save_session(self, session: ChatSession) -> None:
+        """
+        Save or update a chat session to a JSON file asynchronously.
+
+        Args:
+            session: The ChatSession object to save.
+
+        Raises:
+            SessionStorageError: If serialization or file I/O fails.
+        """
+        session_file_path = self._get_session_path(session.id)
+        try:
+            session_json = session.model_dump_json(indent=2)
+            async with aiofiles.open(session_file_path, mode="w", encoding="utf-8") as f:
+                await f.write(session_json)
+            logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to {session_file_path}")
+        except TypeError as e:
+            logger.error(f"Error serializing session '{session.id}' to JSON: {e}")
+            raise SessionStorageError
