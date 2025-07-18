@@ -1,137 +1,87 @@
-# src/llmcore/task_master/worker.py
+# llmcore/src/llmcore/task_master/worker.py
 """
-TaskMaster Worker Configuration and Task Definitions.
+TaskMaster worker configuration and task registration.
 
-This module defines the arq worker configuration and implements sample tasks
-to validate the task queue functionality. This serves as the foundation for
-all future long-running operations in the llmcore ecosystem.
+This module configures the arq worker that processes background tasks
+including data ingestion, agent execution, and other long-running operations.
 """
 
-import asyncio
 import logging
-from typing import Any, Dict
+from arq import create_pool
+from arq.connections import RedisSettings
+from arq.worker import Worker
+
+from llmcore.api import LLMCore
+from .tasks.ingestion import ingest_data_task
 
 logger = logging.getLogger(__name__)
 
 
-async def sample_task(ctx: Dict[str, Any], x: int, y: int) -> int:
+async def startup(ctx):
     """
-    A simple asynchronous task for testing the arq worker.
+    Worker startup function that initializes shared resources.
 
-    This task demonstrates the basic functionality of the TaskMaster service
-    by performing a simple calculation with a simulated delay to represent
-    I/O-bound work.
-
-    Args:
-        ctx: The arq context dictionary (contains job info, Redis connection, etc.)
-        x: First integer operand
-        y: Second integer operand
-
-    Returns:
-        The sum of x and y
-
-    Example:
-        This task would typically be enqueued from the API server:
-        ```python
-        await redis_pool.enqueue_job('sample_task', 5, 10)
-        ```
+    Creates a shared LLMCore instance that will be available to all tasks
+    in this worker process through the context.
     """
-    logger.info(f"Executing sample_task with arguments: x={x}, y={y}")
-
-    # Simulate I/O-bound work (e.g., network request, file operation, etc.)
-    await asyncio.sleep(2)
-
-    result = x + y
-    logger.info(f"sample_task completed with result: {result}")
-
-    return result
+    logger.info("TaskMaster worker is starting up.")
+    # Create a shared LLMCore instance for all tasks in this worker
+    ctx['llmcore_instance'] = await LLMCore.create()
+    logger.info("LLMCore instance created and stored in worker context.")
 
 
-async def startup(ctx: Dict[str, Any]) -> None:
+async def shutdown(ctx):
     """
-    Worker startup function.
-
-    This function is called when the arq worker process starts up.
-    It can be used to initialize shared resources, database connections,
-    or in future iterations, a shared LLMCore instance for the worker process.
-
-    Args:
-        ctx: The arq context dictionary
+    Worker shutdown function that cleans up shared resources.
     """
-    logger.info("TaskMaster worker is starting up...")
-
-    # Future enhancement: Initialize shared LLMCore instance
-    # ctx['llmcore_instance'] = await LLMCore.create()
-
-    logger.info("TaskMaster worker startup complete.")
+    logger.info("TaskMaster worker is shutting down.")
+    if 'llmcore_instance' in ctx:
+        await ctx['llmcore_instance'].close()
+        logger.info("LLMCore instance closed.")
 
 
-async def shutdown(ctx: Dict[str, Any]) -> None:
-    """
-    Worker shutdown function.
-
-    This function is called when the arq worker process is shutting down.
-    It should be used to clean up resources, close connections, and ensure
-    a graceful shutdown of any long-running operations.
-
-    Args:
-        ctx: The arq context dictionary
-    """
-    logger.info("TaskMaster worker is shutting down...")
-
-    # Future enhancement: Clean up shared LLMCore instance
-    # if 'llmcore_instance' in ctx:
-    #     await ctx['llmcore_instance'].close()
-
-    logger.info("TaskMaster worker shutdown complete.")
+async def sample_task(ctx, x, y):
+    """Sample task for testing the task queue functionality."""
+    logger.info(f"Sample task called with x={x}, y={y}")
+    return x + y
 
 
 class WorkerSettings:
     """
-    Configuration class for the arq worker.
-
-    This class defines the tasks, startup/shutdown hooks, and Redis connection
-    settings for the TaskMaster worker. The Redis connection settings are
-    automatically picked up by arq from the REDIS_URL environment variable
-    or default to localhost:6379.
-
-    Attributes:
-        functions: List of task functions available to the worker
-        on_startup: Function to call when the worker starts
-        on_shutdown: Function to call when the worker shuts down
-        redis_settings: Redis connection configuration (auto-detected)
-
-    Environment Variables:
-        REDIS_URL: Redis connection URL (optional, defaults to redis://localhost:6379)
-
-    Example Usage:
-        To start the worker:
-        ```bash
-        python -m llmcore.task_master.main
-        ```
-
-        Or programmatically:
-        ```python
-        from arq import run_worker
-        from llmcore.task_master.worker import WorkerSettings
-
-        await run_worker(WorkerSettings)
-        ```
+    Configuration settings for the arq worker.
     """
+    # Redis connection settings
+    redis_settings = RedisSettings(host='localhost', port=6379, database=0)
 
-    # List of task functions that the worker can execute
-    functions = [sample_task]
+    # Task functions to register with the worker
+    functions = [
+        sample_task,
+        ingest_data_task,
+    ]
 
-    # Lifecycle hooks
+    # Worker lifecycle functions
     on_startup = startup
     on_shutdown = shutdown
 
-    # Redis connection settings will be automatically picked up by arq
-    # from the REDIS_URL environment variable or default to localhost:6379
-    #
-    # For custom Redis settings, you can uncomment and modify:
-    # redis_settings = {
-    #     'host': 'localhost',
-    #     'port': 6379,
-    #     'database': 0,
-    # }
+    # Worker configuration
+    max_jobs = 10
+    job_timeout = 3600  # 1 hour timeout for long-running tasks
+    keep_result = 3600  # Keep results for 1 hour
+
+    # Logging
+    log_results = True
+
+
+if __name__ == "__main__":
+    """
+    Entry point for running the worker directly.
+    This allows the worker to be started with: python -m llmcore.task_master.worker
+    """
+    import asyncio
+
+    async def main():
+        logger.info("Starting TaskMaster worker...")
+        worker = Worker(WorkerSettings)
+        await worker.async_run()
+
+    asyncio.run(main())

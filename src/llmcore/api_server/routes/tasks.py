@@ -6,14 +6,16 @@ This module contains the implementation of the task management endpoints
 that provide API access to the asynchronous TaskMaster service functionality.
 """
 
+import asyncio
+import json
 import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 try:
-    from arq.jobs import Job
+    from arq.jobs import Job, JobStatus
     from arq.connections import ArqRedis
 except ImportError as e:
     raise ImportError(
@@ -34,7 +36,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/tasks/submit",
+    "/submit",
     response_model=TaskSubmissionResponse,
     status_code=status.HTTP_202_ACCEPTED
 )
@@ -111,7 +113,7 @@ async def submit_task(request: TaskSubmissionRequest) -> TaskSubmissionResponse:
             )
 
 
-@router.get("/tasks/{task_id}", response_model=TaskStatusResponse)
+@router.get("/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str) -> TaskStatusResponse:
     """
     Get the current status of an asynchronous task.
@@ -180,7 +182,7 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
             )
 
 
-@router.get("/tasks/{task_id}/result")
+@router.get("/{task_id}/result")
 async def get_task_result(task_id: str) -> JSONResponse:
     """
     Get the final result of a completed asynchronous task.
@@ -270,3 +272,113 @@ async def get_task_result(task_id: str) -> JSONResponse:
                 status_code=500,
                 detail="An internal error occurred while retrieving task result."
             )
+
+
+@router.get("/{task_id}/stream")
+async def stream_task_progress(task_id: str):
+    """
+    Stream real-time progress updates for a long-running task using Server-Sent Events.
+
+    This endpoint provides a continuous stream of progress updates for tasks that
+    support progress reporting. It's particularly useful for ingestion tasks and
+    other long-running operations.
+
+    Args:
+        task_id: The unique identifier of the task to stream
+
+    Returns:
+        StreamingResponse: Server-Sent Events stream with progress updates
+
+    Raises:
+        HTTPException:
+            - 404 if the task is not found
+            - 503 if the task queue is not available
+            - 500 for internal server errors
+    """
+    # Check if Redis is available
+    if not is_redis_available():
+        logger.error("Attempted to stream task progress but Redis pool is not available")
+        raise HTTPException(
+            status_code=503,
+            detail="Task queue service is not available."
+        )
+
+    async def event_stream():
+        """Generate Server-Sent Events for task progress."""
+        try:
+            redis: ArqRedis = get_redis_pool()
+            job = Job(task_id, redis)
+
+            # Check if task exists
+            info = await job.info()
+            if not info:
+                yield f"data: {json.dumps({'type': 'error', 'error': 'Task not found'})}\n\n"
+                return
+
+            # Initial status event
+            yield f"data: {json.dumps({'type': 'status', 'status': info.status.value, 'task_id': task_id})}\n\n"
+
+            # Monitor task until completion
+            last_status = info.status.value
+            poll_count = 0
+            max_polls = 360  # 30 minutes with 5-second intervals
+
+            while poll_count < max_polls:
+                await asyncio.sleep(5)  # Poll every 5 seconds
+                poll_count += 1
+
+                try:
+                    # Get updated job info
+                    info = await job.info()
+                    if not info:
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Task disappeared'})}\n\n"
+                        break
+
+                    current_status = info.status.value
+
+                    # Send status update if changed
+                    if current_status != last_status:
+                        yield f"data: {json.dumps({'type': 'status_change', 'status': current_status, 'previous_status': last_status})}\n\n"
+                        last_status = current_status
+
+                    # Send periodic heartbeat
+                    if poll_count % 6 == 0:  # Every 30 seconds
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'status': current_status, 'poll_count': poll_count})}\n\n"
+
+                    # Check if task is complete
+                    if current_status in ['complete', 'failed']:
+                        if current_status == 'complete':
+                            # Send final result
+                            yield f"data: {json.dumps({'type': 'complete', 'result': info.result})}\n\n"
+                        else:
+                            # Send failure notification
+                            yield f"data: {json.dumps({'type': 'failed', 'error': str(info.result)})}\n\n"
+
+                        yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                        break
+
+                except Exception as poll_error:
+                    logger.error(f"Error polling task {task_id} during stream: {poll_error}")
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Polling error occurred'})}\n\n"
+                    break
+
+            else:
+                # Max polls reached - timeout
+                yield f"data: {json.dumps({'type': 'timeout', 'message': 'Maximum polling time reached'})}\n\n"
+                yield f"data: {json.dumps({'type': 'end'})}\n\n"
+
+        except Exception as stream_error:
+            logger.error(f"Error in task stream for {task_id}: {stream_error}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Stream error occurred'})}\n\n"
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )

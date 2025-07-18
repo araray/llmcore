@@ -7,5 +7,9 @@ within the llmcore ecosystem using the arq (async-redis-queue) library.
 """
 
 from .worker import WorkerSettings
+from .tasks.ingestion import ingest_data_task
 
-__all__ = ["WorkerSettings"]
+__all__ = [
+    "WorkerSettings",
+    "ingest_data_task"
+]

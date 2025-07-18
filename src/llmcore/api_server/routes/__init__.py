@@ -1,14 +1,21 @@
-# src/llmcore/api_server/routes/__init__.py
+# llmcore/src/llmcore/api_server/routes/__init__.py
 """
-API route modules for the llmcore API server.
+API routes package initialization.
 
-This module exports the routers from individual route modules for easy
-inclusion in the main FastAPI application.
+This module exports all the API routers for easy import and registration
+with the main FastAPI application.
 """
 
 from .chat import router as chat_router
 from .core import router as core_router
 from .memory import router as memory_router
 from .tasks import router as tasks_router
+from .ingestion import router as ingestion_router
 
-__all__ = ["chat_router", "core_router", "memory_router", "tasks_router"]
+__all__ = [
+    "chat_router",
+    "core_router",
+    "memory_router",
+    "tasks_router",
+    "ingestion_router"
+]
