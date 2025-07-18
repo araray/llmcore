@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, memory_router
+from .routes import chat_router, core_router, memory_router, tasks_router
+from .services.redis_client import initialize_redis_pool, close_redis_pool
 
 # Configure logging
 logging.basicConfig(
@@ -30,10 +31,10 @@ async def lifespan(app: FastAPI):
     """
     Manages the lifecycle of the FastAPI application.
 
-    Handles startup (LLMCore initialization) and shutdown (graceful cleanup)
-    of the application resources.
+    Handles startup (LLMCore initialization and Redis pool setup) and shutdown
+    (graceful cleanup) of the application resources.
     """
-    # Startup: Initialize LLMCore and store it in the app's state
+    # Startup: Initialize LLMCore and Redis pool
     logger.info("API Server starting up...")
 
     try:
@@ -56,10 +57,21 @@ async def lifespan(app: FastAPI):
         app.state.llmcore_instance = None
         logger.warning("API server will start but LLMCore service will be unavailable")
 
+    # Initialize Redis pool for task queue
+    try:
+        logger.info("Initializing Redis pool for task queue...")
+        await initialize_redis_pool()
+        logger.info("Redis pool successfully initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis pool: {e}", exc_info=True)
+        logger.warning("API server will start but task queue will be unavailable")
+
     yield  # The application runs while in this yield block
 
-    # Shutdown: Cleanly close the LLMCore instance
+    # Shutdown: Cleanly close the LLMCore instance and Redis pool
     logger.info("API Server shutting down...")
+
+    # Close LLMCore instance
     if hasattr(app.state, 'llmcore_instance') and app.state.llmcore_instance:
         try:
             await app.state.llmcore_instance.close()
@@ -68,6 +80,13 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error during LLMCore cleanup: {e}", exc_info=True)
     else:
         logger.info("No LLMCore instance to clean up")
+
+    # Close Redis pool
+    try:
+        await close_redis_pool()
+        logger.info("Redis pool successfully closed")
+    except Exception as e:
+        logger.error(f"Error during Redis pool cleanup: {e}", exc_info=True)
 
 
 # Create the FastAPI application
@@ -94,6 +113,9 @@ app.include_router(chat_router, prefix="/api/v1", tags=["chat_v1"])
 # Add the new v2 router for memory operations
 app.include_router(memory_router, prefix="/api/v2", tags=["memory_v2"])
 
+# Add the new v2 router for task management
+app.include_router(tasks_router, prefix="/api/v2", tags=["tasks_v2"])
+
 
 @app.get("/")
 async def root() -> Dict[str, str]:
@@ -117,14 +139,24 @@ async def health_check() -> Dict[str, Any]:
     if llmcore_instance:
         # Basic health check - could be expanded to test actual functionality
         available_providers = llmcore_instance.get_available_providers()
+
+        # Check Redis availability for task queue
+        from .services.redis_client import is_redis_available
+        redis_available = is_redis_available()
+
         return {
             "status": "healthy",
             "llmcore_available": True,
-            "providers": available_providers
+            "providers": available_providers,
+            "task_queue_available": redis_available
         }
     else:
+        from .services.redis_client import is_redis_available
+        redis_available = is_redis_available()
+
         return {
             "status": "degraded",
             "llmcore_available": False,
-            "providers": []
+            "providers": [],
+            "task_queue_available": redis_available
         }

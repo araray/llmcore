@@ -12,6 +12,14 @@ from .core import ChatRequest, ChatResponse, ErrorResponse
 # Import memory-related models
 from .memory import SemanticSearchRequest
 
+# Import task-related models
+from .tasks import (
+    TaskSubmissionRequest,
+    TaskSubmissionResponse,
+    TaskStatusResponse,
+    TaskResultResponse
+)
+
 __all__ = [
     # Core models
     "ChatRequest",
@@ -19,4 +27,9 @@ __all__ = [
     "ErrorResponse",
     # Memory models
     "SemanticSearchRequest",
+    # Task models
+    "TaskSubmissionRequest",
+    "TaskSubmissionResponse",
+    "TaskStatusResponse",
+    "TaskResultResponse",
 ]
