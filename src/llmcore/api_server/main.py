@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router
+from .routes import chat_router, core_router, memory_router
 
 # Configure logging
 logging.basicConfig(
@@ -88,8 +88,11 @@ app.add_middleware(
 )
 
 # Include routers under the v1 API prefix
-app.include_router(core_router, prefix="/api/v1", tags=["core"])
-app.include_router(chat_router, prefix="/api/v1", tags=["chat"])
+app.include_router(core_router, prefix="/api/v1", tags=["core_v1"])
+app.include_router(chat_router, prefix="/api/v1", tags=["chat_v1"])
+
+# Add the new v2 router for memory operations
+app.include_router(memory_router, prefix="/api/v2", tags=["memory_v2"])
 
 
 @app.get("/")
