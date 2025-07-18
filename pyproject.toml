@@ -30,6 +30,8 @@ dependencies = [
     "deepdiff>=8.5.0",
     "fastapi>=0.116.0",
     "uvicorn[standard]>=0.35.0",
+    "arq>=0.25.0",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
