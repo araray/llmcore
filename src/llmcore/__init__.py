@@ -19,6 +19,8 @@ from .models import (
     ContextPresetItem,
     Episode,           # Added Episode
     EpisodeType,       # Added EpisodeType
+    AgentState,        # Added AgentState
+    AgentTask,         # Added AgentTask
     ModelDetails,
     Tool,
     ToolCall,
@@ -61,6 +63,8 @@ __all__ = [
     "ContextPresetItem",
     "Episode",           # Added Episode
     "EpisodeType",       # Added EpisodeType
+    "AgentState",        # Added AgentState
+    "AgentTask",         # Added AgentTask
     "ModelDetails",
     "Tool",
     "ToolCall",
