@@ -40,6 +40,7 @@ from .exceptions import (
     EmbeddingError
 )
 from .storage import StorageManager
+from .agents import AgentManager, ToolManager  # Added new agent components
 
 # Version information
 try:
@@ -85,6 +86,10 @@ __all__ = [
 
     # Storage
     "StorageManager",
+
+    # Agents
+    "AgentManager",      # Added AgentManager
+    "ToolManager",       # Added ToolManager
 
     # Version
     "__version__",
