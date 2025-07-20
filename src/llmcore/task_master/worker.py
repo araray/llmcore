@@ -13,6 +13,7 @@ from arq.worker import Worker
 
 from llmcore.api import LLMCore
 from .tasks.ingestion import ingest_data_task
+from .tasks.agent import run_agent_task  # Add this import
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class WorkerSettings:
     functions = [
         sample_task,
         ingest_data_task,
+        run_agent_task,  # Add the new agent task
     ]
 
     # Worker lifecycle functions

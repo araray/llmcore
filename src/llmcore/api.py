@@ -27,6 +27,7 @@ from ..providers.base import BaseProvider
 from ..providers.manager import ProviderManager
 from ..sessions.manager import SessionManager
 from ..storage.manager import StorageManager
+from ..agents.manager import AgentManager  # Add this import
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -57,6 +58,7 @@ class LLMCore:
     _session_manager: SessionManager
     _memory_manager: MemoryManager
     _embedding_manager: EmbeddingManager
+    _agent_manager: AgentManager  # Add this attribute
     _transient_sessions_cache: Dict[str, ChatSession]
     _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
     _log_raw_payloads_enabled: bool
@@ -136,7 +138,22 @@ class LLMCore:
             storage_manager=self._storage_manager,
             embedding_manager=self._embedding_manager
         )
+        # Initialize the AgentManager
+        self._agent_manager = AgentManager(
+            self._provider_manager,
+            self._memory_manager,
+            self._storage_manager
+        )
         logger.info("LLMCore components initialization complete.")
+
+    def get_agent_manager(self) -> AgentManager:
+        """
+        Returns the initialized AgentManager instance.
+
+        Returns:
+            AgentManager: The agent manager for orchestrating autonomous agent tasks
+        """
+        return self._agent_manager
 
     async def reload_config(self) -> None:
         """

@@ -10,6 +10,7 @@ from .core import *
 from .memory import *
 from .tasks import *
 from .ingestion import *
+from .agents import *  # Add agents models export
 
 __all__ = [
     # Core models
@@ -32,5 +33,8 @@ __all__ = [
     "GitIngestionRequest",
     "IngestionSubmitRequest",
     "IngestionSubmitResponse",
-    "IngestionResult"
+    "IngestionResult",
+
+    # Agent models
+    "AgentRunRequest",  # Add agent model exports
 ]

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router
+from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router  # Add agents_router import
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 
 # Configure logging
@@ -118,6 +118,9 @@ app.include_router(tasks_router, prefix="/api/v2", tags=["tasks_v2"])
 
 # Add the new v2 router for ingestion operations
 app.include_router(ingestion_router, prefix="/api/v2/ingestion", tags=["ingestion_v2"])
+
+# Add the new v2 router for agent operations
+app.include_router(agents_router, prefix="/api/v2", tags=["agents_v2"])  # Add agents router
 
 
 @app.get("/")
