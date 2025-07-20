@@ -15,19 +15,19 @@ from typing import (Any, AsyncGenerator, Dict, List, Optional, Tuple, Type,
 
 import aiofiles
 
-from ..memory.manager import MemoryManager
-from ..embedding.manager import EmbeddingManager
-from ..exceptions import (ConfigError, ContextLengthError, EmbeddingError,
+from .memory.manager import MemoryManager
+from .embedding.manager import EmbeddingManager
+from .exceptions import (ConfigError, ContextLengthError, EmbeddingError,
                          LLMCoreError, ProviderError, SessionNotFoundError,
                          SessionStorageError, StorageError, VectorStorageError, ValueError)
-from ..models import (ChatSession, ContextDocument, ContextItem,
+from .models import (ChatSession, ContextDocument, ContextItem,
                      ContextItemType, Message, Role, ContextPreparationDetails,
                      ContextPreset, ContextPresetItem, ModelDetails, Tool, ToolCall, ToolResult)
-from ..providers.base import BaseProvider
-from ..providers.manager import ProviderManager
-from ..sessions.manager import SessionManager
-from ..storage.manager import StorageManager
-from ..agents.manager import AgentManager  # Add this import
+from .providers.base import BaseProvider
+from .providers.manager import ProviderManager
+from .sessions.manager import SessionManager
+from .storage.manager import StorageManager
+from .agents.manager import AgentManager  # Add this import
 
 try:
     from confy.loader import Config as ConfyConfig
