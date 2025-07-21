@@ -7,6 +7,8 @@ managing conversation sessions, implementing Retrieval Augmented Generation (RAG
 and now supporting hierarchical memory including episodic memory for agent experiences.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .api import LLMCore
 from .models import (
     ChatSession,
@@ -42,12 +44,12 @@ from .exceptions import (
 from .storage import StorageManager
 from .agents import AgentManager, ToolManager  # Added new agent components
 
-# Version information
 try:
-    from .get_version import get_version
-    __version__ = get_version()
-except ImportError:
-    __version__ = "unknown"
+    __version__ = version("llmchat-web")
+except PackageNotFoundError:
+    from .get_version import _get_version_from_pyproject
+    __version__ = _get_version_from_pyproject()
+
 
 __all__ = [
     # Core API
