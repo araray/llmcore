@@ -60,7 +60,7 @@ except ImportError:
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError, VectorStorageError
 from ..models import (ChatSession, ContextDocument, ContextItem,
-                      ContextItemType, Message, Role, ContextPreset, ContextPresetItem)
+                      ContextItemType, Message, Role, ContextPreset, ContextPresetItem, Episode, EpisodeType)
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
 
@@ -72,6 +72,7 @@ DEFAULT_MESSAGES_TABLE = "llmcore_messages"
 DEFAULT_SESSION_CONTEXT_ITEMS_TABLE = "llmcore_session_context_items"
 DEFAULT_CONTEXT_PRESETS_TABLE = "llmcore_context_presets"
 DEFAULT_CONTEXT_PRESET_ITEMS_TABLE = "llmcore_context_preset_items"
+DEFAULT_EPISODES_TABLE = "llmcore_episodes" # New table for episodes
 DEFAULT_VECTORS_TABLE = "llmcore_vectors"
 DEFAULT_COLLECTIONS_TABLE = "llmcore_vector_collections"
 
@@ -79,7 +80,8 @@ class PostgresSessionStorage(BaseSessionStorage):
     """
     Manages persistence of ChatSession and ContextPreset objects in a PostgreSQL database
     using asynchronous connections via psycopg and connection pooling.
-    Includes storage for messages, session_context_items, context_presets, and context_preset_items.
+    Includes storage for messages, session_context_items, context_presets, context_preset_items,
+    and episodes.
     """
     _pool: Optional["AsyncConnectionPool"] = None
     _sessions_table: str
@@ -87,19 +89,21 @@ class PostgresSessionStorage(BaseSessionStorage):
     _session_context_items_table: str # Renamed from _context_items_table
     _context_presets_table: str
     _context_preset_items_table: str
+    _episodes_table: str # New table for episodes
 
 
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
         Initialize the PostgreSQL session storage asynchronously.
         Sets up connection pool and ensures tables for sessions, messages, session_context_items,
-        context_presets, and context_preset_items exist.
+        context_presets, context_preset_items, and episodes exist.
 
         Args:
             config: Configuration dictionary. Expected keys:
                     'db_url', 'sessions_table_name' (opt), 'messages_table_name' (opt),
                     'session_context_items_table_name' (opt),
                     'context_presets_table_name' (opt), 'context_preset_items_table_name' (opt),
+                    'episodes_table_name' (opt),
                     'min_pool_size' (opt), 'max_pool_size' (opt).
         Raises:
             ConfigError, SessionStorageError.
@@ -116,6 +120,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         self._session_context_items_table = config.get("session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE)
         self._context_presets_table = config.get("context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE)
         self._context_preset_items_table = config.get("context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE)
+        self._episodes_table = config.get("episodes_table_name", DEFAULT_EPISODES_TABLE)
         min_pool_size = config.get("min_pool_size", 2)
         max_pool_size = config.get("max_pool_size", 10)
 
@@ -166,7 +171,18 @@ class PostgresSessionStorage(BaseSessionStorage):
                         )""")
                     await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{self._context_preset_items_table}_preset_name ON {self._context_preset_items_table} (preset_name);")
 
-            logger.info(f"PostgreSQL storage initialized. Tables: '{self._sessions_table}', '{self._messages_table}', '{self._session_context_items_table}', '{self._context_presets_table}', '{self._context_preset_items_table}'.")
+                    # Episodes table
+                    await conn.execute(f"""
+                        CREATE TABLE IF NOT EXISTS {self._episodes_table} (
+                            episode_id TEXT PRIMARY KEY,
+                            session_id TEXT NOT NULL REFERENCES {self._sessions_table}(id) ON DELETE CASCADE,
+                            timestamp TIMESTAMPTZ NOT NULL,
+                            event_type TEXT NOT NULL,
+                            data JSONB NOT NULL
+                        )""")
+                    await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{self._episodes_table}_session_timestamp ON {self._episodes_table} (session_id, timestamp DESC);")
+
+            logger.info(f"PostgreSQL storage initialized. Tables: '{self._sessions_table}', '{self._messages_table}', '{self._session_context_items_table}', '{self._context_presets_table}', '{self._context_preset_items_table}', '{self._episodes_table}'.")
         except psycopg.Error as e: # type: ignore
             logger.error(f"Failed to initialize PostgreSQL storage: {e}", exc_info=True)
             if self._pool: await self._pool.close()
@@ -298,7 +314,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise SessionStorageError(f"Unexpected error listing sessions: {e}")
 
     async def delete_session(self, session_id: str) -> bool:
-        """Deletes a session and its associated messages/session_context_items from PostgreSQL."""
+        """Deletes a session and its associated messages/session_context_items/episodes from PostgreSQL."""
         if not self._pool: raise SessionStorageError("PostgreSQL connection pool not initialized.")
         logger.debug(f"Deleting session '{session_id}' from PostgreSQL...")
         try:
@@ -503,21 +519,10 @@ class PostgresSessionStorage(BaseSessionStorage):
                         if await cur.fetchone():
                             logger.warning(f"Cannot rename preset: new name '{new_name}' already exists."); return False
 
-                    # PostgreSQL allows direct update of PK if FKs use ON UPDATE CASCADE.
-                    # Assuming ON UPDATE CASCADE is set for preset_name in context_preset_items table.
-                    # If not, a more complex read-delete-insert approach (like for SQLite) would be needed.
-                    # For simplicity here, we assume direct update is possible or ON UPDATE CASCADE handles it.
-                    # A safer approach if ON UPDATE CASCADE is not guaranteed on FKs:
-                    # 1. Read old_preset.
-                    # 2. Create new_preset_object with new_name, copy items.
-                    # 3. Call self.save_context_preset(new_preset_object).
-                    # 4. Call self.delete_context_preset(old_name).
-                    # This is what was done for SQLite. Let's keep it consistent for PostgreSQL too for safety.
-
+                    # Use read-delete-insert approach for safety
                     old_preset_obj = await self.get_context_preset(old_name) # Uses its own connection
                     if not old_preset_obj: # Should have been caught above, but defensive
                          logger.error(f"Rename failed: old preset '{old_name}' disappeared before full transaction.")
-                         # No rollback needed here as transaction is outer to this get call
                          return False
 
                     renamed_preset_obj = ContextPreset(
@@ -529,20 +534,12 @@ class PostgresSessionStorage(BaseSessionStorage):
                         metadata=old_preset_obj.metadata
                     )
 
-                    # These will run in their own transactions if called directly,
-                    # or participate if already in a transaction (which we are).
+                    # Save new preset and delete old one within transaction
                     await self.save_context_preset(renamed_preset_obj) # Saves new preset and its items
                     delete_success = await self.delete_context_preset(old_name) # Deletes old preset and its items
 
                     if not delete_success:
-                        # This implies old_name was not found by delete_context_preset, which is odd if get_context_preset found it.
-                        # The transaction should ideally handle rollback if save_context_preset succeeded but delete failed.
-                        # However, save_context_preset and delete_context_preset manage their own transactions.
-                        # For true atomicity, they'd need to accept an existing connection/cursor.
-                        # For now, this is a "best effort" rename.
-                        logger.error(f"Rename partially failed: new preset '{new_name}' saved, but old preset '{old_name}' could not be deleted (or was already gone).")
-                        # Manually attempt rollback if possible, though nested transactions are tricky.
-                        # The outer transaction here will handle it.
+                        logger.error(f"Rename partially failed: new preset '{new_name}' saved, but old preset '{old_name}' could not be deleted.")
                         raise StorageError(f"Partial rename: '{new_name}' created, but '{old_name}' deletion failed.")
 
             logger.info(f"Context preset '{old_name}' successfully renamed to '{new_name}' in PostgreSQL.")
@@ -556,6 +553,85 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.error(f"Unexpected error renaming context preset '{old_name}' to '{new_name}': {e}", exc_info=True)
             raise StorageError(f"Unexpected error renaming context preset: {e}")
 
+    # --- New methods for Episodic Memory Management ---
+
+    async def add_episode(self, episode: Episode) -> None:
+        """
+        Adds a new episode to the episodic memory log for a session.
+
+        Args:
+            episode: The Episode object to add.
+
+        Raises:
+            StorageError: If an error occurs during database insertion.
+        """
+        if not self._pool: raise StorageError("PostgreSQL connection pool not initialized for episodes.")
+        if not Jsonb: raise StorageError("psycopg Jsonb adapter not available for episodes.")
+
+        logger.debug(f"Saving episode '{episode.episode_id}' for session '{episode.session_id}' to PostgreSQL...")
+        try:
+            async with self._pool.connection() as conn: # type: ignore
+                async with conn.transaction(): # type: ignore
+                    await conn.execute(f"""
+                        INSERT INTO {self._episodes_table} (episode_id, session_id, timestamp, event_type, data)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (episode.episode_id, episode.session_id, episode.timestamp, str(episode.event_type), Jsonb(episode.data)))
+            logger.debug(f"Episode '{episode.episode_id}' for session '{episode.session_id}' saved to PostgreSQL.")
+        except psycopg.Error as e: # type: ignore
+            logger.error(f"PostgreSQL error saving episode '{episode.episode_id}': {e}", exc_info=True)
+            raise StorageError(f"Database error saving episode '{episode.episode_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error saving episode '{episode.episode_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error saving episode '{episode.episode_id}': {e}")
+
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+        """
+        Retrieves a list of episodes for a given session, ordered by timestamp.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects.
+
+        Raises:
+            StorageError: If an error occurs during database query or data validation.
+        """
+        if not self._pool: raise StorageError("PostgreSQL connection pool not initialized for episodes.")
+        if not dict_row: raise StorageError("psycopg dict_row factory not available for episodes.")
+
+        episodes: List[Episode] = []
+        logger.debug(f"Retrieving episodes for session '{session_id}' from PostgreSQL (offset={offset}, limit={limit})...")
+        try:
+            async with self._pool.connection() as conn: # type: ignore
+                conn.row_factory = dict_row # type: ignore
+                async with conn.cursor() as cur: # type: ignore
+                    await cur.execute(f"""
+                        SELECT * FROM {self._episodes_table}
+                        WHERE session_id = %s
+                        ORDER BY timestamp DESC
+                        LIMIT %s OFFSET %s
+                    """, (session_id, limit, offset))
+                    async for episode_row_data in cur:
+                        episode_dict = dict(episode_row_data)
+                        try:
+                            episode_dict["data"] = episode_dict.get("data") or {}
+                            episode_dict["event_type"] = EpisodeType(episode_dict["event_type"])
+                            episode_dict["timestamp"] = episode_dict["timestamp"].replace(tzinfo=timezone.utc) if episode_dict.get("timestamp") else datetime.now(timezone.utc)
+                            episodes.append(Episode.model_validate(episode_dict))
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Skipping invalid episode data for session {session_id}, episode_id {episode_dict.get('episode_id')}: {e}")
+
+            logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' (offset={offset}, limit={limit})")
+            return episodes
+        except psycopg.Error as e: # type: ignore
+            logger.error(f"PostgreSQL error retrieving episodes for session '{session_id}': {e}", exc_info=True)
+            raise StorageError(f"Database error retrieving episodes for session '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error retrieving episodes for session '{session_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error retrieving episodes for session '{session_id}': {e}")
 
     async def close(self) -> None:
         """Closes the PostgreSQL connection pool for session storage."""

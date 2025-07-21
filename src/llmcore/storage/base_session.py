@@ -10,8 +10,8 @@ methods for managing Context Presets and updating session names.
 import abc
 from typing import Any, Dict, List, Optional
 
-# Import ChatSession and ContextPreset for type hinting
-from ..models import ChatSession, ContextPreset
+# Import ChatSession, ContextPreset, and Episode for type hinting
+from ..models import ChatSession, ContextPreset, Episode
 
 
 class BaseSessionStorage(abc.ABC):
@@ -179,6 +179,33 @@ class BaseSessionStorage(abc.ABC):
         Raises:
             ValueError: If new_name is invalid (e.g., contains forbidden characters).
             StorageError: For other storage-related issues during rename.
+        """
+        pass
+
+    # --- New methods for Episodic Memory Management ---
+
+    @abc.abstractmethod
+    async def add_episode(self, episode: Episode) -> None:
+        """
+        Adds a new episode to the episodic memory log for a session.
+
+        Args:
+            episode: The Episode object to add.
+        """
+        pass
+
+    @abc.abstractmethod
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+        """
+        Retrieves a list of episodes for a given session, ordered by timestamp.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects.
         """
         pass
 

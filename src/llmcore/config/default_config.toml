@@ -229,7 +229,7 @@ log_raw_payloads = false
   # Maximum character length for any single user-added context item (text, file, pinned RAG).
   # Items exceeding this will be truncated by the ContextManager unless 'ignore_char_limit' is set on the item.
   # Approximately 10,000 tokens (1 token ~ 4 chars).
-  max_chars_per_user_item = 40000 #
+  max_chars_per_user_item = 40000000 #
 
   # Default prompt template string for RAG. Used if prompt_template_path is not set or file not found.
   # This template will be formatted with {context} (RAG documents) and {question} (user's query) placeholders.

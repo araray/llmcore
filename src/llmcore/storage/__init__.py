@@ -1,16 +1,31 @@
-# src/llmcore/sessions/__init__.py
+# src/llmcore/storage/__init__.py
 """
-Session management module for the LLMCore library.
+Storage management module for the LLMCore library.
 
-This package handles the lifecycle and content of chat sessions,
-including conversation history. It interacts with storage backends
-for persistence.
+This package handles the persistence and retrieval of chat sessions,
+context presets, episodic memory, and vector embeddings for RAG.
+It provides both session storage (for conversations and episodes) and
+vector storage (for semantic memory) backends.
 """
 
-# This file intentionally left largely blank.
-# Its presence makes 'llmcore.sessions' a Python package.
-# The SessionManager class will be a key component of this package.
+# Import key storage components for easier access
+from .manager import StorageManager
+from .base_session import BaseSessionStorage
+from .base_vector import BaseVectorStorage
 
-# Example:
-# from .manager import SessionManager
-# __all__ = ["SessionManager"]
+# Import concrete implementations
+from .json_session import JsonSessionStorage
+from .sqlite_session import SqliteSessionStorage
+from .postgres_storage import PostgresSessionStorage, PgVectorStorage
+from .chromadb_vector import ChromaVectorStorage
+
+__all__ = [
+    "StorageManager",
+    "BaseSessionStorage",
+    "BaseVectorStorage",
+    "JsonSessionStorage",
+    "SqliteSessionStorage",
+    "PostgresSessionStorage",
+    "PgVectorStorage",
+    "ChromaVectorStorage",
+]

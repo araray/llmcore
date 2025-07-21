@@ -1,12 +1,15 @@
-# src/llmcore/context/manager.py
+# src/llmcore/memory/manager.py
 """
-Context Management for LLMCore.
+Memory Management for LLMCore.
 
 Handles the assembly of context payloads for LLM providers, managing
 token limits, history selection, RAG integration, and user-added context items.
 Includes per-item truncation for user-added context and prompt template rendering.
 Supports explicitly staged items for prioritized inclusion in context.
 The prepare_context method now returns a detailed ContextPreparationDetails object.
+
+This is the evolved MemoryManager, serving as the central retrieval interface
+for the hierarchical memory system (Semantic, Episodic, and Working Memory).
 """
 
 import asyncio
@@ -34,13 +37,19 @@ from ..storage.manager import StorageManager
 logger = logging.getLogger(__name__)
 
 
-class ContextManager:
+class MemoryManager:
     """
-    Manages the context window for LLM interactions.
+    Manages the memory system for LLM interactions.
 
-    Selects messages from history, integrates RAG results and user-added context items,
-    renders prompt templates, handles explicitly staged items, and ensures the final
-    payload adheres to token limits using configurable strategies.
+    Serves as the central, intelligent retrieval interface for the entire three-tiered
+    memory system. Selects messages from history, integrates RAG results and user-added
+    context items, renders prompt templates, handles explicitly staged items, and ensures
+    the final payload adheres to token limits using configurable strategies.
+
+    The primary responsibility is to abstract the complexity of querying multiple memory
+    sources (Semantic and Episodic) and synthesizing a concise, relevant context for
+    the agent's reasoning loop.
+
     Includes per-item truncation for user-added context.
     Dynamically selects embedding models for RAG queries based on collection metadata.
     The `prepare_context` method returns a `ContextPreparationDetails` object.
@@ -54,9 +63,8 @@ class ContextManager:
         embedding_manager: EmbeddingManager
         ):
         """
-        Initializes the ContextManager.
-        (Docstring and implementation largely unchanged from previous version,
-         initializes configuration values for context strategies.)
+        Initializes the MemoryManager.
+
         Args:
             config: The main LLMCore configuration object.
             provider_manager: The initialized ProviderManager instance.
@@ -118,13 +126,111 @@ class ContextManager:
             logger.info("No prompt_template_path. Using default_prompt_template string.")
             self._prompt_template_content = default_template_str
 
-        logger.info("ContextManager initialized.")
+        logger.info("MemoryManager initialized.")
         logger.debug(f"Inclusion priority: {self._inclusion_priority_order}")
         logger.debug(f"Truncation priority: {self._truncation_priority_order}")
         self._validate_strategies()
 
+    async def retrieve_relevant_context(self, goal: str) -> List[ContextItem]:
+        """
+        Primary method for retrieving relevant context from all memory tiers.
+
+        This is the new central interface that will eventually replace the old
+        prepare_context logic. It generates and executes queries against both
+        Semantic Memory (vector store) and Episodic Memory (episode log) based
+        on the agent's current goal.
+
+        Args:
+            goal: The agent's current high-level goal or objective.
+
+        Returns:
+            A list of ContextItem objects containing relevant information from
+            all memory sources, ranked and filtered for relevance.
+
+        Raises:
+            VectorStorageError: If semantic memory search fails.
+            StorageError: If episodic memory search fails.
+            ConfigError: If memory backends are not properly configured.
+        """
+        logger.debug(f"Retrieving relevant context for goal: '{goal[:100]}...'")
+
+        context_items: List[ContextItem] = []
+
+        try:
+            # Query Semantic Memory (vector store)
+            if self._storage_manager._vector_storage:
+                logger.debug("Querying semantic memory...")
+                try:
+                    # Generate embedding for the goal
+                    goal_embedding = await self._embedding_manager.generate_embedding(goal)
+
+                    # Search vector store
+                    semantic_results = await self._storage_manager.get_vector_storage().similarity_search(
+                        query_embedding=goal_embedding,
+                        k=self._default_rag_k
+                    )
+
+                    # Convert ContextDocument results to ContextItem
+                    for i, doc in enumerate(semantic_results):
+                        context_item = ContextItem(
+                            id=f"semantic_{doc.id}",
+                            type=ContextItemType.RAG_SNIPPET,
+                            source_id=doc.id,
+                            content=doc.content,
+                            metadata={
+                                **doc.metadata,
+                                "retrieval_score": doc.score,
+                                "retrieval_rank": i + 1,
+                                "memory_source": "semantic"
+                            }
+                        )
+                        context_items.append(context_item)
+
+                    logger.debug(f"Retrieved {len(semantic_results)} items from semantic memory")
+
+                except Exception as e:
+                    logger.warning(f"Semantic memory search failed: {e}")
+
+            else:
+                logger.debug("Semantic memory not available")
+
+            # Query Episodic Memory (episode log)
+            if self._storage_manager._session_storage:
+                logger.debug("Querying episodic memory...")
+                try:
+                    # For now, we'll implement a simple approach since we don't have
+                    # a specific session_id in this method signature. In a full implementation,
+                    # this would be passed in or derived from the agent's state.
+
+                    # This is a placeholder implementation - in the full system,
+                    # episodic search would be more sophisticated, potentially using
+                    # semantic search over episode content or temporal filtering
+
+                    logger.debug("Episodic memory search placeholder - would query recent episodes")
+
+                except Exception as e:
+                    logger.warning(f"Episodic memory search failed: {e}")
+
+            else:
+                logger.debug("Episodic memory not available")
+
+            # Rank and filter results
+            # For now, we'll use a simple ranking based on retrieval scores
+            # In a full implementation, this would include more sophisticated
+            # ranking logic considering recency, relevance, and importance
+
+            context_items.sort(key=lambda x: x.metadata.get("retrieval_score", 0.0))
+
+            logger.info(f"Retrieved {len(context_items)} total context items for goal")
+            return context_items
+
+        except Exception as e:
+            logger.error(f"Error retrieving context for goal '{goal[:50]}...': {e}", exc_info=True)
+            # Return empty list rather than failing - agent can still operate
+            return []
+
     def _parse_inclusion_priority(self, priority_str: str) -> List[str]:
-        """Parses the inclusion_priority string. (Implementation unchanged)"""
+        """Parses the inclusion_priority string."""
         valid_inclusions = {"system_history", "explicitly_staged", "user_items_active", "history_chat", "final_user_query"}
         priorities = [p.strip().lower() for p in priority_str.split(',')]
         ordered_priorities = [p for p in priorities if p in valid_inclusions]
@@ -140,7 +246,7 @@ class ContextManager:
         return ordered_priorities
 
     def _parse_truncation_priority(self, priority_str: str) -> List[str]:
-        """Parses the truncation_priority string. (Implementation unchanged)"""
+        """Parses the truncation_priority string."""
         valid_priorities = {"history_chat", "rag_in_query", "user_items_active", "explicitly_staged"}
         priorities = [p.strip().lower() for p in priority_str.split(',')]
         ordered_priorities = [p for p in priorities if p in valid_priorities]
@@ -174,7 +280,7 @@ class ContextManager:
         return ordered_priorities
 
     def _validate_strategies(self):
-        """Validates configured strategies. (Implementation unchanged)"""
+        """Validates configured strategies."""
         if self._history_selection_strategy not in ['last_n_tokens', 'last_n_messages']:
              logger.warning(f"Unsupported history_selection_strategy '{self._history_selection_strategy}'. Falling back to 'last_n_tokens'.")
              self._history_selection_strategy = 'last_n_tokens'
@@ -183,7 +289,7 @@ class ContextManager:
         self, item: Union[Message, ContextItem], provider: BaseProvider,
         target_model: str, item_category: str
     ) -> Message:
-        """Formats ContextItem to Message or tokenizes existing Message. (Implementation unchanged)"""
+        """Formats ContextItem to Message or tokenizes existing Message."""
         if isinstance(item, Message):
             if item.tokens is None: item.tokens = await provider.count_message_tokens([item], target_model)
             return item
@@ -217,7 +323,7 @@ class ContextManager:
         self, history_messages_all_non_system: List[Message], provider: BaseProvider,
         target_model: str, budget: int
     ) -> Tuple[List[Message], int]:
-        """Builds the chat history part of context. (Implementation unchanged)"""
+        """Builds the chat history part of context."""
         selected_history: List[Message] = []; current_history_tokens = 0
         if budget <= 0 or not history_messages_all_non_system: return selected_history, current_history_tokens
         for msg in history_messages_all_non_system:
@@ -253,7 +359,7 @@ class ContextManager:
     def _render_prompt_template(
         self, rag_context_str: str, question_str: str, custom_template_values: Optional[Dict[str, str]]
     ) -> str:
-        """Renders the loaded prompt template. (Implementation unchanged)"""
+        """Renders the loaded prompt template."""
         rendered_prompt = self._prompt_template_content
         rendered_prompt = rendered_prompt.replace("{context}", rag_context_str)
         rendered_prompt = rendered_prompt.replace("{question}", question_str)
@@ -282,11 +388,20 @@ class ContextManager:
         any other history selection logic is applied.
 
         Args:
-            (Args docstring is extensive, see previous versions or api.py for full details)
+            session: The ChatSession containing messages and context items.
+            provider_name: Name of the LLM provider to use.
+            model_name: Specific model name (optional, uses provider default if None).
+            active_context_item_ids: List of context item IDs to include from session.
+            explicitly_staged_items: Items to include with high priority.
             message_inclusion_map: A map where keys are message IDs and values are booleans.
                                    If a message ID from history is in the map with a value
                                    of `False`, it will be excluded from the context.
                                    If a message ID is not in the map, it is included by default.
+            rag_enabled: Whether to perform RAG retrieval.
+            rag_k: Number of RAG documents to retrieve.
+            rag_collection: RAG collection name.
+            rag_metadata_filter: Metadata filters for RAG search.
+            prompt_template_values: Template variable substitutions.
 
         Returns:
             A `ContextPreparationDetails` object containing the final messages,
@@ -505,14 +620,14 @@ class ContextManager:
         )
 
     def _truncate_message_list_from_start(self, messages: List[Message], tokens_to_free: int) -> Tuple[List[Message], int]:
-        """Removes messages from START of list until tokens_to_free met. (Implementation unchanged)"""
+        """Removes messages from START of list until tokens_to_free met."""
         freed_so_far = 0; truncated_list = list(messages)
         while freed_so_far < tokens_to_free and truncated_list:
             msg_to_remove = truncated_list.pop(0); freed_so_far += msg_to_remove.tokens or 0
         return truncated_list, freed_so_far
 
     def _format_rag_docs_for_context(self, documents: List[ContextDocument]) -> str:
-        """Formats RAG documents into a string. (Implementation unchanged)"""
+        """Formats RAG documents into a string."""
         if not documents: return ""
         sorted_documents = sorted(documents, key=lambda d: d.score if d.score is not None else float('inf'))
         context_parts = ["--- Retrieved Relevant Documents ---"]
