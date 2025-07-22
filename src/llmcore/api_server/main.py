@@ -7,16 +7,18 @@ management for the LLMCore instance and all API route definitions.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router  # Add agents_router import
+from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
+from .auth import get_current_tenant, initialize_auth_db_session
 
 # Configure logging
 logging.basicConfig(
@@ -31,10 +33,10 @@ async def lifespan(app: FastAPI):
     """
     Manages the lifecycle of the FastAPI application.
 
-    Handles startup (LLMCore initialization and Redis pool setup) and shutdown
-    (graceful cleanup) of the application resources.
+    Handles startup (LLMCore initialization, Redis pool setup, and authentication DB setup)
+    and shutdown (graceful cleanup) of the application resources.
     """
-    # Startup: Initialize LLMCore and Redis pool
+    # Startup: Initialize LLMCore, Redis pool, and authentication database
     logger.info("API Server starting up...")
 
     try:
@@ -65,6 +67,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize Redis pool: {e}", exc_info=True)
         logger.warning("API server will start but task queue will be unavailable")
+
+    # Initialize authentication database session
+    try:
+        logger.info("Initializing authentication database session...")
+        # Get database URL from environment or configuration
+        # For now, using a default - this should be configured properly in production
+        database_url = os.environ.get(
+            'LLMCORE_AUTH_DATABASE_URL',
+            'postgresql+asyncpg://postgres:password@localhost:5432/llmcore'
+        )
+        initialize_auth_db_session(database_url)
+        logger.info("Authentication database session successfully initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize authentication database: {e}", exc_info=True)
+        logger.warning("API server will start but authentication will be unavailable")
 
     yield  # The application runs while in this yield block
 
@@ -106,27 +123,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers under the v1 API prefix
-app.include_router(core_router, prefix="/api/v1", tags=["core_v1"])
-app.include_router(chat_router, prefix="/api/v1", tags=["chat_v1"])
+# Include routers with security dependency applied to protected endpoints
+# Note: Root and health endpoints remain public as specified in the requirements
 
-# Add the new v2 router for memory operations
-app.include_router(memory_router, prefix="/api/v2", tags=["memory_v2"])
+# V1 API routes - secured
+app.include_router(
+    core_router,
+    prefix="/api/v1",
+    tags=["core_v1"],
+    dependencies=[Depends(get_current_tenant)]
+)
+app.include_router(
+    chat_router,
+    prefix="/api/v1",
+    tags=["chat_v1"],
+    dependencies=[Depends(get_current_tenant)]
+)
 
-# Add the new v2 router for task management
-app.include_router(tasks_router, prefix="/api/v2", tags=["tasks_v2"])
-
-# Add the new v2 router for ingestion operations
-app.include_router(ingestion_router, prefix="/api/v2/ingestion", tags=["ingestion_v2"])
-
-# Add the new v2 router for agent operations
-app.include_router(agents_router, prefix="/api/v2", tags=["agents_v2"])  # Add agents router
+# V2 API routes - secured
+app.include_router(
+    memory_router,
+    prefix="/api/v2",
+    tags=["memory_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
+app.include_router(
+    tasks_router,
+    prefix="/api/v2",
+    tags=["tasks_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
+app.include_router(
+    ingestion_router,
+    prefix="/api/v2/ingestion",
+    tags=["ingestion_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
+app.include_router(
+    agents_router,
+    prefix="/api/v2",
+    tags=["agents_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
 
 
 @app.get("/")
 async def root() -> Dict[str, str]:
     """
     Root endpoint providing basic service information.
+
+    This endpoint remains public and does not require authentication.
     """
     return {
         "message": "llmcore API is running",
@@ -139,6 +185,8 @@ async def root() -> Dict[str, str]:
 async def health_check() -> Dict[str, Any]:
     """
     Health check endpoint for monitoring and load balancers.
+
+    This endpoint remains public and does not require authentication.
     """
     llmcore_instance = getattr(app.state, 'llmcore_instance', None)
 
@@ -154,7 +202,8 @@ async def health_check() -> Dict[str, Any]:
             "status": "healthy",
             "llmcore_available": True,
             "providers": available_providers,
-            "task_queue_available": redis_available
+            "task_queue_available": redis_available,
+            "authentication": "enabled"
         }
     else:
         from .services.redis_client import is_redis_available
@@ -164,5 +213,6 @@ async def health_check() -> Dict[str, Any]:
             "status": "degraded",
             "llmcore_available": False,
             "providers": [],
-            "task_queue_available": redis_available
+            "task_queue_available": redis_available,
+            "authentication": "enabled"
         }
