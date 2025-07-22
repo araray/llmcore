@@ -3,7 +3,9 @@
 TaskMaster worker configuration and task registration.
 
 This module configures the arq worker that processes background tasks
-including data ingestion, agent execution, and other long-running operations.
+including data ingestion, agent execution, tenant provisioning, and other long-running operations.
+
+UPDATED: Added provision_tenant_task registration for multi-tenant schema provisioning.
 """
 
 import logging
@@ -13,7 +15,8 @@ from arq.worker import Worker
 
 from llmcore.api import LLMCore
 from .tasks.ingestion import ingest_data_task
-from .tasks.agent import run_agent_task  # Add this import
+from .tasks.agent import run_agent_task
+from .tasks.provisioning import provision_tenant_task  # NEW: Tenant provisioning task
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,8 @@ class WorkerSettings:
     functions = [
         sample_task,
         ingest_data_task,
-        run_agent_task,  # Add the new agent task
+        run_agent_task,
+        provision_tenant_task,  # NEW: Added tenant provisioning task
     ]
 
     # Worker lifecycle functions

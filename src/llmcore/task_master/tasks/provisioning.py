@@ -1,24 +1,4 @@
-# llmcore/src/llmcore/task_master/__init__.py
-"""
-TaskMaster - Asynchronous Task Queue System for llmcore.
-
-This module provides the foundation for running long-running, non-blocking tasks
-within the llmcore ecosystem using the arq (async-redis-queue) library.
-
-UPDATED: Added provision_tenant_task for multi-tenant schema provisioning.
-"""
-
-from .worker import WorkerSettings
-from .tasks.ingestion import ingest_data_task
-from .tasks.agent import run_agent_task
-from .tasks.provisioning import provision_tenant_task  # NEW: Tenant provisioning task
-
-__all__ = [
-    "WorkerSettings",
-    "ingest_data_task",
-    "run_agent_task",
-    "provision_tenant_task",  # NEW: Export tenant provisioning task
-]
+# llmcore/src/llmcore/task_master/tasks/provisioning.py
 """
 Tenant provisioning tasks for the TaskMaster service.
 

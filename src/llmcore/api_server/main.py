@@ -4,6 +4,8 @@ Main FastAPI application for the llmcore API server.
 
 This module contains the FastAPI application instance with proper lifecycle
 management for the LLMCore instance and all API route definitions.
+
+UPDATED: Added tenant database session factory initialization for multi-tenant support.
 """
 
 import logging
@@ -19,6 +21,7 @@ from ..exceptions import LLMCoreError, ConfigError
 from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 from .auth import get_current_tenant, initialize_auth_db_session
+from .db import initialize_tenant_db_session  # NEW: Tenant database session factory
 
 # Configure logging
 logging.basicConfig(
@@ -33,10 +36,13 @@ async def lifespan(app: FastAPI):
     """
     Manages the lifecycle of the FastAPI application.
 
-    Handles startup (LLMCore initialization, Redis pool setup, and authentication DB setup)
-    and shutdown (graceful cleanup) of the application resources.
+    Handles startup (LLMCore initialization, Redis pool setup, authentication DB setup,
+    and tenant database session factory setup) and shutdown (graceful cleanup) of the
+    application resources.
+
+    UPDATED: Added tenant database session factory initialization.
     """
-    # Startup: Initialize LLMCore, Redis pool, and authentication database
+    # Startup: Initialize LLMCore, Redis pool, authentication database, and tenant database
     logger.info("API Server starting up...")
 
     try:
@@ -82,6 +88,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize authentication database: {e}", exc_info=True)
         logger.warning("API server will start but authentication will be unavailable")
+
+    # NEW: Initialize tenant database session factory
+    try:
+        logger.info("Initializing tenant database session factory...")
+        # Use the same database URL for tenant operations
+        tenant_database_url = os.environ.get(
+            'LLMCORE_TENANT_DATABASE_URL',
+            os.environ.get('LLMCORE_AUTH_DATABASE_URL',
+                           'postgresql+asyncpg://postgres:password@localhost:5432/llmcore')
+        )
+        initialize_tenant_db_session(tenant_database_url)
+        logger.info("Tenant database session factory successfully initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize tenant database session factory: {e}", exc_info=True)
+        logger.warning("API server will start but tenant-scoped operations will be unavailable")
 
     yield  # The application runs while in this yield block
 
@@ -203,7 +224,8 @@ async def health_check() -> Dict[str, Any]:
             "llmcore_available": True,
             "providers": available_providers,
             "task_queue_available": redis_available,
-            "authentication": "enabled"
+            "authentication": "enabled",
+            "multi_tenancy": "enabled"  # NEW: Indicate multi-tenancy support
         }
     else:
         from .services.redis_client import is_redis_available
@@ -214,5 +236,6 @@ async def health_check() -> Dict[str, Any]:
             "llmcore_available": False,
             "providers": [],
             "task_queue_available": redis_available,
-            "authentication": "enabled"
+            "authentication": "enabled",
+            "multi_tenancy": "enabled"  # NEW: Indicate multi-tenancy support
         }
