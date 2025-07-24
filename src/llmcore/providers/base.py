@@ -5,9 +5,14 @@ Abstract Base Class for Large Language Model (LLM) Providers.
 This module defines the common interface that all specific LLM provider
 implementations (e.g., OpenAI, Anthropic, Ollama) must adhere to within
 the LLMCore library.
+
+UPDATED: Added instrumentation points for observability metrics and tracing.
+UPDATED: Added get_models_details() abstract method for dynamic model discovery.
+UPDATED: Added tools and tool_choice parameters to chat_completion() for unified tool-calling.
 """
 
 import abc
+import time
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 # Import models for type hinting
@@ -26,6 +31,10 @@ class BaseProvider(abc.ABC):
     - Dynamic discovery of model details and supported parameters.
     - Performing chat completions, with standardized support for streaming and tool calling.
     - Counting tokens accurately according to the provider's model.
+
+    UPDATED: Added instrumentation methods for observability integration.
+    UPDATED: Added get_models_details() abstract method for dynamic model capability discovery.
+    UPDATED: Enhanced chat_completion() method signature with unified tool-calling support.
     """
     log_raw_payloads_enabled: bool
 
@@ -182,3 +191,180 @@ class BaseProvider(abc.ABC):
          can use this default pass-through implementation.
          """
          pass
+
+    # ============================================================================
+    # NEW: Observability Instrumentation Methods
+    # ============================================================================
+
+    def _record_llm_metrics(
+        self,
+        model: str,
+        duration: float,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None,
+        error: Optional[str] = None,
+        tenant_id: Optional[str] = None
+    ) -> None:
+        """
+        Record metrics for an LLM API request.
+
+        This method should be called by concrete provider implementations
+        to record observability metrics for each API call.
+
+        Args:
+            model: Model name used for the request
+            duration: Request duration in seconds
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            error: Error type if request failed
+            tenant_id: Tenant identifier if available
+        """
+        try:
+            from ..api_server.metrics import record_llm_request
+
+            # Extract tenant_id from current request context if not provided
+            if tenant_id is None:
+                from ..api_server.middleware.observability import get_current_request_context
+                context = get_current_request_context()
+                tenant_id = context.get('tenant_id', 'unknown')
+
+            record_llm_request(
+                provider=self.get_name(),
+                model=model,
+                tenant_id=tenant_id,
+                duration=duration,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                error=error
+            )
+        except Exception as e:
+            # Don't fail the main operation if metrics recording fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Failed to record LLM metrics: {e}")
+
+    def _create_llm_span(self, operation: str, model: str, **attributes):
+        """
+        Create a tracing span for an LLM operation.
+
+        This method creates a distributed tracing span for LLM operations,
+        allowing detailed tracing of API calls across the system.
+
+        Args:
+            operation: Name of the operation (e.g., "chat_completion", "token_count")
+            model: Model name being used
+            **attributes: Additional span attributes
+
+        Returns:
+            Span context manager or no-op context manager
+        """
+        try:
+            from ..tracing import get_tracer, create_span
+
+            tracer = get_tracer(f"llmcore.providers.{self.get_name()}")
+
+            span_attributes = {
+                "llm.provider": self.get_name(),
+                "llm.model": model,
+                "llm.operation": operation,
+                **attributes
+            }
+
+            return create_span(tracer, f"llm.{operation}", **span_attributes)
+
+        except Exception as e:
+            # Return no-op context manager if tracing fails
+            import logging
+            from contextlib import nullcontext
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Failed to create LLM span: {e}")
+            return nullcontext()
+
+    async def _instrumented_chat_completion(
+        self,
+        context: ContextPayload,
+        model: Optional[str] = None,
+        stream: bool = False,
+        tools: Optional[List[Tool]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs: Any
+    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+        """
+        Instrumented wrapper for chat_completion that adds observability.
+
+        This method provides a template for concrete providers to add
+        observability instrumentation around their chat_completion calls.
+        Providers should override this method and call their actual implementation
+        within the instrumentation wrapper.
+
+        Args:
+            context: The context payload to send
+            model: The specific model identifier to use
+            stream: If True, return an async generator of chunks
+            tools: Optional list of tools available for the LLM
+            tool_choice: Optional tool choice strategy
+            **kwargs: Additional provider-specific parameters
+
+        Returns:
+            API response or async generator of chunks
+        """
+        actual_model = model or self.default_model if hasattr(self, 'default_model') else 'unknown'
+        start_time = time.time()
+        error = None
+        input_tokens = None
+        output_tokens = None
+
+        # Create tracing span
+        span_attributes = {
+            "llm.stream": stream,
+            "llm.tools_available": len(tools) if tools else 0,
+            "llm.tool_choice": tool_choice,
+            "llm.context_messages": len(context)
+        }
+
+        with self._create_llm_span("chat_completion", actual_model, **span_attributes) as span:
+            try:
+                # Call the actual implementation
+                result = await self.chat_completion(
+                    context=context,
+                    model=model,
+                    stream=stream,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    **kwargs
+                )
+
+                # Extract token counts from response if available
+                if not stream and isinstance(result, dict):
+                    usage = result.get('usage', {})
+                    input_tokens = usage.get('prompt_tokens')
+                    output_tokens = usage.get('completion_tokens')
+
+                return result
+
+            except Exception as e:
+                error = type(e).__name__
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
+                raise
+            finally:
+                # Record metrics
+                duration = time.time() - start_time
+                self._record_llm_metrics(
+                    model=actual_model,
+                    duration=duration,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    error=error
+                )
+
+                # Add span attributes
+                if span:
+                    from ..tracing import add_span_attributes
+                    add_span_attributes(span, {
+                        "llm.duration_seconds": duration,
+                        "llm.input_tokens": input_tokens,
+                        "llm.output_tokens": output_tokens,
+                        "llm.success": error is None
+                    })

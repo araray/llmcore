@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.21.0"
+version = "0.22.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,8 +30,20 @@ dependencies = [
     "deepdiff>=8.5.0",
     "fastapi>=0.116.0",
     "uvicorn[standard]>=0.35.0",
-    "arq>=0.25.0",
-    "redis>=5.0.0",
+    "arq>=0.26.3",
+    "redis>=4.2.0",
+    "bcrypt>=4.3.0",
+    "sqlalchemy[asyncio]>=2.0.40",
+    "asyncpg>=0.30.0",
+    "structlog>=25.4.0",
+    "prometheus-client>=0.22.1",
+    "prometheus-fastapi-instrumentator>=7.1.0",
+    "opentelemetry-distro>=0.54b",
+    "opentelemetry-instrumentation-fastapi>=0.54b",
+    "opentelemetry-instrumentation-httpx>=0.54b",
+    "opentelemetry-instrumentation-redis>=0.54b",
+    "opentelemetry-instrumentation-psycopg2>=0.54b",
+    "opentelemetry-exporter-otlp>=1.35.0",
 ]
 
 [project.optional-dependencies]

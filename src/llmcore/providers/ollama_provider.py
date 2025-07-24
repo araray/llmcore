@@ -66,54 +66,6 @@ class OllamaProvider(BaseProvider):
     tokenizer_name: str
 
     def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
-        """
-        Initializes the OllamaProvider using the official ollama library.
-
-        Args:
-            config: Configuration dictionary from `[providers.ollama]` containing:
-                    'host' (optional): Host URL for the Ollama server.
-                    'default_model' (optional): Default Ollama model to use.
-                    'timeout' (optional): Request timeout in seconds.
-                    'tokenizer' (optional): Tokenizer to use for estimations.
-            log_raw_payloads: Whether to log raw request/response payloads.
-        """
-        super().__init__(config, log_raw_payloads)
-        if not ollama_available:
-            raise ImportError("Ollama library not installed. Please install `ollama` or `llmcore[ollama]`.")
-        if not tiktoken_available:
-            logger.warning("tiktoken library not available. Token counting will use approximation.")
-
-        self.host = config.get("host")
-        self.default_model = config.get("default_model", DEFAULT_MODEL)
-        timeout_val = config.get("timeout")
-        self.timeout = float(timeout_val) if timeout_val is not None else None
-
-        try:
-            client_args = {}
-            if self.host:
-                client_args['host'] = self.host
-            if self.timeout is not None:
-                client_args['timeout'] = self.timeout
-            self._client = AsyncClient(**client_args)
-            logger.debug("Ollama AsyncClient initialized.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Ollama AsyncClient: {e}", exc_info=True)
-            raise ConfigError(f"Ollama client initialization failed: {e}")
-
-        self.tokenizer_name = config.get("tokenizer", "tiktoken_cl100k_base")
-        self._encoding = None
-        if self.tokenizer_name.startswith("tiktoken_"):
-            if tiktoken_available and tiktoken:
-                try:
-                    encoding_name = self.tokenizer_name.split("tiktoken_")[1]
-                    self._encoding = tiktoken.get_encoding(encoding_name)
-                    logger.info(f"OllamaProvider using tiktoken encoding: {encoding_name}.")
-                except Exception as e:
-                    logger.warning(f"Failed to load tiktoken encoding '{self.tokenizer_name}'. Falling back to approximation. Error: {e}")
-                    self.tokenizer_name = "char_div_4"
-            else:
-                logger.warning("tiktoken not available. Falling back to character approximation.")
-                self.tokenizer_name = "char_div_4"
         elif self.tokenizer_name != "char_div_4":
             logger.warning(f"Unsupported tokenizer '{self.tokenizer_name}'. Falling back to approximation.")
             self.tokenizer_name = "char_div_4"
@@ -306,4 +258,51 @@ class OllamaProvider(BaseProvider):
                     logger.info("OllamaProvider client closed successfully.")
                 except Exception as e:
                     logger.error(f"Error closing OllamaProvider client: {e}", exc_info=True)
-            self._client = None
+            self._client = None"""
+        Initializes the OllamaProvider using the official ollama library.
+
+        Args:
+            config: Configuration dictionary from `[providers.ollama]` containing:
+                    'host' (optional): Host URL for the Ollama server.
+                    'default_model' (optional): Default Ollama model to use.
+                    'timeout' (optional): Request timeout in seconds.
+                    'tokenizer' (optional): Tokenizer to use for estimations.
+            log_raw_payloads: Whether to log raw request/response payloads.
+        """
+        super().__init__(config, log_raw_payloads)
+        if not ollama_available:
+            raise ImportError("Ollama library not installed. Please install `ollama` or `llmcore[ollama]`.")
+        if not tiktoken_available:
+            logger.warning("tiktoken library not available. Token counting will use approximation.")
+
+        self.host = config.get("host")
+        self.default_model = config.get("default_model", DEFAULT_MODEL)
+        timeout_val = config.get("timeout")
+        self.timeout = float(timeout_val) if timeout_val is not None else None
+
+        try:
+            client_args = {}
+            if self.host:
+                client_args['host'] = self.host
+            if self.timeout is not None:
+                client_args['timeout'] = self.timeout
+            self._client = AsyncClient(**client_args)
+            logger.debug("Ollama AsyncClient initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama AsyncClient: {e}", exc_info=True)
+            raise ConfigError(f"Ollama client initialization failed: {e}")
+
+        self.tokenizer_name = config.get("tokenizer", "tiktoken_cl100k_base")
+        self._encoding = None
+        if self.tokenizer_name.startswith("tiktoken_"):
+            if tiktoken_available and tiktoken:
+                try:
+                    encoding_name = self.tokenizer_name.split("tiktoken_")[1]
+                    self._encoding = tiktoken.get_encoding(encoding_name)
+                    logger.info(f"OllamaProvider using tiktoken encoding: {encoding_name}.")
+                except Exception as e:
+                    logger.warning(f"Failed to load tiktoken encoding '{self.tokenizer_name}'. Falling back to approximation. Error: {e}")
+                    self.tokenizer_name = "char_div_4"
+            else:
+                logger.warning("tiktoken not available. Falling back to character approximation.")
+                self.tokenizer_name = "char_div_4"

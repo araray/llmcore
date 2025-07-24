@@ -10,6 +10,8 @@ The prepare_context method now returns a detailed ContextPreparationDetails obje
 
 This is the evolved MemoryManager, serving as the central retrieval interface
 for the hierarchical memory system (Semantic, Episodic, and Working Memory).
+
+UPDATED: Enhanced to use dynamic model introspection for precise context lengths.
 """
 
 import asyncio
@@ -53,6 +55,7 @@ class MemoryManager:
     Includes per-item truncation for user-added context.
     Dynamically selects embedding models for RAG queries based on collection metadata.
     The `prepare_context` method returns a `ContextPreparationDetails` object.
+    Enhanced to use dynamic model introspection for precise context lengths.
     """
 
     def __init__(
@@ -130,6 +133,37 @@ class MemoryManager:
         logger.debug(f"Inclusion priority: {self._inclusion_priority_order}")
         logger.debug(f"Truncation priority: {self._truncation_priority_order}")
         self._validate_strategies()
+
+    async def _get_precise_context_length(self, provider: BaseProvider, model: str) -> int:
+        """
+        Gets precise context length for a model using dynamic model introspection.
+
+        This method leverages the new get_models_details() capability to fetch exact
+        context lengths rather than relying on potentially hardcoded fallback values.
+
+        Args:
+            provider: The provider instance to query
+            model: The specific model name
+
+        Returns:
+            The precise context length for the model
+        """
+        try:
+            # First, try to get precise details from dynamic introspection
+            models_details = await provider.get_models_details()
+            for model_detail in models_details:
+                if model_detail.id == model:
+                    logger.debug(f"Found precise context length for {model}: {model_detail.context_length} tokens")
+                    return model_detail.context_length
+
+            # Fallback to provider's get_max_context_length if model not found in details
+            logger.debug(f"Model {model} not found in detailed introspection, using provider fallback")
+            return provider.get_max_context_length(model)
+
+        except Exception as e:
+            # Final fallback to provider method if introspection fails
+            logger.warning(f"Dynamic model introspection failed for {model}: {e}. Using provider fallback.")
+            return provider.get_max_context_length(model)
 
     async def retrieve_relevant_context(self, goal: str) -> List[ContextItem]:
         """
@@ -341,6 +375,7 @@ class MemoryManager:
             else: break
         retained_for_now = temp_retained_buffer; selected_history.extend(retained_for_now); current_history_tokens = tokens_for_retained
         remaining_history_budget_for_backfill = budget - current_history_tokens
+        remaining_history_budget_for_backfill = budget - current_history_tokens
         if remaining_history_budget_for_backfill > 0 and self._history_selection_strategy == "last_n_tokens":
             ids_in_selected_history = {m.id for m in selected_history}
             older_history_candidates = [msg for msg in history_messages_all_non_system if msg.id not in ids_in_selected_history]
@@ -387,6 +422,8 @@ class MemoryManager:
         This now respects the message_inclusion_map to filter chat history before
         any other history selection logic is applied.
 
+        Enhanced to use dynamic model introspection for precise context lengths.
+
         Args:
             session: The ChatSession containing messages and context items.
             provider_name: Name of the LLM provider to use.
@@ -412,13 +449,14 @@ class MemoryManager:
         if not target_model:
              raise ConfigError(f"Target model undetermined for context (provider: {provider.get_name()}).")
 
-        max_model_tokens = provider.get_max_context_length(target_model)
+        # **ENHANCEMENT: Use dynamic model introspection for precise context length**
+        max_model_tokens = await self._get_precise_context_length(provider, target_model)
         available_tokens_for_prompt = max_model_tokens - self._reserved_response_tokens
         if available_tokens_for_prompt <= 0:
              raise ContextError(f"Config error: reserved_response_tokens ({self._reserved_response_tokens}) "
                                 f"exceeds model context limit ({max_model_tokens}).")
 
-        logger.debug(f"Preparing context for model '{target_model}'. Available prompt tokens: {available_tokens_for_prompt}")
+        logger.debug(f"Preparing context for model '{target_model}'. Available prompt tokens: {available_tokens_for_prompt} (from precise introspection)")
 
         # Initialize for ContextPreparationDetails
         truncation_actions: Dict[str, Any] = {"details": []} # Store detailed truncation log
@@ -608,7 +646,7 @@ class MemoryManager:
             logger.debug(f"Final payload has {len(actual_history_in_payload)} history_chat messages (min: {self._minimum_history_messages}).")
 
         final_token_count_for_payload = await provider.count_message_tokens(final_payload_messages, target_model)
-        logger.info(f"Final prepared context: {len(final_payload_messages)} messages, {final_token_count_for_payload} tokens for model '{target_model}'.")
+        logger.info(f"Final prepared context: {len(final_payload_messages)} messages, {final_token_count_for_payload} tokens for model '{target_model}' (precise introspection).")
 
         return ContextPreparationDetails(
             prepared_messages=final_payload_messages,

@@ -1,239 +1,271 @@
-# src/llmcore/config/default_config.toml
-# Default configuration structure for LLMCore
-# This file defines the standard settings and can be overridden by user configurations,
-# environment variables, or direct overrides in code.
+# ==============================================================================
+# == LLMCore v0.21.0 - Comprehensive & Self-Documented Configuration File      ==
+# ==============================================================================
+#
+# This file serves as the complete template for all settings available in LLMCore.
+# It is heavily commented to explain the purpose, options, and default value
+# for each configuration parameter.
+#
+# --- Configuration Override Precedence (Lowest to Highest) ---
+# 1. Packaged Defaults: The settings defined in this file.
+# 2. User Config File: Located at `~/.config/llmcore/config.toml`.
+# 3. Custom Config File: A path passed during `LLMCore.create()`.
+# 4. `.env` File: Variables loaded from a `.env` file in your project root.
+# 5. Environment Variables: System-level variables (e.g., `export LLMCORE_...`).
+# 6. Code Overrides: A dictionary passed directly to `LLMCore.create()`.
+#
+# For production, it is STRONGLY recommended to use environment variables for
+# secrets like API keys. The corresponding environment variable for each setting
+# is noted in its comment block.
 
+# ==============================================================================
+# [llmcore] - Global Settings
+# ==============================================================================
+# This section defines top-level settings that control the library's default
+# behavior and global features.
 [llmcore]
-# Default provider to use if not specified in API calls.
-# This name should correspond to one of the sections under [providers].
-# Example: default_provider = "my_openai_clone" if you define [providers.my_openai_clone]
+
+# --- Default LLM Provider ---
+# What it does: Specifies the default LLM provider to use for any `chat()` call
+#               where a provider is not explicitly named.
+# Purpose: Simplifies API calls by setting your primary provider once.
+# Possible Options: Any string that matches a configured provider instance name
+#                   under the `[providers]` section (e.g., "openai", "ollama").
+# Default Value: "ollama"
+# Environment Variable: LLMCORE_DEFAULT_PROVIDER
 default_provider = "ollama"
 
-# Default embedding model for RAG (Retrieval Augmented Generation).
-# This can be a local path to a sentence-transformers model (e.g., "all-MiniLM-L6-v2")
-# or an identifier for a service-based model (e.g., "openai:text-embedding-3-small", "google:models/embedding-001").
-default_embedding_model = "all-MiniLM-L6-v2" # A common sentence-transformer model
+# --- Default Embedding Model for RAG ---
+# What it does: Sets the default model used for all Retrieval Augmented
+#               Generation (RAG) operations, like adding documents to the
+#               vector store and performing similarity searches.
+# Purpose: Centralizes the choice of embedding model for RAG, ensuring
+#          consistency across your application's knowledge base.
+# Possible Options:
+#   - For local Sentence Transformers: The model name from Hugging Face Hub
+#     (e.g., "all-MiniLM-L6-v2"). The model will be downloaded automatically.
+#   - For service-based models: A string in the format "provider:model_name"
+#     (e.g., "openai:text-embedding-3-small", "google:models/embedding-001").
+# Default Value: "all-MiniLM-L6-v2"
+# Environment Variable: LLMCORE_DEFAULT_EMBEDDING_MODEL
+default_embedding_model = "all-MiniLM-L6-v2"
 
-# Log level for the library.
-# Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+# --- Logging Verbosity ---
+# What it does: Configures the logging verbosity for the entire `llmcore` library.
+# Purpose: Control the amount of diagnostic information emitted by the library.
+# Possible Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+# Default Value: "INFO"
+# Environment Variable: LLMCORE_LOG_LEVEL
 log_level = "INFO"
 
-# Enable logging of raw request/response payloads to/from LLM providers (at DEBUG level)
+# --- Raw Payload Logging (for Debugging) ---
+# What it does: If true, `llmcore` will log the exact raw JSON request and
+#               response payloads exchanged with the underlying LLM provider APIs.
+#               This logging occurs at the `DEBUG` log level.
+# Purpose: An indispensable tool for advanced troubleshooting. It allows you to
+#          inspect the precise data being sent and received, which is essential
+#          for diagnosing provider errors or understanding unexpected behavior.
+# Possible Options: true, false
+# Default Value: false
+# Environment Variable: LLMCORE_LOG_RAW_PAYLOADS
 log_raw_payloads = false
 
 
-# --- Provider Configurations ---
-# Each provider instance is defined in its own section under [providers].
-# To use a specific base provider class (like OpenAIProvider), specify `type = "openai"`.
-# API keys are best set via environment variables (e.g., LLMCORE_PROVIDERS_OPENAI_API_KEY for the default OpenAI instance,
-# or LLMCORE_PROVIDERS_MY_CUSTOM_OPENAI_BACKEND_API_KEY for a custom one).
-# However, they can also be set directly in these configuration blocks.
+# ==============================================================================
+# [providers] - LLM Provider Configurations
+# ==============================================================================
+# This section is where all individual LLM provider instances are defined.
+# You can define multiple instances of the same provider type by giving them
+# unique names (e.g., [providers.my_openai_clone]) and setting `type = "openai"`.
 [providers]
 
+  # --- OpenAI Provider ---
+  # For official OpenAI models and any OpenAI-compatible API (e.g., Groq, Anyscale).
   [providers.openai]
-  # This section configures a provider instance named "openai" that uses the "openai" base type.
-  # The 'type = "openai"' is implicit here because the section name matches a known type.
-  # API Key: Can be set here, or via LLMCORE_PROVIDERS_OPENAI_API_KEY, or OPENAI_API_KEY.
-  # api_key = "sk-your_openai_api_key_here"
-  # base_url = "https://api.openai.com/v1" # Default OpenAI URL, can be overridden for proxies
-  default_model = "gpt-4o" # Updated default
-  timeout = 60 # Timeout in seconds for API calls
-  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
+  # API Key: It is STRONGLY recommended to set this via an environment variable.
+  # Environment Variable: LLMCORE_PROVIDERS__OPENAI__API_KEY or OPENAI_API_KEY
+  # api_key = "sk-..."
 
-  # Example of a custom OpenAI-like provider configuration:
-  # [providers.my_custom_openai_backend]
-  # # Explicitly state that this custom backend uses the "openai" provider logic.
-  # type = "openai"
-  # # Specific API key for this custom backend.
-  # # Can also be set via environment variable: LLMCORE_PROVIDERS_MY_CUSTOM_OPENAI_BACKEND_API_KEY
-  # api_key = "your_custom_api_key_for_this_backend"
-  # # The base URL for your OpenAI-compatible API.
-  # base_url = "https://your.openai.like.api/v1"
-  # default_model = "custom-model-name"
-  # timeout = 120
+  # Base URL: Override for proxies or compatible APIs.
+  # Example for Groq: base_url = "https://api.groq.com/openai/v1"
+  # base_url = "https://api.openai.com/v1"
 
+  # Default model for this provider instance.
+  default_model = "gpt-4o"
 
+  # Request timeout in seconds.
+  timeout = 60
+
+  # --- Anthropic Provider ---
+  # For Claude models.
   [providers.anthropic]
-  # API Key: Can be set here, or via LLMCORE_PROVIDERS_ANTHROPIC_API_KEY, or ANTHROPIC_API_KEY.
-  # api_key = "sk-ant-your_anthropic_api_key_here"
-  default_model = "claude-3-opus-20240229" #
-  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
-  timeout = 60 # Timeout in seconds for API calls
+  # API Key: Set via environment variable for security.
+  # Environment Variable: LLMCORE_PROVIDERS__ANTHROPIC__API_KEY or ANTHROPIC_API_KEY
+  # api_key = "sk-ant-..."
 
+  # Default model for this provider instance.
+  default_model = "claude-3-opus-20240229"
+  timeout = 60
+
+  # --- Ollama Provider ---
+  # For locally running models via Ollama.
   [providers.ollama]
-  # host = "http://localhost:11434" # Hostname/IP for the ollama library client (library default is usually fine)
-  # base_url = "http://localhost:11434/api" # Base URL for direct API calls if provider used raw HTTP.
-  # The official 'ollama' library uses 'host'.
-  default_model = "llama3" # Updated default
-  timeout = 120 # Timeout in seconds for API calls
-  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
-  # Optional: Specify tokenizer for Ollama models if default (tiktoken_cl100k_base) is not suitable.
-  # Accurate token counting for Ollama can be tricky. Options:
-  # 'tiktoken_cl100k_base': (Default) Good general-purpose tokenizer (used by GPT-3.5/4).
-  # 'tiktoken_p50k_base': Another tiktoken option.
-  # 'char_div_4': A very rough estimate (characters / 4). Use if tiktoken is problematic.
+  # Host URL of the running Ollama server.
+  # The official `ollama` Python library uses this parameter.
+  # host = "http://localhost:11434"
+
+  # Default local model to use. Ensure you have run `ollama pull <model_name>`.
+  default_model = "llama3"
+
+  # Longer timeout is recommended for local models.
+  timeout = 120
+
+  # Tokenizer for token counting. `tiktoken_cl100k_base` is a good default.
+  # Use 'char_div_4' as a rough fallback if tiktoken causes issues with a model.
   # tokenizer = "tiktoken_cl100k_base"
 
+  # --- Google Gemini Provider ---
+  # For Gemini models.
   [providers.gemini]
-  # API Key: Can be set here, or via LLMCORE_PROVIDERS_GEMINI__API_KEY, or GOOGLE_API_KEY.
-  # api_key = "your_google_ai_api_key_here"
-  # fallback_context_length = 128000 # In case it can't determine the model's context length, it assumes this is the maximum context length.
-  default_model = "gemini-1.5-pro-latest" #
-  timeout = 60 # Timeout in seconds for API calls
-  # Add other Gemini specific settings if needed (e.g., safety settings).
-  # Example: safety_settings = { HARM_CATEGORY_SEXUALLY_EXPLICIT = "BLOCK_NONE" }
+  # API Key: Set via environment variable for security.
+  # Environment Variable: LLMCORE_PROVIDERS__GEMINI__API_KEY or GOOGLE_API_KEY
+  # api_key = "..."
+
+  # Default model for this provider instance.
+  default_model = "gemini-1.5-pro-latest"
+  timeout = 60
+
+  # Optional: Configure Google AI's safety filters.
+  # This table is passed directly to the `google-genai` SDK.
+  # [providers.gemini.safety_settings]
+  # HARM_CATEGORY_HARASSMENT = "BLOCK_NONE"
+  # HARM_CATEGORY_HATE_SPEECH = "BLOCK_NONE"
 
 
-# --- Storage Configurations ---
-# Defines where and how session history and vector embeddings are stored.
-[storage] #
+# ==============================================================================
+# [storage] - Persistence Configurations
+# ==============================================================================
+# This section governs where and how persistent data, such as conversation
+# history (session memory) and RAG documents (semantic memory), is stored.
+[storage]
 
-  # Session storage configuration: for conversation history.
-  [storage.session] #
-  # Type: 'json', 'sqlite', 'postgres'
-  type = "sqlite" #
+  # --- Session & Episodic Memory Storage ---
+  # Configures the backend for storing conversation history and agent episodes.
+  [storage.session]
+  # Type: Determines the storage backend.
+  #   - "json": Simple, human-readable. Good for low-concurrency apps.
+  #   - "sqlite": (Default) Excellent for single-process apps and local dev.
+  #   - "postgres": Recommended for production, especially with multiple workers.
+  # Environment Variable: LLMCORE_STORAGE__SESSION__TYPE
+  type = "sqlite"
 
-  # Path for file-based storage (json, sqlite).
-  # '~' will be expanded to the user's home directory.
-  path = "~/.llmcore/sessions.db" # For SQLite, this is the DB file. For JSON, this is the directory.
-  # Connection URL for database storage (e.g., postgres).
-  # Recommended to use environment variable: LLMCORE_STORAGE_SESSION_DB_URL
-  # Example: db_url = "postgresql://user:pass@host:port/dbname"
-  db_url = "" #
+  # Path: Filesystem path for "json" and "sqlite" backends.
+  # The `~` character is expanded to your home directory.
+  # Environment Variable: LLMCORE_STORAGE__SESSION__PATH
+  path = "~/.llmcore/sessions.db"
 
-  # Optional table name for database storage.
-  # table_name = "llmcore_sessions"
+  # Database URL: Full connection URL for "postgres".
+  # It is STRONGLY recommended to set this via an environment variable.
+  # Environment Variable: LLMCORE_STORAGE__SESSION__DB_URL
+  # Example: db_url = "postgresql://user:password@host:port/database_name"
+  db_url = ""
 
-  # Vector storage configuration: for RAG documents and embeddings.
-  [storage.vector] #
-  # Type: 'chromadb', 'pgvector' (PostgreSQL with pgvector extension)
-  type = "chromadb" #
+  # --- Vector Storage for RAG (Semantic Memory) ---
+  # Configures the vector store for RAG documents and their embeddings.
+  [storage.vector]
+  # Type: Determines the vector database backend.
+  #   - "chromadb": (Default) Easy to set up for local development.
+  #   - "pgvector": Excellent for production if you already use PostgreSQL.
+  # Environment Variable: LLMCORE_STORAGE__VECTOR__TYPE
+  type = "chromadb"
 
-  # Default collection name used for RAG if not specified in API calls.
-  # Collections in vector stores are reusable across different sessions or applications.
-  default_collection = "llmcore_default_rag" #
+  # Default Collection: A namespace for RAG documents. Allows you to maintain
+  # multiple distinct knowledge bases in the same vector store.
+  # Environment Variable: LLMCORE_STORAGE__VECTOR__DEFAULT_COLLECTION
+  default_collection = "llmcore_default_rag"
 
-  # Path for file-based vector stores (e.g., chromadb persistent client).
-  # '~' will be expanded to the user's home directory.
-  path = "~/.llmcore/chroma_db" #
+  # Path: Filesystem path for file-based vector stores like "chromadb".
+  # Environment Variable: LLMCORE_STORAGE__VECTOR__PATH
+  path = "~/.llmcore/chroma_db"
 
-  # Connection URL for database vector stores (e.g., pgvector).
-  # Recommended to use environment variable: LLMCORE_STORAGE_VECTOR_DB_URL
-  # Example: db_url = "postgresql://user:pass@host:port/dbname"
-  db_url = "" #
-
-  # Optional table name for database vector storage.
-  # table_name = "llmcore_vectors"
+  # Database URL: Connection URL for "pgvector".
+  # It is STRONGLY recommended to set this via an environment variable.
+  # Environment Variable: LLMCORE_STORAGE__VECTOR__DB_URL
+  db_url = ""
 
 
-# --- Embedding Model Configurations ---
-# Configures embedding models used for RAG.
-[embedding] #
-  # Configuration for specific embedding models if they require special setup,
-  # like API keys for service-based ones.
-  # The 'llmcore.default_embedding_model'
-  # setting determines which model is used by default.
-  # If 'llmcore.default_embedding_model' is like "openai:text-embedding-3-small",
-  # then settings from [embedding.openai] might be used.
-  [embedding.openai] #
-  # API Key for OpenAI embeddings (if different from chat or if using only embeddings).
-  # Recommended to use environment variable: LLMCORE_EMBEDDING_OPENAI_API_KEY
-  # If empty and providers.openai.api_key is set, that might be reused by the provider logic.
+# ==============================================================================
+# [embedding] - Vectorization Model Configurations
+# ==============================================================================
+# This section configures the models responsible for converting text into
+# numerical vectors (embeddings) for the RAG system. The global
+# `llmcore.default_embedding_model` setting determines which model to use.
+# If that identifier contains a colon (e.g., "openai:text-embedding-3-small"),
+# the part before the colon tells the system which configuration block below
+# to consult for specific settings like API keys.
+[embedding]
+
+  [embedding.openai]
+  # API Key for OpenAI embeddings.
+  # Environment Variable: LLMCORE_EMBEDDING__OPENAI__API_KEY
   # api_key = ""
-  # Default OpenAI model for embeddings.
-  default_model = "text-embedding-3-small" # Example, check latest models
-  # base_url = "..." # Can also be set if using a proxy for embeddings
+  default_model = "text-embedding-3-small"
+  # base_url = "..." # Optional proxy URL
 
-  [embedding.google] #
+  [embedding.google]
   # API Key for Google AI (Gemini) embeddings.
-  # Recommended to use environment variable: LLMCORE_EMBEDDING_GOOGLE_API_KEY
+  # Environment Variable: LLMCORE_EMBEDDING__GOOGLE__API_KEY
   # api_key = ""
-  # Default Google AI model for embeddings.
-  default_model = "models/embedding-001" # Example, check latest models
+  default_model = "models/embedding-001"
 
-  [embedding.ollama] #
-  # Host for the Ollama server if different from the main Ollama provider host for chat.
+  [embedding.ollama]
+  # Host URL for the Ollama server for embeddings.
   # host = "http://localhost:11434"
-  # Default Ollama model for embeddings (e.g., "mxbai-embed-large", "nomic-embed-text")
-  # Ensure this model is pulled in your Ollama instance.
-  default_model = "mxbai-embed-large" #
-  # timeout = 60
+  # Default Ollama model for embeddings. Ensure it's pulled locally.
+  # Examples: "mxbai-embed-large", "nomic-embed-text"
+  default_model = "mxbai-embed-large"
+  timeout = 60
 
-  # For local sentence-transformers, the model name/path is usually specified directly
-  # in 'llmcore.default_embedding_model' (e.g., "all-MiniLM-L6-v2").
-  # This section can provide additional parameters if needed by SentenceTransformerEmbedding.
-  [embedding.sentence_transformer] #
-  # device = "cpu" # Example: "cuda", "cpu", "mps" (device to run model on)
-  # model_name_or_path = "all-MiniLM-L6-v2" # This is usually taken from llmcore.default_embedding_model
+  [embedding.sentence_transformer]
+  # Additional configuration for local `sentence-transformers` models.
+  # The model itself is specified in `llmcore.default_embedding_model`.
+  # Device to run the model on. If not set, the library will auto-detect.
+  # Options: "cpu", "cuda", "mps"
+  # device = "cpu"
 
 
-# --- Context Management Configurations ---
-# Defines strategies for how context is built and managed for LLM prompts.
-[context_management] #
-  # Default number of documents to retrieve for RAG.
-  rag_retrieval_k = 3 #
+# ==============================================================================
+# [context_management] - Advanced Prompt Control
+# ==============================================================================
+# This section is the control center for prompt engineering. It governs the
+# sophisticated, multi-stage process of assembling the final context that is
+# sent to the LLM. The system first prioritizes what to INCLUDE, and only then
+# decides what to TRUNCATE if the model's token limit is exceeded.
+[context_management]
 
-  # Strategy for combining RAG results with conversation history.
-  # 'prepend_system': RAG context is added as part of a system message or preamble.
-  # 'prepend_user': RAG context is added before the latest user message.
-  # This is less relevant when using full prompt templating for RAG.
-  # rag_combination_strategy = "prepend_system" #
-
-  # Strategy for selecting history messages to fit within the token limit.
-  # 'last_n_tokens': Prioritizes keeping the most recent messages that fit the token budget.
-  # 'last_n_messages': Keeps a fixed number of the most recent messages (less precise for token limits).
-  history_selection_strategy = "last_n_tokens" #
-
-  # Number of tokens to reserve for the LLM's response generation.
-  # This ensures there's space for the model to actually write its answer.
-  reserved_response_tokens = 500 #
-
-  # NEW: Order in which different context components are added to the prompt,
-  # before overall truncation. Comma-separated list.
-  # Valid components:
-  #   "system_history": System messages from the session's history.
-  #   "final_user_query": The current user's query, potentially rendered with RAG context via template.
-  #   "explicitly_staged": Items passed via LLMCore.chat(explicitly_staged_items=...).
-  #   "user_items_active": Items from the session's context pool (workspace) marked as active.
-  #   "history_chat": Regular user/assistant messages from the session's history.
-  # Default order prioritizes system messages, then the main query, then explicitly chosen items.
+  # --- Inclusion Priority ---
+  # What it does: A comma-separated list defining the order in which context
+  #               components are added to the prompt.
+  # Purpose: Gives fine-grained control over the final prompt's structure.
+  # Valid Components: "system_history", "explicitly_staged", "user_items_active",
+  #                   "history_chat", "final_user_query".
+  # Default: "system_history,explicitly_staged,user_items_active,history_chat,final_user_query"
   inclusion_priority = "system_history,explicitly_staged,user_items_active,history_chat,final_user_query"
 
+  # --- Truncation Priority ---
+  # What it does: A comma-separated list defining the order in which context
+  #               types are removed to meet token limits.
+  # Purpose: Controls what information is sacrificed when the context is too long.
+  # Valid Components: "history_chat", "user_items_active", "rag_in_query",
+  #                   "explicitly_staged".
+  # Default: "history_chat,user_items_active,rag_in_query,explicitly_staged"
+  truncation_priority = "history_chat,user_items_active,rag_in_query,explicitly_staged"
 
-  # UPDATED: Strategy for handling context overflow when total tokens exceed the limit.
-  # The order defines which type of context is truncated first. Comma-separated list.
-  # Valid components for truncation:
-  #   "history_chat": Regular user/assistant messages from chat history (oldest first).
-  #   "user_items_active": Active items from the session's context pool (oldest/least relevant first).
-  #   "rag_in_query": If RAG is enabled and part of the final_user_query (via template),
-  #                   truncating this means attempting to use a plain query without RAG.
-  #   "explicitly_staged": Explicitly staged items (oldest/least relevant first).
-  # System messages and the core final_user_query (without RAG) are generally not truncated by this mechanism,
-  # but if they alone exceed limits, a ContextLengthError will occur.
-  # Legacy values "history", "rag", "user_items" will be mapped to their new equivalents.
-  truncation_priority = "history_chat,user_items_active,rag_in_query,explicitly_staged" #
-
-  # Minimum number of history messages (excluding system message) to try and keep during truncation.
-  # This helps maintain some conversational flow even when context is tight.
-  minimum_history_messages = 1 #
-
-  # Number of most recent user messages (and their preceding assistant messages) to prioritize keeping in context.
-  # Set to 0 to disable this specific retention and rely solely on last_n_tokens/last_n_messages for history.
-  user_retained_messages_count = 5 #
-
-  # If true, user-added context items (from session pool/workspace) are prioritized over RAG results
-  # when initially filling the context budget (before overall truncation).
-  # Note: `inclusion_priority` now offers more direct control over this.
-  prioritize_user_context_items = true #
-
-  # Maximum character length for any single user-added context item (text, file, pinned RAG).
-  # Items exceeding this will be truncated by the ContextManager unless 'ignore_char_limit' is set on the item.
-  # Approximately 10,000 tokens (1 token ~ 4 chars).
-  max_chars_per_user_item = 40000000 #
-
-  # Default prompt template string for RAG. Used if prompt_template_path is not set or file not found.
-  # This template will be formatted with {context} (RAG documents) and {question} (user's query) placeholders.
-  # Custom placeholders can be added and filled via prompt_template_values in LLMCore.chat().
+  # --- RAG Prompt Template ---
+  # What it does: The template used to format the final query when RAG is enabled.
+  #               It will be formatted with `{context}` (retrieved documents) and
+  #               `{question}` (the user's query).
+  # Purpose: To instruct the LLM on how to use the provided RAG context.
   default_prompt_template = """You are an AI assistant specialized in answering questions about codebases based on provided context.
 Use ONLY the following pieces of retrieved context to answer the user's question.
 If the answer is not found in the context, state that you cannot answer based on the provided information.
@@ -248,99 +280,74 @@ Context:
 Question: {question}
 
 Answer:"""
-  # Optional path to a custom prompt template file (.tmpl or .txt).
-  # If set, this file's content will be used instead of default_prompt_template.
-  # Path can be absolute or relative to the main config file's directory.
+
+  # Optional path to a custom prompt template file. Overrides the string above.
   prompt_template_path = ""
 
+  # Default number of documents to retrieve for RAG.
+  rag_retrieval_k = 3
 
-# --- Apykatu Integration Settings ---
-# This section configures how LLMCore instructs the apykatu library
-# when invoking it for ingestion tasks (e.g., via llmchat's /ingest command).
-# These settings will be passed to apykatu, overriding apykatu's own defaults.
-[apykatu] #
+  # Number of tokens to leave free in the context window for the model's response.
+  reserved_response_tokens = 500
 
-  # Note: apykatu.database.path and apykatu.database.collection_name will primarily be
-  # determined by llmchat's /ingest command arguments and LLMCore's main `storage.vector.path`.
-  # The values here can serve as defaults if not specified by the /ingest command.
-  [apykatu.database] #
-  type = "chromadb" # Default type for apykatu's vector store interaction
-  # collection_name = "apykatu_default_via_llmcore" # Default collection if /ingest doesn't provide one
+  # Minimum number of recent chat messages to try to keep during truncation.
+  minimum_history_messages = 1
 
-  # Embedding model configuration specific to apykatu's ingestion process.
-  # This allows apykatu to use a specific embedding model for ingestion,
-  # which might differ from LLMCore's `default_embedding_model` used for other RAG.
-  [apykatu.embeddings] #
-  # default_model should match a key under [apykatu.embeddings.models]
-  default_model = "apykatu_default_st_embedder" #
+  # Prioritizes keeping the N most recent user messages (and their preceding
+  # assistant responses) during truncation.
+  user_retained_messages_count = 5
 
-    [apykatu.embeddings.models] #
-      [apykatu.embeddings.models.apykatu_default_st_embedder] #
-      # Settings for apykatu's default sentence-transformer model
-      provider = "sentence-transformers" #
-      model_name = "all-MiniLM-L6-v2" #
-      device = "cpu" #
-      # max_request_tokens = 30000 # Optional, apykatu's internal default is high
+  # A safeguard character limit for a single user-provided context item.
+  # The default is very large to accommodate large documents.
+  max_chars_per_user_item = 40000000
 
-      # Example: Configuring an Ollama model for apykatu ingestion
-      # [apykatu.embeddings.models.apykatu_ollama_embedder]
-      # provider = "ollama" #
-      # model_name = "nomic-embed-text" #
-      # base_url = "http://localhost:11434" # Ensure Ollama is running here
-      # max_request_tokens = 2048 # Example, as nomic has smaller window
 
-  # Apykatu's chunking configuration.
-  # Mirrors apykatu.config.models.ChunkingConfig structure.
-  [apykatu.chunking] #
-  default_strategy = "RecursiveSplitter" #
+# ==============================================================================
+# [apykatu] - Integrated Data Ingestion Pipeline Configuration
+# ==============================================================================
+# This section configures the `apykatu` data ingestion library. These settings
+# are passed to the `ingest_data_task` background job, which is executed by the
+# TaskMaster service. This allows you to manage the entire data ingestion
+# pipeline from this single configuration file.
+[apykatu]
 
-    [apykatu.chunking.strategies] #
-      [apykatu.chunking.strategies.python_code] #
-      extensions = [".py", ".pyw"] #
-      grammar = "Python3" #
-      entry_points = ["classDef", "functionDef", "decorated"] #
+  [apykatu.database]
+  # Vector store type `apykatu` will write to.
+  type = "chromadb"
 
-      [apykatu.chunking.strategies.yaml_config] #
-      extensions = [".yaml", ".yml"] #
-      parser = "PyYAML" #
+  [apykatu.embeddings]
+  # Default embedding model for `apykatu` to use during ingestion.
+  # This can be different from `llmcore.default_embedding_model`.
+  # The name must match a key under `[apykatu.embeddings.models]`.
+  default_model = "apykatu_default_st_embedder"
 
-      [apykatu.chunking.strategies.markdown_docs] #
-      extensions = [".md", ".mkd", ".mdx"] #
-      method = "RecursiveSplitter" #
+    [apykatu.embeddings.models]
+      [apykatu.embeddings.models.apykatu_default_st_embedder]
+      provider = "sentence-transformers"
+      model_name = "all-MiniLM-L6-v2"
+      device = "cpu"
 
-    [apykatu.chunking.parameters] #
-      [apykatu.chunking.parameters.RecursiveSplitter] #
-      chunk_size = 800 #
-      chunk_overlap = 100 #
-      [apykatu.chunking.parameters.LineSplitter] #
-      lines_per_chunk = 50 #
-      [apykatu.chunking.parameters.SubChunker] # For oversized chunks
-      chunk_size = 500 #
-      chunk_overlap = 50 #
+  [apykatu.chunking]
+  # Default strategy for breaking down documents.
+  default_strategy = "RecursiveSplitter"
 
-  # Apykatu's file discovery settings.
-  [apykatu.discovery] #
-  use_gitignore = true #
-  excluded_dirs = ["__pycache__", "node_modules", "build", "dist", "venv", ".venv", "target", ".git"] #
-  excluded_files = [".DS_Store", "*.lock", "*.bkp"] #
+    [apykatu.chunking.strategies]
+      # Example of a code-aware chunking strategy for Python files.
+      [apykatu.chunking.strategies.python_code]
+      extensions = [".py", ".pyw"]
+      grammar = "Python3"
+      entry_points =
 
-  # Apykatu's Git-specific ingestion settings.
-  [apykatu.ingestion.git] #
-  default_ref = "main" #
-  enable_commit_llm_analysis = false #
-  # commit_llm_provider_key: Refers to a provider name defined in LLMCore's [providers.<name>]
-  # commit_llm_provider_key = "ollama" # Example: use the 'ollama' provider defined above
+    [apykatu.chunking.parameters]
+      # Parameters for the RecursiveSplitter strategy.
 
-  # Apykatu's Khipu export hints.
-  [apykatu.khipu_export_settings] #
-  item_type_mapping = { "Python3.functionDef" = "python_function_code_snippet", "Python3.classDef" = "python_class_code_snippet" } #
-  default_hint = "text_chunk" #
+      chunk_size = 800
+      chunk_overlap = 100
 
-  # Apykatu's optional SQLite metadata store settings.
-  # If enabled, path should be managed carefully.
-  [apykatu.metadata_store] #
-  enable = false # Default to false; can be overridden by user
-  type = "sqlite" #
-  # path = "~/.llmcore/apykatu_metadata.sqlite" # Example path if enabled
-  # table_name = "chunk_metadata_apykatu"
-  # processed_refs_log_table_name = "processed_refs_log_apykatu"
+  [apykatu.discovery]
+  # If true, `apykatu` will respect rules in `.gitignore` files.
+  use_gitignore = true
+  # List of directory names to always exclude.
+  excluded_dirs = ["__pycache__", "node_modules", "build", "dist", "venv", ".venv", "target", ".git"]
+  # List of file patterns to always exclude.
+  excluded_files =

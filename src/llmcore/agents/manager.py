@@ -4,6 +4,8 @@ Agent Management for LLMCore.
 
 Orchestrates the Think -> Act -> Observe execution loop for autonomous agent behavior.
 Implements the ReAct (Reason + Act) paradigm for complex problem-solving.
+
+UPDATED: Added manual OpenTelemetry spans around key agent logic steps for enhanced tracing.
 """
 
 import json
@@ -30,6 +32,8 @@ class AgentManager:
 
     Manages the Think -> Act -> Observe cycle, coordinating between the LLM provider,
     memory systems, and tool execution to achieve complex goals autonomously.
+
+    UPDATED: Added distributed tracing spans for detailed agent behavior analysis.
     """
 
     def __init__(
@@ -50,6 +54,14 @@ class AgentManager:
         self._memory_manager = memory_manager
         self._storage_manager = storage_manager
         self._tool_manager = ToolManager(memory_manager, storage_manager)
+
+        # Initialize tracing
+        self._tracer = None
+        try:
+            from ..tracing import get_tracer
+            self._tracer = get_tracer("llmcore.agents.manager")
+        except Exception as e:
+            logger.debug(f"Tracing not available for AgentManager: {e}")
 
         logger.info("AgentManager initialized")
 
@@ -83,48 +95,151 @@ class AgentManager:
 
         logger.info(f"Starting agent loop for goal: '{agent_state.goal[:100]}...'")
 
-        try:
-            for iteration in range(max_iterations):
-                logger.debug(f"Agent iteration {iteration + 1}/{max_iterations}")
+        # Create main agent loop span
+        span_attributes = {
+            "agent.task_id": task.task_id,
+            "agent.goal": agent_state.goal[:200],  # Truncate for span
+            "agent.max_iterations": max_iterations,
+            "agent.session_id": actual_session_id,
+            "agent.provider": provider_name or "default",
+            "agent.model": model_name or "default"
+        }
 
-                # 1. THINK: Construct prompt and call LLM
-                thought, tool_call = await self._think_step(
-                    agent_state,
-                    actual_session_id,
-                    provider_name,
-                    model_name
-                )
+        from ..tracing import create_span
+        with create_span(self._tracer, "agent.execution_loop", **span_attributes) as main_span:
+            try:
+                from ..tracing import add_span_attributes
 
-                if not thought or not tool_call:
-                    error_msg = f"Failed to get valid thought and action from LLM at iteration {iteration + 1}"
-                    logger.error(error_msg)
-                    return f"Agent error: {error_msg}"
+                for iteration in range(max_iterations):
+                    iteration_attributes = {
+                        "agent.iteration": iteration + 1,
+                        "agent.iteration_total": max_iterations
+                    }
 
-                # 2. ACT: Execute the tool
-                tool_result = await self._act_step(tool_call, actual_session_id)
+                    with create_span(self._tracer, "agent.iteration", **iteration_attributes) as iter_span:
+                        logger.debug(f"Agent iteration {iteration + 1}/{max_iterations}")
 
-                # 3. OBSERVE: Process the result and update state
-                observation = tool_result.content
-                await self._observe_step(agent_state, thought, tool_call, observation, actual_session_id)
+                        # 1. THINK: Construct prompt and call LLM
+                        thought, tool_call = await self._think_step(
+                            agent_state,
+                            actual_session_id,
+                            provider_name,
+                            model_name
+                        )
 
-                # 4. CHECK FOR FINISH
-                if tool_call.name == "finish":
-                    final_answer = observation.replace("TASK_COMPLETE: ", "")
-                    logger.info(f"Agent completed task after {iteration + 1} iterations")
-                    return final_answer
+                        if not thought or not tool_call:
+                            error_msg = f"Failed to get valid thought and action from LLM at iteration {iteration + 1}"
+                            logger.error(error_msg)
+                            if main_span:
+                                add_span_attributes(main_span, {
+                                    "agent.error": error_msg,
+                                    "agent.status": "failed"
+                                })
+                            return f"Agent error: {error_msg}"
 
-                # Log progress
-                logger.debug(f"Iteration {iteration + 1} complete - Thought: {thought[:100]}... Action: {tool_call.name}")
+                        # 2. ACT: Execute the tool
+                        tool_result = await self._act_step(tool_call, actual_session_id)
 
-            # Max iterations reached
-            final_state_summary = self._summarize_agent_state(agent_state)
-            logger.warning(f"Agent reached max iterations ({max_iterations}) without completion")
-            return f"Agent reached maximum iterations ({max_iterations}) without completing the task. Current progress: {final_state_summary}"
+                        # 3. OBSERVE: Process the result and update state
+                        observation = tool_result.content
+                        await self._observe_step(agent_state, thought, tool_call, observation, actual_session_id)
 
-        except Exception as e:
-            error_msg = f"Agent loop failed: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return f"Agent error: {error_msg}"
+                        # Add iteration details to span
+                        if iter_span:
+                            add_span_attributes(iter_span, {
+                                "agent.thought": thought[:200],  # Truncate for span
+                                "agent.tool_called": tool_call.name,
+                                "agent.tool_success": "TASK_COMPLETE" not in observation or "ERROR" not in observation,
+                                "agent.observation_length": len(observation)
+                            })
+
+                        # 4. CHECK FOR FINISH
+                        if tool_call.name == "finish":
+                            final_answer = observation.replace("TASK_COMPLETE: ", "")
+                            logger.info(f"Agent completed task after {iteration + 1} iterations")
+
+                            # Record successful completion metrics
+                            try:
+                                from ..api_server.metrics import record_agent_execution
+                                from ..api_server.middleware.observability import get_current_request_context
+                                context = get_current_request_context()
+                                tenant_id = context.get('tenant_id', 'unknown')
+
+                                record_agent_execution(
+                                    tenant_id=tenant_id,
+                                    iterations=iteration + 1,
+                                    status="completed"
+                                )
+                            except Exception as e:
+                                logger.debug(f"Failed to record agent metrics: {e}")
+
+                            if main_span:
+                                add_span_attributes(main_span, {
+                                    "agent.status": "completed",
+                                    "agent.iterations_used": iteration + 1,
+                                    "agent.final_answer_length": len(final_answer)
+                                })
+
+                            return final_answer
+
+                        # Log progress
+                        logger.debug(f"Iteration {iteration + 1} complete - Thought: {thought[:100]}... Action: {tool_call.name}")
+
+                # Max iterations reached
+                final_state_summary = self._summarize_agent_state(agent_state)
+                logger.warning(f"Agent reached max iterations ({max_iterations}) without completion")
+
+                # Record timeout metrics
+                try:
+                    from ..api_server.metrics import record_agent_execution
+                    from ..api_server.middleware.observability import get_current_request_context
+                    context = get_current_request_context()
+                    tenant_id = context.get('tenant_id', 'unknown')
+
+                    record_agent_execution(
+                        tenant_id=tenant_id,
+                        iterations=max_iterations,
+                        status="timeout"
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record agent metrics: {e}")
+
+                if main_span:
+                    add_span_attributes(main_span, {
+                        "agent.status": "timeout",
+                        "agent.iterations_used": max_iterations
+                    })
+
+                return f"Agent reached maximum iterations ({max_iterations}) without completing the task. Current progress: {final_state_summary}"
+
+            except Exception as e:
+                error_msg = f"Agent loop failed: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+
+                # Record error metrics
+                try:
+                    from ..api_server.metrics import record_agent_execution
+                    from ..api_server.middleware.observability import get_current_request_context
+                    context = get_current_request_context()
+                    tenant_id = context.get('tenant_id', 'unknown')
+
+                    record_agent_execution(
+                        tenant_id=tenant_id,
+                        iterations=0,  # Failed before completing any iterations
+                        status="error"
+                    )
+                except Exception as metrics_error:
+                    logger.debug(f"Failed to record agent metrics: {metrics_error}")
+
+                if main_span:
+                    from ..tracing import record_span_exception, add_span_attributes
+                    record_span_exception(main_span, e)
+                    add_span_attributes(main_span, {
+                        "agent.status": "error",
+                        "agent.error_message": str(e)
+                    })
+
+                return f"Agent error: {error_msg}"
 
     async def _think_step(
         self,
@@ -145,49 +260,67 @@ class AgentManager:
         Returns:
             Tuple of (thought, tool_call) or (None, None) if parsing fails.
         """
-        try:
-            # Get relevant context from memory systems
-            context_items = await self._memory_manager.retrieve_relevant_context(agent_state.goal)
+        from ..tracing import create_span, add_span_attributes
 
-            # Build the prompt
-            prompt = self._build_agent_prompt(agent_state, context_items)
+        with create_span(self._tracer, "agent.think_step") as span:
+            try:
+                # Get relevant context from memory systems
+                context_items = await self._memory_manager.retrieve_relevant_context(agent_state.goal)
 
-            # Get LLM provider
-            provider = self._provider_manager.get_provider(provider_name)
-            target_model = model_name or provider.default_model
+                # Build the prompt
+                prompt = self._build_agent_prompt(agent_state, context_items)
 
-            # Create messages for the LLM
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are an autonomous AI agent. Follow the ReAct format: provide a Thought explaining your reasoning, then specify an Action (tool call) to take.",
-                    session_id=session_id
-                ),
-                Message(
-                    role=Role.USER,
-                    content=prompt,
-                    session_id=session_id
+                # Get LLM provider
+                provider = self._provider_manager.get_provider(provider_name)
+                target_model = model_name or provider.default_model
+
+                # Create messages for the LLM
+                messages = [
+                    Message(
+                        role=Role.SYSTEM,
+                        content="You are an autonomous AI agent. Follow the ReAct format: provide a Thought explaining your reasoning, then specify an Action (tool call) to take.",
+                        session_id=session_id
+                    ),
+                    Message(
+                        role=Role.USER,
+                        content=prompt,
+                        session_id=session_id
+                    )
+                ]
+
+                # Call the LLM
+                logger.debug("Calling LLM for agent reasoning...")
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tools=self._tool_manager.get_tool_definitions()
                 )
-            ]
 
-            # Call the LLM
-            logger.debug("Calling LLM for agent reasoning...")
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                tools=self._tool_manager.get_tool_definitions()
-            )
+                # Extract response content
+                response_content = self._extract_response_content(response, provider)
 
-            # Extract response content
-            response_content = self._extract_response_content(response, provider)
+                # Parse the response to extract thought and tool call
+                result = self._parse_agent_response(response_content, response)
 
-            # Parse the response to extract thought and tool call
-            return self._parse_agent_response(response_content, response)
+                if span:
+                    add_span_attributes(span, {
+                        "think.provider": provider.get_name(),
+                        "think.model": target_model,
+                        "think.context_items": len(context_items),
+                        "think.prompt_length": len(prompt),
+                        "think.response_length": len(response_content),
+                        "think.parsing_success": result[0] is not None and result[1] is not None
+                    })
 
-        except Exception as e:
-            logger.error(f"Error in think step: {e}", exc_info=True)
-            return None, None
+                return result
+
+            except Exception as e:
+                logger.error(f"Error in think step: {e}", exc_info=True)
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
+                return None, None
 
     async def _act_step(self, tool_call: ToolCall, session_id: str) -> ToolResult:
         """
@@ -200,8 +333,57 @@ class AgentManager:
         Returns:
             ToolResult containing the execution result.
         """
-        logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
-        return await self._tool_manager.execute_tool(tool_call, session_id)
+        from ..tracing import create_span, add_span_attributes
+
+        with create_span(self._tracer, "agent.act_step") as span:
+            logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
+
+            if span:
+                add_span_attributes(span, {
+                    "act.tool_name": tool_call.name,
+                    "act.tool_id": tool_call.id,
+                    "act.arguments_count": len(tool_call.arguments),
+                    "act.session_id": session_id
+                })
+
+            try:
+                result = await self._tool_manager.execute_tool(tool_call, session_id)
+
+                # Record tool execution metrics
+                try:
+                    from ..api_server.metrics import record_tool_execution
+                    from ..api_server.middleware.observability import get_current_request_context
+                    context = get_current_request_context()
+                    tenant_id = context.get('tenant_id', 'unknown')
+
+                    status = "success" if not result.content.startswith("ERROR:") else "error"
+                    record_tool_execution(
+                        tenant_id=tenant_id,
+                        tool_name=tool_call.name,
+                        status=status
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record tool execution metrics: {e}")
+
+                if span:
+                    add_span_attributes(span, {
+                        "act.result_length": len(result.content),
+                        "act.success": not result.content.startswith("ERROR:")
+                    })
+
+                return result
+
+            except Exception as e:
+                logger.error(f"Error in act step: {e}", exc_info=True)
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
+
+                # Return error result
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    content=f"ERROR: {str(e)}"
+                )
 
     async def _observe_step(
         self,
@@ -221,40 +403,59 @@ class AgentManager:
             observation: The result of the action.
             session_id: Session ID for episodic logging.
         """
-        # Update agent state
-        agent_state.history_of_thoughts.append(thought)
-        agent_state.observations[tool_call.id] = {
-            "tool_name": tool_call.name,
-            "arguments": tool_call.arguments,
-            "result": observation,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+        from ..tracing import create_span, add_span_attributes
 
-        # Update scratchpad with latest reasoning
-        agent_state.scratchpad = f"Last thought: {thought}\nLast action: {tool_call.name}\nLast observation: {observation[:200]}..."
-
-        # Log the T-A-O cycle as an episode in episodic memory
-        episode = Episode(
-            session_id=session_id,
-            event_type=EpisodeType.AGENT_REFLECTION,
-            data={
-                "thought": thought,
-                "action": {
+        with create_span(self._tracer, "agent.observe_step") as span:
+            try:
+                # Update agent state
+                agent_state.history_of_thoughts.append(thought)
+                agent_state.observations[tool_call.id] = {
                     "tool_name": tool_call.name,
-                    "tool_call_id": tool_call.id,
-                    "arguments": tool_call.arguments
-                },
-                "observation": observation,
-                "goal": agent_state.goal,
-                "iteration_summary": f"Agent reasoned, used {tool_call.name}, observed result"
-            }
-        )
+                    "arguments": tool_call.arguments,
+                    "result": observation,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
 
-        try:
-            await self._storage_manager.add_episode(episode)
-            logger.debug(f"Logged T-A-O cycle as episode {episode.episode_id}")
-        except Exception as e:
-            logger.warning(f"Failed to log episode: {e}")
+                # Update scratchpad with latest reasoning
+                agent_state.scratchpad = f"Last thought: {thought}\nLast action: {tool_call.name}\nLast observation: {observation[:200]}..."
+
+                # Log the T-A-O cycle as an episode in episodic memory
+                episode = Episode(
+                    session_id=session_id,
+                    event_type=EpisodeType.AGENT_REFLECTION,
+                    data={
+                        "thought": thought,
+                        "action": {
+                            "tool_name": tool_call.name,
+                            "tool_call_id": tool_call.id,
+                            "arguments": tool_call.arguments
+                        },
+                        "observation": observation,
+                        "goal": agent_state.goal,
+                        "iteration_summary": f"Agent reasoned, used {tool_call.name}, observed result"
+                    }
+                )
+
+                try:
+                    await self._storage_manager.add_episode(episode)
+                    logger.debug(f"Logged T-A-O cycle as episode {episode.episode_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to log episode: {e}")
+
+                if span:
+                    add_span_attributes(span, {
+                        "observe.thought_length": len(thought),
+                        "observe.observation_length": len(observation),
+                        "observe.total_thoughts": len(agent_state.history_of_thoughts),
+                        "observe.total_observations": len(agent_state.observations),
+                        "observe.episode_logged": True
+                    })
+
+            except Exception as e:
+                logger.error(f"Error in observe step: {e}", exc_info=True)
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
 
     def _build_agent_prompt(self, agent_state: AgentState, context_items: List[Any]) -> str:
         """
