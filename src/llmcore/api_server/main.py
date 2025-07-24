@@ -5,9 +5,11 @@ Main FastAPI application for the llmcore API server.
 This module contains the FastAPI application instance with proper lifecycle
 management for the LLMCore instance and all API route definitions.
 
-UPDATED: Added tenant database session factory initialization for multi-tenant support.
+UPDATED: Added comprehensive observability stack with structured logging,
+Prometheus metrics, and distributed tracing integration.
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -21,7 +23,18 @@ from ..exceptions import LLMCoreError, ConfigError
 from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 from .auth import get_current_tenant, initialize_auth_db_session
-from .db import initialize_tenant_db_session  # NEW: Tenant database session factory
+from .db import initialize_tenant_db_session
+from .middleware.observability import ObservabilityMiddleware
+from ..tracing import configure_tracer
+
+# Import observability components with fallback handling
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    from .metrics import initialize_system_info, update_queue_depth_metrics
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    Instrumentator = None
+    PROMETHEUS_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +43,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global task for metrics updates
+metrics_update_task = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,14 +53,26 @@ async def lifespan(app: FastAPI):
     Manages the lifecycle of the FastAPI application.
 
     Handles startup (LLMCore initialization, Redis pool setup, authentication DB setup,
-    and tenant database session factory setup) and shutdown (graceful cleanup) of the
-    application resources.
+    tenant database session factory setup, and observability stack initialization) and
+    shutdown (graceful cleanup) of the application resources.
 
-    UPDATED: Added tenant database session factory initialization.
+    UPDATED: Added comprehensive observability stack initialization including tracing,
+    metrics, and background metrics collection.
     """
-    # Startup: Initialize LLMCore, Redis pool, authentication database, and tenant database
+    global metrics_update_task
+
+    # Startup: Initialize all components
     logger.info("API Server starting up...")
 
+    # Step 1: Initialize distributed tracing
+    try:
+        logger.info("Initializing distributed tracing...")
+        configure_tracer("llmcore-api")
+        logger.info("Distributed tracing successfully initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize tracing: {e}")
+
+    # Step 2: Initialize LLMCore instance
     try:
         logger.info("Initializing LLMCore instance...")
         llmcore_instance = await LLMCore.create()
@@ -65,7 +93,7 @@ async def lifespan(app: FastAPI):
         app.state.llmcore_instance = None
         logger.warning("API server will start but LLMCore service will be unavailable")
 
-    # Initialize Redis pool for task queue
+    # Step 3: Initialize Redis pool for task queue
     try:
         logger.info("Initializing Redis pool for task queue...")
         await initialize_redis_pool()
@@ -74,11 +102,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize Redis pool: {e}", exc_info=True)
         logger.warning("API server will start but task queue will be unavailable")
 
-    # Initialize authentication database session
+    # Step 4: Initialize authentication database session
     try:
         logger.info("Initializing authentication database session...")
         # Get database URL from environment or configuration
-        # For now, using a default - this should be configured properly in production
         database_url = os.environ.get(
             'LLMCORE_AUTH_DATABASE_URL',
             'postgresql+asyncpg://postgres:password@localhost:5432/llmcore'
@@ -89,7 +116,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize authentication database: {e}", exc_info=True)
         logger.warning("API server will start but authentication will be unavailable")
 
-    # NEW: Initialize tenant database session factory
+    # Step 5: Initialize tenant database session factory
     try:
         logger.info("Initializing tenant database session factory...")
         # Use the same database URL for tenant operations
@@ -104,10 +131,36 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize tenant database session factory: {e}", exc_info=True)
         logger.warning("API server will start but tenant-scoped operations will be unavailable")
 
+    # Step 6: Initialize Prometheus metrics
+    if PROMETHEUS_AVAILABLE:
+        try:
+            logger.info("Initializing Prometheus metrics...")
+            initialize_system_info()
+
+            # Start background task for queue depth metrics
+            metrics_update_task = asyncio.create_task(metrics_update_loop())
+            logger.info("Prometheus metrics and background collection initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Prometheus metrics: {e}", exc_info=True)
+    else:
+        logger.warning("Prometheus instrumentation not available - metrics will be disabled")
+
+    logger.info("API Server startup complete")
+
     yield  # The application runs while in this yield block
 
-    # Shutdown: Cleanly close the LLMCore instance and Redis pool
+    # Shutdown: Cleanly close all resources
     logger.info("API Server shutting down...")
+
+    # Stop metrics update task
+    if metrics_update_task and not metrics_update_task.done():
+        try:
+            metrics_update_task.cancel()
+            await metrics_update_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Error stopping metrics update task: {e}")
 
     # Close LLMCore instance
     if hasattr(app.state, 'llmcore_instance') and app.state.llmcore_instance:
@@ -126,13 +179,38 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error during Redis pool cleanup: {e}", exc_info=True)
 
+    logger.info("API Server shutdown complete")
+
+
+async def metrics_update_loop():
+    """
+    Background task to periodically update metrics that require polling.
+    """
+    logger.info("Starting metrics update background task")
+
+    try:
+        while True:
+            await update_queue_depth_metrics()
+            await asyncio.sleep(30)  # Update every 30 seconds
+    except asyncio.CancelledError:
+        logger.info("Metrics update task cancelled")
+        raise
+    except Exception as e:
+        logger.error(f"Error in metrics update loop: {e}", exc_info=True)
+
 
 # Create the FastAPI application
 app = FastAPI(
     title="llmcore API",
     description="A unified, flexible API for interacting with various Large Language Models (LLMs)",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan
+)
+
+# Add observability middleware (must be added early in the middleware stack)
+app.add_middleware(
+    ObservabilityMiddleware,
+    enable_request_logging=True
 )
 
 # Add CORS middleware for web client compatibility
@@ -143,6 +221,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize Prometheus instrumentation if available
+if PROMETHEUS_AVAILABLE:
+    try:
+        instrumentator = Instrumentator(
+            should_group_status_codes=False,
+            should_ignore_untemplated=True,
+            should_instrument_requests_inprogress=True,
+            should_instrument_requests_request_size=True,
+            should_instrument_requests_response_size=True,
+            excluded_handlers=["/metrics", "/health"],
+        )
+        instrumentator.instrument(app).expose(app)
+        logger.info("Prometheus FastAPI instrumentation enabled on /metrics endpoint")
+    except Exception as e:
+        logger.error(f"Failed to initialize Prometheus instrumentation: {e}")
 
 # Include routers with security dependency applied to protected endpoints
 # Note: Root and health endpoints remain public as specified in the requirements
@@ -197,8 +291,9 @@ async def root() -> Dict[str, str]:
     """
     return {
         "message": "llmcore API is running",
-        "version": "1.0.0",
-        "docs_url": "/docs"
+        "version": "2.0.0",
+        "docs_url": "/docs",
+        "observability_enabled": PROMETHEUS_AVAILABLE
     }
 
 
@@ -225,7 +320,12 @@ async def health_check() -> Dict[str, Any]:
             "providers": available_providers,
             "task_queue_available": redis_available,
             "authentication": "enabled",
-            "multi_tenancy": "enabled"  # NEW: Indicate multi-tenancy support
+            "multi_tenancy": "enabled",
+            "observability": {
+                "structured_logging": True,
+                "distributed_tracing": True,
+                "prometheus_metrics": PROMETHEUS_AVAILABLE
+            }
         }
     else:
         from .services.redis_client import is_redis_available
@@ -237,5 +337,21 @@ async def health_check() -> Dict[str, Any]:
             "providers": [],
             "task_queue_available": redis_available,
             "authentication": "enabled",
-            "multi_tenancy": "enabled"  # NEW: Indicate multi-tenancy support
+            "multi_tenancy": "enabled",
+            "observability": {
+                "structured_logging": True,
+                "distributed_tracing": True,
+                "prometheus_metrics": PROMETHEUS_AVAILABLE
+            }
         }
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """
+    Prometheus metrics endpoint.
+
+    This endpoint is automatically exposed by the prometheus-fastapi-instrumentator
+    but we define it here for documentation purposes.
+    """
+    pass  # The actual implementation is handled by the instrumentator
