@@ -7,6 +7,8 @@ implementations (e.g., OpenAI, Anthropic, Ollama) must adhere to within
 the LLMCore library.
 
 UPDATED: Added instrumentation points for observability metrics and tracing.
+UPDATED: Added get_models_details() abstract method for dynamic model discovery.
+UPDATED: Added tools and tool_choice parameters to chat_completion() for unified tool-calling.
 """
 
 import abc
@@ -31,6 +33,8 @@ class BaseProvider(abc.ABC):
     - Counting tokens accurately according to the provider's model.
 
     UPDATED: Added instrumentation methods for observability integration.
+    UPDATED: Added get_models_details() abstract method for dynamic model capability discovery.
+    UPDATED: Enhanced chat_completion() method signature with unified tool-calling support.
     """
     log_raw_payloads_enabled: bool
 
