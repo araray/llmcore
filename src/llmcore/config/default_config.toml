@@ -70,6 +70,19 @@ log_level = "INFO"
 # Environment Variable: LLMCORE_LOG_RAW_PAYLOADS
 log_raw_payloads = false
 
+# --- Administrative API Key ---
+# What it does: Defines the secret key required for accessing administrative endpoints
+#               such as live configuration reloading. This provides a separate,
+#               high-privilege authentication layer independent of tenant API keys.
+# Purpose: Secures administrative operations that could impact the entire platform,
+#          ensuring only authorized administrators can perform sensitive actions
+#          like configuration reloads.
+# Security: This key should be treated as a high-privilege secret. In production,
+#           ALWAYS set this via the environment variable rather than in config files.
+# Default Value: "" (empty - admin endpoints will be disabled)
+# Environment Variable: LLMCORE_ADMIN_API_KEY
+# Example: admin_api_key = "admin_llmk_abc123def456ghi789jkl"
+admin_api_key = ""
 
 # ==============================================================================
 # [providers] - LLM Provider Configurations
@@ -266,88 +279,88 @@ log_raw_payloads = false
   #               It will be formatted with `{context}` (retrieved documents) and
   #               `{question}` (the user's query).
   # Purpose: To instruct the LLM on how to use the provided RAG context.
-  default_prompt_template = """You are an AI assistant specialized in answering questions about codebases based on provided context.
-Use ONLY the following pieces of retrieved context to answer the user's question.
-If the answer is not found in the context, state that you cannot answer based on the provided information.
-Do not make up an answer or use external knowledge. Keep the answer concise and relevant to the question.
-Include relevant source file paths and line numbers if possible, based *only* on the provided context metadata.
+  default_prompt_template = """You are an AI assistant specialized in answering questions about codebases
+  based on provided context.
+  Use ONLY the following pieces of retrieved context to answer the user's question.
+  If the answer is not found in the context, state that you cannot answer based on the provided information.
+  Do not make up an answer or use external knowledge. Keep the answer concise and relevant to the question.
+  Include relevant source file paths and line numbers if possible, based *only* on the provided context metadata.
 
-Context:
----------------------
-{context}
----------------------
+  Context:
+  ---------------------
+  {context}
+  ---------------------
 
-Question: {question}
+  Question: {question}
 
-Answer:"""
+  Answer:"""
 
-  # Optional path to a custom prompt template file. Overrides the string above.
-  prompt_template_path = ""
+    # Optional path to a custom prompt template file. Overrides the string above.
+    prompt_template_path = ""
 
-  # Default number of documents to retrieve for RAG.
-  rag_retrieval_k = 3
+    # Default number of documents to retrieve for RAG.
+    rag_retrieval_k = 3
 
-  # Number of tokens to leave free in the context window for the model's response.
-  reserved_response_tokens = 500
+    # Number of tokens to leave free in the context window for the model's response.
+    reserved_response_tokens = 500
 
-  # Minimum number of recent chat messages to try to keep during truncation.
-  minimum_history_messages = 1
+    # Minimum number of recent chat messages to try to keep during truncation.
+    minimum_history_messages = 1
 
-  # Prioritizes keeping the N most recent user messages (and their preceding
-  # assistant responses) during truncation.
-  user_retained_messages_count = 5
+    # Prioritizes keeping the N most recent user messages (and their preceding
+    # assistant responses) during truncation.
+    user_retained_messages_count = 5
 
-  # A safeguard character limit for a single user-provided context item.
-  # The default is very large to accommodate large documents.
-  max_chars_per_user_item = 40000000
+    # A safeguard character limit for a single user-provided context item.
+    # The default is very large to accommodate large documents.
+    max_chars_per_user_item = 40000000
 
 
-# ==============================================================================
-# [apykatu] - Integrated Data Ingestion Pipeline Configuration
-# ==============================================================================
-# This section configures the `apykatu` data ingestion library. These settings
-# are passed to the `ingest_data_task` background job, which is executed by the
-# TaskMaster service. This allows you to manage the entire data ingestion
-# pipeline from this single configuration file.
-[apykatu]
+  # ==============================================================================
+  # [apykatu] - Integrated Data Ingestion Pipeline Configuration
+  # ==============================================================================
+  # This section configures the `apykatu` data ingestion library. These settings
+  # are passed to the `ingest_data_task` background job, which is executed by the
+  # TaskMaster service. This allows you to manage the entire data ingestion
+  # pipeline from this single configuration file.
+  [apykatu]
 
-  [apykatu.database]
-  # Vector store type `apykatu` will write to.
-  type = "chromadb"
+    [apykatu.database]
+    # Vector store type `apykatu` will write to.
+    type = "chromadb"
 
-  [apykatu.embeddings]
-  # Default embedding model for `apykatu` to use during ingestion.
-  # This can be different from `llmcore.default_embedding_model`.
-  # The name must match a key under `[apykatu.embeddings.models]`.
-  default_model = "apykatu_default_st_embedder"
+    [apykatu.embeddings]
+    # Default embedding model for `apykatu` to use during ingestion.
+    # This can be different from `llmcore.default_embedding_model`.
+    # The name must match a key under `[apykatu.embeddings.models]`.
+    default_model = "apykatu_default_st_embedder"
 
-    [apykatu.embeddings.models]
-      [apykatu.embeddings.models.apykatu_default_st_embedder]
-      provider = "sentence-transformers"
-      model_name = "all-MiniLM-L6-v2"
-      device = "cpu"
+      [apykatu.embeddings.models]
+        [apykatu.embeddings.models.apykatu_default_st_embedder]
+        provider = "sentence-transformers"
+        model_name = "all-MiniLM-L6-v2"
+        device = "cpu"
 
-  [apykatu.chunking]
-  # Default strategy for breaking down documents.
-  default_strategy = "RecursiveSplitter"
+    [apykatu.chunking]
+    # Default strategy for breaking down documents.
+    default_strategy = "RecursiveSplitter"
 
-    [apykatu.chunking.strategies]
-      # Example of a code-aware chunking strategy for Python files.
-      [apykatu.chunking.strategies.python_code]
-      extensions = [".py", ".pyw"]
-      grammar = "Python3"
-      entry_points =
+      [apykatu.chunking.strategies]
+        # Example of a code-aware chunking strategy for Python files.
+        [apykatu.chunking.strategies.python_code]
+        extensions = [".py", ".pyw"]
+        grammar = "Python3"
+        entry_points = ["module", "class_definition", "function_definition"]
 
-    [apykatu.chunking.parameters]
-      # Parameters for the RecursiveSplitter strategy.
+      [apykatu.chunking.parameters]
+        # Parameters for the RecursiveSplitter strategy.
+        chunk_size = 800
+        chunk_overlap = 100
 
-      chunk_size = 800
-      chunk_overlap = 100
-
-  [apykatu.discovery]
-  # If true, `apykatu` will respect rules in `.gitignore` files.
-  use_gitignore = true
-  # List of directory names to always exclude.
-  excluded_dirs = ["__pycache__", "node_modules", "build", "dist", "venv", ".venv", "target", ".git"]
-  # List of file patterns to always exclude.
-  excluded_files =
+    [apykatu.discovery]
+    # If true, `apykatu` will respect rules in `.gitignore` files.
+    use_gitignore = true
+    # List of directory names to always exclude.
+    excluded_dirs = ["__pycache__", "node_modules", "build", "dist", "venv", ".venv", "target", ".git"]
+    # List of file patterns to always exclude.
+    excluded_files = ["*.pyc", "*.pyo", "*.pyd", "__pycache__", ".DS_Store"]
