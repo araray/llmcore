@@ -7,6 +7,7 @@ Includes built-in tools for semantic search, episodic search, and basic calculat
 
 UPDATED: Refactored to support dynamic tool loading from database with secure
 implementation registry for tenant-specific tool management.
+UPDATED: Added human_approval tool for HITL workflows.
 """
 
 import asyncio
@@ -151,7 +152,7 @@ async def calculator(expression: str) -> str:
         logger.debug(f"Calculator: evaluating '{expression}'")
 
         # Simple safety check - only allow basic math operations
-        if not re.match(r'^[0-9+\-*/().\s]+, expression):
+        if not re.match(r'^[0-9+\-*/().\s]+$', expression):
             return f"Invalid expression: '{expression}'. Only basic arithmetic operations are allowed."
 
         # Prevent potentially dangerous operations
@@ -185,6 +186,25 @@ async def finish(answer: str) -> str:
     return f"TASK_COMPLETE: {answer}"
 
 
+async def human_approval(prompt: str, pending_action: Dict[str, Any]) -> str:
+    """
+    Special tool for requesting human approval before executing sensitive actions.
+
+    This tool does not perform any external action. Instead, it acts as a signal
+    to the AgentManager to pause execution and request human approval.
+
+    Args:
+        prompt: The question/request to present to the human operator
+        pending_action: JSON representation of the tool call that needs approval
+
+    Returns:
+        A placeholder message indicating approval is being requested
+    """
+    logger.info(f"Human approval requested: {prompt}")
+    logger.debug(f"Pending action for approval: {pending_action}")
+    return "Pausing for human approval."
+
+
 # --- Secure Implementation Registry ---
 
 # This is the security boundary - only functions registered here can be executed
@@ -193,6 +213,7 @@ _IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
     "llmcore.tools.search.episodic": episodic_search,
     "llmcore.tools.calculation.calculator": calculator,
     "llmcore.tools.flow.finish": finish,
+    "llmcore.tools.flow.human_approval": human_approval,  # NEW: HITL tool
 }
 
 # Human-readable descriptions for the implementation keys
@@ -201,6 +222,7 @@ _IMPLEMENTATION_DESCRIPTIONS: Dict[str, str] = {
     "llmcore.tools.search.episodic": "Search past experiences and interactions in episodic memory",
     "llmcore.tools.calculation.calculator": "Perform mathematical calculations safely",
     "llmcore.tools.flow.finish": "Complete the agent task with a final answer",
+    "llmcore.tools.flow.human_approval": "Request human approval before executing sensitive or irreversible actions",
 }
 
 
@@ -212,6 +234,7 @@ class ToolManager:
 
     UPDATED: Now supports dynamic tool loading from database with secure implementation
     registry. Tools are loaded per-tenant and per-run rather than globally at startup.
+    UPDATED: Added human_approval tool for HITL workflows.
     """
 
     def __init__(self, memory_manager: MemoryManager, storage_manager: StorageManager):

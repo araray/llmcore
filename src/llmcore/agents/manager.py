@@ -9,6 +9,7 @@ UPDATED: Added planning and reflection steps to transform the agent from reactiv
 UPDATED: Enhanced cognitive cycle: Plan -> (Think -> Act -> Observe -> Reflect) with plan tracking.
 UPDATED: Added manual OpenTelemetry spans around key agent logic steps for enhanced tracing.
 UPDATED: Integrated dynamic tool loading to support tenant-specific toolsets.
+UPDATED: Added Human-in-the-Loop (HITL) workflow support with pause/resume capabilities.
 """
 
 import json
@@ -19,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from ..exceptions import LLMCoreError, ProviderError
 from ..memory.manager import MemoryManager
@@ -43,6 +45,7 @@ class AgentManager:
     UPDATED: Added distributed tracing spans for detailed agent behavior analysis.
     UPDATED: Integrated dynamic tool loading for tenant-specific tool management.
     UPDATED: Enhanced with planning and reflection capabilities for strategic reasoning.
+    UPDATED: Added Human-in-the-Loop (HITL) workflow support for safe execution.
     """
 
     def __init__(
@@ -72,7 +75,7 @@ class AgentManager:
         except Exception as e:
             logger.debug(f"Tracing not available for AgentManager: {e}")
 
-        logger.info("AgentManager initialized with planning and reflection capabilities")
+        logger.info("AgentManager initialized with planning, reflection, and HITL capabilities")
 
     async def run_agent_loop(
         self,
@@ -86,6 +89,8 @@ class AgentManager:
     ) -> str:
         """
         Orchestrates the Plan -> (Think -> Act -> Observe -> Reflect) loop for autonomous task execution.
+
+        UPDATED: Added HITL workflow support - can pause execution for human approval and resume.
 
         Args:
             task: The AgentTask containing the goal and initial state.
@@ -106,7 +111,7 @@ class AgentManager:
         agent_state = task.agent_state
         actual_session_id = session_id or task.task_id
 
-        logger.info(f"Starting enhanced agent loop with planning for goal: '{agent_state.goal[:100]}...'")
+        logger.info(f"Starting enhanced agent loop with planning and HITL for goal: '{agent_state.goal[:100]}...'")
 
         # Create main agent loop span
         span_attributes = {
@@ -117,13 +122,26 @@ class AgentManager:
             "agent.provider": provider_name or "default",
             "agent.model": model_name or "default",
             "agent.enabled_toolkits": str(enabled_toolkits) if enabled_toolkits else "all",
-            "agent.enhanced_mode": True  # Flag for the new cognitive architecture
+            "agent.enhanced_mode": True,  # Flag for the new cognitive architecture
+            "agent.hitl_enabled": True  # Flag for HITL support
         }
 
         from ..tracing import create_span
         with create_span(self._tracer, "agent.enhanced_execution_loop", **span_attributes) as main_span:
             try:
                 from ..tracing import add_span_attributes
+
+                # Check if this is a resuming task (from HITL workflow)
+                is_resuming_task = self._check_if_resuming_task(task, db_session)
+                if is_resuming_task:
+                    logger.info(f"Resuming agent task {task.task_id} from HITL workflow")
+                    if main_span:
+                        add_span_attributes(main_span, {"agent.resuming_from_hitl": True})
+
+                    # Handle the resumption logic
+                    resume_result = await self._handle_task_resumption(task, actual_session_id, provider_name, model_name, db_session)
+                    if resume_result:
+                        return resume_result
 
                 # Load tools for this agent run if database session is available
                 if db_session:
@@ -149,14 +167,15 @@ class AgentManager:
                 else:
                     logger.warning("No database session provided for tool loading - agent will have no tools available")
 
-                # STEP 1: PLANNING - Execute planning step before the main loop
-                await self._plan_step(agent_state, actual_session_id, provider_name, model_name)
+                # STEP 1: PLANNING - Execute planning step before the main loop (skip if resuming)
+                if not is_resuming_task:
+                    await self._plan_step(agent_state, actual_session_id, provider_name, model_name)
 
-                # Initialize plan tracking
-                if agent_state.plan and not agent_state.plan_steps_status:
-                    agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
+                    # Initialize plan tracking
+                    if agent_state.plan and not agent_state.plan_steps_status:
+                        agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
 
-                logger.info(f"Agent generated plan with {len(agent_state.plan)} steps: {agent_state.plan}")
+                    logger.info(f"Agent generated plan with {len(agent_state.plan)} steps: {agent_state.plan}")
 
                 # MAIN LOOP: Think -> Act -> Observe -> Reflect
                 for iteration in range(max_iterations):
@@ -188,8 +207,19 @@ class AgentManager:
                                 })
                             return f"Agent error: {error_msg}"
 
-                        # 2. ACT: Execute the tool
-                        tool_result = await self._act_step(tool_call, actual_session_id)
+                        # 2. ACT: Execute the tool (with HITL check)
+                        tool_result = await self._act_step(tool_call, actual_session_id, task, db_session)
+
+                        # Check if the task was paused for human approval
+                        if tool_result.content == "PAUSED_FOR_APPROVAL":
+                            logger.info(f"Agent task {task.task_id} paused for human approval")
+                            if main_span:
+                                add_span_attributes(main_span, {
+                                    "agent.status": "paused_for_approval",
+                                    "agent.iterations_used": iteration + 1
+                                })
+                            # Return a special message indicating the task is paused
+                            return f"Agent task paused for human approval. Use the API to approve or reject the pending action."
 
                         # 3. OBSERVE: Process the result and update state
                         observation = tool_result.content
@@ -296,6 +326,133 @@ class AgentManager:
                     })
 
                 return f"Agent error: {error_msg}"
+
+    def _check_if_resuming_task(self, task: AgentTask, db_session: Optional[AsyncSession]) -> bool:
+        """
+        Check if this task is resuming from a HITL workflow.
+
+        Args:
+            task: The AgentTask to check
+            db_session: Database session for querying task state
+
+        Returns:
+            True if the task is resuming from HITL, False otherwise
+        """
+        # A task is resuming if it has pending_action_data (either approval or rejection)
+        return task.pending_action_data is not None
+
+    async def _handle_task_resumption(
+        self,
+        task: AgentTask,
+        session_id: str,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        db_session: Optional[AsyncSession] = None
+    ) -> Optional[str]:
+        """
+        Handle the resumption of a task from HITL workflow.
+
+        Args:
+            task: The AgentTask being resumed
+            session_id: Session ID for the task
+            provider_name: Optional provider override
+            model_name: Optional model override
+            db_session: Database session for updates
+
+        Returns:
+            Final result if task completes during resumption, None to continue normal loop
+        """
+        try:
+            pending_data = task.pending_action_data
+            if not pending_data:
+                return None
+
+            # Check if this was an approval or rejection
+            if "rejection_reason" in pending_data:
+                # Task was rejected - provide rejection feedback as observation
+                rejection_reason = pending_data["rejection_reason"]
+                logger.info(f"Task {task.task_id} was rejected: {rejection_reason}")
+
+                # Clear the pending data
+                await self._clear_pending_action_data(task, db_session)
+
+                # The agent will process this rejection in its next think step
+                # Update the scratchpad with the rejection info
+                task.agent_state.scratchpad += f"\n\nHuman rejected the pending action: {rejection_reason}"
+
+                return None  # Continue with normal loop
+
+            else:
+                # Task was approved - execute the pending action
+                approved_action = pending_data.get("approved_action")
+                if approved_action:
+                    logger.info(f"Task {task.task_id} was approved, executing pending action")
+
+                    # Reconstruct the ToolCall from the stored data
+                    tool_call = ToolCall(
+                        id=approved_action.get("id", str(uuid.uuid4())),
+                        name=approved_action["name"],
+                        arguments=approved_action["arguments"]
+                    )
+
+                    # Execute the approved action
+                    tool_result = await self._tool_manager.execute_tool(tool_call, session_id)
+
+                    # Process the observation
+                    await self._observe_step(
+                        task.agent_state,
+                        "Executing approved action",
+                        tool_call,
+                        tool_result.content,
+                        session_id
+                    )
+
+                    # Clear the pending data
+                    await self._clear_pending_action_data(task, db_session)
+
+                    # Check if this was a finish action
+                    if tool_call.name == "finish":
+                        final_answer = tool_result.content.replace("TASK_COMPLETE: ", "")
+                        logger.info(f"Agent completed task after approval with final answer")
+                        return final_answer
+
+                return None  # Continue with normal loop
+
+        except Exception as e:
+            logger.error(f"Error handling task resumption: {e}", exc_info=True)
+            return None
+
+    async def _clear_pending_action_data(self, task: AgentTask, db_session: Optional[AsyncSession]) -> None:
+        """
+        Clear the pending action data from the task.
+
+        Args:
+            task: The AgentTask to update
+            db_session: Database session for updates
+        """
+        try:
+            # Clear the fields in the task object
+            task.pending_action_data = None
+            task.approval_prompt = None
+            task.updated_at = datetime.now(timezone.utc)
+
+            # Update in database if session is available
+            if db_session:
+                update_query = text("""
+                    UPDATE agent_tasks
+                    SET pending_action_data = NULL,
+                        approval_prompt = NULL,
+                        updated_at = :updated_at
+                    WHERE task_id = :task_id
+                """)
+                await db_session.execute(update_query, {
+                    "task_id": task.task_id,
+                    "updated_at": task.updated_at
+                })
+                await db_session.commit()
+
+        except Exception as e:
+            logger.error(f"Error clearing pending action data: {e}", exc_info=True)
 
     async def _plan_step(
         self,
@@ -728,13 +885,23 @@ RESPONSE FORMAT (must be valid JSON):
                     record_span_exception(span, e)
                 return None, None
 
-    async def _act_step(self, tool_call: ToolCall, session_id: str) -> ToolResult:
+    async def _act_step(
+        self,
+        tool_call: ToolCall,
+        session_id: str,
+        task: AgentTask,
+        db_session: Optional[AsyncSession] = None
+    ) -> ToolResult:
         """
         Execute the ACT step: run the requested tool.
+
+        UPDATED: Added HITL workflow support - checks for human_approval tool and pauses execution.
 
         Args:
             tool_call: The tool call to execute.
             session_id: Session ID for tools that need context.
+            task: The current AgentTask (needed for HITL workflow).
+            db_session: Database session for updating task state.
 
         Returns:
             ToolResult containing the execution result.
@@ -749,10 +916,36 @@ RESPONSE FORMAT (must be valid JSON):
                     "act.tool_name": tool_call.name,
                     "act.tool_id": tool_call.id,
                     "act.arguments_count": len(tool_call.arguments),
-                    "act.session_id": session_id
+                    "act.session_id": session_id,
+                    "act.hitl_check": True
                 })
 
             try:
+                # HITL WORKFLOW: Check if this is a human_approval tool call
+                if tool_call.name == "human_approval":
+                    logger.info(f"Human approval requested for task {task.task_id}")
+
+                    # Extract the approval prompt and pending action from arguments
+                    approval_prompt = tool_call.arguments.get("prompt", "Approval requested for pending action")
+                    pending_action = tool_call.arguments.get("pending_action", {})
+
+                    # Update the task in the database to PENDING_APPROVAL state
+                    await self._update_task_for_approval(task, approval_prompt, pending_action, db_session)
+
+                    if span:
+                        add_span_attributes(span, {
+                            "act.hitl_triggered": True,
+                            "act.approval_prompt": approval_prompt[:100],
+                            "act.pending_action": pending_action.get("name", "unknown")
+                        })
+
+                    # Return special result to pause the agent loop
+                    return ToolResult(
+                        tool_call_id=tool_call.id,
+                        content="PAUSED_FOR_APPROVAL"
+                    )
+
+                # Normal tool execution
                 result = await self._tool_manager.execute_tool(tool_call, session_id)
 
                 # Record tool execution metrics
@@ -774,7 +967,8 @@ RESPONSE FORMAT (must be valid JSON):
                 if span:
                     add_span_attributes(span, {
                         "act.result_length": len(result.content),
-                        "act.success": not result.content.startswith("ERROR:")
+                        "act.success": not result.content.startswith("ERROR:"),
+                        "act.hitl_triggered": False
                     })
 
                 return result
@@ -790,6 +984,59 @@ RESPONSE FORMAT (must be valid JSON):
                     tool_call_id=tool_call.id,
                     content=f"ERROR: {str(e)}"
                 )
+
+    async def _update_task_for_approval(
+        self,
+        task: AgentTask,
+        approval_prompt: str,
+        pending_action: Dict[str, Any],
+        db_session: Optional[AsyncSession] = None
+    ) -> None:
+        """
+        Update the task state for human approval workflow.
+
+        Args:
+            task: The AgentTask to update
+            approval_prompt: The prompt for the human operator
+            pending_action: The action that needs approval
+            db_session: Database session for updates
+        """
+        try:
+            # Update the task object
+            task.status = "PENDING_APPROVAL"
+            task.approval_prompt = approval_prompt
+            task.pending_action_data = {
+                "approved_action": pending_action,
+                "requested_at": datetime.now(timezone.utc).isoformat()
+            }
+            task.updated_at = datetime.now(timezone.utc)
+
+            # Update in database if session is available
+            if db_session:
+                update_query = text("""
+                    UPDATE agent_tasks
+                    SET status = :status,
+                        approval_prompt = :approval_prompt,
+                        pending_action_data = :pending_action_data,
+                        updated_at = :updated_at
+                    WHERE task_id = :task_id
+                """)
+                await db_session.execute(update_query, {
+                    "task_id": task.task_id,
+                    "status": task.status,
+                    "approval_prompt": task.approval_prompt,
+                    "pending_action_data": json.dumps(task.pending_action_data),
+                    "updated_at": task.updated_at
+                })
+                await db_session.commit()
+
+                logger.info(f"Task {task.task_id} updated to PENDING_APPROVAL state")
+            else:
+                logger.warning("No database session available to persist HITL state")
+
+        except Exception as e:
+            logger.error(f"Error updating task for approval: {e}", exc_info=True)
+            raise
 
     async def _observe_step(
         self,
@@ -941,6 +1188,7 @@ INSTRUCTIONS:
 - If you have completed all planned steps and have enough information to answer the goal, use the "finish" tool
 - Be thorough but efficient in your approach
 - Stay focused on your plan but be flexible if circumstances change
+- For sensitive or irreversible actions, use the "human_approval" tool to request approval first
 
 CURRENT SITUATION:
 {agent_state.scratchpad if agent_state.scratchpad else "Starting execution of your strategic plan."}
@@ -1094,6 +1342,25 @@ Please provide your Thought about the current step and then make a tool call to 
                             name="finish",
                             arguments={"answer": answer}
                         )
+                    elif tool_name == "human_approval":
+                        # For human_approval tool, extract approval prompt and pending action
+                        prompt_match = re.search(r'prompt["\']?\s*:\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+                        prompt = prompt_match.group(1) if prompt_match else "Approval requested"
+
+                        # Look for pending action info
+                        pending_action = {}
+                        action_match = re.search(r'pending_action["\']?\s*:\s*\{([^}]+)\}', content, re.IGNORECASE)
+                        if action_match:
+                            try:
+                                pending_action = json.loads('{' + action_match.group(1) + '}')
+                            except:
+                                pending_action = {"name": "unknown_action", "arguments": {}}
+
+                        return ToolCall(
+                            id=str(uuid.uuid4()),
+                            name="human_approval",
+                            arguments={"prompt": prompt, "pending_action": pending_action}
+                        )
                     elif tool_name in ["semantic_search", "episodic_search"]:
                         # Extract potential search query
                         query_patterns = [
@@ -1136,7 +1403,8 @@ Please provide your Thought about the current step and then make a tool call to 
             "semantic_search": "query",
             "episodic_search": "query",
             "calculator": "expression",
-            "finish": "answer"
+            "finish": "answer",
+            "human_approval": "prompt"
         }
         return tool_param_map.get(tool_name)
 
