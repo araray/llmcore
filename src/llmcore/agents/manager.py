@@ -2,9 +2,11 @@
 """
 Agent Management for LLMCore.
 
-Orchestrates the Think -> Act -> Observe execution loop for autonomous agent behavior.
-Implements the ReAct (Reason + Act) paradigm for complex problem-solving.
+Orchestrates the Plan -> Think -> Act -> Observe -> Reflect execution loop for autonomous agent behavior.
+Implements an enhanced cognitive architecture with explicit planning and reflection steps.
 
+UPDATED: Added planning and reflection steps to transform the agent from reactive to strategic.
+UPDATED: Enhanced cognitive cycle: Plan -> (Think -> Act -> Observe -> Reflect) with plan tracking.
 UPDATED: Added manual OpenTelemetry spans around key agent logic steps for enhanced tracing.
 UPDATED: Integrated dynamic tool loading to support tenant-specific toolsets.
 """
@@ -31,13 +33,16 @@ logger = logging.getLogger(__name__)
 
 class AgentManager:
     """
-    Orchestrates the autonomous agent execution loop.
+    Orchestrates the autonomous agent execution loop with strategic planning and reflection.
 
-    Manages the Think -> Act -> Observe cycle, coordinating between the LLM provider,
-    memory systems, and tool execution to achieve complex goals autonomously.
+    Manages the Plan -> (Think -> Act -> Observe -> Reflect) cycle, coordinating between
+    the LLM provider, memory systems, and tool execution to achieve complex goals autonomously.
+    The enhanced cognitive architecture includes explicit planning before execution and
+    critical reflection after each action to enable strategic problem-solving.
 
     UPDATED: Added distributed tracing spans for detailed agent behavior analysis.
     UPDATED: Integrated dynamic tool loading for tenant-specific tool management.
+    UPDATED: Enhanced with planning and reflection capabilities for strategic reasoning.
     """
 
     def __init__(
@@ -67,7 +72,7 @@ class AgentManager:
         except Exception as e:
             logger.debug(f"Tracing not available for AgentManager: {e}")
 
-        logger.info("AgentManager initialized")
+        logger.info("AgentManager initialized with planning and reflection capabilities")
 
     async def run_agent_loop(
         self,
@@ -80,7 +85,7 @@ class AgentManager:
         enabled_toolkits: Optional[List[str]] = None
     ) -> str:
         """
-        Orchestrates the Think -> Act -> Observe loop for autonomous task execution.
+        Orchestrates the Plan -> (Think -> Act -> Observe -> Reflect) loop for autonomous task execution.
 
         Args:
             task: The AgentTask containing the goal and initial state.
@@ -101,7 +106,7 @@ class AgentManager:
         agent_state = task.agent_state
         actual_session_id = session_id or task.task_id
 
-        logger.info(f"Starting agent loop for goal: '{agent_state.goal[:100]}...'")
+        logger.info(f"Starting enhanced agent loop with planning for goal: '{agent_state.goal[:100]}...'")
 
         # Create main agent loop span
         span_attributes = {
@@ -111,11 +116,12 @@ class AgentManager:
             "agent.session_id": actual_session_id,
             "agent.provider": provider_name or "default",
             "agent.model": model_name or "default",
-            "agent.enabled_toolkits": str(enabled_toolkits) if enabled_toolkits else "all"
+            "agent.enabled_toolkits": str(enabled_toolkits) if enabled_toolkits else "all",
+            "agent.enhanced_mode": True  # Flag for the new cognitive architecture
         }
 
         from ..tracing import create_span
-        with create_span(self._tracer, "agent.execution_loop", **span_attributes) as main_span:
+        with create_span(self._tracer, "agent.enhanced_execution_loop", **span_attributes) as main_span:
             try:
                 from ..tracing import add_span_attributes
 
@@ -143,16 +149,28 @@ class AgentManager:
                 else:
                     logger.warning("No database session provided for tool loading - agent will have no tools available")
 
+                # STEP 1: PLANNING - Execute planning step before the main loop
+                await self._plan_step(agent_state, actual_session_id, provider_name, model_name)
+
+                # Initialize plan tracking
+                if agent_state.plan and not agent_state.plan_steps_status:
+                    agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
+
+                logger.info(f"Agent generated plan with {len(agent_state.plan)} steps: {agent_state.plan}")
+
+                # MAIN LOOP: Think -> Act -> Observe -> Reflect
                 for iteration in range(max_iterations):
                     iteration_attributes = {
                         "agent.iteration": iteration + 1,
-                        "agent.iteration_total": max_iterations
+                        "agent.iteration_total": max_iterations,
+                        "agent.current_plan_step": agent_state.current_plan_step_index + 1 if agent_state.plan else 0,
+                        "agent.plan_steps_completed": sum(1 for status in agent_state.plan_steps_status if status == 'completed')
                     }
 
                     with create_span(self._tracer, "agent.iteration", **iteration_attributes) as iter_span:
                         logger.debug(f"Agent iteration {iteration + 1}/{max_iterations}")
 
-                        # 1. THINK: Construct prompt and call LLM
+                        # 1. THINK: Construct prompt and call LLM (enhanced with plan context)
                         thought, tool_call = await self._think_step(
                             agent_state,
                             actual_session_id,
@@ -177,19 +195,23 @@ class AgentManager:
                         observation = tool_result.content
                         await self._observe_step(agent_state, thought, tool_call, observation, actual_session_id)
 
+                        # 4. REFLECT: Critically evaluate progress and update plan if needed
+                        await self._reflect_step(agent_state, tool_call, tool_result, actual_session_id, provider_name, model_name)
+
                         # Add iteration details to span
                         if iter_span:
                             add_span_attributes(iter_span, {
                                 "agent.thought": thought[:200],  # Truncate for span
                                 "agent.tool_called": tool_call.name,
                                 "agent.tool_success": "TASK_COMPLETE" not in observation or "ERROR" not in observation,
-                                "agent.observation_length": len(observation)
+                                "agent.observation_length": len(observation),
+                                "agent.reflection_completed": True
                             })
 
-                        # 4. CHECK FOR FINISH
+                        # 5. CHECK FOR FINISH
                         if tool_call.name == "finish":
                             final_answer = observation.replace("TASK_COMPLETE: ", "")
-                            logger.info(f"Agent completed task after {iteration + 1} iterations")
+                            logger.info(f"Agent completed task after {iteration + 1} iterations with {len(agent_state.plan)} planned steps")
 
                             # Record successful completion metrics
                             try:
@@ -210,7 +232,8 @@ class AgentManager:
                                 add_span_attributes(main_span, {
                                     "agent.status": "completed",
                                     "agent.iterations_used": iteration + 1,
-                                    "agent.final_answer_length": len(final_answer)
+                                    "agent.final_answer_length": len(final_answer),
+                                    "agent.plan_execution_completed": True
                                 })
 
                             return final_answer
@@ -274,6 +297,353 @@ class AgentManager:
 
                 return f"Agent error: {error_msg}"
 
+    async def _plan_step(
+        self,
+        agent_state: AgentState,
+        session_id: str,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None
+    ) -> None:
+        """
+        Execute the PLANNING step: decompose the goal into actionable sub-tasks.
+
+        Args:
+            agent_state: Current agent state with goal to be planned.
+            session_id: Session ID for context retrieval.
+            provider_name: Optional provider override.
+            model_name: Optional model override.
+        """
+        from ..tracing import create_span, add_span_attributes
+
+        with create_span(self._tracer, "agent.plan_step") as span:
+            try:
+                logger.debug(f"Executing planning step for goal: {agent_state.goal}")
+
+                # Load planning prompt template
+                planning_prompt = self._load_planning_prompt_template()
+                formatted_prompt = planning_prompt.format(goal=agent_state.goal)
+
+                # Get LLM provider
+                provider = self._provider_manager.get_provider(provider_name)
+                target_model = model_name or provider.default_model
+
+                # Create messages for the LLM
+                messages = [
+                    Message(
+                        role=Role.SYSTEM,
+                        content="You are a strategic planning agent. Create a clear, actionable plan to achieve the given goal.",
+                        session_id=session_id
+                    ),
+                    Message(
+                        role=Role.USER,
+                        content=formatted_prompt,
+                        session_id=session_id
+                    )
+                ]
+
+                # Call the LLM for planning
+                logger.debug("Calling LLM for strategic planning...")
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False
+                )
+
+                # Extract response content
+                response_content = self._extract_response_content(response, provider)
+
+                # Parse the plan from the response
+                plan_steps = self._parse_plan_from_response(response_content)
+
+                if plan_steps:
+                    agent_state.plan = plan_steps
+                    agent_state.current_plan_step_index = 0
+                    agent_state.plan_steps_status = ['pending'] * len(plan_steps)
+                    logger.info(f"Successfully generated plan with {len(plan_steps)} steps")
+                else:
+                    # Fallback: create a basic plan
+                    agent_state.plan = [
+                        "Analyze the goal and determine necessary actions",
+                        "Execute the required actions step by step",
+                        "Use the finish tool with the final result"
+                    ]
+                    agent_state.current_plan_step_index = 0
+                    agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
+                    logger.warning("Failed to parse plan from LLM response, using fallback plan")
+
+                if span:
+                    add_span_attributes(span, {
+                        "plan.provider": provider.get_name(),
+                        "plan.model": target_model,
+                        "plan.prompt_length": len(formatted_prompt),
+                        "plan.response_length": len(response_content),
+                        "plan.steps_generated": len(agent_state.plan),
+                        "plan.parsing_success": len(plan_steps) > 0
+                    })
+
+            except Exception as e:
+                logger.error(f"Error in planning step: {e}", exc_info=True)
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
+
+                # Fallback plan on error
+                agent_state.plan = [
+                    "Proceed with the goal using available tools",
+                    "Use the finish tool when ready with results"
+                ]
+                agent_state.current_plan_step_index = 0
+                agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
+
+    async def _reflect_step(
+        self,
+        agent_state: AgentState,
+        last_tool_call: ToolCall,
+        last_observation: ToolResult,
+        session_id: str,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None
+    ) -> None:
+        """
+        Execute the REFLECTION step: critically evaluate progress and update plan if needed.
+
+        Args:
+            agent_state: Agent state to potentially update.
+            last_tool_call: The action that was just taken.
+            last_observation: The result of the last action.
+            session_id: Session ID for context.
+            provider_name: Optional provider override.
+            model_name: Optional model override.
+        """
+        from ..tracing import create_span, add_span_attributes
+
+        with create_span(self._tracer, "agent.reflect_step") as span:
+            try:
+                logger.debug(f"Executing reflection step for tool: {last_tool_call.name}")
+
+                # Load reflection prompt template
+                reflection_prompt = self._load_reflection_prompt_template()
+
+                # Format the prompt with context
+                plan_text = "\n".join([f"{i+1}. {step}" for i, step in enumerate(agent_state.plan)])
+
+                formatted_prompt = reflection_prompt.format(
+                    goal=agent_state.goal,
+                    plan=plan_text,
+                    last_action_name=last_tool_call.name,
+                    last_action_arguments=json.dumps(last_tool_call.arguments),
+                    last_observation=last_observation.content
+                )
+
+                # Get LLM provider
+                provider = self._provider_manager.get_provider(provider_name)
+                target_model = model_name or provider.default_model
+
+                # Create messages for the LLM
+                messages = [
+                    Message(
+                        role=Role.SYSTEM,
+                        content="You are a critical evaluation agent. Assess progress and determine if the plan needs updating.",
+                        session_id=session_id
+                    ),
+                    Message(
+                        role=Role.USER,
+                        content=formatted_prompt,
+                        session_id=session_id
+                    )
+                ]
+
+                # Call the LLM for reflection
+                logger.debug("Calling LLM for critical reflection...")
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False
+                )
+
+                # Extract and parse reflection response
+                response_content = self._extract_response_content(response, provider)
+                reflection_result = self._parse_reflection_response(response_content)
+
+                # Update agent state based on reflection
+                if reflection_result:
+                    evaluation = reflection_result.get('evaluation', '')
+                    plan_step_completed = reflection_result.get('plan_step_completed', False)
+                    updated_plan = reflection_result.get('updated_plan')
+
+                    # Update scratchpad with reflection
+                    agent_state.scratchpad = f"Reflection: {evaluation[:300]}..."
+
+                    # Update plan step status if completed
+                    if plan_step_completed and agent_state.current_plan_step_index < len(agent_state.plan_steps_status):
+                        agent_state.plan_steps_status[agent_state.current_plan_step_index] = 'completed'
+                        agent_state.current_plan_step_index = min(
+                            agent_state.current_plan_step_index + 1,
+                            len(agent_state.plan) - 1
+                        )
+                        logger.debug(f"Marked plan step {agent_state.current_plan_step_index} as completed")
+
+                    # Update plan if reflection suggests changes
+                    if updated_plan and isinstance(updated_plan, list):
+                        agent_state.plan = updated_plan
+                        agent_state.plan_steps_status = ['pending'] * len(updated_plan)
+                        agent_state.current_plan_step_index = 0
+                        logger.info(f"Plan updated based on reflection with {len(updated_plan)} new steps")
+
+                    if span:
+                        add_span_attributes(span, {
+                            "reflect.provider": provider.get_name(),
+                            "reflect.model": target_model,
+                            "reflect.evaluation_length": len(evaluation),
+                            "reflect.step_completed": plan_step_completed,
+                            "reflect.plan_updated": updated_plan is not None,
+                            "reflect.parsing_success": True
+                        })
+
+                else:
+                    logger.warning("Failed to parse reflection response from LLM")
+                    if span:
+                        add_span_attributes(span, {
+                            "reflect.parsing_success": False
+                        })
+
+            except Exception as e:
+                logger.error(f"Error in reflection step: {e}", exc_info=True)
+                if span:
+                    from ..tracing import record_span_exception
+                    record_span_exception(span, e)
+
+    def _load_planning_prompt_template(self) -> str:
+        """Load the planning prompt template from file or return default."""
+        try:
+            # Try to load from file (in a real implementation, this would be a proper file path)
+            planning_template = """You are a strategic planning agent. Your task is to decompose a high-level goal into a numbered list of simple, actionable sub-tasks.
+
+GOAL: {goal}
+
+INSTRUCTIONS:
+- Break down the goal into a logical sequence of steps
+- Each step should correspond to a single tool use or action
+- Steps should be specific and actionable
+- The final step must always be to use the "finish" tool with your final answer
+- Number each step clearly (1, 2, 3, etc.)
+- Keep steps concise but descriptive
+- Aim for 3-8 steps total
+
+EXAMPLE FORMAT:
+1. Use semantic_search to find information about X
+2. Use calculator to compute Y based on the results
+3. Use episodic_search to check if we've done similar analysis before
+4. Use finish tool with the final analysis and recommendations
+
+Please provide your numbered plan for achieving the goal:"""
+            return planning_template
+        except Exception as e:
+            logger.debug(f"Could not load planning template: {e}")
+            return "Create a step-by-step plan to achieve this goal: {goal}"
+
+    def _load_reflection_prompt_template(self) -> str:
+        """Load the reflection prompt template from file or return default."""
+        try:
+            reflection_template = """You are a critical evaluation agent. Your task is to reflect on the last action taken and assess progress toward the goal.
+
+ORIGINAL GOAL: {goal}
+
+CURRENT PLAN:
+{plan}
+
+LAST ACTION TAKEN:
+Tool: {last_action_name}
+Arguments: {last_action_arguments}
+
+OBSERVATION FROM LAST ACTION:
+{last_observation}
+
+REFLECTION INSTRUCTIONS:
+Critically evaluate the last action and its results. Consider:
+1. Did the action successfully complete the current plan step?
+2. Does the observation reveal new information that changes our understanding?
+3. Should the plan be modified, reordered, or updated?
+4. Are we making progress toward the goal?
+
+Respond with a JSON object containing:
+- "evaluation": Your critical assessment of the last action and observation
+- "plan_step_completed": true/false - whether the current plan step was successfully completed
+- "updated_plan": null if no changes needed, or a new list of plan steps if the plan should be modified
+
+RESPONSE FORMAT (must be valid JSON):
+{{
+  "evaluation": "Your detailed analysis here",
+  "plan_step_completed": true,
+  "updated_plan": null
+}}"""
+            return reflection_template
+        except Exception as e:
+            logger.debug(f"Could not load reflection template: {e}")
+            return "Reflect on the last action and determine if the plan step was completed. Goal: {goal}"
+
+    def _parse_plan_from_response(self, response_content: str) -> List[str]:
+        """Parse a numbered plan from the LLM response."""
+        try:
+            plan_steps = []
+            lines = response_content.strip().split('\n')
+
+            for line in lines:
+                line = line.strip()
+                # Look for numbered steps (1., 2., etc.)
+                if re.match(r'^\d+\.', line):
+                    # Remove the number and period, clean up the step
+                    step = re.sub(r'^\d+\.\s*', '', line).strip()
+                    if step:
+                        plan_steps.append(step)
+
+            # Ensure we have at least a basic plan
+            if not plan_steps:
+                # Try to extract any meaningful lines as steps
+                for line in lines:
+                    line = line.strip()
+                    if len(line) > 10 and not line.startswith('GOAL:') and not line.startswith('INSTRUCTIONS:'):
+                        plan_steps.append(line)
+                        if len(plan_steps) >= 3:  # Limit fallback extraction
+                            break
+
+            return plan_steps[:8]  # Limit to 8 steps maximum
+
+        except Exception as e:
+            logger.error(f"Error parsing plan from response: {e}")
+            return []
+
+    def _parse_reflection_response(self, response_content: str) -> Optional[Dict[str, Any]]:
+        """Parse the JSON reflection response from the LLM."""
+        try:
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                return json.loads(json_str)
+
+            # Fallback: try to parse the whole response as JSON
+            return json.loads(response_content.strip())
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse reflection JSON: {e}")
+
+            # Fallback: extract basic information from text
+            try:
+                evaluation = "Reflection analysis completed"
+                plan_step_completed = "complet" in response_content.lower() or "success" in response_content.lower()
+
+                return {
+                    "evaluation": evaluation,
+                    "plan_step_completed": plan_step_completed,
+                    "updated_plan": None
+                }
+            except Exception:
+                return None
+        except Exception as e:
+            logger.error(f"Error parsing reflection response: {e}")
+            return None
+
     async def _think_step(
         self,
         agent_state: AgentState,
@@ -283,6 +653,8 @@ class AgentManager:
     ) -> Tuple[Optional[str], Optional[ToolCall]]:
         """
         Execute the THINK step: retrieve context and call LLM for reasoning.
+
+        Enhanced with plan context to provide strategic guidance to the tactical thinking.
 
         Args:
             agent_state: Current agent state with goal and history.
@@ -300,8 +672,8 @@ class AgentManager:
                 # Get relevant context from memory systems
                 context_items = await self._memory_manager.retrieve_relevant_context(agent_state.goal)
 
-                # Build the prompt
-                prompt = self._build_agent_prompt(agent_state, context_items)
+                # Build the enhanced prompt with plan context
+                prompt = self._build_enhanced_agent_prompt(agent_state, context_items)
 
                 # Get LLM provider
                 provider = self._provider_manager.get_provider(provider_name)
@@ -311,7 +683,7 @@ class AgentManager:
                 messages = [
                     Message(
                         role=Role.SYSTEM,
-                        content="You are an autonomous AI agent. Follow the ReAct format: provide a Thought explaining your reasoning, then specify an Action (tool call) to take.",
+                        content="You are an autonomous AI agent with strategic planning capabilities. Follow your plan while using the ReAct format: provide a Thought explaining your reasoning, then specify an Action (tool call) to take.",
                         session_id=session_id
                     ),
                     Message(
@@ -322,7 +694,7 @@ class AgentManager:
                 ]
 
                 # Call the LLM
-                logger.debug("Calling LLM for agent reasoning...")
+                logger.debug("Calling LLM for enhanced agent reasoning with plan context...")
                 response = await provider.chat_completion(
                     context=messages,
                     model=target_model,
@@ -343,13 +715,14 @@ class AgentManager:
                         "think.context_items": len(context_items),
                         "think.prompt_length": len(prompt),
                         "think.response_length": len(response_content),
-                        "think.parsing_success": result[0] is not None and result[1] is not None
+                        "think.parsing_success": result[0] is not None and result[1] is not None,
+                        "think.plan_context_included": len(agent_state.plan) > 0
                     })
 
                 return result
 
             except Exception as e:
-                logger.error(f"Error in think step: {e}", exc_info=True)
+                logger.error(f"Error in enhanced think step: {e}", exc_info=True)
                 if span:
                     from ..tracing import record_span_exception
                     record_span_exception(span, e)
@@ -450,7 +823,11 @@ class AgentManager:
                 }
 
                 # Update scratchpad with latest reasoning
-                agent_state.scratchpad = f"Last thought: {thought}\nLast action: {tool_call.name}\nLast observation: {observation[:200]}..."
+                current_step = ""
+                if agent_state.plan and agent_state.current_plan_step_index < len(agent_state.plan):
+                    current_step = f" (Step {agent_state.current_plan_step_index + 1}: {agent_state.plan[agent_state.current_plan_step_index]})"
+
+                agent_state.scratchpad = f"Last thought: {thought}\nLast action: {tool_call.name}{current_step}\nLast observation: {observation[:200]}..."
 
                 # Log the T-A-O cycle as an episode in episodic memory
                 episode = Episode(
@@ -465,13 +842,15 @@ class AgentManager:
                         },
                         "observation": observation,
                         "goal": agent_state.goal,
-                        "iteration_summary": f"Agent reasoned, used {tool_call.name}, observed result"
+                        "current_plan_step": agent_state.current_plan_step_index + 1 if agent_state.plan else 0,
+                        "plan": agent_state.plan,
+                        "iteration_summary": f"Agent reasoned, used {tool_call.name}, observed result, executing plan step {agent_state.current_plan_step_index + 1}"
                     }
                 )
 
                 try:
                     await self._storage_manager.add_episode(episode)
-                    logger.debug(f"Logged T-A-O cycle as episode {episode.episode_id}")
+                    logger.debug(f"Logged enhanced T-A-O cycle as episode {episode.episode_id}")
                 except Exception as e:
                     logger.warning(f"Failed to log episode: {e}")
 
@@ -481,7 +860,8 @@ class AgentManager:
                         "observe.observation_length": len(observation),
                         "observe.total_thoughts": len(agent_state.history_of_thoughts),
                         "observe.total_observations": len(agent_state.observations),
-                        "observe.episode_logged": True
+                        "observe.episode_logged": True,
+                        "observe.plan_step": agent_state.current_plan_step_index + 1
                     })
 
             except Exception as e:
@@ -490,9 +870,12 @@ class AgentManager:
                     from ..tracing import record_span_exception
                     record_span_exception(span, e)
 
-    def _build_agent_prompt(self, agent_state: AgentState, context_items: List[Any]) -> str:
+    def _build_enhanced_agent_prompt(self, agent_state: AgentState, context_items: List[Any]) -> str:
         """
-        Build the comprehensive prompt for the agent's reasoning step.
+        Build the comprehensive prompt for the agent's reasoning step with plan context.
+
+        Enhanced version that includes the current plan and highlights the current step
+        for strategic context during tactical thinking.
 
         Args:
             agent_state: Current agent state.
@@ -508,6 +891,15 @@ class AgentManager:
             for i, item in enumerate(context_items[:5]):  # Limit to top 5 items
                 content = getattr(item, 'content', str(item))
                 context_str += f"{i+1}. {content[:300]}{'...' if len(content) > 300 else ''}\n"
+
+        # Format current plan and progress
+        plan_str = ""
+        if agent_state.plan:
+            plan_str = "\n\nYOUR STRATEGIC PLAN:\n"
+            for i, step in enumerate(agent_state.plan):
+                status_icon = "✓" if i < len(agent_state.plan_steps_status) and agent_state.plan_steps_status[i] == "completed" else "○"
+                current_marker = " 👉 CURRENT STEP" if i == agent_state.current_plan_step_index else ""
+                plan_str += f"{status_icon} {i+1}. {step}{current_marker}\n"
 
         # Format thought history
         thoughts_str = ""
@@ -534,27 +926,26 @@ class AgentManager:
         else:
             tools_str += "No tools available for this run.\n"
 
-        # Build the main prompt
+        # Build the main enhanced prompt
         prompt = f"""GOAL: {agent_state.goal}
 
-You are an autonomous AI agent working to achieve the above goal. Use the ReAct methodology:
+You are an autonomous AI agent with strategic planning capabilities. You have created a plan and are now executing it step by step.
 
-1. **Think** about what you need to do next
-2. **Act** by calling one of the available tools
-3. **Observe** the result and continue
-
-{context_str}{thoughts_str}{observations_str}{tools_str}
+{plan_str}{context_str}{thoughts_str}{observations_str}{tools_str}
 
 INSTRUCTIONS:
-- Provide your reasoning in a "Thought:" section
-- Then call exactly ONE tool to take action
-- If you have enough information to answer the goal, use the "finish" tool with your final answer
+- Follow your strategic plan while using the ReAct methodology
+- Focus on the CURRENT STEP marked with 👉 in your plan
+- Provide your reasoning in a "Thought:" section that considers both the current step and overall goal
+- Then call exactly ONE tool to take action toward completing the current step
+- If you have completed all planned steps and have enough information to answer the goal, use the "finish" tool
 - Be thorough but efficient in your approach
+- Stay focused on your plan but be flexible if circumstances change
 
 CURRENT SITUATION:
-{agent_state.scratchpad if agent_state.scratchpad else "Starting fresh on this goal."}
+{agent_state.scratchpad if agent_state.scratchpad else "Starting execution of your strategic plan."}
 
-Please provide your Thought and then make a tool call."""
+Please provide your Thought about the current step and then make a tool call to progress toward your goal."""
 
         return prompt
 
@@ -750,15 +1141,20 @@ Please provide your Thought and then make a tool call."""
         return tool_param_map.get(tool_name)
 
     def _summarize_agent_state(self, agent_state: AgentState) -> str:
-        """Create a summary of the current agent state."""
+        """Create a summary of the current agent state including plan progress."""
         thoughts_count = len(agent_state.history_of_thoughts)
         observations_count = len(agent_state.observations)
+
+        plan_progress = ""
+        if agent_state.plan:
+            completed_steps = sum(1 for status in agent_state.plan_steps_status if status == 'completed')
+            plan_progress = f" Plan progress: {completed_steps}/{len(agent_state.plan)} steps completed."
 
         last_thought = ""
         if agent_state.history_of_thoughts:
             last_thought = agent_state.history_of_thoughts[-1][:100] + "..."
 
-        return f"Completed {thoughts_count} reasoning steps and {observations_count} actions. Last thought: {last_thought}"
+        return f"Completed {thoughts_count} reasoning steps and {observations_count} actions.{plan_progress} Last thought: {last_thought}"
 
     def get_tool_manager(self) -> ToolManager:
         """Get the ToolManager instance for external access."""

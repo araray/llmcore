@@ -406,12 +406,16 @@ class AgentState(BaseModel):
     Attributes:
         goal: The high-level objective the agent is trying to achieve.
         plan: A list of strings representing the decomposed steps the agent intends to take.
+        current_plan_step_index: Index of the current step being executed in the plan.
+        plan_steps_status: List tracking the status of each plan step ('pending', 'completed', 'failed').
         history_of_thoughts: A log of the agent's internal reasoning steps ("Thoughts").
         observations: A dictionary mapping tool calls or actions to their observed results.
         scratchpad: A free-form text field for intermediate reasoning or notes.
     """
     goal: str = Field(description="The high-level objective for the agent.")
     plan: List[str] = Field(default_factory=list, description="The decomposed plan of sub-tasks.")
+    current_plan_step_index: int = Field(default=0, description="Index of the current plan step being executed.")
+    plan_steps_status: List[str] = Field(default_factory=list, description="Status of each plan step ('pending', 'completed', 'failed').")
     history_of_thoughts: List[str] = Field(default_factory=list, description="A chronological log of the agent's internal 'Thoughts'.")
     observations: Dict[str, Any] = Field(default_factory=dict, description="A mapping of actions to their observed results.")
     scratchpad: str = Field(default="", description="A transient workspace for intermediate reasoning.")
