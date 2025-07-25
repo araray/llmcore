@@ -7,6 +7,7 @@ management for the LLMCore instance and all API route definitions.
 
 UPDATED: Added comprehensive observability stack with structured logging,
 Prometheus metrics, and distributed tracing integration.
+UPDATED: Added tools router for dynamic tool management.
 """
 
 import asyncio
@@ -20,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router
+from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router, tools_router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 from .auth import get_current_tenant, initialize_auth_db_session
 from .db import initialize_tenant_db_session
@@ -280,6 +281,13 @@ app.include_router(
     tags=["agents_v2"],
     dependencies=[Depends(get_current_tenant)]
 )
+# NEW: Tools router for dynamic tool management
+app.include_router(
+    tools_router,
+    prefix="/api/v2",
+    tags=["tools_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
 
 
 @app.get("/")
@@ -321,6 +329,7 @@ async def health_check() -> Dict[str, Any]:
             "task_queue_available": redis_available,
             "authentication": "enabled",
             "multi_tenancy": "enabled",
+            "dynamic_tools": "enabled",  # NEW: Indicate dynamic tool support
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,
@@ -338,6 +347,7 @@ async def health_check() -> Dict[str, Any]:
             "task_queue_available": redis_available,
             "authentication": "enabled",
             "multi_tenancy": "enabled",
+            "dynamic_tools": "enabled",  # NEW: Indicate dynamic tool support
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,

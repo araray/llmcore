@@ -4,8 +4,11 @@ Tenant provisioning tasks for the TaskMaster service.
 
 This module contains arq tasks for creating and managing tenant-specific
 database schemas, providing the foundation for multi-tenant data isolation.
+
+UPDATED: Added tool management tables to tenant provisioning.
 """
 
+import json
 import logging
 import os
 from typing import Dict, Any, Optional
@@ -33,6 +36,8 @@ async def provision_tenant_task(
 
     This task creates a new PostgreSQL schema for the tenant and migrates
     all necessary tables within that schema to provide complete data isolation.
+
+    UPDATED: Now includes tool management tables for dynamic tool configuration.
 
     Args:
         ctx: Arq context containing shared resources
@@ -192,7 +197,7 @@ async def provision_tenant_task(
                     )
                 """)
 
-                # Tools table for dynamic tool management
+                # NEW: Tools table for dynamic tool management
                 await conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS {db_schema_name}.tools (
                         name TEXT PRIMARY KEY,
@@ -205,7 +210,7 @@ async def provision_tenant_task(
                     )
                 """)
 
-                # Toolkits table
+                # NEW: Toolkits table
                 await conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS {db_schema_name}.toolkits (
                         name TEXT PRIMARY KEY,
@@ -215,7 +220,7 @@ async def provision_tenant_task(
                     )
                 """)
 
-                # Toolkit tools junction table
+                # NEW: Toolkit tools junction table
                 await conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS {db_schema_name}.toolkit_tools (
                         toolkit_name TEXT NOT NULL REFERENCES {db_schema_name}.toolkits(name) ON DELETE CASCADE,
@@ -223,6 +228,137 @@ async def provision_tenant_task(
                         PRIMARY KEY (toolkit_name, tool_name)
                     )
                 """)
+
+                # NEW: Create indexes for better query performance on tool tables
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_tools_enabled
+                    ON {db_schema_name}.tools (is_enabled)
+                """)
+
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_tools_implementation_key
+                    ON {db_schema_name}.tools (implementation_key)
+                """)
+
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_toolkit_tools_toolkit
+                    ON {db_schema_name}.toolkit_tools (toolkit_name)
+                """)
+
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_toolkit_tools_tool
+                    ON {db_schema_name}.toolkit_tools (tool_name)
+                """)
+
+                # NEW: Insert default tools for new tenants
+                logger.info(f"Inserting default tools for tenant: {tenant_id}")
+
+                # Default tools that every tenant gets
+                default_tools = [
+                    {
+                        'name': 'semantic_search',
+                        'description': 'Search the knowledge base (Semantic Memory) for relevant information on a topic. Use this when you need factual information or documentation.',
+                        'parameters_schema': {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "The search query to find relevant information"
+                                },
+                                "k": {
+                                    "type": "integer",
+                                    "description": "Number of results to retrieve (default: 3)",
+                                    "default": 3
+                                },
+                                "collection": {
+                                    "type": "string",
+                                    "description": "Optional collection name to search in"
+                                }
+                            },
+                            "required": ["query"]
+                        },
+                        'implementation_key': 'llmcore.tools.search.semantic'
+                    },
+                    {
+                        'name': 'episodic_search',
+                        'description': 'Search past experiences and interactions (Episodic Memory) to recall previous conversations, actions, or observations. Use this to remember what happened before.',
+                        'parameters_schema': {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "What to search for in past experiences"
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum number of episodes to return (default: 10)",
+                                    "default": 10
+                                }
+                            },
+                            "required": ["query"]
+                        },
+                        'implementation_key': 'llmcore.tools.search.episodic'
+                    },
+                    {
+                        'name': 'calculator',
+                        'description': 'Perform mathematical calculations. Use this for arithmetic operations, calculations, or mathematical problem solving.',
+                        'parameters_schema': {
+                            "type": "object",
+                            "properties": {
+                                "expression": {
+                                    "type": "string",
+                                    "description": "The mathematical expression to evaluate (e.g., '2 + 3 * 4', '(10 - 3) / 2')"
+                                }
+                            },
+                            "required": ["expression"]
+                        },
+                        'implementation_key': 'llmcore.tools.calculation.calculator'
+                    },
+                    {
+                        'name': 'finish',
+                        'description': 'Use this tool when you have completed the task and have a final answer. This will end the agent\'s execution.',
+                        'parameters_schema': {
+                            "type": "object",
+                            "properties": {
+                                "answer": {
+                                    "type": "string",
+                                    "description": "The final answer or result of the task"
+                                }
+                            },
+                            "required": ["answer"]
+                        },
+                        'implementation_key': 'llmcore.tools.flow.finish'
+                    }
+                ]
+
+                # Insert default tools
+                for tool in default_tools:
+                    await conn.execute(f"""
+                        INSERT INTO {db_schema_name}.tools
+                        (name, description, parameters_schema, implementation_key)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        tool['name'],
+                        tool['description'],
+                        json.dumps(tool['parameters_schema']),
+                        tool['implementation_key']
+                    ))
+
+                # Create default toolkit with all basic tools
+                await conn.execute(f"""
+                    INSERT INTO {db_schema_name}.toolkits (name, description)
+                    VALUES (%s, %s)
+                """, (
+                    'basic_tools',
+                    'Essential tools for general agent operations including search, calculation, and task completion'
+                ))
+
+                # Add all default tools to the basic toolkit
+                for tool in default_tools:
+                    await conn.execute(f"""
+                        INSERT INTO {db_schema_name}.toolkit_tools (toolkit_name, tool_name)
+                        VALUES (%s, %s)
+                    """, ('basic_tools', tool['name']))
 
         # Step 3: Update tenant status to 'active' in the main tenants table
         logger.info(f"Updating tenant status to active for: {tenant_id}")
@@ -246,7 +382,9 @@ async def provision_tenant_task(
                 "sessions", "messages", "context_items", "context_presets",
                 "context_preset_items", "episodes", "vector_collections",
                 "vectors", "tools", "toolkits", "toolkit_tools"
-            ]
+            ],
+            "default_tools_created": len(default_tools),
+            "default_toolkits_created": 1
         }
 
     except Exception as e:

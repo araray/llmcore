@@ -4,6 +4,9 @@ Tool Management for LLMCore Agents.
 
 Handles the registration, validation, and execution of tools available to agents.
 Includes built-in tools for semantic search, episodic search, and basic calculations.
+
+UPDATED: Refactored to support dynamic tool loading from database with secure
+implementation registry for tenant-specific tool management.
 """
 
 import asyncio
@@ -11,6 +14,9 @@ import json
 import logging
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from ..exceptions import LLMCoreError
 from ..memory.manager import MemoryManager
@@ -145,7 +151,7 @@ async def calculator(expression: str) -> str:
         logger.debug(f"Calculator: evaluating '{expression}'")
 
         # Simple safety check - only allow basic math operations
-        if not re.match(r'^[0-9+\-*/().\s]+$', expression):
+        if not re.match(r'^[0-9+\-*/().\s]+, expression):
             return f"Invalid expression: '{expression}'. Only basic arithmetic operations are allowed."
 
         # Prevent potentially dangerous operations
@@ -179,14 +185,33 @@ async def finish(answer: str) -> str:
     return f"TASK_COMPLETE: {answer}"
 
 
+# --- Secure Implementation Registry ---
+
+# This is the security boundary - only functions registered here can be executed
+_IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
+    "llmcore.tools.search.semantic": semantic_search,
+    "llmcore.tools.search.episodic": episodic_search,
+    "llmcore.tools.calculation.calculator": calculator,
+    "llmcore.tools.flow.finish": finish,
+}
+
+# Human-readable descriptions for the implementation keys
+_IMPLEMENTATION_DESCRIPTIONS: Dict[str, str] = {
+    "llmcore.tools.search.semantic": "Search the knowledge base (vector store) for relevant information",
+    "llmcore.tools.search.episodic": "Search past experiences and interactions in episodic memory",
+    "llmcore.tools.calculation.calculator": "Perform mathematical calculations safely",
+    "llmcore.tools.flow.finish": "Complete the agent task with a final answer",
+}
+
+
 # --- ToolManager Class ---
 
 class ToolManager:
     """
     Manages the registration, validation, and execution of tools available to agents.
 
-    Provides a dynamic registry for tools and handles their execution with proper
-    dependency injection and error handling.
+    UPDATED: Now supports dynamic tool loading from database with secure implementation
+    registry. Tools are loaded per-tenant and per-run rather than globally at startup.
     """
 
     def __init__(self, memory_manager: MemoryManager, storage_manager: StorageManager):
@@ -197,127 +222,96 @@ class ToolManager:
             memory_manager: The MemoryManager instance for memory-related tools.
             storage_manager: The StorageManager instance for storage-related tools.
         """
-        self._tools: Dict[str, Callable] = {}
-        self._tool_definitions: List[Tool] = []
         self._memory_manager = memory_manager
         self._storage_manager = storage_manager
 
-        # Register built-in tools
-        self._register_built_in_tools()
-        logger.info(f"ToolManager initialized with {len(self._tool_definitions)} tools")
+        # These will be populated dynamically per run
+        self._tool_definitions: List[Tool] = []
+        self._implementation_map: Dict[str, str] = {}  # tool_name -> implementation_key
 
-    def _register_built_in_tools(self) -> None:
-        """Register all built-in tools with their definitions."""
+        logger.info("ToolManager initialized for dynamic tool loading")
 
-        # Register semantic_search tool
-        self.register_tool(
-            func=semantic_search,
-            definition=Tool(
-                name="semantic_search",
-                description="Searches the knowledge base (Semantic Memory) for relevant information on a topic. Use this when you need factual information or documentation.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query to find relevant information"
-                        },
-                        "k": {
-                            "type": "integer",
-                            "description": "Number of results to retrieve (default: 3)",
-                            "default": 3
-                        },
-                        "collection": {
-                            "type": "string",
-                            "description": "Optional collection name to search in"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            )
-        )
-
-        # Register episodic_search tool
-        self.register_tool(
-            func=episodic_search,
-            definition=Tool(
-                name="episodic_search",
-                description="Searches past experiences and interactions (Episodic Memory) to recall previous conversations, actions, or observations. Use this to remember what happened before.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "What to search for in past experiences"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of episodes to return (default: 10)",
-                            "default": 10
-                        }
-                    },
-                    "required": ["query"]
-                }
-            )
-        )
-
-        # Register calculator tool
-        self.register_tool(
-            func=calculator,
-            definition=Tool(
-                name="calculator",
-                description="Performs mathematical calculations. Use this for arithmetic operations, calculations, or mathematical problem solving.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "expression": {
-                            "type": "string",
-                            "description": "The mathematical expression to evaluate (e.g., '2 + 3 * 4', '(10 - 3) / 2')"
-                        }
-                    },
-                    "required": ["expression"]
-                }
-            )
-        )
-
-        # Register finish tool
-        self.register_tool(
-            func=finish,
-            definition=Tool(
-                name="finish",
-                description="Use this tool when you have completed the task and have a final answer. This will end the agent's execution.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "answer": {
-                            "type": "string",
-                            "description": "The final answer or result of the task"
-                        }
-                    },
-                    "required": ["answer"]
-                }
-            )
-        )
-
-    def register_tool(self, func: Callable, definition: Tool) -> None:
+    async def load_tools_for_run(
+        self,
+        db_session: AsyncSession,
+        enabled_toolkits: Optional[List[str]] = None
+    ) -> None:
         """
-        Register a new tool with its function and definition.
+        Load tool definitions from the database for a specific tenant and toolkits.
+
+        This method queries the tenant's database schema to load the tools that are
+        available for the current agent run. It supports filtering by toolkit names.
 
         Args:
-            func: The Python function to execute for this tool.
-            definition: The Tool definition including name, description, and parameters.
+            db_session: Tenant-scoped database session
+            enabled_toolkits: List of toolkit names to enable (None = all tools)
+
+        Raises:
+            LLMCoreError: If database query fails or invalid implementation keys found
         """
-        self._tools[definition.name] = func
+        try:
+            logger.debug(f"Loading tools for run with toolkits: {enabled_toolkits}")
 
-        # Remove existing definition if present (for updates)
-        self._tool_definitions = [t for t in self._tool_definitions if t.name != definition.name]
-        self._tool_definitions.append(definition)
+            # Clear any existing tool definitions
+            self._tool_definitions.clear()
+            self._implementation_map.clear()
 
-        logger.debug(f"Registered tool: {definition.name}")
+            # Build query based on whether toolkits are specified
+            if enabled_toolkits:
+                # Load tools from specific toolkits
+                placeholders = ", ".join([f":toolkit_{i}" for i in range(len(enabled_toolkits))])
+                query = text(f"""
+                    SELECT DISTINCT t.name, t.description, t.parameters_schema, t.implementation_key
+                    FROM tools t
+                    JOIN toolkit_tools tt ON t.name = tt.tool_name
+                    WHERE t.is_enabled = TRUE
+                    AND tt.toolkit_name IN ({placeholders})
+                    ORDER BY t.name
+                """)
+                params = {f"toolkit_{i}": name for i, name in enumerate(enabled_toolkits)}
+            else:
+                # Load all enabled tools
+                query = text("""
+                    SELECT name, description, parameters_schema, implementation_key
+                    FROM tools
+                    WHERE is_enabled = TRUE
+                    ORDER BY name
+                """)
+                params = {}
+
+            # Execute query and process results
+            result = await db_session.execute(query, params)
+            rows = result.fetchall()
+
+            for row in rows:
+                tool_name = row.name
+                implementation_key = row.implementation_key
+
+                # Security check: ensure implementation key exists in secure registry
+                if implementation_key not in _IMPLEMENTATION_REGISTRY:
+                    logger.error(f"Invalid implementation key '{implementation_key}' for tool '{tool_name}'")
+                    raise LLMCoreError(f"Tool '{tool_name}' has invalid implementation key: {implementation_key}")
+
+                # Create Tool model from database data
+                tool = Tool(
+                    name=tool_name,
+                    description=row.description,
+                    parameters=row.parameters_schema
+                )
+
+                # Store the mappings
+                self._tool_definitions.append(tool)
+                self._implementation_map[tool_name] = implementation_key
+
+            logger.info(f"Loaded {len(self._tool_definitions)} tools for agent run")
+
+        except Exception as e:
+            logger.error(f"Error loading tools for run: {e}", exc_info=True)
+            raise LLMCoreError(f"Failed to load tools: {str(e)}")
 
     def get_tool_definitions(self) -> List[Tool]:
         """
-        Get all registered tool definitions.
+        Get all loaded tool definitions for the current run.
 
         Returns:
             List of Tool definitions available for agent use.
@@ -340,9 +334,9 @@ class ToolManager:
         """
         tool_name = tool_call.name
 
-        if tool_name not in self._tools:
-            available_tools = list(self._tools.keys())
-            error_msg = f"Tool '{tool_name}' not found. Available tools: {available_tools}"
+        if tool_name not in self._implementation_map:
+            available_tools = list(self._implementation_map.keys())
+            error_msg = f"Tool '{tool_name}' not loaded for this run. Available tools: {available_tools}"
             logger.error(error_msg)
             return ToolResult(
                 tool_call_id=tool_call.id,
@@ -350,7 +344,10 @@ class ToolManager:
             )
 
         try:
-            tool_func = self._tools[tool_name]
+            # Get the implementation key and function
+            implementation_key = self._implementation_map[tool_name]
+            tool_func = _IMPLEMENTATION_REGISTRY[implementation_key]
+
             arguments = tool_call.arguments.copy()
 
             # Inject dependencies based on tool function signature
@@ -369,7 +366,7 @@ class ToolManager:
             if 'session_id' in sig.parameters and session_id:
                 arguments['session_id'] = session_id
 
-            logger.debug(f"Executing tool '{tool_name}' with arguments: {arguments}")
+            logger.debug(f"Executing tool '{tool_name}' (key: {implementation_key}) with arguments: {arguments}")
 
             # Execute the tool function
             if asyncio.iscoroutinefunction(tool_func):
@@ -400,9 +397,32 @@ class ToolManager:
             )
 
     def get_tool_names(self) -> List[str]:
-        """Get a list of all registered tool names."""
-        return list(self._tools.keys())
+        """Get a list of all loaded tool names for the current run."""
+        return list(self._implementation_map.keys())
 
     def has_tool(self, tool_name: str) -> bool:
-        """Check if a tool is registered."""
-        return tool_name in self._tools
+        """Check if a tool is loaded for the current run."""
+        return tool_name in self._implementation_map
+
+    @classmethod
+    def is_valid_implementation_key(cls, implementation_key: str) -> bool:
+        """
+        Check if an implementation key is valid (exists in the secure registry).
+
+        Args:
+            implementation_key: The key to validate
+
+        Returns:
+            True if the key is valid, False otherwise
+        """
+        return implementation_key in _IMPLEMENTATION_REGISTRY
+
+    @classmethod
+    def get_available_implementations(cls) -> Dict[str, str]:
+        """
+        Get all available implementation keys and their descriptions.
+
+        Returns:
+            Dictionary mapping implementation keys to descriptions
+        """
+        return _IMPLEMENTATION_DESCRIPTIONS.copy()

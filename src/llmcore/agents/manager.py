@@ -6,6 +6,7 @@ Orchestrates the Think -> Act -> Observe execution loop for autonomous agent beh
 Implements the ReAct (Reason + Act) paradigm for complex problem-solving.
 
 UPDATED: Added manual OpenTelemetry spans around key agent logic steps for enhanced tracing.
+UPDATED: Integrated dynamic tool loading to support tenant-specific toolsets.
 """
 
 import json
@@ -14,6 +15,8 @@ import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import LLMCoreError, ProviderError
 from ..memory.manager import MemoryManager
@@ -34,6 +37,7 @@ class AgentManager:
     memory systems, and tool execution to achieve complex goals autonomously.
 
     UPDATED: Added distributed tracing spans for detailed agent behavior analysis.
+    UPDATED: Integrated dynamic tool loading for tenant-specific tool management.
     """
 
     def __init__(
@@ -71,7 +75,9 @@ class AgentManager:
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
         max_iterations: int = 10,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        db_session: Optional[AsyncSession] = None,
+        enabled_toolkits: Optional[List[str]] = None
     ) -> str:
         """
         Orchestrates the Think -> Act -> Observe loop for autonomous task execution.
@@ -82,6 +88,8 @@ class AgentManager:
             model_name: Optional override for the model name.
             max_iterations: Maximum number of loop iterations to prevent infinite loops.
             session_id: Optional session ID for episodic memory context.
+            db_session: Tenant-scoped database session for dynamic tool loading.
+            enabled_toolkits: List of toolkit names to enable for this run.
 
         Returns:
             The final result or answer from the agent.
@@ -102,13 +110,38 @@ class AgentManager:
             "agent.max_iterations": max_iterations,
             "agent.session_id": actual_session_id,
             "agent.provider": provider_name or "default",
-            "agent.model": model_name or "default"
+            "agent.model": model_name or "default",
+            "agent.enabled_toolkits": str(enabled_toolkits) if enabled_toolkits else "all"
         }
 
         from ..tracing import create_span
         with create_span(self._tracer, "agent.execution_loop", **span_attributes) as main_span:
             try:
                 from ..tracing import add_span_attributes
+
+                # Load tools for this agent run if database session is available
+                if db_session:
+                    try:
+                        await self._tool_manager.load_tools_for_run(db_session, enabled_toolkits)
+                        loaded_tools = self._tool_manager.get_tool_names()
+                        logger.info(f"Loaded {len(loaded_tools)} tools for agent run: {loaded_tools}")
+
+                        if main_span:
+                            add_span_attributes(main_span, {
+                                "agent.tools_loaded": len(loaded_tools),
+                                "agent.available_tools": str(loaded_tools)[:200]  # Truncate for span
+                            })
+                    except Exception as e:
+                        logger.error(f"Failed to load tools for agent run: {e}", exc_info=True)
+                        error_msg = f"Failed to load tools for agent: {str(e)}"
+                        if main_span:
+                            add_span_attributes(main_span, {
+                                "agent.error": error_msg,
+                                "agent.status": "failed"
+                            })
+                        return f"Agent error: {error_msg}"
+                else:
+                    logger.warning("No database session provided for tool loading - agent will have no tools available")
 
                 for iteration in range(max_iterations):
                     iteration_attributes = {
@@ -495,8 +528,11 @@ class AgentManager:
         # Format available tools
         tools = self._tool_manager.get_tool_definitions()
         tools_str = "\n\nAVAILABLE TOOLS:\n"
-        for tool in tools:
-            tools_str += f"- {tool.name}: {tool.description}\n"
+        if tools:
+            for tool in tools:
+                tools_str += f"- {tool.name}: {tool.description}\n"
+        else:
+            tools_str += "No tools available for this run.\n"
 
         # Build the main prompt
         prompt = f"""GOAL: {agent_state.goal}

@@ -4,13 +4,16 @@ API models package initialization.
 
 This module exports all the Pydantic models used for API request/response validation
 and data structures across the different API endpoints.
+
+UPDATED: Added tools models for dynamic tool management.
 """
 
 from .core import *
 from .memory import *
 from .tasks import *
 from .ingestion import *
-from .agents import *  # Add agents models export
+from .agents import *
+from .tools import *  # NEW: Add tools models import
 
 __all__ = [
     # Core models
@@ -36,5 +39,15 @@ __all__ = [
     "IngestionResult",
 
     # Agent models
-    "AgentRunRequest",  # Add agent model exports
+    "AgentRunRequest",
+
+    # NEW: Tool management models
+    "ToolCreateRequest",
+    "ToolUpdateRequest",
+    "ToolResponse",
+    "ToolkitCreateRequest",
+    "ToolkitUpdateRequest",
+    "ToolkitResponse",
+    "ToolExecutionRequest",
+    "AvailableImplementationsResponse",
 ]
