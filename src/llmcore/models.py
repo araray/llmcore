@@ -406,12 +406,16 @@ class AgentState(BaseModel):
     Attributes:
         goal: The high-level objective the agent is trying to achieve.
         plan: A list of strings representing the decomposed steps the agent intends to take.
+        current_plan_step_index: Index of the current step being executed in the plan.
+        plan_steps_status: List tracking the status of each plan step ('pending', 'completed', 'failed').
         history_of_thoughts: A log of the agent's internal reasoning steps ("Thoughts").
         observations: A dictionary mapping tool calls or actions to their observed results.
         scratchpad: A free-form text field for intermediate reasoning or notes.
     """
     goal: str = Field(description="The high-level objective for the agent.")
     plan: List[str] = Field(default_factory=list, description="The decomposed plan of sub-tasks.")
+    current_plan_step_index: int = Field(default=0, description="Index of the current plan step being executed.")
+    plan_steps_status: List[str] = Field(default_factory=list, description="Status of each plan step ('pending', 'completed', 'failed').")
     history_of_thoughts: List[str] = Field(default_factory=list, description="A chronological log of the agent's internal 'Thoughts'.")
     observations: Dict[str, Any] = Field(default_factory=dict, description="A mapping of actions to their observed results.")
     scratchpad: str = Field(default="", description="A transient workspace for intermediate reasoning.")
@@ -425,11 +429,15 @@ class AgentTask(BaseModel):
     Represents an asynchronous agentic task being managed by the TaskMaster service.
     This model tracks the lifecycle and state of a long-running agent operation.
 
+    UPDATED: Added HITL workflow support with pending_action_data and approval_prompt fields.
+
     Attributes:
         task_id: A unique identifier for the agent task.
-        status: The current status of the task (e.g., PENDING, RUNNING, SUCCESS, FAILURE).
+        status: The current status of the task (e.g., PENDING, RUNNING, SUCCESS, FAILURE, PENDING_APPROVAL).
         goal: The original goal provided by the user.
         agent_state: The current working memory (AgentState) of the agent performing the task.
+        pending_action_data: JSON representation of the ToolCall awaiting human approval (HITL workflow).
+        approval_prompt: The question/prompt for the human operator (HITL workflow).
         created_at: The timestamp when the task was created.
         updated_at: The timestamp when the task was last updated.
     """
@@ -437,6 +445,8 @@ class AgentTask(BaseModel):
     status: str = Field(default="PENDING", description="The current status of the task.")
     goal: str = Field(description="The original high-level goal for the task.")
     agent_state: AgentState = Field(description="The agent's current working memory state.")
+    pending_action_data: Optional[Dict[str, Any]] = Field(default=None, description="JSON representation of the ToolCall awaiting approval (HITL).")
+    approval_prompt: Optional[str] = Field(default=None, description="The question for the human operator (HITL workflow).")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of task creation (UTC).")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of last task update (UTC).")
 

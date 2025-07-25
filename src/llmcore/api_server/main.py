@@ -7,6 +7,8 @@ management for the LLMCore instance and all API route definitions.
 
 UPDATED: Added comprehensive observability stack with structured logging,
 Prometheus metrics, and distributed tracing integration.
+UPDATED: Added tools router for dynamic tool management.
+UPDATED: Added admin router for administrative operations including live config reload.
 """
 
 import asyncio
@@ -20,7 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router
+from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router, tools_router
+from .routes.admin import admin_router  # NEW: Import admin router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 from .auth import get_current_tenant, initialize_auth_db_session
 from .db import initialize_tenant_db_session
@@ -280,6 +283,21 @@ app.include_router(
     tags=["agents_v2"],
     dependencies=[Depends(get_current_tenant)]
 )
+# Tools router for dynamic tool management
+app.include_router(
+    tools_router,
+    prefix="/api/v2",
+    tags=["tools_v2"],
+    dependencies=[Depends(get_current_tenant)]
+)
+
+# NEW: Admin router for administrative operations (secured with admin auth)
+app.include_router(
+    admin_router,
+    prefix="/api/v2/admin",
+    tags=["admin_v2"]
+    # Note: Admin authentication is applied at the route level in admin.py
+)
 
 
 @app.get("/")
@@ -293,7 +311,8 @@ async def root() -> Dict[str, str]:
         "message": "llmcore API is running",
         "version": "2.0.0",
         "docs_url": "/docs",
-        "observability_enabled": PROMETHEUS_AVAILABLE
+        "observability_enabled": PROMETHEUS_AVAILABLE,
+        "admin_endpoints": "/api/v2/admin"  # NEW: Indicate admin endpoints availability
     }
 
 
@@ -321,6 +340,9 @@ async def health_check() -> Dict[str, Any]:
             "task_queue_available": redis_available,
             "authentication": "enabled",
             "multi_tenancy": "enabled",
+            "dynamic_tools": "enabled",
+            "admin_features": "enabled",  # NEW: Indicate admin features
+            "live_config_reload": "enabled",  # NEW: Indicate live reload capability
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,
@@ -338,6 +360,9 @@ async def health_check() -> Dict[str, Any]:
             "task_queue_available": redis_available,
             "authentication": "enabled",
             "multi_tenancy": "enabled",
+            "dynamic_tools": "enabled",
+            "admin_features": "enabled",  # NEW: Indicate admin features
+            "live_config_reload": "enabled",  # NEW: Indicate live reload capability
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,
