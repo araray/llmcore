@@ -229,11 +229,11 @@ app.add_middleware(
 if PROMETHEUS_AVAILABLE:
     try:
         instrumentator = Instrumentator(
-            should_group_status_codes=False,
-            should_ignore_untemplated=True,
-            should_instrument_requests_inprogress=True,
-            should_instrument_requests_request_size=True,
-            should_instrument_requests_response_size=True,
+            group_status_codes=False,
+            ignore_untemplated=True,
+            instrument_requests_inprogress=True,
+            instrument_requests_request_size=True,
+            instrument_requests_response_size=True,
             excluded_handlers=["/metrics", "/health"],
         )
         instrumentator.instrument(app).expose(app)

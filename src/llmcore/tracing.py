@@ -44,7 +44,7 @@ def configure_tracer(service_name: str = "llmcore") -> None:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
         from opentelemetry.instrumentation.redis import RedisInstrumentor
-        from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+        from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
 
         # Create resource with service information
         resource = Resource.create({
@@ -97,7 +97,7 @@ def _configure_auto_instrumentation() -> None:
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
         from opentelemetry.instrumentation.redis import RedisInstrumentor
-        from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+        from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
 
         # Instrument HTTP clients (for LLM provider calls)
         HTTPXClientInstrumentor().instrument()
@@ -108,8 +108,8 @@ def _configure_auto_instrumentation() -> None:
         logger.debug("Configured Redis instrumentation")
 
         # Instrument PostgreSQL connections
-        Psycopg2Instrumentor().instrument()
-        logger.debug("Configured PostgreSQL instrumentation")
+        PsycopgInstrumentor().instrument()
+        logger.debug("Configured PostgreSQL (psycopg) instrumentation")
 
     except ImportError as e:
         logger.debug(f"Some auto-instrumentation libraries not available: {e}")

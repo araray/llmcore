@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.23.5"
+version = "0.23.6"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -42,7 +42,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.54b",
     "opentelemetry-instrumentation-httpx>=0.54b",
     "opentelemetry-instrumentation-redis>=0.54b",
-    "opentelemetry-instrumentation-psycopg2>=0.54b",
+    "opentelemetry-instrumentation-psycopg>=0.54b",
     "opentelemetry-exporter-otlp>=1.35.0",
     "python-multipart>=0.0.20"
 ]
