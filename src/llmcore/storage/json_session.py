@@ -78,6 +78,40 @@ class JsonSessionStorage(BaseSessionStorage):
             logger.info(f"JSON episode storage initialized at: {self._episodes_dir.resolve()}")
         except OSError as e:
             logger.error(f"Failed to create JSON storage directories (main: {self._storage_dir}, presets: {self._presets_dir}, episodes: {self._episodes_dir}): {e}")
+            raise SessionStorageError(f"Could not create storage directories: {e}")
+
+    def _get_session_path(self, session_id: str) -> pathlib.Path:
+        """Constructs the file path for a given session ID."""
+        return self._storage_dir / f"{session_id}{self._file_extension}"
+
+    def _get_preset_path(self, preset_name: str) -> pathlib.Path:
+        """Constructs the file path for a given context preset name."""
+        # Basic sanitization for filename from preset_name, though Pydantic model should validate 'name'
+        sane_filename = re.sub(r'[^\w\-. ]', '_', preset_name)
+        return self._presets_dir / f"{sane_filename}{self._file_extension}"
+
+    def _get_episode_path(self, session_id: str) -> pathlib.Path:
+        """Constructs the file path for episodes of a given session ID using JSON Lines format."""
+        return self._episodes_dir / f"{session_id}_episodes.jsonl"
+
+    async def save_session(self, session: ChatSession) -> None:
+        """
+        Save or update a chat session to a JSON file asynchronously.
+
+        Args:
+            session: The ChatSession object to save.
+
+        Raises:
+            SessionStorageError: If serialization or file I/O fails.
+        """
+        session_file_path = self._get_session_path(session.id)
+        try:
+            session_json = session.model_dump_json(indent=2)
+            async with aiofiles.open(session_file_path, mode="w", encoding="utf-8") as f:
+                await f.write(session_json)
+            logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to {session_file_path}")
+        except TypeError as e:
+            logger.error(f"Error serializing session '{session.id}' to JSON: {e}")
             raise SessionStorageError(f"Failed to serialize session data for '{session.id}': {e}")
         except IOError as e:
             logger.error(f"Error writing session '{session.id}' to file {session_file_path}: {e}")
@@ -545,38 +579,4 @@ class JsonSessionStorage(BaseSessionStorage):
         Clean up resources. For JSON storage, no explicit closing action is typically needed.
         """
         logger.debug("JSONSessionStorage (including presets and episodes) closed (no specific action needed).")
-        pass(f"Could not create storage directories: {e}")
-
-    def _get_session_path(self, session_id: str) -> pathlib.Path:
-        """Constructs the file path for a given session ID."""
-        return self._storage_dir / f"{session_id}{self._file_extension}"
-
-    def _get_preset_path(self, preset_name: str) -> pathlib.Path:
-        """Constructs the file path for a given context preset name."""
-        # Basic sanitization for filename from preset_name, though Pydantic model should validate 'name'
-        sane_filename = re.sub(r'[^\w\-. ]', '_', preset_name)
-        return self._presets_dir / f"{sane_filename}{self._file_extension}"
-
-    def _get_episode_path(self, session_id: str) -> pathlib.Path:
-        """Constructs the file path for episodes of a given session ID using JSON Lines format."""
-        return self._episodes_dir / f"{session_id}_episodes.jsonl"
-
-    async def save_session(self, session: ChatSession) -> None:
-        """
-        Save or update a chat session to a JSON file asynchronously.
-
-        Args:
-            session: The ChatSession object to save.
-
-        Raises:
-            SessionStorageError: If serialization or file I/O fails.
-        """
-        session_file_path = self._get_session_path(session.id)
-        try:
-            session_json = session.model_dump_json(indent=2)
-            async with aiofiles.open(session_file_path, mode="w", encoding="utf-8") as f:
-                await f.write(session_json)
-            logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to {session_file_path}")
-        except TypeError as e:
-            logger.error(f"Error serializing session '{session.id}' to JSON: {e}")
-            raise SessionStorageError
+        pass
