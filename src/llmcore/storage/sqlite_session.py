@@ -207,28 +207,18 @@ class SqliteSessionStorage(BaseSessionStorage):
             await self._conn.commit()
             logger.debug(f"Session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items saved to SQLite.")
         except aiosqlite.Error as e: # type: ignore
-            logger.error(f"aiosqlite error retrieving episodes for session '{session_id}': {e}")
-            raise StorageError(f"Database error retrieving episodes for session '{session_id}': {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error retrieving episodes for session '{session_id}': {e}", exc_info=True)
-            raise StorageError(f"Unexpected error retrieving episodes for session '{session_id}': {e}")
-
-    async def close(self) -> None:
-        """Close the database connection."""
-        if self._conn:
+            logger.error(f"aiosqlite error saving session '{session.id}': {e}")
             try:
-                await self._conn.close()
-                self._conn = None
-                logger.info("aiosqlite storage connection (sessions, presets & episodes) closed.")
-            except aiosqlite.Error as e: # type: ignore
-                logger.error(f"Error closing aiosqlite connection: {e}")iosqlite error saving session '{session.id}': {e}")
-            try: await self._conn.rollback()
-            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
+                if self._conn: await self._conn.rollback()
+            except Exception as rb_e:
+                logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Database error saving session '{session.id}': {e}")
         except Exception as e:
             logger.error(f"Unexpected error saving session '{session.id}': {e}", exc_info=True)
-            try: await self._conn.rollback()
-            except Exception as rb_e: logger.error(f"Rollback failed: {rb_e}")
+            try:
+                if self._conn: await self._conn.rollback()
+            except Exception as rb_e:
+                logger.error(f"Rollback failed: {rb_e}")
             raise SessionStorageError(f"Unexpected error saving session '{session.id}': {e}")
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
@@ -638,4 +628,18 @@ class SqliteSessionStorage(BaseSessionStorage):
             logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' (offset={offset}, limit={limit})")
             return episodes
         except aiosqlite.Error as e: # type: ignore
-            logger.error(f"a
+            logger.error(f"aiosqlite error retrieving episodes for session '{session_id}': {e}")
+            raise StorageError(f"Database error retrieving episodes for session '{session_id}': {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error retrieving episodes for session '{session_id}': {e}", exc_info=True)
+            raise StorageError(f"Unexpected error retrieving episodes for session '{session_id}': {e}")
+
+    async def close(self) -> None:
+        """Close the database connection."""
+        if self._conn:
+            try:
+                await self._conn.close()
+                self._conn = None
+                logger.info("aiosqlite storage connection (sessions, presets & episodes) closed.")
+            except aiosqlite.Error as e: # type: ignore
+                logger.error(f"Error closing aiosqlite connection: {e}")
