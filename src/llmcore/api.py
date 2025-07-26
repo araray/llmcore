@@ -19,7 +19,7 @@ from .memory.manager import MemoryManager
 from .embedding.manager import EmbeddingManager
 from .exceptions import (ConfigError, ContextLengthError, EmbeddingError,
                          LLMCoreError, ProviderError, SessionNotFoundError,
-                         SessionStorageError, StorageError, VectorStorageError, ValueError)
+                         SessionStorageError, StorageError, VectorStorageError)
 from .models import (ChatSession, ContextDocument, ContextItem,
                      ContextItemType, Message, Role, ContextPreparationDetails,
                      ContextPreset, ContextPresetItem, ModelDetails, Tool, ToolCall, ToolResult)
