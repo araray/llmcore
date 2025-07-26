@@ -226,17 +226,13 @@ app.add_middleware(
 )
 
 # Initialize Prometheus instrumentation if available
-if PROMETHEUS_AVAILABLE:
+if PROMETHEUS_AVAILABLE and Instrumentator:
     try:
+        # Use the modern API for prometheus-fastapi-instrumentator v7+
         instrumentator = Instrumentator(
-            group_status_codes=False,
-            ignore_untemplated=True,
-            instrument_requests_inprogress=True,
-            instrument_requests_request_size=True,
-            instrument_requests_response_size=True,
             excluded_handlers=["/metrics", "/health"],
-        )
-        instrumentator.instrument(app).expose(app)
+        ).instrument(app)
+        instrumentator.expose(app)
         logger.info("Prometheus FastAPI instrumentation enabled on /metrics endpoint")
     except Exception as e:
         logger.error(f"Failed to initialize Prometheus instrumentation: {e}")
