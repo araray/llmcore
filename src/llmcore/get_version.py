@@ -9,8 +9,8 @@ def _get_version_from_pyproject() -> str:
     """
     project_root = pathlib.Path(__file__).parent.parent.parent
     pyproject = project_root / "pyproject.toml"
-    content = pyproject.read_bytes()
-    data = tomllib.loads(str(content))
+    content = pyproject.read_text(encoding="utf-8")
+    data = tomllib.loads(content)
     # PEP 621:
     if "project" in data and "version" in data["project"]:
         return data["project"]["version"]
