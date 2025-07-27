@@ -4,11 +4,6 @@ Main FastAPI application for the llmcore API server.
 
 This module contains the FastAPI application instance with proper lifecycle
 management for the LLMCore instance and all API route definitions.
-
-UPDATED: Added comprehensive observability stack with structured logging,
-Prometheus metrics, and distributed tracing integration.
-UPDATED: Added tools router for dynamic tool management.
-UPDATED: Added admin router for administrative operations including live config reload.
 """
 
 import asyncio
@@ -22,15 +17,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api import LLMCore
 from ..exceptions import LLMCoreError, ConfigError
-from .routes import chat_router, core_router, ingestion_router, memory_router, tasks_router, agents_router, tools_router
-from .routes.admin import admin_router  # NEW: Import admin router
+from .routes import (chat_router, core_router, ingestion_router, memory_router,
+                     tasks_router, agents_router, tool_management_router,
+                     toolkit_management_router, hitl_router)
+from .routes.admin import admin_router
 from .services.redis_client import initialize_redis_pool, close_redis_pool
 from .auth import get_current_tenant, initialize_auth_db_session
 from .db import initialize_tenant_db_session
 from .middleware.observability import ObservabilityMiddleware
 from ..tracing import configure_tracer
 
-# Import observability components with fallback handling
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
     from .metrics import initialize_system_info, update_queue_depth_metrics
@@ -39,14 +35,9 @@ except ImportError:
     Instrumentator = None
     PROMETHEUS_AVAILABLE = False
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Global task for metrics updates
 metrics_update_task = None
 
 
@@ -58,13 +49,8 @@ async def lifespan(app: FastAPI):
     Handles startup (LLMCore initialization, Redis pool setup, authentication DB setup,
     tenant database session factory setup, and observability stack initialization) and
     shutdown (graceful cleanup) of the application resources.
-
-    UPDATED: Added comprehensive observability stack initialization including tracing,
-    metrics, and background metrics collection.
     """
     global metrics_update_task
-
-    # Startup: Initialize all components
     logger.info("API Server starting up...")
 
     # Step 1: Initialize distributed tracing
@@ -81,15 +67,11 @@ async def lifespan(app: FastAPI):
         llmcore_instance = await LLMCore.create()
         app.state.llmcore_instance = llmcore_instance
         logger.info("LLMCore instance successfully created and attached to app state")
-
-        # Log available providers for debugging
         available_providers = llmcore_instance.get_available_providers()
         logger.info(f"Available LLM providers: {available_providers}")
-
     except (ConfigError, LLMCoreError) as e:
         logger.critical(f"Fatal error during LLMCore initialization: {e}", exc_info=True)
         app.state.llmcore_instance = None
-        # Don't raise here - let the server start but mark service as unavailable
         logger.warning("API server will start but LLMCore service will be unavailable")
     except Exception as e:
         logger.critical(f"Unexpected error during LLMCore initialization: {e}", exc_info=True)
@@ -108,7 +90,6 @@ async def lifespan(app: FastAPI):
     # Step 4: Initialize authentication database session
     try:
         logger.info("Initializing authentication database session...")
-        # Get database URL from environment or configuration
         database_url = os.environ.get(
             'LLMCORE_AUTH_DATABASE_URL',
             'postgresql+asyncpg://postgres:password@localhost:5432/llmcore'
@@ -122,7 +103,6 @@ async def lifespan(app: FastAPI):
     # Step 5: Initialize tenant database session factory
     try:
         logger.info("Initializing tenant database session factory...")
-        # Use the same database URL for tenant operations
         tenant_database_url = os.environ.get(
             'LLMCORE_TENANT_DATABASE_URL',
             os.environ.get('LLMCORE_AUTH_DATABASE_URL',
@@ -139,8 +119,6 @@ async def lifespan(app: FastAPI):
         try:
             logger.info("Initializing Prometheus metrics...")
             initialize_system_info()
-
-            # Start background task for queue depth metrics
             metrics_update_task = asyncio.create_task(metrics_update_loop())
             logger.info("Prometheus metrics and background collection initialized")
         except Exception as e:
@@ -150,12 +128,10 @@ async def lifespan(app: FastAPI):
 
     logger.info("API Server startup complete")
 
-    yield  # The application runs while in this yield block
+    yield
 
     # Shutdown: Cleanly close all resources
     logger.info("API Server shutting down...")
-
-    # Stop metrics update task
     if metrics_update_task and not metrics_update_task.done():
         try:
             metrics_update_task.cancel()
@@ -165,7 +141,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Error stopping metrics update task: {e}")
 
-    # Close LLMCore instance
     if hasattr(app.state, 'llmcore_instance') and app.state.llmcore_instance:
         try:
             await app.state.llmcore_instance.close()
@@ -175,7 +150,6 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("No LLMCore instance to clean up")
 
-    # Close Redis pool
     try:
         await close_redis_pool()
         logger.info("Redis pool successfully closed")
@@ -186,15 +160,11 @@ async def lifespan(app: FastAPI):
 
 
 async def metrics_update_loop():
-    """
-    Background task to periodically update metrics that require polling.
-    """
-    logger.info("Starting metrics update background task")
-
+    """Background task to periodically update metrics."""
     try:
         while True:
             await update_queue_depth_metrics()
-            await asyncio.sleep(30)  # Update every 30 seconds
+            await asyncio.sleep(30)
     except asyncio.CancelledError:
         logger.info("Metrics update task cancelled")
         raise
@@ -202,7 +172,6 @@ async def metrics_update_loop():
         logger.error(f"Error in metrics update loop: {e}", exc_info=True)
 
 
-# Create the FastAPI application
 app = FastAPI(
     title="llmcore API",
     description="A unified, flexible API for interacting with various Large Language Models (LLMs)",
@@ -210,135 +179,76 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add observability middleware (must be added early in the middleware stack)
-app.add_middleware(
-    ObservabilityMiddleware,
-    enable_request_logging=True
-)
-
-# Add CORS middleware for web client compatibility
+app.add_middleware(ObservabilityMiddleware, enable_request_logging=True)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
 
-# Initialize Prometheus instrumentation if available
 if PROMETHEUS_AVAILABLE and Instrumentator:
-    try:
-        # Use the modern API for prometheus-fastapi-instrumentator v7+
-        instrumentator = Instrumentator(
-            excluded_handlers=["/metrics", "/health"],
-        ).instrument(app)
-        instrumentator.expose(app)
-        logger.info("Prometheus FastAPI instrumentation enabled on /metrics endpoint")
-    except Exception as e:
-        logger.error(f"Failed to initialize Prometheus instrumentation: {e}")
+    Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app).expose(app)
 
-# Include routers with security dependency applied to protected endpoints
-# Note: Root and health endpoints remain public as specified in the requirements
+# --- Include Routers ---
+# V1 API routes
+app.include_router(core_router, prefix="/api/v1", tags=["core_v1"], dependencies=[Depends(get_current_tenant)])
+app.include_router(chat_router, prefix="/api/v1", tags=["chat_v1"], dependencies=[Depends(get_current_tenant)])
 
-# V1 API routes - secured
-app.include_router(
-    core_router,
-    prefix="/api/v1",
-    tags=["core_v1"],
-    dependencies=[Depends(get_current_tenant)]
-)
-app.include_router(
-    chat_router,
-    prefix="/api/v1",
-    tags=["chat_v1"],
-    dependencies=[Depends(get_current_tenant)]
-)
+# V2 API routes
+app.include_router(memory_router, prefix="/api/v2", tags=["memory_v2"], dependencies=[Depends(get_current_tenant)])
+app.include_router(tasks_router, prefix="/api/v2/tasks", tags=["tasks_v2"], dependencies=[Depends(get_current_tenant)])
+app.include_router(ingestion_router, prefix="/api/v2/ingestion", tags=["ingestion_v2"], dependencies=[Depends(get_current_tenant)])
+app.include_router(agents_router, prefix="/api/v2/agents", tags=["agents_v2"], dependencies=[Depends(get_current_tenant)])
+app.include_router(hitl_router, prefix="/api/v2/hitl", tags=["hitl_v2"], dependencies=[Depends(get_current_tenant)])
 
-# V2 API routes - secured
+# NEW: Include the specialized tool and toolkit routers under a management prefix
 app.include_router(
-    memory_router,
-    prefix="/api/v2",
-    tags=["memory_v2"],
+    tool_management_router,
+    prefix="/api/v2/management",
+    tags=["tool_management_v2"],
     dependencies=[Depends(get_current_tenant)]
 )
 app.include_router(
-    tasks_router,
-    prefix="/api/v2",
-    tags=["tasks_v2"],
-    dependencies=[Depends(get_current_tenant)]
-)
-app.include_router(
-    ingestion_router,
-    prefix="/api/v2/ingestion",
-    tags=["ingestion_v2"],
-    dependencies=[Depends(get_current_tenant)]
-)
-app.include_router(
-    agents_router,
-    prefix="/api/v2",
-    tags=["agents_v2"],
-    dependencies=[Depends(get_current_tenant)]
-)
-# Tools router for dynamic tool management
-app.include_router(
-    tools_router,
-    prefix="/api/v2",
-    tags=["tools_v2"],
+    toolkit_management_router,
+    prefix="/api/v2/management",
+    tags=["toolkit_management_v2"],
     dependencies=[Depends(get_current_tenant)]
 )
 
-# NEW: Admin router for administrative operations (secured with admin auth)
-app.include_router(
-    admin_router,
-    prefix="/api/v2/admin",
-    tags=["admin_v2"]
-    # Note: Admin authentication is applied at the route level in admin.py
-)
+# Admin routes
+app.include_router(admin_router, prefix="/api/v2/admin", tags=["admin_v2"])
 
 
 @app.get("/")
 async def root() -> Dict[str, str]:
-    """
-    Root endpoint providing basic service information.
-
-    This endpoint remains public and does not require authentication.
-    """
+    """Root endpoint providing basic service information."""
     return {
         "message": "llmcore API is running",
         "version": "2.0.0",
         "docs_url": "/docs",
-        "observability_enabled": PROMETHEUS_AVAILABLE,
-        "admin_endpoints": "/api/v2/admin"  # NEW: Indicate admin endpoints availability
+        "observability_enabled": str(PROMETHEUS_AVAILABLE).lower(),
+        "admin_endpoints": "/api/v2/admin"
     }
 
 
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    This endpoint remains public and does not require authentication.
-    """
+    """Health check endpoint for monitoring."""
     llmcore_instance = getattr(app.state, 'llmcore_instance', None)
+    from .services.redis_client import is_redis_available
+    redis_available = is_redis_available()
 
     if llmcore_instance:
-        # Basic health check - could be expanded to test actual functionality
-        available_providers = llmcore_instance.get_available_providers()
-
-        # Check Redis availability for task queue
-        from .services.redis_client import is_redis_available
-        redis_available = is_redis_available()
-
         return {
             "status": "healthy",
             "llmcore_available": True,
-            "providers": available_providers,
+            "providers": llmcore_instance.get_available_providers(),
             "task_queue_available": redis_available,
             "authentication": "enabled",
             "multi_tenancy": "enabled",
             "dynamic_tools": "enabled",
-            "admin_features": "enabled",  # NEW: Indicate admin features
-            "live_config_reload": "enabled",  # NEW: Indicate live reload capability
+            "admin_features": "enabled",
+            "live_config_reload": "enabled",
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,
@@ -346,9 +256,6 @@ async def health_check() -> Dict[str, Any]:
             }
         }
     else:
-        from .services.redis_client import is_redis_available
-        redis_available = is_redis_available()
-
         return {
             "status": "degraded",
             "llmcore_available": False,
@@ -357,22 +264,11 @@ async def health_check() -> Dict[str, Any]:
             "authentication": "enabled",
             "multi_tenancy": "enabled",
             "dynamic_tools": "enabled",
-            "admin_features": "enabled",  # NEW: Indicate admin features
-            "live_config_reload": "enabled",  # NEW: Indicate live reload capability
+            "admin_features": "enabled",
+            "live_config_reload": "enabled",
             "observability": {
                 "structured_logging": True,
                 "distributed_tracing": True,
                 "prometheus_metrics": PROMETHEUS_AVAILABLE
             }
         }
-
-
-@app.get("/metrics")
-async def metrics_endpoint():
-    """
-    Prometheus metrics endpoint.
-
-    This endpoint is automatically exposed by the prometheus-fastapi-instrumentator
-    but we define it here for documentation purposes.
-    """
-    pass  # The actual implementation is handled by the instrumentator
