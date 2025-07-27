@@ -16,7 +16,8 @@ from .base_vector import BaseVectorStorage
 # Import concrete implementations
 from .json_session import JsonSessionStorage
 from .sqlite_session import SqliteSessionStorage
-from .postgres_storage import PostgresSessionStorage, PgVectorStorage
+from .postgres_session_storage import PostgresSessionStorage
+from .pgvector_storage import PgVectorStorage
 from .chromadb_vector import ChromaVectorStorage
 
 __all__ = [
