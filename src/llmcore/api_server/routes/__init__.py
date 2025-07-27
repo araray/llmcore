@@ -6,6 +6,7 @@ This module exports all the API routers for easy import and registration
 with the main FastAPI application.
 
 UPDATED: Added tools_router for dynamic tool management.
+UPDATED: Added hitl_router for Human-in-the-Loop workflows.
 """
 
 from .chat import router as chat_router
@@ -14,7 +15,8 @@ from .memory import router as memory_router
 from .tasks import router as tasks_router
 from .ingestion import router as ingestion_router
 from .agents import router as agents_router
-from .tools import router as tools_router  # NEW: Add tools router import
+from .tools import router as tools_router
+from .hitl import router as hitl_router # NEW: Add hitl router import
 
 __all__ = [
     "chat_router",
@@ -23,5 +25,6 @@ __all__ = [
     "tasks_router",
     "ingestion_router",
     "agents_router",
-    "tools_router",  # NEW: Add tools router export
+    "tools_router",
+    "hitl_router", # NEW: Add hitl router export
 ]
