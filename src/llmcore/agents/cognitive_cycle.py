@@ -13,6 +13,7 @@ of the agent more explicit and easier to modify or extend.
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -287,7 +288,9 @@ async def think_step(
             )
 
             response_content = response['choices'][0]['message']['content'] or ""
-            result = prompt_utils.parse_agent_response(response_content, response)
+            result = prompt_utils.parse_agent_response(
+                response_content, response, tool_manager.get_tool_names()
+            )
 
             if span:
                 add_span_attributes(span, {
@@ -363,6 +366,22 @@ async def act_step(
                 return ToolResult(tool_call_id=tool_call.id, content="PAUSED_FOR_APPROVAL")
 
             result = await tool_manager.execute_tool(tool_call, session_id)
+
+            # Record tool execution metrics
+            try:
+                from ..api_server.metrics import record_tool_execution
+                from ..api_server.middleware.observability import get_current_request_context
+                context = get_current_request_context()
+                tenant_id = context.get('tenant_id', 'unknown')
+
+                status = "success" if not result.content.startswith("ERROR:") else "error"
+                record_tool_execution(
+                    tenant_id=tenant_id,
+                    tool_name=tool_call.name,
+                    status=status
+                )
+            except Exception as e:
+                logger.debug(f"Failed to record tool execution metrics: {e}")
 
             if span:
                 add_span_attributes(span, {
