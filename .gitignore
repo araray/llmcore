@@ -21,6 +21,7 @@ grammars/*
 semantiscan/core/chunking/antlr_parsers/*/
 .python-version
 temp/
+.av.version
 
 # Distribution / packaging
 .Python
