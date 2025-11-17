@@ -29,8 +29,8 @@ from .base_vector import BaseVectorStorage
 from .chromadb_vector import ChromaVectorStorage
 # Import concrete session storage implementations
 from .json_session import JsonSessionStorage
-from .pgvector_storage import PgVectorStorage
-from .postgres_session_storage import PostgresSessionStorage
+from .postgres_storage import PgVectorStorage
+from .postgres_storage import PostgresSessionStorage
 from .sqlite_session import SqliteSessionStorage
 
 logger = logging.getLogger(__name__)
