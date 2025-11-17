@@ -21,7 +21,6 @@ from ..models import Message, ModelDetails, Tool
 # Define a type alias for the context payload that can be passed to providers.
 ContextPayload = List[Message]
 
-
 class BaseProvider(abc.ABC):
     """
     Abstract Base Class for LLM provider integrations.
@@ -220,15 +219,9 @@ class BaseProvider(abc.ABC):
             tenant_id: Tenant identifier if available
         """
         try:
-            from ..api_server.metrics import record_llm_request
-
+            
             # Extract tenant_id from current request context if not provided
-            if tenant_id is None:
-                from ..api_server.middleware.observability import get_current_request_context
-                context = get_current_request_context()
-                tenant_id = context.get('tenant_id', 'unknown')
-
-            record_llm_request(
+            if tenant_id is None:            record_llm_request(
                 provider=self.get_name(),
                 model=model,
                 tenant_id=tenant_id,

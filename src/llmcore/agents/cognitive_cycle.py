@@ -30,7 +30,6 @@ from .tools import ToolManager
 
 logger = logging.getLogger(__name__)
 
-
 async def plan_step(
     agent_state: AgentState,
     session_id: str,
@@ -120,7 +119,6 @@ async def plan_step(
             ]
             agent_state.current_plan_step_index = 0
             agent_state.plan_steps_status = ['pending'] * len(agent_state.plan)
-
 
 async def reflect_step(
     agent_state: AgentState,
@@ -227,7 +225,6 @@ async def reflect_step(
             if span:
                 record_span_exception(span, e)
 
-
 async def think_step(
     agent_state: AgentState,
     session_id: str,
@@ -311,7 +308,6 @@ async def think_step(
                 record_span_exception(span, e)
             return None, None
 
-
 async def act_step(
     tool_call: ToolCall,
     session_id: str,
@@ -368,13 +364,7 @@ async def act_step(
             result = await tool_manager.execute_tool(tool_call, session_id)
 
             # Record tool execution metrics
-            try:
-                from ..api_server.metrics import record_tool_execution
-                from ..api_server.middleware.observability import get_current_request_context
-                context = get_current_request_context()
-                tenant_id = context.get('tenant_id', 'unknown')
-
-                status = "success" if not result.content.startswith("ERROR:") else "error"
+            try:                status = "success" if not result.content.startswith("ERROR:") else "error"
                 record_tool_execution(
                     tenant_id=tenant_id,
                     tool_name=tool_call.name,
@@ -397,7 +387,6 @@ async def act_step(
             if span:
                 record_span_exception(span, e)
             return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {str(e)}")
-
 
 async def observe_step(
     agent_state: AgentState,
@@ -473,13 +462,11 @@ async def observe_step(
             if span:
                 record_span_exception(span, e)
 
-
 # --- HITL Workflow Functions ---
 
 def check_if_resuming_task(task: AgentTask) -> bool:
     """Check if this task is resuming from a HITL workflow."""
     return task.pending_action_data is not None
-
 
 async def handle_task_resumption(
     task: AgentTask,
@@ -528,7 +515,6 @@ async def handle_task_resumption(
         logger.error(f"Error handling task resumption: {e}", exc_info=True)
         return None
 
-
 async def update_task_for_approval(
     task: AgentTask,
     approval_prompt: str,
@@ -566,7 +552,6 @@ async def update_task_for_approval(
     except Exception as e:
         logger.error(f"Error updating task for approval: {e}", exc_info=True)
         raise
-
 
 async def clear_pending_action_data(task: AgentTask, db_session: Optional[AsyncSession]) -> None:
     """Clear the pending action data from the task."""

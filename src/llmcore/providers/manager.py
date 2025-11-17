@@ -184,6 +184,16 @@ class ProviderManager:
                     logger.error(f"Error during provider closure: {result}", exc_info=result)
         logger.info("Provider connections closure attempt complete.")
 
+    async def close_all(self) -> None:
+        """
+        Alias for close_providers() to maintain API compatibility.
+        
+        LLMCore.close() calls ProviderManager.close_all(), so this method
+        delegates to close_providers() which does the actual cleanup.
+        """
+        await self.close_providers()
+
+
     async def _close_single_provider(self, name: str, provider: BaseProvider):
         """Helper coroutine to close a single provider and log errors."""
         try:
