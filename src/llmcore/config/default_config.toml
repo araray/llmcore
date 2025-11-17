@@ -302,20 +302,17 @@ admin_api_key = ""
     # The default is very large to accommodate large documents.
     max_chars_per_user_item = 40000000
 
-
     # ==============================================================================
-    # Step 1.5: Semantiscan Configuration Section
+    # Step 2.1: Semantiscan Configuration Section (CORRECTED & COMPLETE)
     # ==============================================================================
-    # This section should be added to: src/llmcore/config/default_config.toml
-    #
     # Purpose: Unified configuration for the semantiscan RAG/ingestion engine.
-    # After Phase 1, semantiscan will no longer maintain its own config.toml;
-    # instead, it will receive configuration from llmcore via this section.
+    # After Phase 2, semantiscan no longer maintains its own config.toml;
+    # instead, it receives configuration from llmcore via this section.
     #
     # References:
     # - semantiscan/config/loaders.py (DEFAULT_CONFIG)
     # - semantiscan/config/models.py (AppConfig schema)
-    # - Resurrection Plan Section VI, Task 1.3
+    # - Resurrection Plan Section VI, Task 1.3 & Phase 2, Step 2.1
     # ==============================================================================
 
     [semantiscan]
@@ -333,14 +330,18 @@ admin_api_key = ""
 
         # --- Metadata Store Configuration ---
         # Optional SQLite database for tracking ingestion history, Git metadata, etc.
+        # CORRECTED: Field names now match semantiscan.config.models.MetadataStoreConfig
         [semantiscan.metadata_store]
-        enabled = false  # Disabled by default; enable for Git-aware ingestion tracking
+        enable = false  # Disabled by default; enable for Git-aware ingestion tracking
+        type = "sqlite"  # Type of external store (sqlite or postgresql - postgresql future)
         path = "~/.local/share/semantiscan/metadata.db"
-        # Table names (advanced configuration - usually no need to change)
-        scans_table = "scans"
-        chunks_table = "chunks"
-        commit_log_table = "commit_log"
-        file_history_table = "file_history"
+        connection_string = ""  # Connection string for PostgreSQL (required if type is postgresql)
+        # Primary table for storing rich chunk metadata
+        table_name = "chunk_metadata"
+        # Table for tracking ingestion state per repo/branch
+        ingestion_log_table_name = "ingestion_log"
+        # Table for tracking file changes per commit ('historical_delta' mode)
+        file_history_table_name = "file_history"
 
         # --- Embedding Configuration ---
         # Defines which embedding models are available for chunking ingestion.
@@ -353,49 +354,164 @@ admin_api_key = ""
         provider = "sentence-transformers"  # Maps to llmcore's sentence_transformer provider
         model_name = "all-MiniLM-L6-v2"  # Default local model
         device = "cpu"  # "cpu" | "cuda" | "mps" (for M1/M2 Macs)
-        # Optional: Override context/request limits for this model
         max_request_tokens = 8000  # Max tokens per embedding batch request
+        base_url = ""  # Not used for sentence-transformers
+        tokenizer_name = ""  # Optional: Specific tokenizer name
+        uses_doc_query_prefixes = false  # Set to true if model requires different prefixes
+        query_prefix = ""  # Prefix for queries if uses_doc_query_prefixes is true
+        document_prefix = ""  # Prefix for documents if uses_doc_query_prefixes is true
 
         [semantiscan.embeddings.models.openai_ada]
         provider = "openai"  # Maps to llmcore's openai embedding provider
         model_name = "text-embedding-ada-002"
+        device = "cpu"  # Not used for API-based models
         api_key_env = "OPENAI_API_KEY"  # Reference to environment variable
         max_request_tokens = 8000
+        base_url = ""  # Optional: Custom API endpoint
+        tokenizer_name = "cl100k_base"  # OpenAI tokenizer
+        uses_doc_query_prefixes = false
+        query_prefix = ""
+        document_prefix = ""
 
         [semantiscan.embeddings.models.openai_large]
         provider = "openai"
         model_name = "text-embedding-3-large"
+        device = "cpu"
         api_key_env = "OPENAI_API_KEY"
         max_request_tokens = 8000
+        base_url = ""
+        tokenizer_name = "cl100k_base"
+        uses_doc_query_prefixes = false
+        query_prefix = ""
+        document_prefix = ""
+
+        [semantiscan.embeddings.models.ollama_nomic]
+        provider = "ollama"
+        model_name = "nomic-embed-text:latest"
+        device = "cpu"  # Not used for Ollama
+        api_key_env = ""  # Not needed for local Ollama
+        max_request_tokens = 2048
+        base_url = "http://localhost:11434"
+        tokenizer_name = ""  # Optional
+        uses_doc_query_prefixes = false
+        query_prefix = ""
+        document_prefix = ""
 
         # --- Chunking Configuration ---
         # Defines how different file types are parsed and chunked during ingestion.
         [semantiscan.chunking]
-        default_strategy = "AgnosticRecursive"  # Fallback for unknown file types
+        default_strategy = "RecursiveSplitter"  # Fallback for unknown file types
 
         # ANTLR-based code parsers (requires ANTLR runtime and generated parsers)
-        [semantiscan.chunking.strategies.antlr]
-        # Python code parsing
-        python = {extensions = [".py"], grammar = "Python3", entry_points = ["funcdef", "async_funcdef", "classdef"]}
-        # Java code parsing
-        java = {extensions = [".java"], grammar = "Java", entry_points = ["methodDeclaration", "classDeclaration", "interfaceDeclaration"]}
-        # Additional language parsers can be added here
-        # cpp = { extensions = [".cpp", ".cc", ".h"], grammar = "CPP14", entry_points = ["functionDefinition", "classSpecifier"] }
-        # go = { extensions = [".go"], grammar = "Golang", entry_points = ["functionDecl", "methodDecl"] }
+        [semantiscan.chunking.strategies.python_code]
+        extensions = [".py", ".pyw"]
+        grammar = "Python3"
+        entry_points = ["funcdef", "async_funcdef", "classdef", "decorated"]
+        parser = ""  # Not used for ANTLR strategy
+        method = ""  # Not used for ANTLR strategy
+        strategy_sequence = []  # Not used for simple strategy
+        hybrid_content = false  # Combine related elements in ANTLR chunks
+
+        [semantiscan.chunking.strategies.java_code]
+        extensions = [".java"]
+        grammar = "Java"
+        entry_points = ["methodDeclaration", "classDeclaration", "interfaceDeclaration"]
+        parser = ""
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.cpp_code]
+        extensions = [".cpp", ".cc", ".cxx", ".hpp", ".h", ".hxx"]
+        grammar = "CPP14"
+        entry_points = ["functionDefinition", "classSpecifier"]
+        parser = ""
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.go_code]
+        extensions = [".go"]
+        grammar = "Golang"
+        entry_points = ["functionDecl", "methodDecl", "typeSpec"]
+        parser = ""
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
 
         # Format-specific parsers (YAML, JSON, TOML, XML, etc.)
-        [semantiscan.chunking.strategies.format]
-        yaml = { extensions = [".yaml", ".yml"], parser = "PyYAML" }
-        json = { extensions = [".json"], parser = "json" }
-        toml = { extensions = [".toml"], parser = "tomli" }
-        xml = { extensions = [".xml"], parser = "xml.etree.ElementTree" }
+        [semantiscan.chunking.strategies.yaml_format]
+        extensions = [".yaml", ".yml"]
+        grammar = ""  # Not used for format strategy
+        entry_points = []
+        parser = "PyYAML"
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.json_format]
+        extensions = [".json"]
+        grammar = ""
+        entry_points = []
+        parser = "json"
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.toml_format]
+        extensions = [".toml"]
+        grammar = ""
+        entry_points = []
+        parser = "tomli"
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.xml_format]
+        extensions = [".xml"]
+        grammar = ""
+        entry_points = []
+        parser = "xml.etree.ElementTree"
+        method = ""
+        strategy_sequence = []
+        hybrid_content = false
 
         # Agnostic text splitters (for markdown, plain text, logs, etc.)
-        [semantiscan.chunking.strategies.agnostic]
-        markdown = { extensions = [".md", ".markdown"], method = "RecursiveSplitter" }
-        text = { extensions = [".txt"], method = "RecursiveSplitter" }
-        logs = { extensions = [".log"], method = "LineSplitter" }
-        rst = { extensions = [".rst"], method = "RecursiveSplitter" }
+        [semantiscan.chunking.strategies.markdown_agnostic]
+        extensions = [".md", ".markdown"]
+        grammar = ""
+        entry_points = []
+        parser = ""
+        method = "RecursiveSplitter"
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.text_agnostic]
+        extensions = [".txt"]
+        grammar = ""
+        entry_points = []
+        parser = ""
+        method = "RecursiveSplitter"
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.logs_agnostic]
+        extensions = [".log"]
+        grammar = ""
+        entry_points = []
+        parser = ""
+        method = "LineSplitter"
+        strategy_sequence = []
+        hybrid_content = false
+
+        [semantiscan.chunking.strategies.rst_agnostic]
+        extensions = [".rst"]
+        grammar = ""
+        entry_points = []
+        parser = ""
+        method = "RecursiveSplitter"
+        strategy_sequence = []
+        hybrid_content = false
 
         # Parameters for agnostic chunking methods
         [semantiscan.chunking.parameters.RecursiveSplitter]
@@ -405,47 +521,75 @@ admin_api_key = ""
         [semantiscan.chunking.parameters.LineSplitter]
         lines_per_chunk = 50  # Number of lines per chunk
 
-        [semantiscan.chunking.parameters.WholeFile]
-        # No parameters - just ingests the entire file as one chunk
+        [semantiscan.chunking.parameters.SubChunker]
+        chunk_size = 500  # Chunk size for sub-chunking oversized chunks
+        chunk_overlap = 50  # Overlap for sub-chunking
 
         # --- Ingestion Configuration ---
         # Controls the ingestion pipeline behavior
         [semantiscan.ingestion]
         embedding_workers = 4  # Number of parallel workers for embedding generation
-        batch_size = 100  # Number of chunks to process in parallel
+        batch_size = 100  # Number of chunks to process in parallel batches
 
         # Git-aware ingestion modes (advanced feature)
         [semantiscan.ingestion.git]
         enabled = false  # Enable Git-aware ingestion tracking
         default_ref = "main"  # Default branch to ingest
+        ingestion_mode = "snapshot"  # Modes: "snapshot" | "historical" | "historical_delta" | "incremental"
+        historical_start_ref = ""  # Starting ref for historical ingestion modes
         enable_commit_analysis = false  # Extract commit messages, authors, etc.
-        # Ingestion modes: "snapshot" | "historical" | "historical_delta" | "incremental"
-        ingestion_mode = "snapshot"
-        historical_start_ref = ""  # Starting ref for historical ingestion
+        enable_commit_llm_analysis = false  # Use LLM to analyze/summarize commit messages
+        commit_llm_provider_key = ""  # LLM provider key for commit analysis
+        commit_llm_prompt_template = ""  # Custom prompt template for commit analysis
+        commit_message_filter_regex = []  # Regex patterns to filter out certain commit messages
 
         # --- LLM Configuration (for query answering) ---
         # NOTE: In Phase 2, semantiscan will use llmcore's LLM providers directly.
-        # This section is for future query rewriting and advanced features.
+        # This section is for query answering and advanced features like query rewriting.
         [semantiscan.llm]
         default_provider = "ollama_llama3"  # Key referencing llmcore's provider
         prompt_template_path = ""  # Optional: Custom prompt template file path
         enable_query_rewriting = false  # Enable LLM-based query expansion
         query_rewrite_provider_key = ""  # LLM provider for query rewriting
         show_sources_in_text = true  # Include source references in text responses
+        tokenizer_name = ""  # Optional: Specific tokenizer for LLM context estimation
+        context_buffer = 200  # Reserved tokens for prompt formatting
 
         # Reference to llmcore providers (will be resolved at runtime)
         [semantiscan.llm.providers.ollama_llama3]
         provider = "ollama"  # Maps to llmcore's ollama provider
         model_name = "llama3:8b"
         base_url = "http://localhost:11434"
-        parameters = { temperature = 0.5, num_ctx = 4096 }
-        context_buffer = 250  # Reserved tokens for prompt formatting
+        api_key_env = ""  # Not needed for Ollama
+        tokenizer_name = ""
+        context_buffer = 250
+        # Parameters passed directly to the LLM API
+        [semantiscan.llm.providers.ollama_llama3.parameters]
+        temperature = 0.5
+        num_ctx = 4096
+        top_p = 0.9
 
         [semantiscan.llm.providers.openai_gpt4]
         provider = "openai"
         model_name = "gpt-4"
+        base_url = ""  # Optional: Custom endpoint
         api_key_env = "OPENAI_API_KEY"
-        parameters = { temperature = 0.2, max_tokens = 4000 }
+        tokenizer_name = "cl100k_base"
+        context_buffer = 200
+        [semantiscan.llm.providers.openai_gpt4.parameters]
+        temperature = 0.2
+        max_tokens = 4000
+
+        [semantiscan.llm.providers.openai_gpt4_turbo]
+        provider = "openai"
+        model_name = "gpt-4-turbo-preview"
+        base_url = ""
+        api_key_env = "OPENAI_API_KEY"
+        tokenizer_name = "cl100k_base"
+        context_buffer = 200
+        [semantiscan.llm.providers.openai_gpt4_turbo.parameters]
+        temperature = 0.2
+        max_tokens = 4000
 
         # --- Retrieval Configuration ---
         # Controls how semantiscan retrieves relevant chunks during RAG queries.
@@ -454,7 +598,7 @@ admin_api_key = ""
         enable_hybrid_search = false  # Use hybrid search (semantic + keyword BM25)
         bm25_k1 = 1.5  # BM25 parameter: term frequency saturation
         bm25_b = 0.75  # BM25 parameter: length normalization
-        enrich_with_external_metadata = false  # Include file metadata in retrieval
+        enrich_with_external_metadata = false  # Include file metadata from external store in retrieval
 
         # --- File Discovery Configuration ---
         # Controls which files are included/excluded during ingestion.
@@ -470,16 +614,20 @@ admin_api_key = ""
             "dist",
             ".pytest_cache",
             ".mypy_cache",
-            "htmlcov"
+            "htmlcov",
+            ".tox",
+            ".eggs",
+            "*.egg-info",
+            "target"  # Rust/Java build directories
         ]
-        excluded_files = [".DS_Store", "Thumbs.db"]  # Files to always skip
+        excluded_files = [".DS_Store", "Thumbs.db", "*.pyc", "*.pyo", "*.pyd"]  # Files to always skip
 
         # --- Logging Configuration ---
         # Semantiscan-specific logging (separate from llmcore's logging)
         [semantiscan.logging]
-        log_level_console = "INFO"  # Console log level for semantiscan operations
+        log_level_console = "INFO"  # Console log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
         log_file_enabled = false  # Enable file logging for semantiscan
-        log_directory = "~/.local/share/semantiscan/logs"
-        log_filename_template = "semantiscan_{timestamp:%Y%m%d_%H%M%S}.log"
+        log_directory = "~/.local/share/semantiscan/logs"  # Directory for log files
+        log_filename_template = "semantiscan_{timestamp:%Y%m%d_%H%M%S}.log"  # Log filename template
         log_level_file = "DEBUG"  # File log level (more verbose than console)
         log_format = "%(asctime)s [%(levelname)-8s] %(name)-30s - %(message)s (%(filename)s:%(lineno)d)"

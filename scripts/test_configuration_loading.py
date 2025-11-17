@@ -1,0 +1,11 @@
+from llmcore.api import LLMCore
+import asyncio
+
+async def test_config():
+    core = await LLMCore.create()
+    # Test dot notation access
+    db_type = core.config.get('semantiscan.database.type')
+    print(f"Database type: {db_type}")
+    # Should print: Database type: chromadb
+
+asyncio.run(test_config())
