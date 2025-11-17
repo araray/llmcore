@@ -174,14 +174,18 @@ class AgentManager:
                             final_answer = tool_result.content.replace("TASK_COMPLETE: ", "")
                             logger.info(f"Agent completed task after {iteration + 1} iterations.")
                             # Record successful completion metrics
-                            try:                                tenant_id = context.get('tenant_id', 'unknown')                            except Exception as e:
+                            try:
+                                tenant_id = context.get('tenant_id', 'unknown')
+                            except Exception as e:
                                 logger.debug(f"Failed to record agent metrics: {e}")
                             return final_answer
 
                 # Max iterations reached
                 logger.warning(f"Agent reached max iterations ({max_iterations}) without completion.")
                 # Record timeout metrics
-                try:                    tenant_id = context.get('tenant_id', 'unknown')                except Exception as e:
+                try:
+                    tenant_id = context.get('tenant_id', 'unknown')
+                except Exception as e:
                     logger.debug(f"Failed to record agent metrics: {e}")
                 return f"Agent reached maximum iterations ({max_iterations}) without completing the task."
 
@@ -191,7 +195,9 @@ class AgentManager:
                 if main_span:
                     record_span_exception(main_span, e)
                 # Record error metrics
-                try:                    tenant_id = context.get('tenant_id', 'unknown')                except Exception as metrics_error:
+                try:
+                    tenant_id = context.get('tenant_id', 'unknown')
+                except Exception as metrics_error:
                     logger.debug(f"Failed to record agent metrics: {metrics_error}")
                 return f"Agent error: {error_msg}"
 

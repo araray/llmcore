@@ -364,7 +364,8 @@ async def act_step(
             result = await tool_manager.execute_tool(tool_call, session_id)
 
             # Record tool execution metrics
-            try:                status = "success" if not result.content.startswith("ERROR:") else "error"
+            try:
+                status = "success" if not result.content.startswith("ERROR:") else "error"
                 record_tool_execution(
                     tenant_id=tenant_id,
                     tool_name=tool_call.name,
