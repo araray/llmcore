@@ -7,7 +7,7 @@ name = "llmcore"
 version = "0.25.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Araray Velho", email = "araray@gmail.com" }

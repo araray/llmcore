@@ -1,6 +1,9 @@
 # src/llmcore/api.py
 """
 Core API Facade for the LLMCore library.
+
+This module provides the main LLMCore class for interacting with Large Language Models,
+managing conversation sessions, and performing Retrieval Augmented Generation (RAG).
 """
 
 import asyncio
@@ -27,19 +30,18 @@ from .providers.base import BaseProvider
 from .providers.manager import ProviderManager
 from .sessions.manager import SessionManager
 from .storage.manager import StorageManager
-from .agents.manager import AgentManager  # Add this import
 
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any] # type: ignore [no-redef]
+    ConfyConfig = Dict[str, Any]  # type: ignore [no-redef]
 try:
     import tomllib
 except ImportError:
     try:
         import tomli as tomllib
     except ImportError:
-        tomllib = None # type: ignore [assignment]
+        tomllib = None  # type: ignore [assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,8 @@ class LLMCore:
     Provides methods for chat completions, session management, Retrieval Augmented
     Generation (RAG), and dynamic configuration. It is initialized asynchronously
     using the `LLMCore.create()` classmethod.
+
+    This is a pure library implementation - no service components or async task queues.
     """
     config: ConfyConfig
     _storage_manager: StorageManager
@@ -58,7 +62,6 @@ class LLMCore:
     _session_manager: SessionManager
     _memory_manager: MemoryManager
     _embedding_manager: EmbeddingManager
-    _agent_manager: AgentManager  # Add this attribute
     _transient_sessions_cache: Dict[str, ChatSession]
     _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
     _log_raw_payloads_enabled: bool
@@ -80,6 +83,22 @@ class LLMCore:
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
+
+        This factory method is the recommended way to create LLMCore instances.
+        It loads configuration from multiple sources (defaults, file, env vars, overrides)
+        and initializes all necessary managers.
+
+        Args:
+            config_overrides: Optional dictionary of configuration overrides
+            config_file_path: Optional path to a TOML configuration file
+            env_prefix: Environment variable prefix (default: "LLMCORE")
+
+        Returns:
+            Initialized LLMCore instance
+
+        Raises:
+            ConfigError: If configuration loading fails
+            LLMCoreError: If initialization fails
         """
         instance = cls()
         await instance._initialize_from_config(config_overrides, config_file_path, env_prefix)
@@ -93,7 +112,15 @@ class LLMCore:
     ):
         """
         Initializes or re-initializes all components from a configuration.
+
         This method is used by both `create` and `reload_config`.
+        It sets up all managers (providers, storage, sessions, memory, embeddings)
+        based on the loaded configuration.
+
+        Args:
+            config_overrides: Optional configuration overrides
+            config_file_path: Optional path to config file
+            env_prefix: Environment variable prefix
         """
         logger.info("Initializing LLMCore components from configuration...")
         try:
@@ -101,15 +128,17 @@ class LLMCore:
             if not tomllib:
                 raise ImportError("tomli (for Python < 3.11) or tomllib is required.")
 
+            # Load default configuration from package
             default_config_dict = {}
             if hasattr(importlib.resources, 'files'):
                 default_config_path_obj = importlib.resources.files('llmcore.config').joinpath('default_config.toml')
                 with default_config_path_obj.open('rb') as f:
                     default_config_dict = tomllib.load(f)
             else:
-                default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8') # type: ignore
-                default_config_dict = tomllib.loads(default_config_content) # type: ignore
+                default_config_content = importlib.resources.read_text('llmcore.config', 'default_config.toml', encoding='utf-8')  # type: ignore
+                default_config_dict = tomllib.loads(default_config_content)  # type: ignore
 
+            # Create configuration object with layered precedence
             self.config = ActualConfyConfig(
                 defaults=default_config_dict,
                 file_path=config_file_path,
@@ -119,41 +148,33 @@ class LLMCore:
         except Exception as e:
             raise ConfigError(f"LLMCore configuration loading failed: {e}")
 
+        # Configure logging
         self._log_raw_payloads_enabled = self.config.get('llmcore.log_raw_payloads', False)
         self._llmcore_log_level_str = self.config.get('llmcore.log_level', 'INFO').upper()
         logging.getLogger("llmcore").setLevel(logging.getLevelName(self._llmcore_log_level_str))
         logger.info(f"LLMCore logger level set to: {self._llmcore_log_level_str}")
 
+        # Initialize core managers
         self._provider_manager = ProviderManager(self.config)
         self._storage_manager = StorageManager(self.config)
         await self._storage_manager.initialize_storages()
         self._session_manager = SessionManager(self._storage_manager.get_session_storage())
         self._embedding_manager = EmbeddingManager(self.config)
+
+        # Pre-load default embedding model if configured
         default_embedding_model = self.config.get('llmcore.default_embedding_model')
         if default_embedding_model:
             await self._embedding_manager.get_model(default_embedding_model)
+
+        # Initialize memory manager (coordinates context building and RAG)
         self._memory_manager = MemoryManager(
             config=self.config,
             provider_manager=self._provider_manager,
             storage_manager=self._storage_manager,
             embedding_manager=self._embedding_manager
         )
-        # Initialize the AgentManager
-        self._agent_manager = AgentManager(
-            self._provider_manager,
-            self._memory_manager,
-            self._storage_manager
-        )
+
         logger.info("LLMCore components initialization complete.")
-
-    def get_agent_manager(self) -> AgentManager:
-        """
-        Returns the initialized AgentManager instance.
-
-        Returns:
-            AgentManager: The agent manager for orchestrating autonomous agent tasks
-        """
-        return self._agent_manager
 
     async def reload_config(self) -> None:
         """
@@ -175,154 +196,155 @@ class LLMCore:
         The most critical aspect is preserving `_transient_sessions_cache` which contains
         active, non-persistent chat sessions. Losing this data would terminate ongoing
         conversations for users who haven't explicitly saved their sessions.
-
-        Raises:
-            ConfigError: If configuration reload or component re-initialization fails
         """
-        logger.info("Starting live configuration reload...")
+        logger.info("Beginning configuration reload with state preservation...")
 
-        # Step 1: Preserve State
-        # Create deep copies to ensure state is fully preserved even if original objects change
+        # Step 1: Preserve transient state
+        saved_sessions = self._transient_sessions_cache.copy()
+        saved_context_info = self._transient_last_interaction_info_cache.copy()
+        logger.debug(f"Preserved {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries")
+
+        # Step 2: Attempt to reload configuration
+        old_config = self.config
         try:
-            preserved_sessions = self._transient_sessions_cache.copy()
-            preserved_context_info = self._transient_last_interaction_info_cache.copy()
-
-            logger.info(f"State preservation: {len(preserved_sessions)} transient sessions, {len(preserved_context_info)} context info entries")
-            logger.debug(f"Preserved session IDs: {list(preserved_sessions.keys())}")
-        except Exception as e:
-            logger.error(f"Failed to preserve transient state: {e}", exc_info=True)
-            raise ConfigError(f"State preservation failed during reload: {e}")
-
-        # Step 2: Graceful Shutdown
-        # Clean shutdown of all existing connections and resources
-        try:
-            logger.info("Performing graceful shutdown of existing components...")
-            await self.close()
-            logger.info("Graceful shutdown completed")
-        except Exception as e:
-            logger.error(f"Error during graceful shutdown: {e}", exc_info=True)
-            # Continue with reload attempt even if shutdown had issues
-            logger.warning("Continuing with reload despite shutdown errors")
-
-        # Step 3: Reload and Re-initialize
-        # Re-read configuration and reinitialize all components
-        try:
-            logger.info("Reloading configuration from all sources...")
-
-            # The config object should reload from files and environment variables
-            # Note: The original config file path and overrides are not stored, so we assume
-            # the reload is based on the files on disk and environment variables.
-            self.config.reload()
-            logger.info("Configuration successfully reloaded from sources")
-
-            # Re-run initialization logic with the new config object
-            # We pass None for overrides and file path since we want to use the reloaded config as-is
+            # Re-initialize from configuration (uses the same sources as create())
             await self._initialize_from_config(
                 config_overrides=None,
-                config_file_path=getattr(self.config, '_config_file_path_loaded_from', None),
-                env_prefix=getattr(self.config, '_prefix', 'LLMCORE')
+                config_file_path=None,
+                env_prefix="LLMCORE"
             )
-            logger.info("All components successfully re-initialized with new configuration")
+            logger.info("Configuration reloaded successfully")
 
         except Exception as e:
-            logger.error(f"Failed to reload configuration and re-initialize managers: {e}", exc_info=True)
+            # Critical: Restore previous configuration on failure
+            logger.error(f"Configuration reload failed: {e}. Restoring previous configuration.", exc_info=True)
+            self.config = old_config
+            raise ConfigError(f"Failed to reload configuration: {e}")
 
-            # Attempt to restore to a usable state might be complex since we've already
-            # shut down the previous managers. For now, we log the error and raise.
-            # In a production environment, you might want to implement a more sophisticated
-            # rollback mechanism or maintain a backup of the previous working configuration.
-            raise ConfigError(f"Configuration reload failed during re-initialization: {e}")
+        # Step 3: Restore transient state
+        self._transient_sessions_cache = saved_sessions
+        self._transient_last_interaction_info_cache = saved_context_info
+        logger.info(f"Restored {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries")
 
-        # Step 4: Restore State
-        # Restore the preserved transient state to the newly initialized instance
-        try:
-            logger.info("Restoring preserved transient state...")
+        logger.info("Configuration reload complete with full state restoration")
 
-            self._transient_sessions_cache = preserved_sessions
-            self._transient_last_interaction_info_cache = preserved_context_info
+    def get_available_providers(self) -> List[str]:
+        """
+        Returns a list of provider names that are currently configured and available.
 
-            logger.info(f"Configuration reload completed successfully. Restored {len(self._transient_sessions_cache)} transient sessions and {len(self._transient_last_interaction_info_cache)} context info entries")
+        Returns:
+            List of provider names (e.g., ['openai', 'anthropic', 'ollama'])
+        """
+        return self._provider_manager.list_providers()
 
-            # Log the restored session IDs for debugging
-            if preserved_sessions:
-                logger.debug(f"Restored session IDs: {list(self._transient_sessions_cache.keys())}")
+    def get_provider_details(self, provider_name: Optional[str] = None) -> ModelDetails:
+        """
+        Gets detailed information about a specific provider or the default provider.
 
-        except Exception as e:
-            logger.error(f"Failed to restore transient state after reload: {e}", exc_info=True)
-            # Even if state restoration fails, the reload was successful
-            # Just log the issue and continue
-            logger.warning("Configuration reload succeeded but state restoration had issues")
+        Args:
+            provider_name: Optional provider name. If None, returns default provider details.
 
-        # Final verification log
-        available_providers = self.get_available_providers()
-        logger.info(f"Live configuration reload completed. Available providers: {available_providers}")
+        Returns:
+            ModelDetails object containing provider information
+
+        Raises:
+            ProviderError: If the specified provider is not found
+        """
+        provider = self._provider_manager.get_provider(provider_name)
+        return ModelDetails(
+            provider_name=provider.get_name(),
+            model_name=provider.default_model,
+            supports_streaming=provider.supports_streaming,
+            supports_tools=provider.supports_tools,
+            max_context_length=provider.get_max_context_length(provider.default_model)
+        )
 
     async def chat(
         self,
         message: str,
-        *,
         session_id: Optional[str] = None,
         system_message: Optional[str] = None,
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
         stream: bool = False,
         save_session: bool = True,
+        enable_rag: bool = False,
+        rag_retrieval_k: Optional[int] = None,
+        rag_collection_name: Optional[str] = None,
+        rag_metadata_filter: Optional[Dict[str, Any]] = None,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        use_mcp_tools: Optional[List[str]] = None, # Placeholder for future MCP integration
         **provider_kwargs
     ) -> Union[str, AsyncGenerator[str, None]]:
         """
-        Sends a message to the LLM, managing history, RAG, and tool-calling.
+        Sends a message to an LLM and returns the response.
+
+        This is the primary method for interacting with LLMs. It handles session management,
+        context preparation, RAG integration, and both streaming and non-streaming responses.
 
         Args:
-            message: The user's input message.
-            session_id: The ID of the conversation session.
-            system_message: A message defining the LLM's behavior.
-            provider_name: Overrides the default LLM provider for this call.
-            model_name: Overrides the default model for the chosen provider.
-            stream: If True, returns an async generator of text chunks.
-            save_session: If True, saves the conversation turn to storage.
-            tools: A list of `Tool` objects available for the LLM to call.
-            tool_choice: A string to control how the model uses tools (e.g., "auto", "any").
-            use_mcp_tools: (For future use) A list of remote MCP tools to use.
-            **provider_kwargs: Additional arguments passed directly to the provider's API,
-                               which are validated before the call.
+            message: The user's input message
+            session_id: Optional session ID for conversation continuity
+            system_message: Optional system message to define LLM behavior
+            provider_name: Optional provider override (e.g., 'openai', 'anthropic')
+            model_name: Optional model override (e.g., 'gpt-4', 'claude-3-opus')
+            stream: If True, returns an async generator for streaming responses
+            save_session: If True, saves the conversation turn to storage
+            enable_rag: If True, retrieves relevant context from vector store
+            rag_retrieval_k: Number of documents to retrieve for RAG
+            rag_collection_name: Vector store collection name for RAG
+            rag_metadata_filter: Optional metadata filter for RAG queries
+            tools: Optional list of tools available to the LLM
+            tool_choice: Optional tool choice strategy ('auto', 'required', or specific tool name)
+            **provider_kwargs: Additional provider-specific parameters
 
         Returns:
-            The full response string or a stream of response chunks.
+            For non-streaming: The complete response string
+            For streaming: An async generator yielding response chunks
 
         Raises:
-            ProviderError, ContextLengthError, ConfigError, ValueError (for invalid params).
+            ProviderError: If provider interaction fails
+            ContextLengthError: If context exceeds model's maximum length
+            SessionStorageError: If session save/load fails
+            VectorStorageError: If RAG retrieval fails
         """
+        # Get the active provider
         active_provider = self._provider_manager.get_provider(provider_name)
         actual_model = model_name or active_provider.default_model
-        if not actual_model:
-            raise ConfigError(f"Target model for provider '{active_provider.get_name()}' is not defined.")
 
-        # Pre-flight parameter validation
+        # Validate provider kwargs against supported parameters
         supported_params = active_provider.get_supported_parameters(actual_model)
         for key in provider_kwargs:
             if key not in supported_params:
-                raise ValueError(f"Unsupported parameter '{key}' for provider '{active_provider.get_name()}'. "
-                                 f"Supported parameters are: {list(supported_params.keys())}")
+                raise ValueError(
+                    f"Unsupported parameter '{key}' for provider '{active_provider.get_name()}'. "
+                    f"Supported parameters are: {list(supported_params.keys())}"
+                )
 
-        # Session handling logic... (remains largely the same)
+        # Load or create session
         chat_session = await self._session_manager.load_or_create_session(session_id, system_message)
-        if not session_id: # If it was a temporary session, cache it
+        if not session_id:  # If it was a temporary session, cache it
             self._transient_sessions_cache[chat_session.id] = chat_session
+
+        # Add user message to session
         chat_session.add_message(message, Role.USER)
 
-        # Context preparation logic... (remains largely the same)
+        # Prepare context (includes history, RAG, context management)
         context_details = await self._memory_manager.prepare_context(
             session=chat_session,
             provider_name=active_provider.get_name(),
-            model_name=actual_model
+            model_name=actual_model,
+            enable_rag=enable_rag,
+            rag_k=rag_retrieval_k,
+            rag_collection=rag_collection_name,
+            rag_filter=rag_metadata_filter
         )
         context_payload = context_details.prepared_messages
+
+        # Cache context details for clients like llmchat
         self._transient_last_interaction_info_cache[chat_session.id] = context_details
 
-        # Provider call
+        # Call provider
         response_data = await active_provider.chat_completion(
             context=context_payload,
             model=actual_model,
@@ -332,9 +354,9 @@ class LLMCore:
             **provider_kwargs
         )
 
-        # Response handling...
+        # Handle response
         if stream:
-            return self._stream_response_wrapper(response_data, active_provider, chat_session, save_session) # type: ignore
+            return self._stream_response_wrapper(response_data, active_provider, chat_session, save_session)  # type: ignore
         else:
             full_content = self._extract_full_content(response_data, active_provider)
             chat_session.add_message(full_content, Role.ASSISTANT)
@@ -346,11 +368,21 @@ class LLMCore:
         self, provider_stream: AsyncGenerator, provider: BaseProvider,
         session: ChatSession, do_save: bool
     ) -> AsyncGenerator[str, None]:
-        """Wraps provider's stream, yields text, and handles session saving."""
+        """
+        Wraps provider's stream, yields text, and handles session saving.
+
+        Args:
+            provider_stream: The async generator from the provider
+            provider: The provider instance for response extraction
+            session: The chat session to update
+            do_save: Whether to save the session after streaming completes
+
+        Yields:
+            Text chunks from the LLM response
+        """
         full_response = ""
         try:
             async for chunk in provider_stream:
-                # This part will need enhancement to handle tool_call deltas
                 text_delta = self._extract_delta_content(chunk, provider)
                 if text_delta:
                     full_response += text_delta
@@ -362,81 +394,150 @@ class LLMCore:
                     await self._session_manager.save_session(session)
 
     def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> str:
-        """Extracts full response content from a non-streaming response."""
-        # This part will need enhancement to handle tool_calls in the response
-        try:
-            return response_data['choices'][0]['message']['content'] or ""
-        except (KeyError, IndexError, TypeError):
-            logger.warning(f"Could not extract content from {provider.get_name()} response: {response_data}")
-            return ""
-
-    def _extract_delta_content(self, chunk: Dict[str, Any], provider: BaseProvider) -> str:
-        """Extracts text delta from a streaming chunk."""
-        # This part will need enhancement to handle tool_call deltas
-        try:
-            return chunk['choices'][0]['delta'].get('content', '') or ""
-        except (KeyError, IndexError, TypeError):
-            return ""
-
-    # --- Other methods ---
-
-    async def get_models_details_for_provider(self, provider_name: str) -> List[ModelDetails]:
         """
-        Gets detailed information for all available models from a specific provider.
+        Extracts full response content from a non-streaming response.
 
         Args:
-            provider_name: The name of the provider to query.
+            response_data: The response dictionary from the provider
+            provider: The provider instance
 
         Returns:
-            A list of `ModelDetails` objects.
+            The extracted text content
         """
-        provider = self._provider_manager.get_provider(provider_name)
-        return await provider.get_models_details()
+        return provider.extract_response_content(response_data)
 
-    def get_available_providers(self) -> List[str]:
-        """Lists the names of all successfully loaded provider instances."""
-        return self._provider_manager.get_available_providers()
+    def _extract_delta_content(self, chunk: Dict[str, Any], provider: BaseProvider) -> str:
+        """
+        Extracts delta content from a streaming chunk.
 
-    async def close(self):
-        """Closes all provider and storage connections gracefully."""
-        logger.info("Closing LLMCore resources...")
-        await asyncio.gather(
-            self._provider_manager.close_providers(),
-            self._storage_manager.close_storages(),
-            self._embedding_manager.close(),
-            return_exceptions=True
-        )
-        self._transient_sessions_cache.clear()
-        self._transient_last_interaction_info_cache.clear()
-        logger.info("LLMCore resources cleanup complete.")
+        Args:
+            chunk: A single chunk from the streaming response
+            provider: The provider instance
 
-    # --- Methods below this line are simplified for brevity and would be fully implemented ---
+        Returns:
+            The extracted text delta
+        """
+        return provider.extract_delta_content(chunk)
 
-    async def get_session(self, session_id: str) -> Optional[ChatSession]:
-        return await self._session_manager.get_session_if_exists(session_id)
+    def get_last_interaction_context_info(self, session_id: str) -> Optional[ContextPreparationDetails]:
+        """
+        Retrieves the context preparation details from the most recent interaction.
 
-    async def list_sessions(self) -> List[Dict[str, Any]]:
-        return await self._storage_manager.get_session_storage().list_sessions()
+        This method is essential for clients like llmchat that need to display
+        information about context usage, token counts, RAG documents used, etc.
 
-    async def delete_session(self, session_id: str) -> bool:
-        # Also clear from transient cache
+        Args:
+            session_id: The session ID to query
+
+        Returns:
+            ContextPreparationDetails if available, None otherwise
+        """
+        return self._transient_last_interaction_info_cache.get(session_id)
+
+    async def list_sessions(self, limit: Optional[int] = None) -> List[ChatSession]:
+        """
+        Lists all available chat sessions.
+
+        Args:
+            limit: Optional maximum number of sessions to return
+
+        Returns:
+            List of ChatSession objects
+        """
+        return await self._session_manager.list_sessions(limit=limit)
+
+    async def get_session(self, session_id: str) -> ChatSession:
+        """
+        Retrieves a specific chat session by ID.
+
+        Args:
+            session_id: The session ID to retrieve
+
+        Returns:
+            ChatSession object
+
+        Raises:
+            SessionNotFoundError: If the session doesn't exist
+        """
+        return await self._session_manager.get_session(session_id)
+
+    async def delete_session(self, session_id: str) -> None:
+        """
+        Deletes a chat session.
+
+        Args:
+            session_id: The session ID to delete
+
+        Raises:
+            SessionNotFoundError: If the session doesn't exist
+        """
+        await self._session_manager.delete_session(session_id)
+        # Also remove from transient caches if present
         self._transient_sessions_cache.pop(session_id, None)
         self._transient_last_interaction_info_cache.pop(session_id, None)
-        return await self._storage_manager.get_session_storage().delete_session(session_id)
 
-    async def add_documents_to_vector_store(self, documents: List[Dict[str, Any]], collection_name: Optional[str] = None) -> List[str]:
-        # Simplified implementation
-        contents = [doc["content"] for doc in documents]
-        embeddings = await self._embedding_manager.generate_embeddings(contents)
-        docs_to_add = [ContextDocument(id=d.get("id", str(uuid.uuid4())), content=d["content"], embedding=emb, metadata=d.get("metadata", {})) for d, emb in zip(documents, embeddings)]
-        return await self._storage_manager.get_vector_storage().add_documents(docs_to_add, collection_name)
+    async def add_documents_to_vector_store(
+        self,
+        documents: List[ContextDocument],
+        collection_name: Optional[str] = None,
+        metadata_filter: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Adds documents to the vector store for RAG.
 
-    async def search_vector_store(self, query: str, k: int, collection_name: Optional[str] = None, filter_metadata: Optional[Dict] = None) -> List[ContextDocument]:
-        query_embedding = await self._embedding_manager.generate_embedding(query)
-        return await self._storage_manager.get_vector_storage().similarity_search(query_embedding, k, collection_name, filter_metadata)
+        Args:
+            documents: List of ContextDocument objects to add
+            collection_name: Optional collection name (uses default if not specified)
+            metadata_filter: Optional metadata to attach to documents
 
-    async def __aenter__(self):
-        return self
+        Raises:
+            VectorStorageError: If document addition fails
+        """
+        vector_storage = self._storage_manager.get_vector_storage(collection_name)
+        await vector_storage.add_documents(documents, metadata_filter)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
+    async def search_vector_store(
+        self,
+        query: str,
+        k: int = 5,
+        collection_name: Optional[str] = None,
+        metadata_filter: Optional[Dict[str, Any]] = None
+    ) -> List[ContextDocument]:
+        """
+        Searches the vector store for relevant documents.
+
+        Args:
+            query: The search query
+            k: Number of results to return
+            collection_name: Optional collection name
+            metadata_filter: Optional metadata filter
+
+        Returns:
+            List of relevant ContextDocument objects
+
+        Raises:
+            VectorStorageError: If search fails
+        """
+        vector_storage = self._storage_manager.get_vector_storage(collection_name)
+        return await vector_storage.search(query, k=k, metadata_filter=metadata_filter)
+
+    async def close(self) -> None:
+        """
+        Closes all connections and cleans up resources.
+
+        This method should be called when shutting down to ensure proper cleanup
+        of database connections, HTTP clients, and other resources.
+        """
+        logger.info("Closing LLMCore instance...")
+        try:
+            # Close storage connections
+            if hasattr(self, '_storage_manager'):
+                await self._storage_manager.close()
+
+            # Close provider connections
+            if hasattr(self, '_provider_manager'):
+                await self._provider_manager.close_all()
+
+            logger.info("LLMCore instance closed successfully")
+        except Exception as e:
+            logger.error(f"Error during LLMCore shutdown: {e}", exc_info=True)

@@ -4,7 +4,10 @@ LLMCore - A comprehensive library for LLM interaction, session management, and R
 
 This library provides a unified interface for working with multiple LLM providers,
 managing conversation sessions, implementing Retrieval Augmented Generation (RAG),
-and now supporting hierarchical memory including episodic memory for agent experiences.
+and supporting hierarchical memory including episodic memory for agent experiences.
+
+UPDATED: Pure library mode - removed service-oriented component exports.
+         AgentManager and ToolManager remain available for advanced users.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -19,10 +22,10 @@ from .models import (
     ContextItemType,
     ContextPreset,
     ContextPresetItem,
-    Episode,           # Added Episode
-    EpisodeType,       # Added EpisodeType
-    AgentState,        # Added AgentState
-    AgentTask,         # Added AgentTask
+    Episode,
+    EpisodeType,
+    AgentState,
+    AgentTask,
     ModelDetails,
     Tool,
     ToolCall,
@@ -42,7 +45,7 @@ from .exceptions import (
     EmbeddingError
 )
 from .storage import StorageManager
-from .agents import AgentManager, ToolManager  # Added new agent components
+from .agents import AgentManager, ToolManager
 
 try:
     __version__ = version("llmcore")
@@ -64,10 +67,10 @@ __all__ = [
     "ContextItemType",
     "ContextPreset",
     "ContextPresetItem",
-    "Episode",           # Added Episode
-    "EpisodeType",       # Added EpisodeType
-    "AgentState",        # Added AgentState
-    "AgentTask",         # Added AgentTask
+    "Episode",
+    "EpisodeType",
+    "AgentState",
+    "AgentTask",
     "ModelDetails",
     "Tool",
     "ToolCall",
@@ -89,9 +92,9 @@ __all__ = [
     # Storage
     "StorageManager",
 
-    # Agents
-    "AgentManager",      # Added AgentManager
-    "ToolManager",       # Added ToolManager
+    # Agents (available for advanced library users)
+    "AgentManager",
+    "ToolManager",
 
     # Version
     "__version__",
