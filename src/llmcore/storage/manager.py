@@ -320,3 +320,12 @@ class StorageManager:
         cached connections or resources.
         """
         logger.info("Storage manager cleanup complete (factory pattern - no persistent connections).")
+
+    async def close(self) -> None:
+        """
+        Alias for close_storages() to maintain API compatibility.
+
+        LLMCore.close() calls StorageManager.close(), so this method
+        delegates to close_storages() which does the actual cleanup.
+        """
+        await self.close_storages()
