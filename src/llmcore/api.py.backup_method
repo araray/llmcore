@@ -235,7 +235,7 @@ class LLMCore:
         Returns:
             List of provider names (e.g., ['openai', 'anthropic', 'ollama'])
         """
-        return self._provider_manager.get_available_providers()
+        return self._provider_manager.list_providers()
 
     def get_provider_details(self, provider_name: Optional[str] = None) -> ModelDetails:
         """
