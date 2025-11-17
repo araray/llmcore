@@ -376,17 +376,9 @@ admin_api_key = ""
         # ANTLR-based code parsers (requires ANTLR runtime and generated parsers)
         [semantiscan.chunking.strategies.antlr]
         # Python code parsing
-        python = {
-            extensions = [".py"],
-            grammar = "Python3",  # ANTLR grammar name (must be pre-built)
-            entry_points = ["funcdef", "async_funcdef", "classdef"]  # AST nodes to extract
-        }
+        python = {extensions = [".py"], grammar = "Python3", entry_points = ["funcdef", "async_funcdef", "classdef"]}
         # Java code parsing
-        java = {
-            extensions = [".java"],
-            grammar = "Java",
-            entry_points = ["methodDeclaration", "classDeclaration", "interfaceDeclaration"]
-        }
+        java = {extensions = [".java"], grammar = "Java", entry_points = ["methodDeclaration", "classDeclaration", "interfaceDeclaration"]}
         # Additional language parsers can be added here
         # cpp = { extensions = [".cpp", ".cc", ".h"], grammar = "CPP14", entry_points = ["functionDefinition", "classSpecifier"] }
         # go = { extensions = [".go"], grammar = "Golang", entry_points = ["functionDecl", "methodDecl"] }
@@ -429,16 +421,16 @@ admin_api_key = ""
         enable_commit_analysis = false  # Extract commit messages, authors, etc.
         # Ingestion modes: "snapshot" | "historical" | "historical_delta" | "incremental"
         ingestion_mode = "snapshot"
-        historical_start_ref = null  # Starting ref for historical ingestion
+        historical_start_ref = ""  # Starting ref for historical ingestion
 
         # --- LLM Configuration (for query answering) ---
         # NOTE: In Phase 2, semantiscan will use llmcore's LLM providers directly.
         # This section is for future query rewriting and advanced features.
         [semantiscan.llm]
         default_provider = "ollama_llama3"  # Key referencing llmcore's provider
-        prompt_template_path = null  # Optional: Custom prompt template file path
+        prompt_template_path = ""  # Optional: Custom prompt template file path
         enable_query_rewriting = false  # Enable LLM-based query expansion
-        query_rewrite_provider_key = null  # LLM provider for query rewriting
+        query_rewrite_provider_key = ""  # LLM provider for query rewriting
         show_sources_in_text = true  # Include source references in text responses
 
         # Reference to llmcore providers (will be resolved at runtime)
