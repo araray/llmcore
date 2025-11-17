@@ -153,7 +153,7 @@ class MemoryManager:
 
         # Query Semantic Memory (vector store)
         try:
-            vector_storage = self._storage_manager.get_vector_storage()
+            vector_storage = self._storage_manager.vector_storage
             if vector_storage:
                 goal_embedding = await self._embedding_manager.generate_embedding(goal)
                 semantic_results = await vector_storage.similarity_search(
@@ -219,7 +219,7 @@ class MemoryManager:
 
         if rag_enabled:
             try:
-                vector_storage = self._storage_manager.get_vector_storage()
+                vector_storage = self._storage_manager.vector_storage
                 k = rag_k if rag_k is not None else self._cm_config['default_rag_k']
                 query_embedding = await self._embedding_manager.generate_embedding(last_user_message.content)
                 rag_documents_used = await vector_storage.similarity_search(

@@ -2,18 +2,18 @@
 """
 Storage Manager for LLMCore.
 
-Handles the dynamic loading and management of session and vector storage backends
+Handles the initialization and management of session and vector storage backends
 based on the application's configuration. Now includes episodic memory management
 through the session storage backends.
 
-REFACTORED FOR MULTI-TENANCY: This manager now acts as a factory that provides
-tenant-scoped storage accessors rather than holding global storage instances.
+REFACTORED FOR LIBRARY MODE (Step 1.3): This manager now directly instantiates
+and holds storage backend instances rather than acting as a factory. All multi-tenant
+db_session parameters have been removed for single-tenant library usage.
 """
 
 import asyncio
 import logging
 from typing import Any, Dict, Optional, Type, List
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Assume ConfyConfig type for hinting
 try:
@@ -53,9 +53,10 @@ class StorageManager:
     """
     Manages the initialization and access to storage backends.
 
-    REFACTORED: Now acts as a factory for tenant-scoped storage backends
-    rather than holding global instances. Reads configuration and provides
-    methods to create tenant-aware storage accessors.
+    REFACTORED (Step 1.3): Now operates in library mode. Storage backend instances
+    are created once during initialization and held internally, rather than being
+    created on-demand per-request. This provides a simple, single-tenant API suitable
+    for library usage.
     """
     _config: ConfyConfig
     _session_storage_type: Optional[str] = None
@@ -63,30 +64,52 @@ class StorageManager:
     _session_storage_config: Dict[str, Any] = {}
     _vector_storage_config: Dict[str, Any] = {}
 
+    # REFACTORED: Storage instances are now held directly
+    _session_storage_instance: Optional[BaseSessionStorage] = None
+    _vector_storage_instance: Optional[BaseVectorStorage] = None
+
     def __init__(self, config: ConfyConfig):
         """
         Initializes the StorageManager.
+
+        REFACTORED (Step 1.3): Constructor now only stores configuration.
+        Actual storage backend instantiation is deferred to initialize_storages().
 
         Args:
             config: The main LLMCore configuration object (ConfyConfig instance).
         """
         self._config = config
-        logger.info("StorageManager initialized as factory.")
-        # Configuration parsing is deferred to initialize_storages()
+        logger.info("StorageManager initialized for library mode (single-tenant).")
 
     async def initialize_storages(self) -> None:
         """
-        Parses storage configuration but does not create global instances.
+        Parses storage configuration and creates storage backend instances.
 
-        In the new multi-tenant architecture, storage instances are created
-        on-demand with tenant-specific configurations.
+        REFACTORED (Step 1.3): Now actually instantiates the storage backends
+        based on configuration, rather than just parsing config. The backends
+        are held internally and accessed via properties.
+
+        Raises:
+            ConfigError: If storage configuration is invalid.
+            StorageError: If storage backend instantiation fails.
         """
+        # Parse configuration
         await self._parse_session_storage_config()
         await self._parse_vector_storage_config()
-        logger.info("Storage configuration parsing complete.")
+
+        # Instantiate storage backends
+        await self._instantiate_session_storage()
+        await self._instantiate_vector_storage()
+
+        logger.info("Storage backends initialized successfully.")
 
     async def _parse_session_storage_config(self) -> None:
-        """Parses session storage configuration."""
+        """
+        Parses session storage configuration from the config object.
+
+        Sets _session_storage_type and _session_storage_config based on
+        the [storage.session] section of the configuration.
+        """
         session_storage_config = self._config.get("storage.session", {})
         session_storage_type = session_storage_config.get("type")
 
@@ -104,7 +127,12 @@ class StorageManager:
         logger.info(f"Session storage type '{session_storage_type}' configured.")
 
     async def _parse_vector_storage_config(self) -> None:
-        """Parses vector storage configuration."""
+        """
+        Parses vector storage configuration from the config object.
+
+        Sets _vector_storage_type and _vector_storage_config based on
+        the [storage.vector] section of the configuration.
+        """
         vector_storage_config = self._config.get("storage.vector", {})
         vector_storage_type = vector_storage_config.get("type")
 
@@ -121,122 +149,129 @@ class StorageManager:
         self._vector_storage_config = vector_storage_config
         logger.info(f"Vector storage type '{vector_storage_type}' configured.")
 
-    def get_session_storage(self, db_session: Optional[AsyncSession] = None) -> BaseSessionStorage:
+    async def _instantiate_session_storage(self) -> None:
         """
-        Returns a session storage instance, optionally configured for tenant-specific use.
+        Creates and initializes the session storage backend instance.
 
-        REFACTORED: Now accepts an optional tenant-scoped database session.
-        For PostgreSQL backends, this session will be pre-configured with the
-        correct schema search path.
-
-        Args:
-            db_session: Optional tenant-scoped database session for PostgreSQL backends
-
-        Returns:
-            BaseSessionStorage: Storage instance ready for use
+        REFACTORED (Step 1.3): New method that instantiates the storage backend
+        once during initialization, rather than on-demand per-request.
 
         Raises:
-            StorageError: If session storage is not configured or initialization fails.
+            StorageError: If instantiation or initialization fails.
         """
         if self._session_storage_type is None:
-            if not self._config.get("storage.session.type"):
-                raise StorageError("Session storage is not configured ('storage.session.type' missing).")
-            else:
-                raise StorageError("Session storage failed to parse configuration (check logs for details).")
+            logger.info("Session storage not configured; skipping instantiation.")
+            self._session_storage_instance = None
+            return
 
         session_storage_cls = SESSION_STORAGE_MAP[self._session_storage_type]
 
         try:
-            storage_instance = session_storage_cls()
-
-            # For PostgreSQL, inject the tenant-scoped session if provided
-            if self._session_storage_type == "postgres" and db_session is not None:
-                # PostgresSessionStorage will be modified to accept pre-configured sessions
-                storage_instance._tenant_session = db_session
-                logger.debug("Injected tenant-scoped session into PostgreSQL storage backend")
-
-            # Initialize with configuration
-            asyncio.create_task(storage_instance.initialize(self._session_storage_config))
-
-            return storage_instance
-
+            self._session_storage_instance = session_storage_cls()
+            await self._session_storage_instance.initialize(self._session_storage_config)
+            logger.info(f"Session storage backend '{self._session_storage_type}' instantiated and initialized.")
         except Exception as e:
-            logger.error(f"Failed to create session storage instance '{self._session_storage_type}': {e}", exc_info=True)
-            raise StorageError(f"Session storage creation failed: {e}")
+            logger.error(f"Failed to instantiate session storage backend '{self._session_storage_type}': {e}", exc_info=True)
+            raise StorageError(f"Session storage instantiation failed: {e}")
 
-    def get_vector_storage(self, db_session: Optional[AsyncSession] = None) -> BaseVectorStorage:
+    async def _instantiate_vector_storage(self) -> None:
         """
-        Returns a vector storage instance, optionally configured for tenant-specific use.
+        Creates and initializes the vector storage backend instance.
 
-        REFACTORED: Now accepts an optional tenant-scoped database session.
-        For PgVector backends, this session will be pre-configured with the
-        correct schema search path.
-
-        Args:
-            db_session: Optional tenant-scoped database session for PgVector backends
-
-        Returns:
-            BaseVectorStorage: Storage instance ready for use
+        REFACTORED (Step 1.3): New method that instantiates the storage backend
+        once during initialization, rather than on-demand per-request.
 
         Raises:
-            StorageError: If vector storage is not configured or initialization fails.
+            StorageError: If instantiation or initialization fails.
         """
         if self._vector_storage_type is None:
-            if not self._config.get("storage.vector.type"):
-                raise StorageError("Vector storage is not configured ('storage.vector.type' missing). RAG is unavailable.")
-            else:
-                raise StorageError("Vector storage failed to parse configuration (check logs for details). RAG is unavailable.")
+            logger.info("Vector storage not configured; skipping instantiation.")
+            self._vector_storage_instance = None
+            return
 
         vector_storage_cls = VECTOR_STORAGE_MAP[self._vector_storage_type]
 
         try:
-            storage_instance = vector_storage_cls()
-
-            # For PgVector, inject the tenant-scoped session if provided
-            if self._vector_storage_type == "pgvector" and db_session is not None:
-                # PgVectorStorage will be modified to accept pre-configured sessions
-                storage_instance._tenant_session = db_session
-                logger.debug("Injected tenant-scoped session into PgVector storage backend")
-
-            # Initialize with configuration
-            asyncio.create_task(storage_instance.initialize(self._vector_storage_config))
-
-            return storage_instance
-
+            self._vector_storage_instance = vector_storage_cls()
+            await self._vector_storage_instance.initialize(self._vector_storage_config)
+            logger.info(f"Vector storage backend '{self._vector_storage_type}' instantiated and initialized.")
         except Exception as e:
-            logger.error(f"Failed to create vector storage instance '{self._vector_storage_type}': {e}", exc_info=True)
-            raise StorageError(f"Vector storage creation failed: {e}")
+            logger.error(f"Failed to instantiate vector storage backend '{self._vector_storage_type}': {e}", exc_info=True)
+            raise StorageError(f"Vector storage instantiation failed: {e}")
 
-    # --- Legacy methods for backward compatibility during transition ---
+    @property
+    def session_storage(self) -> BaseSessionStorage:
+        """
+        Returns the initialized session storage backend instance.
 
-    async def add_episode(self, episode: Episode, db_session: Optional[AsyncSession] = None) -> None:
+        REFACTORED (Step 1.3): Changed from get_session_storage(db_session) method
+        to a simple property that returns the internally-held instance.
+
+        Returns:
+            BaseSessionStorage: The initialized storage backend instance.
+
+        Raises:
+            StorageError: If session storage is not configured or not initialized.
+        """
+        if self._session_storage_instance is None:
+            if self._session_storage_type is None:
+                raise StorageError("Session storage is not configured ('storage.session.type' missing).")
+            else:
+                raise StorageError("Session storage not initialized. Call initialize_storages() first.")
+
+        return self._session_storage_instance
+
+    @property
+    def vector_storage(self) -> BaseVectorStorage:
+        """
+        Returns the initialized vector storage backend instance.
+
+        REFACTORED (Step 1.3): Changed from get_vector_storage(db_session) method
+        to a simple property that returns the internally-held instance.
+
+        Returns:
+            BaseVectorStorage: The initialized storage backend instance.
+
+        Raises:
+            StorageError: If vector storage is not configured or not initialized.
+        """
+        if self._vector_storage_instance is None:
+            if self._vector_storage_type is None:
+                raise StorageError("Vector storage is not configured ('storage.vector.type' missing). RAG is unavailable.")
+            else:
+                raise StorageError("Vector storage not initialized. Call initialize_storages() first.")
+
+        return self._vector_storage_instance
+
+    # --- Convenience methods for episodic memory (delegate to session storage) ---
+
+    async def add_episode(self, episode: Episode) -> None:
         """
         Adds a new episode to the episodic memory log through the session storage backend.
 
-        REFACTORED: Now accepts optional tenant-scoped database session.
+        REFACTORED (Step 1.3): Removed db_session parameter. Now uses internally-held
+        storage instance via the session_storage property.
 
         Args:
             episode: The Episode object to add.
-            db_session: Optional tenant-scoped database session
 
         Raises:
             StorageError: If session storage is not configured or if the operation fails.
         """
-        session_storage = self.get_session_storage(db_session)
-        await session_storage.add_episode(episode)
+        await self.session_storage.add_episode(episode)
         logger.debug(f"Episode '{episode.episode_id}' added to session '{episode.session_id}' via StorageManager.")
 
-    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0, db_session: Optional[AsyncSession] = None) -> List[Episode]:
+    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
         """
         Retrieves episodes for a given session through the session storage backend.
 
-        REFACTORED: Now accepts optional tenant-scoped database session.
+        REFACTORED (Step 1.3): Removed db_session parameter. Now uses internally-held
+        storage instance via the session_storage property.
 
         Args:
             session_id: The ID of the session to retrieve episodes for.
             limit: The maximum number of episodes to return.
             offset: The number of episodes to skip (for pagination).
-            db_session: Optional tenant-scoped database session
 
         Returns:
             A list of Episode objects.
@@ -244,20 +279,19 @@ class StorageManager:
         Raises:
             StorageError: If session storage is not configured or if the operation fails.
         """
-        session_storage = self.get_session_storage(db_session)
-        episodes = await session_storage.get_episodes(session_id, limit, offset)
+        episodes = await self.session_storage.get_episodes(session_id, limit, offset)
         logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' via StorageManager.")
         return episodes
 
-    async def get_episode_count(self, session_id: str, db_session: Optional[AsyncSession] = None) -> int:
+    async def get_episode_count(self, session_id: str) -> int:
         """
         Gets the total count of episodes for a session.
 
-        REFACTORED: Now accepts optional tenant-scoped database session.
+        REFACTORED (Step 1.3): Removed db_session parameter. Now uses internally-held
+        storage instance via the session_storage property.
 
         Args:
             session_id: The ID of the session to count episodes for.
-            db_session: Optional tenant-scoped database session
 
         Returns:
             The total number of episodes for the session.
@@ -265,15 +299,13 @@ class StorageManager:
         Raises:
             StorageError: If session storage is not configured or if the operation fails.
         """
-        session_storage = self.get_session_storage(db_session)
-
         # Get episodes in batches to count total without loading all into memory
         total_count = 0
         batch_size = 1000
         offset = 0
 
         while True:
-            batch = await session_storage.get_episodes(session_id, limit=batch_size, offset=offset)
+            batch = await self.session_storage.get_episodes(session_id, limit=batch_size, offset=offset)
             batch_count = len(batch)
             total_count += batch_count
 
@@ -285,14 +317,12 @@ class StorageManager:
         logger.debug(f"Total episode count for session '{session_id}': {total_count}")
         return total_count
 
-    async def list_vector_collection_names(self, db_session: Optional[AsyncSession] = None) -> List[str]:
+    async def list_vector_collection_names(self) -> List[str]:
         """
         Lists the names of all available collections in the configured vector store.
 
-        REFACTORED: Now accepts optional tenant-scoped database session.
-
-        Args:
-            db_session: Optional tenant-scoped database session
+        REFACTORED (Step 1.3): Removed db_session parameter. Now uses internally-held
+        storage instance via the vector_storage property.
 
         Returns:
             A list of collection name strings.
@@ -301,25 +331,36 @@ class StorageManager:
             StorageError: If vector storage is not configured, failed to initialize,
                           or if the backend fails to list collections.
         """
-        vector_storage = self.get_vector_storage(db_session)
         try:
-            return await vector_storage.list_collection_names()
+            return await self.vector_storage.list_collection_names()
         except NotImplementedError:
-            logger.error(f"Vector storage backend {type(vector_storage).__name__} does not implement list_collection_names.")
-            raise StorageError(f"Listing collections not supported by {type(vector_storage).__name__}.")
+            logger.error(f"Vector storage backend {type(self.vector_storage).__name__} does not implement list_collection_names.")
+            raise StorageError(f"Listing collections not supported by {type(self.vector_storage).__name__}.")
         except Exception as e:
-            logger.error(f"Error listing vector collections via {type(vector_storage).__name__}: {e}", exc_info=True)
+            logger.error(f"Error listing vector collections via {type(self.vector_storage).__name__}: {e}", exc_info=True)
             raise StorageError(f"Failed to list vector collections: {e}")
 
     async def close_storages(self) -> None:
         """
         Closes connections for all initialized storage backends.
 
-        REFACTORED: In the new architecture, storage instances are created
-        on-demand, so this method primarily serves as cleanup for any
-        cached connections or resources.
+        REFACTORED (Step 1.3): Now closes the internally-held storage instances.
         """
-        logger.info("Storage manager cleanup complete (factory pattern - no persistent connections).")
+        if self._session_storage_instance:
+            try:
+                await self._session_storage_instance.close()
+                logger.info("Session storage backend closed.")
+            except Exception as e:
+                logger.warning(f"Error closing session storage: {e}")
+
+        if self._vector_storage_instance:
+            try:
+                await self._vector_storage_instance.close()
+                logger.info("Vector storage backend closed.")
+            except Exception as e:
+                logger.warning(f"Error closing vector storage: {e}")
+
+        logger.info("Storage manager cleanup complete.")
 
     async def close(self) -> None:
         """

@@ -158,7 +158,7 @@ class LLMCore:
         self._provider_manager = ProviderManager(self.config)
         self._storage_manager = StorageManager(self.config)
         await self._storage_manager.initialize_storages()
-        self._session_manager = SessionManager(self._storage_manager.get_session_storage())
+        self._session_manager = SessionManager(self._storage_manager.session_storage)
         self._embedding_manager = EmbeddingManager(self.config)
 
         # Pre-load default embedding model if configured
@@ -493,7 +493,7 @@ class LLMCore:
         Raises:
             VectorStorageError: If document addition fails
         """
-        vector_storage = self._storage_manager.get_vector_storage(collection_name)
+        vector_storage = self._storage_manager.vector_storage
         await vector_storage.add_documents(documents, metadata_filter)
 
     async def search_vector_store(
@@ -518,7 +518,7 @@ class LLMCore:
         Raises:
             VectorStorageError: If search fails
         """
-        vector_storage = self._storage_manager.get_vector_storage(collection_name)
+        vector_storage = self._storage_manager.vector_storage
         return await vector_storage.search(query, k=k, metadata_filter=metadata_filter)
 
     async def close(self) -> None:
