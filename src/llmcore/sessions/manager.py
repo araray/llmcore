@@ -8,7 +8,7 @@ and saving to a configured storage backend provided by StorageManager.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from ..exceptions import (LLMCoreError, SessionNotFoundError,
                           SessionStorageError)
@@ -213,3 +213,137 @@ class SessionManager:
             # Wrap any other unexpected errors from the storage layer in a SessionStorageError
             logger.error(f"SessionManager encountered an unexpected error updating name for session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"An unexpected error occurred while updating session name: {e}")
+
+    async def list_sessions(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Lists all available chat sessions with metadata.
+
+        This method retrieves session metadata from the storage backend, which typically
+        includes session ID, name, creation/update timestamps, and counts of messages
+        and context items.
+
+        Args:
+            limit: Optional maximum number of sessions to return. Note that not all
+                   storage backends may support this parameter - it's applied as a
+                   post-processing filter if the backend doesn't support it natively.
+
+        Returns:
+            List of session metadata dictionaries. Each dictionary typically contains:
+            - id: Session identifier
+            - name: Human-readable session name
+            - created_at: Session creation timestamp
+            - updated_at: Last update timestamp
+            - metadata: Additional session metadata
+            - message_count: Number of messages in the session
+            - context_item_count: Number of context items in the session
+
+        Raises:
+            SessionStorageError: If there's an error retrieving the session list
+                                from the storage backend.
+        """
+        try:
+            logger.debug("SessionManager listing sessions from storage backend.")
+            sessions = await self._storage.list_sessions()
+
+            # Apply limit if specified (post-processing filter)
+            if limit and len(sessions) > limit:
+                sessions = sessions[:limit]
+                logger.debug(f"Applied limit filter: returning {limit} of {len(sessions)} total sessions.")
+
+            logger.debug(f"Listed {len(sessions)} sessions via SessionManager.")
+            return sessions
+        except SessionStorageError:
+            # Re-raise storage errors as-is
+            logger.error("Storage error while listing sessions.", exc_info=True)
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            logger.error(f"Unexpected error listing sessions: {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to list sessions: {e}")
+
+    async def get_session(self, session_id: str) -> ChatSession:
+        """
+        Retrieves a specific chat session by ID.
+
+        This method fetches a complete session including all messages and context items.
+        Unlike `get_session_if_exists`, this method raises an exception if the session
+        is not found, making it suitable for cases where the session MUST exist.
+
+        Args:
+            session_id: The session ID to retrieve.
+
+        Returns:
+            The complete ChatSession object with all messages and context items.
+
+        Raises:
+            SessionNotFoundError: If the session doesn't exist in the storage backend.
+            SessionStorageError: If there's an error retrieving the session from storage.
+            ValueError: If session_id is None or empty.
+        """
+        if not session_id:
+            logger.error("get_session called with empty session_id.")
+            raise ValueError("session_id cannot be None or empty.")
+
+        try:
+            logger.debug(f"SessionManager retrieving session '{session_id}' from storage.")
+            session = await self._storage.get_session(session_id)
+
+            if not session:
+                # Session not found - raise specific exception
+                logger.warning(f"Session '{session_id}' not found in storage.")
+                raise SessionNotFoundError(f"Session '{session_id}' not found")
+
+            logger.info(f"Retrieved session '{session_id}' via SessionManager.")
+            return session
+        except SessionNotFoundError:
+            # Re-raise SessionNotFoundError as-is
+            raise
+        except SessionStorageError:
+            # Re-raise storage errors as-is
+            logger.error(f"Storage error while retrieving session '{session_id}'.", exc_info=True)
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            logger.error(f"Unexpected error retrieving session '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to retrieve session '{session_id}': {e}")
+
+    async def delete_session(self, session_id: str) -> None:
+        """
+        Deletes a chat session from the storage backend.
+
+        This operation removes the session and all associated data (messages,
+        context items, etc.) from persistent storage. This action is irreversible.
+
+        Args:
+            session_id: The ID of the session to delete.
+
+        Raises:
+            SessionNotFoundError: If the session doesn't exist in the storage backend.
+            SessionStorageError: If there's an error during the deletion operation.
+            ValueError: If session_id is None or empty.
+        """
+        if not session_id:
+            logger.error("delete_session called with empty session_id.")
+            raise ValueError("session_id cannot be None or empty.")
+
+        try:
+            logger.debug(f"SessionManager attempting to delete session '{session_id}'.")
+            success = await self._storage.delete_session(session_id)
+
+            if not success:
+                # Session not found - raise specific exception
+                logger.warning(f"Attempted to delete non-existent session '{session_id}'.")
+                raise SessionNotFoundError(f"Session '{session_id}' not found")
+
+            logger.info(f"Deleted session '{session_id}' via SessionManager.")
+        except SessionNotFoundError:
+            # Re-raise SessionNotFoundError as-is
+            raise
+        except SessionStorageError:
+            # Re-raise storage errors as-is
+            logger.error(f"Storage error while deleting session '{session_id}'.", exc_info=True)
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            logger.error(f"Unexpected error deleting session '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to delete session '{session_id}': {e}")
