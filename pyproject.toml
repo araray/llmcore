@@ -48,10 +48,10 @@ dependencies = [
 
 [project.optional-dependencies]
 # Dependencies for specific providers
-openai = ["openai>=1.77.0"]
-anthropic = ["anthropic>=0.51.0"]
-gemini = ["google-genai>=1.10.0", "google-api-core>=2.20.0"]
-ollama = ["ollama>=0.4.8"]
+openai = ["openai>=2.8.0"]
+anthropic = ["anthropic>=0.74.0"]
+gemini = ["google-genai>=1.52.0", "google-api-core>=2.28.0"]
+ollama = ["ollama>=0.6.0"]
 
 # Dependencies for specific storage backends
 sqlite = []  # sqlite3 is part of standard library
