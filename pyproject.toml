@@ -58,10 +58,6 @@ sqlite = []  # sqlite3 is part of standard library
 postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"]  # Optional: for PostgreSQL session/vector storage
 chromadb = ["chromadb>=1.0.0"]
 
-# Dependencies for specific embedding models
-sentence_transformers = ["sentence-transformers>=2.2.0"]
-# OpenAI and Google embeddings are usually part of their main SDKs (openai, google-genai)
-
 # Testing dependencies
 test = [
     "pytest>=7.0.0",
@@ -90,7 +86,6 @@ all = [  # To install all optional dependencies
     "llmcore[sqlite]",
     "llmcore[postgres]",
     "llmcore[chromadb]",
-    "llmcore[sentence_transformers]",
 ]
 
 [project.urls]
