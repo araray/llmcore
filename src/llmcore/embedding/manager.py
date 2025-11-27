@@ -5,6 +5,9 @@ Embedding Model Manager for LLMCore.
 Handles the dynamic loading and management of text embedding model instances
 based on configuration. Allows for multiple embedding models to be used
 concurrently based on identifiers.
+
+UPDATED: Added storage_manager parameter to __init__ for API compatibility.
+UPDATED: Added async initialize() method for future async initialization needs.
 """
 
 import asyncio
@@ -15,10 +18,11 @@ from typing import Any, Dict, List, Optional, Type
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any] # type: ignore [no-redef]
+    ConfyConfig = Dict[str, Any]  # type: ignore [no-redef]
 
 
 from ..exceptions import ConfigError, EmbeddingError
+from ..storage.manager import StorageManager
 from .base import BaseEmbeddingModel
 from .google import GoogleAIEmbedding
 from .ollama import OllamaEmbedding
@@ -31,7 +35,7 @@ logger = logging.getLogger(__name__)
 EMBEDDING_PROVIDER_CLASS_MAP: Dict[str, Type[BaseEmbeddingModel]] = {
     "sentence-transformers": SentenceTransformerEmbedding,
     "openai": OpenAIEmbedding,
-    "google": GoogleAIEmbedding, # Maps to GoogleAIEmbedding
+    "google": GoogleAIEmbedding,
     "ollama": OllamaEmbedding,
 }
 
@@ -43,22 +47,56 @@ class EmbeddingManager:
     Reads configuration, determines the appropriate embedding model type based
     on an identifier, instantiates it, handles its asynchronous initialization,
     and caches instances.
+
+    UPDATED: Now accepts an optional storage_manager parameter for API
+    compatibility with LLMCore.create().
     """
     _global_config: ConfyConfig
-    _initialized_models: Dict[str, BaseEmbeddingModel] # Cache for model instances
-    _model_init_locks: Dict[str, asyncio.Lock] # Locks per model identifier
+    _storage_manager: Optional[StorageManager]
+    _initialized_models: Dict[str, BaseEmbeddingModel]
+    _model_init_locks: Dict[str, asyncio.Lock]
+    _initialized: bool
 
-    def __init__(self, global_config: ConfyConfig):
+    def __init__(self, global_config: ConfyConfig, storage_manager: Optional[StorageManager] = None):
         """
         Initializes the EmbeddingManager.
 
         Args:
             global_config: The main LLMCore configuration object (ConfyConfig instance).
+            storage_manager: Optional StorageManager instance. Currently stored for
+                           potential future use (e.g., caching embeddings to vector store).
+                           This parameter is accepted for API compatibility with LLMCore.
         """
         self._global_config = global_config
+        self._storage_manager = storage_manager
         self._initialized_models = {}
-        self._model_init_locks = {} # Initialize locks dictionary
+        self._model_init_locks = {}
+        self._initialized = False
         logger.info("EmbeddingManager initialized. Models will be loaded on demand via get_model().")
+
+    async def initialize(self) -> None:
+        """
+        Asynchronous initialization hook for the EmbeddingManager.
+
+        Currently, embedding models are loaded on-demand via get_model().
+        This method is provided for:
+        1. API compatibility with LLMCore's async initialization pattern
+        2. Future support for pre-loading default models
+        3. Post-construction async setup tasks
+
+        This method is idempotent - calling it multiple times is safe.
+        """
+        if self._initialized:
+            logger.debug("EmbeddingManager already initialized, skipping async initialize()")
+            return
+
+        # Future: Could pre-load the default embedding model here
+        # default_model = self._global_config.get('llmcore.default_embedding_model')
+        # if default_model:
+        #     await self.get_model(default_model)
+
+        self._initialized = True
+        logger.debug("EmbeddingManager async initialize() complete")
 
     async def get_model(self, model_identifier: str) -> BaseEmbeddingModel:
         """
@@ -87,7 +125,7 @@ class EmbeddingManager:
 
         lock = self._model_init_locks[model_identifier]
 
-        async with lock: # Ensure only one coroutine initializes a specific model_identifier
+        async with lock:
             if model_identifier in self._initialized_models:
                 logger.debug(f"Returning cached embedding model for identifier: '{model_identifier}'")
                 return self._initialized_models[model_identifier]
@@ -114,16 +152,14 @@ class EmbeddingManager:
             EmbeddingCls = EMBEDDING_PROVIDER_CLASS_MAP[provider_type_for_map]
 
             # Get the base configuration block for this provider type from global config
-            # e.g., if provider_type_for_map is "openai", get "[embedding.openai]"
-            # if provider_type_for_map is "sentence-transformers", get "[embedding.sentence_transformer]"
-            config_section_key_for_provider = provider_type_for_map # Direct match now
+            config_section_key_for_provider = provider_type_for_map
 
             # For sentence-transformers, the config section might be named 'sentence_transformer' (singular)
             if provider_type_for_map == "sentence-transformers":
                 config_section_key_for_provider = "sentence_transformer"
 
             provider_base_config = self._global_config.get(f"embedding.{config_section_key_for_provider}", {})
-            if not isinstance(provider_base_config, dict): # Should be a dict from confy
+            if not isinstance(provider_base_config, dict):
                 logger.warning(f"Configuration for embedding provider type '{config_section_key_for_provider}' is not a dictionary. Using empty config.")
                 provider_base_config = {}
 
@@ -134,12 +170,9 @@ class EmbeddingManager:
             if EmbeddingCls == SentenceTransformerEmbedding:
                 instance_config["model_name_or_path"] = actual_model_name_for_class
             elif EmbeddingCls in [OpenAIEmbedding, GoogleAIEmbedding, OllamaEmbedding]:
-                # These classes expect 'default_model' in their config dict to pick the model
                 instance_config["default_model"] = actual_model_name_for_class
             else:
-                # Fallback or for new classes, could set a generic key
                 instance_config["model_name"] = actual_model_name_for_class
-
 
             logger.debug(f"Instantiating {EmbeddingCls.__name__} with model '{actual_model_name_for_class}' "
                          f"using derived config: {instance_config}")
@@ -163,71 +196,64 @@ class EmbeddingManager:
 
         Args:
             text: The text to embed.
-            model_identifier: Optional. The identifier of the model to use
-                              (e.g., "openai:text-embedding-3-small" or "all-MiniLM-L6-v2").
+            model_identifier: Optional. The identifier of the model to use.
                               If None, uses the `llmcore.default_embedding_model` from config.
 
         Returns:
             The generated embedding as a list of floats.
 
         Raises:
-            EmbeddingError: If the model is not available or embedding fails.
-            ConfigError: If the default model identifier is not configured and model_identifier is None.
+            ConfigError: If no model identifier is provided and no default is configured.
+            EmbeddingError: If embedding generation fails.
         """
-        effective_identifier = model_identifier
-        if not effective_identifier:
-            effective_identifier = self._global_config.get('llmcore.default_embedding_model')
-            if not effective_identifier:
-                raise ConfigError("No model_identifier provided and 'llmcore.default_embedding_model' is not set.")
+        if not model_identifier:
+            model_identifier = self._global_config.get('llmcore.default_embedding_model')
+            if not model_identifier:
+                raise ConfigError("No model_identifier provided and 'llmcore.default_embedding_model' is not set in config.")
 
-        logger.debug(f"generate_embedding called for text (len: {len(text)}) using model_identifier: '{effective_identifier}'")
-        model_instance = await self.get_model(effective_identifier)
-        return await model_instance.generate_embedding(text)
+        model = await self.get_model(model_identifier)
+        return await model.embed_text(text)
 
     async def generate_embeddings(self, texts: List[str], model_identifier: Optional[str] = None) -> List[List[float]]:
         """
-        Generates embeddings for a batch of texts using the specified or default model.
+        Generates embeddings for multiple texts using the specified or default model.
 
         Args:
-            texts: The list of texts to embed.
+            texts: List of texts to embed.
             model_identifier: Optional. The identifier of the model to use.
-                              If None, uses the `llmcore.default_embedding_model`.
+                              If None, uses the `llmcore.default_embedding_model` from config.
 
         Returns:
-            A list of generated embeddings.
+            List of embeddings, each as a list of floats.
 
         Raises:
-            EmbeddingError: If the model is not available or embedding fails.
-            ConfigError: If the default model identifier is not configured and model_identifier is None.
+            ConfigError: If no model identifier is provided and no default is configured.
+            EmbeddingError: If embedding generation fails.
         """
-        effective_identifier = model_identifier
-        if not effective_identifier:
-            effective_identifier = self._global_config.get('llmcore.default_embedding_model')
-            if not effective_identifier:
-                raise ConfigError("No model_identifier provided and 'llmcore.default_embedding_model' is not set.")
+        if not model_identifier:
+            model_identifier = self._global_config.get('llmcore.default_embedding_model')
+            if not model_identifier:
+                raise ConfigError("No model_identifier provided and 'llmcore.default_embedding_model' is not set in config.")
 
-        logger.debug(f"generate_embeddings called for {len(texts)} texts using model_identifier: '{effective_identifier}'")
-        model_instance = await self.get_model(effective_identifier)
-        return await model_instance.generate_embeddings(texts)
+        model = await self.get_model(model_identifier)
+        return await model.embed_texts(texts)
+
+    def get_cached_models(self) -> List[str]:
+        """Returns a list of currently cached model identifiers."""
+        return list(self._initialized_models.keys())
 
     async def close(self) -> None:
-        """Cleans up resources used by all cached embedding models."""
-        logger.info(f"Closing EmbeddingManager and {len(self._initialized_models)} cached embedding model(s)...")
-        close_tasks = []
+        """
+        Closes all cached embedding model instances and releases resources.
+        """
+        logger.info("Closing EmbeddingManager and all cached models...")
         for model_id, model_instance in self._initialized_models.items():
-            if hasattr(model_instance, 'close') and asyncio.iscoroutinefunction(model_instance.close):
-                logger.debug(f"Queueing close for model: {model_id}")
-                close_tasks.append(model_instance.close()) # type: ignore
-            else:
-                logger.debug(f"Model {model_id} (type: {type(model_instance).__name__}) does not have an async close method.")
-
-        if close_tasks:
-            results = await asyncio.gather(*close_tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                model_id_closed = list(self._initialized_models.keys())[i] # Assuming order is maintained
-                if isinstance(result, Exception):
-                    logger.error(f"Error closing embedding model '{model_id_closed}': {result}", exc_info=result)
-
+            try:
+                if hasattr(model_instance, 'close'):
+                    await model_instance.close()
+                logger.debug(f"Closed embedding model: {model_id}")
+            except Exception as e:
+                logger.error(f"Error closing embedding model '{model_id}': {e}", exc_info=True)
         self._initialized_models.clear()
-        self._model_init_locks.clear()
-        logger.info("EmbeddingManager closed and cache cleared.")
+        self._initialized = False
+        logger.info("EmbeddingManager closed.")

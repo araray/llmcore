@@ -3,6 +3,9 @@
 Provider Manager for LLMCore.
 
 Handles the dynamic loading and management of LLM provider instances based on configuration.
+
+UPDATED: Added log_raw_payloads parameter to __init__ for explicit control from LLMCore.
+UPDATED: Added async initialize() method for future async provider initialization needs.
 """
 
 import asyncio
@@ -14,7 +17,7 @@ from typing import Any, Dict, List, Optional, Type
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any] # type: ignore
+    ConfyConfig = Dict[str, Any]  # type: ignore
 
 
 from ..exceptions import ConfigError, ProviderError
@@ -44,17 +47,25 @@ class ProviderManager:
     Reads configuration, instantiates configured providers, and provides
     access to them. It handles flexible API key management and passes the
     global raw payload logging setting to each provider instance.
+
+    UPDATED: Now accepts an optional log_raw_payloads parameter for explicit
+    control from LLMCore.create(), while maintaining backward compatibility.
     """
     _providers: Dict[str, BaseProvider]
     _config: ConfyConfig
     _default_provider_name: str
+    _log_raw_payloads_override: Optional[bool]
+    _initialized: bool
 
-    def __init__(self, config: ConfyConfig):
+    def __init__(self, config: ConfyConfig, log_raw_payloads: bool = False):
         """
         Initializes the ProviderManager and loads configured providers.
 
         Args:
             config: The main LLMCore configuration object (ConfyConfig instance).
+            log_raw_payloads: Optional flag to enable raw payload logging for all
+                             providers. This parameter takes precedence over the
+                             config value 'llmcore.log_raw_payloads'. Default is False.
 
         Raises:
             ConfigError: If the default provider is not configured or supported.
@@ -62,6 +73,8 @@ class ProviderManager:
         """
         self._config = config
         self._providers = {}
+        self._log_raw_payloads_override = log_raw_payloads
+        self._initialized = False
         self._default_provider_name = self._config.get('llmcore.default_provider', 'ollama').lower()
         logger.info(f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'.")
 
@@ -73,18 +86,51 @@ class ProviderManager:
                 f"Loaded provider instances: {list(self._providers.keys())}"
             )
 
+        self._initialized = True
+
+    async def initialize(self) -> None:
+        """
+        Asynchronous initialization hook for providers that need async setup.
+
+        Currently, providers are initialized synchronously in __init__.
+        This method is provided for:
+        1. API compatibility with LLMCore's async initialization pattern
+        2. Future support for providers that require async initialization
+        3. Post-construction async setup tasks
+
+        This method is idempotent - calling it multiple times is safe.
+        """
+        if self._initialized:
+            logger.debug("ProviderManager already initialized, skipping async initialize()")
+            return
+
+        # Future: Add any async provider initialization here
+        # For example, some providers might need to fetch model lists asynchronously
+
+        logger.debug("ProviderManager async initialize() complete (no-op for current providers)")
+
     def _load_configured_providers(self) -> None:
         """
         Loads and initializes all providers defined in the [providers] configuration section.
+
         It determines the provider class based on a 'type' field, handles API key indirection
         via 'api_key_env_var', and passes the global `log_raw_payloads` setting.
+
+        The log_raw_payloads value is determined by:
+        1. The explicitly passed parameter to __init__ (if True)
+        2. Otherwise, the config value 'llmcore.log_raw_payloads'
         """
         providers_config = self._config.get('providers', {})
         if not isinstance(providers_config, dict):
             logger.warning("'[providers]' section is not a valid dictionary. No providers loaded.")
             return
 
-        log_raw_payloads_global = self._config.get('llmcore.log_raw_payloads', False)
+        # Prefer explicitly passed log_raw_payloads, fall back to config
+        log_raw_payloads_global = (
+            self._log_raw_payloads_override
+            if self._log_raw_payloads_override
+            else self._config.get('llmcore.log_raw_payloads', False)
+        )
         logger.debug(f"Global 'log_raw_payloads' setting for providers: {log_raw_payloads_global}")
 
         for section_name, provider_specific_config in providers_config.items():
@@ -164,6 +210,7 @@ class ProviderManager:
             enable: True to enable raw payload logging, False to disable.
         """
         logger.info(f"ProviderManager updating raw payload logging for all providers to: {enable}")
+        self._log_raw_payloads_override = enable
         for provider_name, provider_instance in self._providers.items():
             try:
                 provider_instance.log_raw_payloads_enabled = enable
@@ -187,12 +234,11 @@ class ProviderManager:
     async def close_all(self) -> None:
         """
         Alias for close_providers() to maintain API compatibility.
-        
+
         LLMCore.close() calls ProviderManager.close_all(), so this method
         delegates to close_providers() which does the actual cleanup.
         """
         await self.close_providers()
-
 
     async def _close_single_provider(self, name: str, provider: BaseProvider):
         """Helper coroutine to close a single provider and log errors."""

@@ -253,7 +253,7 @@ class LLMCore:
             await self._provider_manager.initialize()
 
             logger.debug("Initializing SessionManager...")
-            self._session_manager = SessionManager(self._storage_manager)
+            self._session_manager = SessionManager(self._storage_manager.session_storage)
 
             logger.debug("Initializing EmbeddingManager...")
             self._embedding_manager = EmbeddingManager(self.config, self._storage_manager)
@@ -815,6 +815,44 @@ class LLMCore:
         # Also remove from transient caches if present
         self._transient_sessions_cache.pop(session_id, None)
         self._transient_last_interaction_info_cache.pop(session_id, None)
+
+    async def create_session(
+        self,
+        session_id: Optional[str] = None,
+        name: Optional[str] = None,
+        system_message: Optional[str] = None
+    ) -> ChatSession:
+        """
+        Creates a new chat session or loads an existing one.
+
+        This method is the primary way for clients like llmchat to create
+        new conversation sessions. If a session_id is provided and exists,
+        it will be loaded; otherwise, a new session is created.
+
+        Args:
+            session_id: Optional ID for the session. If None, a new UUID is generated.
+            name: Optional human-readable name for the session.
+            system_message: Optional system message to initialize the session with.
+
+        Returns:
+            ChatSession: The created or loaded session object.
+
+        Raises:
+            SessionStorageError: If there's an error creating/loading the session.
+        """
+        session = await self._session_manager.load_or_create_session(
+            session_id=session_id,
+            system_message=system_message
+        )
+
+        # Set the name if provided
+        if name and session.name != name:
+            session.name = name
+            # Save the session to persist the name
+            await self._session_manager.save_session(session)
+
+        logger.info(f"Session created/loaded: {session.id} (name: {session.name})")
+        return session
 
     async def update_session_name(self, session_id: str, new_name: str) -> None:
         """
