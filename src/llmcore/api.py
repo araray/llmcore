@@ -572,7 +572,7 @@ class LLMCore:
             session=chat_session,
             provider_name=active_provider.get_name(),
             model_name=actual_model,
-            enable_rag=enable_rag,
+            rag_enabled=enable_rag,
             rag_k=rag_retrieval_k,
             rag_collection=rag_collection_name,
             rag_filter=rag_metadata_filter,
