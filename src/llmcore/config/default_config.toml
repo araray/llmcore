@@ -71,6 +71,40 @@ log_raw_payloads = false
 # Example: admin_api_key = "admin_llmk_abc123def456ghi789jkl"
 admin_api_key = ""
 
+# =============================================================================
+# UNIFIED LOGGING CONFIGURATION
+# =============================================================================
+# This section controls logging for ALL components: llmcore, llmchat,
+# semantiscan, and confy. Configuration here is the single source of truth.
+
+[logging]
+# Console logging - set to false to suppress ALL console output
+console_enabled = false
+console_level = "WARNING"        # Minimum level for console (if enabled)
+console_format = "%(levelname)s - %(message)s"
+
+# File logging - always recommended to keep enabled
+file_enabled = true
+file_level = "DEBUG"             # Capture full detail in files
+file_directory = "~/.local/share/llmcore/logs"
+file_name_pattern = "{app}_{timestamp:%Y%m%d_%H%M%S}.log"
+file_format = "%(asctime)s [%(levelname)-8s] %(name)-30s - %(message)s (%(filename)s:%(lineno)d)"
+
+# Per-component log levels (override the handlers' levels for specific loggers)
+[logging.components]
+llmchat = "INFO"
+llmcore = "INFO"
+semantiscan = "INFO"
+confy = "WARNING"
+# Suppress noisy third-party libraries
+urllib3 = "WARNING"
+httpx = "WARNING"
+httpcore = "WARNING"
+asyncio = "WARNING"
+aiosqlite = "WARNING"
+chromadb = "WARNING"
+posthog = "ERROR"
+
 # ==============================================================================
 # [providers] - LLM Provider Configurations
 # ==============================================================================

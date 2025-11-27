@@ -47,6 +47,16 @@ from .exceptions import (
 from .storage import StorageManager
 from .agents import AgentManager, ToolManager
 
+from .logging_config import (
+    configure_logging,
+    get_log_file_path,
+    set_console_level,
+    set_file_level,
+    set_component_level,
+    disable_console_logging,
+    enable_console_logging,
+)
+
 try:
     __version__ = version("llmcore")
 except PackageNotFoundError:
