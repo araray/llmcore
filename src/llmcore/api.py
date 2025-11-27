@@ -68,7 +68,7 @@ class LLMCoreProtocol(Protocol):
 
         def process_query(llm: LLMCoreProtocol, query: str) -> str:
             # Type checker knows llm has chat() method
-            return await llm.chat(message=query, enable_rag=False)
+            return  llm.chat(message=query, enable_rag=False)
         ```
     """
 
@@ -246,7 +246,7 @@ class LLMCore:
             # Initialize managers
             logger.debug("Initializing StorageManager...")
             self._storage_manager = StorageManager(self.config)
-            await self._storage_manager.initialize()
+            await self._storage_manager.initialize_storages()
 
             logger.debug("Initializing ProviderManager...")
             self._provider_manager = ProviderManager(self.config, self._log_raw_payloads_enabled)
