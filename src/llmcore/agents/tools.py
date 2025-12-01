@@ -2,22 +2,27 @@
 """
 Tool Management for LLMCore Agents.
 
-Handles the registration, validation, and execution of tools available to agents.
-Includes built-in tools for semantic search, episodic search, and basic calculations.
+This module provides the ToolManager which handles the registration, validation,
+and execution of tools available to agents. Tools are the actions that agents
+can take to interact with the external world.
 
-UPDATED: Refactored to support dynamic tool loading from database with secure
-implementation registry for tenant-specific tool management.
-UPDATED: Added human_approval tool for HITL workflows.
+UPDATED: Now supports dynamic registration of sandbox tools for isolated
+code execution. Sandbox tools run inside Docker/VM containers.
+
+Security Model:
+    - Only functions in _IMPLEMENTATION_REGISTRY can be executed
+    - Tool definitions are loaded from database per-tenant
+    - Implementation keys map tool names to actual functions
+    - Sandbox tools execute in isolated environments (when sandbox is active)
 """
 
 import asyncio
-import json
 import logging
-import re
-from typing import Any, Callable, Dict, List, Optional, Union
+import math
+from typing import Any, Callable, Dict, List, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import LLMCoreError
 from ..memory.manager import MemoryManager
@@ -27,168 +32,156 @@ from ..storage.manager import StorageManager
 logger = logging.getLogger(__name__)
 
 
-# --- Built-in Tool Functions ---
+# =============================================================================
+# BUILT-IN TOOL IMPLEMENTATIONS
+# =============================================================================
 
-async def semantic_search(memory_manager: MemoryManager, query: str, k: int = 3, collection: Optional[str] = None) -> str:
+async def semantic_search(
+    query: str,
+    memory_manager: MemoryManager,
+    top_k: int = 5,
+    collection_name: Optional[str] = None
+) -> str:
     """
-    Searches the semantic memory (vector store) for relevant information.
+    Search the knowledge base (vector store) for relevant information.
 
     Args:
-        memory_manager: The MemoryManager instance for accessing memory systems.
-        query: The search query string.
-        k: Number of results to retrieve (default: 3).
-        collection: Optional collection name to search in.
+        query: The search query
+        memory_manager: MemoryManager instance for retrieval
+        top_k: Number of results to return
+        collection_name: Optional collection to search
 
     Returns:
-        Formatted string containing the search results.
+        Formatted search results as a string
     """
+    logger.debug(f"Semantic search: {query}")
+
     try:
-        logger.debug(f"Semantic search: query='{query}', k={k}, collection={collection}")
+        results = await memory_manager.search_semantic(
+            query=query,
+            top_k=top_k,
+            collection_name=collection_name
+        )
 
-        # Use the retrieve_relevant_context method which handles semantic memory
-        context_items = await memory_manager.retrieve_relevant_context(query)
+        if not results:
+            return "No relevant results found."
 
-        if not context_items:
-            return f"No relevant information found in semantic memory for query: '{query}'"
+        formatted = []
+        for i, result in enumerate(results, 1):
+            content = result.get("content", "")[:500]
+            score = result.get("score", 0)
+            formatted.append(f"[{i}] (score: {score:.2f}) {content}")
 
-        # Format the results for the agent
-        results = []
-        for i, item in enumerate(context_items[:k]):
-            score_info = ""
-            if item.metadata.get("retrieval_score"):
-                score_info = f" (relevance: {item.metadata['retrieval_score']:.3f})"
-
-            source_info = ""
-            if item.source_id:
-                source_info = f" [Source: {item.source_id}]"
-
-            results.append(f"{i+1}. {item.content[:500]}{'...' if len(item.content) > 500 else ''}{source_info}{score_info}")
-
-        return f"Semantic search results for '{query}':\n\n" + "\n\n".join(results)
+        return "\n\n".join(formatted)
 
     except Exception as e:
-        logger.error(f"Error in semantic_search tool: {e}", exc_info=True)
-        return f"Error searching semantic memory: {str(e)}"
+        logger.error(f"Semantic search failed: {e}")
+        return f"Search error: {str(e)}"
 
 
-async def episodic_search(storage_manager: StorageManager, session_id: str, query: str, limit: int = 10) -> str:
+async def episodic_search(
+    query: str,
+    storage_manager: StorageManager,
+    session_id: Optional[str] = None,
+    limit: int = 10
+) -> str:
     """
-    Searches the episodic memory for past experiences and interactions.
+    Search past experiences and interactions in episodic memory.
 
     Args:
-        storage_manager: The StorageManager instance for accessing episode storage.
-        session_id: The session ID to search episodes for.
-        query: The search query (currently supports basic text matching).
-        limit: Maximum number of episodes to return.
+        query: The search query
+        storage_manager: StorageManager instance
+        session_id: Optional session to filter by
+        limit: Maximum results to return
 
     Returns:
-        Formatted string containing the episode search results.
+        Formatted episodic memories as a string
     """
+    logger.debug(f"Episodic search: {query}")
+
     try:
-        logger.debug(f"Episodic search: session_id='{session_id}', query='{query}', limit={limit}")
+        results = await storage_manager.search_episodes(
+            query=query,
+            session_id=session_id,
+            limit=limit
+        )
 
-        # Get recent episodes from the session
-        episodes = await storage_manager.get_episodes(session_id, limit=limit * 2)  # Get more to filter
+        if not results:
+            return "No relevant past experiences found."
 
-        if not episodes:
-            return f"No episodes found in session '{session_id}'"
+        formatted = []
+        for i, episode in enumerate(results, 1):
+            summary = episode.get("summary", "")[:300]
+            timestamp = episode.get("timestamp", "unknown")
+            formatted.append(f"[{i}] ({timestamp}) {summary}")
 
-        # Basic text search through episodes (in a full implementation, this would use semantic search)
-        query_lower = query.lower()
-        matching_episodes = []
-
-        for episode in episodes:
-            # Search in the episode data content
-            episode_text = json.dumps(episode.data, default=str).lower()
-            if query_lower in episode_text:
-                matching_episodes.append(episode)
-                if len(matching_episodes) >= limit:
-                    break
-
-        if not matching_episodes:
-            return f"No episodes matching '{query}' found in recent history"
-
-        # Format the results
-        results = []
-        for i, episode in enumerate(matching_episodes):
-            timestamp_str = episode.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            event_type = episode.event_type.value if hasattr(episode.event_type, 'value') else str(episode.event_type)
-
-            # Extract relevant content from episode data
-            content_preview = ""
-            if isinstance(episode.data, dict):
-                if 'content' in episode.data:
-                    content_preview = str(episode.data['content'])[:200]
-                elif 'thought' in episode.data:
-                    content_preview = f"Thought: {episode.data['thought']}"[:200]
-                elif 'observation' in episode.data:
-                    content_preview = f"Observation: {episode.data['observation']}"[:200]
-                else:
-                    content_preview = str(episode.data)[:200]
-
-            if len(content_preview) > 200:
-                content_preview += "..."
-
-            results.append(f"{i+1}. [{timestamp_str}] {event_type}: {content_preview}")
-
-        return f"Episodic search results for '{query}' in session '{session_id}':\n\n" + "\n\n".join(results)
+        return "\n\n".join(formatted)
 
     except Exception as e:
-        logger.error(f"Error in episodic_search tool: {e}", exc_info=True)
-        return f"Error searching episodic memory: {str(e)}"
+        logger.error(f"Episodic search failed: {e}")
+        return f"Search error: {str(e)}"
 
 
-async def calculator(expression: str) -> str:
+def calculator(expression: str) -> str:
     """
-    Safely evaluates a mathematical expression.
+    Perform mathematical calculations safely.
 
     Args:
-        expression: The mathematical expression to evaluate.
+        expression: Mathematical expression to evaluate
 
     Returns:
-        The result of the calculation or an error message.
+        Result of the calculation as a string
     """
+    logger.debug(f"Calculator: {expression}")
+
+    # Safe math functions
+    safe_dict = {
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "pow": pow,
+        "sqrt": math.sqrt,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "log": math.log,
+        "log10": math.log10,
+        "exp": math.exp,
+        "pi": math.pi,
+        "e": math.e,
+    }
+
     try:
-        logger.debug(f"Calculator: evaluating '{expression}'")
-
-        # Simple safety check - only allow basic math operations
-        if not re.match(r'^[0-9+\-*/().\s]+$', expression):
-            return f"Invalid expression: '{expression}'. Only basic arithmetic operations are allowed."
-
-        # Prevent potentially dangerous operations
-        if any(dangerous in expression.lower() for dangerous in ['import', 'exec', 'eval', '__']):
-            return f"Expression contains potentially dangerous operations: '{expression}'"
-
-        try:
-            result = eval(expression)
-            return f"Result of '{expression}' = {result}"
-        except ZeroDivisionError:
-            return f"Error: Division by zero in expression '{expression}'"
-        except Exception as e:
-            return f"Error evaluating expression '{expression}': {str(e)}"
-
+        # Remove any potentially dangerous characters
+        clean_expr = expression.replace("__", "").replace("import", "")
+        result = eval(clean_expr, {"__builtins__": {}}, safe_dict)
+        return str(result)
     except Exception as e:
-        logger.error(f"Error in calculator tool: {e}", exc_info=True)
-        return f"Calculator error: {str(e)}"
+        return f"Calculation error: {str(e)}"
 
 
-async def finish(answer: str) -> str:
+def finish(answer: str) -> str:
     """
-    Special tool to indicate the agent has completed its task.
+    Complete the agent task with a final answer.
+
+    This tool signals that the agent has completed its task and provides
+    the final result.
 
     Args:
-        answer: The final answer or result.
+        answer: The final answer/result to return
 
     Returns:
-        The final answer formatted for completion.
+        The answer (passthrough)
     """
     logger.info(f"Agent finishing with answer: {answer[:100]}...")
-    return f"TASK_COMPLETE: {answer}"
+    return answer
 
 
-async def human_approval(prompt: str, pending_action: Dict[str, Any]) -> str:
+def human_approval(prompt: str, pending_action: str) -> str:
     """
-    Special tool for requesting human approval before executing sensitive actions.
+    Request human approval before executing sensitive or irreversible actions.
 
     This tool does not perform any external action. Instead, it acts as a signal
     to the AgentManager to pause execution and request human approval.
@@ -205,15 +198,25 @@ async def human_approval(prompt: str, pending_action: Dict[str, Any]) -> str:
     return "Pausing for human approval."
 
 
-# --- Secure Implementation Registry ---
+# =============================================================================
+# SECURE IMPLEMENTATION REGISTRY
+# =============================================================================
 
 # This is the security boundary - only functions registered here can be executed
 _IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
+    # Core search tools
     "llmcore.tools.search.semantic": semantic_search,
     "llmcore.tools.search.episodic": episodic_search,
+
+    # Calculation tools
     "llmcore.tools.calculation.calculator": calculator,
+
+    # Flow control tools
     "llmcore.tools.flow.finish": finish,
-    "llmcore.tools.flow.human_approval": human_approval,  # NEW: HITL tool
+    "llmcore.tools.flow.human_approval": human_approval,
+
+    # NOTE: Sandbox tools are registered dynamically via register_sandbox_tools()
+    # This keeps the sandbox system optional and modular
 }
 
 # Human-readable descriptions for the implementation keys
@@ -222,11 +225,55 @@ _IMPLEMENTATION_DESCRIPTIONS: Dict[str, str] = {
     "llmcore.tools.search.episodic": "Search past experiences and interactions in episodic memory",
     "llmcore.tools.calculation.calculator": "Perform mathematical calculations safely",
     "llmcore.tools.flow.finish": "Complete the agent task with a final answer",
-    "llmcore.tools.flow.human_approval": "Request human approval before executing sensitive or irreversible actions",
+    "llmcore.tools.flow.human_approval": "Request human approval before executing sensitive actions",
 }
 
 
-# --- ToolManager Class ---
+def register_implementation(key: str, func: Callable, description: str = "") -> None:
+    """
+    Register a new tool implementation.
+
+    This is the approved way to add new tools to the registry.
+
+    Args:
+        key: Unique implementation key (e.g., "llmcore.tools.mypackage.mytool")
+        func: The function to execute
+        description: Human-readable description
+
+    Raises:
+        ValueError: If key already exists
+    """
+    if key in _IMPLEMENTATION_REGISTRY:
+        raise ValueError(f"Implementation key '{key}' already registered")
+
+    _IMPLEMENTATION_REGISTRY[key] = func
+    if description:
+        _IMPLEMENTATION_DESCRIPTIONS[key] = description
+
+    logger.debug(f"Registered tool implementation: {key}")
+
+
+def register_implementations(implementations: Dict[str, Callable]) -> None:
+    """
+    Register multiple tool implementations at once.
+
+    Args:
+        implementations: Dict mapping keys to functions
+    """
+    for key, func in implementations.items():
+        if key not in _IMPLEMENTATION_REGISTRY:
+            _IMPLEMENTATION_REGISTRY[key] = func
+            logger.debug(f"Registered tool implementation: {key}")
+
+
+def get_registered_implementations() -> List[str]:
+    """Get list of all registered implementation keys."""
+    return list(_IMPLEMENTATION_REGISTRY.keys())
+
+
+# =============================================================================
+# TOOLMANAGER CLASS
+# =============================================================================
 
 class ToolManager:
     """
@@ -234,7 +281,14 @@ class ToolManager:
 
     UPDATED: Now supports dynamic tool loading from database with secure implementation
     registry. Tools are loaded per-tenant and per-run rather than globally at startup.
-    UPDATED: Added human_approval tool for HITL workflows.
+
+    Also supports sandbox tools when sandbox integration is active.
+
+    Attributes:
+        _memory_manager: MemoryManager for memory-related tools
+        _storage_manager: StorageManager for storage-related tools
+        _tool_definitions: List of loaded tool definitions
+        _implementation_map: Maps tool names to implementation keys
     """
 
     def __init__(self, memory_manager: MemoryManager, storage_manager: StorageManager):
@@ -332,6 +386,36 @@ class ToolManager:
             logger.error(f"Error loading tools for run: {e}", exc_info=True)
             raise LLMCoreError(f"Failed to load tools: {str(e)}")
 
+    def load_default_tools(self) -> None:
+        """
+        Load default built-in tools without database.
+
+        Useful for testing or when running without database.
+        """
+        self._tool_definitions.clear()
+        self._implementation_map.clear()
+
+        default_tools = [
+            ("semantic_search", "Search the knowledge base for relevant information",
+             "llmcore.tools.search.semantic"),
+            ("episodic_search", "Search past experiences in episodic memory",
+             "llmcore.tools.search.episodic"),
+            ("calculator", "Perform mathematical calculations",
+             "llmcore.tools.calculation.calculator"),
+            ("finish", "Complete the task with a final answer",
+             "llmcore.tools.flow.finish"),
+            ("human_approval", "Request human approval for sensitive actions",
+             "llmcore.tools.flow.human_approval"),
+        ]
+
+        for name, desc, impl_key in default_tools:
+            if impl_key in _IMPLEMENTATION_REGISTRY:
+                tool = Tool(name=name, description=desc, parameters={})
+                self._tool_definitions.append(tool)
+                self._implementation_map[name] = impl_key
+
+        logger.info(f"Loaded {len(self._tool_definitions)} default tools")
+
     def get_tool_definitions(self) -> List[Tool]:
         """
         Get all loaded tool definitions for the current run.
@@ -389,7 +473,7 @@ class ToolManager:
             if 'session_id' in sig.parameters and session_id:
                 arguments['session_id'] = session_id
 
-            logger.debug(f"Executing tool '{tool_name}' (key: {implementation_key}) with arguments: {arguments}")
+            logger.debug(f"Executing tool '{tool_name}' (key: {implementation_key}) with arguments: {list(arguments.keys())}")
 
             # Execute the tool function
             if asyncio.iscoroutinefunction(tool_func):
@@ -423,29 +507,52 @@ class ToolManager:
         """Get a list of all loaded tool names for the current run."""
         return list(self._implementation_map.keys())
 
-    def has_tool(self, tool_name: str) -> bool:
-        """Check if a tool is loaded for the current run."""
+    def is_tool_loaded(self, tool_name: str) -> bool:
+        """Check if a tool is loaded for this run."""
         return tool_name in self._implementation_map
 
-    @classmethod
-    def is_valid_implementation_key(cls, implementation_key: str) -> bool:
-        """
-        Check if an implementation key is valid (exists in the secure registry).
+    def get_implementation_key(self, tool_name: str) -> Optional[str]:
+        """Get the implementation key for a tool."""
+        return self._implementation_map.get(tool_name)
 
-        Args:
-            implementation_key: The key to validate
 
-        Returns:
-            True if the key is valid, False otherwise
-        """
-        return implementation_key in _IMPLEMENTATION_REGISTRY
+# =============================================================================
+# SANDBOX TOOL REGISTRATION (NEW)
+# =============================================================================
 
-    @classmethod
-    def get_available_implementations(cls) -> Dict[str, str]:
-        """
-        Get all available implementation keys and their descriptions.
+def register_sandbox_tools_to_manager(tool_manager: ToolManager) -> None:
+    """
+    Register sandbox tools with a ToolManager instance.
 
-        Returns:
-            Dictionary mapping implementation keys to descriptions
-        """
-        return _IMPLEMENTATION_DESCRIPTIONS.copy()
+    This adds the sandbox execution tools to the manager's available tools.
+    Called when sandbox integration is initialized.
+
+    Args:
+        tool_manager: The ToolManager to register tools with
+    """
+    try:
+        from .sandbox import SANDBOX_TOOL_IMPLEMENTATIONS, SANDBOX_TOOL_SCHEMAS
+
+        # Register implementations in global registry
+        register_implementations(SANDBOX_TOOL_IMPLEMENTATIONS)
+
+        # Add tool definitions to manager
+        for tool_name, schema in SANDBOX_TOOL_SCHEMAS.items():
+            # Extract implementation key from the SANDBOX_TOOL_IMPLEMENTATIONS
+            impl_key = f"llmcore.tools.sandbox.{tool_name}"
+
+            if impl_key in _IMPLEMENTATION_REGISTRY:
+                tool = Tool(
+                    name=tool_name,
+                    description=schema.get("description", ""),
+                    parameters=schema.get("parameters", {})
+                )
+                tool_manager._tool_definitions.append(tool)
+                tool_manager._implementation_map[tool_name] = impl_key
+
+        logger.info("Sandbox tools registered with ToolManager")
+
+    except ImportError as e:
+        logger.warning(f"Sandbox module not available: {e}")
+    except Exception as e:
+        logger.error(f"Failed to register sandbox tools: {e}")

@@ -2,15 +2,21 @@
 """
 Configuration module for the LLMCore library.
 
-This package will handle the loading and management of configuration
+This package handles the loading and management of configuration
 settings for the library, leveraging the `confy` library and
 a default TOML configuration file.
+
+Configuration files:
+    - default_config.toml: Packaged defaults
+    - User config: ~/.config/llmcore/config.toml
+    - Custom config: Specified via LLMCore.create(config_file_path=...)
+
+Environment variables:
+    - Prefix: LLMCORE_
+    - Nested keys use double underscores: LLMCORE_AGENTS__SANDBOX__MODE
 """
 
-# This file intentionally left largely blank.
-# Its presence makes 'llmcore.config' a Python package.
-# We can expose specific configuration-related classes or functions here later if needed.
-
+# Configuration-related exports can be added here as needed
 # Example:
 # from .loader import ConfigLoader
 # __all__ = ["ConfigLoader"]

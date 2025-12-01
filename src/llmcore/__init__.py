@@ -6,8 +6,8 @@ This library provides a unified interface for working with multiple LLM provider
 managing conversation sessions, implementing Retrieval Augmented Generation (RAG),
 and supporting hierarchical memory including episodic memory for agent experiences.
 
-UPDATED: Pure library mode - removed service-oriented component exports.
-         AgentManager and ToolManager remain available for advanced users.
+UPDATED v0.26.0: Added sandbox system for isolated agent code execution.
+                 AgentManager now supports optional sandbox integration.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -47,14 +47,59 @@ from .exceptions import (
 from .storage import StorageManager
 from .agents import AgentManager, ToolManager
 
-from .logging_config import (
-    configure_logging,
-    get_log_file_path,
-    set_console_level,
-    set_file_level,
-    set_component_level,
-    disable_console_logging,
-    enable_console_logging,
+# =============================================================================
+# SANDBOX EXPORTS (NEW in v0.26.0)
+# =============================================================================
+# These exports provide access to the sandbox system for isolated agent execution.
+# Import these directly from llmcore or from llmcore.agents.sandbox
+
+from .agents import (
+    # Sandbox core classes
+    SandboxRegistry,
+    SandboxRegistryConfig,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxMode,
+    SandboxAccessLevel,
+    SandboxStatus,
+    ExecutionResult,
+    FileInfo,
+
+    # Sandbox providers
+    DockerSandboxProvider,
+    VMSandboxProvider,
+
+    # Sandbox utilities
+    EphemeralResourceManager,
+    OutputTracker,
+
+    # Sandbox configuration helpers
+    load_sandbox_config,
+    create_registry_config,
+
+    # Sandbox exceptions
+    SandboxError,
+    SandboxInitializationError,
+    SandboxExecutionError,
+    SandboxTimeoutError,
+    SandboxAccessDenied,
+    SandboxResourceError,
+    SandboxConnectionError,
+    SandboxCleanupError,
+
+    # Sandbox tool management
+    set_active_sandbox,
+    clear_active_sandbox,
+    get_active_sandbox,
+    SANDBOX_TOOL_IMPLEMENTATIONS,
+    SANDBOX_TOOL_SCHEMAS,
+
+    # Integration bridge
+    SandboxIntegration,
+    SandboxContext,
+    SandboxAgentMixin,
+    register_sandbox_tools,
+    get_sandbox_tool_definitions,
 )
 
 try:
@@ -65,10 +110,14 @@ except PackageNotFoundError:
 
 
 __all__ = [
+    # ==========================================================================
     # Core API
+    # ==========================================================================
     "LLMCore",
 
+    # ==========================================================================
     # Data Models
+    # ==========================================================================
     "ChatSession",
     "Message",
     "Role",
@@ -87,7 +136,9 @@ __all__ = [
     "ToolResult",
     "ContextPreparationDetails",
 
-    # Exceptions
+    # ==========================================================================
+    # Core Exceptions
+    # ==========================================================================
     "LLMCoreError",
     "ConfigError",
     "ProviderError",
@@ -99,13 +150,69 @@ __all__ = [
     "ContextLengthError",
     "EmbeddingError",
 
+    # ==========================================================================
     # Storage
+    # ==========================================================================
     "StorageManager",
 
-    # Agents (available for advanced library users)
+    # ==========================================================================
+    # Agents (Core)
+    # ==========================================================================
     "AgentManager",
     "ToolManager",
 
+    # ==========================================================================
+    # Sandbox System (NEW in v0.26.0)
+    # ==========================================================================
+    # Core classes
+    "SandboxRegistry",
+    "SandboxRegistryConfig",
+    "SandboxConfig",
+    "SandboxProvider",
+    "SandboxMode",
+    "SandboxAccessLevel",
+    "SandboxStatus",
+    "ExecutionResult",
+    "FileInfo",
+
+    # Providers
+    "DockerSandboxProvider",
+    "VMSandboxProvider",
+
+    # Utilities
+    "EphemeralResourceManager",
+    "OutputTracker",
+
+    # Configuration
+    "load_sandbox_config",
+    "create_registry_config",
+
+    # Sandbox Exceptions
+    "SandboxError",
+    "SandboxInitializationError",
+    "SandboxExecutionError",
+    "SandboxTimeoutError",
+    "SandboxAccessDenied",
+    "SandboxResourceError",
+    "SandboxConnectionError",
+    "SandboxCleanupError",
+
+    # Tool Management
+    "set_active_sandbox",
+    "clear_active_sandbox",
+    "get_active_sandbox",
+    "SANDBOX_TOOL_IMPLEMENTATIONS",
+    "SANDBOX_TOOL_SCHEMAS",
+
+    # Integration Bridge
+    "SandboxIntegration",
+    "SandboxContext",
+    "SandboxAgentMixin",
+    "register_sandbox_tools",
+    "get_sandbox_tool_definitions",
+
+    # ==========================================================================
     # Version
+    # ==========================================================================
     "__version__",
 ]

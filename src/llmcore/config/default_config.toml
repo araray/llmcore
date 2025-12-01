@@ -665,3 +665,212 @@ posthog = "ERROR"
         log_filename_template = "semantiscan_{timestamp:%Y%m%d_%H%M%S}.log"  # Log filename template
         log_level_file = "DEBUG"  # File log level (more verbose than console)
         log_format = "%(asctime)s [%(levelname)-8s] %(name)-30s - %(message)s (%(filename)s:%(lineno)d)"
+
+        # ==============================================================================
+        # SANDBOX ADDITIONS FOR default_config.toml
+        # ==============================================================================
+        # INSTRUCTIONS: Append this content to the END of your existing default_config.toml
+        # Do NOT replace the existing file - just add these sections at the bottom.
+        # ==============================================================================
+
+        # ==============================================================================
+        # [agents] - Agent System Configuration
+        # ==============================================================================
+        [agents]
+
+        # --- Agent Execution Settings ---
+        # Default maximum iterations for agent loops
+        max_iterations = 10
+
+        # Default timeout for agent tasks (in seconds)
+        default_timeout = 600
+
+        # ==============================================================================
+        # [agents.sandbox] - Sandbox Configuration for Agent Execution
+        # ==============================================================================
+        # This section configures the sandbox system for isolated agent code execution.
+        # When enabled, agent tasks execute in Docker containers or VMs, ensuring
+        # that agent-generated code NEVER runs on the host system.
+        #
+        # SECURITY: The sandbox is designed to prevent agents from accessing or
+        # modifying the host system. All code execution happens in isolated environments.
+
+        [agents.sandbox]
+        # Sandbox mode determines which backend to use for isolation.
+        # Possible Values: "docker", "vm", "hybrid"
+        #   - docker: Use Docker containers (recommended for most use cases)
+        #   - vm: Use SSH to a dedicated VM (for high-security scenarios)
+        #   - hybrid: Try Docker first, fall back to VM if Docker unavailable
+        # Default Value: "docker"
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__MODE
+        mode = "docker"
+
+        # Enable fallback to VM if primary mode fails (only applies to hybrid mode)
+        # Default Value: true
+        fallback_enabled = true
+
+        # --- Docker Sandbox Settings ---
+        [agents.sandbox.docker]
+        # Enable Docker sandbox support
+        # Default Value: true
+        enabled = true
+
+        # Default Docker image for sandbox containers.
+        # Should be a Python image with necessary tools.
+        # Default Value: "python:3.11-slim"
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__DOCKER__IMAGE
+        image = "python:3.11-slim"
+
+        # Whitelist of allowed Docker images (glob patterns supported).
+        # Only images matching these patterns can be used.
+        # Default Value: ["python:3.*-slim", "python:3.*-bookworm"]
+        image_whitelist = [
+            "python:3.*-slim",
+            "python:3.*-bookworm",
+            "llmcore-sandbox:*"
+        ]
+
+        # Docker label that grants FULL access level.
+        # Containers with this label bypass tool restrictions.
+        # Default Value: "llmcore.sandbox.full_access=true"
+        full_access_label = "llmcore.sandbox.full_access=true"
+
+        # Container name patterns that grant FULL access (glob patterns).
+        # Default Value: []
+        full_access_name_patterns = [
+            "llmcore-trusted-*"
+        ]
+
+        # Memory limit for containers (Docker memory limit format).
+        # Default Value: "1g"
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__DOCKER__MEMORY_LIMIT
+        memory_limit = "1g"
+
+        # CPU limit for containers (number of CPU cores).
+        # Default Value: 2.0
+        cpu_limit = 2.0
+
+        # Default timeout for operations in seconds.
+        # Default Value: 600
+        timeout_seconds = 600
+
+        # Enable network access in containers.
+        # WARNING: Enabling network access reduces isolation security.
+        # Default Value: false
+        network_enabled = false
+
+        # Docker host URL (for remote Docker daemons).
+        # Leave empty for local Docker socket.
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__DOCKER__HOST
+        # docker_host = "tcp://192.168.1.100:2375"
+
+        # --- VM Sandbox Settings ---
+        [agents.sandbox.vm]
+        # Enable VM sandbox support (requires SSH access to a VM).
+        # Default Value: false
+        enabled = false
+
+        # VM host address.
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__VM__HOST
+        host = ""
+
+        # SSH port.
+        # Default Value: 22
+        port = 22
+
+        # SSH username.
+        # Default Value: "agent"
+        username = "agent"
+
+        # Path to SSH private key file.
+        # WARNING: Use SSH agent or environment variable in production.
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__VM__PRIVATE_KEY_PATH
+        private_key_path = ""
+
+        # Use SSH agent for authentication instead of key file.
+        # Default Value: false
+        use_ssh_agent = false
+
+        # List of hosts that grant FULL access level.
+        # VMs in this list bypass tool restrictions.
+        # Default Value: []
+        full_access_hosts = []
+
+        # Default timeout for operations in seconds.
+        # Default Value: 600
+        timeout_seconds = 600
+
+        # Working directory on the VM.
+        # Default Value: "/tmp/llmcore_sandbox"
+        working_directory = "/tmp/llmcore_sandbox"
+
+        # --- Volume Mount Settings ---
+        [agents.sandbox.volumes]
+        # Host path for shared data that persists across sandbox instances.
+        # This directory is mounted read-write in sandboxes.
+        # Default Value: "~/.llmcore/agent_share"
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__VOLUMES__SHARE_PATH
+        share_path = "~/.llmcore/agent_share"
+
+        # Host path for agent output files.
+        # Files saved here persist after sandbox cleanup.
+        # Default Value: "~/.llmcore/agent_outputs"
+        # Environment Variable: LLMCORE_AGENTS__SANDBOX__VOLUMES__OUTPUTS_PATH
+        outputs_path = "~/.llmcore/agent_outputs"
+
+        # --- Tool Access Control ---
+        [agents.sandbox.tools]
+        # List of tools allowed for RESTRICTED access level sandboxes.
+        # FULL access sandboxes bypass this restriction.
+        # Default Value: (all standard sandbox tools)
+        allowed = [
+            "execute_shell",
+            "execute_python",
+            "save_file",
+            "load_file",
+            "replace_in_file",
+            "append_to_file",
+            "list_files",
+            "file_exists",
+            "delete_file",
+            "create_directory",
+            "get_state",
+            "set_state",
+            "list_state",
+            "get_sandbox_info",
+            "get_recorded_files",
+            # Core agent tools
+            "semantic_search",
+            "episodic_search",
+            "calculator",
+            "finish",
+            "human_approval"
+        ]
+
+        # List of tools explicitly denied for all access levels.
+        # These tools are never available, even for FULL access.
+        # Default Value: []
+        denied = [
+            # Example dangerous tools that should never be allowed:
+            # "sudo_execute",
+            # "raw_socket",
+            # "install_system_package"
+        ]
+
+        # --- Output Tracking Settings ---
+        [agents.sandbox.output_tracking]
+        # Enable persistent tracking of agent outputs.
+        # Default Value: true
+        enabled = true
+
+        # Maximum number of execution log entries per run.
+        # Default Value: 1000
+        max_log_entries = 1000
+
+        # Maximum age of runs to keep (in days). 0 = keep forever.
+        # Default Value: 30
+        max_run_age_days = 30
+
+        # Maximum number of runs to keep. 0 = no limit.
+        # Default Value: 100
+        max_runs = 100
