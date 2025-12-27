@@ -392,6 +392,14 @@ class EnhancedAgentState(AgentState):
         >>> state.progress_estimate = 0.5
     """
 
+    # Session tracking
+    session_id: str = Field(
+        default="", description="Session identifier for this agent execution"
+    )
+    context: str = Field(
+        default="", description="Initial context for the task"
+    )
+
     # Iteration tracking
     iterations: List[CycleIteration] = Field(
         default_factory=list, description="Complete history of all iterations"
