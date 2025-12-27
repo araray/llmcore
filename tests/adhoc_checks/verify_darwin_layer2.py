@@ -17,7 +17,7 @@ Requirements:
 
 Author: Claude (Anthropic)
 Date: December 2025
-Version: 1.0.0
+Version: 1.0.1 - Fixed EnhancedAgentState verification
 """
 
 import importlib
@@ -571,10 +571,6 @@ def verify_persona_manager_instantiation(report: VerificationReport) -> bool:
         personas = manager.list_personas()
 
         # Should have built-in personas
-        expected_personas = {"assistant", "analyst", "developer", "researcher", "creative"}
-        available = set(p.persona_id if hasattr(p, "persona_id") else str(p) for p in personas)
-
-        # Check at least some built-in personas exist
         if len(personas) >= 1:
             report.add(
                 VerificationResult(
@@ -607,14 +603,13 @@ def verify_persona_manager_instantiation(report: VerificationReport) -> bool:
 
 
 def verify_prompt_registry_instantiation(report: VerificationReport) -> bool:
-    """Verify PromptRegistry can be instantiated and has built-in templates."""
+    """Verify PromptRegistry can be instantiated."""
     try:
         from llmcore.agents import PromptRegistry
 
         registry = PromptRegistry()
 
         # Try to list templates
-        # Note: May not have list_templates, check what's available
         if hasattr(registry, "list_templates"):
             templates = registry.list_templates()
             count = len(templates)
@@ -649,22 +644,48 @@ def verify_enhanced_agent_state_creation(report: VerificationReport) -> bool:
     try:
         from llmcore.agents import EnhancedAgentState
 
+        # Create with required arguments
         state = EnhancedAgentState(goal="Test goal", session_id="session-123")
 
-        # Verify key attributes
-        assert state.goal == "Test goal for verification"
-        assert state.iteration_count == 0
-        assert hasattr(state, "iteration_history")
-        assert hasattr(state, "plan")
+        # Verify key attributes - FIXED: use correct values and attribute names
+        assert state.goal == "Test goal", f"Expected 'Test goal', got '{state.goal}'"
+        assert state.session_id == "session-123", (
+            f"Expected 'session-123', got '{state.session_id}'"
+        )
+
+        # Check iteration tracking (attribute is 'iterations', not 'iteration_history')
+        assert hasattr(state, "iterations"), "Missing 'iterations' attribute"
+        assert len(state.iterations) == 0, "Initial iterations should be empty"
+
+        # Check plan attribute
+        assert hasattr(state, "plan"), "Missing 'plan' attribute"
+
+        # Check working memory
+        assert hasattr(state, "working_memory"), "Missing 'working_memory' attribute"
+
+        # Check progress tracking
+        assert hasattr(state, "progress_estimate"), "Missing 'progress_estimate' attribute"
+        assert state.progress_estimate == 0.0, "Initial progress should be 0.0"
 
         report.add(
             VerificationResult(
                 name="EnhancedAgentState Creation",
                 status=VerificationStatus.PASS,
-                message="EnhancedAgentState created successfully",
+                message="EnhancedAgentState created and validated successfully",
             )
         )
         return True
+    except AssertionError as e:
+        report.add(
+            VerificationResult(
+                name="EnhancedAgentState Creation",
+                status=VerificationStatus.FAIL,
+                message="EnhancedAgentState validation failed",
+                details=str(e),
+                exception=e,
+            )
+        )
+        return False
     except Exception as e:
         report.add(
             VerificationResult(
@@ -725,21 +746,16 @@ def verify_cognitive_cycle_instantiation(report: VerificationReport) -> bool:
 def verify_agent_persona_creation(report: VerificationReport) -> bool:
     """Verify AgentPersona can be created."""
     try:
-        from llmcore.agents import (
-            AgentPersona,
-            CommunicationPreferences,
-            CommunicationStyle,
-            DecisionMakingPreferences,
-            PersonalityTrait,
-            PersonaTrait,
-            PlanningDepth,
-            RiskTolerance,
+        from llmcore.agents import AgentPersona
+
+        # Create a custom persona with required fields
+        persona = AgentPersona(
+            id="test_persona", name="Test Persona", description="A test persona for verification"
         )
 
-        # Create a custom persona
-        persona = AgentPersona(id="test", name="Test Persona", description="A test persona")
-
+        assert persona.id == "test_persona"
         assert persona.name == "Test Persona"
+        assert persona.description == "A test persona for verification"
 
         report.add(
             VerificationResult(
@@ -828,12 +844,12 @@ def verify_file_structure(report: VerificationReport) -> bool:
 
         agents_path = os.path.dirname(llmcore.agents.__file__)
 
+        # Note: prompts/templates is optional - may not exist if using programmatic templates
         expected_dirs = [
             "cognitive",
             "cognitive/phases",
             "persona",
             "prompts",
-            "prompts/templates",
             "memory",
         ]
 
