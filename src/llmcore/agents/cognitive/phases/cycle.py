@@ -17,7 +17,7 @@ References:
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
-from .models import (
+from ..models import (
     ActInput,
     CycleIteration,
     EnhancedAgentState,
@@ -32,16 +32,14 @@ from .models import (
     # Enums
     ValidationResult,
 )
-from .phases import (
-    act_phase,
-    observe_phase,
-    perceive_phase,
-    plan_phase,
-    reflect_phase,
-    think_phase,
-    update_phase,
-    validate_phase,
-)
+from .perceive import perceive_phase
+from .plan import plan_phase
+from .think import think_phase
+from .validate import validate_phase
+from .act import act_phase
+from .observe import observe_phase
+from .reflect import reflect_phase
+from .update import update_phase
 
 if TYPE_CHECKING:
     from ...memory.manager import MemoryManager
