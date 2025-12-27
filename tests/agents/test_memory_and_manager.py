@@ -4,11 +4,14 @@ Unit tests for Memory Integration and Enhanced Agent Manager.
 
 Tests cover:
 - CognitiveMemoryIntegrator (recording, retrieval, consolidation)
-- EnhancedAgentManager (modes, routing, integration)
+- AgentManager (original functionality preserved)
+- EnhancedAgentManager (inheritance, modes, routing, integration)
+- Backward compatibility
 - Complete system integration
 
 References:
     - Dossier: Steps 2.10-2.11 (Memory Integration & Enhanced AgentManager)
+    - Integration Audit: INTEGRATION_AUDIT.md
 """
 
 from datetime import datetime
@@ -23,7 +26,7 @@ from llmcore.agents.cognitive import (
     IterationStatus,
     ReflectOutput,
 )
-from llmcore.agents.manager import AgentMode, EnhancedAgentManager
+from llmcore.agents.manager import AgentManager, AgentMode, EnhancedAgentManager
 from llmcore.agents.memory import CognitiveMemoryIntegrator
 
 # =============================================================================
@@ -160,6 +163,57 @@ class TestCognitiveMemoryIntegrator:
         metadata = call_args[1]["metadata"]
         assert metadata["type"] == "session_learning"
         assert metadata["session_id"] == "session-123"
+
+
+# =============================================================================
+# ORIGINAL AGENT MANAGER TESTS
+# =============================================================================
+
+
+class TestAgentManager:
+    """Tests for original AgentManager (preserved functionality)."""
+
+    @pytest.fixture
+    def mock_components(self):
+        """Create mock components for AgentManager."""
+        provider_manager = Mock()
+        memory_manager = Mock()
+        storage_manager = Mock()
+
+        return {
+            "provider_manager": provider_manager,
+            "memory_manager": memory_manager,
+            "storage_manager": storage_manager,
+        }
+
+    def test_manager_initialization(self, mock_components):
+        """Test AgentManager initialization."""
+        manager = AgentManager(**mock_components)
+
+        assert manager._provider_manager is not None
+        assert manager._memory_manager is not None
+        assert manager._storage_manager is not None
+        assert manager._tool_manager is not None
+        assert not manager.sandbox_enabled
+
+    def test_manager_has_original_methods(self, mock_components):
+        """Test that original methods are present."""
+        manager = AgentManager(**mock_components)
+
+        # Original methods should exist
+        assert hasattr(manager, "run_agent_loop")
+        assert hasattr(manager, "initialize_sandbox")
+        assert hasattr(manager, "shutdown_sandbox")
+        assert hasattr(manager, "get_available_tools")
+        assert hasattr(manager, "get_tool_definitions")
+        assert hasattr(manager, "cleanup")
+
+    def test_sandbox_properties(self, mock_components):
+        """Test sandbox property accessors."""
+        manager = AgentManager(**mock_components)
+
+        assert manager.sandbox_enabled is False
+        assert manager.sandbox_integration is None
 
 
 # =============================================================================
@@ -457,6 +511,89 @@ class TestSystemIntegration:
 
             # Verify memory storage was called
             assert mock_components["memory_manager"].store_memory.called
+
+
+# =============================================================================
+# INHERITANCE & BACKWARD COMPATIBILITY TESTS
+# =============================================================================
+
+
+class TestInheritanceAndCompatibility:
+    """Tests for proper inheritance and backward compatibility."""
+
+    @pytest.fixture
+    def mock_components(self):
+        """Create mock components."""
+        provider_manager = Mock()
+        memory_manager = Mock()
+        storage_manager = Mock()
+
+        memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
+        memory_manager.store_memory = AsyncMock(return_value=None)
+        storage_manager.store_episode = AsyncMock(return_value=None)
+        storage_manager.get_episodes = AsyncMock(return_value=[])
+
+        return {
+            "provider_manager": provider_manager,
+            "memory_manager": memory_manager,
+            "storage_manager": storage_manager,
+        }
+
+    def test_enhanced_inherits_from_original(self, mock_components):
+        """Test proper inheritance."""
+        manager = EnhancedAgentManager(**mock_components)
+
+        assert isinstance(manager, AgentManager)
+        assert isinstance(manager, EnhancedAgentManager)
+
+    def test_original_methods_available_in_enhanced(self, mock_components):
+        """Test all original methods are accessible."""
+        manager = EnhancedAgentManager(**mock_components)
+
+        # Original public methods
+        assert callable(manager.run_agent_loop)
+        assert callable(manager.initialize_sandbox)
+        assert callable(manager.shutdown_sandbox)
+        assert callable(manager.cleanup)
+        assert callable(manager.get_available_tools)
+        assert callable(manager.get_tool_definitions)
+
+    def test_new_methods_only_in_enhanced(self, mock_components):
+        """Test new methods are only in EnhancedAgentManager."""
+        original = AgentManager(**mock_components)
+        enhanced = EnhancedAgentManager(**mock_components)
+
+        # Original should NOT have new methods
+        assert not hasattr(original, "run")
+        assert not hasattr(original, "create_persona")
+        assert not hasattr(original, "set_default_mode")
+
+        # Enhanced SHOULD have new methods
+        assert callable(enhanced.run)
+        assert callable(enhanced.create_persona)
+        assert callable(enhanced.set_default_mode)
+
+    def test_both_managers_have_same_constructor_signature(self):
+        """Test that both managers accept same basic arguments."""
+        pm = Mock()
+        mm = Mock()
+        sm = Mock()
+
+        # Both should accept same 3 required args
+        original = AgentManager(pm, mm, sm)
+        enhanced = EnhancedAgentManager(pm, mm, sm)
+
+        assert original is not None
+        assert enhanced is not None
+
+    def test_enhanced_has_additional_attributes(self, mock_components):
+        """Test enhanced manager has Layer 2 attributes."""
+        manager = EnhancedAgentManager(**mock_components)
+
+        assert hasattr(manager, "persona_manager")
+        assert hasattr(manager, "memory_integrator")
+        assert hasattr(manager, "single_agent")
+        assert hasattr(manager, "default_mode")
 
 
 if __name__ == "__main__":

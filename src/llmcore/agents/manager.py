@@ -13,10 +13,18 @@ This separation of concerns makes the agent's architecture clearer and more main
 
 UPDATED: Added sandbox integration for isolated code execution. Agent tasks can now
 execute code in Docker containers or VMs, ensuring host system security.
+
+DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
+- 8-phase enhanced cognitive cycle
+- Persona-based customization
+- Memory integration
+- Multiple execution modes (SINGLE, LEGACY, MULTI)
+- Full backward compatibility maintained
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,16 +34,18 @@ from ..models import AgentTask
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import cognitive_cycle
-from .tools import ToolManager
 
 # Sandbox integration imports
-from .sandbox_integration import (
-    SandboxIntegration,
-    register_sandbox_tools,
-)
 from .sandbox import SandboxError
+from .sandbox_integration import SandboxIntegration, register_sandbox_tools
+from .tools import ToolManager
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# ORIGINAL AGENT MANAGER (PRESERVED)
+# =============================================================================
 
 
 class AgentManager:
@@ -62,7 +72,7 @@ class AgentManager:
         self,
         provider_manager: ProviderManager,
         memory_manager: MemoryManager,
-        storage_manager: StorageManager
+        storage_manager: StorageManager,
     ):
         """
         Initialize the AgentManager with required dependencies.
@@ -85,6 +95,7 @@ class AgentManager:
         self._tracer = None
         try:
             from ..tracing import get_tracer
+
             self._tracer = get_tracer("llmcore.agents.manager")
         except Exception as e:
             logger.debug(f"Tracing not available for AgentManager: {e}")
@@ -92,13 +103,10 @@ class AgentManager:
         logger.info("AgentManager initialized as orchestrator.")
 
     # =========================================================================
-    # SANDBOX INTEGRATION METHODS (NEW)
+    # SANDBOX INTEGRATION METHODS
     # =========================================================================
 
-    async def initialize_sandbox(
-        self,
-        config: Optional[Dict[str, Any]] = None
-    ) -> None:
+    async def initialize_sandbox(self, config: Optional[Dict[str, Any]] = None) -> None:
         """
         Initialize sandbox support for agent execution.
 
@@ -127,7 +135,7 @@ class AgentManager:
                 self._sandbox_integration = SandboxIntegration.from_dict(config)
             else:
                 # Try to get config from provider_manager if available
-                if hasattr(self._provider_manager, 'config'):
+                if hasattr(self._provider_manager, "config"):
                     self._sandbox_integration = SandboxIntegration.from_llmcore_config(
                         self._provider_manager.config
                     )
@@ -182,7 +190,7 @@ class AgentManager:
         session_id: Optional[str] = None,
         db_session: Optional[AsyncSession] = None,
         enabled_toolkits: Optional[List[str]] = None,
-        use_sandbox: Optional[bool] = None
+        use_sandbox: Optional[bool] = None,
     ) -> str:
         """
         Orchestrates the Plan -> (Think -> Act -> Observe -> Reflect) loop.
@@ -222,7 +230,7 @@ class AgentManager:
                 max_iterations=max_iterations,
                 session_id=session_id,
                 db_session=db_session,
-                enabled_toolkits=enabled_toolkits
+                enabled_toolkits=enabled_toolkits,
             )
         else:
             return await self._run_agent_loop_direct(
@@ -232,7 +240,7 @@ class AgentManager:
                 max_iterations=max_iterations,
                 session_id=session_id,
                 db_session=db_session,
-                enabled_toolkits=enabled_toolkits
+                enabled_toolkits=enabled_toolkits,
             )
 
     def _should_use_sandbox(self, use_sandbox: Optional[bool]) -> bool:
@@ -251,8 +259,7 @@ class AgentManager:
         if use_sandbox is True:
             if not self._sandbox_enabled:
                 raise SandboxError(
-                    "Sandbox requested but not initialized. "
-                    "Call initialize_sandbox() first."
+                    "Sandbox requested but not initialized. Call initialize_sandbox() first."
                 )
             return True
         elif use_sandbox is False:
@@ -269,7 +276,7 @@ class AgentManager:
         max_iterations: int = 10,
         session_id: Optional[str] = None,
         db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None
+        enabled_toolkits: Optional[List[str]] = None,
     ) -> str:
         """
         Run the agent loop with sandbox isolation.
@@ -292,7 +299,7 @@ class AgentManager:
                 session_id=session_id,
                 db_session=db_session,
                 enabled_toolkits=enabled_toolkits,
-                sandbox_context=ctx
+                sandbox_context=ctx,
             )
 
     async def _run_agent_loop_direct(
@@ -303,7 +310,7 @@ class AgentManager:
         max_iterations: int = 10,
         session_id: Optional[str] = None,
         db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None
+        enabled_toolkits: Optional[List[str]] = None,
     ) -> str:
         """
         Run the agent loop without sandbox (original behavior).
@@ -321,7 +328,7 @@ class AgentManager:
             session_id=session_id,
             db_session=db_session,
             enabled_toolkits=enabled_toolkits,
-            sandbox_context=None
+            sandbox_context=None,
         )
 
     async def _run_cognitive_loop(
@@ -333,7 +340,7 @@ class AgentManager:
         session_id: Optional[str] = None,
         db_session: Optional[AsyncSession] = None,
         enabled_toolkits: Optional[List[str]] = None,
-        sandbox_context: Optional[Any] = None
+        sandbox_context: Optional[Any] = None,
     ) -> str:
         """
         Execute the core cognitive loop (Plan -> Think -> Act -> Observe -> Reflect).
@@ -354,30 +361,32 @@ class AgentManager:
         Returns:
             The final result string from the agent
         """
-        from ..tracing import create_span, add_span_attributes, record_span_exception
+        from ..tracing import add_span_attributes, create_span, record_span_exception
 
         with create_span(self._tracer, "agent.run_loop") as span:
             try:
-                add_span_attributes(span, {
-                    "agent.goal": task.goal[:100],
-                    "agent.max_iterations": max_iterations,
-                    "agent.sandbox_enabled": sandbox_context is not None
-                })
+                add_span_attributes(
+                    span,
+                    {
+                        "agent.goal": task.goal[:100],
+                        "agent.max_iterations": max_iterations,
+                        "agent.sandbox_enabled": sandbox_context is not None,
+                    },
+                )
 
                 # Generate session ID if not provided
                 if not session_id:
                     import uuid
+
                     session_id = f"agent-{uuid.uuid4().hex[:8]}"
 
                 # Load tools for this run
                 if db_session and enabled_toolkits:
-                    await self._tool_manager.load_tools_for_run(
-                        db_session,
-                        enabled_toolkits
-                    )
+                    await self._tool_manager.load_tools_for_run(db_session, enabled_toolkits)
 
                 # Initialize agent state
                 from ..models import AgentState
+
                 agent_state = AgentState(goal=task.goal)
 
                 # Execute planning step
@@ -387,7 +396,7 @@ class AgentManager:
                     provider_manager=self._provider_manager,
                     tracer=self._tracer,
                     provider_name=provider_name,
-                    model_name=model_name
+                    model_name=model_name,
                 )
 
                 # Main cognitive loop
@@ -403,7 +412,7 @@ class AgentManager:
                         tool_manager=self._tool_manager,
                         tracer=self._tracer,
                         provider_name=provider_name,
-                        model_name=model_name
+                        model_name=model_name,
                     )
 
                     # Check if agent decided to finish
@@ -423,7 +432,7 @@ class AgentManager:
                         agent_state=agent_state,
                         tool_manager=self._tool_manager,
                         session_id=session_id,
-                        tracer=self._tracer
+                        tracer=self._tracer,
                     )
 
                     # Log execution if sandboxed
@@ -431,14 +440,12 @@ class AgentManager:
                         await sandbox_context.log_execution(
                             agent_state.pending_tool_call.name,
                             str(agent_state.pending_tool_call.arguments)[:200],
-                            tool_result
+                            tool_result,
                         )
 
                     # Observe: Process tool result
                     await cognitive_cycle.observe_step(
-                        agent_state=agent_state,
-                        tool_result=tool_result,
-                        tracer=self._tracer
+                        agent_state=agent_state, tool_result=tool_result, tracer=self._tracer
                     )
 
                     # Reflect: Update understanding
@@ -449,16 +456,15 @@ class AgentManager:
                         storage_manager=self._storage_manager,
                         tracer=self._tracer,
                         provider_name=provider_name,
-                        model_name=model_name
+                        model_name=model_name,
                     )
 
                 # Return final result
                 final_result = agent_state.final_answer or "Task completed without explicit answer."
 
-                add_span_attributes(span, {
-                    "agent.iterations": iteration + 1,
-                    "agent.success": True
-                })
+                add_span_attributes(
+                    span, {"agent.iterations": iteration + 1, "agent.success": True}
+                )
 
                 return final_result
 
@@ -488,3 +494,314 @@ class AgentManager:
         if self._sandbox_enabled:
             await self.shutdown_sandbox()
         logger.info("AgentManager cleanup completed")
+
+
+# =============================================================================
+# DARWIN LAYER 2 - ENHANCED AGENT MANAGER (NEW)
+# =============================================================================
+
+
+class AgentMode(str, Enum):
+    """Agent execution mode for EnhancedAgentManager."""
+
+    SINGLE = "single"  # Single autonomous agent (Darwin Layer 2)
+    LEGACY = "legacy"  # Legacy compatibility mode (uses original AgentManager)
+    MULTI = "multi"  # Multi-agent (Darwin Layer 3)
+
+
+class EnhancedAgentManager(AgentManager):
+    """
+    Enhanced agent manager with Darwin Layer 2 capabilities.
+
+    Extends the original AgentManager with:
+    - 8-phase enhanced cognitive cycle
+    - Persona-based customization
+    - Memory integration
+    - Multiple execution modes
+    - Full backward compatibility
+
+    The EnhancedAgentManager maintains ALL original AgentManager functionality
+    while adding new Darwin Layer 2 features. Existing code continues to work
+    unchanged.
+
+    Example - Original Method (Still Works):
+        >>> manager = EnhancedAgentManager(...)
+        >>> task = AgentTask(goal="Process files")
+        >>> result = await manager.run_agent_loop(task=task)
+
+    Example - New Enhanced Method:
+        >>> manager = EnhancedAgentManager(...)
+        >>> result = await manager.run(
+        ...     goal="Analyze sales data",
+        ...     mode=AgentMode.SINGLE,
+        ...     persona="analyst"
+        ... )
+
+    Attributes:
+        All AgentManager attributes (inherited)
+        persona_manager: PersonaManager for persona management
+        memory_integrator: CognitiveMemoryIntegrator for enhanced memory
+        single_agent: SingleAgentMode for Layer 2 execution
+        prompt_registry: Optional PromptRegistry
+        default_mode: Default execution mode for run()
+    """
+
+    def __init__(
+        self,
+        provider_manager: ProviderManager,
+        memory_manager: MemoryManager,
+        storage_manager: StorageManager,
+        prompt_registry: Optional[Any] = None,
+        tracer: Optional[Any] = None,
+        default_mode: AgentMode = AgentMode.SINGLE,
+    ):
+        """
+        Initialize the enhanced agent manager.
+
+        Args:
+            provider_manager: Provider manager for LLM calls
+            memory_manager: Memory manager
+            storage_manager: Storage manager
+            prompt_registry: Optional prompt registry (Darwin Layer 2)
+            tracer: Optional OpenTelemetry tracer
+            default_mode: Default mode for run() method
+        """
+        # Initialize parent class (original AgentManager)
+        super().__init__(
+            provider_manager=provider_manager,
+            memory_manager=memory_manager,
+            storage_manager=storage_manager,
+        )
+
+        # Store additional components
+        self.prompt_registry = prompt_registry
+        self.default_mode = default_mode
+
+        # Use parent's tracer if not provided
+        if tracer is not None:
+            self._tracer = tracer
+
+        # Initialize Darwin Layer 2 components
+        try:
+            from .memory import CognitiveMemoryIntegrator
+            from .persona import PersonaManager
+            from .single_agent import SingleAgentMode
+
+            self.persona_manager = PersonaManager()
+            self.memory_integrator = CognitiveMemoryIntegrator(
+                memory_manager=memory_manager, storage_manager=storage_manager
+            )
+            self.single_agent = SingleAgentMode(
+                provider_manager=provider_manager,
+                memory_manager=memory_manager,
+                storage_manager=storage_manager,
+                tool_manager=self._tool_manager,
+                prompt_registry=prompt_registry,
+                tracer=self._tracer,
+            )
+
+            logger.info(f"EnhancedAgentManager initialized (default_mode={default_mode.value})")
+
+        except ImportError as e:
+            logger.warning(
+                f"Darwin Layer 2 components not available: {e}. "
+                "Using original AgentManager functionality only."
+            )
+            self.persona_manager = None
+            self.memory_integrator = None
+            self.single_agent = None
+
+    # =========================================================================
+    # DARWIN LAYER 2 - NEW ENHANCED METHODS
+    # =========================================================================
+
+    async def run(
+        self,
+        goal: str,
+        mode: Optional[AgentMode] = None,
+        persona: Optional[Any] = None,
+        context: Optional[str] = None,
+        max_iterations: int = 10,
+        **kwargs,
+    ) -> Any:
+        """
+        Run an agent with Darwin Layer 2 capabilities.
+
+        This is the new enhanced interface that supports personas, advanced
+        cognitive cycles, and multiple execution modes. Use this for new code.
+
+        For backward compatibility, use the original run_agent_loop() method.
+
+        Args:
+            goal: The task goal/objective
+            mode: Execution mode (SINGLE, LEGACY, MULTI)
+            persona: Persona for SINGLE mode (string ID or AgentPersona object)
+            context: Optional initial context
+            max_iterations: Maximum iterations
+            **kwargs: Additional mode-specific arguments
+
+        Returns:
+            AgentResult with execution details
+
+        Example:
+            >>> # Enhanced mode with persona
+            >>> result = await manager.run(
+            ...     goal="Analyze Q4 sales trends",
+            ...     mode=AgentMode.SINGLE,
+            ...     persona="analyst",
+            ...     max_iterations=15
+            ... )
+            >>>
+            >>> # Legacy mode (uses original cognitive cycle)
+            >>> result = await manager.run(
+            ...     goal="Simple calculation",
+            ...     mode=AgentMode.LEGACY
+            ... )
+        """
+        if self.single_agent is None:
+            raise RuntimeError(
+                "Darwin Layer 2 components not available. Use run_agent_loop() instead."
+            )
+
+        from .single_agent import AgentResult
+
+        # Use default mode if not specified
+        execution_mode = mode or self.default_mode
+
+        logger.info(
+            f"Running enhanced agent: mode={execution_mode.value}, goal='{goal[:50]}...', persona={persona}"
+        )
+
+        # Route to appropriate mode
+        if execution_mode == AgentMode.SINGLE:
+            return await self.single_agent.run(
+                goal=goal, persona=persona, context=context, max_iterations=max_iterations, **kwargs
+            )
+
+        elif execution_mode == AgentMode.LEGACY:
+            # Use original AgentManager cognitive loop
+            from ..models import AgentTask
+
+            task = AgentTask(goal=goal, context=context or "")
+            final_answer = await self.run_agent_loop(
+                task=task, max_iterations=max_iterations, **kwargs
+            )
+
+            # Wrap in AgentResult for consistency
+            return AgentResult(
+                goal=goal,
+                final_answer=final_answer,
+                success=True,
+                iteration_count=max_iterations,
+                total_tokens=0,
+                total_time_seconds=0.0,
+                session_id=kwargs.get("session_id", "legacy"),
+            )
+
+        elif execution_mode == AgentMode.MULTI:
+            raise NotImplementedError("Multi-agent mode requires Darwin Layer 3 implementation")
+
+        else:
+            raise ValueError(f"Unknown agent mode: {execution_mode}")
+
+    # =========================================================================
+    # PERSONA MANAGEMENT (Darwin Layer 2)
+    # =========================================================================
+
+    def create_persona(self, name: str, description: str, **kwargs) -> Any:
+        """
+        Create a custom persona (Darwin Layer 2).
+
+        Args:
+            name: Persona name
+            description: Persona description
+            **kwargs: Additional persona configuration
+
+        Returns:
+            Created AgentPersona
+        """
+        if self.persona_manager is None:
+            raise RuntimeError("Persona system not available")
+
+        return self.persona_manager.create_persona(
+            persona_id=name.lower().replace(" ", "_"), name=name, description=description, **kwargs
+        )
+
+    def list_personas(self) -> List[Any]:
+        """List all available personas (Darwin Layer 2)."""
+        if self.persona_manager is None:
+            return []
+        return self.persona_manager.list_personas()
+
+    def get_persona(self, persona_id: str) -> Optional[Any]:
+        """Get a persona by ID (Darwin Layer 2)."""
+        if self.persona_manager is None:
+            return None
+        return self.persona_manager.get_persona(persona_id)
+
+    # =========================================================================
+    # MEMORY MANAGEMENT (Darwin Layer 2)
+    # =========================================================================
+
+    async def consolidate_memory(self, session_id: str, agent_state: Any) -> None:
+        """
+        Consolidate memories from a completed session (Darwin Layer 2).
+
+        Args:
+            session_id: Session identifier
+            agent_state: Final agent state
+        """
+        if self.memory_integrator is None:
+            logger.warning("Memory integrator not available")
+            return
+
+        await self.memory_integrator.consolidate_session_memory(
+            session_id=session_id, agent_state=agent_state
+        )
+
+    # =========================================================================
+    # UTILITY METHODS
+    # =========================================================================
+
+    def set_default_mode(self, mode: AgentMode) -> None:
+        """Set the default execution mode for run()."""
+        self.default_mode = mode
+        logger.info(f"Default mode set to: {mode.value}")
+
+    def get_capabilities(self) -> Dict[str, Any]:
+        """
+        Get information about available capabilities.
+
+        Returns:
+            Dictionary of capabilities
+        """
+        capabilities = {
+            "modes": [mode.value for mode in AgentMode],
+            "default_mode": self.default_mode.value,
+            "sandbox_enabled": self.sandbox_enabled,
+            "original_methods": ["run_agent_loop", "initialize_sandbox", "shutdown_sandbox"],
+            "enhanced_methods": ["run", "create_persona", "consolidate_memory"],
+        }
+
+        if self.persona_manager:
+            capabilities["personas"] = [p.name for p in self.list_personas()]
+            capabilities["cognitive_phases"] = 8
+
+        if self.prompt_registry:
+            capabilities["prompt_library"] = True
+
+        if self.memory_integrator:
+            capabilities["memory_integration"] = True
+
+        return capabilities
+
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
+
+__all__ = [
+    "AgentManager",  # Original (preserved)
+    "EnhancedAgentManager",  # New Darwin Layer 2
+    "AgentMode",  # New enum
+]
