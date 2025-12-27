@@ -1,48 +1,30 @@
 # src/llmcore/agents/__init__.py
 """
-Darwin Agent System - Layer 2 Complete.
+Darwin Layer 2 - Enhanced Agent System.
 
-The Darwin agent system provides a comprehensive framework for building
-autonomous AI agents with:
+This package provides comprehensive agent management with the enhanced
+cognitive cycle, persona system, and prompt library.
 
-- **8-Phase Cognitive Cycle**: PERCEIVE → PLAN → THINK → VALIDATE → ACT → OBSERVE → REFLECT → UPDATE
-- **Persona System**: Customizable agent personalities and behaviors
-- **Prompt Library**: Versioned, testable prompts with A/B testing
-- **Memory Integration**: Episodic and semantic memory with learning
-- **Single & Multi-Agent**: Support for both modes
-- **Sandbox Execution**: Safe isolated execution environments
+Key Components:
+    - AgentManager: Original agent manager (preserved for backward compatibility)
+    - EnhancedAgentManager: Darwin Layer 2 agent with 8-phase cognitive cycle
+    - SingleAgentMode: Autonomous single-agent execution
+    - CognitiveCycle: 8-phase reasoning system
+    - PersonaManager: Agent personality customization
+    - PromptRegistry: Centralized prompt management
+    - CognitiveMemoryIntegrator: Enhanced memory integration
 
-Main Components:
-    - EnhancedAgentManager: Main entry point for agent orchestration
-    - SingleAgentMode: High-level single-agent interface
-    - CognitiveCycle: 8-phase cognitive loop orchestrator
-    - PersonaManager: Persona creation and management
-    - PromptRegistry: Prompt library and versioning
+Example - Original (Still Works):
+    >>> from llmcore.agents import AgentManager
+    >>> manager = AgentManager(provider_manager, memory_manager, storage_manager)
+    >>> result = await manager.run_agent_loop(task=task)
 
-Quick Start - Single Agent:
+Example - Enhanced (New):
     >>> from llmcore.agents import EnhancedAgentManager, AgentMode
-    >>>
-    >>> manager = EnhancedAgentManager(
-    ...     provider_manager=provider_manager,
-    ...     memory_manager=memory_manager,
-    ...     storage_manager=storage_manager,
-    ...     tool_manager=tool_manager
-    ... )
-    >>>
-    >>> result = await manager.run(
-    ...     goal="Analyze sales data and generate report",
-    ...     mode=AgentMode.SINGLE,
-    ...     persona="analyst",
-    ...     max_iterations=10
-    ... )
-    >>>
-    >>> print(result.final_answer)
-
-Quick Start - Legacy Mode:
-    >>> # Backward compatible with existing code
+    >>> manager = EnhancedAgentManager(...)
     >>> result = await manager.run(
     ...     goal="Calculate factorial of 10",
-    ...     mode=AgentMode.LEGACY
+    ...     mode=AgentMode.SINGLE
     ... )
 
 References:
@@ -50,81 +32,151 @@ References:
     - Implementation Dossiers: Steps 2.1-2.11
 """
 
-# Core Manager
-# Cognitive System
+# =============================================================================
+# CORE MANAGERS (Preserved for backward compatibility)
+# =============================================================================
+from .manager import AgentManager, AgentMode, EnhancedAgentManager
+from .tools import ToolManager
+
+# =============================================================================
+# COGNITIVE SYSTEM
+# =============================================================================
 from .cognitive import (
-    ActInput,
-    ActOutput,
     # Orchestrator
     CognitiveCycle,
     # Enums
     CognitivePhase,
+    IterationStatus,
+    ValidationResult,
     ConfidenceLevel,
     # Models
     CycleIteration,
     # State
     EnhancedAgentState,
-    IterationStatus,
-    ObserveInput,
-    ObserveOutput,
     # Phase I/O Models (for advanced usage)
     PerceiveInput,
     PerceiveOutput,
     PlanInput,
     PlanOutput,
-    ReflectInput,
-    ReflectOutput,
     ThinkInput,
     ThinkOutput,
-    UpdateInput,
-    UpdateOutput,
     ValidateInput,
     ValidateOutput,
-    ValidationResult,
-    act_phase,
-    observe_phase,
+    ActInput,
+    ActOutput,
+    ObserveInput,
+    ObserveOutput,
+    ReflectInput,
+    ReflectOutput,
+    UpdateInput,
+    UpdateOutput,
     # Individual phases (for advanced usage)
     perceive_phase,
     plan_phase,
-    reflect_phase,
     think_phase,
-    update_phase,
     validate_phase,
+    act_phase,
+    observe_phase,
+    reflect_phase,
+    update_phase,
 )
-from .manager import AgentMode, EnhancedAgentManager
 
-# Memory Integration
+# =============================================================================
+# MEMORY INTEGRATION
+# =============================================================================
 from .memory import CognitiveMemoryIntegrator
 
-# Persona System
+# =============================================================================
+# PERSONA SYSTEM
+# =============================================================================
 from .persona import (
-    AgentPersona,
-    CommunicationPreferences,
-    CommunicationStyle,
-    DecisionMakingPreferences,
-    PersonalityTrait,
     PersonaManager,
-    PersonaTrait,
-    PlanningDepth,
-    PromptModifications,
+    AgentPersona,
+    PersonalityTrait,
+    CommunicationStyle,
     RiskTolerance,
+    PlanningDepth,
+    PersonaTrait,
+    CommunicationPreferences,
+    DecisionMakingPreferences,
+    PromptModifications,
 )
 
-# Prompt Library
+# =============================================================================
+# PROMPT LIBRARY
+# =============================================================================
 from .prompts import (
-    PromptComposer,
     PromptRegistry,
     PromptTemplate,
     PromptVersion,
+    PromptComposer,
     TemplateLoader,
 )
 
-# Single Agent Mode
+# =============================================================================
+# SINGLE AGENT MODE
+# =============================================================================
 from .single_agent import AgentResult, IterationUpdate, SingleAgentMode
 
+# =============================================================================
+# SANDBOX SYSTEM
+# =============================================================================
+from .sandbox import (
+    # Core classes
+    SandboxRegistry,
+    SandboxRegistryConfig,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxMode,
+    SandboxAccessLevel,
+    SandboxStatus,
+    ExecutionResult,
+    FileInfo,
+    # Providers
+    DockerSandboxProvider,
+    VMSandboxProvider,
+    # Utilities
+    EphemeralResourceManager,
+    OutputTracker,
+    # Configuration
+    load_sandbox_config,
+    create_registry_config,
+    # Exceptions
+    SandboxError,
+    SandboxInitializationError,
+    SandboxExecutionError,
+    SandboxTimeoutError,
+    SandboxAccessDenied,
+    SandboxResourceError,
+    SandboxConnectionError,
+    SandboxCleanupError,
+    # Tool management
+    set_active_sandbox,
+    clear_active_sandbox,
+    get_active_sandbox,
+    SANDBOX_TOOL_IMPLEMENTATIONS,
+    SANDBOX_TOOL_SCHEMAS,
+)
+
+# =============================================================================
+# SANDBOX INTEGRATION
+# =============================================================================
+from .sandbox_integration import (
+    SandboxIntegration,
+    SandboxContext,
+    SandboxAgentMixin,
+    register_sandbox_tools,
+    get_sandbox_tool_definitions,
+)
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
 __all__ = [
-    # Core Manager
-    "EnhancedAgentManager",
+    # Core Managers
+    "AgentManager",  # Original (preserved)
+    "ToolManager",
+    "EnhancedAgentManager",  # Darwin Layer 2
     "AgentMode",
     # Single Agent
     "SingleAgentMode",
@@ -183,6 +235,46 @@ __all__ = [
     "TemplateLoader",
     # Memory
     "CognitiveMemoryIntegrator",
+    # Sandbox Core
+    "SandboxRegistry",
+    "SandboxRegistryConfig",
+    "SandboxConfig",
+    "SandboxProvider",
+    "SandboxMode",
+    "SandboxAccessLevel",
+    "SandboxStatus",
+    "ExecutionResult",
+    "FileInfo",
+    # Sandbox Providers
+    "DockerSandboxProvider",
+    "VMSandboxProvider",
+    # Sandbox Utilities
+    "EphemeralResourceManager",
+    "OutputTracker",
+    # Sandbox Configuration
+    "load_sandbox_config",
+    "create_registry_config",
+    # Sandbox Exceptions
+    "SandboxError",
+    "SandboxInitializationError",
+    "SandboxExecutionError",
+    "SandboxTimeoutError",
+    "SandboxAccessDenied",
+    "SandboxResourceError",
+    "SandboxConnectionError",
+    "SandboxCleanupError",
+    # Sandbox Tools
+    "set_active_sandbox",
+    "clear_active_sandbox",
+    "get_active_sandbox",
+    "SANDBOX_TOOL_IMPLEMENTATIONS",
+    "SANDBOX_TOOL_SCHEMAS",
+    # Sandbox Integration
+    "SandboxIntegration",
+    "SandboxContext",
+    "SandboxAgentMixin",
+    "register_sandbox_tools",
+    "get_sandbox_tool_definitions",
 ]
 
 __version__ = "0.26.0"  # Darwin Layer 2 Complete
