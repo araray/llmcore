@@ -188,7 +188,8 @@ ignore_missing_imports = true
 # --- Pytest Configuration ---
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=src/llmcore --cov-report=term-missing --cov-report=xml"
+#addopts = "-ra -q --cov=src/llmcore --cov-report=term-missing --cov-report=xml"
+addopts = ""
 testpaths = [
     "tests",
 ]
