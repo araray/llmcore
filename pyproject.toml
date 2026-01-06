@@ -102,6 +102,8 @@ dev = [
     "tox>=4.0.0",  # For testing in different environments
     "build",  # For building the package
     "twine",  # For uploading to PyPI
+    "pytes",
+    "pytest-asyncio",
 ]
 
 # Full installation with all optional dependencies
@@ -200,6 +202,7 @@ markers = [
     "sandbox: marks tests that require sandbox infrastructure",
     "docker: marks tests that require Docker",
     "vm: marks tests that require VM/SSH access",
+    "asyncio: mark test as an asyncio test",
 ]
 
 # --- Coverage Configuration ---

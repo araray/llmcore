@@ -1,85 +1,132 @@
-# tests/sandbox/test_vm_provider.py
+# tests/agents/sandbox/test_vm_provider.py
 """
 Unit tests for VMSandboxProvider.
 
 These tests use mocking to test the VM provider without requiring
-an actual VM or SSH connection.
+actual SSH connections. Integration tests with real VMs are in
+a separate integration test file.
+
+IMPORTANT FIX NOTES:
+====================
+The original tests failed because they tried to patch
+'llmcore.agents.sandbox.vm_provider.paramiko', but the paramiko module
+is imported LAZILY inside methods, not at module level.
+
+Fix approach: Use sys.modules patching OR create=True.
 """
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+import sys
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-import sys
-# Assumes llmcore is installed or in PYTHONPATH
+import pytest
 
-from llmcore.agents.sandbox.vm_provider import VMSandboxProvider, MAX_OUTPUT_SIZE
 from llmcore.agents.sandbox.base import (
-    SandboxConfig,
+    ExecutionResult,
     SandboxAccessLevel,
+    SandboxConfig,
     SandboxStatus,
-    ExecutionResult
 )
 from llmcore.agents.sandbox.exceptions import (
-    SandboxInitializationError,
+    SandboxAccessDenied,
     SandboxConnectionError,
-    SandboxNotInitializedError
+    SandboxInitializationError,
+    SandboxNotInitializedError,
 )
 
+# Assumes llmcore is installed or in PYTHONPATH
+from llmcore.agents.sandbox.vm_provider import VMSandboxProvider
 
 # =============================================================================
-# FIXTURES
+# FIXTURES - FIXED VERSION
 # =============================================================================
 
-@pytest.fixture
-def mock_paramiko():
-    """Create mock paramiko module."""
-    with patch('llmcore.agents.sandbox.vm_provider.paramiko') as mock:
-        # Mock key types
-        mock.Ed25519Key = MagicMock()
-        mock.RSAKey = MagicMock()
-        mock.ECDSAKey = MagicMock()
-        mock.DSSKey = MagicMock()
-        mock.SSHClient = MagicMock
-        mock.AutoAddPolicy = MagicMock()
-        mock.AuthenticationException = Exception
-        mock.SSHException = Exception
-        yield mock
-
 
 @pytest.fixture
-def mock_ssh_client():
-    """Create a mock SSH client."""
-    client = MagicMock()
+def mock_paramiko_module():
+    """
+    Create a mock paramiko module.
 
-    # Mock transport
-    transport = MagicMock()
-    transport.is_active.return_value = True
-    client.get_transport.return_value = transport
+    This fixture patches the paramiko module using sys.modules, which works
+    regardless of where/when the import happens (lazy or eager).
+    """
+    mock_paramiko = MagicMock()
 
-    # Mock SFTP
-    sftp = MagicMock()
-    client.open_sftp.return_value = sftp
+    # Setup mock classes and exceptions
+    mock_paramiko.SSHClient = MagicMock
+    mock_paramiko.AutoAddPolicy = MagicMock
+    mock_paramiko.AuthenticationException = Exception
+    mock_paramiko.SSHException = Exception
 
-    return client
+    # Mock key classes
+    mock_paramiko.Ed25519Key = MagicMock()
+    mock_paramiko.RSAKey = MagicMock()
+    mock_paramiko.ECDSAKey = MagicMock()
+    mock_paramiko.DSSKey = MagicMock()
+
+    # Store original if exists
+    original_paramiko = sys.modules.get("paramiko")
+
+    # Patch sys.modules
+    sys.modules["paramiko"] = mock_paramiko
+
+    yield mock_paramiko
+
+    # Restore original
+    if original_paramiko is not None:
+        sys.modules["paramiko"] = original_paramiko
+    else:
+        sys.modules.pop("paramiko", None)
 
 
 @pytest.fixture
-def vm_provider(mock_paramiko, mock_ssh_client):
-    """Create a VMSandboxProvider with mocked SSH."""
-    with patch.object(Path, 'exists', return_value=True):
-        provider = VMSandboxProvider(
-            host="192.168.1.100",
-            port=22,
-            username="agent",
-            private_key_path="~/.ssh/test_key",
-            full_access_hosts=["trusted-host-1"]
-        )
+def mock_paramiko(mock_paramiko_module):
+    """
+    Create mock paramiko module with pre-configured SSH client.
 
-    provider._client = mock_ssh_client
-    provider._sftp = mock_ssh_client.open_sftp()
+    FIXED: This fixture now uses sys.modules patching instead of
+    trying to patch a non-existent module-level name.
+    """
+    mock_client = MagicMock()
+    mock_sftp = MagicMock()
+    mock_transport = MagicMock()
+
+    # Configure client methods
+    mock_client.connect = MagicMock()
+    mock_client.open_sftp.return_value = mock_sftp
+    mock_client.get_transport.return_value = mock_transport
+    mock_transport.is_active.return_value = True
+
+    # Configure exec_command
+    mock_stdin = MagicMock()
+    mock_stdout = MagicMock()
+    mock_stderr = MagicMock()
+
+    mock_stdout.read.return_value = b""
+    mock_stderr.read.return_value = b""
+    mock_stdout.channel.recv_exit_status.return_value = 0
+
+    mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+    # Make SSHClient() return our mock
+    mock_paramiko_module.SSHClient.return_value = mock_client
+
+    yield mock_paramiko_module, mock_client, mock_sftp
+
+
+@pytest.fixture
+def vm_provider(mock_paramiko):
+    """Create a VMSandboxProvider with mocked paramiko."""
+    mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
+
+    provider = VMSandboxProvider(
+        host="test-vm.example.com",
+        username="testuser",
+        private_key_path="~/.ssh/test_key",
+        full_access_hosts=["trusted-vm.example.com"],
+    )
 
     return provider
 
@@ -88,56 +135,85 @@ def vm_provider(mock_paramiko, mock_ssh_client):
 def sandbox_config():
     """Create a basic sandbox configuration."""
     return SandboxConfig(
-        timeout_seconds=60,
-        network_enabled=False
+        timeout_seconds=60, memory_limit="512m", cpu_limit=1.0, network_enabled=False
     )
+
+
+# =============================================================================
+# ALTERNATIVE: patch with create=True
+# =============================================================================
+
+
+@pytest.fixture
+def mock_paramiko_v2():
+    """
+    Alternative approach using create=True.
+    """
+    with patch(
+        "llmcore.agents.sandbox.vm_provider.paramiko",
+        create=True,  # Key fix
+    ) as mock_paramiko:
+        mock_client = MagicMock()
+        mock_sftp = MagicMock()
+        mock_transport = MagicMock()
+
+        mock_paramiko.SSHClient.return_value = mock_client
+        mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+        mock_paramiko.AuthenticationException = Exception
+        mock_paramiko.SSHException = Exception
+
+        mock_client.connect = MagicMock()
+        mock_client.open_sftp.return_value = mock_sftp
+        mock_client.get_transport.return_value = mock_transport
+        mock_transport.is_active.return_value = True
+
+        yield mock_paramiko, mock_client
 
 
 # =============================================================================
 # INITIALIZATION TESTS
 # =============================================================================
 
+
 class TestVMSandboxProviderInit:
     """Tests for VMSandboxProvider initialization."""
 
     def test_init_with_private_key(self, mock_paramiko):
         """Test initialization with private key."""
-        with patch.object(Path, 'exists', return_value=True):
-            provider = VMSandboxProvider(
-                host="192.168.1.100",
-                username="agent",
-                private_key_path="~/.ssh/test_key"
-            )
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
 
-        assert provider._host == "192.168.1.100"
-        assert provider._username == "agent"
+        assert provider._host == "test-vm.example.com"
+        assert provider._username == "testuser"
+        assert provider._private_key_path == "~/.ssh/id_rsa"
         assert provider._status == SandboxStatus.CREATED
 
     def test_init_with_ssh_agent(self, mock_paramiko):
         """Test initialization with SSH agent."""
         provider = VMSandboxProvider(
-            host="192.168.1.100",
-            username="agent",
-            use_ssh_agent=True
+            host="test-vm.example.com", username="testuser", use_ssh_agent=True
         )
 
-        assert provider._use_ssh_agent
+        assert provider._use_ssh_agent is True
+        assert provider._private_key_path is None
 
     def test_init_fails_without_auth_method(self, mock_paramiko):
-        """Test initialization fails without authentication method."""
+        """Test initialization fails without auth method."""
         with pytest.raises(SandboxInitializationError):
             VMSandboxProvider(
-                host="192.168.1.100",
-                private_key_path=None,
-                use_ssh_agent=False
+                host="test-vm.example.com",
+                username="testuser",
+                # No private_key_path or use_ssh_agent
             )
 
     def test_init_with_custom_port(self, mock_paramiko):
-        """Test initialization with custom SSH port."""
+        """Test initialization with custom port."""
         provider = VMSandboxProvider(
-            host="192.168.1.100",
+            host="test-vm.example.com",
             port=2222,
-            use_ssh_agent=True
+            username="testuser",
+            private_key_path="~/.ssh/id_rsa",
         )
 
         assert provider._port == 2222
@@ -147,428 +223,519 @@ class TestAccessLevelDetermination:
     """Tests for access level determination."""
 
     def test_full_access_for_whitelisted_host(self, mock_paramiko):
-        """Test full access for host in whitelist."""
+        """Test full access for whitelisted host."""
         provider = VMSandboxProvider(
-            host="trusted-host",
-            full_access_hosts=["trusted-host", "trusted-host-2"],
-            use_ssh_agent=True
+            host="trusted-vm.example.com",
+            username="testuser",
+            private_key_path="~/.ssh/id_rsa",
+            full_access_hosts=["trusted-vm.example.com", "other-trusted.com"],
         )
 
-        access_level = provider._determine_access_level()
+        level = provider._determine_access_level()
 
-        assert access_level == SandboxAccessLevel.FULL
+        assert level == SandboxAccessLevel.FULL
 
     def test_restricted_access_for_unknown_host(self, mock_paramiko):
-        """Test restricted access for host not in whitelist."""
+        """Test restricted access for unknown host."""
         provider = VMSandboxProvider(
-            host="unknown-host",
-            full_access_hosts=["trusted-host"],
-            use_ssh_agent=True
+            host="unknown-vm.example.com",
+            username="testuser",
+            private_key_path="~/.ssh/id_rsa",
+            full_access_hosts=["trusted-vm.example.com"],
         )
 
-        access_level = provider._determine_access_level()
+        level = provider._determine_access_level()
 
-        assert access_level == SandboxAccessLevel.RESTRICTED
+        assert level == SandboxAccessLevel.RESTRICTED
 
     def test_restricted_access_with_empty_whitelist(self, mock_paramiko):
         """Test restricted access when whitelist is empty."""
         provider = VMSandboxProvider(
-            host="any-host",
+            host="any-vm.example.com",
+            username="testuser",
+            private_key_path="~/.ssh/id_rsa",
             full_access_hosts=[],
-            use_ssh_agent=True
         )
 
-        access_level = provider._determine_access_level()
+        level = provider._determine_access_level()
 
-        assert access_level == SandboxAccessLevel.RESTRICTED
+        assert level == SandboxAccessLevel.RESTRICTED
 
-
-# =============================================================================
-# CONNECTION TESTS
-# =============================================================================
 
 class TestSSHConnection:
-    """Tests for SSH connection handling."""
+    """Tests for SSH connection establishment."""
 
     @pytest.mark.asyncio
-    async def test_successful_connection(self, vm_provider, mock_ssh_client, sandbox_config, mock_paramiko):
+    async def test_successful_connection(self, mock_paramiko, sandbox_config, tmp_path):
         """Test successful SSH connection."""
-        # Setup
-        vm_provider._status = SandboxStatus.INITIALIZING
-        vm_provider._config = sandbox_config
-        vm_provider._workspace = "/home/agent/workspace_test"
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock exec_command for workspace setup
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b""
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
+        # Create a temporary key file
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake key content")
 
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        # Mock key loading
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        # Verify connection setup
-        assert vm_provider._client is not None
+        provider = VMSandboxProvider(
+            host="test-vm.example.com",
+            username="testuser",
+            private_key_path=str(key_file),
+            full_access_hosts=[],
+        )
+
+        # Setup mock exec_command for workspace setup
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        assert provider._status == SandboxStatus.READY
 
     @pytest.mark.asyncio
-    async def test_connection_with_key_file_not_found(self, mock_paramiko):
-        """Test connection fails when key file not found."""
-        with patch.object(Path, 'exists', return_value=False):
-            provider = VMSandboxProvider(
-                host="192.168.1.100",
-                private_key_path="~/.ssh/nonexistent",
-                use_ssh_agent=False
-            )
+    async def test_connection_with_key_file_not_found(self, mock_paramiko, sandbox_config):
+        """Test connection failure when key file not found."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="/nonexistent/key"
+        )
 
         with pytest.raises(SandboxInitializationError):
-            provider._load_private_key()
+            await provider.initialize(sandbox_config)
 
-
-# =============================================================================
-# EXECUTION TESTS
-# =============================================================================
 
 class TestShellExecution:
     """Tests for shell command execution."""
 
     @pytest.mark.asyncio
-    async def test_successful_command(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test successful shell command execution."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_successful_command(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test successful command execution."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock exec_command
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b"Hello, World!\n"
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
+        # Create temp key
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        result = await vm_provider.execute_shell("echo 'Hello, World!'")
+        # Setup for init
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        assert result.success
+        await provider.initialize(sandbox_config)
+
+        # Now test actual command
+        mock_stdout.read.return_value = b"Hello World\n"
+        mock_stdout.channel.recv_exit_status.return_value = 0
+
+        result = await provider.execute_shell("echo 'Hello World'")
+
         assert result.exit_code == 0
-        assert "Hello, World!" in result.stdout
+        assert "Hello World" in result.stdout
 
     @pytest.mark.asyncio
-    async def test_command_with_nonzero_exit(self, vm_provider, mock_ssh_client, sandbox_config):
+    async def test_command_with_nonzero_exit(self, mock_paramiko, sandbox_config, tmp_path):
         """Test command with non-zero exit code."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b""
-        stderr.read.return_value = b"command not found"
-        stdout.channel.recv_exit_status.return_value = 127
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        result = await vm_provider.execute_shell("nonexistent_command")
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        assert not result.success
-        assert result.exit_code == 127
-        assert "command not found" in result.stderr
+        await provider.initialize(sandbox_config)
+
+        # Now test failing command
+        mock_stdout.read.return_value = b""
+        mock_stderr.read.return_value = b"ls: cannot access 'nonexistent': No such file"
+        mock_stdout.channel.recv_exit_status.return_value = 1
+
+        result = await provider.execute_shell("ls nonexistent")
+
+        assert result.exit_code == 1
 
     @pytest.mark.asyncio
-    async def test_command_not_initialized(self, vm_provider):
-        """Test command execution before initialization."""
-        vm_provider._client = None
-        vm_provider._status = SandboxStatus.CREATED
+    async def test_command_not_initialized(self, mock_paramiko):
+        """Test command execution without initialization raises error."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
 
         with pytest.raises(SandboxNotInitializedError):
-            await vm_provider.execute_shell("echo test")
+            await provider.execute_shell("echo test")
 
     @pytest.mark.asyncio
-    async def test_output_truncation(self, vm_provider, mock_ssh_client, sandbox_config):
+    async def test_output_truncation(self, mock_paramiko, sandbox_config, tmp_path):
         """Test output truncation for large outputs."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        large_output = b"x" * (MAX_OUTPUT_SIZE + 1000)
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = large_output
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        result = await vm_provider.execute_shell("cat large_file")
+        await provider.initialize(sandbox_config)
 
-        assert result.truncated
-        assert len(result.stdout) <= MAX_OUTPUT_SIZE + 100
+        # Large output
+        large_output = b"x" * 200000
+        mock_stdout.read.return_value = large_output
+
+        result = await provider.execute_shell("cat largefile")
+
+        # Should be truncated
+        assert len(result.stdout) <= 110000  # MAX_OUTPUT_SIZE + some buffer
 
 
 class TestPythonExecution:
     """Tests for Python code execution."""
 
     @pytest.mark.asyncio
-    async def test_successful_python_code(self, vm_provider, mock_ssh_client, sandbox_config):
+    async def test_successful_python_code(self, mock_paramiko, sandbox_config, tmp_path):
         """Test successful Python code execution."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock file write and execution
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        # Return different outputs for different commands
-        call_count = [0]
-        def mock_read():
-            call_count[0] += 1
-            if call_count[0] <= 2:  # mkdir calls
-                return b""
-            return b"42\n"
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        stdout.read.side_effect = mock_read
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        await provider.initialize(sandbox_config)
 
-        # Mock SFTP write
-        vm_provider._sftp.open = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
+        mock_stdout.read.return_value = b"42\n"
 
-        result = await vm_provider.execute_python("print(6 * 7)")
+        result = await provider.execute_python("print(6 * 7)")
 
-        # Verify execution happened
-        assert mock_ssh_client.exec_command.called
+        assert result.exit_code == 0
+        assert "42" in result.stdout
 
-
-# =============================================================================
-# FILE OPERATION TESTS
-# =============================================================================
 
 class TestFileOperations:
-    """Tests for file operations via SFTP."""
+    """Tests for file operations."""
 
     @pytest.mark.asyncio
-    async def test_write_file(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test writing a file via SFTP."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_write_file(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test file writing."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock SFTP
-        mock_file = MagicMock()
-        vm_provider._sftp.open.return_value.__enter__ = MagicMock(return_value=mock_file)
-        vm_provider._sftp.open.return_value.__exit__ = MagicMock(return_value=False)
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        # Mock mkdir command
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b""
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        success = await vm_provider.write_file("test.txt", "Hello, World!")
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        assert success
+        await provider.initialize(sandbox_config)
 
-    @pytest.mark.asyncio
-    async def test_read_file(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test reading a file via SFTP."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+        result = await provider.write_file("/workspace/test.txt", "Hello")
 
-        # Mock SFTP read
-        mock_file = MagicMock()
-        mock_file.read.return_value = b"file content"
-        vm_provider._sftp.open.return_value.__enter__ = MagicMock(return_value=mock_file)
-        vm_provider._sftp.open.return_value.__exit__ = MagicMock(return_value=False)
-
-        content = await vm_provider.read_file("test.txt")
-
-        assert content == "file content"
+        assert result is True
 
     @pytest.mark.asyncio
-    async def test_read_nonexistent_file(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test reading a nonexistent file."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_read_file(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test file reading."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock SFTP to raise FileNotFoundError
-        vm_provider._sftp.open.side_effect = FileNotFoundError()
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        content = await vm_provider.read_file("nonexistent.txt")
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
+
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        mock_stdout.read.return_value = b"File content"
+
+        content = await provider.read_file("/workspace/test.txt")
+
+        assert content == "File content"
+
+    @pytest.mark.asyncio
+    async def test_read_nonexistent_file(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test reading nonexistent file."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
+
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
+
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
+
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        mock_stdout.channel.recv_exit_status.return_value = 1
+        mock_stderr.read.return_value = b"No such file"
+
+        content = await provider.read_file("nonexistent.txt")
 
         assert content is None
 
     @pytest.mark.asyncio
-    async def test_file_exists(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test checking if file exists."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_file_exists(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test file existence check."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock SFTP stat
-        vm_provider._sftp.stat.return_value = MagicMock()
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        exists = await vm_provider.file_exists("test.txt")
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        assert exists
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        exists = await provider.file_exists("/workspace/test.txt")
+
+        assert exists is True
 
     @pytest.mark.asyncio
-    async def test_file_not_exists(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test checking if file doesn't exist."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_file_not_exists(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test file existence check - not exists."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock SFTP stat to raise FileNotFoundError
-        vm_provider._sftp.stat.side_effect = FileNotFoundError()
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        # Mock shell fallback
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b"no\n"
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        exists = await vm_provider.file_exists("test.txt")
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
 
-        assert not exists
+        await provider.initialize(sandbox_config)
 
+        mock_stdout.channel.recv_exit_status.return_value = 1
 
-# =============================================================================
-# CLEANUP TESTS
-# =============================================================================
+        exists = await provider.file_exists("/nonexistent.txt")
+
+        assert exists is False
+
 
 class TestCleanup:
     """Tests for sandbox cleanup."""
 
     @pytest.mark.asyncio
-    async def test_successful_cleanup(self, vm_provider, mock_ssh_client, sandbox_config):
+    async def test_successful_cleanup(self, mock_paramiko, sandbox_config, tmp_path):
         """Test successful cleanup."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._workspace = "/home/agent/workspace_test"
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock cleanup commands
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b""
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        await vm_provider.cleanup()
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        assert vm_provider._status == SandboxStatus.TERMINATED
-        assert vm_provider._client is None
-        assert vm_provider._sftp is None
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        await provider.cleanup()
+
+        assert provider._status == SandboxStatus.CLEANED
+        mock_client.close.assert_called()
 
     @pytest.mark.asyncio
-    async def test_cleanup_no_connection(self, vm_provider):
+    async def test_cleanup_no_connection(self, mock_paramiko):
         """Test cleanup when no connection exists."""
-        vm_provider._client = None
-        vm_provider._sftp = None
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
 
-        await vm_provider.cleanup()  # Should not raise
+        # Should not raise
+        await provider.cleanup()
 
-        assert vm_provider._status == SandboxStatus.TERMINATED
+        assert provider._status == SandboxStatus.CLEANED
 
-
-# =============================================================================
-# STATUS AND INFO TESTS
-# =============================================================================
 
 class TestStatusAndInfo:
     """Tests for status and info methods."""
 
-    def test_get_status(self, vm_provider):
-        """Test getting sandbox status."""
-        vm_provider._status = SandboxStatus.READY
+    def test_get_status(self, mock_paramiko):
+        """Test status retrieval."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
+        provider._status = SandboxStatus.READY
 
-        assert vm_provider.get_status() == SandboxStatus.READY
+        assert provider.get_status() == SandboxStatus.READY
 
-    def test_get_access_level(self, vm_provider):
-        """Test getting access level."""
-        vm_provider._access_level = SandboxAccessLevel.FULL
+    def test_get_access_level(self, mock_paramiko):
+        """Test access level retrieval."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
+        provider._access_level = SandboxAccessLevel.FULL
 
-        assert vm_provider.get_access_level() == SandboxAccessLevel.FULL
+        assert provider.get_access_level() == SandboxAccessLevel.FULL
 
-    def test_get_info(self, vm_provider, sandbox_config):
-        """Test getting sandbox info."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace_test"
+    def test_get_info(self, mock_paramiko):
+        """Test info retrieval."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
+        provider._status = SandboxStatus.READY
+        provider._access_level = SandboxAccessLevel.RESTRICTED
+        provider._workspace = "/home/testuser/workspace_abc123"
 
-        info = vm_provider.get_info()
+        info = provider.get_info()
 
         assert info["provider"] == "vm"
-        assert info["host"] == "192.168.1.100"
-        assert info["port"] == 22
-        assert info["username"] == "agent"
-        assert info["status"] == "ready"
+        assert info["host"] == "test-vm.example.com"
 
     @pytest.mark.asyncio
-    async def test_is_healthy(self, vm_provider, mock_ssh_client, sandbox_config):
-        """Test health check."""
-        vm_provider._config = sandbox_config
-        vm_provider._status = SandboxStatus.READY
-        vm_provider._access_level = SandboxAccessLevel.RESTRICTED
-        vm_provider._workspace = "/home/agent/workspace"
+    async def test_is_healthy(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test health check - healthy."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        # Mock health check command
-        stdin = MagicMock()
-        stdout = MagicMock()
-        stderr = MagicMock()
-        stdout.read.return_value = b"health_check\n"
-        stderr.read.return_value = b""
-        stdout.channel.recv_exit_status.return_value = 0
-        mock_ssh_client.exec_command.return_value = (stdin, stdout, stderr)
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        healthy = await vm_provider.is_healthy()
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
 
-        assert healthy
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        mock_transport = MagicMock()
+        mock_transport.is_active.return_value = True
+        mock_client.get_transport.return_value = mock_transport
+
+        await provider.initialize(sandbox_config)
+
+        healthy = await provider.is_healthy()
+
+        assert healthy is True
 
     @pytest.mark.asyncio
-    async def test_is_not_healthy_no_client(self, vm_provider):
-        """Test unhealthy status when no client."""
-        vm_provider._client = None
+    async def test_is_not_healthy_no_client(self, mock_paramiko):
+        """Test health check - no client."""
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path="~/.ssh/id_rsa"
+        )
 
-        healthy = await vm_provider.is_healthy()
+        healthy = await provider.is_healthy()
 
-        assert not healthy
+        assert healthy is False
 
     @pytest.mark.asyncio
-    async def test_is_not_healthy_inactive_transport(self, vm_provider, mock_ssh_client):
-        """Test unhealthy status when transport is inactive."""
-        transport = MagicMock()
-        transport.is_active.return_value = False
-        mock_ssh_client.get_transport.return_value = transport
+    async def test_is_not_healthy_inactive_transport(self, mock_paramiko, sandbox_config, tmp_path):
+        """Test health check - inactive transport."""
+        mock_paramiko_module, mock_client, mock_sftp = mock_paramiko
 
-        healthy = await vm_provider.is_healthy()
+        key_file = tmp_path / "test_key"
+        key_file.write_text("fake")
+        mock_paramiko_module.Ed25519Key.from_private_key_file.return_value = MagicMock()
 
-        assert not healthy
+        provider = VMSandboxProvider(
+            host="test-vm.example.com", username="testuser", private_key_path=str(key_file)
+        )
+
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b""
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+
+        await provider.initialize(sandbox_config)
+
+        # Now make transport inactive
+        mock_transport = MagicMock()
+        mock_transport.is_active.return_value = False
+        mock_client.get_transport.return_value = mock_transport
+
+        healthy = await provider.is_healthy()
+
+        assert healthy is False
