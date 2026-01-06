@@ -89,7 +89,7 @@ def mock_ephemeral():
 @pytest.fixture
 def setup_sandbox(mock_sandbox, mock_registry, mock_ephemeral):
     """Setup the active sandbox for testing."""
-    with patch('sandbox.tools.EphemeralResourceManager') as MockEphemeral:
+    with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager') as MockEphemeral:
         MockEphemeral.return_value = mock_ephemeral
         set_active_sandbox(mock_sandbox, mock_registry)
         yield mock_sandbox, mock_registry, mock_ephemeral
@@ -105,7 +105,7 @@ class TestSandboxManagement:
 
     def test_set_active_sandbox(self, mock_sandbox, mock_registry):
         """Test setting active sandbox."""
-        with patch('sandbox.tools.EphemeralResourceManager'):
+        with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager'):
             set_active_sandbox(mock_sandbox, mock_registry)
 
             assert get_active_sandbox() is mock_sandbox
@@ -114,7 +114,7 @@ class TestSandboxManagement:
 
     def test_clear_active_sandbox(self, mock_sandbox, mock_registry):
         """Test clearing active sandbox."""
-        with patch('sandbox.tools.EphemeralResourceManager'):
+        with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager'):
             set_active_sandbox(mock_sandbox, mock_registry)
             clear_active_sandbox()
 
@@ -425,7 +425,7 @@ class TestStateManagementTools:
         _, _, mock_ephemeral = setup_sandbox
         mock_ephemeral.get_state.return_value = "stored_value"
 
-        with patch('sandbox.tools._ephemeral_manager', mock_ephemeral):
+        with patch('llmcore.agents.sandbox.tools._ephemeral_manager', mock_ephemeral):
             result = await get_state("my_key")
 
         assert result == "stored_value"
@@ -436,7 +436,7 @@ class TestStateManagementTools:
         _, _, mock_ephemeral = setup_sandbox
         mock_ephemeral.get_state.return_value = None
 
-        with patch('sandbox.tools._ephemeral_manager', mock_ephemeral):
+        with patch('llmcore.agents.sandbox.tools._ephemeral_manager', mock_ephemeral):
             result = await get_state("nonexistent")
 
         assert result == "(not set)"
@@ -447,7 +447,7 @@ class TestStateManagementTools:
         _, _, mock_ephemeral = setup_sandbox
         mock_ephemeral.set_state.return_value = True
 
-        with patch('sandbox.tools._ephemeral_manager', mock_ephemeral):
+        with patch('llmcore.agents.sandbox.tools._ephemeral_manager', mock_ephemeral):
             result = await set_state("my_key", "my_value")
 
         assert "updated" in result.lower()
@@ -458,7 +458,7 @@ class TestStateManagementTools:
         _, _, mock_ephemeral = setup_sandbox
         mock_ephemeral.list_state_keys.return_value = ["key1", "key2", "key3"]
 
-        with patch('sandbox.tools._ephemeral_manager', mock_ephemeral):
+        with patch('llmcore.agents.sandbox.tools._ephemeral_manager', mock_ephemeral):
             result = await list_state()
 
         assert "key1" in result
@@ -517,7 +517,7 @@ class TestInformationTools:
             )
         ]
 
-        with patch('sandbox.tools._ephemeral_manager', mock_ephemeral):
+        with patch('llmcore.agents.sandbox.tools._ephemeral_manager', mock_ephemeral):
             result = await get_recorded_files()
 
         assert "output.py" in result

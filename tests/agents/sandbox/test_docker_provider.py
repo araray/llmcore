@@ -38,7 +38,7 @@ from llmcore.agents.sandbox.exceptions import (
 @pytest.fixture
 def mock_docker_client():
     """Create a mock Docker client."""
-    with patch('sandbox.docker_provider.docker') as mock_docker:
+    with patch('llmcore.agents.sandbox.docker_provider.docker') as mock_docker:
         client = MagicMock()
         mock_docker.from_env.return_value = client
         mock_docker.DockerClient.return_value = client
@@ -93,7 +93,7 @@ class TestDockerSandboxProviderInit:
 
     def test_init_with_remote_docker(self, mock_docker_client):
         """Test initialization with remote Docker host."""
-        with patch('sandbox.docker_provider.docker') as mock_docker:
+        with patch('llmcore.agents.sandbox.docker_provider.docker') as mock_docker:
             mock_docker.DockerClient.return_value = mock_docker_client
             mock_docker_client.version.return_value = {"Version": "24.0.0"}
 
@@ -107,7 +107,7 @@ class TestDockerSandboxProviderInit:
 
     def test_init_fails_without_docker(self):
         """Test initialization fails when Docker is not available."""
-        with patch('sandbox.docker_provider.docker') as mock_docker:
+        with patch('llmcore.agents.sandbox.docker_provider.docker') as mock_docker:
             mock_docker.from_env.side_effect = Exception("Cannot connect")
 
             with pytest.raises(SandboxConnectionError):

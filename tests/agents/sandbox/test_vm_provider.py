@@ -36,7 +36,7 @@ from llmcore.agents.sandbox.exceptions import (
 @pytest.fixture
 def mock_paramiko():
     """Create mock paramiko module."""
-    with patch('sandbox.vm_provider.paramiko') as mock:
+    with patch('llmcore.agents.sandbox.vm_provider.paramiko') as mock:
         # Mock key types
         mock.Ed25519Key = MagicMock()
         mock.RSAKey = MagicMock()

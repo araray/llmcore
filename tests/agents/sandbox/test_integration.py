@@ -16,7 +16,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import sys
 # Assumes llmcore is installed or in PYTHONPATH
 
-from sandbox import (
+from llmcore.agents.sandbox import (
     SandboxRegistry,
     SandboxRegistryConfig,
     SandboxConfig,
@@ -312,7 +312,7 @@ class TestToolsIntegration:
         registry = SandboxRegistry(config)
 
         # Set active sandbox
-        with patch('sandbox.tools.EphemeralResourceManager') as MockEphemeral:
+        with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager') as MockEphemeral:
             mock_ephemeral = MagicMock()
             mock_ephemeral.get_state = AsyncMock(return_value=None)
             mock_ephemeral.set_state = AsyncMock(return_value=True)
@@ -489,7 +489,7 @@ class TestErrorHandlingIntegration:
         )
         registry = SandboxRegistry(config)
 
-        with patch('sandbox.tools.EphemeralResourceManager'):
+        with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager'):
             set_active_sandbox(initialized_mock_provider, registry)
 
             try:
@@ -544,7 +544,7 @@ class TestEndToEndWorkflows:
             task_description="Agent simulation"
         )
 
-        with patch('sandbox.tools.EphemeralResourceManager'):
+        with patch('llmcore.agents.sandbox.tools.EphemeralResourceManager'):
             set_active_sandbox(sandbox, registry)
 
             try:
