@@ -57,7 +57,7 @@ class Message(BaseModel):
         metadata: An optional dictionary for storing additional, unstructured information.
     """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the message.")
-    session_id: str = Field(description="Identifier of the chat session this message belongs to.")
+    session_id: Optional[str] = Field(default=None, description="Identifier of the chat session this message belongs to.")
     role: Role = Field(description="The role of the message sender (system, user, assistant, or tool).")
     content: str = Field(description="The textual content of the message.")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the message was created (UTC).")
@@ -390,9 +390,11 @@ class ToolResult(BaseModel):
     Attributes:
         tool_call_id: The ID of the ToolCall this result corresponds to.
         content: The string representation of the tool's output.
+        is_error: Whether the tool execution resulted in an error.
     """
     tool_call_id: str = Field(description="The ID of the ToolCall this result corresponds to.")
     content: str = Field(description="The string representation of the tool's output.")
+    is_error: bool = Field(default=False, description="Whether the tool execution resulted in an error.")
 
 
 # --- Models for Phase 4: Agentic Loop ---

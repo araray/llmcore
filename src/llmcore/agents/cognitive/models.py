@@ -443,6 +443,30 @@ class EnhancedAgentState(AgentState):
     # Metrics
     total_tokens_used: int = Field(default=0, description="Total tokens used across all iterations")
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
+    @property
+    def is_finished(self) -> bool:
+        """
+        Check if the agent has finished its task.
+        
+        Returns True if:
+        - All plan steps are completed, OR
+        - The goal has been marked as achieved in metadata
+        
+        Returns:
+            True if the agent's task is complete, False otherwise.
+        """
+        # Check if all plan steps are completed
+        if self.plan_steps_status:
+            all_completed = all(status == "completed" for status in self.plan_steps_status)
+            if all_completed:
+                return True
+        
+        # Check metadata for goal achieved flag
+        if self.metadata.get("goal_achieved", False):
+            return True
+            
+        return False
+
 
     def add_iteration(self, iteration: CycleIteration) -> None:
         """

@@ -575,7 +575,7 @@ class LLMCore:
             rag_enabled=enable_rag,
             rag_k=rag_retrieval_k,
             rag_collection=rag_collection_name,
-            rag_filter=rag_metadata_filter,
+            rag_metadata_filter=rag_metadata_filter,
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
             prompt_template_values=prompt_template_values
@@ -757,7 +757,7 @@ class LLMCore:
                 enable_rag=enable_rag,
                 rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
-                rag_filter=rag_metadata_filter,
+                rag_metadata_filter=rag_metadata_filter,
                 active_context_item_ids=active_context_item_ids,
                 explicitly_staged_items=explicitly_staged_items,
                 prompt_template_values=prompt_template_values
