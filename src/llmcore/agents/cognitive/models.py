@@ -443,6 +443,12 @@ class EnhancedAgentState(AgentState):
     # Metrics
     total_tokens_used: int = Field(default=0, description="Total tokens used across all iterations")
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
+
+    # Metadata for extensibility
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Arbitrary metadata for extensibility and goal tracking"
+    )
     @property
     def is_finished(self) -> bool:
         """

@@ -521,7 +521,7 @@ class TestCleanup:
 
         mock_container.stop.assert_called_once()
         mock_container.remove.assert_called_once()
-        assert docker_provider._status == SandboxStatus.CLEANED
+        assert docker_provider._status == SandboxStatus.TERMINATED
 
     @pytest.mark.asyncio
     async def test_cleanup_no_container(self, docker_provider):
@@ -531,7 +531,7 @@ class TestCleanup:
         # Should not raise
         await docker_provider.cleanup()
 
-        assert docker_provider._status == SandboxStatus.CLEANED
+        assert docker_provider._status == SandboxStatus.TERMINATED
 
 
 class TestStatusAndInfo:

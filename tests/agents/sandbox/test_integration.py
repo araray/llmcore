@@ -342,7 +342,6 @@ class TestToolsIntegrationFixed:
             set_active_sandbox(
                 sandbox=initialized_mock_provider,
                 registry=registry,
-                ephemeral_manager=mock_ephemeral_instance,
             )
 
             yield {

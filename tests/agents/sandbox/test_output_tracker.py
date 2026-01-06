@@ -159,7 +159,7 @@ class TestExecutionLogging:
         await output_tracker.log_execution(
             run_id=run_id,
             tool_name="execute_shell",
-            input_text="echo 'Hello, World!'",
+            input_data="echo 'Hello, World!'",
             result=result
         )
 
@@ -186,7 +186,7 @@ class TestExecutionLogging:
         await output_tracker.log_execution(
             run_id=run_id,
             tool_name="test",
-            input_text=long_input,
+            input_data=long_input,
             result=result
         )
 
@@ -223,7 +223,7 @@ class TestFileTracking:
 
         await output_tracker.track_file(
             run_id=run_id,
-            path="/workspace/output.py",
+            file_path="/workspace/output.py",
             size_bytes=1024,
             description="Generated code"
         )

@@ -311,6 +311,36 @@ class OutputTracker:
         with open(log_file, "a") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")
 
+    async def get_execution_logs(self, run_id: str) -> List[Dict[str, Any]]:
+        """
+        Get execution logs for a run.
+
+        Args:
+            run_id: Run ID
+
+        Returns:
+            List of execution log entries as dictionaries
+        """
+        logs = self._execution_logs.get(run_id, [])
+        return [log.to_dict() for log in logs]
+
+    async def get_tracked_files(self, run_id: str) -> List[Dict[str, Any]]:
+        """
+        Get tracked files for a run.
+
+        Args:
+            run_id: Run ID
+
+        Returns:
+            List of tracked file entries
+        """
+        manifest_path = self._get_run_path(run_id) / "outputs" / "manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path, "r") as f:
+                manifest = json.load(f)
+                return manifest.get("files", [])
+        return []
+
     async def log_agent_event(
         self,
         run_id: str,
