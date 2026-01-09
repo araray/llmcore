@@ -321,7 +321,7 @@ class TestRunFinalization:
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
         # Mock ephemeral manager
-        with patch('sandbox.output_tracker.EphemeralResourceManager') as MockEphemeral:
+        with patch('llmcore.agents.sandbox.ephemeral.EphemeralResourceManager') as MockEphemeral:
             mock_ephemeral = MagicMock()
             mock_ephemeral.export_state = AsyncMock(return_value={
                 "state": {"key": "value"},

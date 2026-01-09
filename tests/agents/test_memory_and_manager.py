@@ -226,11 +226,14 @@ class TestEnhancedAgentManager:
 
     @pytest.fixture
     def mock_components(self):
-        """Create mock components for EnhancedAgentManager."""
+        """Create mock components for EnhancedAgentManager.
+        
+        NOTE: EnhancedAgentManager does NOT accept tool_manager as a parameter.
+        It creates its own ToolManager internally through the parent class.
+        """
         provider_manager = Mock()
         memory_manager = Mock()
         storage_manager = Mock()
-        tool_manager = Mock()
 
         # Setup async mocks
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
@@ -242,17 +245,17 @@ class TestEnhancedAgentManager:
             "provider_manager": provider_manager,
             "memory_manager": memory_manager,
             "storage_manager": storage_manager,
-            "tool_manager": tool_manager,
         }
 
     def test_manager_initialization(self, mock_components):
         """Test EnhancedAgentManager initialization."""
         manager = EnhancedAgentManager(**mock_components)
 
-        assert manager.provider_manager is not None
-        assert manager.memory_manager is not None
-        assert manager.storage_manager is not None
-        assert manager.tool_manager is not None
+        assert manager._provider_manager is not None
+        assert manager._memory_manager is not None
+        assert manager._storage_manager is not None
+        # ToolManager is created internally by parent class
+        assert manager._tool_manager is not None
         assert manager.persona_manager is not None
         assert manager.memory_integrator is not None
         assert manager.single_agent is not None
@@ -458,7 +461,7 @@ class TestSystemIntegration:
     @pytest.mark.asyncio
     async def test_end_to_end_workflow(self, mock_components):
         """Test end-to-end workflow with mocks."""
-        with patch("llmcore.agents.manager.SingleAgentMode") as MockSingleAgent:
+        with patch("llmcore.agents.single_agent.SingleAgentMode") as MockSingleAgent:
             # Setup complete mock chain
             mock_single_instance = AsyncMock()
 

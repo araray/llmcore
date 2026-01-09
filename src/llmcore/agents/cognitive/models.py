@@ -226,7 +226,10 @@ class ReflectInput(BaseModel):
     goal: str = Field(..., description="Original goal")
     plan: List[str] = Field(..., description="Current plan")
     current_step_index: int = Field(..., description="Current step index")
-    last_action: ToolCall = Field(..., description="Last action taken")
+    last_action: Optional[ToolCall] = Field(
+        default=None, 
+        description="Last action taken (None if no action was proposed)"
+    )
     observation: str = Field(..., description="Observation from OBSERVE phase")
     iteration_number: int = Field(..., description="Current iteration number")
 
@@ -450,6 +453,12 @@ class EnhancedAgentState(AgentState):
         description="Arbitrary metadata for extensibility and goal tracking"
     )
         # === P0 FIX: Added missing fields ===
+    # Fix #1: Final answer storage when task completes
+    final_answer: Optional[str] = Field(
+        default=None,
+        description="Final answer when task is complete"
+    )
+    
     # Fix #2: Tool call pending execution from THINK phase
     pending_tool_call: Optional[ToolCall] = None
     

@@ -542,7 +542,7 @@ class TestErrorHandlingIntegration:
         )
         registry = SandboxRegistry(config)
 
-        with patch("llmcore.agents.sandbox.tools.EphemeralResourceManager"):
+        with patch("llmcore.agents.sandbox.ephemeral.EphemeralResourceManager"):
             set_active_sandbox(initialized_mock_provider, registry)
 
             try:

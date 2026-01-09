@@ -136,7 +136,7 @@ class TestSandboxRegistry:
 
         # Mock Docker provider to fail
         with patch(
-            'sandbox.docker_provider.DockerSandboxProvider._connect_docker'
+            'llmcore.agents.sandbox.docker_provider.DockerSandboxProvider._connect_docker'
         ) as mock_connect:
             mock_connect.side_effect = Exception("Docker not available")
 

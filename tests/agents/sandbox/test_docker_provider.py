@@ -556,6 +556,7 @@ class TestStatusAndInfo:
         """Test info retrieval."""
         mock_container = MagicMock()
         mock_container.id = "abc123456789"
+        mock_container.short_id = "abc123456789"  # Docker uses short_id in get_info
         mock_container.name = "test-container"
         mock_container.status = "running"
         docker_provider._container = mock_container
