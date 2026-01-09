@@ -50,13 +50,13 @@ dependencies = [
 # Dependencies for specific LLM providers
 openai = ["openai>=2.8.0"]
 anthropic = ["anthropic>=0.74.0"]
-gemini = ["google-genai>=1.52.0", "google-api-core>=2.28.0"]
+gemini = ["google-genai>=1.57.0", "google-api-core>=2.29.0"]
 ollama = ["ollama>=0.6.0"]
 
 # Dependencies for specific storage backends
 sqlite = []  # sqlite3 is part of standard library
 postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"]
-chromadb = ["chromadb>=1.0.0"]
+chromadb = ["chromadb>=1.4.0"]
 
 # ============================================================================
 # SANDBOX DEPENDENCIES (NEW in v0.26.0)
@@ -66,18 +66,18 @@ chromadb = ["chromadb>=1.0.0"]
 
 # Docker sandbox support
 sandbox-docker = [
-    "docker>=6.0.0",  # Docker SDK for Python
+    "docker>=7.0.0",  # Docker SDK for Python
 ]
 
 # VM/SSH sandbox support
 sandbox-vm = [
-    "paramiko>=3.0.0",  # SSH client library
+    "paramiko>=4.0.0",  # SSH client library
 ]
 
 # Full sandbox support (both Docker and VM)
 sandbox = [
-    "docker>=6.0.0",
-    "paramiko>=3.0.0",
+    "docker>=7.0.0",
+    "paramiko>=4.0.0",
 ]
 
 # ============================================================================
