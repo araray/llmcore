@@ -17,20 +17,22 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 try:
     import ollama
     from ollama import AsyncClient, ChatResponse, ResponseError
+
     ollama_available = True
 except ImportError:
     ollama_available = False
-    AsyncClient = None # type: ignore
-    ResponseError = Exception # type: ignore
-    ChatResponse = None # type: ignore
+    AsyncClient = None  # type: ignore
+    ResponseError = Exception  # type: ignore
+    ChatResponse = None  # type: ignore
 
 # Keep tiktoken for token counting
 try:
     import tiktoken
+
     tiktoken_available = True
 except ImportError:
     tiktoken_available = False
-    tiktoken = None # type: ignore
+    tiktoken = None  # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
 from ..models import Message, ModelDetails, Tool
@@ -41,17 +43,28 @@ logger = logging.getLogger(__name__)
 
 # Default context lengths for common Ollama models
 DEFAULT_OLLAMA_TOKEN_LIMITS = {
-    "llama3": 8000, "llama3:8b": 8000, "llama3:70b": 8000,
+    "llama3": 8000,
+    "llama3:8b": 8000,
+    "llama3:70b": 8000,
     "gemma3:4b": 128000,
     "falcon3:3b": 8000,
-    "gemma:latest": 8000, "gemma:7b": 8000, "gemma:2b": 8000,
-    "mistral": 8000, "mistral:7b": 8000,
-    "mixtral": 32000, "mixtral:8x7b": 32000,
-    "phi3": 4000, "phi3:mini": 4000,
+    "gemma:latest": 8000,
+    "gemma:7b": 8000,
+    "gemma:2b": 8000,
+    "mistral": 8000,
+    "mistral:7b": 8000,
+    "mixtral": 32000,
+    "mixtral:8x7b": 32000,
+    "phi3": 4000,
+    "phi3:mini": 4000,
     "codellama": 16000,
-    "codellama:7b": 16000, "codellama:13b": 16000, "codellama:34b": 16000,
+    "codellama:7b": 16000,
+    "codellama:13b": 16000,
+    "codellama:34b": 16000,
     "llama2": 4000,
-    "llama2:7b": 4000, "llama2:13b": 4000, "llama2:70b": 4000,
+    "llama2:7b": 4000,
+    "llama2:13b": 4000,
+    "llama2:70b": 4000,
 }
 DEFAULT_MODEL = "gemma3:4b"
 
@@ -61,6 +74,7 @@ class OllamaProvider(BaseProvider):
     LLMCore provider for interacting with Ollama using the official ollama library.
     Handles List[Message] context type and standardized tool-calling.
     """
+
     _client: Optional[AsyncClient] = None
     _encoding: Optional[Any] = None
     tokenizer_name: str
@@ -79,7 +93,9 @@ class OllamaProvider(BaseProvider):
         """
         super().__init__(config, log_raw_payloads)
         if not ollama_available:
-            raise ImportError("Ollama library not installed. Please install `ollama` or `llmcore[ollama]`.")
+            raise ImportError(
+                "Ollama library not installed. Please install `ollama` or `llmcore[ollama]`."
+            )
         if not tiktoken_available:
             logger.warning("tiktoken library not available. Token counting will use approximation.")
 
@@ -91,9 +107,9 @@ class OllamaProvider(BaseProvider):
         try:
             client_args = {}
             if self.host:
-                client_args['host'] = self.host
+                client_args["host"] = self.host
             if self.timeout is not None:
-                client_args['timeout'] = self.timeout
+                client_args["timeout"] = self.timeout
             self._client = AsyncClient(**client_args)
             logger.debug("Ollama AsyncClient initialized.")
         except Exception as e:
@@ -109,13 +125,17 @@ class OllamaProvider(BaseProvider):
                     self._encoding = tiktoken.get_encoding(encoding_name)
                     logger.info(f"OllamaProvider using tiktoken encoding: {encoding_name}.")
                 except Exception as e:
-                    logger.warning(f"Failed to load tiktoken encoding '{self.tokenizer_name}'. Falling back to approximation. Error: {e}")
+                    logger.warning(
+                        f"Failed to load tiktoken encoding '{self.tokenizer_name}'. Falling back to approximation. Error: {e}"
+                    )
                     self.tokenizer_name = "char_div_4"
             else:
                 logger.warning("tiktoken not available. Falling back to character approximation.")
                 self.tokenizer_name = "char_div_4"
         elif self.tokenizer_name != "char_div_4":
-            logger.warning(f"Unsupported tokenizer '{self.tokenizer_name}'. Falling back to approximation.")
+            logger.warning(
+                f"Unsupported tokenizer '{self.tokenizer_name}'. Falling back to approximation."
+            )
             self.tokenizer_name = "char_div_4"
 
         if self.tokenizer_name == "char_div_4":
@@ -147,17 +167,21 @@ class OllamaProvider(BaseProvider):
                     id=model_name,
                     context_length=self.get_max_context_length(model_name),
                     supports_streaming=True,
-                    supports_tools=True, # Assuming experimental support
+                    supports_tools=True,  # Assuming experimental support
                     provider_name=self.get_name(),
-                    metadata={"details": model_data.get("details", {})}
+                    metadata={"details": model_data.get("details", {})},
                 )
                 details_list.append(details)
 
             logger.info(f"Discovered {len(details_list)} local Ollama models.")
             return details_list
         except ResponseError as e:
-            logger.error(f"Ollama API error fetching models: HTTP {e.status_code} - {e.error}", exc_info=True)
-            raise ProviderError(self.get_name(), f"Failed to fetch models from Ollama API: {e.error}")
+            logger.error(
+                f"Ollama API error fetching models: HTTP {e.status_code} - {e.error}", exc_info=True
+            )
+            raise ProviderError(
+                self.get_name(), f"Failed to fetch models from Ollama API: {e.error}"
+            )
         except Exception as e:
             logger.error(f"Unexpected error fetching models from Ollama API: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Unexpected error fetching models: {e}")
@@ -182,11 +206,15 @@ class OllamaProvider(BaseProvider):
     def get_max_context_length(self, model: Optional[str] = None) -> int:
         """Returns the maximum context length (tokens) for the given Ollama model."""
         model_name = model or self.default_model
-        base_model_name = model_name.split(':')[0]
-        limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name))
+        base_model_name = model_name.split(":")[0]
+        limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(
+            model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
+        )
         if limit is None:
             limit = 4096
-            logger.warning(f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}.")
+            logger.warning(
+                f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
+            )
         return limit
 
     async def chat_completion(
@@ -196,7 +224,7 @@ class OllamaProvider(BaseProvider):
         stream: bool = False,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Sends a chat completion request to the Ollama API, with support for tools.
@@ -215,7 +243,11 @@ class OllamaProvider(BaseProvider):
             raise ProviderError(self.get_name(), "Unsupported context type.")
 
         messages_payload: List[Dict[str, str]] = [
-            {"role": msg.role.value, "content": msg.content} for msg in context
+            {
+                "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                "content": msg.content,
+            }
+            for msg in context
         ]
         if not messages_payload:
             raise ProviderError(self.get_name(), "No valid messages to send.")
@@ -224,31 +256,39 @@ class OllamaProvider(BaseProvider):
         tools_payload = None
         if tools:
             logger.info(f"Preparing {len(tools)} tools for Ollama request (experimental).")
-            tools_payload = [
-                {"type": "function", "function": tool.model_dump()} for tool in tools
-            ]
+            tools_payload = [{"type": "function", "function": tool.model_dump()} for tool in tools]
 
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
             log_data = {
-                "model": model_name, "messages": messages_payload, "stream": stream,
-                "options": kwargs, "tools": tools_payload, "tool_choice": tool_choice
+                "model": model_name,
+                "messages": messages_payload,
+                "stream": stream,
+                "options": kwargs,
+                "tools": tools_payload,
+                "tool_choice": tool_choice,
             }
-            logger.debug(f"RAW LLM REQUEST ({self.get_name()} @ {model_name}): {json.dumps(log_data, indent=2)}")
+            logger.debug(
+                f"RAW LLM REQUEST ({self.get_name()} @ {model_name}): {json.dumps(log_data, indent=2)}"
+            )
 
         try:
             response_or_stream = await self._client.chat(
                 model=model_name,
-                messages=messages_payload, # type: ignore
+                messages=messages_payload,  # type: ignore
                 stream=stream,
-                tools=tools_payload, # type: ignore
+                tools=tools_payload,  # type: ignore
                 options=kwargs if kwargs else None,
             )
             if stream:
+
                 async def stream_wrapper():
-                    async for chunk in response_or_stream: # type: ignore
+                    async for chunk in response_or_stream:  # type: ignore
                         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()}): {json.dumps(chunk)}")
+                            logger.debug(
+                                f"RAW LLM STREAM CHUNK ({self.get_name()}): {json.dumps(chunk)}"
+                            )
                         yield chunk
+
                 return stream_wrapper()
             else:
                 if isinstance(response_or_stream, dict):
@@ -257,15 +297,22 @@ class OllamaProvider(BaseProvider):
                     raise ProviderError(self.get_name(), "Invalid non-streaming response format.")
 
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"RAW LLM RESPONSE ({self.get_name()}): {json.dumps(response_dict, indent=2)}")
+                    logger.debug(
+                        f"RAW LLM RESPONSE ({self.get_name()}): {json.dumps(response_dict, indent=2)}"
+                    )
                 return response_dict
 
         except ResponseError as e:
-            error_detail = e.error if hasattr(e, 'error') and e.error else str(e)
+            error_detail = e.error if hasattr(e, "error") and e.error else str(e)
             logger.error(f"Ollama API error: HTTP {e.status_code} - {error_detail}", exc_info=True)
             if e.status_code == 404:
-                raise ProviderError(self.get_name(), f"Model '{model_name}' not found. Pull it with `ollama pull {model_name}`.")
-            raise ProviderError(self.get_name(), f"Ollama API Error (HTTP {e.status_code}): {error_detail}")
+                raise ProviderError(
+                    self.get_name(),
+                    f"Model '{model_name}' not found. Pull it with `ollama pull {model_name}`.",
+                )
+            raise ProviderError(
+                self.get_name(), f"Ollama API Error (HTTP {e.status_code}): {error_detail}"
+            )
         except Exception as e:
             logger.error(f"Unexpected error during Ollama chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
@@ -276,30 +323,49 @@ class OllamaProvider(BaseProvider):
             return (len(text) + 3) // 4
         if not text:
             return 0
-        return await asyncio.to_thread(lambda: len(self._encoding.encode(text))) # type: ignore
+        return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(
+        self, messages: List[Message], model: Optional[str] = None
+    ) -> int:
         """Approximates token count for a list of messages using tiktoken."""
         if not self._encoding:
-            total_chars = sum(len(msg.content) + len(msg.role.value) for msg in messages)
+            total_chars = sum(
+                len(msg.content)
+                + len(
+                    msg.role.value
+                    if hasattr(msg.role, "value")
+                    else str(msg.role)
+                    if hasattr(msg.role, "value")
+                    else str(msg.role)
+                )
+                for msg in messages
+            )
             return (total_chars + (len(messages) * 5) + 3) // 4
 
         num_tokens = 0
         for message in messages:
             num_tokens += 3  # tokens_per_message
             try:
-                num_tokens += len(self._encoding.encode(message.role.value))
+                role_str = (
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+
+                num_tokens += len(self._encoding.encode(role_str))
                 num_tokens += len(self._encoding.encode(message.content))
             except Exception as e:
                 logger.warning(f"Tiktoken encoding failed for message part: {e}. Approximating.")
-                num_tokens += (len(message.role.value) + len(message.content)) // 4
+                role_str_fallback = (
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+                num_tokens += (len(role_str_fallback) + len(message.content)) // 4
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
     async def close(self) -> None:
         """Closes the underlying Ollama client session."""
         if self._client:
-            if hasattr(self._client, 'aclose') and asyncio.iscoroutinefunction(self._client.aclose):
+            if hasattr(self._client, "aclose") and asyncio.iscoroutinefunction(self._client.aclose):
                 try:
                     await self._client.aclose()
                     logger.info("OllamaProvider client closed successfully.")

@@ -24,7 +24,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 # Import existing models from llmcore
 from ...models import AgentState, ToolCall, ToolResult
@@ -449,6 +449,17 @@ class EnhancedAgentState(AgentState):
         default_factory=dict, 
         description="Arbitrary metadata for extensibility and goal tracking"
     )
+        # === P0 FIX: Added missing fields ===
+    # Fix #2: Tool call pending execution from THINK phase
+    pending_tool_call: Optional[ToolCall] = None
+    
+    # Fix #4: Flag indicating agent is waiting for human approval
+    awaiting_human_approval: bool = False
+    
+    # Fix #3: Private field for explicit is_finished setting
+    _is_finished_override: bool = PrivateAttr(default=False)
+    # === END P0 FIX ===
+
     @property
     def is_finished(self) -> bool:
         """
@@ -461,6 +472,10 @@ class EnhancedAgentState(AgentState):
         Returns:
             True if the agent's task is complete, False otherwise.
         """
+        # P0 Fix #3: Check explicit override first
+        if getattr(self, '_is_finished_override', False):
+            return True
+        
         # Check if all plan steps are completed
         if self.plan_steps_status:
             all_completed = all(status == "completed" for status in self.plan_steps_status)
@@ -472,6 +487,11 @@ class EnhancedAgentState(AgentState):
             return True
             
         return False
+    
+    @is_finished.setter
+    def is_finished(self, value: bool) -> None:
+        """Allow explicit setting of finished state (P0 Fix #3)."""
+        object.__setattr__(self, '_is_finished_override', value)
 
 
     def add_iteration(self, iteration: CycleIteration) -> None:
