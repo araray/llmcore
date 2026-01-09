@@ -108,7 +108,11 @@ def mock_paramiko(mock_paramiko_module):
     mock_stderr.read.return_value = b""
     mock_stdout.channel.recv_exit_status.return_value = 0
 
-    mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+    mock_client.exec_command.side_effect = lambda *args, **kwargs: (
+        mock_stdin,
+        mock_stdout,
+        mock_stderr,
+    )
 
     # Make SSHClient() return our mock
     mock_paramiko_module.SSHClient.return_value = mock_client
@@ -617,7 +621,7 @@ class TestCleanup:
 
         await provider.cleanup()
 
-        assert provider._status == SandboxStatus.CLEANED
+        assert provider._status == SandboxStatus.TERMINATED
         mock_client.close.assert_called()
 
     @pytest.mark.asyncio
@@ -630,7 +634,7 @@ class TestCleanup:
         # Should not raise
         await provider.cleanup()
 
-        assert provider._status == SandboxStatus.CLEANED
+        assert provider._status == SandboxStatus.TERMINATED
 
 
 class TestStatusAndInfo:

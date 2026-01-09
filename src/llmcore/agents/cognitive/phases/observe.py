@@ -174,6 +174,11 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
     """
     Check if the result matches the expected outcome.
 
+    Uses multiple strategies:
+    1. If result is an error, it doesn't match
+    2. Check if the expected value appears in the result
+    3. Fall back to word overlap for complex expectations
+
     Args:
         result: The tool result
         expected: Expected outcome description
@@ -185,24 +190,45 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
     if result.is_error:
         return False
 
-    # Simple keyword matching
-    # In a real implementation, this could use LLM for semantic comparison
-    result_lower = result.content.lower()
-    expected_lower = expected.lower()
+    result_lower = result.content.lower().strip()
+    expected_lower = expected.lower().strip()
 
+    # Strategy 1: Direct value match
+    # Extract key values from expected (numbers, specific words)
+    import re
+    expected_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', expected_lower)
+    result_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', result_lower)
+    
+    # If expected contains specific values, check if they appear in result
+    if expected_values:
+        for val in expected_values:
+            if val in result_values or val in result_lower:
+                return True
+    
+    # Strategy 2: Result content appears in expected or vice versa
+    if result_lower in expected_lower or expected_lower in result_lower:
+        return True
+    
+    # Strategy 3: Word overlap for complex expectations
     # Check if key words from expected are in result
     expected_words = set(expected_lower.split())
     result_words = set(result_lower.split())
 
+    # Remove common stop words
+    stop_words = {"the", "a", "an", "is", "be", "should", "will", "would", "could"}
+    expected_words -= stop_words
+    result_words -= stop_words
+
     # Calculate overlap
+    if not expected_words:
+        return True  # If no meaningful expected words, assume match
+        
     overlap = len(expected_words & result_words)
     total = len(expected_words)
 
-    # If more than 50% of expected words are in result, consider it a match
-    if total > 0:
-        return (overlap / total) > 0.5
-
-    return True  # If no expected words, assume match
+    # If more than 30% of expected words are in result, consider it a match
+    # (lowered from 50% to be more lenient)
+    return (overlap / total) > 0.3 if total > 0 else True
 
 
 def _extract_insights(

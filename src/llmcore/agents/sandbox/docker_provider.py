@@ -34,25 +34,25 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from .base import (
-    SandboxProvider,
-    SandboxConfig,
-    SandboxAccessLevel,
-    SandboxStatus,
     ExecutionResult,
-    FileInfo
+    FileInfo,
+    SandboxAccessLevel,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxStatus,
 )
 from .exceptions import (
-    SandboxInitializationError,
-    SandboxExecutionError,
-    SandboxTimeoutError,
     SandboxAccessDenied,
     SandboxCleanupError,
-    SandboxNotInitializedError,
+    SandboxConnectionError,
+    SandboxExecutionError,
     SandboxImageNotFoundError,
-    SandboxConnectionError
+    SandboxInitializationError,
+    SandboxNotInitializedError,
+    SandboxTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class DockerSandboxProvider(SandboxProvider):
         full_access_label: str = "llmcore.sandbox.full_access=true",
         full_access_name_pattern: Optional[str] = None,
         docker_host: Optional[str] = None,
-        auto_pull: bool = True
+        auto_pull: bool = True,
     ):
         """
         Initialize Docker sandbox provider.
@@ -164,7 +164,7 @@ class DockerSandboxProvider(SandboxProvider):
             raise SandboxConnectionError(
                 f"Failed to connect to Docker daemon: {e}",
                 host=self._docker_host or "local",
-                connection_type="docker"
+                connection_type="docker",
             )
 
     def _validate_image_whitelist(self) -> None:
@@ -183,7 +183,7 @@ class DockerSandboxProvider(SandboxProvider):
             f"Docker image '{self._image}' is not in the whitelist",
             resource=self._image,
             reason="Image not in whitelist",
-            policy=f"Allowed patterns: {self._image_whitelist}"
+            policy=f"Allowed patterns: {self._image_whitelist}",
         )
 
     def _determine_access_level(self) -> SandboxAccessLevel:
@@ -201,13 +201,17 @@ class DockerSandboxProvider(SandboxProvider):
             if "=" in self._full_access_label:
                 label_key, label_value = self._full_access_label.split("=", 1)
                 if labels.get(label_key) == label_value:
-                    logger.info(f"Image '{self._image}' has full access label '{self._full_access_label}'")
+                    logger.info(
+                        f"Image '{self._image}' has full access label '{self._full_access_label}'"
+                    )
                     return SandboxAccessLevel.FULL
 
             # Check name pattern
             if self._full_access_name_pattern:
                 if fnmatch.fnmatch(self._image, self._full_access_name_pattern):
-                    logger.info(f"Image '{self._image}' matches full access pattern '{self._full_access_name_pattern}'")
+                    logger.info(
+                        f"Image '{self._image}' matches full access pattern '{self._full_access_name_pattern}'"
+                    )
                     return SandboxAccessLevel.FULL
 
             logger.info(f"Image '{self._image}' will run in RESTRICTED mode")
@@ -231,20 +235,18 @@ class DockerSandboxProvider(SandboxProvider):
             if not self._auto_pull:
                 raise SandboxImageNotFoundError(
                     f"Image '{self._image}' not found locally and auto_pull is disabled",
-                    image=self._image
+                    image=self._image,
                 )
 
             logger.info(f"Pulling Docker image '{self._image}'...")
             try:
                 await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._client.images.pull(self._image)
+                    None, lambda: self._client.images.pull(self._image)
                 )
                 logger.info(f"Successfully pulled image '{self._image}'")
             except Exception as e:
                 raise SandboxImageNotFoundError(
-                    f"Failed to pull image '{self._image}': {e}",
-                    image=self._image
+                    f"Failed to pull image '{self._image}': {e}", image=self._image
                 )
 
     async def initialize(self, config: SandboxConfig) -> None:
@@ -328,19 +330,13 @@ class DockerSandboxProvider(SandboxProvider):
         if config.share_mount_host:
             host_share = Path(config.share_mount_host).expanduser().resolve()
             host_share.mkdir(parents=True, exist_ok=True)
-            volumes[str(host_share)] = {
-                'bind': config.share_mount_container,
-                'mode': 'rw'
-            }
+            volumes[str(host_share)] = {"bind": config.share_mount_container, "mode": "rw"}
             logger.debug(f"Share volume: {host_share} -> {config.share_mount_container}")
 
         if config.output_mount_host:
             host_output = Path(config.output_mount_host).expanduser().resolve()
             host_output.mkdir(parents=True, exist_ok=True)
-            volumes[str(host_output)] = {
-                'bind': config.output_mount_container,
-                'mode': 'rw'
-            }
+            volumes[str(host_output)] = {"bind": config.output_mount_container, "mode": "rw"}
             logger.debug(f"Output volume: {host_output} -> {config.output_mount_container}")
 
         return volumes
@@ -366,10 +362,7 @@ class DockerSandboxProvider(SandboxProvider):
         return None
 
     async def _create_container(
-        self,
-        config: SandboxConfig,
-        volumes: Dict,
-        network_mode: Optional[str]
+        self, config: SandboxConfig, volumes: Dict, network_mode: Optional[str]
     ) -> None:
         """
         Create and start the Docker container.
@@ -385,7 +378,7 @@ class DockerSandboxProvider(SandboxProvider):
         labels = {
             "llmcore.sandbox.id": config.sandbox_id,
             "llmcore.sandbox.access_level": self._access_level.value,
-            "llmcore.sandbox.created_at": datetime.utcnow().isoformat()
+            "llmcore.sandbox.created_at": datetime.utcnow().isoformat(),
         }
         labels.update(config.labels)
 
@@ -407,8 +400,8 @@ class DockerSandboxProvider(SandboxProvider):
                 working_dir=config.working_directory,
                 labels=labels,
                 stdin_open=True,
-                tty=False
-            )
+                tty=False,
+            ),
         )
 
     async def _init_workspace(self) -> None:
@@ -448,9 +441,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
         db_path = self._config.ephemeral_db_path
 
         # Write SQL to temp file and execute
-        result = await self.execute_shell(
-            f'sqlite3 {db_path} << \'EOF\'\n{init_sql}\nEOF'
-        )
+        result = await self.execute_shell(f"sqlite3 {db_path} << 'EOF'\n{init_sql}\nEOF")
 
         if result.success:
             logger.debug(f"Initialized ephemeral SQLite at {db_path}")
@@ -475,18 +466,17 @@ CREATE TABLE IF NOT EXISTS agent_files (
             SandboxNotInitializedError: If not initialized
         """
         if not self._container or self._status not in (
-            SandboxStatus.READY, SandboxStatus.EXECUTING
+            SandboxStatus.READY,
+            SandboxStatus.EXECUTING,
+            SandboxStatus.INITIALIZING,
         ):
             raise SandboxNotInitializedError(
                 "Sandbox not initialized or not ready",
-                sandbox_id=self._config.sandbox_id if self._config else None
+                sandbox_id=self._config.sandbox_id if self._config else None,
             )
 
     async def execute_shell(
-        self,
-        command: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute a shell command in the Docker container.
@@ -517,10 +507,10 @@ CREATE TABLE IF NOT EXISTS agent_files (
                         stdout=True,
                         stderr=True,
                         demux=True,
-                        workdir=effective_workdir
-                    )
+                        workdir=effective_workdir,
+                    ),
                 ),
-                timeout=effective_timeout
+                timeout=effective_timeout,
             )
 
             execution_time = time.time() - start_time
@@ -551,7 +541,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 stderr=stderr,
                 execution_time_seconds=execution_time,
                 truncated=truncated,
-                timed_out=False
+                timed_out=False,
             )
 
         except asyncio.TimeoutError:
@@ -563,7 +553,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 stdout="",
                 stderr=f"Command timed out after {effective_timeout} seconds",
                 execution_time_seconds=execution_time,
-                timed_out=True
+                timed_out=True,
             )
 
         except Exception as e:
@@ -574,14 +564,11 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 exit_code=-1,
                 stdout="",
                 stderr=str(e),
-                execution_time_seconds=time.time() - start_time
+                execution_time_seconds=time.time() - start_time,
             )
 
     async def execute_python(
-        self,
-        code: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute Python code in the Docker container.
@@ -602,24 +589,15 @@ CREATE TABLE IF NOT EXISTS agent_files (
 
         if not write_success:
             return ExecutionResult(
-                exit_code=-1,
-                stdout="",
-                stderr="Failed to write Python code to temp file"
+                exit_code=-1, stdout="", stderr="Failed to write Python code to temp file"
             )
 
         # Execute the Python file
         return await self.execute_shell(
-            f"python3 {temp_file}",
-            timeout=timeout,
-            working_dir=working_dir
+            f"python3 {temp_file}", timeout=timeout, working_dir=working_dir
         )
 
-    async def write_file(
-        self,
-        path: str,
-        content: str,
-        mode: str = "w"
-    ) -> bool:
+    async def write_file(self, path: str, content: str, mode: str = "w") -> bool:
         """
         Write content to a file in the container.
 
@@ -646,7 +624,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
         redirect = ">" if mode == "w" else ">>"
 
         # Use base64 encoding for truly safe transfer of any content
-        encoded_content = base64.b64encode(content.encode('utf-8')).decode('ascii')
+        encoded_content = base64.b64encode(content.encode("utf-8")).decode("ascii")
 
         result = await self.execute_shell(
             f"echo '{encoded_content}' | base64 -d {redirect} '{path}'"
@@ -696,11 +674,9 @@ CREATE TABLE IF NOT EXISTS agent_files (
         await self.execute_shell(f"mkdir -p '{parent_dir}'")
 
         # Use base64 encoding for binary transfer
-        encoded_content = base64.b64encode(content).decode('ascii')
+        encoded_content = base64.b64encode(content).decode("ascii")
 
-        result = await self.execute_shell(
-            f"echo '{encoded_content}' | base64 -d > '{path}'"
-        )
+        result = await self.execute_shell(f"echo '{encoded_content}' | base64 -d > '{path}'")
 
         return result.success
 
@@ -728,11 +704,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 return None
         return None
 
-    async def list_files(
-        self,
-        path: str = ".",
-        recursive: bool = False
-    ) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
         """
         List files in a directory in the container.
 
@@ -769,11 +741,13 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 item_path = line.strip()
                 if item_path:
                     name = Path(item_path).name
-                    files.append(FileInfo(
-                        path=item_path,
-                        name=name,
-                        is_directory=False  # Would need additional stat call
-                    ))
+                    files.append(
+                        FileInfo(
+                            path=item_path,
+                            name=name,
+                            is_directory=False,  # Would need additional stat call
+                        )
+                    )
             else:
                 # Parse ls -la output
                 parts = line.split()
@@ -785,13 +759,15 @@ CREATE TABLE IF NOT EXISTS agent_files (
                     if name in (".", ".."):
                         continue
 
-                    files.append(FileInfo(
-                        path=f"{path}/{name}",
-                        name=name,
-                        is_directory=permissions.startswith("d"),
-                        size_bytes=size,
-                        permissions=permissions
-                    ))
+                    files.append(
+                        FileInfo(
+                            path=f"{path}/{name}",
+                            name=name,
+                            is_directory=permissions.startswith("d"),
+                            size_bytes=size,
+                            permissions=permissions,
+                        )
+                    )
 
         return files
 
@@ -810,9 +786,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
         if not path.startswith("/"):
             path = f"{self._config.working_directory}/{path}"
 
-        result = await self.execute_shell(
-            f"test -e '{path}' && echo 'yes' || echo 'no'"
-        )
+        result = await self.execute_shell(f"test -e '{path}' && echo 'yes' || echo 'no'")
 
         return result.stdout.strip() == "yes"
 
@@ -865,14 +839,12 @@ CREATE TABLE IF NOT EXISTS agent_files (
 
                 # Stop container
                 await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._container.stop(timeout=10)
+                    None, lambda: self._container.stop(timeout=10)
                 )
 
                 # Remove container
                 await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._container.remove(force=True)
+                    None, lambda: self._container.remove(force=True)
                 )
 
                 logger.debug("Docker container stopped and removed")
@@ -890,7 +862,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 f"Cleanup completed with errors: {'; '.join(errors)}",
                 resources_leaked=errors,
                 partial_cleanup=True,
-                sandbox_id=self._config.sandbox_id if self._config else None
+                sandbox_id=self._config.sandbox_id if self._config else None,
             )
 
     async def is_healthy(self) -> bool:
@@ -904,10 +876,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
             return False
 
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._container.reload
-            )
+            await asyncio.get_event_loop().run_in_executor(None, self._container.reload)
             return self._container.status == "running"
         except Exception:
             return False
@@ -941,12 +910,14 @@ CREATE TABLE IF NOT EXISTS agent_files (
         }
 
         if self._config:
-            info.update({
-                "sandbox_id": self._config.sandbox_id,
-                "memory_limit": self._config.memory_limit,
-                "cpu_limit": self._config.cpu_limit,
-                "network_enabled": self._config.network_enabled,
-                "working_directory": self._config.working_directory
-            })
+            info.update(
+                {
+                    "sandbox_id": self._config.sandbox_id,
+                    "memory_limit": self._config.memory_limit,
+                    "cpu_limit": self._config.cpu_limit,
+                    "network_enabled": self._config.network_enabled,
+                    "working_directory": self._config.working_directory,
+                }
+            )
 
         return info

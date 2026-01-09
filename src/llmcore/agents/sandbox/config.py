@@ -530,7 +530,7 @@ def create_registry_config(
         docker_timeout_seconds=sandbox_config.docker.timeout_seconds,
 
         # VM
-        vm_enabled=sandbox_config.vm.enabled,
+        vm_enabled=sandbox_config.vm.enabled or sandbox_config.mode == "vm",
         vm_host=sandbox_config.vm.host,
         vm_port=sandbox_config.vm.port,
         vm_username=sandbox_config.vm.username,

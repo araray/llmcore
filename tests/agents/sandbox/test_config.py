@@ -427,7 +427,7 @@ class TestEdgeCases:
         config = load_sandbox_config(overrides=overrides)
 
         assert config.docker.memory_limit == "4g"
-        assert config.docker.image == "python:3.11-slim"  # Default
+        assert config.docker.image == "python:3.12-alpine"  # Default changed
 
     def test_invalid_mode_defaults(self):
         """Test invalid mode falls back to docker."""

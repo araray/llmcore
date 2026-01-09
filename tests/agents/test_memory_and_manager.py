@@ -227,7 +227,7 @@ class TestEnhancedAgentManager:
     @pytest.fixture
     def mock_components(self):
         """Create mock components for EnhancedAgentManager.
-        
+
         NOTE: EnhancedAgentManager does NOT accept tool_manager as a parameter.
         It creates its own ToolManager internally through the parent class.
         """
@@ -425,7 +425,7 @@ class TestSystemIntegration:
         provider_manager = Mock()
         memory_manager = Mock()
         storage_manager = Mock()
-        tool_manager = Mock()
+        # tool_manager = Mock()
 
         # Setup comprehensive async mocks
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
