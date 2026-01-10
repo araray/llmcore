@@ -45,7 +45,7 @@ class TestCognitiveMemoryIntegrator:
 
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
         memory_manager.store_memory = AsyncMock(return_value=None)
-        storage_manager.store_episode = AsyncMock(return_value=None)
+        storage_manager.add_episode = AsyncMock(return_value=None)
         storage_manager.get_episodes = AsyncMock(return_value=[])
 
         return memory_manager, storage_manager
@@ -88,7 +88,7 @@ class TestCognitiveMemoryIntegrator:
         )
 
         # Verify episode was stored
-        assert storage_manager.store_episode.called
+        assert storage_manager.add_episode.called
 
         # Verify learnings were extracted and stored
         assert memory_manager.store_memory.call_count == 2  # 2 insights
@@ -238,7 +238,7 @@ class TestEnhancedAgentManager:
         # Setup async mocks
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
         memory_manager.store_memory = AsyncMock(return_value=None)
-        storage_manager.store_episode = AsyncMock(return_value=None)
+        storage_manager.add_episode = AsyncMock(return_value=None)
         storage_manager.get_episodes = AsyncMock(return_value=[])
 
         return {
@@ -442,7 +442,7 @@ class TestSystemIntegration:
         # Setup comprehensive async mocks
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
         memory_manager.store_memory = AsyncMock(return_value=None)
-        storage_manager.store_episode = AsyncMock(return_value=None)
+        storage_manager.add_episode = AsyncMock(return_value=None)
         storage_manager.get_episodes = AsyncMock(return_value=[])
 
         return {
@@ -545,7 +545,7 @@ class TestInheritanceAndCompatibility:
 
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[])
         memory_manager.store_memory = AsyncMock(return_value=None)
-        storage_manager.store_episode = AsyncMock(return_value=None)
+        storage_manager.add_episode = AsyncMock(return_value=None)
         storage_manager.get_episodes = AsyncMock(return_value=[])
 
         return {
