@@ -33,13 +33,13 @@ import json
 import logging
 import os
 import shutil
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from .base import SandboxProvider, ExecutionResult
+    from .base import ExecutionResult, SandboxProvider
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ class ExecutionLog:
         success: Whether execution was successful
         output_preview: First 500 chars of output
     """
+
     timestamp: datetime
     tool_name: str
     input_summary: str
@@ -75,7 +76,7 @@ class ExecutionLog:
             "exit_code": self.exit_code,
             "execution_time": self.execution_time,
             "success": self.success,
-            "output_preview": self.output_preview
+            "output_preview": self.output_preview,
         }
 
 
@@ -98,6 +99,7 @@ class RunMetadata:
         success: Whether the run succeeded
         error_message: Error message if failed
     """
+
     run_id: str
     created_at: datetime
     completed_at: Optional[datetime] = None
@@ -125,7 +127,7 @@ class RunMetadata:
             "execution_count": self.execution_count,
             "total_execution_time": self.total_execution_time,
             "success": self.success,
-            "error_message": self.error_message
+            "error_message": self.error_message,
         }
 
 
@@ -165,7 +167,7 @@ class OutputTracker:
         base_path: str = "~/.llmcore/agent_outputs",
         max_log_entries: int = 10000,
         log_input_preview_length: int = 200,
-        log_output_preview_length: int = 500
+        log_output_preview_length: int = 500,
     ):
         """
         Initialize the output tracker.
@@ -212,7 +214,7 @@ class OutputTracker:
         sandbox_type: str = "unknown",
         access_level: str = "restricted",
         task_description: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Create a new run tracking directory.
@@ -244,7 +246,7 @@ class OutputTracker:
             access_level=access_level,
             status="running",
             task_description=task_description,
-            custom_metadata=metadata or {}
+            custom_metadata=metadata or {},
         )
 
         # Store in memory
@@ -267,11 +269,7 @@ class OutputTracker:
                 json.dump(metadata.to_dict(), f, indent=2)
 
     async def log_execution(
-        self,
-        run_id: str,
-        tool_name: str,
-        input_data: str,
-        result: "ExecutionResult"
+        self, run_id: str, tool_name: str, input_data: str, result: "ExecutionResult"
     ) -> None:
         """
         Log an execution event.
@@ -289,11 +287,11 @@ class OutputTracker:
         entry = ExecutionLog(
             timestamp=datetime.utcnow(),
             tool_name=tool_name,
-            input_summary=input_data[:self._input_preview_length],
+            input_summary=input_data[: self._input_preview_length],
             exit_code=result.exit_code,
             execution_time=result.execution_time_seconds,
             success=result.success,
-            output_preview=result.stdout[:self._output_preview_length] if result.stdout else ""
+            output_preview=result.stdout[: self._output_preview_length] if result.stdout else "",
         )
 
         # Add to in-memory list
@@ -334,19 +332,14 @@ class OutputTracker:
         Returns:
             List of tracked file entries
         """
-        manifest_path = self._get_run_path(run_id) / "outputs" / "manifest.json"
+        manifest_path = self._get_run_path(run_id) / "file_manifest.json"
         if manifest_path.exists():
             with open(manifest_path, "r") as f:
-                manifest = json.load(f)
-                return manifest.get("files", [])
+                return json.load(f)
         return []
 
     async def log_agent_event(
-        self,
-        run_id: str,
-        level: str,
-        message: str,
-        data: Optional[Dict[str, Any]] = None
+        self, run_id: str, level: str, message: str, data: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Log an agent cognitive cycle event.
@@ -361,7 +354,7 @@ class OutputTracker:
             "timestamp": datetime.utcnow().isoformat(),
             "level": level.upper(),
             "message": message,
-            "data": data
+            "data": data,
         }
 
         log_file = self._get_logs_path(run_id) / "agent.log"
@@ -369,11 +362,7 @@ class OutputTracker:
             f.write(json.dumps(log_entry) + "\n")
 
     async def track_file(
-        self,
-        run_id: str,
-        file_path: str,
-        size_bytes: int,
-        description: str = ""
+        self, run_id: str, file_path: str, size_bytes: int, description: str = ""
     ) -> None:
         """
         Track a file created by the agent.
@@ -395,12 +384,14 @@ class OutputTracker:
                 manifest = json.load(f)
 
         # Add entry
-        manifest.append({
-            "path": file_path,
-            "size_bytes": size_bytes,
-            "description": description,
-            "tracked_at": datetime.utcnow().isoformat()
-        })
+        manifest.append(
+            {
+                "path": file_path,
+                "size_bytes": size_bytes,
+                "description": description,
+                "tracked_at": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Write back
         with open(manifest_path, "w") as f:
@@ -411,7 +402,7 @@ class OutputTracker:
         run_id: str,
         sandbox: "SandboxProvider",
         sandbox_path: str,
-        local_filename: Optional[str] = None
+        local_filename: Optional[str] = None,
     ) -> bool:
         """
         Copy a file from sandbox to output tracking.
@@ -443,7 +434,7 @@ class OutputTracker:
         run_id: str,
         sandbox: "SandboxProvider",
         sandbox_path: str,
-        local_filename: Optional[str] = None
+        local_filename: Optional[str] = None,
     ) -> bool:
         """
         Copy a binary file from sandbox to output tracking.
@@ -470,11 +461,7 @@ class OutputTracker:
         await self.track_file(run_id, filename, len(content))
         return True
 
-    async def save_final_state(
-        self,
-        run_id: str,
-        state: Dict[str, Any]
-    ) -> None:
+    async def save_final_state(self, run_id: str, state: Dict[str, Any]) -> None:
         """
         Save the final ephemeral state from the sandbox.
 
@@ -492,7 +479,7 @@ class OutputTracker:
         sandbox: Optional["SandboxProvider"] = None,
         success: bool = True,
         error_message: str = "",
-        preserve_state: bool = True
+        preserve_state: bool = True,
     ) -> None:
         """
         Finalize a run, preserving outputs and state.
@@ -528,6 +515,7 @@ class OutputTracker:
         if preserve_state and sandbox:
             try:
                 from .ephemeral import EphemeralResourceManager
+
                 ephemeral = EphemeralResourceManager(sandbox)
                 state = await ephemeral.export_state()
                 await self.save_final_state(run_id, state)
@@ -546,7 +534,7 @@ class OutputTracker:
             "successful": sum(1 for log in logs if log.success),
             "failed": sum(1 for log in logs if not log.success),
             "total_time": sum(log.execution_time for log in logs),
-            "by_tool": {}
+            "by_tool": {},
         }
 
         for log in logs:
@@ -555,7 +543,7 @@ class OutputTracker:
                     "count": 0,
                     "success": 0,
                     "failed": 0,
-                    "total_time": 0
+                    "total_time": 0,
                 }
             tool_summary = summary["by_tool"][log.tool_name]
             tool_summary["count"] += 1
@@ -591,9 +579,7 @@ class OutputTracker:
         return None
 
     async def list_runs(
-        self,
-        limit: int = 100,
-        status_filter: Optional[str] = None
+        self, limit: int = 100, status_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         List tracked runs.
@@ -667,11 +653,7 @@ class OutputTracker:
             return outputs_path
         return None
 
-    async def cleanup_old_runs(
-        self,
-        max_age_days: int = 30,
-        keep_min_runs: int = 10
-    ) -> int:
+    async def cleanup_old_runs(self, max_age_days: int = 30, keep_min_runs: int = 10) -> int:
         """
         Clean up old run data.
 
