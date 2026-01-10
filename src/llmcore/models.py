@@ -6,6 +6,9 @@ This module defines the Pydantic models used to represent fundamental
 data structures such as messages, roles, chat sessions, context documents,
 context items, and context presets. It also includes models for the
 unified tool-calling interface and dynamic provider introspection.
+
+UPDATED: Migrated to Pydantic V2 patterns (ConfigDict, field_serializer)
+to eliminate deprecation warnings.
 """
 
 import uuid
@@ -13,7 +16,14 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 
 class Role(str, Enum):
@@ -21,13 +31,14 @@ class Role(str, Enum):
     Enumeration of possible roles in a conversation.
     These roles define the origin or type of a message.
     """
+
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
-    TOOL = "tool" # Added for tool results
+    TOOL = "tool"  # Added for tool results
 
     @classmethod
-    def _missing_(cls, value: object): # type: ignore[misc]
+    def _missing_(cls, value: object):  # type: ignore[misc]
         """
         Handles case-insensitive matching and common aliases for roles.
         For example, "Agent" or "AGENT" will be mapped to Role.ASSISTANT.
@@ -56,31 +67,49 @@ class Message(BaseModel):
         tokens: An optional count of tokens for the message content.
         metadata: An optional dictionary for storing additional, unstructured information.
     """
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the message.")
-    session_id: Optional[str] = Field(default=None, description="Identifier of the chat session this message belongs to.")
-    role: Role = Field(description="The role of the message sender (system, user, assistant, or tool).")
+
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the message."
+    )
+    session_id: Optional[str] = Field(
+        default=None, description="Identifier of the chat session this message belongs to."
+    )
+    role: Role = Field(
+        description="The role of the message sender (system, user, assistant, or tool)."
+    )
     content: str = Field(description="The textual content of the message.")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of when the message was created (UTC).")
-    tool_call_id: Optional[str] = Field(default=None, description="For role 'tool', the ID of the corresponding tool call.")
-    tokens: Optional[int] = Field(default=None, description="Optional token count for the message content.")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional dictionary for additional message metadata.")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of when the message was created (UTC).",
+    )
+    tool_call_id: Optional[str] = Field(
+        default=None, description="For role 'tool', the ID of the corresponding tool call."
+    )
+    tokens: Optional[int] = Field(
+        default=None, description="Optional token count for the message content."
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Optional dictionary for additional message metadata."
+    )
 
-    class Config:
-        """Pydantic model configuration."""
-        use_enum_values = True
-        validate_assignment = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(
+        use_enum_values=True,
+        validate_assignment=True,
+    )
 
-    @field_validator('timestamp', mode='before')
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
+
+    @field_validator("timestamp", mode="before")
     @classmethod
     def ensure_utc_timestamp(cls, v: Any) -> datetime:
         """Ensure the timestamp is timezone-aware and in UTC if naive."""
         if isinstance(v, str):
             try:
-                if v.endswith('Z'):
-                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                if v.endswith("Z"):
+                    v_parsed = datetime.fromisoformat(v[:-1] + "+00:00")
                 else:
                     v_parsed = datetime.fromisoformat(v)
             except ValueError:
@@ -109,6 +138,7 @@ class ContextItemType(str, Enum):
     """
     Enumeration of types for items that can be part of the LLM context pool or a saved preset.
     """
+
     HISTORY_MESSAGE = "history_message"
     USER_TEXT = "user_text"
     USER_FILE = "user_file"
@@ -118,7 +148,7 @@ class ContextItemType(str, Enum):
     PRESET_RAG_CONTENT = "preset_rag_content"
 
     @classmethod
-    def _missing_(cls, value: object): # type: ignore[misc]
+    def _missing_(cls, value: object):  # type: ignore[misc]
         if isinstance(value, str):
             lower_value = value.lower()
             for member in cls:
@@ -132,6 +162,7 @@ class ContextItem(BaseModel):
     Represents an individual item that can be part of the LLM's context pool,
     typically managed within a ChatSession's `context_items` list (workspace).
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: ContextItemType
     source_id: Optional[str] = None
@@ -142,16 +173,20 @@ class ContextItem(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    class Config:
-        use_enum_values = True
-        validate_assignment = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(
+        use_enum_values=True,
+        validate_assignment=True,
+    )
+
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
 
 
 class EpisodeType(str, Enum):
     """Enumeration of possible event types in an agent's episodic memory."""
+
     THOUGHT = "thought"
     ACTION = "action"
     OBSERVATION = "observation"
@@ -159,7 +194,7 @@ class EpisodeType(str, Enum):
     AGENT_REFLECTION = "agent_reflection"
 
     @classmethod
-    def _missing_(cls, value: object): # type: ignore[misc]
+    def _missing_(cls, value: object):  # type: ignore[misc]
         if isinstance(value, str):
             lower_value = value.lower()
             for member in cls:
@@ -170,27 +205,38 @@ class EpisodeType(str, Enum):
 
 class Episode(BaseModel):
     """Represents a single event in an agent's experience log (Episodic Memory)."""
-    episode_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the episode.")
+
+    episode_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the episode."
+    )
     session_id: str = Field(description="The session this episode belongs to.")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of the event (UTC).")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of the event (UTC).",
+    )
     event_type: EpisodeType = Field(description="The type of event that occurred.")
-    data: Dict[str, Any] = Field(description="A JSON blob containing the structured data of the event.")
+    data: Dict[str, Any] = Field(
+        description="A JSON blob containing the structured data of the event."
+    )
 
-    class Config:
-        use_enum_values = True
-        validate_assignment = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(
+        use_enum_values=True,
+        validate_assignment=True,
+    )
 
-    @field_validator('timestamp', mode='before')
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
+
+    @field_validator("timestamp", mode="before")
     @classmethod
     def ensure_utc_timestamp(cls, v: Any) -> datetime:
         """Ensure the timestamp is timezone-aware and in UTC if naive."""
         if isinstance(v, str):
             try:
-                if v.endswith('Z'):
-                    v_parsed = datetime.fromisoformat(v[:-1] + '+00:00')
+                if v.endswith("Z"):
+                    v_parsed = datetime.fromisoformat(v[:-1] + "+00:00")
                 else:
                     v_parsed = datetime.fromisoformat(v)
             except ValueError:
@@ -219,6 +265,7 @@ class ChatSession(BaseModel):
     """
     Represents a single conversation or chat session.
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: Optional[str] = None
     messages: List[Message] = Field(default_factory=list)
@@ -227,15 +274,22 @@ class ChatSession(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        validate_assignment = True
-        use_enum_values = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(
+        use_enum_values=True,
+        validate_assignment=True,
+    )
 
-    def add_message(self, message_content: str, role: Role, session_id_override: Optional[str] = None) -> Message:
-        new_message = Message(content=message_content, role=role, session_id=session_id_override or self.id)
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
+
+    def add_message(
+        self, message_content: str, role: Role, session_id_override: Optional[str] = None
+    ) -> Message:
+        new_message = Message(
+            content=message_content, role=role, session_id=session_id_override or self.id
+        )
         self.messages.append(new_message)
         self.updated_at = datetime.now(timezone.utc)
         return new_message
@@ -265,20 +319,21 @@ class ContextDocument(BaseModel):
     """
     Represents a document used for context, typically in Retrieval Augmented Generation (RAG).
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     content: str
     embedding: Optional[List[float]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     score: Optional[float] = None
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
 
 class ContextPreparationDetails(BaseModel):
     """
     Structured output from ContextManager.prepare_context.
     """
+
     prepared_messages: List[Message]
     final_token_count: int
     max_tokens_for_model: int
@@ -286,29 +341,31 @@ class ContextPreparationDetails(BaseModel):
     rendered_rag_template_content: Optional[str] = None
     truncation_actions_taken: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
 
 class ContextPresetItem(BaseModel):
     """
     Represents an item within a saved ContextPreset.
     """
+
     item_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: ContextItemType
     content: Optional[str] = None
     source_identifier: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        use_enum_values = True
-        validate_assignment = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        validate_assignment=True,
+    )
 
 
 class ContextPreset(BaseModel):
     """
     Represents a named, saved collection of context items (a "Context Preset").
     """
+
     name: str
     description: Optional[str] = None
     items: List[ContextPresetItem] = Field(default_factory=list)
@@ -316,24 +373,30 @@ class ContextPreset(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        validate_assignment = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(validate_assignment=True)
 
-    @model_validator(mode='before')
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
+
+    @model_validator(mode="before")
     @classmethod
     def ensure_name_is_valid_identifier(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            name = data.get('name')
+            name = data.get("name")
             if name and not isinstance(name, str):
                 raise ValueError("Preset name must be a string.")
-            if name and (not name.strip() or any(c in name for c in ['/', '\\', ':', '*', '?', '"', '<', '>', '|'])):
+            if name and (
+                not name.strip()
+                or any(c in name for c in ["/", "\\", ":", "*", "?", '"', "<", ">", "|"])
+            ):
                 raise ValueError(f"Preset name '{name}' contains invalid characters or is empty.")
         return data
 
+
 # --- Models for spec5.md ---
+
 
 class ModelDetails(BaseModel):
     """
@@ -347,12 +410,19 @@ class ModelDetails(BaseModel):
         provider_name: The name of the provider this model belongs to.
         metadata: A dictionary for any other provider-specific metadata.
     """
+
     id: str = Field(description="The unique identifier for the model.")
     context_length: int = Field(description="The maximum context window size in tokens.")
-    supports_streaming: bool = Field(default=True, description="Indicates if the model supports streaming responses.")
-    supports_tools: bool = Field(default=False, description="Indicates if the model supports tool/function calling.")
+    supports_streaming: bool = Field(
+        default=True, description="Indicates if the model supports streaming responses."
+    )
+    supports_tools: bool = Field(
+        default=False, description="Indicates if the model supports tool/function calling."
+    )
     provider_name: str = Field(description="The name of the provider this model belongs to.")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific metadata.")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Provider-specific metadata."
+    )
 
 
 class Tool(BaseModel):
@@ -364,9 +434,12 @@ class Tool(BaseModel):
         description: A description of what the tool does, used by the LLM to decide when to call it.
         parameters: A dictionary representing the JSON Schema for the tool's input parameters.
     """
+
     name: str = Field(description="The name of the tool/function.")
     description: str = Field(description="A description of what the tool does.")
-    parameters: Dict[str, Any] = Field(description="A JSON Schema object defining the tool's input parameters.")
+    parameters: Dict[str, Any] = Field(
+        description="A JSON Schema object defining the tool's input parameters."
+    )
 
 
 class ToolCall(BaseModel):
@@ -378,9 +451,12 @@ class ToolCall(BaseModel):
         name: The name of the tool to be executed.
         arguments: A dictionary of arguments for the tool, as generated by the LLM.
     """
+
     id: str = Field(description="Unique identifier for this specific tool call.")
     name: str = Field(description="The name of the tool to be executed.")
-    arguments: Dict[str, Any] = Field(description="A dictionary of arguments for the tool, generated by the LLM.")
+    arguments: Dict[str, Any] = Field(
+        description="A dictionary of arguments for the tool, generated by the LLM."
+    )
 
 
 class ToolResult(BaseModel):
@@ -392,12 +468,16 @@ class ToolResult(BaseModel):
         content: The string representation of the tool's output.
         is_error: Whether the tool execution resulted in an error.
     """
+
     tool_call_id: str = Field(description="The ID of the ToolCall this result corresponds to.")
     content: str = Field(description="The string representation of the tool's output.")
-    is_error: bool = Field(default=False, description="Whether the tool execution resulted in an error.")
+    is_error: bool = Field(
+        default=False, description="Whether the tool execution resulted in an error."
+    )
 
 
 # --- Models for Phase 4: Agentic Loop ---
+
 
 class AgentState(BaseModel):
     """
@@ -414,16 +494,27 @@ class AgentState(BaseModel):
         observations: A dictionary mapping tool calls or actions to their observed results.
         scratchpad: A free-form text field for intermediate reasoning or notes.
     """
+
     goal: str = Field(description="The high-level objective for the agent.")
     plan: List[str] = Field(default_factory=list, description="The decomposed plan of sub-tasks.")
-    current_plan_step_index: int = Field(default=0, description="Index of the current plan step being executed.")
-    plan_steps_status: List[str] = Field(default_factory=list, description="Status of each plan step ('pending', 'completed', 'failed').")
-    history_of_thoughts: List[str] = Field(default_factory=list, description="A chronological log of the agent's internal 'Thoughts'.")
-    observations: Dict[str, Any] = Field(default_factory=dict, description="A mapping of actions to their observed results.")
-    scratchpad: str = Field(default="", description="A transient workspace for intermediate reasoning.")
+    current_plan_step_index: int = Field(
+        default=0, description="Index of the current plan step being executed."
+    )
+    plan_steps_status: List[str] = Field(
+        default_factory=list,
+        description="Status of each plan step ('pending', 'completed', 'failed').",
+    )
+    history_of_thoughts: List[str] = Field(
+        default_factory=list, description="A chronological log of the agent's internal 'Thoughts'."
+    )
+    observations: Dict[str, Any] = Field(
+        default_factory=dict, description="A mapping of actions to their observed results."
+    )
+    scratchpad: str = Field(
+        default="", description="A transient workspace for intermediate reasoning."
+    )
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
 
 class AgentTask(BaseModel):
@@ -443,17 +534,32 @@ class AgentTask(BaseModel):
         created_at: The timestamp when the task was created.
         updated_at: The timestamp when the task was last updated.
     """
-    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the agent task.")
+
+    task_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique identifier for the agent task.",
+    )
     status: str = Field(default="PENDING", description="The current status of the task.")
     goal: str = Field(description="The original high-level goal for the task.")
     agent_state: AgentState = Field(description="The agent's current working memory state.")
-    pending_action_data: Optional[Dict[str, Any]] = Field(default=None, description="JSON representation of the ToolCall awaiting approval (HITL).")
-    approval_prompt: Optional[str] = Field(default=None, description="The question for the human operator (HITL workflow).")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of task creation (UTC).")
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of last task update (UTC).")
+    pending_action_data: Optional[Dict[str, Any]] = Field(
+        default=None, description="JSON representation of the ToolCall awaiting approval (HITL)."
+    )
+    approval_prompt: Optional[str] = Field(
+        default=None, description="The question for the human operator (HITL workflow)."
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of task creation (UTC).",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of last task update (UTC).",
+    )
 
-    class Config:
-        validate_assignment = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat().replace('+00:00', 'Z')
-        }
+    model_config = ConfigDict(validate_assignment=True)
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, dt: datetime) -> str:
+        """Serialize datetime to ISO format with Z suffix."""
+        return dt.isoformat().replace("+00:00", "Z")
