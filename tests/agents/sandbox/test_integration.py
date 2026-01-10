@@ -358,21 +358,23 @@ class TestToolsIntegrationFixed:
     @pytest.mark.asyncio
     async def test_execute_shell_tool(self, setup_tools_environment):
         """Test shell command execution through tool interface."""
+        from llmcore.agents.sandbox.base import ExecutionResult
         from llmcore.agents.sandbox.tools import execute_shell
 
         env = setup_tools_environment
         sandbox = env["sandbox"]
 
-        # Mock the sandbox's execute_command method
-        sandbox.execute_command = AsyncMock(
-            return_value={"stdout": "Hello World", "stderr": "", "exit_code": 0}
+        # Mock the sandbox's execute_shell method (not execute_command!)
+        sandbox.execute_shell = AsyncMock(
+            return_value=ExecutionResult(exit_code=0, stdout="Hello World\n", stderr="")
         )
 
         result = await execute_shell(command="echo 'Hello World'")
 
         # Verify
         assert result is not None
-        sandbox.execute_command.assert_called_once()
+        assert "Hello World" in result
+        sandbox.execute_shell.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_save_and_load_file_tools(self, setup_tools_environment):
