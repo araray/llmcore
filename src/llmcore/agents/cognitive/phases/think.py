@@ -348,8 +348,8 @@ def _parse_think_response(response: Any, tool_manager: "ToolManager") -> ThinkOu
                 arguments=action_args,
             )
 
-    # Determine confidence from thought content
-    confidence = _determine_confidence(thought, response_text)
+        # Determine confidence from thought content
+        confidence = _determine_confidence(thought, response_text)
 
     # Get token count if available
     reasoning_tokens = None
