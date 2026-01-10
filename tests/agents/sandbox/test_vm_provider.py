@@ -677,10 +677,23 @@ class TestStatusAndInfo:
 
         await provider.initialize(sandbox_config)
 
-        # Explicitly configure mock transport for health check
-        # (ensures mock chain is properly set up at assertion time)
+        # Configure mock transport for health check
         mock_transport = mock_client.get_transport.return_value
         mock_transport.is_active.return_value = True
+
+        # CRITICAL FIX: is_healthy() also runs execute_shell("echo 'health_check'")
+        # and checks that "health_check" is in stdout. Must configure this!
+        def create_health_check_result(*args, **kwargs):
+            mock_stdin = MagicMock()
+            mock_stdout = MagicMock()
+            mock_stderr = MagicMock()
+            mock_stdout.read.return_value = b"health_check\n"
+            mock_stderr.read.return_value = b""
+            mock_stdout.channel = MagicMock()
+            mock_stdout.channel.recv_exit_status.return_value = 0
+            return (mock_stdin, mock_stdout, mock_stderr)
+
+        mock_client.exec_command.side_effect = create_health_check_result
 
         is_healthy = await provider.is_healthy()
 
