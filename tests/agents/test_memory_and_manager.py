@@ -299,45 +299,57 @@ class TestEnhancedAgentManager:
     @pytest.mark.asyncio
     async def test_run_legacy_mode(self, mock_components):
         """Test running in legacy mode."""
-        with patch("llmcore.agents.cognitive.phases.cycle.CognitiveCycle") as MockCycle:
-            # Setup mock
-            mock_cycle_instance = AsyncMock()
-            mock_cycle_instance.run_until_complete = AsyncMock(return_value="Legacy result")
-            MockCycle.return_value = mock_cycle_instance
+        # The legacy mode runs through _run_cognitive_loop which expects
+        # a proper async provider. We need to mock the internal run method.
+        manager = EnhancedAgentManager(**mock_components)
 
-            manager = EnhancedAgentManager(**mock_components)
+        # Mock the internal _run_cognitive_loop to avoid provider issues
+        mock_result = AgentResult(
+            goal="Test goal",
+            final_answer="Legacy result",
+            success=True,
+            iteration_count=1,
+            total_tokens=100,
+            total_time_seconds=1.0,
+            session_id="session-123",
+        )
 
-            # Run
+        # Patch _run_cognitive_loop directly since legacy mode uses it
+        with patch.object(manager, "_run_cognitive_loop", new_callable=AsyncMock) as mock_loop:
+            mock_loop.return_value = "Legacy result"
+
+            # Run in legacy mode
             result = await manager.run(goal="Test goal", mode=AgentMode.LEGACY)
 
             # Verify
             assert result.final_answer == "Legacy result"
+            assert mock_loop.called
 
     @pytest.mark.asyncio
     async def test_run_uses_default_mode(self, mock_components):
         """Test that run() uses default mode when not specified."""
-        with patch("llmcore.agents.manager.SingleAgentMode") as MockSingleAgent:
-            mock_single_instance = AsyncMock()
-            mock_result = AgentResult(
-                goal="Test",
-                final_answer="Done",
-                success=True,
-                iteration_count=1,
-                total_tokens=100,
-                total_time_seconds=1.0,
-                session_id="session-123",
-            )
-            mock_single_instance.run = AsyncMock(return_value=mock_result)
-            MockSingleAgent.return_value = mock_single_instance
+        # Setup mock single agent instance
+        mock_single_instance = AsyncMock()
+        mock_result = AgentResult(
+            goal="Test",
+            final_answer="Done",
+            success=True,
+            iteration_count=1,
+            total_tokens=100,
+            total_time_seconds=1.0,
+            session_id="session-123",
+        )
+        mock_single_instance.run = AsyncMock(return_value=mock_result)
 
-            manager = EnhancedAgentManager(**mock_components, default_mode=AgentMode.SINGLE)
-            manager.single_agent = mock_single_instance
+        manager = EnhancedAgentManager(**mock_components, default_mode=AgentMode.SINGLE)
+        # Directly set the single_agent (same pattern as test_run_single_mode)
+        manager.single_agent = mock_single_instance
 
-            # Run without specifying mode
-            result = await manager.run(goal="Test")
+        # Run without specifying mode
+        result = await manager.run(goal="Test")
 
-            # Should use default (SINGLE)
-            assert mock_single_instance.run.called
+        # Should use default (SINGLE)
+        assert mock_single_instance.run.called
 
     def test_create_persona(self, mock_components):
         """Test creating a persona through manager."""

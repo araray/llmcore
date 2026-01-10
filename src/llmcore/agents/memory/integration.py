@@ -227,7 +227,7 @@ class CognitiveMemoryIntegrator:
         """Create an Episode from a CycleIteration."""
         from ...models import Episode, EpisodeType
 
-        # Build episode content
+        # Build episode content for the data field
         content_parts = [f"Goal: {agent_state.goal}"]
 
         # Add action
@@ -243,12 +243,14 @@ class CognitiveMemoryIntegrator:
         if iteration.reflect_output:
             content_parts.append(f"Evaluation: {iteration.reflect_output.evaluation}")
 
-        # Create episode
+        # Create episode with correct field names:
+        # - event_type (NOT episode_type) - this is the actual field name in Episode model
+        # - data (NOT content) - Episodes use data: Dict[str, Any], not content: str
         return Episode(
             session_id=session_id,
-            episode_type=EpisodeType.TOOL_USE,
-            content="\n".join(content_parts),
-            metadata={
+            event_type=EpisodeType.TOOL_USE,  # Correct field name
+            data={  # Episodes use 'data' dict, not 'content' string
+                "content": "\n".join(content_parts),
                 "iteration": iteration.iteration_number,
                 "goal": agent_state.goal,
                 "success": iteration.status.value == "completed",
@@ -284,7 +286,9 @@ class CognitiveMemoryIntegrator:
         try:
             episodes = await self.storage_manager.get_episodes(session_id=session_id, limit=limit)
 
-            return [ep.content for ep in episodes]
+            # Episode uses 'data' dict, not 'content' attribute
+            # Extract content from the data dict, with fallback for empty/missing data
+            return [ep.data.get("content", "") for ep in episodes if ep.data]
         except Exception as e:
             logger.warning(f"Failed to retrieve episodes: {e}")
             return []
