@@ -88,6 +88,11 @@ def mock_paramiko(mock_paramiko_module):
 
     FIXED: This fixture now uses sys.modules patching instead of
     trying to patch a non-existent module-level name.
+    
+    FIXED (2026-01-09): The exec_command side_effect now creates FRESH
+    mock objects for each call to avoid state pollution between calls.
+    This is critical because provider.initialize() calls execute_shell
+    multiple times (workspace setup, ephemeral DB, volume mounts).
     """
     mock_client = MagicMock()
     mock_sftp = MagicMock()
@@ -99,20 +104,23 @@ def mock_paramiko(mock_paramiko_module):
     mock_client.get_transport.return_value = mock_transport
     mock_transport.is_active.return_value = True
 
-    # Configure exec_command
-    mock_stdin = MagicMock()
-    mock_stdout = MagicMock()
-    mock_stderr = MagicMock()
-
-    mock_stdout.read.return_value = b""
-    mock_stderr.read.return_value = b""
-    mock_stdout.channel.recv_exit_status.return_value = 0
-
-    mock_client.exec_command.side_effect = lambda *args, **kwargs: (
-        mock_stdin,
-        mock_stdout,
-        mock_stderr,
-    )
+    # FIXED: Create fresh mock objects for each exec_command call
+    # This prevents state pollution (like .read() returning empty after first call)
+    def create_exec_command_result(*args, **kwargs):
+        """Factory function that creates fresh mocks for each call."""
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stderr = MagicMock()
+        
+        # Default successful execution
+        mock_stdout.read.return_value = b""
+        mock_stderr.read.return_value = b""
+        mock_stdout.channel = MagicMock()
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        
+        return (mock_stdin, mock_stdout, mock_stderr)
+    
+    mock_client.exec_command.side_effect = create_exec_command_result
 
     # Make SSHClient() return our mock
     mock_paramiko_module.SSHClient.return_value = mock_client
@@ -203,7 +211,18 @@ class TestVMSandboxProviderInit:
         assert provider._private_key_path is None
 
     def test_init_fails_without_auth_method(self, mock_paramiko):
-        """Test initialization fails without auth method."""
+        """Test initialization fails without auth method.
+        
+        NOTE: This test expects VMSandboxProvider to validate auth method
+        in __init__ and raise SandboxInitializationError if neither
+        private_key_path nor use_ssh_agent is provided.
+        
+        If this test fails, ensure VMSandboxProvider.__init__ includes:
+            if not private_key_path and not use_ssh_agent:
+                raise SandboxInitializationError(
+                    "Must provide either private_key_path or use_ssh_agent=True"
+                )
+        """
         with pytest.raises(SandboxInitializationError):
             VMSandboxProvider(
                 host="test-vm.example.com",
@@ -288,13 +307,18 @@ class TestSSHConnection:
             full_access_hosts=[],
         )
 
-        # Setup mock exec_command for workspace setup
-        mock_stdout = MagicMock()
-        mock_stdout.read.return_value = b""
-        mock_stdout.channel.recv_exit_status.return_value = 0
-        mock_stderr = MagicMock()
-        mock_stderr.read.return_value = b""
-        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
+        # FIXED: Use factory function for exec_command to create fresh mocks each call
+        # This is necessary because initialize() calls execute_shell multiple times
+        def create_exec_result(*a, **k):
+            mock_stdout = MagicMock()
+            mock_stdout.read.return_value = b""
+            mock_stdout.channel = MagicMock()
+            mock_stdout.channel.recv_exit_status.return_value = 0
+            mock_stderr = MagicMock()
+            mock_stderr.read.return_value = b""
+            return (MagicMock(), mock_stdout, mock_stderr)
+        
+        mock_client.exec_command.side_effect = create_exec_result
 
         await provider.initialize(sandbox_config)
 

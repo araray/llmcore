@@ -699,6 +699,27 @@ SANDBOX_TOOL_SCHEMAS = {
             }
         }
     },
+        "append_to_file": {
+        "type": "function",
+        "function": {
+            "name": "append_to_file",
+            "description": "Append content to an existing file in the sandbox",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to append to"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to append"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }
+    },
     "save_file": {
         "type": "function",
         "function": {
