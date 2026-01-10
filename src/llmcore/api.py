@@ -16,19 +16,49 @@ import logging
 import pathlib
 import uuid
 from datetime import datetime, timezone
-from typing import (Any, AsyncGenerator, Dict, List, Optional, Tuple, Type,
-                    Union, Protocol, runtime_checkable)
+from typing import (
+    Any,
+    AsyncGenerator,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+    runtime_checkable,
+)
 
 import aiofiles
 
-from .memory.manager import MemoryManager
 from .embedding.manager import EmbeddingManager
-from .exceptions import (ConfigError, ContextLengthError, EmbeddingError,
-                         LLMCoreError, ProviderError, SessionNotFoundError,
-                         SessionStorageError, StorageError, VectorStorageError)
-from .models import (ChatSession, ContextDocument, ContextItem,
-                     ContextItemType, Message, Role, ContextPreparationDetails,
-                     ContextPreset, ContextPresetItem, ModelDetails, Tool, ToolCall, ToolResult)
+from .exceptions import (
+    ConfigError,
+    ContextLengthError,
+    EmbeddingError,
+    LLMCoreError,
+    ProviderError,
+    SessionNotFoundError,
+    SessionStorageError,
+    StorageError,
+    VectorStorageError,
+)
+from .memory.manager import MemoryManager
+from .models import (
+    ChatSession,
+    ContextDocument,
+    ContextItem,
+    ContextItemType,
+    ContextPreparationDetails,
+    ContextPreset,
+    ContextPresetItem,
+    Message,
+    ModelDetails,
+    Role,
+    Tool,
+    ToolCall,
+    ToolResult,
+)
 from .providers.base import BaseProvider
 from .providers.manager import ProviderManager
 from .sessions.manager import SessionManager
@@ -52,6 +82,7 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 # Protocol Definition for External RAG Engines
 # ==============================================================================
+
 
 @runtime_checkable
 class LLMCoreProtocol(Protocol):
@@ -91,7 +122,7 @@ class LLMCoreProtocol(Protocol):
         prompt_template_values: Optional[Dict[str, str]] = None,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **provider_kwargs
+        **provider_kwargs,
     ) -> Union[str, AsyncGenerator[str, None]]:
         """
         Send a message to an LLM and return the response.
@@ -108,6 +139,7 @@ class LLMCoreProtocol(Protocol):
 # ==============================================================================
 # Main LLMCore Class
 # ==============================================================================
+
 
 class LLMCore:
     """
@@ -132,6 +164,7 @@ class LLMCore:
     This pattern allows external engines to control RAG logic while leveraging
     LLMCore's provider abstraction, session management, and context handling.
     """
+
     config: ConfyConfig
     _storage_manager: StorageManager
     _provider_manager: ProviderManager
@@ -155,7 +188,7 @@ class LLMCore:
         cls,
         config_overrides: Optional[Dict[str, Any]] = None,
         config_file_path: Optional[str] = None,
-        env_prefix: Optional[str] = "LLMCORE"
+        env_prefix: Optional[str] = "LLMCORE",
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -192,7 +225,7 @@ class LLMCore:
         self,
         config_overrides: Optional[Dict[str, Any]],
         config_file_path: Optional[str],
-        env_prefix: Optional[str]
+        env_prefix: Optional[str],
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -209,21 +242,26 @@ class LLMCore:
         logger.info("Initializing LLMCore components from configuration...")
         try:
             from confy.loader import Config as ActualConfyConfig
+
             if not tomllib:
                 raise ImportError("tomli (for Python < 3.11) or tomllib is required.")
 
             # Load default config from package
             try:
-                if hasattr(importlib.resources, 'files'):
-                    config_files = importlib.resources.files('llmcore.config')
-                    default_config_path = config_files / 'default_config.toml'
-                    with default_config_path.open('rb') as f:
+                if hasattr(importlib.resources, "files"):
+                    config_files = importlib.resources.files("llmcore.config")
+                    default_config_path = config_files / "default_config.toml"
+                    with default_config_path.open("rb") as f:
                         default_config_dict = tomllib.load(f)
                 else:
-                    with importlib.resources.open_binary('llmcore.config', 'default_config.toml') as f:
+                    with importlib.resources.open_binary(
+                        "llmcore.config", "default_config.toml"
+                    ) as f:
                         default_config_dict = tomllib.load(f)
             except Exception as e:
-                logger.warning(f"Could not load default config from package: {e}. Using minimal defaults.")
+                logger.warning(
+                    f"Could not load default config from package: {e}. Using minimal defaults."
+                )
                 default_config_dict = {"llmcore": {"default_provider": "ollama"}}
 
             # Initialize Confy with all sources
@@ -231,15 +269,15 @@ class LLMCore:
                 defaults=default_config_dict,
                 config_file_path=config_file_path,
                 env_prefix=env_prefix,
-                overrides=config_overrides
+                overrides=config_overrides,
             )
 
             # Set log level and raw payload logging
-            self._llmcore_log_level_str = self.config.get('llmcore.log_level', 'INFO')
-            llmcore_logger = logging.getLogger('llmcore')
+            self._llmcore_log_level_str = self.config.get("llmcore.log_level", "INFO")
+            llmcore_logger = logging.getLogger("llmcore")
             llmcore_logger.setLevel(self._llmcore_log_level_str.upper())
 
-            self._log_raw_payloads_enabled = self.config.get('llmcore.log_raw_payloads', False)
+            self._log_raw_payloads_enabled = self.config.get("llmcore.log_raw_payloads", False)
             if self._log_raw_payloads_enabled:
                 logger.info("Raw payload logging is ENABLED for this LLMCore instance")
 
@@ -264,7 +302,7 @@ class LLMCore:
                 config=self.config,
                 provider_manager=self._provider_manager,
                 embedding_manager=self._embedding_manager,
-                storage_manager=self._storage_manager
+                storage_manager=self._storage_manager,
             )
 
             logger.info("LLMCore initialization complete")
@@ -315,29 +353,34 @@ class LLMCore:
         # Step 1: Preserve transient state
         saved_sessions = self._transient_sessions_cache.copy()
         saved_context_info = self._transient_last_interaction_info_cache.copy()
-        logger.debug(f"Preserved {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries")
+        logger.debug(
+            f"Preserved {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries"
+        )
 
         # Step 2: Attempt to reload configuration
         old_config = self.config
         try:
             # Re-initialize from configuration (uses the same sources as create())
             await self._initialize_from_config(
-                config_overrides=None,
-                config_file_path=None,
-                env_prefix="LLMCORE"
+                config_overrides=None, config_file_path=None, env_prefix="LLMCORE"
             )
             logger.info("Configuration reloaded successfully")
 
         except Exception as e:
             # Critical: Restore previous configuration on failure
-            logger.error(f"Configuration reload failed: {e}. Restoring previous configuration.", exc_info=True)
+            logger.error(
+                f"Configuration reload failed: {e}. Restoring previous configuration.",
+                exc_info=True,
+            )
             self.config = old_config
             raise ConfigError(f"Failed to reload configuration: {e}")
 
         # Step 3: Restore transient state
         self._transient_sessions_cache = saved_sessions
         self._transient_last_interaction_info_cache = saved_context_info
-        logger.info(f"Restored {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries")
+        logger.info(
+            f"Restored {len(saved_sessions)} transient sessions and {len(saved_context_info)} context info entries"
+        )
 
         logger.info("Configuration reload complete with full state restoration")
 
@@ -368,8 +411,8 @@ class LLMCore:
             id=provider.default_model,
             provider_name=provider.get_name(),
             context_length=provider.get_max_context_length(provider.default_model),
-            supports_streaming=getattr(provider, 'supports_streaming', True),
-            supports_tools=getattr(provider, 'supports_tools', False)
+            supports_streaming=getattr(provider, "supports_streaming", True),
+            supports_tools=getattr(provider, "supports_tools", False),
         )
 
     async def chat(
@@ -391,7 +434,7 @@ class LLMCore:
         prompt_template_values: Optional[Dict[str, str]] = None,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **provider_kwargs
+        **provider_kwargs,
     ) -> Union[str, AsyncGenerator[str, None]]:
         """
         Sends a message to an LLM and returns the response.
@@ -559,7 +602,9 @@ class LLMCore:
                 )
 
         # Load or create session
-        chat_session = await self._session_manager.load_or_create_session(session_id, system_message)
+        chat_session = await self._session_manager.load_or_create_session(
+            session_id, system_message
+        )
         if not session_id:  # If it was a temporary session, cache it
             self._transient_sessions_cache[chat_session.id] = chat_session
 
@@ -578,7 +623,7 @@ class LLMCore:
             rag_metadata_filter=rag_metadata_filter,
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
-            prompt_template_values=prompt_template_values
+            prompt_template_values=prompt_template_values,
         )
         context_payload = context_details.prepared_messages
 
@@ -592,12 +637,14 @@ class LLMCore:
             stream=stream,
             tools=tools,
             tool_choice=tool_choice,
-            **provider_kwargs
+            **provider_kwargs,
         )
 
         # Handle response
         if stream:
-            return self._stream_response_wrapper(response_data, active_provider, chat_session, save_session)  # type: ignore
+            return self._stream_response_wrapper(
+                response_data, active_provider, chat_session, save_session
+            )  # type: ignore
         else:
             full_content = self._extract_full_content(response_data, active_provider)
             chat_session.add_message(full_content, Role.ASSISTANT)
@@ -606,8 +653,11 @@ class LLMCore:
             return full_content
 
     async def _stream_response_wrapper(
-        self, provider_stream: AsyncGenerator, provider: BaseProvider,
-        session: ChatSession, do_save: bool
+        self,
+        provider_stream: AsyncGenerator,
+        provider: BaseProvider,
+        session: ChatSession,
+        do_save: bool,
     ) -> AsyncGenerator[str, None]:
         """
         Wraps provider's stream, yields text, and handles session saving.
@@ -660,7 +710,9 @@ class LLMCore:
         """
         return provider.extract_delta_content(chunk)
 
-    def get_last_interaction_context_info(self, session_id: str) -> Optional[ContextPreparationDetails]:
+    def get_last_interaction_context_info(
+        self, session_id: str
+    ) -> Optional[ContextPreparationDetails]:
         """
         Retrieves the context preparation details from the most recent interaction.
 
@@ -689,7 +741,7 @@ class LLMCore:
         rag_retrieval_k: Optional[int] = None,
         rag_collection_name: Optional[str] = None,
         rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None
+        prompt_template_values: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Previews the context that would be sent to the LLM without making an API call.
@@ -729,20 +781,16 @@ class LLMCore:
 
         # Load or create temporary session
         if session_id:
-            chat_session = await self._session_manager.load_or_create_session(session_id, system_message)
+            chat_session = await self._session_manager.load_or_create_session(
+                session_id, system_message
+            )
         else:
             chat_session = ChatSession(
-                id=str(uuid.uuid4()),
-                name="preview_session",
-                system_message=system_message
+                id=str(uuid.uuid4()), name="preview_session", system_message=system_message
             )
 
         # Create temporary message for preview
-        temp_message = Message(
-            id=str(uuid.uuid4()),
-            role=Role.USER,
-            content=current_user_query
-        )
+        temp_message = Message(id=str(uuid.uuid4()), role=Role.USER, content=current_user_query)
 
         # Temporarily add message to session for context preparation
         original_messages = chat_session.messages.copy()
@@ -754,13 +802,13 @@ class LLMCore:
                 session=chat_session,
                 provider_name=active_provider.get_name(),
                 model_name=actual_model,
-                enable_rag=enable_rag,
+                rag_enabled=enable_rag,
                 rag_k=rag_retrieval_k,
                 rag_collection=rag_collection_name,
                 rag_metadata_filter=rag_metadata_filter,
                 active_context_item_ids=active_context_item_ids,
                 explicitly_staged_items=explicitly_staged_items,
-                prompt_template_values=prompt_template_values
+                prompt_template_values=prompt_template_values,
             )
 
             # Return as dictionary (model_dump will handle serialization)
@@ -820,7 +868,7 @@ class LLMCore:
         self,
         session_id: Optional[str] = None,
         name: Optional[str] = None,
-        system_message: Optional[str] = None
+        system_message: Optional[str] = None,
     ) -> ChatSession:
         """
         Creates a new chat session or loads an existing one.
@@ -841,8 +889,7 @@ class LLMCore:
             SessionStorageError: If there's an error creating/loading the session.
         """
         session = await self._session_manager.load_or_create_session(
-            session_id=session_id,
-            system_message=system_message
+            session_id=session_id, system_message=system_message
         )
 
         # Set the name if provided
@@ -877,7 +924,7 @@ class LLMCore:
         content: str,
         item_type: ContextItemType = ContextItemType.USER_TEXT,
         source_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Adds a context item to a session's workspace.
@@ -902,7 +949,7 @@ class LLMCore:
             type=item_type,
             content=content,
             source_id=source_id,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         session.context_items.append(item)
@@ -949,9 +996,7 @@ class LLMCore:
     # ==============================================================================
 
     async def add_documents_to_vector_store(
-        self,
-        documents: List[Dict[str, Any]],
-        collection_name: Optional[str] = None
+        self, documents: List[Dict[str, Any]], collection_name: Optional[str] = None
     ) -> List[str]:
         """
         Adds documents to the vector store for RAG.
@@ -973,7 +1018,7 @@ class LLMCore:
         query: str,
         k: int = 5,
         collection_name: Optional[str] = None,
-        metadata_filter: Optional[Dict[str, Any]] = None
+        metadata_filter: Optional[Dict[str, Any]] = None,
     ) -> List[ContextDocument]:
         """
         Searches the vector store for relevant documents.
@@ -1000,7 +1045,7 @@ class LLMCore:
             List of collection names
         """
         vector_storage = self._storage_manager.vector_storage
-        if hasattr(vector_storage, 'list_collections'):
+        if hasattr(vector_storage, "list_collections"):
             return await vector_storage.list_collections()
         return []
 

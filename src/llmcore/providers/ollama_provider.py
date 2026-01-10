@@ -291,8 +291,15 @@ class OllamaProvider(BaseProvider):
 
                 return stream_wrapper()
             else:
+                # Handle both dict and ChatResponse object (Pydantic model)
                 if isinstance(response_or_stream, dict):
                     response_dict = response_or_stream
+                elif hasattr(response_or_stream, "model_dump"):
+                    # ChatResponse is a Pydantic model - convert to dict
+                    response_dict = response_or_stream.model_dump()
+                elif hasattr(response_or_stream, "__dict__"):
+                    # Fallback for other object types
+                    response_dict = dict(response_or_stream.__dict__)
                 else:
                     raise ProviderError(self.get_name(), "Invalid non-streaming response format.")
 
