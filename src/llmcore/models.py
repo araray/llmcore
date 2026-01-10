@@ -14,7 +14,7 @@ to eliminate deprecation warnings.
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import (
     BaseModel,
@@ -331,15 +331,86 @@ class ContextDocument(BaseModel):
 
 class ContextPreparationDetails(BaseModel):
     """
-    Structured output from ContextManager.prepare_context.
+    Detailed information about how context was prepared for an LLM interaction.
+
+    This model provides comprehensive metadata for UI rendering, debugging,
+    and analytics purposes. It captures both the context preparation phase
+    and post-interaction token usage.
+
+    Attributes:
+        prepared_messages: The final list of messages sent to the LLM.
+        final_token_count: The token count of the prepared context (prompt tokens).
+        max_tokens_for_model: The maximum context window for the model used.
+        rag_documents_used: Optional list of RAG documents included in context.
+        rendered_rag_template_content: The formatted RAG prompt if RAG was used.
+        truncation_actions_taken: Details of any truncation operations performed.
+        provider: The LLM provider name used (e.g., 'openai', 'anthropic').
+        model: The specific model used (e.g., 'gpt-4', 'claude-3-5-sonnet-20241022').
+        prompt_tokens: Number of tokens in the prompt sent to the LLM.
+        completion_tokens: Number of tokens in the LLM's response.
+        total_tokens: Total tokens used (prompt + completion).
+        rag_used: Whether RAG was enabled for this interaction.
+        rag_documents_retrieved: Number of RAG documents retrieved (if applicable).
+        context_truncation_applied: Whether context truncation was necessary.
+        max_context_length: Maximum context window size for the model.
+        reserved_response_tokens: Tokens reserved for the LLM response.
+        available_context_tokens: Tokens available for context after reserving response space.
     """
 
-    prepared_messages: List[Message]
-    final_token_count: int
-    max_tokens_for_model: int
-    rag_documents_used: Optional[List[ContextDocument]] = None
-    rendered_rag_template_content: Optional[str] = None
-    truncation_actions_taken: Dict[str, Any] = Field(default_factory=dict)
+    # === Core Context Preparation Fields (existing) ===
+    prepared_messages: List[Message] = Field(
+        default_factory=list, description="The final list of messages prepared for the LLM"
+    )
+    final_token_count: int = Field(default=0, description="The token count of the prepared context")
+    max_tokens_for_model: int = Field(
+        default=0, description="The maximum context window for the model used"
+    )
+    rag_documents_used: Optional[List[ContextDocument]] = Field(
+        default=None, description="List of RAG documents included in context"
+    )
+    rendered_rag_template_content: Optional[str] = Field(
+        default=None, description="The formatted RAG prompt with injected context"
+    )
+    truncation_actions_taken: Dict[str, Any] = Field(
+        default_factory=dict, description="Details of any truncation operations performed"
+    )
+
+    # === Provider and Model Information (NEW) ===
+    provider: str = Field(
+        default="", description="LLM provider name (e.g., 'openai', 'anthropic', 'ollama')"
+    )
+    model: str = Field(
+        default="", description="Specific model used (e.g., 'gpt-4', 'claude-3-5-sonnet-20241022')"
+    )
+
+    # === Token Usage (NEW) ===
+    prompt_tokens: int = Field(
+        default=0, description="Number of tokens in the prompt sent to the LLM"
+    )
+    completion_tokens: int = Field(default=0, description="Number of tokens in the LLM's response")
+    total_tokens: int = Field(default=0, description="Total tokens used (prompt + completion)")
+
+    # === RAG Information (NEW) ===
+    rag_used: bool = Field(
+        default=False, description="Whether RAG was enabled for this interaction"
+    )
+    rag_documents_retrieved: Optional[int] = Field(
+        default=None, description="Number of RAG documents retrieved (if applicable)"
+    )
+
+    # === Context Management (NEW) ===
+    context_truncation_applied: bool = Field(
+        default=False, description="Whether context truncation was necessary"
+    )
+    max_context_length: int = Field(
+        default=0, description="Maximum context window size for the model"
+    )
+    reserved_response_tokens: int = Field(
+        default=0, description="Tokens reserved for the LLM response"
+    )
+    available_context_tokens: int = Field(
+        default=0, description="Tokens available for context after reserving response space"
+    )
 
     model_config = ConfigDict(validate_assignment=True)
 

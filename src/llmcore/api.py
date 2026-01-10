@@ -612,7 +612,6 @@ class LLMCore:
         chat_session.add_message(message, Role.USER)
 
         # Prepare context (includes history, RAG, context management)
-        # CRITICAL: Pass through all external RAG parameters
         context_details = await self._memory_manager.prepare_context(
             session=chat_session,
             provider_name=active_provider.get_name(),
@@ -627,8 +626,32 @@ class LLMCore:
         )
         context_payload = context_details.prepared_messages
 
-        # Cache context details for clients like llmchat
-        self._transient_last_interaction_info_cache[chat_session.id] = context_details
+        # Pre-populate introspection fields that are known before the LLM call
+        context_details.provider = active_provider.get_name()
+        context_details.model = actual_model
+        context_details.prompt_tokens = context_details.final_token_count
+        context_details.rag_used = enable_rag
+        context_details.max_context_length = active_provider.get_max_context_length(actual_model)
+
+        # Determine if truncation was applied
+        context_details.context_truncation_applied = bool(
+            context_details.truncation_actions_taken.get("details")
+        )
+
+        # Count RAG documents if present
+        if context_details.rag_documents_used:
+            context_details.rag_documents_retrieved = len(context_details.rag_documents_used)
+        else:
+            context_details.rag_documents_retrieved = 0 if enable_rag else None
+
+        # Calculate available context tokens
+        reserved_tokens = self.config.get("context_management", {}).get(
+            "reserved_response_tokens", 500
+        )
+        context_details.reserved_response_tokens = reserved_tokens
+        context_details.available_context_tokens = (
+            context_details.max_context_length - reserved_tokens
+        )
 
         # Call provider
         response_data = await active_provider.chat_completion(
@@ -642,11 +665,27 @@ class LLMCore:
 
         # Handle response
         if stream:
-            return self._stream_response_wrapper(
-                response_data, active_provider, chat_session, save_session
-            )  # type: ignore
+            return self._stream_response_wrapper_with_introspection(
+                response_data,
+                active_provider,
+                chat_session,
+                save_session,
+                context_details,  # Pass context_details for post-stream update
+                actual_model,
+            )
         else:
             full_content = self._extract_full_content(response_data, active_provider)
+
+            # Post-completion: Update token counts from actual response
+            completion_tokens = await self._count_completion_tokens(
+                full_content, active_provider, actual_model
+            )
+            context_details.completion_tokens = completion_tokens
+            context_details.total_tokens = context_details.prompt_tokens + completion_tokens
+
+            # Cache AFTER all fields are populated
+            self._transient_last_interaction_info_cache[chat_session.id] = context_details
+
             chat_session.add_message(full_content, Role.ASSISTANT)
             if save_session:
                 await self._session_manager.save_session(chat_session)
@@ -684,6 +723,53 @@ class LLMCore:
                 if do_save:
                     await self._session_manager.save_session(session)
 
+    async def _stream_response_wrapper_with_introspection(
+        self,
+        provider_stream: AsyncGenerator,
+        provider: BaseProvider,
+        session: ChatSession,
+        do_save: bool,
+        context_details: ContextPreparationDetails,
+        model: str,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Wraps provider's stream, yields text, handles session saving,
+        and updates introspection data after streaming completes.
+
+        Args:
+            provider_stream: The async generator from the provider
+            provider: The provider instance for response extraction
+            session: The chat session to update
+            do_save: Whether to save the session after streaming completes
+            context_details: The context preparation details to update
+            model: The model being used
+
+        Yields:
+            Text chunks from the LLM response
+        """
+        full_response = ""
+        try:
+            async for chunk in provider_stream:
+                text_delta = self._extract_delta_content(chunk, provider)
+                if text_delta:
+                    full_response += text_delta
+                    yield text_delta
+        finally:
+            if full_response:
+                # Update completion tokens after stream completes
+                completion_tokens = await self._count_completion_tokens(
+                    full_response, provider, model
+                )
+                context_details.completion_tokens = completion_tokens
+                context_details.total_tokens = context_details.prompt_tokens + completion_tokens
+
+                # Cache the updated context details
+                self._transient_last_interaction_info_cache[session.id] = context_details
+
+                session.add_message(full_response, Role.ASSISTANT)
+                if do_save:
+                    await self._session_manager.save_session(session)
+
     def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> str:
         """
         Extracts full response content from a non-streaming response.
@@ -709,6 +795,30 @@ class LLMCore:
             The extracted text delta
         """
         return provider.extract_delta_content(chunk)
+
+    async def _count_completion_tokens(
+        self,
+        content: str,
+        provider: BaseProvider,
+        model: str,
+    ) -> int:
+        """
+        Counts the tokens in the completion response.
+
+        Args:
+            content: The response content text
+            provider: The provider instance
+            model: The model used
+
+        Returns:
+            The token count for the completion
+        """
+        try:
+            return await provider.count_tokens(content, model)
+        except Exception as e:
+            logger.warning(f"Failed to count completion tokens: {e}. Estimating...")
+            # Fallback: rough estimate of ~4 chars per token
+            return len(content) // 4
 
     def get_last_interaction_context_info(
         self, session_id: str
@@ -1001,6 +1111,10 @@ class LLMCore:
         """
         Adds documents to the vector store for RAG.
 
+        This method handles the full pipeline:
+        1. Generates embeddings for document content via EmbeddingManager
+        2. Stores documents with embeddings in the vector store
+
         Args:
             documents: List of document dictionaries with 'content' and optional 'metadata'
             collection_name: Optional collection name (uses default if not specified)
@@ -1010,8 +1124,61 @@ class LLMCore:
 
         Raises:
             VectorStorageError: If document addition fails
+            EmbeddingError: If embedding generation fails
         """
-        return await self._embedding_manager.add_documents(documents, collection_name)
+        import uuid
+
+        from .models import ContextDocument
+
+        if not documents:
+            return []
+
+        # Get the vector storage backend
+        vector_storage = self._storage_manager.vector_storage
+
+        # Extract content for batch embedding
+        contents = [doc.get("content", "") for doc in documents]
+
+        # Generate embeddings in batch for better performance
+        # NOTE: EmbeddingManager uses generate_embedding/generate_embeddings, NOT get_embedding
+        embeddings = await self._embedding_manager.generate_embeddings(contents)
+
+        # Get the default embedding model identifier for metadata
+        default_embedding_model = self.config.get("llmcore.default_embedding_model", "unknown")
+
+        # Prepare ContextDocument objects with embeddings
+        context_docs: List[ContextDocument] = []
+
+        for i, doc in enumerate(documents):
+            content = doc.get("content", "")
+            metadata = doc.get("metadata", {})
+            doc_id = doc.get("id", str(uuid.uuid4()))
+            embedding = embeddings[i]
+
+            # Add embedding metadata
+            embedding_metadata = metadata.copy()
+            # Parse provider from model identifier (format: "provider:model_name" or just "model_name")
+            if ":" in default_embedding_model:
+                provider_name = default_embedding_model.split(":")[0]
+                model_name = default_embedding_model.split(":", 1)[1]
+            else:
+                provider_name = "sentence-transformers"  # Default provider
+                model_name = default_embedding_model
+
+            embedding_metadata["embedding_model_provider"] = provider_name
+            embedding_metadata["embedding_model_name"] = model_name
+            embedding_metadata["embedding_dimension"] = len(embedding)
+
+            context_doc = ContextDocument(
+                id=doc_id,
+                content=content,
+                embedding=embedding,
+                metadata=embedding_metadata,
+            )
+            context_docs.append(context_doc)
+
+        # Add documents to vector storage
+        return await vector_storage.add_documents(context_docs, collection_name)
 
     async def search_vector_store(
         self,
