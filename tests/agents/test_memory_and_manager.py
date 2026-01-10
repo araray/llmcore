@@ -104,7 +104,7 @@ class TestCognitiveMemoryIntegrator:
         memory_manager.retrieve_relevant_context = AsyncMock(return_value=[semantic_item])
 
         episode = Mock()
-        episode.content = "Episodic context item"
+        episode.data = {"content": "Episodic context item"}
         storage_manager.get_episodes = AsyncMock(return_value=[episode])
 
         integrator = CognitiveMemoryIntegrator(

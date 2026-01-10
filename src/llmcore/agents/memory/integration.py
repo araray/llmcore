@@ -102,7 +102,7 @@ class CognitiveMemoryIntegrator:
             )
 
             # Store episode
-            await self.storage_manager.store_episode(episode)
+            await self.storage_manager.add_episode(episode)
 
             logger.debug(
                 f"Recorded iteration {iteration.iteration_number} "
