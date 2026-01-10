@@ -244,6 +244,12 @@ class TestPromptTemplate:
         template.add_version(version1)
         template.add_version(version2)
 
+        # First activate version1
+        template.set_active_version(version1.id)
+        assert template.active_version == version1
+        assert version1.status == VersionStatus.ACTIVE
+
+        # Now activate version2 - version1 should become ARCHIVED
         template.set_active_version(version2.id)
 
         assert template.active_version == version2
