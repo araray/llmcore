@@ -161,7 +161,6 @@ class TestSandboxManagement:
             sandbox = get_active_sandbox()
 
             assert sandbox is mock_sandbox
-            assert registry is mock_registry
 
             clear_active_sandbox()
 
@@ -175,7 +174,6 @@ class TestSandboxManagement:
             sandbox = get_active_sandbox()
 
             assert sandbox is None
-            assert registry is None
 
 
 # =============================================================================

@@ -33,12 +33,12 @@ Thread Safety:
 
 import json
 import logging
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .base import SandboxProvider
-    from .registry import SandboxRegistry
     from .ephemeral import EphemeralResourceManager
+    from .registry import SandboxRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,7 @@ _sandbox_registry: Optional["SandboxRegistry"] = None
 _ephemeral_manager: Optional["EphemeralResourceManager"] = None
 
 
-def set_active_sandbox(
-    sandbox: "SandboxProvider",
-    registry: "SandboxRegistry"
-) -> None:
+def set_active_sandbox(sandbox: "SandboxProvider", registry: "SandboxRegistry") -> None:
     """
     Set the active sandbox for tool execution.
 
@@ -69,6 +66,7 @@ def set_active_sandbox(
 
     # Create ephemeral resource manager
     from .ephemeral import EphemeralResourceManager
+
     _ephemeral_manager = EphemeralResourceManager(sandbox)
 
     logger.debug(f"Active sandbox set: {sandbox.get_info().get('provider')}")
@@ -124,10 +122,9 @@ def _check_tool_access(tool_name: str) -> Optional[str]:
 # EXECUTION TOOLS
 # =============================================================================
 
+
 async def execute_shell(
-    command: str,
-    timeout: Optional[int] = None,
-    working_dir: Optional[str] = None
+    command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
 ) -> str:
     """
     Execute a shell command in the sandbox.
@@ -162,10 +159,7 @@ async def execute_shell(
     return result.to_tool_output()
 
 
-async def execute_python(
-    code: str,
-    timeout: Optional[int] = None
-) -> str:
+async def execute_python(code: str, timeout: Optional[int] = None) -> str:
     """
     Execute Python code in the sandbox.
 
@@ -204,11 +198,8 @@ async def execute_python(
 # FILE OPERATION TOOLS
 # =============================================================================
 
-async def save_file(
-    path: str,
-    content: str,
-    description: Optional[str] = None
-) -> str:
+
+async def save_file(path: str, content: str, description: Optional[str] = None) -> str:
     """
     Save content to a file in the sandbox.
 
@@ -240,9 +231,7 @@ async def save_file(
         # Record in ephemeral database
         if _ephemeral_manager:
             await _ephemeral_manager.record_file(
-                path,
-                len(content.encode('utf-8')),
-                description or ""
+                path, len(content.encode("utf-8")), description or ""
             )
         return f"Successfully saved file: {path}"
 
@@ -278,11 +267,7 @@ async def load_file(path: str) -> str:
     return f"ERROR: File not found or could not be read: {path}"
 
 
-async def replace_in_file(
-    path: str,
-    old_value: str,
-    new_value: str
-) -> str:
+async def replace_in_file(path: str, old_value: str, new_value: str) -> str:
     """
     Find and replace text in a file in the sandbox.
 
@@ -324,10 +309,7 @@ async def replace_in_file(
     return f"ERROR: Failed to write updated file: {path}"
 
 
-async def append_to_file(
-    path: str,
-    content: str
-) -> str:
+async def append_to_file(path: str, content: str) -> str:
     """
     Append content to a file in the sandbox.
 
@@ -352,10 +334,7 @@ async def append_to_file(
     return f"ERROR: Failed to append to file: {path}"
 
 
-async def list_files(
-    path: str = ".",
-    recursive: bool = False
-) -> str:
+async def list_files(path: str = ".", recursive: bool = False) -> str:
     """
     List files in a directory in the sandbox.
 
@@ -460,6 +439,7 @@ async def create_directory(path: str) -> str:
 # STATE MANAGEMENT TOOLS
 # =============================================================================
 
+
 async def get_state(key: str) -> str:
     """
     Get a value from the agent's ephemeral state.
@@ -538,6 +518,7 @@ async def list_state() -> str:
 # INFORMATION TOOLS
 # =============================================================================
 
+
 async def get_sandbox_info() -> str:
     """
     Get information about the current sandbox environment.
@@ -562,25 +543,25 @@ async def get_sandbox_info() -> str:
     ]
 
     if access_level.value == "full":
-        lines.extend([
-            "Network: enabled",
-            "Package Installation: allowed",
-            "Tool Restrictions: none"
-        ])
+        lines.extend(
+            ["Network: enabled", "Package Installation: allowed", "Tool Restrictions: none"]
+        )
     else:
-        lines.extend([
-            "Network: disabled",
-            "Package Installation: restricted",
-            "Tool Restrictions: whitelist enforced"
-        ])
+        lines.extend(
+            [
+                "Network: disabled",
+                "Package Installation: restricted",
+                "Tool Restrictions: whitelist enforced",
+            ]
+        )
 
-    if 'container_id' in info:
+    if "container_id" in info:
         lines.append(f"Container ID: {info['container_id']}")
-    if 'host' in info:
+    if "host" in info:
         lines.append(f"VM Host: {info['host']}")
-    if 'workspace' in info:
+    if "workspace" in info:
         lines.append(f"Workspace: {info['workspace']}")
-    if 'working_directory' in info:
+    if "working_directory" in info:
         lines.append(f"Working Directory: {info['working_directory']}")
 
     return "\n".join(lines)
@@ -661,22 +642,13 @@ SANDBOX_TOOL_SCHEMAS = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "The shell command to execute"
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Optional timeout in seconds"
-                    },
-                    "working_dir": {
-                        "type": "string",
-                        "description": "Optional working directory"
-                    }
+                    "command": {"type": "string", "description": "The shell command to execute"},
+                    "timeout": {"type": "integer", "description": "Optional timeout in seconds"},
+                    "working_dir": {"type": "string", "description": "Optional working directory"},
                 },
-                "required": ["command"]
-            }
-        }
+                "required": ["command"],
+            },
+        },
     },
     "execute_python": {
         "type": "function",
@@ -686,20 +658,14 @@ SANDBOX_TOOL_SCHEMAS = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "The Python code to execute"
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Optional timeout in seconds"
-                    }
+                    "code": {"type": "string", "description": "The Python code to execute"},
+                    "timeout": {"type": "integer", "description": "Optional timeout in seconds"},
                 },
-                "required": ["code"]
-            }
-        }
+                "required": ["code"],
+            },
+        },
     },
-        "append_to_file": {
+    "append_to_file": {
         "type": "function",
         "function": {
             "name": "append_to_file",
@@ -707,18 +673,12 @@ SANDBOX_TOOL_SCHEMAS = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file to append to"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to append"
-                    }
+                    "path": {"type": "string", "description": "Path to the file to append to"},
+                    "content": {"type": "string", "description": "Content to append"},
                 },
-                "required": ["path", "content"]
-            }
-        }
+                "required": ["path", "content"],
+            },
+        },
     },
     "save_file": {
         "type": "function",
@@ -730,20 +690,17 @@ SANDBOX_TOOL_SCHEMAS = {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "File path (relative to workspace or absolute)"
+                        "description": "File path (relative to workspace or absolute)",
                     },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to write to the file"
-                    },
+                    "content": {"type": "string", "description": "Content to write to the file"},
                     "description": {
                         "type": "string",
-                        "description": "Optional description for tracking"
-                    }
+                        "description": "Optional description for tracking",
+                    },
                 },
-                "required": ["path", "content"]
-            }
-        }
+                "required": ["path", "content"],
+            },
+        },
     },
     "load_file": {
         "type": "function",
@@ -752,15 +709,10 @@ SANDBOX_TOOL_SCHEMAS = {
             "description": "Load content from a file in the sandbox workspace",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "File path to read"
-                    }
-                },
-                "required": ["path"]
-            }
-        }
+                "properties": {"path": {"type": "string", "description": "File path to read"}},
+                "required": ["path"],
+            },
+        },
     },
     "replace_in_file": {
         "type": "function",
@@ -770,22 +722,13 @@ SANDBOX_TOOL_SCHEMAS = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "File path"
-                    },
-                    "old_value": {
-                        "type": "string",
-                        "description": "Text to find"
-                    },
-                    "new_value": {
-                        "type": "string",
-                        "description": "Text to replace with"
-                    }
+                    "path": {"type": "string", "description": "File path"},
+                    "old_value": {"type": "string", "description": "Text to find"},
+                    "new_value": {"type": "string", "description": "Text to replace with"},
                 },
-                "required": ["path", "old_value", "new_value"]
-            }
-        }
+                "required": ["path", "old_value", "new_value"],
+            },
+        },
     },
     "list_files": {
         "type": "function",
@@ -797,16 +740,16 @@ SANDBOX_TOOL_SCHEMAS = {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Directory path (default: current workspace)"
+                        "description": "Directory path (default: current workspace)",
                     },
                     "recursive": {
                         "type": "boolean",
-                        "description": "If true, list files recursively"
-                    }
+                        "description": "If true, list files recursively",
+                    },
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
     "file_exists": {
         "type": "function",
@@ -815,26 +758,89 @@ SANDBOX_TOOL_SCHEMAS = {
             "description": "Check if a file or directory exists in the sandbox",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to check"
-                    }
-                },
-                "required": ["path"]
-            }
-        }
+                "properties": {"path": {"type": "string", "description": "Path to check"}},
+                "required": ["path"],
+            },
+        },
     },
     "get_sandbox_info": {
         "type": "function",
         "function": {
             "name": "get_sandbox_info",
             "description": "Get information about the current sandbox environment",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    "delete_file": {
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": "Delete a file in the sandbox",
             "parameters": {
                 "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    }
+                "properties": {"path": {"type": "string", "description": "File path to delete"}},
+                "required": ["path"],
+            },
+        },
+    },
+    "create_directory": {
+        "type": "function",
+        "function": {
+            "name": "create_directory",
+            "description": "Create a directory in the sandbox",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory path to create"}
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    "get_state": {
+        "type": "function",
+        "function": {
+            "name": "get_state",
+            "description": "Get a value from ephemeral agent state",
+            "parameters": {
+                "type": "object",
+                "properties": {"key": {"type": "string", "description": "State key to retrieve"}},
+                "required": ["key"],
+            },
+        },
+    },
+    "set_state": {
+        "type": "function",
+        "function": {
+            "name": "set_state",
+            "description": "Store a value in ephemeral agent state",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "State key"},
+                    "value": {
+                        "type": "string",
+                        "description": "Value to store (will be JSON serialized)",
+                    },
+                },
+                "required": ["key", "value"],
+            },
+        },
+    },
+    "list_state": {
+        "type": "function",
+        "function": {
+            "name": "list_state",
+            "description": "List all keys in ephemeral agent state",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    "get_recorded_files": {
+        "type": "function",
+        "function": {
+            "name": "get_recorded_files",
+            "description": "Get list of files recorded as created by the agent",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 }
