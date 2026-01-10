@@ -417,10 +417,11 @@ class TestPythonExecution:
         docker_provider._config = sandbox_config
         docker_provider._access_level = SandboxAccessLevel.RESTRICTED
 
-        mock_container.exec_run.return_value = (
-            1,
-            b'  File "<stdin>", line 1\n    def broken(\n              ^\nSyntaxError: unexpected EOF',
-        )
+        # First call is write_file (base64 echo), second is python execution
+        mock_container.exec_run.side_effect = [
+            (0, b""),  # write_file success
+            (1, b'  File "<stdin>", line 1\n    def broken(\n              ^\nSyntaxError: unexpected EOF'),
+        ]
 
         result = await docker_provider.execute_python("def broken(")
 
@@ -485,7 +486,7 @@ class TestFileOperations:
         docker_provider._config = sandbox_config
         docker_provider._access_level = SandboxAccessLevel.RESTRICTED
 
-        mock_container.exec_run.return_value = (0, b"")
+        mock_container.exec_run.return_value = (0, b"yes")  # file_exists expects "yes" or "no"
 
         exists = await docker_provider.file_exists("/workspace/test.txt")
 

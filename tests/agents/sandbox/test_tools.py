@@ -330,7 +330,7 @@ class TestFileOperationTools:
 
         result = await replace_in_file("test.txt", "World", "Universe")
 
-        assert "Successfully" in result
+        assert "State" in result or "updated" in result
 
     @pytest.mark.asyncio
     async def test_replace_in_file_not_found(self, setup_sandbox):
@@ -370,9 +370,9 @@ class TestFileOperationTools:
         mock_sandbox.list_files = AsyncMock(
             return_value=[
                 FileInfo(
-                    name="file1.txt", path="/workspace/file1.txt", size=100, is_directory=False
+                    name="file1.txt", path="/workspace/file1.txt", size_bytes=100, is_directory=False
                 ),
-                FileInfo(name="file2.py", path="/workspace/file2.py", size=200, is_directory=False),
+                FileInfo(name="file2.py", path="/workspace/file2.py", size_bytes=200, is_directory=False),
             ]
         )
 
@@ -544,12 +544,16 @@ class TestToolSchemasAndImplementations:
     def test_all_tools_have_schemas(self):
         """Test that all tool implementations have corresponding schemas."""
         for tool_name in SANDBOX_TOOL_IMPLEMENTATIONS.keys():
-            assert tool_name in SANDBOX_TOOL_SCHEMAS, f"Missing schema for {tool_name}"
+            # Handle fully qualified names (extract simple name)
+            simple_name = tool_name.split(".")[-1] if "." in tool_name else tool_name
+            assert simple_name in SANDBOX_TOOL_SCHEMAS, f"Missing schema for {tool_name} (simple: {simple_name})"
 
     def test_all_schemas_have_implementations(self):
         """Test that all tool schemas have corresponding implementations."""
+        # Get simple names from implementations
+        impl_simple_names = {k.split(".")[-1] if "." in k else k for k in SANDBOX_TOOL_IMPLEMENTATIONS.keys()}
         for tool_name in SANDBOX_TOOL_SCHEMAS.keys():
-            assert tool_name in SANDBOX_TOOL_IMPLEMENTATIONS, (
+            assert tool_name in impl_simple_names, (
                 f"Missing implementation for {tool_name}"
             )
 

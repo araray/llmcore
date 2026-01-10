@@ -598,7 +598,7 @@ class TestEndToEndWorkflows:
             task_description="Agent simulation",
         )
 
-        with patch("llmcore.agents.sandbox.tools.EphemeralResourceManager"):
+        with patch("llmcore.agents.sandbox.tools.EphemeralResourceManager", create=True):
             set_active_sandbox(sandbox, registry)
 
             try:

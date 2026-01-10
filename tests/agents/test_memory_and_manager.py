@@ -270,7 +270,7 @@ class TestEnhancedAgentManager:
     @pytest.mark.asyncio
     async def test_run_single_mode(self, mock_components):
         """Test running in single mode."""
-        with patch("llmcore.agents.manager.SingleAgentMode") as MockSingleAgent:
+        with patch("llmcore.agents.single_agent.SingleAgentMode") as MockSingleAgent:
             # Setup mock
             mock_single_instance = AsyncMock()
             mock_result = AgentResult(
@@ -299,7 +299,7 @@ class TestEnhancedAgentManager:
     @pytest.mark.asyncio
     async def test_run_legacy_mode(self, mock_components):
         """Test running in legacy mode."""
-        with patch("llmcore.agents.manager.CognitiveCycle") as MockCycle:
+        with patch("llmcore.agents.cognitive.phases.cycle.CognitiveCycle") as MockCycle:
             # Setup mock
             mock_cycle_instance = AsyncMock()
             mock_cycle_instance.run_until_complete = AsyncMock(return_value="Legacy result")
@@ -437,7 +437,7 @@ class TestSystemIntegration:
             "provider_manager": provider_manager,
             "memory_manager": memory_manager,
             "storage_manager": storage_manager,
-            "tool_manager": tool_manager,
+            # "tool_manager": tool_manager,  # Removed - not accepted by EnhancedAgentManager
         }
 
     def test_complete_initialization(self, mock_components):

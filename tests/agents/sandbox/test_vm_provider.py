@@ -294,7 +294,7 @@ class TestSSHConnection:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -334,7 +334,7 @@ class TestShellExecution:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -365,7 +365,7 @@ class TestShellExecution:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -406,7 +406,7 @@ class TestShellExecution:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -441,7 +441,7 @@ class TestPythonExecution:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -474,7 +474,7 @@ class TestFileOperations:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -500,7 +500,7 @@ class TestFileOperations:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -528,7 +528,7 @@ class TestFileOperations:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -557,7 +557,7 @@ class TestFileOperations:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -583,7 +583,7 @@ class TestFileOperations:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -615,7 +615,7 @@ class TestCleanup:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 
@@ -690,7 +690,7 @@ class TestStatusAndInfo:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         mock_transport = MagicMock()
         mock_transport.is_active.return_value = True
@@ -731,7 +731,7 @@ class TestStatusAndInfo:
         mock_stdout.channel.recv_exit_status.return_value = 0
         mock_stderr = MagicMock()
         mock_stderr.read.return_value = b""
-        mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
+        mock_client.exec_command.side_effect = lambda *a, **k: (MagicMock(), mock_stdout, mock_stderr)
 
         await provider.initialize(sandbox_config)
 

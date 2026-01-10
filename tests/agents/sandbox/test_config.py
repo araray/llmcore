@@ -295,6 +295,8 @@ class TestCreateRegistryConfig:
     def test_convert_vm_mode(self):
         """Test converting VM mode config."""
         sandbox_config = SandboxSystemConfig(mode="vm")
+        # VM mode requires vm_host to be set for registry validation
+        sandbox_config.vm.host = "test-vm.example.com"
 
         registry_config = create_registry_config(sandbox_config)
 
