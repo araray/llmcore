@@ -17,19 +17,21 @@ try:
     import openai
     from openai import AsyncOpenAI, OpenAIError
     from openai.types.chat import ChatCompletionChunk
+
     openai_available = True
 except ImportError:
     openai_available = False
-    AsyncOpenAI = None # type: ignore
-    OpenAIError = Exception # type: ignore
-    ChatCompletionChunk = None # type: ignore
+    AsyncOpenAI = None  # type: ignore
+    OpenAIError = Exception  # type: ignore
+    ChatCompletionChunk = None  # type: ignore
 
 try:
     import tiktoken
+
     tiktoken_available = True
 except ImportError:
     tiktoken_available = False
-    tiktoken = None # type: ignore
+    tiktoken = None  # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
 from ..models import Message, ModelDetails, Tool
@@ -66,6 +68,7 @@ class OpenAIProvider(BaseProvider):
     LLMCore provider for interacting with the OpenAI API.
     Handles List[Message] context type and standardized tool-calling.
     """
+
     _client: Optional[AsyncOpenAI] = None
     _encoding: Optional[Any] = None
     _api_key_env_var: Optional[str] = None
@@ -85,24 +88,30 @@ class OpenAIProvider(BaseProvider):
         """
         super().__init__(config, log_raw_payloads)
         if not openai_available:
-            raise ImportError("OpenAI library not installed. Please install `openai` or `llmcore[openai]`.")
+            raise ImportError(
+                "OpenAI library not installed. Please install `openai` or `llmcore[openai]`."
+            )
         if not tiktoken_available:
-            raise ImportError("tiktoken library not installed. It is required for the OpenAI provider.")
+            raise ImportError(
+                "tiktoken library not installed. It is required for the OpenAI provider."
+            )
 
-        self._api_key_env_var = config.get('api_key_env_var')
-        api_key = config.get('api_key')
+        self._api_key_env_var = config.get("api_key_env_var")
+        api_key = config.get("api_key")
         if not api_key and self._api_key_env_var:
             api_key = os.environ.get(self._api_key_env_var)
         if not api_key:
-            api_key = os.environ.get('OPENAI_API_KEY')
+            api_key = os.environ.get("OPENAI_API_KEY")
 
         self.api_key = api_key
-        self.base_url = config.get('base_url')
-        self.default_model = config.get('default_model', DEFAULT_MODEL)
-        self.timeout = float(config.get('timeout', 60.0))
+        self.base_url = config.get("base_url")
+        self.default_model = config.get("default_model", DEFAULT_MODEL)
+        self.timeout = float(config.get("timeout", 60.0))
 
         if not self.api_key:
-            logger.warning("OpenAI API key not found in config or environment. Provider will likely fail.")
+            logger.warning(
+                "OpenAI API key not found in config or environment. Provider will likely fail."
+            )
 
         try:
             self._client = AsyncOpenAI(
@@ -126,7 +135,9 @@ class OpenAIProvider(BaseProvider):
             self._encoding = tiktoken.encoding_for_model(model_name)
             logger.debug(f"Loaded tiktoken encoding for model: {model_name}")
         except KeyError:
-            logger.warning(f"No specific tiktoken encoding for '{model_name}'. Using 'cl100k_base'.")
+            logger.warning(
+                f"No specific tiktoken encoding for '{model_name}'. Using 'cl100k_base'."
+            )
             self._encoding = tiktoken.get_encoding("cl100k_base")
         except Exception as e:
             logger.error(f"Failed to load tiktoken encoding for '{model_name}': {e}", exc_info=True)
@@ -151,7 +162,9 @@ class OpenAIProvider(BaseProvider):
                 model_id = model_obj.id
                 # OpenAI API doesn't return these details, so we use our static map.
                 context_length = self.get_max_context_length(model_id)
-                supports_tools = "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
+                supports_tools = (
+                    "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
+                )
 
                 details = ModelDetails(
                     id=model_id,
@@ -159,7 +172,7 @@ class OpenAIProvider(BaseProvider):
                     supports_streaming=True,
                     supports_tools=supports_tools,
                     provider_name=self.get_name(),
-                    metadata={"owned_by": model_obj.owned_by, "created": model_obj.created}
+                    metadata={"owned_by": model_obj.owned_by, "created": model_obj.created},
                 )
                 model_details_list.append(details)
             logger.info(f"Discovered {len(model_details_list)} models from OpenAI API.")
@@ -185,14 +198,21 @@ class OpenAIProvider(BaseProvider):
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
         if limit is None:
-            if "gpt-4o" in model_name: limit = 128000
-            elif "gpt-4-turbo" in model_name: limit = 128000
-            elif "gpt-4-32k" in model_name: limit = 32768
-            elif "gpt-4" in model_name: limit = 8192
-            elif "gpt-3.5-turbo" in model_name: limit = 16385
+            if "gpt-4o" in model_name:
+                limit = 128000
+            elif "gpt-4-turbo" in model_name:
+                limit = 128000
+            elif "gpt-4-32k" in model_name:
+                limit = 32768
+            elif "gpt-4" in model_name:
+                limit = 8192
+            elif "gpt-3.5-turbo" in model_name:
+                limit = 16385
             else:
                 limit = 4096
-                logger.warning(f"Unknown context length for OpenAI model '{model_name}'. Using fallback: {limit}.")
+                logger.warning(
+                    f"Unknown context length for OpenAI model '{model_name}'. Using fallback: {limit}."
+                )
         return limit
 
     async def chat_completion(
@@ -202,7 +222,7 @@ class OpenAIProvider(BaseProvider):
         stream: bool = False,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Sends a chat completion request to the OpenAI API with standardized tool support.
@@ -243,31 +263,44 @@ class OpenAIProvider(BaseProvider):
             api_kwargs["tool_choice"] = tool_choice
 
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-            log_data = {"model": model_name, "messages": messages_payload, "stream": stream, **api_kwargs}
+            log_data = {
+                "model": model_name,
+                "messages": messages_payload,
+                "stream": stream,
+                **api_kwargs,
+            }
             logger.debug(f"RAW LLM REQUEST ({self.get_name()}): {json.dumps(log_data, indent=2)}")
 
         try:
             response_or_stream = await self._client.chat.completions.create(
                 model=model_name,
-                messages=messages_payload, # type: ignore
+                messages=messages_payload,  # type: ignore
                 stream=stream,
-                **api_kwargs
+                **api_kwargs,
             )
             if stream:
+
                 async def stream_wrapper():
-                    async for chunk in response_or_stream: # type: ignore
+                    async for chunk in response_or_stream:  # type: ignore
                         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(f"RAW LLM STREAM CHUNK ({self.get_name()}): {chunk.model_dump_json()}")
+                            logger.debug(
+                                f"RAW LLM STREAM CHUNK ({self.get_name()}): {chunk.model_dump_json()}"
+                            )
                         yield chunk.model_dump(exclude_none=True)
+
                 return stream_wrapper()
             else:
-                response_dict = response_or_stream.model_dump(exclude_none=True) # type: ignore
+                response_dict = response_or_stream.model_dump(exclude_none=True)  # type: ignore
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"RAW LLM RESPONSE ({self.get_name()}): {json.dumps(response_dict, indent=2)}")
+                    logger.debug(
+                        f"RAW LLM RESPONSE ({self.get_name()}): {json.dumps(response_dict, indent=2)}"
+                    )
                 return response_dict
         except OpenAIError as e:
             logger.error(f"OpenAI API error: {e}", exc_info=True)
-            raise ProviderError(self.get_name(), f"OpenAI API Error (Status {e.status_code}): {e.message}")
+            raise ProviderError(
+                self.get_name(), f"OpenAI API Error (Status {e.status_code}): {e.message}"
+            )
         except Exception as e:
             logger.error(f"Unexpected error during OpenAI chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
@@ -279,9 +312,11 @@ class OpenAIProvider(BaseProvider):
             return (len(text) + 3) // 4
         if not text:
             return 0
-        return await asyncio.to_thread(lambda: len(self._encoding.encode(text))) # type: ignore
+        return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(
+        self, messages: List[Message], model: Optional[str] = None
+    ) -> int:
         """Counts tokens for a list of messages using tiktoken, including overhead."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating message token count.")
@@ -309,6 +344,49 @@ class OpenAIProvider(BaseProvider):
                 num_tokens += (len(message.role.value) + len(message.content)) // 4
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
+
+    def extract_response_content(self, response: Dict[str, Any]) -> str:
+        """
+        Extract text content from OpenAI non-streaming response.
+
+        OpenAI format: {"choices": [{"message": {"content": "..."}}]}
+
+        Args:
+            response: The raw response dictionary from chat_completion().
+
+        Returns:
+            The extracted text content.
+        """
+        try:
+            choices = response.get("choices", [])
+            if not choices:
+                return ""
+            message = choices[0].get("message", {})
+            return message.get("content") or ""
+        except (KeyError, IndexError, TypeError) as e:
+            logger.warning(f"Failed to extract content from OpenAI response: {e}")
+            return ""
+
+    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+        """
+        Extract text delta from OpenAI streaming chunk.
+
+        OpenAI streaming format: {"choices": [{"delta": {"content": "..."}}]}
+
+        Args:
+            chunk: A single streaming chunk dictionary.
+
+        Returns:
+            The extracted text delta.
+        """
+        try:
+            choices = chunk.get("choices", [])
+            if not choices:
+                return ""
+            delta = choices[0].get("delta", {})
+            return delta.get("content") or ""
+        except (KeyError, IndexError, TypeError):
+            return ""
 
     async def close(self) -> None:
         """Closes the underlying OpenAI client session."""

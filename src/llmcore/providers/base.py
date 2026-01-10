@@ -21,6 +21,7 @@ from ..models import Message, ModelDetails, Tool
 # Define a type alias for the context payload that can be passed to providers.
 ContextPayload = List[Message]
 
+
 class BaseProvider(abc.ABC):
     """
     Abstract Base Class for LLM provider integrations.
@@ -35,6 +36,7 @@ class BaseProvider(abc.ABC):
     UPDATED: Added get_models_details() abstract method for dynamic model capability discovery.
     UPDATED: Enhanced chat_completion() method signature with unified tool-calling support.
     """
+
     log_raw_payloads_enabled: bool
 
     @abc.abstractmethod
@@ -120,7 +122,7 @@ class BaseProvider(abc.ABC):
         stream: bool = False,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Perform a chat completion request to the provider's API.
@@ -166,7 +168,9 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def count_message_tokens(self, messages: List[Message], model: Optional[str] = None) -> int:
+    async def count_message_tokens(
+        self, messages: List[Message], model: Optional[str] = None
+    ) -> int:
         """
         Asynchronously count the total tokens for a list of messages.
 
@@ -183,13 +187,48 @@ class BaseProvider(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def extract_response_content(self, response: Dict[str, Any]) -> str:
+        """
+        Extract the text content from a non-streaming API response.
+
+        Each provider has a different response structure. This method provides
+        a unified interface for extracting the generated text content.
+
+        Args:
+            response: The raw response dictionary from chat_completion().
+
+        Returns:
+            The extracted text content as a string.
+
+        Raises:
+            KeyError: If the expected content field is not present.
+        """
+        pass
+
+    @abc.abstractmethod
+    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+        """
+        Extract the text delta from a streaming response chunk.
+
+        Each provider has a different streaming chunk structure. This method
+        provides a unified interface for extracting incremental text content.
+
+        Args:
+            chunk: A single chunk dictionary from a streaming response.
+
+        Returns:
+            The extracted text delta as a string, or empty string if none.
+        """
+        pass
+
     async def close(self) -> None:
-         """
-         Clean up any resources used by the provider, such as network sessions.
-         This is an optional method; providers that do not need explicit cleanup
-         can use this default pass-through implementation.
-         """
-         pass
+        """
+        Clean up any resources used by the provider, such as network sessions.
+        This is an optional method; providers that do not need explicit cleanup
+        can use this default pass-through implementation.
+        """
+        pass
 
     # ============================================================================
     # NEW: Observability Instrumentation Methods
@@ -202,7 +241,7 @@ class BaseProvider(abc.ABC):
         input_tokens: Optional[int] = None,
         output_tokens: Optional[int] = None,
         error: Optional[str] = None,
-        tenant_id: Optional[str] = None
+        tenant_id: Optional[str] = None,
     ) -> None:
         """
         Record metrics for an LLM API request.
@@ -219,20 +258,21 @@ class BaseProvider(abc.ABC):
             tenant_id: Tenant identifier if available
         """
         try:
-            
             # Extract tenant_id from current request context if not provided
-            if tenant_id is None:            record_llm_request(
-                provider=self.get_name(),
-                model=model,
-                tenant_id=tenant_id,
-                duration=duration,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                error=error
-            )
+            if tenant_id is None:
+                record_llm_request(
+                    provider=self.get_name(),
+                    model=model,
+                    tenant_id=tenant_id,
+                    duration=duration,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    error=error,
+                )
         except Exception as e:
             # Don't fail the main operation if metrics recording fails
             import logging
+
             logger = logging.getLogger(__name__)
             logger.debug(f"Failed to record LLM metrics: {e}")
 
@@ -252,7 +292,7 @@ class BaseProvider(abc.ABC):
             Span context manager or no-op context manager
         """
         try:
-            from ..tracing import get_tracer, create_span
+            from ..tracing import create_span, get_tracer
 
             tracer = get_tracer(f"llmcore.providers.{self.get_name()}")
 
@@ -260,7 +300,7 @@ class BaseProvider(abc.ABC):
                 "llm.provider": self.get_name(),
                 "llm.model": model,
                 "llm.operation": operation,
-                **attributes
+                **attributes,
             }
 
             return create_span(tracer, f"llm.{operation}", **span_attributes)
@@ -269,6 +309,7 @@ class BaseProvider(abc.ABC):
             # Return no-op context manager if tracing fails
             import logging
             from contextlib import nullcontext
+
             logger = logging.getLogger(__name__)
             logger.debug(f"Failed to create LLM span: {e}")
             return nullcontext()
@@ -280,7 +321,7 @@ class BaseProvider(abc.ABC):
         stream: bool = False,
         tools: Optional[List[Tool]] = None,
         tool_choice: Optional[str] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Instrumented wrapper for chat_completion that adds observability.
@@ -301,7 +342,7 @@ class BaseProvider(abc.ABC):
         Returns:
             API response or async generator of chunks
         """
-        actual_model = model or self.default_model if hasattr(self, 'default_model') else 'unknown'
+        actual_model = model or self.default_model if hasattr(self, "default_model") else "unknown"
         start_time = time.time()
         error = None
         input_tokens = None
@@ -312,7 +353,7 @@ class BaseProvider(abc.ABC):
             "llm.stream": stream,
             "llm.tools_available": len(tools) if tools else 0,
             "llm.tool_choice": tool_choice,
-            "llm.context_messages": len(context)
+            "llm.context_messages": len(context),
         }
 
         with self._create_llm_span("chat_completion", actual_model, **span_attributes) as span:
@@ -324,14 +365,14 @@ class BaseProvider(abc.ABC):
                     stream=stream,
                     tools=tools,
                     tool_choice=tool_choice,
-                    **kwargs
+                    **kwargs,
                 )
 
                 # Extract token counts from response if available
                 if not stream and isinstance(result, dict):
-                    usage = result.get('usage', {})
-                    input_tokens = usage.get('prompt_tokens')
-                    output_tokens = usage.get('completion_tokens')
+                    usage = result.get("usage", {})
+                    input_tokens = usage.get("prompt_tokens")
+                    output_tokens = usage.get("completion_tokens")
 
                 return result
 
@@ -339,6 +380,7 @@ class BaseProvider(abc.ABC):
                 error = type(e).__name__
                 if span:
                     from ..tracing import record_span_exception
+
                     record_span_exception(span, e)
                 raise
             finally:
@@ -349,15 +391,19 @@ class BaseProvider(abc.ABC):
                     duration=duration,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
-                    error=error
+                    error=error,
                 )
 
                 # Add span attributes
                 if span:
                     from ..tracing import add_span_attributes
-                    add_span_attributes(span, {
-                        "llm.duration_seconds": duration,
-                        "llm.input_tokens": input_tokens,
-                        "llm.output_tokens": output_tokens,
-                        "llm.success": error is None
-                    })
+
+                    add_span_attributes(
+                        span,
+                        {
+                            "llm.duration_seconds": duration,
+                            "llm.input_tokens": input_tokens,
+                            "llm.output_tokens": output_tokens,
+                            "llm.success": error is None,
+                        },
+                    )

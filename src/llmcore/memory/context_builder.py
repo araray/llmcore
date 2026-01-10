@@ -12,8 +12,8 @@ payload exceeds the model's token limit.
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from ..models import (ChatSession, ContextItem, ContextItemType, Message,
-                      ContextPreparationDetails, Role as LLMCoreRole)
+from ..models import ChatSession, ContextItem, ContextItemType, ContextPreparationDetails, Message
+from ..models import Role as LLMCoreRole
 from ..providers.base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ async def build_context_payload(
     active_context_item_ids: Optional[List[str]] = None,
     explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
     message_inclusion_map: Optional[Dict[str, bool]] = None,
-    final_user_query_content: str = ""
+    final_user_query_content: str = "",
 ) -> ContextPreparationDetails:
     """
     Assembles and truncates the context payload, returning detailed information.
@@ -52,9 +52,9 @@ async def build_context_payload(
         A `ContextPreparationDetails` object containing the final messages,
         token counts, and truncation details.
     """
-    reserved_response_tokens = config.get('reserved_response_tokens', 500)
-    inclusion_priority = config.get('inclusion_priority_order', [])
-    truncation_priority = config.get('truncation_priority_order', [])
+    reserved_response_tokens = config.get("reserved_response_tokens", 500)
+    inclusion_priority = config.get("inclusion_priority_order", [])
+    truncation_priority = config.get("truncation_priority_order", [])
 
     available_tokens_for_prompt = max_model_tokens - reserved_response_tokens
     truncation_actions: Dict[str, Any] = {"details": []}
@@ -92,26 +92,36 @@ async def build_context_payload(
                 component_tokens["user_items_active"] += formatted_msg.tokens or 0
 
     # Final User Query
-    last_user_message_obj = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
+    last_user_message_obj = next(
+        (msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None
+    )
     final_query_message = Message(
         role=LLMCoreRole.USER,
         content=final_user_query_content,
         session_id=session.id,
-        id=f"final_query_{last_user_message_obj.id if last_user_message_obj else 'new'}"
+        id=f"final_query_{last_user_message_obj.id if last_user_message_obj else 'new'}",
     )
-    final_query_message.tokens = await provider.count_message_tokens([final_query_message], target_model)
+    final_query_message.tokens = await provider.count_message_tokens(
+        [final_query_message], target_model
+    )
     components["final_user_query"] = [final_query_message]
     component_tokens["final_user_query"] = final_query_message.tokens or 0
 
     # 2. Initial Assembly & Budget for History
     history_messages = [
-        msg for msg in session.messages
-        if msg.role != LLMCoreRole.SYSTEM and (not last_user_message_obj or msg.id != last_user_message_obj.id)
+        msg
+        for msg in session.messages
+        if msg.role != LLMCoreRole.SYSTEM
+        and (not last_user_message_obj or msg.id != last_user_message_obj.id)
     ]
     if message_inclusion_map:
-        history_messages = [msg for msg in history_messages if message_inclusion_map.get(msg.id, True)]
+        history_messages = [
+            msg for msg in history_messages if message_inclusion_map.get(msg.id, True)
+        ]
 
-    tokens_for_non_history = sum(component_tokens.get(cat, 0) for cat in inclusion_priority if cat != "history_chat")
+    tokens_for_non_history = sum(
+        component_tokens.get(cat, 0) for cat in inclusion_priority if cat != "history_chat"
+    )
     budget_for_history = available_tokens_for_prompt - tokens_for_non_history
 
     built_history, built_tokens = await _build_history_messages(
@@ -130,7 +140,9 @@ async def build_context_payload(
 
     # 4. Truncation if Over Budget
     if current_tokens > available_tokens_for_prompt:
-        logger.info(f"Context over budget ({current_tokens}/{available_tokens_for_prompt}). Applying truncation.")
+        logger.info(
+            f"Context over budget ({current_tokens}/{available_tokens_for_prompt}). Applying truncation."
+        )
         for category_to_truncate in truncation_priority:
             if current_tokens <= available_tokens_for_prompt:
                 break
@@ -160,7 +172,9 @@ async def build_context_payload(
     # Final check
     if current_tokens > available_tokens_for_prompt:
         # This should be a rare case, but as a safeguard
-        logger.error(f"Context still too long ({current_tokens}/{available_tokens_for_prompt}) after all truncation.")
+        logger.error(
+            f"Context still too long ({current_tokens}/{available_tokens_for_prompt}) after all truncation."
+        )
         # We might need a final, more aggressive truncation here, or raise an error.
         # For now, we'll let the caller handle the oversized payload.
 
@@ -170,7 +184,7 @@ async def build_context_payload(
         prepared_messages=final_payload_messages,
         final_token_count=final_token_count,
         max_tokens_for_model=max_model_tokens,
-        truncation_actions_taken=truncation_actions
+        truncation_actions_taken=truncation_actions,
     )
 
 
@@ -179,18 +193,26 @@ async def _format_and_tokenize_item_as_message(
     provider: BaseProvider,
     target_model: str,
     item_category: str,
-    config: Dict[str, Any]
+    config: Dict[str, Any],
 ) -> Message:
     """Formats a ContextItem into a Message or tokenizes an existing Message."""
+
+    # Type validation: ensure item is Message or ContextItem
+    if not isinstance(item, (Message, ContextItem)):
+        raise TypeError(
+            f"explicitly_staged_items must contain Message or ContextItem objects, "
+            f"got {type(item).__name__}. Ensure all items are properly typed."
+        )
+
     if isinstance(item, Message):
         if item.tokens is None:
             item.tokens = await provider.count_message_tokens([item], target_model)
         return item
 
-    max_chars_per_item = config.get('max_chars_per_user_item', 40000)
+    max_chars_per_item = config.get("max_chars_per_user_item", 40000)
     content_for_llm = item.content
     item.is_truncated = False
-    if not item.metadata.get('ignore_char_limit', False) and len(item.content) > max_chars_per_item:
+    if not item.metadata.get("ignore_char_limit", False) and len(item.content) > max_chars_per_item:
         content_for_llm = item.content[:max_chars_per_item]
         item.is_truncated = True
 
@@ -201,10 +223,10 @@ async def _format_and_tokenize_item_as_message(
     formatted_content = f"{header}\n{content_for_llm}\n{footer}"
 
     msg = Message(
-        role=LLMCoreRole.USER, # Using USER role for context items to be clearly separated
+        role=LLMCoreRole.USER,  # Using USER role for context items to be clearly separated
         content=formatted_content,
         session_id=item.metadata.get("session_id_for_message", "context_item_session"),
-        id=f"{item_category}_{item.id}"
+        id=f"{item_category}_{item.id}",
     )
     msg.tokens = await provider.count_message_tokens([msg], target_model)
     return msg
@@ -215,13 +237,13 @@ async def _build_history_messages(
     provider: BaseProvider,
     target_model: str,
     budget: int,
-    config: Dict[str, Any]
+    config: Dict[str, Any],
 ) -> Tuple[List[Message], int]:
     """Builds the chat history part of the context within a given token budget."""
     if budget <= 0 or not history_messages:
         return [], 0
 
-    user_retained_count = config.get('user_retained_messages_count', 5)
+    user_retained_count = config.get("user_retained_messages_count", 5)
 
     for msg in history_messages:
         if msg.tokens is None:
@@ -275,8 +297,7 @@ async def _build_history_messages(
 
 
 def _truncate_message_list_from_start(
-    messages: List[Message],
-    tokens_to_free: int
+    messages: List[Message], tokens_to_free: int
 ) -> Tuple[List[Message], int]:
     """Removes messages from the beginning of a list to free up tokens."""
     freed_so_far = 0

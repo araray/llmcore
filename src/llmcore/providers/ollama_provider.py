@@ -369,6 +369,83 @@ class OllamaProvider(BaseProvider):
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
+    def extract_response_content(self, response: Dict[str, Any]) -> str:
+        """
+        Extract text content from Ollama non-streaming response.
+
+        Ollama /api/chat response format (verified from official REST API docs):
+        {
+            "model": "llama3.2",
+            "message": {"role": "assistant", "content": "Hello! How are you?"},
+            "done": true,
+            "total_duration": 5191566416,
+            ...
+        }
+
+        The Ollama Python SDK's ChatResponse.model_dump() produces this structure.
+        This differs from OpenAI's {"choices": [{"message": {...}}]} format.
+
+        Args:
+            response: The raw response dictionary from chat_completion().
+
+        Returns:
+            The extracted text content.
+        """
+        try:
+            # Ollama format: response["message"]["content"]
+            message = response.get("message", {})
+            if isinstance(message, dict):
+                return message.get("content") or ""
+            return ""
+        except (KeyError, TypeError) as e:
+            logger.warning(f"Failed to extract content from Ollama response: {e}")
+            return ""
+
+    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+        """
+        Extract text delta from Ollama streaming chunk.
+
+        Ollama streaming format (verified from official REST API docs):
+        {
+            "model": "llama3.2",
+            "message": {"role": "assistant", "content": "The"},
+            "done": false
+        }
+
+        Each chunk contains incremental content. The final chunk has "done": true
+        and may have empty content.
+
+        Args:
+            chunk: A single streaming chunk dictionary (or Pydantic model).
+
+        Returns:
+            The extracted text delta.
+        """
+        try:
+            # Handle both dict and Pydantic model formats
+            # OllamaProvider.chat_completion() may return ChatResponse Pydantic model
+            # which gets converted to dict, but streaming yields raw chunks
+            if isinstance(chunk, dict):
+                message = chunk.get("message", {})
+            elif hasattr(chunk, "message"):
+                # Handle Pydantic ChatResponse model case (ollama._types.ChatResponse)
+                msg_attr = chunk.message
+                if isinstance(msg_attr, dict):
+                    message = msg_attr
+                elif hasattr(msg_attr, "content"):
+                    # Message is a Pydantic model with .content attribute
+                    return msg_attr.content or ""
+                else:
+                    return ""
+            else:
+                return ""
+
+            if isinstance(message, dict):
+                return message.get("content") or ""
+            return ""
+        except (KeyError, TypeError, AttributeError):
+            return ""
+
     async def close(self) -> None:
         """Closes the underlying Ollama client session."""
         if self._client:
