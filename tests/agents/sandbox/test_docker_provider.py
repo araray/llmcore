@@ -417,10 +417,14 @@ class TestPythonExecution:
         docker_provider._config = sandbox_config
         docker_provider._access_level = SandboxAccessLevel.RESTRICTED
 
-        # First call is write_file (base64 echo), second is python execution
+        # write_file makes 2 calls (mkdir + base64 write), then python execution
         mock_container.exec_run.side_effect = [
-            (0, b""),  # write_file success
-            (1, b'  File "<stdin>", line 1\n    def broken(\n              ^\nSyntaxError: unexpected EOF'),
+            (0, b""),  # mkdir -p for parent directory
+            (0, b""),  # base64 echo to write file content
+            (
+                1,
+                b'  File "<stdin>", line 1\n    def broken(\n              ^\nSyntaxError: unexpected EOF',
+            ),
         ]
 
         result = await docker_provider.execute_python("def broken(")
