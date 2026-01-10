@@ -248,7 +248,7 @@ class CognitiveMemoryIntegrator:
         # - data (NOT content) - Episodes use data: Dict[str, Any], not content: str
         return Episode(
             session_id=session_id,
-            event_type=EpisodeType.TOOL_USE,  # Correct field name
+            event_type=EpisodeType.AGENT_REFLECTION,
             data={  # Episodes use 'data' dict, not 'content' string
                 "content": "\n".join(content_parts),
                 "iteration": iteration.iteration_number,
