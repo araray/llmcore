@@ -808,6 +808,23 @@ SANDBOX_TOOL_SCHEMAS = {
             }
         }
     },
+    "file_exists": {
+        "type": "function",
+        "function": {
+            "name": "file_exists",
+            "description": "Check if a file or directory exists in the sandbox",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to check"
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+    },
     "get_sandbox_info": {
         "type": "function",
         "function": {

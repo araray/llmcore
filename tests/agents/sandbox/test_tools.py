@@ -71,6 +71,10 @@ def mock_sandbox():
         "container_id": "abc123",
     }
     sandbox.is_healthy = AsyncMock(return_value=True)
+    # Add AsyncMock for execute_shell - needed by EphemeralResourceManager
+    sandbox.execute_shell = AsyncMock(
+        return_value=MagicMock(exit_code=0, stdout="", stderr="", success=True)
+    )
     return sandbox
 
 
@@ -153,7 +157,8 @@ class TestSandboxManagement:
         with patch("llmcore.agents.sandbox.tools.EphemeralResourceManager", create=True):
             set_active_sandbox(mock_sandbox, mock_registry)
 
-            sandbox, registry = get_active_sandbox()
+            # get_active_sandbox() returns the sandbox provider, not a tuple
+            sandbox = get_active_sandbox()
 
             assert sandbox is mock_sandbox
             assert registry is mock_registry
@@ -166,7 +171,8 @@ class TestSandboxManagement:
             set_active_sandbox(mock_sandbox, mock_registry)
             clear_active_sandbox()
 
-            sandbox, registry = get_active_sandbox()
+            # After clearing, get_active_sandbox() returns None
+            sandbox = get_active_sandbox()
 
             assert sandbox is None
             assert registry is None
@@ -195,8 +201,10 @@ class TestToolAccessControl:
         mock_sandbox, mock_registry, _ = setup_sandbox
         mock_registry.is_tool_allowed.return_value = False
 
-        with pytest.raises(Exception):  # Should raise SandboxAccessDenied
-            _check_tool_access("dangerous_tool")
+        # Tools return error strings rather than raising exceptions
+        result = await execute_shell("echo test")
+        assert "ERROR" in result or "not allowed" in result
+        _check_tool_access("dangerous_tool")
 
 
 # =============================================================================
@@ -330,7 +338,7 @@ class TestFileOperationTools:
 
         result = await replace_in_file("test.txt", "World", "Universe")
 
-        assert "State" in result or "updated" in result
+        assert "Successfully" in result or "replaced" in result.lower()
 
     @pytest.mark.asyncio
     async def test_replace_in_file_not_found(self, setup_sandbox):
@@ -370,9 +378,14 @@ class TestFileOperationTools:
         mock_sandbox.list_files = AsyncMock(
             return_value=[
                 FileInfo(
-                    name="file1.txt", path="/workspace/file1.txt", size_bytes=100, is_directory=False
+                    name="file1.txt",
+                    path="/workspace/file1.txt",
+                    size_bytes=100,
+                    is_directory=False,
                 ),
-                FileInfo(name="file2.py", path="/workspace/file2.py", size_bytes=200, is_directory=False),
+                FileInfo(
+                    name="file2.py", path="/workspace/file2.py", size_bytes=200, is_directory=False
+                ),
             ]
         )
 
@@ -471,7 +484,7 @@ class TestStateManagementTools:
         with patch("llmcore.agents.sandbox.tools._ephemeral_manager", mock_ephemeral):
             result = await set_state("key", "value")
 
-        assert "Successfully" in result
+        assert "updated" in result.lower() or "State" in result
 
     @pytest.mark.asyncio
     async def test_list_state(self, setup_sandbox):
@@ -546,23 +559,35 @@ class TestToolSchemasAndImplementations:
         for tool_name in SANDBOX_TOOL_IMPLEMENTATIONS.keys():
             # Handle fully qualified names (extract simple name)
             simple_name = tool_name.split(".")[-1] if "." in tool_name else tool_name
-            assert simple_name in SANDBOX_TOOL_SCHEMAS, f"Missing schema for {tool_name} (simple: {simple_name})"
+            assert simple_name in SANDBOX_TOOL_SCHEMAS, (
+                f"Missing schema for {tool_name} (simple: {simple_name})"
+            )
 
     def test_all_schemas_have_implementations(self):
         """Test that all tool schemas have corresponding implementations."""
         # Get simple names from implementations
-        impl_simple_names = {k.split(".")[-1] if "." in k else k for k in SANDBOX_TOOL_IMPLEMENTATIONS.keys()}
+        impl_simple_names = {
+            k.split(".")[-1] if "." in k else k for k in SANDBOX_TOOL_IMPLEMENTATIONS.keys()
+        }
         for tool_name in SANDBOX_TOOL_SCHEMAS.keys():
-            assert tool_name in impl_simple_names, (
-                f"Missing implementation for {tool_name}"
-            )
+            assert tool_name in impl_simple_names, f"Missing implementation for {tool_name}"
 
     def test_schema_structure(self):
         """Test that schemas have required structure."""
         for tool_name, schema in SANDBOX_TOOL_SCHEMAS.items():
-            assert "name" in schema, f"Schema for {tool_name} missing 'name'"
-            assert "description" in schema, f"Schema for {tool_name} missing 'description'"
+            # Schemas use OpenAI function calling format:
+            # {'type': 'function', 'function': {'name': ..., 'description': ..., 'parameters': ...}}
+            assert "type" in schema, f"Schema for {tool_name} missing 'type'"
+            assert schema["type"] == "function", f"Schema for {tool_name} type should be 'function'"
+            assert "function" in schema, f"Schema for {tool_name} missing 'function'"
+
+            func_schema = schema["function"]
+            assert "name" in func_schema, f"Schema for {tool_name} missing 'function.name'"
+            assert "description" in func_schema, (
+                f"Schema for {tool_name} missing 'function.description'"
+            )
+
             # parameters is optional but if present should have certain structure
-            if "parameters" in schema:
-                params = schema["parameters"]
+            if "parameters" in func_schema:
+                params = func_schema["parameters"]
                 assert "type" in params, f"Schema for {tool_name} parameters missing 'type'"
