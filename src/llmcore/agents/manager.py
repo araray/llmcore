@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import LLMCoreError
 from ..memory.manager import MemoryManager
-from ..models import AgentTask
+from ..models import AgentTask, AgentState
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import cognitive_cycle
@@ -680,9 +680,10 @@ class EnhancedAgentManager(AgentManager):
 
         elif execution_mode == AgentMode.LEGACY:
             # Use original AgentManager cognitive loop
-            from ..models import AgentTask
+            from ..models import AgentTask, AgentState
 
-            task = AgentTask(goal=goal, context=context or "")
+            agent_state = AgentState(goal=goal)
+            task = AgentTask(goal=goal, context=context or "", agent_state=agent_state)
             final_answer = await self.run_agent_loop(
                 task=task, max_iterations=max_iterations, **kwargs
             )
