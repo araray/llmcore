@@ -41,7 +41,7 @@ async def llmcore_instance():
         "providers": {
             "ollama": {
                 "host": "http://localhost:11434",
-                "default_model": "llama3:8b",
+                "default_model": "gemma3:4b",
                 "timeout": 30,
             }
         },
@@ -163,7 +163,7 @@ class TestExternalRAGPattern1_ConstructedPrompts:
         response = await llmcore_instance.chat(
             message=full_prompt,
             provider_name="ollama",  # Explicit provider
-            model_name="llama3:8b",  # Explicit model
+            model_name="gemma3:4b",  # Explicit model
             enable_rag=False,
         )
 

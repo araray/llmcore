@@ -260,7 +260,7 @@ class TestSemantiscanConfigValidation:
                 'providers': {
                     'test_provider': {
                         'provider': 'ollama',
-                        'model_name': 'llama3:8b',
+                        'model_name': 'gemma3:4b',
                         'base_url': 'http://localhost:11434',
                         'api_key_env': '',
                         'tokenizer_name': '',
