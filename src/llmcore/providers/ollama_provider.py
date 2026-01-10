@@ -201,6 +201,8 @@ class OllamaProvider(BaseProvider):
             "mirostat": {"type": "integer"},
             "mirostat_tau": {"type": "number"},
             "mirostat_eta": {"type": "number"},
+            "num_predict": {"type": "integer"},
+            "max_tokens": {"type": "integer"},
         }
 
     def get_max_context_length(self, model: Optional[str] = None) -> int:
@@ -251,6 +253,9 @@ class OllamaProvider(BaseProvider):
         ]
         if not messages_payload:
             raise ProviderError(self.get_name(), "No valid messages to send.")
+
+        if "max_tokens" in kwargs:
+            kwargs["num_predict"] = kwargs.pop("max_tokens")
 
         # Prepare tools for the ollama library
         tools_payload = None

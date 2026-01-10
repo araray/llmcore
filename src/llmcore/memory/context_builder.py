@@ -59,8 +59,9 @@ async def build_context_payload(
     available_tokens_for_prompt = max_model_tokens - reserved_response_tokens
     truncation_actions: Dict[str, Any] = {"details": []}
 
-    components: Dict[str, List[Message]] = {cat: [] for cat in inclusion_priority}
-    component_tokens: Dict[str, int] = {cat: 0 for cat in inclusion_priority}
+    all_categories = set(inclusion_priority) | set(truncation_priority)
+    components: Dict[str, List[Message]] = {cat: [] for cat in all_categories}
+    component_tokens: Dict[str, int] = {cat: 0 for cat in all_categories}
 
     # 1. Gather and Prepare All Potential Components
     # System messages from session history
