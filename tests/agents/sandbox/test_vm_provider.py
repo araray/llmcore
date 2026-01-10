@@ -677,7 +677,11 @@ class TestStatusAndInfo:
 
         await provider.initialize(sandbox_config)
 
-        # Mock transport is_active returns True (set in fixture)
+        # Explicitly configure mock transport for health check
+        # (ensures mock chain is properly set up at assertion time)
+        mock_transport = mock_client.get_transport.return_value
+        mock_transport.is_active.return_value = True
+
         is_healthy = await provider.is_healthy()
 
         assert is_healthy is True

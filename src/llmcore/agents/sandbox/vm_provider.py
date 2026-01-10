@@ -33,24 +33,24 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from .base import (
-    SandboxProvider,
-    SandboxConfig,
-    SandboxAccessLevel,
-    SandboxStatus,
     ExecutionResult,
-    FileInfo
+    FileInfo,
+    SandboxAccessLevel,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxStatus,
 )
 from .exceptions import (
-    SandboxInitializationError,
-    SandboxExecutionError,
-    SandboxTimeoutError,
     SandboxAccessDenied,
     SandboxCleanupError,
+    SandboxConnectionError,
+    SandboxExecutionError,
+    SandboxInitializationError,
     SandboxNotInitializedError,
-    SandboxConnectionError
+    SandboxTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ class VMSandboxProvider(SandboxProvider):
         private_key_path: Optional[str] = None,
         full_access_hosts: Optional[List[str]] = None,
         use_ssh_agent: bool = True,
-        connection_timeout: int = 30
+        connection_timeout: int = 30,
     ):
         """
         Initialize VM sandbox provider.
@@ -174,17 +174,10 @@ class VMSandboxProvider(SandboxProvider):
         key_path = Path(self._private_key_path).expanduser()
 
         if not key_path.exists():
-            raise SandboxInitializationError(
-                f"Private key file not found: {key_path}"
-            )
+            raise SandboxInitializationError(f"Private key file not found: {key_path}")
 
         # Try different key types
-        key_types = [
-            paramiko.Ed25519Key,
-            paramiko.RSAKey,
-            paramiko.ECDSAKey,
-            paramiko.DSSKey
-        ]
+        key_types = [paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey, paramiko.DSSKey]
 
         for key_class in key_types:
             try:
@@ -193,8 +186,7 @@ class VMSandboxProvider(SandboxProvider):
                 continue
 
         raise SandboxInitializationError(
-            f"Could not load private key from {key_path}. "
-            "Supported types: Ed25519, RSA, ECDSA, DSS"
+            f"Could not load private key from {key_path}. Supported types: Ed25519, RSA, ECDSA, DSS"
         )
 
     async def initialize(self, config: SandboxConfig) -> None:
@@ -238,7 +230,7 @@ class VMSandboxProvider(SandboxProvider):
                 "username": self._username,
                 "timeout": self._connection_timeout,
                 "allow_agent": self._use_ssh_agent,
-                "look_for_keys": True
+                "look_for_keys": True,
             }
 
             if pkey:
@@ -248,14 +240,12 @@ class VMSandboxProvider(SandboxProvider):
 
             # Connect (run in executor to avoid blocking)
             await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._client.connect(**connect_kwargs)
+                None, lambda: self._client.connect(**connect_kwargs)
             )
 
             # Setup SFTP
             self._sftp = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._client.open_sftp
+                None, self._client.open_sftp
             )
 
             logger.info(f"Connected to VM sandbox (access: {self._access_level.value})")
@@ -278,7 +268,7 @@ class VMSandboxProvider(SandboxProvider):
                 f"SSH authentication failed: {e}",
                 host=self._host,
                 port=self._port,
-                connection_type="ssh"
+                connection_type="ssh",
             )
         except paramiko.SSHException as e:
             self._status = SandboxStatus.ERROR
@@ -286,7 +276,7 @@ class VMSandboxProvider(SandboxProvider):
                 f"SSH connection error: {e}",
                 host=self._host,
                 port=self._port,
-                connection_type="ssh"
+                connection_type="ssh",
             )
         except Exception as e:
             self._status = SandboxStatus.ERROR
@@ -309,9 +299,7 @@ cd {self._workspace}
 
         result = await self.execute_shell(setup_commands)
         if not result.success:
-            raise SandboxInitializationError(
-                f"Failed to setup workspace: {result.stderr}"
-            )
+            raise SandboxInitializationError(f"Failed to setup workspace: {result.stderr}")
 
         # Update config with workspace paths
         self._config.working_directory = self._workspace
@@ -344,9 +332,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
         db_path = f"{self._workspace}/tmp/agent_task.db"
         self._config.ephemeral_db_path = db_path
 
-        result = await self.execute_shell(
-            f"sqlite3 {db_path} << 'EOF'\n{init_sql}\nEOF"
-        )
+        result = await self.execute_shell(f"sqlite3 {db_path} << 'EOF'\n{init_sql}\nEOF")
 
         if result.success:
             logger.debug(f"Initialized ephemeral SQLite at {db_path}")
@@ -389,19 +375,14 @@ mkdir -p {self._workspace}/share
         Raises:
             SandboxNotInitializedError: If not initialized
         """
-        if not self._client or self._status not in (
-            SandboxStatus.READY, SandboxStatus.EXECUTING
-        ):
+        if not self._client or self._status not in (SandboxStatus.READY, SandboxStatus.EXECUTING):
             raise SandboxNotInitializedError(
                 "Sandbox not initialized or not ready",
-                sandbox_id=self._config.sandbox_id if self._config else None
+                sandbox_id=self._config.sandbox_id if self._config else None,
             )
 
     async def execute_shell(
-        self,
-        command: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute a shell command on the VM.
@@ -414,9 +395,11 @@ mkdir -p {self._workspace}/share
         Returns:
             ExecutionResult with command output
         """
-        # For workspace setup, we may be called before full init
-        if self._status == SandboxStatus.INITIALIZING:
-            pass  # Allow during init
+        # For workspace setup or cleanup, we may be called outside normal ready state
+        # INITIALIZING: workspace creation during init
+        # CLEANING_UP: workspace removal during cleanup
+        if self._status in (SandboxStatus.INITIALIZING, SandboxStatus.CLEANING_UP):
+            pass  # Allow during init and cleanup
         else:
             self._ensure_initialized()
 
@@ -425,9 +408,7 @@ mkdir -p {self._workspace}/share
             effective_timeout = self._config.timeout_seconds
         effective_timeout = effective_timeout or 600
 
-        effective_workdir = working_dir or (
-            self._workspace if self._workspace else None
-        )
+        effective_workdir = working_dir or (self._workspace if self._workspace else None)
 
         start_time = time.time()
 
@@ -444,24 +425,18 @@ mkdir -p {self._workspace}/share
             # Execute via SSH
             stdin, stdout, stderr = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._client.exec_command(
-                        full_command,
-                        timeout=effective_timeout
-                    )
+                    None, lambda: self._client.exec_command(full_command, timeout=effective_timeout)
                 ),
-                timeout=effective_timeout + 5  # Extra buffer for network latency
+                timeout=effective_timeout + 5,  # Extra buffer for network latency
             )
 
             # Read outputs
             stdout_str = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: stdout.read().decode("utf-8", errors="replace")
+                None, lambda: stdout.read().decode("utf-8", errors="replace")
             )
 
             stderr_str = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: stderr.read().decode("utf-8", errors="replace")
+                None, lambda: stderr.read().decode("utf-8", errors="replace")
             )
 
             exit_code = stdout.channel.recv_exit_status()
@@ -486,7 +461,7 @@ mkdir -p {self._workspace}/share
                 stderr=stderr_str,
                 execution_time_seconds=execution_time,
                 truncated=truncated,
-                timed_out=False
+                timed_out=False,
             )
 
         except asyncio.TimeoutError:
@@ -500,7 +475,7 @@ mkdir -p {self._workspace}/share
                 stdout="",
                 stderr=f"Command timed out after {effective_timeout} seconds",
                 execution_time_seconds=execution_time,
-                timed_out=True
+                timed_out=True,
             )
 
         except Exception as e:
@@ -513,14 +488,11 @@ mkdir -p {self._workspace}/share
                 exit_code=-1,
                 stdout="",
                 stderr=str(e),
-                execution_time_seconds=time.time() - start_time
+                execution_time_seconds=time.time() - start_time,
             )
 
     async def execute_python(
-        self,
-        code: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute Python code on the VM.
@@ -541,23 +513,14 @@ mkdir -p {self._workspace}/share
 
         if not write_success:
             return ExecutionResult(
-                exit_code=-1,
-                stdout="",
-                stderr="Failed to write Python code to temp file"
+                exit_code=-1, stdout="", stderr="Failed to write Python code to temp file"
             )
 
         return await self.execute_shell(
-            f"python3 {temp_file}",
-            timeout=timeout,
-            working_dir=working_dir
+            f"python3 {temp_file}", timeout=timeout, working_dir=working_dir
         )
 
-    async def write_file(
-        self,
-        path: str,
-        content: str,
-        mode: str = "w"
-    ) -> bool:
+    async def write_file(self, path: str, content: str, mode: str = "w") -> bool:
         """
         Write content to a file on the VM.
 
@@ -586,8 +549,7 @@ mkdir -p {self._workspace}/share
             sftp_mode = "w" if mode == "w" else "a"
 
             await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._write_file_sftp(path, content, sftp_mode)
+                None, lambda: self._write_file_sftp(path, content, sftp_mode)
             )
 
             return True
@@ -618,8 +580,7 @@ mkdir -p {self._workspace}/share
 
         try:
             content = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._read_file_sftp(path)
+                None, lambda: self._read_file_sftp(path)
             )
             return content
         except FileNotFoundError:
@@ -654,8 +615,7 @@ mkdir -p {self._workspace}/share
             await self.execute_shell(f"mkdir -p '{parent_dir}'")
 
             await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._write_file_binary_sftp(path, content)
+                None, lambda: self._write_file_binary_sftp(path, content)
             )
 
             return True
@@ -686,8 +646,7 @@ mkdir -p {self._workspace}/share
 
         try:
             content = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._read_file_binary_sftp(path)
+                None, lambda: self._read_file_binary_sftp(path)
             )
             return content
         except FileNotFoundError:
@@ -701,11 +660,7 @@ mkdir -p {self._workspace}/share
         with self._sftp.open(path, "rb") as f:
             return f.read()
 
-    async def list_files(
-        self,
-        path: str = ".",
-        recursive: bool = False
-    ) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
         """
         List files in a directory on the VM.
 
@@ -732,29 +687,29 @@ mkdir -p {self._workspace}/share
                     item_path = line.strip()
                     if item_path:
                         name = Path(item_path).name
-                        files.append(FileInfo(
-                            path=item_path,
-                            name=name,
-                            is_directory=False
-                        ))
+                        files.append(FileInfo(path=item_path, name=name, is_directory=False))
                 return files
             else:
                 # Use SFTP for more accurate listing
                 items = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._sftp.listdir_attr(path)
+                    None, lambda: self._sftp.listdir_attr(path)
                 )
 
                 import stat
+
                 files = []
                 for item in items:
-                    files.append(FileInfo(
-                        path=f"{path}/{item.filename}",
-                        name=item.filename,
-                        is_directory=stat.S_ISDIR(item.st_mode),
-                        size_bytes=item.st_size,
-                        modified_at=datetime.fromtimestamp(item.st_mtime) if item.st_mtime else None
-                    ))
+                    files.append(
+                        FileInfo(
+                            path=f"{path}/{item.filename}",
+                            name=item.filename,
+                            is_directory=stat.S_ISDIR(item.st_mode),
+                            size_bytes=item.st_size,
+                            modified_at=datetime.fromtimestamp(item.st_mtime)
+                            if item.st_mtime
+                            else None,
+                        )
+                    )
 
                 return files
 
@@ -778,18 +733,13 @@ mkdir -p {self._workspace}/share
             path = f"{self._workspace}/{path}"
 
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._sftp.stat(path)
-            )
+            await asyncio.get_event_loop().run_in_executor(None, lambda: self._sftp.stat(path))
             return True
         except FileNotFoundError:
             return False
         except Exception:
             # Fall back to shell check
-            result = await self.execute_shell(
-                f"test -e '{path}' && echo 'yes' || echo 'no'"
-            )
+            result = await self.execute_shell(f"test -e '{path}' && echo 'yes' || echo 'no'")
             return result.stdout.strip() == "yes"
 
     async def delete_file(self, path: str) -> bool:
@@ -808,10 +758,7 @@ mkdir -p {self._workspace}/share
             path = f"{self._workspace}/{path}"
 
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._sftp.remove(path)
-            )
+            await asyncio.get_event_loop().run_in_executor(None, lambda: self._sftp.remove(path))
             return True
         except FileNotFoundError:
             return True  # Already doesn't exist
@@ -882,7 +829,7 @@ mkdir -p {self._workspace}/share
                 f"Cleanup completed with errors: {'; '.join(errors)}",
                 resources_leaked=errors,
                 partial_cleanup=True,
-                sandbox_id=self._config.sandbox_id if self._config else None
+                sandbox_id=self._config.sandbox_id if self._config else None,
             )
 
     async def is_healthy(self) -> bool:
@@ -933,14 +880,16 @@ mkdir -p {self._workspace}/share
             "username": self._username,
             "status": self._status.value,
             "access_level": self._access_level.value if self._access_level else None,
-            "workspace": self._workspace
+            "workspace": self._workspace,
         }
 
         if self._config:
-            info.update({
-                "sandbox_id": self._config.sandbox_id,
-                "network_enabled": self._config.network_enabled,
-                "timeout_seconds": self._config.timeout_seconds
-            })
+            info.update(
+                {
+                    "sandbox_id": self._config.sandbox_id,
+                    "network_enabled": self._config.network_enabled,
+                    "timeout_seconds": self._config.timeout_seconds,
+                }
+            )
 
         return info
