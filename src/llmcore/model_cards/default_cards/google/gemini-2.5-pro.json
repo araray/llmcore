@@ -1,0 +1,65 @@
+{
+  "model_id": "gemini-2.5-pro",
+  "display_name": "Gemini 2.5 Pro",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536,
+    "default_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.25,
+      "output": 10.00,
+      "cached_input": 0.31
+    },
+    "context_tiers": [
+      {"threshold_tokens": 200000, "input_price": 1.25, "output_price": 10.00},
+      {"threshold_tokens": 1000000, "input_price": 2.50, "output_price": 15.00}
+    ]
+  },
+  "lifecycle": {
+    "release_date": "2025-03-25",
+    "knowledge_cutoff": "2025-01",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-2.5-pro-latest", "gemini-2.5-pro-exp"],
+  "description": "Gemini 2.5 Pro is Google's flagship model with 1M-token context window and native multimodal understanding of text, images, video, and audio. Features thinking mode for complex reasoning tasks.",
+  "tags": ["flagship", "multimodal", "long-context", "reasoning"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
+    "supported_outputs": ["text"],
+    "grounding": {
+      "search": true,
+      "maps": false
+    },
+    "thinking": {
+      "mode": "dynamic",
+      "default_enabled": true
+    },
+    "live_api": true,
+    "url_context": true,
+    "safety_settings": []
+  },
+  "source": "builtin"
+}

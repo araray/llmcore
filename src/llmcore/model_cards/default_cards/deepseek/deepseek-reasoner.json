@@ -1,0 +1,55 @@
+{
+  "model_id": "deepseek-reasoner",
+  "display_name": "DeepSeek Reasoner",
+  "provider": "deepseek",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek",
+    "parameter_count": "671B",
+    "active_parameters": "37B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 64000,
+    "max_output_tokens": 64000,
+    "default_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.70,
+      "output": 2.50,
+      "cached_input": 0.07
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-01-20",
+    "knowledge_cutoff": "2024-11",
+    "status": "active"
+  },
+  "license": "MIT",
+  "open_weights": true,
+  "aliases": ["deepseek-r1", "DeepSeek-R1"],
+  "description": "DeepSeek Reasoner (R1) is a reasoning-optimized model that generates explicit chain-of-thought solutions. Returns reasoning_content plus final content for complex problems.",
+  "tags": ["reasoning", "chain-of-thought", "open-source", "math"],
+  "provider_deepseek": {
+    "thinking_mode": {
+      "supported": true,
+      "requires_think_token": true
+    },
+    "cache_hit_discount": null,
+    "fill_in_middle": false
+  },
+  "source": "builtin"
+}

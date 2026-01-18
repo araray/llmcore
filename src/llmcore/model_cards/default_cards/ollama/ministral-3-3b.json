@@ -1,0 +1,39 @@
+{
+  "model_id": "ministral-3-3b",
+  "display_name": "Ministral 3 3B",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "3B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-12-01",
+    "status": "active"
+  },
+  "license": "Apache-2.0",
+  "open_weights": true,
+  "aliases": ["Mistral-3-3B"],
+  "description": "Ministral 3 3B is a 3-billion-parameter open model designed for ultra-lightweight deployments (e.g. mobile, IoT). It supports text and image inputs and has basic instruction-following and reasoning capabilities given its size. While not as powerful as larger models, it delivers the best cost-to-performance ratio at this scale, often requiring an order of magnitude fewer tokens to produce useful results. Context window is 65K tokens, sufficient for short documents or conversations. Apache-2.0 licensed, it can be fine-tuned easily for custom edge use cases. Ministral 3B is ideal for scenarios where memory and compute are extremely limited but some conversational or perceptual AI capability is needed.",
+  "tags": ["open-weights", "tiny-model", "edge"],
+  "provider_mistral": {
+    "license_type": "apache-2.0",
+    "fill_in_middle": false
+  },
+  "source": "model_cards_01"
+}

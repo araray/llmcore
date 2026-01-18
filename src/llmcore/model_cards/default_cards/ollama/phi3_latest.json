@@ -1,0 +1,42 @@
+{
+  "model_id": "phi3:latest",
+  "display_name": "Phi-3",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "phi",
+    "parameter_count": "3.8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2024-04-23",
+    "knowledge_cutoff": "2024-01",
+    "status": "active"
+  },
+  "license": "MIT",
+  "open_weights": true,
+  "aliases": ["phi3", "phi3:mini"],
+  "description": "Phi-3 is Microsoft's small but highly capable model achieving GPT-3.5 level performance. Extremely efficient with 128K context window.",
+  "tags": ["open-source", "local", "efficient", "microsoft", "lightweight"],
+  "provider_ollama": {
+    "quantization_default": "q4_K_M",
+    "available_quantizations": ["q4_K_M", "q5_K_M", "q8_0", "fp16"],
+    "vram_requirement_gb": 3
+  },
+  "source": "builtin"
+}

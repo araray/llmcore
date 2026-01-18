@@ -1,0 +1,59 @@
+{
+  "model_id": "claude-opus-4.5-20251101",
+  "display_name": "Claude Opus 4.5",
+  "provider": "anthropic",
+  "model_type": "chat",
+  "architecture": {
+    "family": "claude",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "reasoning": true,
+    "code_execution": true,
+    "web_search": true,
+    "file_processing": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 5.00,
+      "output": 25.00,
+      "cached_input": 0.50
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-11-01",
+    "knowledge_cutoff": "2025-05",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["claude-4.5-opus"],
+  "description": "Claude Opus 4.5 is Anthropic's premium 1M-context model, optimized for maximal reasoning depth and multimodal input. It supports a 1,048,576-token context window and outputs up to 64K tokens. Opus 4.5 excels at complex, long documents and agent chains, outperforming previous models on coding and logic tasks. API pricing is $5 per 1M input tokens and $25 per 1M output tokens, reflecting its enterprise-grade capability. This model handles text, image, and other inputs, with integrated grounding (e.g. search) and priority access for Pro/Enterprise users.",
+  "tags": ["flagship", "long-context", "multimodal", "enterprise"],
+  "provider_anthropic": {
+    "extended_thinking": {
+      "supported": true,
+      "budget_tokens_range": [1024, 128000]
+    },
+    "computer_use": true,
+    "prompt_caching": {
+      "cache_write_5m_multiplier": 1.25,
+      "cache_write_1h_multiplier": 2.0,
+      "cache_read_multiplier": 0.1
+    },
+    "beta_features": []
+  },
+  "source": "model_cards_01"
+}

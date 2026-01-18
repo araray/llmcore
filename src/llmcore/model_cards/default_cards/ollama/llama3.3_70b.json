@@ -1,0 +1,42 @@
+{
+  "model_id": "llama3.3:70b",
+  "display_name": "Llama 3.3 70B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "70B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2024-12-06",
+    "knowledge_cutoff": "2023-12",
+    "status": "active"
+  },
+  "license": "llama3.3",
+  "open_weights": true,
+  "aliases": ["llama3.3", "llama3.3:latest"],
+  "description": "Llama 3.3 70B is Meta's efficient large language model offering GPT-4 level performance with 128K context. Optimized for local deployment with tool use support.",
+  "tags": ["open-source", "local", "tool-use", "meta"],
+  "provider_ollama": {
+    "quantization_default": "q4_K_M",
+    "available_quantizations": ["q4_K_M", "q5_K_M", "q8_0", "fp16"],
+    "vram_requirement_gb": 42
+  },
+  "source": "builtin"
+}

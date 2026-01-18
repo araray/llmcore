@@ -1,0 +1,49 @@
+{
+  "model_id": "mistral-large-latest",
+  "display_name": "Mistral Large",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "123B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.00,
+      "output": 6.00
+    }
+  },
+  "lifecycle": {
+    "release_date": "2024-11-18",
+    "knowledge_cutoff": "2024-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["mistral-large-2411"],
+  "description": "Mistral Large is Mistral AI's flagship model with 128K context, vision support, and strong reasoning. Excellent for complex tasks requiring nuanced understanding.",
+  "tags": ["flagship", "vision", "multilingual"],
+  "provider_mistral": {
+    "supports_safe_prompt": true,
+    "supports_fim": false
+  },
+  "source": "builtin"
+}

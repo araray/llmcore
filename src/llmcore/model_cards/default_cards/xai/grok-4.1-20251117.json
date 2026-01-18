@@ -1,0 +1,55 @@
+{
+  "model_id": "grok-4.1-20251117",
+  "display_name": "Grok 4.1",
+  "provider": "xai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Grok",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "reasoning": true,
+    "image_generation": true,
+    "web_search": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.20,
+      "output": 0.50,
+      "cached_input": 0.05
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-11-17",
+    "knowledge_cutoff": "2024-11",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["grok-4.1"],
+  "description": "Grok 4.1 is xAI's latest model, significantly improving emotional intelligence, creativity, and alignment while retaining Grok 4's analytical power. It underwent large-scale RLHF focusing on style, personality, and helpfulness, making it engaging and coherent in conversations. Grok 4.1 supports multimodal input (vision) and has integrated agent tools – it can perform live web searches, execute code, fetch data, and even generate images via an Agent Tools API. It holds the #1 rank on multiple human preference leaderboards in both reasoning ('thinking' mode) and non-reasoning modes. The model dynamically switches between Instant responses and extended reasoning (code-named tensor vs quasarflux) depending on query complexity. API usage is extremely affordable at ~$0.20 per 1M input and $0.50 per 1M output tokens, with only $0.05/M for cached prompts – making Grok 4.1 one of the most cost-effective frontier models. It outputs fewer hallucinations and more nuanced answers (e.g. demonstrating empathy in responses) compared to earlier Grok. Grok 4.1 is well-suited for general assistants requiring a mix of factual reliability and human-like emotional intelligence.",
+  "tags": ["alignment", "creative", "multimodal", "tool-augmented"],
+  "provider_xai": {
+    "live_search": {
+      "enabled": true,
+      "cost_per_source": 0.025
+    },
+    "x_integration": {
+      "X_mode": true
+    },
+    "server_tools": ["web_search", "X_search", "code_execution", "document_search", "image_generation"]
+  },
+  "source": "model_cards_01"
+}

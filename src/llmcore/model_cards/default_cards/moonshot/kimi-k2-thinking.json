@@ -1,0 +1,48 @@
+{
+  "model_id": "kimi-k2-thinking",
+  "display_name": "Kimi K2 Thinking",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi",
+    "parameter_count": "1T",
+    "active_parameters": "32B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true,
+    "web_search": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 2.50,
+      "cached_input": 0.05
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-07-15",
+    "status": "active"
+  },
+  "license": "Modified MIT",
+  "open_weights": true,
+  "aliases": ["Kimi-K2-Think"],
+  "description": "Kimi K2 Thinking is a special mode of K2 that enables chain-of-thought and extended reasoning. In this variant, the model can produce <think> segments or spawn multi-step solutions internally, greatly improving performance on complex logical and multi-step problems (it scored second-highest among open models on reasoning benchmarks). K2 Thinking retains the same 1T MoE architecture and 128K context, but allows the model to 'slow down and think,' trading latency for accuracy. It supports the <think> token format similar to DeepSeek and can search online or use tools mid-response, providing step-by-step transparency. API pricing is still extremely low for input ($0.15/M) and moderately higher for output ($2.50/M) due to the potentially longer answers with reasoning tokens. K2 Thinking is ideal when correctness is paramount – e.g. solving math proofs, complex code debugging – and the user is willing to allow the model to systematically work out the answer.",
+  "tags": ["extended-thinking", "chain-of-thought", "open-weights"],
+  "provider_extension": {
+    "extended_thinking": true,
+    "default_thinking_tokens": 0.60
+  },
+  "source": "model_cards_01"
+}

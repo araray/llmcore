@@ -1,0 +1,51 @@
+{
+  "model_id": "gpt-4o-mini",
+  "display_name": "GPT-4o Mini",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 16384,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.60,
+      "cached_input": 0.075
+    },
+    "batch_discount_percent": 50
+  },
+  "lifecycle": {
+    "release_date": "2024-07-18",
+    "knowledge_cutoff": "2023-10",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gpt-4o-mini-2024-07-18"],
+  "description": "GPT-4o Mini is a cost-efficient, smaller variant of GPT-4o, ideal for high-volume tasks requiring strong capabilities at lower cost.",
+  "tags": ["efficient", "cost-effective", "vision"],
+  "provider_openai": {
+    "owned_by": "openai",
+    "supports_predicted_outputs": true,
+    "fine_tuning_available": true
+  },
+  "source": "builtin"
+}

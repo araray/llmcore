@@ -1,0 +1,49 @@
+{
+  "model_id": "text-embedding-3-large",
+  "display_name": "Text Embedding 3 Large",
+  "provider": "openai",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "text-embedding",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8191,
+    "max_output_tokens": null
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.13,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "release_date": "2024-01-25",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["text-embedding-3-large-2024-01-25"],
+  "description": "OpenAI's most capable embedding model with 3072 dimensions. Supports dimension reduction via the dimensions parameter for optimizing storage and performance.",
+  "tags": ["embedding", "semantic-search", "rag"],
+  "embedding_config": {
+    "dimensions_default": 3072,
+    "dimensions": 3072,
+    "max_dimensions": 3072,
+    "similarity_metric": "cosine",
+    "supports_dimension_reduction": true
+  },
+  "provider_openai": {
+    "owned_by": "openai"
+  },
+  "source": "builtin"
+}

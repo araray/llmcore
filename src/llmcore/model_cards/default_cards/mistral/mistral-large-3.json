@@ -1,0 +1,46 @@
+{
+  "model_id": "mistral-large-3",
+  "display_name": "Mistral Large 3",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "675B",
+    "active_parameters": "41B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true,
+    "multimodal": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-12-01",
+    "knowledge_cutoff": "2025-05",
+    "status": "active"
+  },
+  "license": "Apache-2.0",
+  "open_weights": true,
+  "aliases": ["Mistral-3-Large"],
+  "description": "Mistral Large 3 is a state-of-the-art open-weight model with 675B parameters (MoE, 41B active). It supports 256K token context and excels at general tasks, multilingual dialogue, and even image understanding. Large 3 matches top closed models on many benchmarks while being fully open (Apache 2.0). Both base and instruction-tuned versions are available. This model achieves parity with other frontier instruct models and can be self-hosted via optimized NVFP4 checkpoints. Mistral Large 3 is designed for high-performance deployments, with support for JSON outputs and tool usage via an integrated 'thinking mode' (a reasoning variant is planned).",
+  "tags": ["open-weights", "moe", "multilingual", "multimodal"],
+  "provider_mistral": {
+    "open_weights": true,
+    "license_type": "apache-2.0",
+    "fill_in_middle": false,
+    "guardrails": {
+      "system_prompt": false
+    }
+  },
+  "source": "model_cards_01"
+}

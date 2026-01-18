@@ -1,0 +1,51 @@
+{
+  "model_id": "o1",
+  "display_name": "o1",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "o1",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 100000,
+    "default_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 15.00,
+      "output": 60.00,
+      "cached_input": 7.50
+    }
+  },
+  "lifecycle": {
+    "release_date": "2024-12-17",
+    "knowledge_cutoff": "2023-10",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["o1-2024-12-17"],
+  "description": "o1 is OpenAI's reasoning model that uses chain-of-thought to solve complex problems in science, coding, and math. It 'thinks before answering' with extended internal reasoning.",
+  "tags": ["reasoning", "chain-of-thought", "science", "math", "coding"],
+  "provider_openai": {
+    "owned_by": "openai",
+    "supports_predicted_outputs": false,
+    "fine_tuning_available": false,
+    "reasoning_effort_levels": ["low", "medium", "high"]
+  },
+  "source": "builtin"
+}

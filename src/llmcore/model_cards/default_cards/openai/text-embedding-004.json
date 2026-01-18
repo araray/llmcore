@@ -1,0 +1,48 @@
+{
+  "model_id": "text-embedding-004",
+  "display_name": "Text Embedding 004",
+  "provider": "google",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "gecko",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 2048,
+    "max_output_tokens": null
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.00,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "release_date": "2024-04-09",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["textembedding-gecko@004"],
+  "description": "Google's state-of-the-art text embedding model with 768 dimensions. Free to use with generous rate limits.",
+  "tags": ["embedding", "semantic-search", "rag", "free"],
+  "embedding_config": {
+    "dimensions_default": 768,
+    "similarity_metric": "cosine",
+    "supports_dimension_reduction": false
+  },
+  "provider_google": {
+    "supported_inputs": ["text"],
+    "supported_outputs": ["embedding"]
+  },
+  "source": "builtin"
+}

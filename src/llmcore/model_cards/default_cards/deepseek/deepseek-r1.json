@@ -1,0 +1,52 @@
+{
+  "model_id": "deepseek-r1",
+  "display_name": "DeepSeek R1",
+  "provider": "deepseek",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek",
+    "parameter_count": "671B",
+    "active_parameters": "37B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 64000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.70,
+      "output": 2.50,
+      "cached_input": 0.07
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-01-20",
+    "knowledge_cutoff": "2024-11",
+    "status": "active"
+  },
+  "license": "MIT",
+  "open_weights": true,
+  "aliases": ["deepseek-reasoner"],
+  "description": "DeepSeek R1 is a reasoning-optimized model built on the V3 base. It generates explicit step-by-step solutions (chain-of-thought) and was the first open model to rival OpenAI's o1 on reasoning tasks. R1 uses a 64K context and emphasizes internal logic over speed. It's open-sourced (MIT license) with 671B MoE parameters (37B active) and powers DeepSeek's thinking mode agent.",
+  "tags": ["reasoning", "chain-of-thought", "open-source"],
+  "provider_deepseek": {
+    "thinking_mode": {
+      "supported": true,
+      "requires_think_token": true
+    },
+    "cache_hit_discount": null,
+    "fill_in_middle": false
+  },
+  "source": "model_cards_01"
+}

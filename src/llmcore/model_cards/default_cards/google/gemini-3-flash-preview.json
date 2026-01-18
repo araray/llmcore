@@ -1,0 +1,56 @@
+{
+  "model_id": "gemini-3-flash-preview",
+  "display_name": "Gemini 3 Flash",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.50,
+      "output": 3.00,
+      "cached_input": 0.05
+    },
+    "batch_discount_percent": 50
+  },
+  "lifecycle": {
+    "release_date": "2025-12-17",
+    "knowledge_cutoff": "2025-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["Gemini3-Flash"],
+  "description": "Gemini 3 Flash is optimized for high-speed performance at a fraction of the cost. It supports the same 1.0M token context as Pro but is tuned for low latency, making it ideal for real-time applications. Flash provides Pro-level reasoning at 1/4 the price – just $0.50/M input and $3.00/M output tokens. It excels in agentic workflows, code tasks, and complex analysis with minimal delay. This model is well-suited for high-volume deployments, offering near frontier intelligence with significantly reduced cost.",
+  "tags": ["fast", "cost-effective", "long-context", "agentic"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio"],
+    "supported_outputs": ["text"],
+    "grounding": {
+      "search": true
+    },
+    "thinking": {
+      "mode": "efficient",
+      "default_enabled": true
+    },
+    "live_api": true
+  },
+  "source": "model_cards_01"
+}

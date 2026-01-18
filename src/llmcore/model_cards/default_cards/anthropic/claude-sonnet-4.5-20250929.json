@@ -1,0 +1,64 @@
+{
+  "model_id": "claude-sonnet-4.5-20250929",
+  "display_name": "Claude Sonnet 4.5",
+  "provider": "anthropic",
+  "model_type": "chat",
+  "architecture": {
+    "family": "claude",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "default_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true,
+    "code_execution": true,
+    "web_search": true,
+    "file_processing": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 3.00,
+      "output": 15.00,
+      "cached_input": 0.30
+    },
+    "batch_discount_percent": 50,
+    "context_tiers": [
+      { "threshold_tokens": 200000, "input_price": 3.00, "output_price": 15.00 },
+      { "threshold_tokens": 1000000, "input_price": 6.00, "output_price": 22.50 }
+    ]
+  },
+  "lifecycle": {
+    "release_date": "2025-09-29",
+    "knowledge_cutoff": "2025-01",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["claude-4.5-sonnet"],
+  "description": "Claude Sonnet 4.5 is a general-purpose model balancing reasoning and speed. It supports 200K token context by default, with an optional 1M-token beta context extension for complex workloads. Sonnet 4.5 handles coding, structured analysis, and extended dialogues, and can switch into an 'extended thinking' mode for step-by-step solutions. Priced at $3/M input and $15/M output (with prompt caching and batch 50% discounts), it is the recommended default Claude model for most developers.",
+  "tags": ["balanced", "extended-context", "coding", "vision"],
+  "provider_anthropic": {
+    "extended_thinking": {
+      "supported": true,
+      "budget_tokens_range": [1024, 128000]
+    },
+    "computer_use": true,
+    "prompt_caching": {
+      "cache_write_5m_multiplier": 1.25,
+      "cache_write_1h_multiplier": 2.0,
+      "cache_read_multiplier": 0.1
+    },
+    "beta_features": ["context-1m-2025-08-07"]
+  },
+  "source": "model_cards_01"
+}

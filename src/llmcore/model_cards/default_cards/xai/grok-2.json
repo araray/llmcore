@@ -1,0 +1,47 @@
+{
+  "model_id": "grok-2",
+  "display_name": "Grok 2",
+  "provider": "xai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "grok",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.00,
+      "output": 10.00
+    }
+  },
+  "lifecycle": {
+    "release_date": "2024-08-13",
+    "knowledge_cutoff": "2024-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["grok-2-1212", "grok-2-latest"],
+  "description": "Grok 2 is xAI's flagship model with strong reasoning, coding, and vision capabilities. Known for its witty and direct communication style.",
+  "tags": ["flagship", "vision", "coding"],
+  "provider_xai": {
+    "supports_live_data": true
+  },
+  "source": "builtin"
+}

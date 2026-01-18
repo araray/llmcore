@@ -1,0 +1,39 @@
+{
+  "model_id": "ministral-3-8b",
+  "display_name": "Ministral 3 8B",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-12-01",
+    "status": "active"
+  },
+  "license": "Apache-2.0",
+  "open_weights": true,
+  "aliases": ["Mistral-3-8B"],
+  "description": "Ministral 3 8B is an efficient open model with 8B parameters, offering strong performance given its small size. It supports multimodal inputs (images) and is fine-tuned for instructions and basic reasoning, making it suitable for edge devices and lightweight applications. Despite fewer parameters, it benefits from Mistral's advanced training techniques – often matching larger models in output quality while generating fewer unnecessary tokens. With up to 128K context length, it can process moderately long texts. The model is Apache 2.0 licensed. It's a good choice when running locally with limited GPU resources or for batch tasks where cost-efficiency is crucial.",
+  "tags": ["open-weights", "efficient", "multimodal"],
+  "provider_mistral": {
+    "license_type": "apache-2.0",
+    "fill_in_middle": false
+  },
+  "source": "model_cards_01"
+}

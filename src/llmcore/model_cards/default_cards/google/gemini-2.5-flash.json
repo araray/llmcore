@@ -1,0 +1,65 @@
+{
+  "model_id": "gemini-2.5-flash",
+  "display_name": "Gemini 2.5 Flash",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536,
+    "default_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": true,
+    "video_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.60,
+      "cached_input": 0.0375
+    },
+    "context_tiers": [
+      {"threshold_tokens": 200000, "input_price": 0.15, "output_price": 0.60},
+      {"threshold_tokens": 1000000, "input_price": 0.30, "output_price": 1.20}
+    ]
+  },
+  "lifecycle": {
+    "release_date": "2025-04-17",
+    "knowledge_cutoff": "2025-01",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-2.5-flash-latest", "gemini-2.5-flash-preview"],
+  "description": "Gemini 2.5 Flash is Google's fast, cost-efficient model with 1M-token context. Supports native audio/video understanding and thinking mode with excellent latency.",
+  "tags": ["fast", "efficient", "multimodal", "long-context"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
+    "supported_outputs": ["text", "audio"],
+    "grounding": {
+      "search": true,
+      "maps": false
+    },
+    "thinking": {
+      "mode": "dynamic",
+      "default_enabled": false
+    },
+    "live_api": true,
+    "url_context": true,
+    "safety_settings": []
+  },
+  "source": "builtin"
+}

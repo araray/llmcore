@@ -1,0 +1,50 @@
+{
+  "model_id": "kimi-k2-instruct",
+  "display_name": "Kimi K2",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi",
+    "parameter_count": "1T",
+    "active_parameters": "32B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true,
+    "audio_input": false,
+    "web_search": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.60,
+      "cached_input": 0.05
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-07-15",
+    "knowledge_cutoff": "2025-05",
+    "status": "active"
+  },
+  "license": "Modified MIT",
+  "open_weights": true,
+  "aliases": ["Kimi-K2"],
+  "description": "Kimi K2 is a 1-trillion parameter Mixture-of-Experts model (32B activated) developed by Moonshot AI. It was designed from the ground up for agentic intelligence – strong tool use, autonomous problem-solving, and reasoning. K2-Instruct is the general chat model, instruction-tuned for helpful and coherent responses without long chain-of-thought ('reflex-grade' with no extended thinking by default). It supports a 128K token context and accepts images as input (multimodal). Kimi K2 is open-source (modified MIT license) and optimized for use of external tools like web search and code execution. It's remarkably cost-effective: ~$0.15 per 1M input and $0.60 per 1M output tokens via API. This model achieves near state-of-the-art results on many benchmarks while running efficiently – making open AI more accessible.",
+  "tags": ["open-weights", "moe", "agentic", "multimodal"],
+  "provider_extension": {
+    "thinking_mode": "reflex",
+    "search_integration": true
+  },
+  "source": "model_cards_01"
+}

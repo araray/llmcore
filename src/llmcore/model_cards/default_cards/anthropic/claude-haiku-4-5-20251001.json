@@ -1,0 +1,58 @@
+{
+  "model_id": "claude-haiku-4-5-20251001",
+  "display_name": "Claude Haiku 4.5",
+  "provider": "anthropic",
+  "model_type": "chat",
+  "architecture": {
+    "family": "claude",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true,
+    "code_execution": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.00,
+      "output": 5.00,
+      "cached_input": 0.10
+    },
+    "batch_discount_percent": 50
+  },
+  "lifecycle": {
+    "release_date": "2025-10-01",
+    "knowledge_cutoff": "2025-02",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["claude-4.5-haiku", "claude-haiku-4.5"],
+  "description": "Claude Haiku 4.5 is Anthropic's ultra-fast, budget-friendly model for everyday tasks. Shares 200K context and 64K output capacity, prioritizing low latency and efficiency.",
+  "tags": ["fast", "low-cost", "vision", "multilingual"],
+  "provider_anthropic": {
+    "extended_thinking": {
+      "supported": true,
+      "budget_tokens_range": [1024, 128000]
+    },
+    "computer_use": true,
+    "prompt_caching": {
+      "cache_read_multiplier": 0.1
+    },
+    "beta_features": []
+  },
+  "source": "builtin"
+}

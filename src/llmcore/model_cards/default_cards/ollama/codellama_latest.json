@@ -1,0 +1,42 @@
+{
+  "model_id": "codellama:latest",
+  "display_name": "Code Llama",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 16384,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2023-08-24",
+    "knowledge_cutoff": "2023-04",
+    "status": "active"
+  },
+  "license": "llama2",
+  "open_weights": true,
+  "aliases": ["codellama", "codellama:7b"],
+  "description": "Code Llama is Meta's code-specialized model fine-tuned from Llama 2. Excels at code generation, completion, and explanation.",
+  "tags": ["open-source", "local", "coding", "meta"],
+  "provider_ollama": {
+    "quantization_default": "q4_K_M",
+    "available_quantizations": ["q4_K_M", "q5_K_M", "q8_0", "fp16"],
+    "vram_requirement_gb": 5
+  },
+  "source": "builtin"
+}

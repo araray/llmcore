@@ -1,0 +1,42 @@
+{
+  "model_id": "mistral:latest",
+  "display_name": "Mistral 7B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2023-09-27",
+    "knowledge_cutoff": "2023-06",
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": ["mistral", "mistral:7b"],
+  "description": "Mistral 7B is a highly efficient open model that outperforms Llama 2 13B on all benchmarks. Excellent for local deployment.",
+  "tags": ["open-source", "local", "efficient", "mistral"],
+  "provider_ollama": {
+    "quantization_default": "q4_K_M",
+    "available_quantizations": ["q4_K_M", "q5_K_M", "q8_0", "fp16"],
+    "vram_requirement_gb": 5
+  },
+  "source": "builtin"
+}

@@ -1,0 +1,49 @@
+{
+  "model_id": "gpt-5.2",
+  "display_name": "ChatGPT 5.2",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.75,
+      "output": 14.00,
+      "cached_input": 0.175
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-12-13",
+    "knowledge_cutoff": "2025-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gpt-5.2-default"],
+  "description": "ChatGPT 5.2 is OpenAI's most powerful general model, featuring integrated step-by-step reasoning. By default, it 'thinks' through problems internally before answering, yielding highly reliable results. It supports up to 400K tokens of context and can optionally expose its chain-of-thought when higher reasoning_effort is specified. GPT-5.2 demonstrates a massive leap in reasoning and coding ability, roughly doubling GPT-5.1's performance on expert tasks. API usage is billed at $1.75 per 1M input tokens and $14 per 1M output tokens, with cached prompt reuse at 10% cost. This model is ideal for complex Q&A, multi-step workflows, and agentic tasks, combining extended context with advanced planning.",
+  "tags": ["reasoning", "planning", "multimodal"],
+  "provider_openai": {
+    "supports_reasoning": true,
+    "reasoning_effort": "medium",
+    "supports_predicted_outputs": true,
+    "fine_tuning_available": false
+  },
+  "source": "model_cards_01"
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen3-coder-480b",
+  "display_name": "Qwen3-Coder 480B",
+  "provider": "qwen",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Qwen",
+    "parameter_count": "480B",
+    "active_parameters": "35B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.80,
+      "output": 4.00,
+      "cached_input": 0.08
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-07-22",
+    "knowledge_cutoff": "2025-06",
+    "status": "active"
+  },
+  "license": "Apache-2.0",
+  "open_weights": true,
+  "aliases": ["Qwen3-Coder"],
+  "description": "Qwen3-Coder is Alibaba's most powerful open-source coding model. It is a 480B-parameter MoE model with 35B active parameters per token, instruction-tuned for code generation and tool use. It supports native 256K token context (extensible to 1M with Yarn for repository-scale tasks). Qwen3-Coder excels at 'agentic coding,' integrating with tools like compilers or browsers via a special function-call format. By default it does not output chain-of-thought (no <think> blocks) to ensure deterministic code responses. It achieved top-tier results on agentic code benchmarks, comparable to Claude 4.5 on code reasoning tasks. The model is Apache 2.0 licensed and can be self-hosted (8 experts of 160 are used per query). API pricing via Alibaba Cloud is low (~$0.8/M input, $4/M output tokens), and it supports caching for repeated prompts. Qwen3-Coder is ideal for building coding assistants that can plan and execute multi-step programming tasks autonomously.",
+  "tags": ["open-weights", "coding", "agentic", "moe"],
+  "provider_qwen": {
+    "deployment_regions": ["global"],
+    "specialized_variant": "coder",
+    "context_tiers": [
+      { "threshold_tokens": 262144, "input_price": 0.80, "output_price": 4.00 }
+    ]
+  },
+  "source": "model_cards_01"
+}

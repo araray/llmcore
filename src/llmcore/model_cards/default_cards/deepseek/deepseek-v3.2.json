@@ -1,0 +1,61 @@
+{
+  "model_id": "deepseek-v3.2",
+  "display_name": "DeepSeek V3.2",
+  "provider": "deepseek",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek",
+    "parameter_count": "671B",
+    "active_parameters": "37B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 65536,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.28,
+      "output": 0.42,
+      "cached_input": 0.028
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-12-01",
+    "knowledge_cutoff": "2025-06",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["DeepSeek-V3.2"],
+  "description": "DeepSeek V3.2 is a Mixture-of-Experts model (671B params, 37B active) achieving GPT-5 level performance. It supports a 128K token context and offers a 'thinking mode' for step-by-step reasoning up to 64K output tokens. V3.2 integrates tool use and JSON output formatting, enabling agentic operations within prompts.",
+  "tags": ["flagship", "reasoning", "agentic", "moe"],
+  "provider_deepseek": {
+    "thinking_mode": {
+      "supported": true,
+      "param": "reasoning",
+      "default": false
+    },
+    "cache_hit_discount": 0.90,
+    "fill_in_middle": true,
+    "moe_architecture": {
+      "total_parameters": "671B",
+      "active_parameters": "37B"
+    }
+  },
+  "source": "model_cards_01"
+}

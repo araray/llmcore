@@ -1,0 +1,50 @@
+{
+  "model_id": "gpt-5.2-chat",
+  "display_name": "ChatGPT 5.2 Chat (Instant)",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.75,
+      "output": 14.00,
+      "cached_input": 0.175
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-12-13",
+    "knowledge_cutoff": "2025-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gpt-5.2-turbo"],
+  "description": "ChatGPT 5.2 Chat is the Instant mode of GPT-5.2, tuned for quick replies without step-by-step thinking. It provides high-quality answers with minimal latency, ideal for interactive chat and simple questions. This mode uses the full 400K-token context of GPT-5.2 but produces answers directly (no <think> reasoning output) for speed. Priced at ~$1.75/M input and $14/M output tokens, it balances cost and performance. ChatGPT 5.2 Chat is typically auto-selected for everyday queries, offering rapid responses while still benefiting from GPT-5.2's vast knowledge and multimodal understanding.",
+  "tags": ["instant", "low-latency", "chat"],
+  "provider_openai": {
+    "supports_reasoning": false,
+    "reasoning_effort": null,
+    "supports_predicted_outputs": true,
+    "fine_tuning_available": false
+  },
+  "source": "model_cards_01"
+}

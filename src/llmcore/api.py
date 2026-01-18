@@ -1268,3 +1268,256 @@ class LLMCore:
         """
         session_storage = self._storage_manager.session_storage
         return await session_storage.delete_context_preset(preset_name)
+
+    # ==========================================================================
+    # Model Card Library Methods
+    # ==========================================================================
+
+    def get_model_card(
+        self,
+        provider_name: str,
+        model_id: str,
+    ) -> Optional["ModelCard"]:
+        """
+        Get model card for a specific model.
+
+        Lookup order:
+        1. User override (~/.config/llmcore/model_cards/)
+        2. Built-in cards (llmcore/model_cards/default_cards/)
+        3. None if not found
+
+        Args:
+            provider_name: Provider name (e.g., "openai", "anthropic")
+            model_id: Model identifier or alias
+
+        Returns:
+            ModelCard if found, None otherwise
+
+        Example:
+            >>> card = llm.get_model_card("openai", "gpt-4o")
+            >>> if card:
+            ...     print(f"Context: {card.get_context_length()}")
+            ...     print(f"Supports vision: {card.capabilities.vision}")
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.get(provider_name, model_id)
+
+    def list_model_cards(
+        self,
+        provider_name: Optional[str] = None,
+        model_type: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        status: Optional[str] = None,
+    ) -> List["ModelCardSummary"]:
+        """
+        List available model cards with optional filtering.
+
+        Args:
+            provider_name: Filter by provider (None for all)
+            model_type: Filter by type ("chat", "embedding", etc.)
+            tags: Filter by tags (any match)
+            status: Filter by status ("active", "deprecated", etc.)
+
+        Returns:
+            List of ModelCardSummary objects
+
+        Example:
+            >>> # List all chat models
+            >>> cards = llm.list_model_cards(model_type="chat")
+            >>>
+            >>> # List all OpenAI models
+            >>> cards = llm.list_model_cards(provider_name="openai")
+            >>>
+            >>> # List models with specific tags
+            >>> cards = llm.list_model_cards(tags=["reasoning", "vision"])
+        """
+        from .model_cards import ModelType, get_model_card_registry
+
+        registry = get_model_card_registry()
+
+        mt = None
+        if model_type:
+            try:
+                mt = ModelType(model_type)
+            except ValueError:
+                logger.warning(f"Unknown model type: {model_type}")
+
+        return registry.list_cards(
+            provider=provider_name,
+            model_type=mt,
+            tags=tags,
+            status=status,
+        )
+
+    def get_model_context_length(
+        self,
+        provider_name: str,
+        model_id: str,
+        *,
+        fallback_to_provider: bool = True,
+    ) -> int:
+        """
+        Get context length for a model.
+
+        Lookup order:
+        1. Model card (if available)
+        2. Provider's get_max_context_length() (if fallback_to_provider=True)
+        3. Default (4096)
+
+        Args:
+            provider_name: Provider name
+            model_id: Model identifier
+            fallback_to_provider: Query provider if not in card
+
+        Returns:
+            Maximum input context length in tokens
+
+        Example:
+            >>> context_len = llm.get_model_context_length("openai", "gpt-4o")
+            >>> print(f"Max context: {context_len:,} tokens")
+        """
+        # Try model card first
+        card = self.get_model_card(provider_name, model_id)
+        if card:
+            return card.get_context_length()
+
+        # Fallback to provider
+        if fallback_to_provider:
+            try:
+                provider = self._provider_manager.get_provider(provider_name)
+                return provider.get_max_context_length(model_id)
+            except Exception:
+                pass
+
+        return 4096  # Default
+
+    def get_model_pricing(
+        self,
+        provider_name: str,
+        model_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get pricing information for a model.
+
+        Args:
+            provider_name: Provider name
+            model_id: Model identifier
+
+        Returns:
+            Dict with pricing info or None if not available
+
+        Example:
+            >>> pricing = llm.get_model_pricing("openai", "gpt-4o")
+            >>> if pricing:
+            ...     print(f"Input: ${pricing['input']}/1M tokens")
+            ...     print(f"Output: ${pricing['output']}/1M tokens")
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.get_pricing(provider_name, model_id)
+
+    def estimate_model_cost(
+        self,
+        provider_name: str,
+        model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int = 0,
+    ) -> Optional[float]:
+        """
+        Estimate cost for a given token usage.
+
+        Args:
+            provider_name: Provider name
+            model_id: Model identifier
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            cached_tokens: Number of cached input tokens (subset of input)
+
+        Returns:
+            Estimated cost in USD, or None if pricing not available
+
+        Example:
+            >>> cost = llm.estimate_model_cost(
+            ...     "openai", "gpt-4o",
+            ...     input_tokens=10000,
+            ...     output_tokens=2000
+            ... )
+            >>> if cost:
+            ...     print(f"Estimated cost: ${cost:.4f}")
+        """
+        card = self.get_model_card(provider_name, model_id)
+        if card:
+            return card.estimate_cost(input_tokens, output_tokens, cached_tokens)
+        return None
+
+    def save_model_card(
+        self,
+        card: "ModelCard",
+        *,
+        user_override: bool = True,
+    ) -> pathlib.Path:
+        """
+        Save a model card to disk.
+
+        Args:
+            card: ModelCard to save
+            user_override: If True, save to user directory; else to package
+
+        Returns:
+            Path where the card was saved
+
+        Example:
+            >>> from llmcore.model_cards import ModelCard, ModelContext
+            >>> card = ModelCard(
+            ...     model_id="my-custom-model",
+            ...     provider="ollama",
+            ...     model_type="chat",
+            ...     context=ModelContext(max_input_tokens=8192),
+            ... )
+            >>> path = llm.save_model_card(card)
+            >>> print(f"Saved to: {path}")
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.save_card(card, user_override=user_override)
+
+    def get_model_card_providers(self) -> List[str]:
+        """
+        Get list of providers that have model cards registered.
+
+        Returns:
+            List of provider names
+
+        Example:
+            >>> providers = llm.get_model_card_providers()
+            >>> print("Available providers:", providers)
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.get_providers()
+
+    def get_model_card_registry_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about the model card registry.
+
+        Returns:
+            Dict with registry statistics including:
+            - total_cards: Total number of loaded cards
+            - providers: Number of providers
+            - aliases: Number of registered aliases
+            - cards_by_provider: Breakdown by provider
+
+        Example:
+            >>> stats = llm.get_model_card_registry_stats()
+            >>> print(f"Loaded {stats['total_cards']} model cards")
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.stats()

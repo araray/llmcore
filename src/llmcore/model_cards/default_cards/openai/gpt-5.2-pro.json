@@ -1,0 +1,52 @@
+{
+  "model_id": "gpt-5.2-pro",
+  "display_name": "ChatGPT 5.2 Pro",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.75,
+      "output": 14.00,
+      "cached_input": 0.175
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-12-13",
+    "knowledge_cutoff": "2025-07",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gpt-5.2-pro-extended"],
+  "description": "ChatGPT 5.2 Pro (Extended Thinking) is the premium tier of GPT-5.2, capable of intensive, long-duration reasoning. In Pro mode, the model can think for very extended periods (minutes to hours) on difficult problems before finalizing an answer. It supports a user-adjustable 'reasoning_effort' up to Extra High, generating deeply considered responses with improved accuracy. Pro requires a specialized subscription (and initially was not API-accessible). It maintains the same 400K context window and core capabilities as GPT-5.2, but with substantially more internal computation (the model may produce large hidden chains-of-thought on the server). This mode is suited for high-stakes research and complex planning tasks, and matches or exceeds Gemini Pro on many benchmarks. (Pricing for Pro usage is typically higher or subject to special tier requirements; by default token rates mirror GPT-5.2 standard, but effective cost is greater due to extended compute.)",
+  "tags": ["extended-thinking", "premium", "high-accuracy"],
+  "provider_openai": {
+    "supports_reasoning": true,
+    "reasoning_effort": "extra high",
+    "supports_predicted_outputs": true,
+    "fine_tuning_available": false,
+    "tier_requirements": {
+      "subscription": "Pro plan required"
+    }
+  },
+  "source": "model_cards_01"
+}

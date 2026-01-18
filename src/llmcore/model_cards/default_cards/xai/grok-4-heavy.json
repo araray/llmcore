@@ -1,0 +1,39 @@
+{
+  "model_id": "grok-4-heavy",
+  "display_name": "Grok 4 Heavy",
+  "provider": "xai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Grok",
+    "architecture_type": "hybrid"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-07-15",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["Grok-4-Heavy"],
+  "description": "Grok 4 Heavy is not a single model but a multi-agent orchestration of Grok 4 designed to push the limits of AI reasoning. In Grok Heavy mode, multiple Grok 4.0+ agents tackle a problem in parallel and then cross-verify each other's solutions, akin to a 'study group' of AIs. This yields dramatically improved accuracy on the hardest tasks – Grok 4 Heavy was the first to exceed 50% on the rigorous HLE (Humanity's Last Exam) benchmark and even achieved a perfect score on the AIME 2025 math competition. It uses ~10× more compute than a normal inference, resulting in slower responses and significantly higher running cost (available only to Heavy subscribers via SuperGrok Heavy or enterprise plans, not general API). Grok 4 Heavy has the same interfaces (chat input/output, tool usage) but under the hood it's collaborating models. It's employed for ultra high-stakes queries where maximal reliability is needed. (No per-token pricing is public; access is via a $300/mo Heavy tier or special API arrangement.)",
+  "tags": ["multi-agent", "ensemble", "max-reasoning", "premium"],
+  "provider_xai": {
+    "live_search": {
+      "enabled": true
+    },
+    "server_tools": ["web_search", "code_execution"]
+  },
+  "source": "model_cards_01"
+}
