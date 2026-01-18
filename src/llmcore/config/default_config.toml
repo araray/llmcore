@@ -227,6 +227,31 @@ posthog = "ERROR"
   # Environment Variable: LLMCORE_STORAGE__VECTOR__DB_URL
   db_url = ""
 
+  # ==============================================================================
+  # [model_cards] - Model Card Library Configuration
+  # ==============================================================================
+  # The Model Card Library provides comprehensive metadata for LLM models,
+  # including context limits, capabilities, pricing, and lifecycle information.
+  # Cards are loaded from built-in defaults and can be overridden by user cards.
+  [model_cards]
+
+  # Path to user-defined model cards directory.
+  # Cards in this directory override built-in cards with the same model_id.
+  # Organize cards by provider subdirectory: model_cards/<provider>/<model>.json
+  # The `~` character is expanded to your home directory.
+  # Environment Variable: LLMCORE_MODEL_CARDS__USER_CARDS_PATH
+  user_cards_path = "~/.config/llmcore/model_cards"
+
+  # Automatically load model cards on first registry access.
+  # Set to false if you want to control loading timing manually via registry.load()
+  # Environment Variable: LLMCORE_MODEL_CARDS__AUTO_LOAD
+  auto_load = true
+
+  # Validation strictness for model card files.
+  # If true, invalid JSON files will raise errors during loading.
+  # If false, invalid files are logged as warnings and skipped.
+  # Environment Variable: LLMCORE_MODEL_CARDS__STRICT_VALIDATION
+  strict_validation = false
 
 # ==============================================================================
 # [embedding] - Vectorization Model Configurations

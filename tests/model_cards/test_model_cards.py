@@ -695,6 +695,107 @@ class TestModuleFunctions:
         assert info.currsize == 0
 
 
+class TestRegistryConfig:
+    """Tests for registry configuration integration."""
+
+    def test_default_user_path(self):
+        """Should return default user path."""
+        path = ModelCardRegistry.get_default_user_path()
+        assert path.name == "model_cards"
+        assert "llmcore" in str(path)
+        assert ".config" in str(path)
+
+    def test_configure_from_config_dict(self, tmp_path):
+        """Should accept dict-style config."""
+        ModelCardRegistry.reset_instance()
+        registry = ModelCardRegistry.get_instance()
+
+        custom_path = tmp_path / "custom_cards"
+        custom_path.mkdir()
+
+        mock_config = {"model_cards": {"user_cards_path": str(custom_path)}}
+        registry.configure_from_config(mock_config)
+
+        # Should use configured path
+        configured = registry._get_configured_user_path()
+        assert configured == custom_path
+
+    def test_configure_from_config_with_tilde(self, tmp_path):
+        """Should expand ~ in configured path."""
+        ModelCardRegistry.reset_instance()
+        registry = ModelCardRegistry.get_instance()
+
+        mock_config = {"model_cards": {"user_cards_path": "~/custom_model_cards"}}
+        registry.configure_from_config(mock_config)
+
+        configured = registry._get_configured_user_path()
+        assert configured is not None
+        assert "~" not in str(configured)
+        assert "custom_model_cards" in str(configured)
+
+    def test_load_uses_configured_path(self, tmp_path):
+        """load() should use configured user_cards_path."""
+        ModelCardRegistry.reset_instance()
+        registry = ModelCardRegistry.get_instance()
+
+        custom_path = tmp_path / "configured_cards"
+        custom_path.mkdir()
+
+        mock_config = {"model_cards": {"user_cards_path": str(custom_path)}}
+        registry.configure_from_config(mock_config)
+
+        # Create a test card in custom path
+        provider_dir = custom_path / "test_provider"
+        provider_dir.mkdir()
+        card_data = {
+            "model_id": "config-test-model",
+            "provider": "test_provider",
+            "model_type": "chat",
+            "context": {"max_input_tokens": 4096},
+        }
+        with open(provider_dir / "config-test-model.json", "w") as f:
+            json.dump(card_data, f)
+
+        registry.load(force_reload=True)
+
+        # Should have loaded from configured path
+        assert registry._user_path == custom_path
+        card = registry.get("test_provider", "config-test-model")
+        assert card is not None
+        assert card.model_id == "config-test-model"
+
+    def test_explicit_path_overrides_config(self, tmp_path):
+        """Explicit user_path argument should override config."""
+        ModelCardRegistry.reset_instance()
+        registry = ModelCardRegistry.get_instance()
+
+        config_path = tmp_path / "config_path"
+        explicit_path = tmp_path / "explicit_path"
+        config_path.mkdir()
+        explicit_path.mkdir()
+
+        mock_config = {"model_cards": {"user_cards_path": str(config_path)}}
+        registry.configure_from_config(mock_config)
+
+        # Load with explicit path
+        registry.load(user_path=explicit_path, force_reload=True)
+
+        # Should use explicit path, not config
+        assert registry._user_path == explicit_path
+
+    def test_no_config_uses_default(self, tmp_path):
+        """Without config, should use default path."""
+        ModelCardRegistry.reset_instance()
+        registry = ModelCardRegistry.get_instance()
+
+        # Don't configure - should use default
+        default = ModelCardRegistry.get_default_user_path()
+
+        # _get_configured_user_path should return None
+        configured = registry._get_configured_user_path()
+        assert configured is None
+
+
 # =============================================================================
 # MAIN
 # =============================================================================

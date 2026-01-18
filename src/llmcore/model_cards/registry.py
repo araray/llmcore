@@ -84,6 +84,7 @@ class ModelCardRegistry:
         self._loaded = False
         self._builtin_path: Optional[Path] = None
         self._user_path: Optional[Path] = None
+        self._config: Any = None  # Optional llmcore config object
 
         self._initialized = True
         logger.debug("ModelCardRegistry instance created")
@@ -114,6 +115,54 @@ class ModelCardRegistry:
                 cls._instance._loaded = False
             cls._instance = None
 
+    def configure_from_config(self, config: Any) -> None:
+        """
+        Configure the registry from an llmcore config object.
+
+        This method should be called by LLMCore during initialization
+        to pass the config object to the registry.
+
+        Args:
+            config: The confy Config object from LLMCore
+
+        Example:
+            >>> # Called internally by LLMCore
+            >>> registry = ModelCardRegistry.get_instance()
+            >>> registry.configure_from_config(llmcore_instance.config)
+        """
+        self._config = config
+        logger.debug("ModelCardRegistry configured with llmcore config")
+
+    def _get_configured_user_path(self) -> Optional[Path]:
+        """
+        Get user_cards_path from stored config.
+
+        Returns:
+            Path from config if available and configured, None otherwise.
+        """
+        if not hasattr(self, "_config") or self._config is None:
+            return None
+
+        try:
+            # Try config.get() for confy Config
+            user_path_str = self._config.get("model_cards.user_cards_path")
+            if user_path_str:
+                return Path(user_path_str).expanduser()
+        except (AttributeError, KeyError, TypeError):
+            pass
+
+        try:
+            # Try dict-style access
+            model_cards_config = self._config.get("model_cards", {})
+            if isinstance(model_cards_config, dict):
+                user_path_str = model_cards_config.get("user_cards_path")
+                if user_path_str:
+                    return Path(user_path_str).expanduser()
+        except (AttributeError, KeyError, TypeError):
+            pass
+
+        return None
+
     def load(
         self,
         builtin_path: Optional[Path] = None,
@@ -125,13 +174,17 @@ class ModelCardRegistry:
 
         Args:
             builtin_path: Path to built-in cards (default: package/default_cards)
-            user_path: Path to user cards (default: ~/.config/llmcore/model_cards)
+            user_path: Path to user cards. Resolution order:
+                1. Explicit user_path argument
+                2. Config value (model_cards.user_cards_path)
+                3. Default: ~/.config/llmcore/model_cards
             force_reload: Reload even if already loaded
 
         Example:
             >>> registry = ModelCardRegistry.get_instance()
-            >>> registry.load()  # Uses defaults
+            >>> registry.load()  # Uses defaults or config
             >>> registry.load(force_reload=True)  # Force refresh
+            >>> registry.load(user_path=Path("/custom/path"))  # Custom path
         """
         if self._loaded and not force_reload:
             logger.debug("Registry already loaded, skipping (use force_reload=True to reload)")
@@ -142,13 +195,21 @@ class ModelCardRegistry:
         self._aliases.clear()
         self._lowercase_index.clear()
 
-        # Determine paths
+        # Determine builtin path
         if builtin_path is None:
             builtin_path = Path(__file__).parent / "default_cards"
         self._builtin_path = builtin_path
 
+        # Determine user path with resolution order:
+        # 1. Explicit argument
+        # 2. Config value
+        # 3. Default
         if user_path is None:
-            user_path = Path.home() / ".config" / "llmcore" / "model_cards"
+            # Try to get from config
+            user_path = self._get_configured_user_path()
+        if user_path is None:
+            # Fall back to default
+            user_path = self.get_default_user_path()
         self._user_path = user_path
 
         # Load built-in cards first (lower priority)
@@ -264,8 +325,26 @@ class ModelCardRegistry:
             f"(source={card.source}, aliases={len(card.aliases)})"
         )
 
+    @staticmethod
+    def get_default_user_path() -> Path:
+        """
+        Get the default user cards path.
+
+        Returns:
+            Default path: ~/.config/llmcore/model_cards
+
+        This is the fallback when config is not available or doesn't
+        specify a custom path.
+        """
+        return Path.home() / ".config" / "llmcore" / "model_cards"
+
     def _ensure_loaded(self) -> None:
-        """Ensure cards are loaded before any query operation."""
+        """
+        Ensure cards are loaded before any query operation.
+
+        Uses configured user_cards_path if available, otherwise
+        uses the default path (~/.config/llmcore/model_cards).
+        """
         if not self._loaded:
             self.load()
 
