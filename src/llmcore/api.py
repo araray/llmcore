@@ -1653,16 +1653,80 @@ class LLMCore:
 
         try:
             # Use the ollama library's list method
-            # This returns a dict with "models" key containing list of model info
+            # Response format varies by SDK version:
+            # - Older: dict with "models" key
+            # - Newer: ListResponse object with .models attribute
             list_response = await provider._client.list()
-            models_data = list_response.get("models", [])
+
+            # Handle both response formats
+            if hasattr(list_response, "models"):
+                # Newer SDK: ListResponse object
+                models_data = list_response.models
+            elif isinstance(list_response, dict):
+                # Older SDK: dict format
+                models_data = list_response.get("models", [])
+            else:
+                logger.warning(f"Unexpected Ollama list response type: {type(list_response)}")
+                models_data = []
         except Exception as e:
             raise ProviderError(provider_name, f"Failed to list Ollama models: {e}")
 
         models: List[ModelDetails] = []
         for model_data in models_data:
-            name = model_data.get("name", "")
-            details = model_data.get("details", {})
+            # Handle both Model object and dict formats
+            if hasattr(model_data, "model"):
+                # Newer SDK: Model object with .model attribute for name
+                name = model_data.model
+                # Details might be nested object or dict
+                if hasattr(model_data, "details") and model_data.details:
+                    details = model_data.details
+                    family = (
+                        getattr(details, "family", None)
+                        if hasattr(details, "family")
+                        else details.get("family")
+                        if isinstance(details, dict)
+                        else None
+                    )
+                    param_size = (
+                        getattr(details, "parameter_size", None)
+                        if hasattr(details, "parameter_size")
+                        else details.get("parameter_size")
+                        if isinstance(details, dict)
+                        else None
+                    )
+                    quant_level = (
+                        getattr(details, "quantization_level", None)
+                        if hasattr(details, "quantization_level")
+                        else details.get("quantization_level")
+                        if isinstance(details, dict)
+                        else None
+                    )
+                else:
+                    family = param_size = quant_level = None
+                size = getattr(model_data, "size", None)
+                digest = getattr(model_data, "digest", None)
+                modified_at = getattr(model_data, "modified_at", None)
+                format_str = (
+                    getattr(model_data.details, "format", None)
+                    if hasattr(model_data, "details") and model_data.details
+                    else None
+                )
+            else:
+                # Older SDK: dict format
+                name = model_data.get("name", "")
+                details = model_data.get("details", {})
+                family = details.get("family") if isinstance(details, dict) else None
+                param_size = details.get("parameter_size") if isinstance(details, dict) else None
+                quant_level = (
+                    details.get("quantization_level") if isinstance(details, dict) else None
+                )
+                size = model_data.get("size")
+                digest = model_data.get("digest")
+                modified_at = model_data.get("modified_at")
+                format_str = details.get("format") if isinstance(details, dict) else None
+
+            if not name:
+                continue
 
             # Try to get context length from model cards first
             context_length = self.get_model_context_length(provider_name, name)
@@ -1671,17 +1735,17 @@ class LLMCore:
                 id=name,
                 provider_name=provider_name,
                 display_name=name,
-                family=details.get("family"),
-                parameter_count=details.get("parameter_size"),
-                quantization_level=details.get("quantization_level"),
-                file_size_bytes=model_data.get("size"),
+                family=family,
+                parameter_count=param_size,
+                quantization_level=quant_level,
+                file_size_bytes=size,
                 context_length=context_length,
                 supports_streaming=True,
                 supports_tools=True,  # Most modern Ollama models support tools
                 metadata={
-                    "digest": model_data.get("digest"),
-                    "modified_at": model_data.get("modified_at"),
-                    "format": details.get("format"),
+                    "digest": digest,
+                    "modified_at": str(modified_at) if modified_at else None,
+                    "format": format_str,
                     "source": "ollama_api",
                 },
             )
