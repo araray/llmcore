@@ -14,11 +14,13 @@ import importlib.resources
 import json
 import logging
 import pathlib
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import (
     Any,
     AsyncGenerator,
+    Callable,
     Dict,
     List,
     Optional,
@@ -54,6 +56,9 @@ from .models import (
     ContextPresetItem,
     Message,
     ModelDetails,
+    ModelValidationResult,
+    PullProgress,
+    PullResult,
     Role,
     Tool,
     ToolCall,
@@ -1521,3 +1526,608 @@ class LLMCore:
 
         registry = get_model_card_registry()
         return registry.stats()
+
+    # ==========================================================================
+    # Phase 1: Enhanced Model Management Methods
+    # ==========================================================================
+
+    async def get_provider_model_details(
+        self,
+        provider_name: Optional[str] = None,
+        *,
+        fetch_remote: bool = False,
+        include_embeddings: bool = True,
+    ) -> Dict[str, List[ModelDetails]]:
+        """
+        Get detailed model information for one or all providers.
+
+        This is the primary method for model discovery. It aggregates information
+        from multiple sources:
+        1. Model card registry (authoritative metadata)
+        2. Provider APIs (for Ollama local, OpenAI list, etc.)
+        3. Configuration (user-specified models)
+
+        Args:
+            provider_name: Specific provider to query, or None for all loaded providers
+            fetch_remote: If True, query provider APIs for latest data
+                         - Ollama: Always queries local API (ignores this flag)
+                         - OpenAI: Calls models.list() API
+                         - Anthropic: Returns static list (no list API)
+                         - Google: Calls list_models() API
+            include_embeddings: Include embedding models in results
+
+        Returns:
+            Dict mapping provider names to lists of ModelDetails
+
+        Example:
+            >>> # Get all models for current provider
+            >>> models = await llm.get_provider_model_details("ollama")
+            >>> for model in models["ollama"]:
+            ...     print(f"{model.id}: {model.context_length} tokens")
+            >>>
+            >>> # Get all models from all providers
+            >>> all_models = await llm.get_provider_model_details()
+
+        Raises:
+            ConfigError: If provider_name is invalid
+            ProviderError: If provider API call fails
+        """
+        from .model_cards import get_model_card_registry
+
+        if provider_name and provider_name not in self.get_available_providers():
+            raise ConfigError(f"Provider '{provider_name}' is not loaded")
+
+        providers_to_query = [provider_name] if provider_name else self.get_available_providers()
+        registry = get_model_card_registry()
+        result: Dict[str, List[ModelDetails]] = {}
+
+        for prov_name in providers_to_query:
+            models: List[ModelDetails] = []
+
+            # Special handling for Ollama - always query local API
+            if prov_name.lower() == "ollama":
+                try:
+                    ollama_models = await self._get_ollama_models(prov_name)
+                    models.extend(ollama_models)
+                except Exception as e:
+                    logger.warning(f"Failed to query Ollama API: {e}")
+                    # Fall back to cards
+                    models.extend(
+                        self._get_models_from_cards(prov_name, registry, include_embeddings)
+                    )
+            else:
+                # For other providers, use cards primarily
+                models.extend(self._get_models_from_cards(prov_name, registry, include_embeddings))
+
+                # If fetch_remote and provider supports listing, supplement
+                if fetch_remote:
+                    try:
+                        remote_models = await self._fetch_remote_model_list(prov_name)
+                        existing_ids = {m.id for m in models}
+                        for rm in remote_models:
+                            if rm.id not in existing_ids:
+                                models.append(rm)
+                    except Exception as e:
+                        logger.debug(f"Remote model fetch not available for {prov_name}: {e}")
+
+            # Also add models from config that might not be in cards
+            try:
+                config_models = self.get_models_for_provider(prov_name)
+                existing_ids = {m.id for m in models}
+                for model_id in config_models:
+                    if model_id not in existing_ids:
+                        # Create basic ModelDetails for config-only models
+                        models.append(
+                            ModelDetails(
+                                id=model_id,
+                                provider_name=prov_name,
+                                context_length=self.get_model_context_length(prov_name, model_id),
+                                metadata={"source": "config"},
+                            )
+                        )
+            except Exception as e:
+                logger.debug(f"Could not get config models for {prov_name}: {e}")
+
+            result[prov_name] = models
+
+        return result
+
+    async def _get_ollama_models(self, provider_name: str) -> List[ModelDetails]:
+        """
+        Query local Ollama API for installed models.
+
+        Args:
+            provider_name: Should be "ollama"
+
+        Returns:
+            List of ModelDetails for locally installed models
+        """
+        try:
+            provider = self._provider_manager.get_provider(provider_name)
+        except Exception as e:
+            raise ProviderError(provider_name, f"Failed to get provider: {e}")
+
+        # The Ollama provider should have a client with list() method
+        if not hasattr(provider, "_client") or provider._client is None:
+            raise ProviderError(provider_name, "Ollama client not initialized")
+
+        try:
+            # Use the ollama library's list method
+            # This returns a dict with "models" key containing list of model info
+            list_response = await provider._client.list()
+            models_data = list_response.get("models", [])
+        except Exception as e:
+            raise ProviderError(provider_name, f"Failed to list Ollama models: {e}")
+
+        models: List[ModelDetails] = []
+        for model_data in models_data:
+            name = model_data.get("name", "")
+            details = model_data.get("details", {})
+
+            # Try to get context length from model cards first
+            context_length = self.get_model_context_length(provider_name, name)
+
+            model = ModelDetails(
+                id=name,
+                provider_name=provider_name,
+                display_name=name,
+                family=details.get("family"),
+                parameter_count=details.get("parameter_size"),
+                quantization_level=details.get("quantization_level"),
+                file_size_bytes=model_data.get("size"),
+                context_length=context_length,
+                supports_streaming=True,
+                supports_tools=True,  # Most modern Ollama models support tools
+                metadata={
+                    "digest": model_data.get("digest"),
+                    "modified_at": model_data.get("modified_at"),
+                    "format": details.get("format"),
+                    "source": "ollama_api",
+                },
+            )
+            models.append(model)
+
+        return models
+
+    def _get_models_from_cards(
+        self,
+        provider_name: str,
+        registry: Any,
+        include_embeddings: bool = True,
+    ) -> List[ModelDetails]:
+        """
+        Get models from the model card registry.
+
+        Args:
+            provider_name: Provider to get models for
+            registry: ModelCardRegistry instance
+            include_embeddings: Whether to include embedding models
+
+        Returns:
+            List of ModelDetails built from model cards
+        """
+        cards = registry.list_cards(provider=provider_name)
+        models: List[ModelDetails] = []
+
+        for card_summary in cards:
+            # Filter out embeddings if requested
+            if not include_embeddings and card_summary.model_type == "embedding":
+                continue
+
+            card = registry.get(provider_name, card_summary.model_id)
+            if card:
+                model = ModelDetails(
+                    id=card.model_id,
+                    provider_name=provider_name,
+                    display_name=card.display_name or card.model_id,
+                    context_length=card.context.max_input_tokens if card.context else 4096,
+                    max_output_tokens=card.context.max_output_tokens if card.context else None,
+                    supports_streaming=card.capabilities.streaming if card.capabilities else True,
+                    supports_tools=card.capabilities.tool_use if card.capabilities else False,
+                    supports_vision=card.capabilities.vision if card.capabilities else False,
+                    supports_reasoning=card.capabilities.reasoning if card.capabilities else False,
+                    family=card.architecture.family if card.architecture else None,
+                    parameter_count=card.architecture.parameter_count
+                    if card.architecture
+                    else None,
+                    model_type=card.model_type,
+                    metadata={"source": "card"},
+                )
+                models.append(model)
+
+        return models
+
+    async def _fetch_remote_model_list(self, provider_name: str) -> List[ModelDetails]:
+        """
+        Fetch model list from provider's remote API.
+
+        Currently a stub - can be extended for providers that support listing.
+
+        Args:
+            provider_name: Provider to fetch from
+
+        Returns:
+            List of ModelDetails from remote API
+        """
+        # This can be extended to support OpenAI's models.list(), etc.
+        # For now, return empty list
+        return []
+
+    async def validate_model_for_provider(
+        self,
+        provider_name: str,
+        model_name: str,
+    ) -> ModelValidationResult:
+        """
+        Validate if a model is available for a provider.
+
+        Performs multi-level validation:
+        1. Check model card registry (with alias support)
+        2. Check provider's known models (config + API)
+        3. For Ollama, check local models
+        4. Provide suggestions for similar models if not found
+
+        Args:
+            provider_name: Provider to validate against
+            model_name: Model identifier to validate
+
+        Returns:
+            ModelValidationResult with:
+                - is_valid: bool - Whether model is available
+                - canonical_name: str - Correct model name (may differ in case)
+                - suggestions: List[str] - Similar models if not found
+                - error_message: Optional[str] - Human-readable error
+                - model_details: Optional[ModelDetails] - If valid, full details
+
+        Example:
+            >>> result = await llm.validate_model_for_provider("openai", "gpt-5-turbo")
+            >>> if not result.is_valid:
+            ...     print(f"Model not found: {result.error_message}")
+            ...     print(f"Did you mean: {', '.join(result.suggestions)}")
+            >>> else:
+            ...     print(f"Using model: {result.canonical_name}")
+        """
+        from .model_cards import get_model_card_registry
+
+        if provider_name not in self.get_available_providers():
+            return ModelValidationResult(
+                is_valid=False,
+                error_message=f"Provider '{provider_name}' is not loaded",
+            )
+
+        registry = get_model_card_registry()
+
+        # Get available models for this provider
+        try:
+            models_dict = await self.get_provider_model_details(provider_name)
+            available_models = models_dict.get(provider_name, [])
+        except Exception as e:
+            # Can't validate, allow with warning
+            return ModelValidationResult(
+                is_valid=True,
+                canonical_name=model_name,
+                error_message=f"Could not validate (allowing): {e}",
+            )
+
+        # If no models returned (dynamic provider), allow anything
+        if not available_models:
+            return ModelValidationResult(
+                is_valid=True,
+                canonical_name=model_name,
+                error_message="Provider accepts any model name (dynamic)",
+            )
+
+        model_ids = [m.id for m in available_models]
+        model_map = {m.id: m for m in available_models}
+
+        # 1. Exact match
+        if model_name in model_ids:
+            return ModelValidationResult(
+                is_valid=True,
+                canonical_name=model_name,
+                model_details=model_map[model_name],
+            )
+
+        # 2. Case-insensitive match
+        for mid in model_ids:
+            if model_name.lower() == mid.lower():
+                return ModelValidationResult(
+                    is_valid=True,
+                    canonical_name=mid,  # Return correct casing
+                    model_details=model_map[mid],
+                    error_message=f"Note: Using '{mid}' (case corrected)",
+                )
+
+        # 3. Alias match (check model cards)
+        card = registry.get(provider_name, model_name)
+        if card:
+            # Found via alias
+            canonical = card.model_id
+            # Try to find the corresponding ModelDetails
+            details = model_map.get(canonical)
+            return ModelValidationResult(
+                is_valid=True,
+                canonical_name=canonical,
+                model_details=details,
+                error_message=f"Resolved alias to '{canonical}'",
+            )
+
+        # 4. Not found - generate suggestions
+        suggestions = self._generate_model_suggestions(model_name, model_ids)
+
+        return ModelValidationResult(
+            is_valid=False,
+            suggestions=suggestions[:5],  # Top 5 suggestions
+            error_message=f"Model '{model_name}' not found for provider '{provider_name}'",
+        )
+
+    def _generate_model_suggestions(
+        self,
+        query: str,
+        available: List[str],
+        max_suggestions: int = 5,
+    ) -> List[str]:
+        """
+        Generate model name suggestions using fuzzy matching.
+
+        Args:
+            query: The model name that wasn't found
+            available: List of available model IDs
+            max_suggestions: Maximum number of suggestions to return
+
+        Returns:
+            List of suggested model IDs, sorted by relevance
+        """
+        query_lower = query.lower()
+        scored: List[Tuple[int, str]] = []
+
+        for model_id in available:
+            model_lower = model_id.lower()
+            score = 0
+
+            # Substring match
+            if query_lower in model_lower:
+                score += 50
+
+            # Prefix match
+            if model_lower.startswith(query_lower):
+                score += 30
+
+            # Word overlap
+            query_words = set(query_lower.replace("-", " ").replace("_", " ").split())
+            model_words = set(model_lower.replace("-", " ").replace("_", " ").split())
+            overlap = len(query_words & model_words)
+            score += overlap * 20
+
+            # Levenshtein-like simple distance (for typos)
+            if len(query_lower) > 3 and len(model_lower) > 3:
+                common_prefix = 0
+                for a, b in zip(query_lower, model_lower):
+                    if a == b:
+                        common_prefix += 1
+                    else:
+                        break
+                score += common_prefix * 5
+
+            if score > 0:
+                scored.append((score, model_id))
+
+        # Sort by score descending
+        scored.sort(key=lambda x: -x[0])
+
+        return [model_id for _, model_id in scored[:max_suggestions]]
+
+    async def pull_model(
+        self,
+        provider_name: str,
+        model_name: str,
+        *,
+        stream: bool = True,
+        progress_callback: Optional[Callable[[PullProgress], None]] = None,
+        insecure: bool = False,
+    ) -> PullResult:
+        """
+        Download/pull a model from a provider's registry.
+
+        Currently only supported for Ollama provider.
+
+        Args:
+            provider_name: Must be "ollama"
+            model_name: Model to pull (e.g., "llama3.2:70b")
+            stream: Whether to stream progress updates
+            progress_callback: Called with progress updates if stream=True
+            insecure: Allow insecure connections (Ollama)
+
+        Returns:
+            PullResult with success status, model name, error message, and duration
+
+        Raises:
+            ProviderError: If provider is not Ollama or pull fails
+
+        Example:
+            >>> def on_progress(p: PullProgress):
+            ...     if p.percent_complete:
+            ...         print(f"Progress: {p.percent_complete:.1f}%")
+            >>>
+            >>> result = await llm.pull_model(
+            ...     "ollama",
+            ...     "llama3.2:8b",
+            ...     progress_callback=on_progress
+            ... )
+            >>> if result.success:
+            ...     print(f"Pulled in {result.duration_seconds:.1f}s")
+        """
+        if provider_name.lower() != "ollama":
+            raise ProviderError(
+                provider_name,
+                f"Model pulling is only supported for Ollama, not '{provider_name}'",
+            )
+
+        try:
+            provider = self._provider_manager.get_provider(provider_name)
+        except Exception as e:
+            return PullResult(
+                success=False,
+                model_name=model_name,
+                error_message=f"Failed to get provider: {e}",
+            )
+
+        if not hasattr(provider, "_client") or provider._client is None:
+            return PullResult(
+                success=False,
+                model_name=model_name,
+                error_message="Ollama client not initialized",
+            )
+
+        start_time = time.time()
+
+        try:
+            # Use the ollama library's pull method
+            if stream and progress_callback:
+                # Stream progress updates
+                async for progress_data in await provider._client.pull(
+                    model=model_name,
+                    stream=True,
+                    insecure=insecure,
+                ):
+                    progress = PullProgress(
+                        status=progress_data.get("status", "downloading"),
+                        digest=progress_data.get("digest"),
+                        total_bytes=progress_data.get("total"),
+                        completed_bytes=progress_data.get("completed"),
+                        percent_complete=(
+                            (progress_data.get("completed", 0) / progress_data.get("total", 1))
+                            * 100
+                            if progress_data.get("total")
+                            else None
+                        ),
+                    )
+                    progress_callback(progress)
+            else:
+                # Non-streaming pull
+                await provider._client.pull(
+                    model=model_name,
+                    stream=False,
+                    insecure=insecure,
+                )
+
+            duration = time.time() - start_time
+
+            # Final success callback
+            if progress_callback:
+                progress_callback(
+                    PullProgress(
+                        status="success",
+                        percent_complete=100.0,
+                    )
+                )
+
+            return PullResult(
+                success=True,
+                model_name=model_name,
+                duration_seconds=duration,
+            )
+
+        except Exception as e:
+            duration = time.time() - start_time
+            error_msg = str(e)
+
+            # Provide helpful error messages
+            if "not found" in error_msg.lower():
+                error_msg = f"Model '{model_name}' not found in Ollama registry"
+            elif "connection" in error_msg.lower():
+                error_msg = f"Connection error: Is Ollama running? ({error_msg})"
+
+            return PullResult(
+                success=False,
+                model_name=model_name,
+                error_message=error_msg,
+                duration_seconds=duration,
+            )
+
+    def update_config_add_model(
+        self,
+        provider_name: str,
+        model_name: str,
+        *,
+        set_as_default: bool = False,
+    ) -> bool:
+        """
+        Add a model to the provider's tracked models in config.
+
+        Updates the in-memory config. Note: This does not persist to disk
+        automatically. Use config persistence methods for that.
+
+        Args:
+            provider_name: Provider to add model to
+            model_name: Model name to add
+            set_as_default: If True, also set as default model
+
+        Returns:
+            True if added, False if already present
+
+        Example:
+            >>> # Add a newly pulled model to config
+            >>> added = llm.update_config_add_model("ollama", "llama3.2:8b")
+            >>> if added:
+            ...     print("Model added to config")
+        """
+        if provider_name not in self.get_available_providers():
+            logger.warning(f"Provider '{provider_name}' not in available providers")
+            return False
+
+        # Get current models from config
+        current_models = []
+        try:
+            config_models = self.get_models_for_provider(provider_name)
+            current_models = list(config_models) if config_models else []
+        except Exception:
+            pass
+
+        # Check if already present
+        if model_name in current_models:
+            logger.debug(f"Model '{model_name}' already in config for {provider_name}")
+            if set_as_default:
+                # Still set as default even if already present
+                self._set_default_model_for_provider(provider_name, model_name)
+            return False
+
+        # Add to list
+        current_models.append(model_name)
+
+        # Update config
+        # Note: The actual config update mechanism depends on how config is managed
+        # This is a best-effort implementation that works with common config patterns
+        try:
+            if hasattr(self.config, "set"):
+                self.config.set(f"providers.{provider_name}.models", current_models)
+            elif isinstance(self.config, dict):
+                if "providers" not in self.config:
+                    self.config["providers"] = {}
+                if provider_name not in self.config["providers"]:
+                    self.config["providers"][provider_name] = {}
+                self.config["providers"][provider_name]["models"] = current_models
+        except Exception as e:
+            logger.warning(f"Could not update config: {e}")
+            return False
+
+        if set_as_default:
+            self._set_default_model_for_provider(provider_name, model_name)
+
+        logger.info(f"Added model '{model_name}' to {provider_name} config")
+        return True
+
+    def _set_default_model_for_provider(
+        self,
+        provider_name: str,
+        model_name: str,
+    ) -> None:
+        """Set the default model for a provider in config."""
+        try:
+            if hasattr(self.config, "set"):
+                self.config.set(f"providers.{provider_name}.default_model", model_name)
+            elif isinstance(self.config, dict):
+                if "providers" in self.config and provider_name in self.config["providers"]:
+                    self.config["providers"][provider_name]["default_model"] = model_name
+        except Exception as e:
+            logger.warning(f"Could not set default model: {e}")

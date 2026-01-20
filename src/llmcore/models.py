@@ -473,26 +473,147 @@ class ModelDetails(BaseModel):
     """
     Represents detailed information about a specific LLM model, discovered dynamically.
 
+    This model aggregates information from multiple sources:
+    1. Model card registry (authoritative metadata)
+    2. Provider APIs (for Ollama local, OpenAI list, etc.)
+    3. Configuration (user-specified models)
+
     Attributes:
         id: The unique identifier for the model (e.g., "gpt-4o").
+        provider_name: The name of the provider this model belongs to.
+        display_name: Human-friendly name for the model.
         context_length: The maximum context window size in tokens.
+        max_output_tokens: Maximum number of output tokens the model can generate.
         supports_streaming: Flag indicating if the model supports streaming responses.
         supports_tools: Flag indicating if the model supports tool/function calling.
-        provider_name: The name of the provider this model belongs to.
+        supports_vision: Flag indicating if the model supports vision/image inputs.
+        supports_reasoning: Flag indicating if the model supports extended reasoning.
+        family: Model family (e.g., "GPT-4", "Claude", "Llama").
+        parameter_count: Model parameter count as string (e.g., "70B", "8x7B").
+        quantization_level: Quantization level for local models (e.g., "Q4_K_M").
+        file_size_bytes: File size on disk for local models (Ollama).
+        model_type: Type of model ("chat", "embedding", "completion").
         metadata: A dictionary for any other provider-specific metadata.
     """
 
     id: str = Field(description="The unique identifier for the model.")
-    context_length: int = Field(description="The maximum context window size in tokens.")
+    provider_name: str = Field(description="The name of the provider this model belongs to.")
+    display_name: Optional[str] = Field(
+        default=None, description="Human-friendly name for the model."
+    )
+    context_length: int = Field(
+        default=4096, description="The maximum context window size in tokens."
+    )
+    max_output_tokens: Optional[int] = Field(
+        default=None, description="Maximum number of output tokens the model can generate."
+    )
     supports_streaming: bool = Field(
         default=True, description="Indicates if the model supports streaming responses."
     )
     supports_tools: bool = Field(
         default=False, description="Indicates if the model supports tool/function calling."
     )
-    provider_name: str = Field(description="The name of the provider this model belongs to.")
+    supports_vision: bool = Field(
+        default=False, description="Indicates if the model supports vision/image inputs."
+    )
+    supports_reasoning: bool = Field(
+        default=False, description="Indicates if the model supports extended reasoning."
+    )
+    family: Optional[str] = Field(
+        default=None, description="Model family (e.g., 'GPT-4', 'Claude', 'Llama')."
+    )
+    parameter_count: Optional[str] = Field(
+        default=None, description="Model parameter count as string (e.g., '70B', '8x7B')."
+    )
+    quantization_level: Optional[str] = Field(
+        default=None, description="Quantization level for local models (e.g., 'Q4_K_M')."
+    )
+    file_size_bytes: Optional[int] = Field(
+        default=None, description="File size on disk for local models (Ollama)."
+    )
+    model_type: Optional[str] = Field(
+        default="chat", description="Type of model ('chat', 'embedding', 'completion')."
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Provider-specific metadata."
+    )
+
+
+class ModelValidationResult(BaseModel):
+    """
+    Result of validating a model for a provider.
+
+    Used by validate_model_for_provider() to return comprehensive validation
+    information including suggestions for similar models when validation fails.
+
+    Attributes:
+        is_valid: Whether the model is available for the provider.
+        canonical_name: The correct/canonical model name (may differ in case).
+        suggestions: List of similar model names if not found.
+        error_message: Human-readable error or note message.
+        model_details: Full model details if validation succeeded.
+    """
+
+    is_valid: bool = Field(description="Whether the model is available for the provider.")
+    canonical_name: Optional[str] = Field(
+        default=None, description="The correct/canonical model name (may differ in case)."
+    )
+    suggestions: List[str] = Field(
+        default_factory=list, description="List of similar model names if not found."
+    )
+    error_message: Optional[str] = Field(
+        default=None, description="Human-readable error or note message."
+    )
+    model_details: Optional[ModelDetails] = Field(
+        default=None, description="Full model details if validation succeeded."
+    )
+
+
+class PullProgress(BaseModel):
+    """
+    Progress update during model pull/download operation.
+
+    Used by pull_model() to report download progress via callback.
+
+    Attributes:
+        status: Current status ("pulling manifest", "downloading", "verifying", "success").
+        digest: Layer/file digest being processed.
+        total_bytes: Total bytes to download (may be None if unknown).
+        completed_bytes: Bytes downloaded so far.
+        percent_complete: Percentage complete (0-100).
+        layer: Current layer identifier (Ollama-specific).
+    """
+
+    status: str = Field(description="Current status of the pull operation.")
+    digest: Optional[str] = Field(default=None, description="Layer/file digest being processed.")
+    total_bytes: Optional[int] = Field(
+        default=None, description="Total bytes to download (may be None if unknown)."
+    )
+    completed_bytes: Optional[int] = Field(default=None, description="Bytes downloaded so far.")
+    percent_complete: Optional[float] = Field(
+        default=None, description="Percentage complete (0-100)."
+    )
+    layer: Optional[str] = Field(
+        default=None, description="Current layer identifier (Ollama-specific)."
+    )
+
+
+class PullResult(BaseModel):
+    """
+    Result of a model pull/download operation.
+
+    Attributes:
+        success: Whether the pull completed successfully.
+        model_name: The name of the model that was pulled.
+        error_message: Error message if pull failed.
+        duration_seconds: Time taken to pull the model.
+    """
+
+    success: bool = Field(description="Whether the pull completed successfully.")
+    model_name: str = Field(description="The name of the model that was pulled.")
+    error_message: Optional[str] = Field(default=None, description="Error message if pull failed.")
+    duration_seconds: float = Field(
+        default=0.0, description="Time taken to pull the model in seconds."
     )
 
 
