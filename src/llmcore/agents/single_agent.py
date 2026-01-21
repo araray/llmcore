@@ -197,6 +197,15 @@ class SingleAgentMode:
             if not session_id:
                 session_id = f"session-{uuid.uuid4()}"
 
+            # CRITICAL FIX: Ensure tools are loaded before running
+            # The ToolManager may have been initialized with empty tool lists.
+            # If no tools are loaded, load the default built-in tools.
+            if not self.tool_manager.get_tool_definitions():
+                logger.info("No tools loaded - loading default tools for agent run")
+                self.tool_manager.load_default_tools()
+                loaded_tools = self.tool_manager.get_tool_names()
+                logger.info(f"Loaded {len(loaded_tools)} default tools: {loaded_tools}")
+
             # Resolve persona
             agent_persona = self._resolve_persona(persona)
 

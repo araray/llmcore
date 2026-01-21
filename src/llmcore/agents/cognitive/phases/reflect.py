@@ -202,8 +202,13 @@ def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: Op
     # Format plan
     plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(reflect_input.plan))
 
-    # Format action
-    action_str = f"{reflect_input.last_action.name}({reflect_input.last_action.arguments})"
+    # Format action - guard against None last_action
+    if reflect_input.last_action:
+        action_str = f"{reflect_input.last_action.name}({reflect_input.last_action.arguments})"
+    else:
+        # No action was proposed (THINK phase may have failed)
+        action_str = "(no action proposed)"
+        logger.warning("REFLECT: No last_action available - THINK phase may have failed")
 
     # Try to use prompt library
     if prompt_registry:
