@@ -1,0 +1,42 @@
+{
+  "model_id": "gemma3:4b",
+  "display_name": "Gemma 3 4B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemma",
+    "parameter_count": "4B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-03-12",
+    "knowledge_cutoff": "2024-08",
+    "status": "active"
+  },
+  "license": "gemma",
+  "open_weights": true,
+  "aliases": ["gemma3", "gemma3:4b", "gemma3:latest"],
+  "description": "Gemma 3 4B is Google DeepMind's multimodal, instruction-tuned model. It features a 128k context window, native vision capabilities via a SigLIP encoder, and support for over 140 languages, optimized for efficiency on consumer hardware.",
+  "tags": ["open-source", "local", "multimodal", "vision", "google-deepmind"],
+  "provider_ollama": {
+    "quantization_default": "q4_K_M",
+    "available_quantizations": ["q4_K_M", "q8_0", "fp16"],
+    "vram_requirement_gb": 4
+  },
+  "source": "builtin"
+}
