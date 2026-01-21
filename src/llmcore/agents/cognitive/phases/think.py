@@ -80,7 +80,7 @@ async def think_phase(
         >>> think_input = ThinkInput(
         ...     goal="Calculate factorial of 10",
         ...     current_step="Determine calculation approach",
-        ...     available_tools=tool_manager.get_tool_definitions()
+        ...     available_tools=[t.model_dump() for t in tool_manager.get_tool_definitions()]
         ... )
         >>>
         >>> output = await think_phase(

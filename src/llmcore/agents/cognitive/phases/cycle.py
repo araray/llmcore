@@ -220,7 +220,9 @@ class CognitiveCycle:
                     current_step=current_step,
                     history=self._build_history(agent_state),
                     context="\n".join(iteration.perceive_output.retrieved_context),
-                    available_tools=self.tool_manager.get_tool_definitions(),
+                    available_tools=[
+                        t.model_dump() for t in self.tool_manager.get_tool_definitions()
+                    ],
                 )
 
                 iteration.think_output = await think_phase(
