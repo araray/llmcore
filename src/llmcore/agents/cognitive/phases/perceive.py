@@ -148,8 +148,7 @@ async def _retrieve_context(
     try:
         # Retrieve from semantic memory (RAG)
         context_items = await memory_manager.retrieve_relevant_context(
-            query=query,
-            # Could add filters, limits here
+            goal=query,  # Parameter is named 'goal', not 'query'
         )
 
         # Convert to strings

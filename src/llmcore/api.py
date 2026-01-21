@@ -2266,6 +2266,29 @@ class LLMCore:
         registry = get_model_card_registry()
         return registry.get_providers()
 
+    def get_models_for_provider(self, provider_name: str) -> List[str]:
+        """
+        Get list of model IDs available for a specific provider.
+
+        This method queries the model card registry to retrieve all registered
+        models for the given provider.
+
+        Args:
+            provider_name: Name of the provider (e.g., "openai", "anthropic")
+
+        Returns:
+            List of model IDs for the provider, empty list if provider not found
+
+        Example:
+            >>> models = llm.get_models_for_provider("openai")
+            >>> print("OpenAI models:", models)
+            ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', ...]
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        return registry.get_models_for_provider(provider_name)
+
     def get_model_card_registry_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the model card registry.

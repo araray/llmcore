@@ -227,8 +227,7 @@ class ReflectInput(BaseModel):
     plan: List[str] = Field(..., description="Current plan")
     current_step_index: int = Field(..., description="Current step index")
     last_action: Optional[ToolCall] = Field(
-        default=None, 
-        description="Last action taken (None if no action was proposed)"
+        default=None, description="Last action taken (None if no action was proposed)"
     )
     observation: str = Field(..., description="Observation from OBSERVE phase")
     iteration_number: int = Field(..., description="Current iteration number")
@@ -396,12 +395,8 @@ class EnhancedAgentState(AgentState):
     """
 
     # Session tracking
-    session_id: str = Field(
-        default="", description="Session identifier for this agent execution"
-    )
-    context: str = Field(
-        default="", description="Initial context for the task"
-    )
+    session_id: str = Field(default="", description="Session identifier for this agent execution")
+    context: str = Field(default="", description="Initial context for the task")
 
     # Iteration tracking
     iterations: List[CycleIteration] = Field(
@@ -449,22 +444,25 @@ class EnhancedAgentState(AgentState):
 
     # Metadata for extensibility
     metadata: Dict[str, Any] = Field(
-        default_factory=dict, 
-        description="Arbitrary metadata for extensibility and goal tracking"
+        default_factory=dict, description="Arbitrary metadata for extensibility and goal tracking"
     )
-        # === P0 FIX: Added missing fields ===
+    # === P0 FIX: Added missing fields ===
     # Fix #1: Final answer storage when task completes
     final_answer: Optional[str] = Field(
-        default=None,
-        description="Final answer when task is complete"
+        default=None, description="Final answer when task is complete"
     )
-    
+
     # Fix #2: Tool call pending execution from THINK phase
     pending_tool_call: Optional[ToolCall] = None
-    
+
     # Fix #4: Flag indicating agent is waiting for human approval
     awaiting_human_approval: bool = False
-    
+
+    # Fix #5: Prompt to show user when human approval is required
+    pending_approval_prompt: Optional[str] = Field(
+        default=None, description="Prompt to display when awaiting human approval"
+    )
+
     # Fix #3: Private field for explicit is_finished setting
     _is_finished_override: bool = PrivateAttr(default=False)
     # === END P0 FIX ===
@@ -473,35 +471,34 @@ class EnhancedAgentState(AgentState):
     def is_finished(self) -> bool:
         """
         Check if the agent has finished its task.
-        
+
         Returns True if:
         - All plan steps are completed, OR
         - The goal has been marked as achieved in metadata
-        
+
         Returns:
             True if the agent's task is complete, False otherwise.
         """
         # P0 Fix #3: Check explicit override first
-        if getattr(self, '_is_finished_override', False):
+        if getattr(self, "_is_finished_override", False):
             return True
-        
+
         # Check if all plan steps are completed
         if self.plan_steps_status:
             all_completed = all(status == "completed" for status in self.plan_steps_status)
             if all_completed:
                 return True
-        
+
         # Check metadata for goal achieved flag
         if self.metadata.get("goal_achieved", False):
             return True
-            
+
         return False
-    
+
     @is_finished.setter
     def is_finished(self, value: bool) -> None:
         """Allow explicit setting of finished state (P0 Fix #3)."""
-        object.__setattr__(self, '_is_finished_override', value)
-
+        object.__setattr__(self, "_is_finished_override", value)
 
     def add_iteration(self, iteration: CycleIteration) -> None:
         """

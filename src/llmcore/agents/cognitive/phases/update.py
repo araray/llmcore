@@ -151,8 +151,8 @@ async def update_phase(
                         },
                     )
 
-                    # Store episode
-                    await storage_manager.store_episode(episode)
+                    # Store episode (method is add_episode, not store_episode)
+                    await storage_manager.add_episode(episode)
                     memory_updates.append(
                         {
                             "type": "episode",
