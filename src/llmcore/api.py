@@ -3944,6 +3944,56 @@ class LLMCore:
             logger.error(f"Error setting runtime config: {e}", exc_info=True)
             raise ConfigError(f"Failed to set configuration value '{key}': {e}")
 
+    def set_raw_payload_logging(self, enable: bool) -> None:
+        """
+        Enable or disable raw payload logging for all providers at runtime.
+
+        When enabled, all request/response payloads to/from LLM providers
+        are logged at DEBUG level. Useful for debugging API interactions.
+
+        Args:
+            enable: True to enable raw payload logging, False to disable.
+
+        Example:
+            ```python
+            # Enable raw payload logging for debugging
+            llm.set_raw_payload_logging(True)
+
+            # Make API calls - payloads will be logged at DEBUG level
+            response = await llm.chat_completion(...)
+
+            # Disable when done
+            llm.set_raw_payload_logging(False)
+            ```
+
+        Note:
+            - Requires log level DEBUG to see the payloads
+            - May log sensitive data - use with caution in production
+        """
+        self._log_raw_payloads_enabled = enable
+        self._provider_manager.update_log_raw_payloads_setting(enable)
+        logger.info(f"Raw payload logging {'enabled' if enable else 'disabled'}")
+
+    def set_log_level(self, level: str) -> None:
+        """
+        Set the log level for the llmcore library at runtime.
+
+        Args:
+            level: Log level name (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+        Example:
+            ```python
+            llm.set_log_level("DEBUG")  # Enable verbose logging
+            llm.set_log_level("WARNING")  # Only warnings and errors
+            ```
+        """
+        import logging as logging_module
+
+        level_int = getattr(logging_module, level.upper(), logging_module.INFO)
+        logging_module.getLogger("llmcore").setLevel(level_int)
+        self._llmcore_log_level_str = level.upper()
+        logger.info(f"LLMCore log level set to: {level.upper()}")
+
     def diff_config(self) -> Dict[str, Any]:
         """
         Compare runtime configuration against the original file configuration.
