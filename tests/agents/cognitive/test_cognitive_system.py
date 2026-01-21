@@ -380,9 +380,8 @@ class TestPlanPhase:
         provider.get_name = Mock(return_value="test_provider")
         provider.default_model = "test_model"
 
-        # Mock response
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content
+        mock_content = """
 PLAN:
 1. Understand the problem
 2. Break down into steps
@@ -395,9 +394,13 @@ RISKS:
 - Time constraints
 - Resource availability
 """
-        mock_response.usage = Mock(total_tokens=100)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 100, "prompt_tokens": 50, "completion_tokens": 50},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         # Create state and input
@@ -429,16 +432,19 @@ class TestThinkPhase:
         provider.get_name = Mock(return_value="test_provider")
         provider.default_model = "test_model"
 
-        # Mock response
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content
+        mock_content = """
 Thought: I need to calculate the factorial using the calculator tool.
 Action: calculator
 Action Input: {"expression": "10!"}
 """
-        mock_response.usage = Mock(total_tokens=150)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 150, "prompt_tokens": 80, "completion_tokens": 70},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         # Mock memory and tool managers
@@ -482,14 +488,18 @@ Action Input: {"expression": "10!"}
         provider.get_name = Mock(return_value="test")
         provider.default_model = "test_model"
 
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content
+        mock_content = """
 Thought: I have calculated the result and can provide the final answer.
 Final Answer: The factorial of 10 is 3,628,800
 """
-        mock_response.usage = Mock(total_tokens=100)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 100, "prompt_tokens": 50, "completion_tokens": 50},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         memory_manager = Mock()
