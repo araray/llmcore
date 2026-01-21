@@ -121,6 +121,7 @@ from .models import (
     ContextPreparationDetails,
     ContextPreset,
     ContextPresetItem,
+    CostEstimate,
     Episode,
     EpisodeType,
     Message,
@@ -129,6 +130,7 @@ from .models import (
     PullProgress,
     PullResult,
     Role,
+    SessionTokenStats,
     Tool,
     ToolCall,
     ToolResult,
@@ -273,4 +275,7 @@ __all__ = [
     # Version
     # ==========================================================================
     "__version__",
+    # Statistics Models
+    "SessionTokenStats",
+    "CostEstimate",
 ]

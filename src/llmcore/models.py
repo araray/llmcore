@@ -617,6 +617,148 @@ class PullResult(BaseModel):
     )
 
 
+class SessionTokenStats(BaseModel):
+    """
+    Cumulative token statistics for a session.
+
+    This model aggregates token usage data from all interactions within a
+    session, providing summary statistics useful for monitoring, cost estimation,
+    and usage analytics.
+
+    Attributes:
+        session_id: The session this statistics object belongs to.
+        total_prompt_tokens: Cumulative count of all input/prompt tokens.
+        total_completion_tokens: Cumulative count of all output/completion tokens.
+        total_tokens: Sum of prompt and completion tokens.
+        total_cached_tokens: Cumulative count of tokens served from provider cache.
+        interaction_count: Number of chat interactions in the session.
+        avg_prompt_tokens: Average prompt tokens per interaction.
+        avg_completion_tokens: Average completion tokens per interaction.
+        max_prompt_tokens: Maximum prompt tokens in a single interaction.
+        max_completion_tokens: Maximum completion tokens in a single interaction.
+        first_interaction_at: Timestamp of the first interaction.
+        last_interaction_at: Timestamp of the most recent interaction.
+        by_model: Token breakdown by model used (for multi-model sessions).
+    """
+
+    session_id: str = Field(description="Session identifier.")
+    total_prompt_tokens: int = Field(default=0, description="Total input tokens used.")
+    total_completion_tokens: int = Field(default=0, description="Total output tokens used.")
+    total_tokens: int = Field(default=0, description="Total tokens (prompt + completion).")
+    total_cached_tokens: int = Field(default=0, description="Total tokens served from cache.")
+    interaction_count: int = Field(default=0, description="Number of chat interactions.")
+    avg_prompt_tokens: float = Field(
+        default=0.0, description="Average prompt tokens per interaction."
+    )
+    avg_completion_tokens: float = Field(
+        default=0.0, description="Average completion tokens per interaction."
+    )
+    max_prompt_tokens: int = Field(
+        default=0, description="Maximum prompt tokens in any interaction."
+    )
+    max_completion_tokens: int = Field(
+        default=0, description="Maximum completion tokens in any interaction."
+    )
+    first_interaction_at: Optional[datetime] = Field(
+        default=None, description="Timestamp of first interaction (UTC)."
+    )
+    last_interaction_at: Optional[datetime] = Field(
+        default=None, description="Timestamp of most recent interaction (UTC)."
+    )
+    by_model: Dict[str, Dict[str, int]] = Field(
+        default_factory=dict,
+        description=(
+            "Token usage breakdown by model. Format: "
+            "{'model_name': {'prompt': int, 'completion': int, 'count': int}}"
+        ),
+    )
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    @field_serializer("first_interaction_at", "last_interaction_at")
+    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Serialize datetime to ISO format with Z suffix."""
+        if dt is None:
+            return None
+        return dt.isoformat().replace("+00:00", "Z")
+
+
+class CostEstimate(BaseModel):
+    """
+    Cost estimation result for token usage.
+
+    This model provides a detailed breakdown of estimated costs based on
+    token counts and model card pricing data.
+
+    Attributes:
+        input_cost: Cost for input/prompt tokens.
+        output_cost: Cost for output/completion tokens.
+        cached_discount: Cost savings from cached tokens (if applicable).
+        reasoning_cost: Cost for reasoning tokens (for thinking models).
+        total_cost: Total estimated cost.
+        currency: Currency code (ISO 4217, default "USD").
+        pricing_source: Source of pricing data ("model_card", "estimated", "unavailable").
+        prompt_tokens: Number of prompt tokens used in estimate.
+        completion_tokens: Number of completion tokens used in estimate.
+        cached_tokens: Number of cached tokens (subset of prompt).
+        reasoning_tokens: Number of reasoning tokens (for thinking models).
+        input_price_per_million: Input price per 1M tokens used.
+        output_price_per_million: Output price per 1M tokens used.
+        cached_price_per_million: Cached input price per 1M tokens used.
+        model_id: Model identifier used for pricing.
+        provider: Provider name used for pricing.
+    """
+
+    input_cost: float = Field(default=0.0, description="Cost for input tokens.")
+    output_cost: float = Field(default=0.0, description="Cost for output tokens.")
+    cached_discount: float = Field(default=0.0, description="Cost savings from cached tokens.")
+    reasoning_cost: float = Field(default=0.0, description="Cost for reasoning tokens.")
+    total_cost: float = Field(default=0.0, description="Total estimated cost.")
+    currency: str = Field(default="USD", description="Currency code (ISO 4217).")
+    pricing_source: str = Field(
+        default="model_card",
+        description="Source of pricing data: 'model_card', 'estimated', 'unavailable'.",
+    )
+
+    # Token counts for reference
+    prompt_tokens: int = Field(default=0, description="Prompt tokens in this estimate.")
+    completion_tokens: int = Field(default=0, description="Completion tokens in this estimate.")
+    cached_tokens: int = Field(default=0, description="Cached tokens (subset of prompt).")
+    reasoning_tokens: int = Field(default=0, description="Reasoning tokens used.")
+
+    # Pricing rates used
+    input_price_per_million: Optional[float] = Field(
+        default=None, description="Input price per 1M tokens."
+    )
+    output_price_per_million: Optional[float] = Field(
+        default=None, description="Output price per 1M tokens."
+    )
+    cached_price_per_million: Optional[float] = Field(
+        default=None, description="Cached input price per 1M tokens."
+    )
+
+    # Model identification
+    model_id: Optional[str] = Field(default=None, description="Model identifier used for pricing.")
+    provider: Optional[str] = Field(default=None, description="Provider name.")
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    def format_cost(self, precision: int = 4) -> str:
+        """
+        Format the total cost as a currency string.
+
+        Args:
+            precision: Decimal places to display.
+
+        Returns:
+            Formatted cost string (e.g., "$0.0123").
+        """
+        if self.pricing_source == "unavailable":
+            return "N/A (local model)"
+        symbol = "$" if self.currency == "USD" else self.currency
+        return f"{symbol}{self.total_cost:.{precision}f}"
+
+
 class Tool(BaseModel):
     """
     Represents a function that can be called by an LLM, defined in a provider-agnostic way.

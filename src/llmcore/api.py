@@ -54,12 +54,14 @@ from .models import (
     ContextPreparationDetails,
     ContextPreset,
     ContextPresetItem,
+    CostEstimate,
     Message,
     ModelDetails,
     ModelValidationResult,
     PullProgress,
     PullResult,
     Role,
+    SessionTokenStats,
     Tool,
     ToolCall,
     ToolResult,
@@ -841,6 +843,284 @@ class LLMCore:
             ContextPreparationDetails if available, None otherwise
         """
         return self._transient_last_interaction_info_cache.get(session_id)
+
+    # =========================================================================
+    # Statistics & Introspection
+    # =========================================================================
+    async def get_session_token_stats(self, session_id: str) -> SessionTokenStats:
+        """
+        Get cumulative token usage statistics for a session.
+
+        Aggregates all token usage data from interactions within the session
+        to provide summary statistics useful for monitoring and cost estimation.
+
+        The method uses two data sources:
+        1. Session metadata's "interactions" list (preferred, contains detailed data)
+        2. Message token counts (fallback for sessions without interaction tracking)
+
+        Args:
+            session_id: Session to get stats for.
+
+        Returns:
+            SessionTokenStats with totals, averages, and timing info.
+
+        Raises:
+            SessionNotFoundError: If session doesn't exist.
+
+        Example:
+            >>> stats = await llm.get_session_token_stats("session_123")
+            >>> print(f"Total tokens: {stats.total_tokens:,}")
+            >>> print(f"Interactions: {stats.interaction_count}")
+            >>> print(f"Avg per interaction: {stats.avg_prompt_tokens:.0f} prompt")
+        """
+        # Get session asynchronously
+        session = await self._session_manager.load_or_create_session(session_id)
+
+        if session is None:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        # Initialize stats
+        stats = SessionTokenStats(
+            session_id=session_id,
+            total_prompt_tokens=0,
+            total_completion_tokens=0,
+            total_tokens=0,
+        )
+
+        # Try to use recorded interaction data from session metadata
+        interaction_data = session.metadata.get("interactions", [])
+
+        if interaction_data:
+            # Use recorded interaction data (preferred)
+            for interaction in interaction_data:
+                prompt_tokens = interaction.get("prompt_tokens", 0)
+                completion_tokens = interaction.get("completion_tokens", 0)
+                cached_tokens = interaction.get("cached_tokens", 0)
+
+                stats.total_prompt_tokens += prompt_tokens
+                stats.total_completion_tokens += completion_tokens
+                stats.total_cached_tokens += cached_tokens
+                stats.interaction_count += 1
+
+                # Track max values
+                stats.max_prompt_tokens = max(stats.max_prompt_tokens, prompt_tokens)
+                stats.max_completion_tokens = max(stats.max_completion_tokens, completion_tokens)
+
+                # Track by model
+                model = interaction.get("model", "unknown")
+                if model not in stats.by_model:
+                    stats.by_model[model] = {"prompt": 0, "completion": 0, "count": 0}
+                stats.by_model[model]["prompt"] += prompt_tokens
+                stats.by_model[model]["completion"] += completion_tokens
+                stats.by_model[model]["count"] += 1
+
+                # Track timing
+                timestamp_str = interaction.get("timestamp")
+                if timestamp_str:
+                    try:
+                        if timestamp_str.endswith("Z"):
+                            ts = datetime.fromisoformat(timestamp_str[:-1] + "+00:00")
+                        else:
+                            ts = datetime.fromisoformat(timestamp_str)
+
+                        if stats.first_interaction_at is None or ts < stats.first_interaction_at:
+                            stats.first_interaction_at = ts
+                        if stats.last_interaction_at is None or ts > stats.last_interaction_at:
+                            stats.last_interaction_at = ts
+                    except (ValueError, TypeError):
+                        pass
+        else:
+            # Fallback: estimate from message token counts
+            user_messages = [m for m in session.messages if m.role == Role.USER]
+            assistant_messages = [m for m in session.messages if m.role == Role.ASSISTANT]
+
+            for msg in session.messages:
+                if msg.tokens:
+                    if msg.role == Role.ASSISTANT:
+                        stats.total_completion_tokens += msg.tokens
+                        stats.max_completion_tokens = max(stats.max_completion_tokens, msg.tokens)
+                    elif msg.role == Role.USER:
+                        stats.total_prompt_tokens += msg.tokens
+                        stats.max_prompt_tokens = max(stats.max_prompt_tokens, msg.tokens)
+
+            stats.interaction_count = min(len(user_messages), len(assistant_messages))
+
+            # Use message timestamps for timing
+            if session.messages:
+                sorted_msgs = sorted(session.messages, key=lambda m: m.timestamp)
+                stats.first_interaction_at = sorted_msgs[0].timestamp
+                stats.last_interaction_at = sorted_msgs[-1].timestamp
+
+        # Calculate totals and averages
+        stats.total_tokens = stats.total_prompt_tokens + stats.total_completion_tokens
+
+        if stats.interaction_count > 0:
+            stats.avg_prompt_tokens = stats.total_prompt_tokens / stats.interaction_count
+            stats.avg_completion_tokens = stats.total_completion_tokens / stats.interaction_count
+
+        return stats
+
+    def estimate_cost(
+        self,
+        provider_name: str,
+        model_name: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        *,
+        cached_tokens: int = 0,
+        reasoning_tokens: int = 0,
+    ) -> CostEstimate:
+        """
+        Estimate cost for given token counts.
+
+        Uses the model card library for pricing data. If pricing is not
+        available (e.g., local Ollama models), returns an estimate with
+        pricing_source="unavailable".
+
+        Args:
+            provider_name: Provider name (e.g., "anthropic", "openai").
+            model_name: Model name (e.g., "claude-sonnet-4", "gpt-4o").
+            prompt_tokens: Input/prompt token count.
+            completion_tokens: Output/completion token count.
+            cached_tokens: Tokens served from cache (discount applied).
+            reasoning_tokens: Reasoning/thinking tokens (special pricing).
+
+        Returns:
+            CostEstimate with cost breakdown and total.
+
+        Example:
+            >>> cost = llm.estimate_cost(
+            ...     "anthropic", "claude-sonnet-4",
+            ...     prompt_tokens=10000,
+            ...     completion_tokens=2000,
+            ...     cached_tokens=5000
+            ... )
+            >>> print(f"Estimated cost: {cost.format_cost()}")
+            >>> print(f"  Input: ${cost.input_cost:.4f}")
+            >>> print(f"  Output: ${cost.output_cost:.4f}")
+        """
+        from .model_cards import get_model_card_registry
+
+        registry = get_model_card_registry()
+        card = registry.get(provider_name, model_name)
+
+        # Initialize result with token counts
+        result = CostEstimate(
+            input_cost=0.0,
+            output_cost=0.0,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cached_tokens=cached_tokens,
+            reasoning_tokens=reasoning_tokens,
+            provider=provider_name,
+            model_id=model_name,
+        )
+
+        if not card or not card.pricing:
+            # No pricing available (e.g., local models)
+            result.pricing_source = "unavailable"
+            logger.debug(f"No pricing data for {provider_name}/{model_name}")
+            return result
+
+        pricing = card.pricing.per_million_tokens
+        result.pricing_source = "model_card"
+        result.currency = card.pricing.currency
+
+        # Store pricing info
+        result.input_price_per_million = pricing.input
+        result.output_price_per_million = pricing.output
+        result.cached_price_per_million = pricing.cached_input
+
+        # Calculate input cost
+        regular_input_tokens = max(0, prompt_tokens - cached_tokens)
+        result.input_cost = (regular_input_tokens / 1_000_000) * pricing.input
+
+        # Add cached token cost if applicable
+        if cached_tokens > 0:
+            if pricing.cached_input is not None:
+                cached_cost = (cached_tokens / 1_000_000) * pricing.cached_input
+            else:
+                # If no cached price, charge full input price
+                cached_cost = (cached_tokens / 1_000_000) * pricing.input
+            result.input_cost += cached_cost
+
+            # Calculate savings from caching
+            full_input_cost = (cached_tokens / 1_000_000) * pricing.input
+            if pricing.cached_input is not None:
+                result.cached_discount = full_input_cost - (
+                    (cached_tokens / 1_000_000) * pricing.cached_input
+                )
+
+        # Calculate output cost
+        regular_output_tokens = max(0, completion_tokens - reasoning_tokens)
+        result.output_cost = (regular_output_tokens / 1_000_000) * pricing.output
+
+        # Calculate reasoning cost (if separate pricing exists)
+        if reasoning_tokens > 0:
+            if pricing.reasoning_output is not None:
+                result.reasoning_cost = (reasoning_tokens / 1_000_000) * pricing.reasoning_output
+            else:
+                # If no separate reasoning price, use regular output price
+                result.output_cost += (reasoning_tokens / 1_000_000) * pricing.output
+
+        # Calculate total
+        result.total_cost = result.input_cost + result.output_cost + result.reasoning_cost
+
+        return result
+
+    async def estimate_session_cost(self, session_id: str) -> CostEstimate:
+        """
+        Estimate total cost for all interactions in a session.
+
+        Uses recorded interaction data and model card pricing to calculate
+        cumulative session costs.
+
+        Args:
+            session_id: Session to estimate cost for.
+
+        Returns:
+            Aggregated CostEstimate for all interactions in the session.
+
+        Raises:
+            SessionNotFoundError: If session doesn't exist.
+
+        Example:
+            >>> cost = await llm.estimate_session_cost("session_123")
+            >>> print(f"Session cost: {cost.format_cost()}")
+            >>> print(f"Total tokens: {cost.prompt_tokens + cost.completion_tokens:,}")
+        """
+        # Get token stats first
+        stats = await self.get_session_token_stats(session_id)
+
+        # Get session to determine provider/model
+        session = await self._session_manager.load_or_create_session(session_id)
+
+        if session is None:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        # Determine primary model used (model with most interactions)
+        primary_model = "unknown"
+        if stats.by_model:
+            primary_model = max(stats.by_model.items(), key=lambda x: x[1].get("count", 0))[0]
+
+        # Get provider from session metadata or use default
+        provider = session.metadata.get("provider")
+        if not provider:
+            # Try to get from context info cache
+            context_info = self._transient_last_interaction_info_cache.get(session_id)
+            if context_info:
+                provider = context_info.provider
+            else:
+                provider = self._default_provider
+
+        # Calculate cost using the estimate_cost method
+        return self.estimate_cost(
+            provider_name=provider,
+            model_name=primary_model,
+            prompt_tokens=stats.total_prompt_tokens,
+            completion_tokens=stats.total_completion_tokens,
+            cached_tokens=stats.total_cached_tokens,
+        )
 
     async def preview_context_for_chat(
         self,
