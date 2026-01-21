@@ -285,10 +285,30 @@ class ChatSession(BaseModel):
         return dt.isoformat().replace("+00:00", "Z")
 
     def add_message(
-        self, message_content: str, role: Role, session_id_override: Optional[str] = None
+        self,
+        message_content: str,
+        role: Role,
+        session_id_override: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Message:
+        """
+        Add a new message to the session.
+
+        Args:
+            message_content: The content of the message.
+            role: The role of the message sender.
+            session_id_override: Optional session ID override.
+            metadata: Optional metadata dictionary for tracking additional info
+                      (e.g., provider/model for assistant, context info for user).
+
+        Returns:
+            The newly created Message object.
+        """
         new_message = Message(
-            content=message_content, role=role, session_id=session_id_override or self.id
+            content=message_content,
+            role=role,
+            session_id=session_id_override or self.id,
+            metadata=metadata or {},
         )
         self.messages.append(new_message)
         self.updated_at = datetime.now(timezone.utc)

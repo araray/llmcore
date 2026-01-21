@@ -640,8 +640,26 @@ class LLMCore:
         if not session_id:  # If it was a temporary session, cache it
             self._transient_sessions_cache[chat_session.id] = chat_session
 
-        # Add user message to session
-        chat_session.add_message(message, Role.USER)
+        # Build user message metadata (Issue 3 fix: track context info for user messages)
+        user_message_metadata: Dict[str, Any] = {
+            "provider": active_provider.get_name(),
+            "model": actual_model,
+        }
+        if enable_rag:
+            user_message_metadata["rag_enabled"] = True
+            if rag_collection_name:
+                user_message_metadata["rag_collection"] = rag_collection_name
+            if rag_retrieval_k:
+                user_message_metadata["rag_k"] = rag_retrieval_k
+        if active_context_item_ids:
+            user_message_metadata["active_context_item_ids"] = active_context_item_ids
+        if explicitly_staged_items:
+            user_message_metadata["staged_items_count"] = len(explicitly_staged_items)
+        if prompt_template_values:
+            user_message_metadata["prompt_template_values"] = list(prompt_template_values.keys())
+
+        # Add user message to session with metadata
+        chat_session.add_message(message, Role.USER, metadata=user_message_metadata)
 
         # Prepare context (includes history, RAG, context management)
         context_details = await self._memory_manager.prepare_context(
@@ -718,7 +736,20 @@ class LLMCore:
             # Cache AFTER all fields are populated
             self._transient_last_interaction_info_cache[chat_session.id] = context_details
 
-            chat_session.add_message(full_content, Role.ASSISTANT)
+            # Build assistant message metadata (Issue 3 fix: track provider/model)
+            assistant_metadata: Dict[str, Any] = {
+                "provider": active_provider.get_name(),
+                "model": actual_model,
+                "prompt_tokens": context_details.prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": context_details.total_tokens,
+            }
+            if context_details.rag_used:
+                assistant_metadata["rag_used"] = True
+                if context_details.rag_documents_retrieved:
+                    assistant_metadata["rag_docs_count"] = context_details.rag_documents_retrieved
+
+            chat_session.add_message(full_content, Role.ASSISTANT, metadata=assistant_metadata)
             if save_session:
                 await self._session_manager.save_session(chat_session)
             return full_content
@@ -751,7 +782,11 @@ class LLMCore:
                     yield text_delta
         finally:
             if full_response:
-                session.add_message(full_response, Role.ASSISTANT)
+                # Basic metadata for legacy streaming (provider info only)
+                basic_metadata: Dict[str, Any] = {
+                    "provider": provider.get_name(),
+                }
+                session.add_message(full_response, Role.ASSISTANT, metadata=basic_metadata)
                 if do_save:
                     await self._session_manager.save_session(session)
 
@@ -798,7 +833,22 @@ class LLMCore:
                 # Cache the updated context details
                 self._transient_last_interaction_info_cache[session.id] = context_details
 
-                session.add_message(full_response, Role.ASSISTANT)
+                # Build assistant message metadata (Issue 3 fix: track provider/model)
+                assistant_metadata: Dict[str, Any] = {
+                    "provider": provider.get_name(),
+                    "model": model,
+                    "prompt_tokens": context_details.prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": context_details.total_tokens,
+                }
+                if context_details.rag_used:
+                    assistant_metadata["rag_used"] = True
+                    if context_details.rag_documents_retrieved:
+                        assistant_metadata["rag_docs_count"] = (
+                            context_details.rag_documents_retrieved
+                        )
+
+                session.add_message(full_response, Role.ASSISTANT, metadata=assistant_metadata)
                 if do_save:
                     await self._session_manager.save_session(session)
 
