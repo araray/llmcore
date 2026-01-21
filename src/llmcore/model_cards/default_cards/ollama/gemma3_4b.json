@@ -30,13 +30,17 @@
   },
   "license": "gemma",
   "open_weights": true,
-  "aliases": ["gemma3", "gemma3:4b", "gemma3:latest"],
+  "aliases": ["gemma3", "gemma3:latest"],
   "description": "Gemma 3 4B is Google DeepMind's multimodal, instruction-tuned model. It features a 128k context window, native vision capabilities via a SigLIP encoder, and support for over 140 languages, optimized for efficiency on consumer hardware.",
   "tags": ["open-source", "local", "multimodal", "vision", "google-deepmind"],
   "provider_ollama": {
-    "quantization_default": "q4_K_M",
-    "available_quantizations": ["q4_K_M", "q8_0", "fp16"],
-    "vram_requirement_gb": 4
+    "format": "gguf",
+    "quantization_level": "Q4_K_M",
+    "file_size_bytes": 4000000000,
+    "modelfile_parameters": {
+      "num_ctx": 8192,
+      "temperature": 0.7
+    }
   },
   "source": "builtin"
 }
