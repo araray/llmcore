@@ -64,17 +64,20 @@ class TestValidatePhase:
         provider.get_name = Mock(return_value="test_provider")
         provider.default_model = "test_model"
 
-        # Mock response - approval
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content - approval
+        mock_content = """
 APPROVED: yes
 CONFIDENCE: high
 CONCERNS: None
 SUGGESTIONS: None
 """
-        mock_response.usage = Mock(total_tokens=80)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 80, "prompt_tokens": 50, "completion_tokens": 30},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         # Create state and input
@@ -310,8 +313,8 @@ class TestReflectPhase:
         provider.get_name = Mock(return_value="test")
         provider.default_model = "test_model"
 
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content
+        mock_content = """
 EVALUATION: Successfully completed calculation step.
 PROGRESS: 50%
 INSIGHTS:
@@ -321,9 +324,13 @@ PLAN_UPDATE: no
 STEP_COMPLETED: yes
 NEXT_FOCUS: Move to next step in plan
 """
-        mock_response.usage = Mock(total_tokens=120)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 120, "prompt_tokens": 70, "completion_tokens": 50},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         state = EnhancedAgentState(goal="Calculate factorial")
@@ -357,8 +364,8 @@ NEXT_FOCUS: Move to next step in plan
         provider.get_name = Mock(return_value="test")
         provider.default_model = "test_model"
 
-        mock_response = Mock()
-        mock_response.content = """
+        # Mock response content
+        mock_content = """
 EVALUATION: Approach not working, need to change strategy.
 PROGRESS: 25%
 INSIGHTS:
@@ -373,9 +380,13 @@ UPDATED PLAN:
 2. Cache intermediate results
 3. Return final answer
 """
-        mock_response.usage = Mock(total_tokens=130)
-
-        provider.chat = AsyncMock(return_value=mock_response)
+        # Mock chat_completion to return dict (like real provider)
+        mock_response = {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"total_tokens": 130, "prompt_tokens": 80, "completion_tokens": 50},
+        }
+        provider.chat_completion = AsyncMock(return_value=mock_response)
+        provider.extract_response_content = Mock(return_value=mock_content)
         provider_manager.get_provider = Mock(return_value=provider)
 
         state = EnhancedAgentState(goal="Optimize")
