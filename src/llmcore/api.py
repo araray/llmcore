@@ -1030,6 +1030,460 @@ class LLMCore:
         await self._session_manager.update_session_name(session_id, new_name)
 
     # ==============================================================================
+    # Session Fork, Clone, and Message Operations (Phase 3)
+    # ==============================================================================
+
+    async def fork_session(
+        self,
+        session_id: str,
+        *,
+        new_name: Optional[str] = None,
+        from_message_id: Optional[str] = None,
+        message_ids: Optional[List[str]] = None,
+        message_range: Optional[Tuple[int, int]] = None,
+        include_context_items: bool = True,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Fork a session to create an independent copy with selected messages.
+
+        Fork creates a new session with selected messages from the source.
+        The forked session is completely independent - changes to either
+        session do not affect the other.
+
+        Fork modes (mutually exclusive, checked in order of priority):
+        1. message_ids: Include only these specific messages
+        2. message_range: Include messages in index range (0-based, inclusive)
+        3. from_message_id: Include this message and all subsequent messages
+        4. None of above: Full fork (all messages)
+
+        Args:
+            session_id: Source session to fork from
+            new_name: Name for the new session. If None, generates name
+                     like "source_name_fork_20260120_143052"
+            from_message_id: Fork from this message onwards (inclusive)
+            message_ids: List of specific message IDs to include
+            message_range: Tuple of (start_index, end_index), 0-based inclusive
+            include_context_items: Whether to copy workspace items to fork
+            metadata: Additional metadata to add to forked session
+
+        Returns:
+            ID of the newly created session
+
+        Example:
+            # Full fork
+            new_id = await llm.fork_session("session_123")
+
+            # Fork from a specific point
+            new_id = await llm.fork_session(
+                "session_123",
+                from_message_id="msg_005",
+                new_name="divergent_exploration"
+            )
+
+            # Fork specific messages
+            new_id = await llm.fork_session(
+                "session_123",
+                message_ids=["msg_001", "msg_003", "msg_005"],
+                new_name="selected_messages"
+            )
+
+            # Fork a range
+            new_id = await llm.fork_session(
+                "session_123",
+                message_range=(2, 7),  # Messages at indices 2-7
+                new_name="conversation_segment"
+            )
+
+        Raises:
+            SessionNotFoundError: If source session doesn't exist
+            ValueError: If specified message IDs or range are invalid
+        """
+        from datetime import datetime as dt
+
+        # Get source session
+        source_session = await self._session_manager.get_session(session_id)
+        if not source_session:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        # Determine which messages to include (sorted by timestamp)
+        source_messages = sorted(source_session.messages, key=lambda m: m.timestamp)
+
+        if message_ids:
+            # Mode 1: Specific message IDs
+            id_set = set(message_ids)
+            messages_to_copy = [m for m in source_messages if m.id in id_set]
+
+            if len(messages_to_copy) != len(message_ids):
+                found_ids = {m.id for m in messages_to_copy}
+                missing = id_set - found_ids
+                raise ValueError(f"Message IDs not found: {missing}")
+
+            fork_type = "specific_messages"
+
+        elif message_range:
+            # Mode 2: Index range (0-based, inclusive)
+            start_idx, end_idx = message_range
+            if start_idx < 0 or end_idx >= len(source_messages) or start_idx > end_idx:
+                raise ValueError(
+                    f"Invalid range ({start_idx}, {end_idx}) for session with "
+                    f"{len(source_messages)} messages"
+                )
+
+            messages_to_copy = source_messages[start_idx : end_idx + 1]
+            fork_type = "range"
+
+        elif from_message_id:
+            # Mode 3: From message onwards
+            found_idx = None
+            for i, msg in enumerate(source_messages):
+                if msg.id == from_message_id:
+                    found_idx = i
+                    break
+
+            if found_idx is None:
+                raise ValueError(f"Message not found: {from_message_id}")
+
+            messages_to_copy = source_messages[found_idx:]
+            fork_type = "from_message"
+
+        else:
+            # Mode 4: Full fork
+            messages_to_copy = source_messages
+            fork_type = "full"
+
+        # Generate name if not provided
+        if not new_name:
+            timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+            source_name = source_session.name or "session"
+            new_name = f"{source_name}_fork_{timestamp}"
+
+        # Create fork metadata
+        fork_metadata: Dict[str, Any] = {
+            "forked_from": session_id,
+            "forked_at": dt.now(timezone.utc).isoformat(),
+            "fork_type": fork_type,
+            "source_message_count": len(source_messages),
+            "forked_message_count": len(messages_to_copy),
+        }
+
+        if from_message_id:
+            fork_metadata["fork_point_message_id"] = from_message_id
+        if message_range:
+            fork_metadata["fork_range"] = list(message_range)
+
+        if metadata:
+            fork_metadata.update(metadata)
+
+        # Create new session
+        new_session = await self.create_session(name=new_name)
+        new_session.metadata = fork_metadata
+
+        # Copy messages with new IDs
+        for msg in messages_to_copy:
+            new_message = Message(
+                id=str(uuid.uuid4()),  # New ID for independence
+                session_id=new_session.id,
+                role=msg.role,
+                content=msg.content,
+                timestamp=msg.timestamp,  # Preserve original timestamp
+                tool_call_id=msg.tool_call_id,
+                tokens=msg.tokens,
+                metadata=msg.metadata.copy() if msg.metadata else {},
+            )
+            new_session.messages.append(new_message)
+
+        # Copy context items if requested
+        if include_context_items and source_session.context_items:
+            for item in source_session.context_items:
+                new_item = ContextItem(
+                    id=str(uuid.uuid4()),  # New ID for independence
+                    type=item.type,
+                    source_id=item.source_id,
+                    content=item.content,
+                    tokens=item.tokens,
+                    original_tokens=item.original_tokens,
+                    is_truncated=item.is_truncated,
+                    metadata=item.metadata.copy() if item.metadata else {},
+                    timestamp=item.timestamp,
+                )
+                new_session.context_items.append(new_item)
+
+        # Save the forked session
+        await self._session_manager.save_session(new_session)
+
+        logger.info(
+            f"Forked session {session_id} to {new_session.id} "
+            f"({len(messages_to_copy)} messages, type: {fork_type})"
+        )
+
+        return new_session.id
+
+    async def clone_session(
+        self,
+        session_id: str,
+        new_name: Optional[str] = None,
+        *,
+        include_messages: bool = True,
+        include_context_items: bool = True,
+    ) -> str:
+        """
+        Clone a session (full copy with new ID).
+
+        Unlike fork, clone is always a complete copy. The main difference
+        from fork is semantic - clone implies an exact duplicate, while
+        fork implies divergence.
+
+        Args:
+            session_id: Source session to clone
+            new_name: Name for cloned session (uses "source_clone" if None)
+            include_messages: If False, creates empty session with same metadata
+            include_context_items: Whether to copy workspace items
+
+        Returns:
+            ID of cloned session
+
+        Example:
+            # Full clone
+            clone_id = await llm.clone_session("session_123")
+
+            # Clone settings only (no messages)
+            clone_id = await llm.clone_session(
+                "session_123",
+                include_messages=False
+            )
+        """
+        from datetime import datetime as dt
+
+        # Get source session
+        source_session = await self._session_manager.get_session(session_id)
+        if not source_session:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        # Generate name if not provided
+        if not new_name:
+            timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+            source_name = source_session.name or "session"
+            new_name = f"{source_name}_clone_{timestamp}"
+
+        # Create clone metadata
+        clone_metadata: Dict[str, Any] = {
+            "cloned_from": session_id,
+            "cloned_at": dt.now(timezone.utc).isoformat(),
+            "messages_included": include_messages,
+            "context_items_included": include_context_items,
+        }
+
+        # Preserve source metadata with prefix
+        if source_session.metadata:
+            for key, value in source_session.metadata.items():
+                if key not in ("cloned_from", "cloned_at"):
+                    clone_metadata[f"source_{key}"] = value
+
+        # Create new session
+        new_session = await self.create_session(name=new_name)
+        new_session.metadata = clone_metadata
+
+        # Copy messages if requested
+        if include_messages:
+            for msg in source_session.messages:
+                new_message = Message(
+                    id=str(uuid.uuid4()),
+                    session_id=new_session.id,
+                    role=msg.role,
+                    content=msg.content,
+                    timestamp=msg.timestamp,
+                    tool_call_id=msg.tool_call_id,
+                    tokens=msg.tokens,
+                    metadata=msg.metadata.copy() if msg.metadata else {},
+                )
+                new_session.messages.append(new_message)
+
+        # Copy context items if requested
+        if include_context_items and source_session.context_items:
+            for item in source_session.context_items:
+                new_item = ContextItem(
+                    id=str(uuid.uuid4()),
+                    type=item.type,
+                    source_id=item.source_id,
+                    content=item.content,
+                    tokens=item.tokens,
+                    original_tokens=item.original_tokens,
+                    is_truncated=item.is_truncated,
+                    metadata=item.metadata.copy() if item.metadata else {},
+                    timestamp=item.timestamp,
+                )
+                new_session.context_items.append(new_item)
+
+        # Save the cloned session
+        await self._session_manager.save_session(new_session)
+
+        logger.info(
+            f"Cloned session {session_id} to {new_session.id} "
+            f"(messages: {include_messages}, context: {include_context_items})"
+        )
+
+        return new_session.id
+
+    async def delete_messages(
+        self,
+        session_id: str,
+        message_ids: List[str],
+    ) -> int:
+        """
+        Delete specific messages from a session.
+
+        Args:
+            session_id: Session containing the messages
+            message_ids: List of message IDs to delete
+
+        Returns:
+            Number of messages actually deleted
+
+        Raises:
+            SessionNotFoundError: If session doesn't exist
+        """
+        session = await self._session_manager.get_session(session_id)
+        if not session:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        id_set = set(message_ids)
+        original_count = len(session.messages)
+
+        session.messages = [m for m in session.messages if m.id not in id_set]
+
+        deleted_count = original_count - len(session.messages)
+
+        if deleted_count > 0:
+            session.updated_at = datetime.now(timezone.utc)
+            await self._session_manager.save_session(session)
+            logger.info(f"Deleted {deleted_count} messages from session {session_id}")
+
+        return deleted_count
+
+    async def copy_messages_to_session(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+        message_ids: List[str],
+        *,
+        preserve_timestamps: bool = True,
+    ) -> List[str]:
+        """
+        Copy specific messages from one session to another.
+
+        Args:
+            source_session_id: Session to copy from
+            target_session_id: Session to copy to
+            message_ids: IDs of messages to copy
+            preserve_timestamps: If True, keep original timestamps; otherwise use current time
+
+        Returns:
+            List of new message IDs created in target session
+
+        Raises:
+            SessionNotFoundError: If either session doesn't exist
+            ValueError: If any message_ids are not found
+        """
+        from datetime import datetime as dt
+
+        # Get source and target sessions
+        source_session = await self._session_manager.get_session(source_session_id)
+        if not source_session:
+            raise SessionNotFoundError(f"Source session not found: {source_session_id}")
+
+        target_session = await self._session_manager.get_session(target_session_id)
+        if not target_session:
+            raise SessionNotFoundError(f"Target session not found: {target_session_id}")
+
+        # Find messages to copy
+        id_set = set(message_ids)
+        messages_to_copy = [m for m in source_session.messages if m.id in id_set]
+
+        if len(messages_to_copy) != len(message_ids):
+            found_ids = {m.id for m in messages_to_copy}
+            missing = id_set - found_ids
+            raise ValueError(f"Message IDs not found in source session: {missing}")
+
+        # Copy messages with new IDs
+        new_ids: List[str] = []
+        for msg in messages_to_copy:
+            new_id = str(uuid.uuid4())
+            new_message = Message(
+                id=new_id,
+                session_id=target_session_id,
+                role=msg.role,
+                content=msg.content,
+                timestamp=msg.timestamp if preserve_timestamps else dt.now(timezone.utc),
+                tool_call_id=msg.tool_call_id,
+                tokens=msg.tokens,
+                metadata={
+                    **msg.metadata,
+                    "copied_from_session": source_session_id,
+                    "copied_from_message": msg.id,
+                },
+            )
+            target_session.messages.append(new_message)
+            new_ids.append(new_id)
+
+        # Sort messages by timestamp
+        target_session.messages.sort(key=lambda m: m.timestamp)
+        target_session.updated_at = dt.now(timezone.utc)
+
+        await self._session_manager.save_session(target_session)
+
+        logger.info(
+            f"Copied {len(new_ids)} messages from session {source_session_id} "
+            f"to session {target_session_id}"
+        )
+
+        return new_ids
+
+    async def get_messages_by_range(
+        self,
+        session_id: str,
+        start_index: int,
+        end_index: int,
+    ) -> List[Message]:
+        """
+        Get messages from a session by index range.
+
+        Messages are sorted by timestamp before indexing.
+
+        Args:
+            session_id: Session to get messages from
+            start_index: Start index (0-based, inclusive)
+            end_index: End index (0-based, inclusive)
+
+        Returns:
+            List of Message objects in the range
+
+        Raises:
+            SessionNotFoundError: If session doesn't exist
+            ValueError: If range is invalid
+        """
+        session = await self._session_manager.get_session(session_id)
+        if not session:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        messages = sorted(session.messages, key=lambda m: m.timestamp)
+        msg_count = len(messages)
+
+        if start_index < 0:
+            raise ValueError(f"start_index must be >= 0, got {start_index}")
+        if end_index < start_index:
+            raise ValueError(f"end_index ({end_index}) must be >= start_index ({start_index})")
+        if start_index >= msg_count:
+            raise ValueError(
+                f"start_index ({start_index}) out of range for session with {msg_count} messages"
+            )
+
+        # Clamp end_index to valid range
+        end_index = min(end_index, msg_count - 1)
+
+        return messages[start_index : end_index + 1]
+
+    # ==============================================================================
     # Context Item Management (Session Workspace)
     # ==============================================================================
 
