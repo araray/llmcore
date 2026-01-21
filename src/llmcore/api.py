@@ -2959,7 +2959,7 @@ class LLMCore:
     # EXPORT/IMPORT APIs (Phase 6)
     # =========================================================================
 
-    def export_session(
+    async def export_session(
         self,
         session_id: str,
         *,
@@ -2991,17 +2991,17 @@ class LLMCore:
 
         Example:
             >>> # Export to JSON
-            >>> json_data = llm.export_session("session_123")
+            >>> json_data = await llm.export_session("session_123")
             >>> with open("backup.json", "w") as f:
             ...     f.write(json_data)
             >>>
             >>> # Export to Markdown for documentation
-            >>> md_data = llm.export_session("session_123", format="markdown")
+            >>> md_data = await llm.export_session("session_123", format="markdown")
             >>> with open("session.md", "w") as f:
             ...     f.write(md_data)
             >>>
             >>> # Export to dict for programmatic use
-            >>> data = llm.export_session("session_123", format="dict")
+            >>> data = await llm.export_session("session_123", format="dict")
             >>> print(f"Messages: {len(data['messages'])}")
         """
         import json as json_module
@@ -3011,11 +3011,11 @@ class LLMCore:
                 f"Invalid format '{format}'. Must be 'json', 'yaml', 'dict', or 'markdown'."
             )
 
-        # Get session from storage
-        if self._storage_manager is None:
-            raise LLMCoreError("Storage manager not initialized")
+        # Get session from session manager (async)
+        if self._session_manager is None:
+            raise LLMCoreError("Session manager not initialized")
 
-        session = self._storage_manager.get_session(session_id)
+        session = await self._session_manager.get_session(session_id)
         if session is None:
             raise LLMCoreError(f"Session '{session_id}' not found")
 
@@ -3527,7 +3527,7 @@ class LLMCore:
 
         raise ValueError(f"Invalid format: {format}")
 
-    def create_bundle(
+    async def create_bundle(
         self,
         session_id: str,
         bundle_path: str,
@@ -3564,7 +3564,7 @@ class LLMCore:
             LLMCoreError: If session not found or bundle creation fails.
 
         Example:
-            >>> path = llm.create_bundle(
+            >>> path = await llm.create_bundle(
             ...     "session_123",
             ...     "~/backups/my_session.llmchat",
             ...     include_files=["~/project/main.py"]
@@ -3582,7 +3582,7 @@ class LLMCore:
 
         # Export session to dict
         try:
-            export_data = self.export_session(
+            export_data = await self.export_session(
                 session_id,
                 format="dict",
                 include_context_items=include_context_items,
