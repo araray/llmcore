@@ -106,14 +106,18 @@ async def plan_phase(
                 Message(role=Role.USER, content=planning_prompt),
             ]
 
-            response = await provider.chat(
-                messages=messages,
+            response = await provider.chat_completion(
+                context=messages,
                 model=target_model,
+                stream=False,
                 temperature=0.7,  # Some creativity in planning
             )
 
+            # Extract response content from provider-specific response format
+            response_content = provider.extract_response_content(response)
+
             # 3. Parse response
-            output = _parse_plan_response(response_text=response.content, plan_input=plan_input)
+            output = _parse_plan_response(response_text=response_content, plan_input=plan_input)
 
             # 4. Update agent state
             agent_state.plan = output.plan_steps
@@ -128,12 +132,13 @@ async def plan_phase(
                     # Get active version ID for planning_prompt
                     template = prompt_registry.get_template("planning_prompt")
                     if template.active_version:
+                        # Extract token usage from response dict
+                        usage = response.get("usage", {}) if isinstance(response, dict) else None
+                        total_tokens = usage.get("total_tokens") if usage else None
                         prompt_registry.record_use(
                             version_id=template.active_version.id,
                             success=len(output.plan_steps) > 0,
-                            tokens=response.usage.total_tokens
-                            if hasattr(response, "usage")
-                            else None,
+                            tokens=total_tokens,
                         )
                 except Exception as e:
                     logger.warning(f"Failed to record prompt metrics: {e}")
