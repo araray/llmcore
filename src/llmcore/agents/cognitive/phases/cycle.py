@@ -32,14 +32,14 @@ from ..models import (
     # Enums
     ValidationResult,
 )
-from .perceive import perceive_phase
-from .plan import plan_phase
-from .think import think_phase
-from .validate import validate_phase
 from .act import act_phase
 from .observe import observe_phase
+from .perceive import perceive_phase
+from .plan import plan_phase
 from .reflect import reflect_phase
+from .think import think_phase
 from .update import update_phase
+from .validate import validate_phase
 
 if TYPE_CHECKING:
     from ...memory.manager import MemoryManager
@@ -395,6 +395,10 @@ class CognitiveCycle:
         """
         logger.info(f"Starting cognitive cycle: max_iterations={max_iterations}")
 
+        actual_iterations = 0
+        stopped_early = False
+        stop_reason = None
+
         for iteration_num in range(max_iterations):
             # Check if already finished
             if agent_state.is_finished:
@@ -410,24 +414,58 @@ class CognitiveCycle:
                     provider_name=provider_name,
                     model_name=model_name,
                 )
+                actual_iterations = iteration_num + 1
+
+                # Accumulate tokens from think phase if available
+                if iteration.think_output and iteration.think_output.reasoning_tokens:
+                    iteration.total_tokens_used += iteration.think_output.reasoning_tokens
 
                 # Check if we should stop
                 if iteration.update_output and not iteration.update_output.should_continue:
-                    logger.info(
-                        f"Stopping after {iteration_num + 1} iterations (should_continue=False)"
-                    )
+                    stopped_early = True
+                    # Determine stop reason
+                    if agent_state.awaiting_human_approval:
+                        stop_reason = "human_approval_required"
+                    else:
+                        stop_reason = "update_stopped"
+                    logger.info(f"Stopping after {actual_iterations} iterations ({stop_reason})")
                     break
 
             except Exception as e:
                 logger.error(f"Iteration failed: {e}")
                 return f"Task failed: {str(e)}"
 
-        # Max iterations reached
-        if not agent_state.is_finished:
-            logger.warning(f"Max iterations ({max_iterations}) reached without completion")
-            return f"Task incomplete after {max_iterations} iterations. Progress: {agent_state.progress_estimate:.1%}"
+        # Check if task completed during the last iteration
+        if agent_state.is_finished:
+            return agent_state.final_answer or "Task completed"
 
-        return agent_state.final_answer or "Task completed"
+        # Determine result based on how loop ended
+        if stopped_early:
+            if stop_reason == "human_approval_required":
+                approval_prompt = (
+                    agent_state.pending_approval_prompt or "Approval needed for proposed action"
+                )
+                logger.warning(f"Human approval required after {actual_iterations} iteration(s)")
+                return (
+                    f"Human approval required after {actual_iterations} iteration(s). "
+                    f"Progress: {agent_state.progress_estimate:.1%}. {approval_prompt}"
+                )
+            else:
+                # Stopped by UPDATE phase (e.g., progress stalled, reflection decided to stop)
+                logger.info(
+                    f"Task incomplete after {actual_iterations} iteration(s) (update stopped)"
+                )
+                return (
+                    f"Task incomplete after {actual_iterations} iteration(s). "
+                    f"Progress: {agent_state.progress_estimate:.1%}"
+                )
+
+        # Actually hit max iterations
+        logger.warning(f"Max iterations ({max_iterations}) reached without completion")
+        return (
+            f"Task incomplete after {max_iterations} iterations (limit reached). "
+            f"Progress: {agent_state.progress_estimate:.1%}"
+        )
 
     def _build_history(self, agent_state: EnhancedAgentState) -> str:
         """
