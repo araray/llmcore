@@ -158,6 +158,7 @@ class SingleAgentMode:
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
         session_id: Optional[str] = None,
+        skip_validation: bool = False,
     ) -> "AgentResult":
         """
         Run an autonomous agent to complete a goal.
@@ -172,6 +173,7 @@ class SingleAgentMode:
             provider_name: Optional LLM provider override
             model_name: Optional model override
             session_id: Optional session ID (generated if not provided)
+            skip_validation: If True, auto-approve all actions (bypass HITL)
 
         Returns:
             AgentResult with execution details
@@ -229,6 +231,7 @@ class SingleAgentMode:
                     sandbox=sandbox,
                     provider_name=provider_name,
                     model_name=model_name,
+                    skip_validation=skip_validation,
                 )
 
                 end_time = datetime.utcnow()

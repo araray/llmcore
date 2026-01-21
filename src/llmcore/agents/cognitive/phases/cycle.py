@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import (
     ActInput,
+    ConfidenceLevel,
     CycleIteration,
     EnhancedAgentState,
     ObserveInput,
@@ -29,6 +30,7 @@ from ..models import (
     ThinkInput,
     UpdateInput,
     ValidateInput,
+    ValidateOutput,
     # Enums
     ValidationResult,
 )
@@ -127,6 +129,7 @@ class CognitiveCycle:
         sandbox: Optional["SandboxProvider"] = None,
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
+        skip_validation: bool = False,
     ) -> CycleIteration:
         """
         Run a single complete cognitive iteration.
@@ -242,22 +245,33 @@ class CognitiveCycle:
                 # Phase 4: VALIDATE
                 # ============================================================
                 if iteration.think_output.proposed_action:
-                    validate_input = ValidateInput(
-                        goal=agent_state.goal,
-                        proposed_action=iteration.think_output.proposed_action,
-                        reasoning=iteration.think_output.thought,
-                        risk_tolerance="medium",  # Could be configurable
-                    )
+                    if skip_validation:
+                        # Auto-approve when skip_validation is True
+                        logger.info("Skipping validation (auto-approve enabled)")
+                        iteration.validate_output = ValidateOutput(
+                            result=ValidationResult.APPROVED,
+                            confidence=ConfidenceLevel.HIGH,
+                            concerns=[],
+                            suggestions=[],
+                            requires_human_approval=False,
+                        )
+                    else:
+                        validate_input = ValidateInput(
+                            goal=agent_state.goal,
+                            proposed_action=iteration.think_output.proposed_action,
+                            reasoning=iteration.think_output.thought,
+                            risk_tolerance="medium",  # Could be configurable
+                        )
 
-                    iteration.validate_output = await validate_phase(
-                        agent_state=agent_state,
-                        validate_input=validate_input,
-                        provider_manager=self.provider_manager,
-                        prompt_registry=self.prompt_registry,
-                        tracer=self.tracer,
-                        provider_name=provider_name,
-                        model_name=model_name,
-                    )
+                        iteration.validate_output = await validate_phase(
+                            agent_state=agent_state,
+                            validate_input=validate_input,
+                            provider_manager=self.provider_manager,
+                            prompt_registry=self.prompt_registry,
+                            tracer=self.tracer,
+                            provider_name=provider_name,
+                            model_name=model_name,
+                        )
 
                     # ========================================================
                     # Phase 5: ACT
@@ -369,6 +383,7 @@ class CognitiveCycle:
         sandbox: Optional["SandboxProvider"] = None,
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
+        skip_validation: bool = False,
     ) -> str:
         """
         Run cognitive iterations until task is complete or max iterations reached.
@@ -380,6 +395,7 @@ class CognitiveCycle:
             sandbox: Optional active sandbox
             provider_name: Optional provider override
             model_name: Optional model override
+            skip_validation: If True, auto-approve all actions (bypass VALIDATE phase)
 
         Returns:
             Final answer or status message
@@ -393,7 +409,9 @@ class CognitiveCycle:
             ... )
             >>> print(result)
         """
-        logger.info(f"Starting cognitive cycle: max_iterations={max_iterations}")
+        logger.info(
+            f"Starting cognitive cycle: max_iterations={max_iterations}, skip_validation={skip_validation}"
+        )
 
         actual_iterations = 0
         stopped_early = False
@@ -413,6 +431,7 @@ class CognitiveCycle:
                     sandbox=sandbox,
                     provider_name=provider_name,
                     model_name=model_name,
+                    skip_validation=skip_validation,
                 )
                 actual_iterations = iteration_num + 1
 
