@@ -2940,7 +2940,7 @@ class LLMCore:
         self,
         session_id: str,
         *,
-        format: Literal["json", "yaml", "dict"] = "json",
+        format: Literal["json", "yaml", "dict", "markdown"] = "json",
         include_context_items: bool = True,
         include_metadata: bool = True,
         pretty: bool = True,
@@ -2953,13 +2953,13 @@ class LLMCore:
 
         Args:
             session_id: ID of the session to export.
-            format: Output format - "json", "yaml", or "dict" for raw dict.
+            format: Output format - "json", "yaml", "dict", or "markdown".
             include_context_items: Whether to include workspace/context items.
             include_metadata: Whether to include session metadata.
             pretty: Pretty-print output (for json/yaml formats).
 
         Returns:
-            For "json"/"yaml": Serialized string.
+            For "json"/"yaml"/"markdown": Serialized string.
             For "dict": Raw dictionary.
 
         Raises:
@@ -2972,14 +2972,21 @@ class LLMCore:
             >>> with open("backup.json", "w") as f:
             ...     f.write(json_data)
             >>>
+            >>> # Export to Markdown for documentation
+            >>> md_data = llm.export_session("session_123", format="markdown")
+            >>> with open("session.md", "w") as f:
+            ...     f.write(md_data)
+            >>>
             >>> # Export to dict for programmatic use
             >>> data = llm.export_session("session_123", format="dict")
             >>> print(f"Messages: {len(data['messages'])}")
         """
         import json as json_module
 
-        if format not in ("json", "yaml", "dict"):
-            raise ValueError(f"Invalid format '{format}'. Must be 'json', 'yaml', or 'dict'.")
+        if format not in ("json", "yaml", "dict", "markdown"):
+            raise ValueError(
+                f"Invalid format '{format}'. Must be 'json', 'yaml', 'dict', or 'markdown'."
+            )
 
         # Get session from storage
         if self._storage_manager is None:
@@ -3069,8 +3076,125 @@ class LLMCore:
             else:
                 return yaml.dump(export_data, default_flow_style=True, allow_unicode=True)
 
+        if format == "markdown":
+            return self._format_session_as_markdown(export_data, session, include_context_items)
+
         # Should not reach here
         raise ValueError(f"Invalid format: {format}")
+
+    def _format_session_as_markdown(
+        self,
+        export_data: Dict[str, Any],
+        session: ChatSession,
+        include_context_items: bool,
+    ) -> str:
+        """
+        Format session data as a readable Markdown document.
+
+        Creates a human-readable Markdown export with YAML frontmatter
+        containing metadata, followed by the conversation transcript.
+
+        Args:
+            export_data: The export data dictionary.
+            session: The ChatSession object.
+            include_context_items: Whether to include context items section.
+
+        Returns:
+            Formatted Markdown string.
+        """
+        lines: List[str] = []
+
+        # YAML frontmatter
+        lines.append("---")
+        lines.append(f'llmcore_export_version: "{export_data["llmcore_export_version"]}"')
+        lines.append(f"export_timestamp: {export_data['export_timestamp']}")
+        lines.append(f"session_id: {session.id}")
+        if session.name:
+            lines.append(f'session_name: "{session.name}"')
+        lines.append(f"message_count: {len(export_data.get('messages', []))}")
+
+        # Extract provider/model from metadata if available
+        provider = session.metadata.get("provider", "unknown")
+        model = session.metadata.get("model", "unknown")
+        if provider != "unknown" or model != "unknown":
+            lines.append(f"provider: {provider}")
+            lines.append(f"model: {model}")
+
+        lines.append("---")
+        lines.append("")
+
+        # Session header
+        session_name = session.name or session.id
+        lines.append(f"# Session: {session_name}")
+        lines.append("")
+
+        # Session info block
+        created_str = session.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        updated_str = session.updated_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        lines.append(f"**Created**: {created_str}  ")
+        lines.append(f"**Updated**: {updated_str}  ")
+        if provider != "unknown":
+            lines.append(f"**Provider**: {provider} / {model}  ")
+        lines.append(f"**Messages**: {len(export_data.get('messages', []))}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Conversation section
+        lines.append("## Conversation")
+        lines.append("")
+
+        messages = export_data.get("messages", [])
+        for msg in messages:
+            role = msg.get("role", "unknown").upper()
+            timestamp = msg.get("timestamp", "")
+
+            # Parse timestamp for display
+            if timestamp:
+                try:
+                    if timestamp.endswith("Z"):
+                        dt = datetime.fromisoformat(timestamp[:-1] + "+00:00")
+                    else:
+                        dt = datetime.fromisoformat(timestamp)
+                    time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    time_str = timestamp
+            else:
+                time_str = ""
+
+            # Role header with timestamp
+            lines.append(f"### {role.title()} ({time_str})")
+            lines.append("")
+
+            # Message content
+            content = msg.get("content", "")
+            lines.append(content)
+            lines.append("")
+
+        # Context items section (if included and present)
+        if include_context_items and export_data.get("context_items"):
+            lines.append("---")
+            lines.append("")
+            lines.append("## Context Items")
+            lines.append("")
+
+            for item in export_data["context_items"]:
+                item_type = item.get("type", "unknown")
+                item_id = item.get("id", "unknown")
+                source_id = item.get("source_id", "")
+
+                header = f"### {source_id or item_id} ({item_type})"
+                lines.append(header)
+                lines.append("")
+
+                content = item.get("content", "")
+                # Truncate very long content in markdown export
+                if len(content) > 2000:
+                    content = content[:2000] + "\n\n*[Content truncated for readability...]*"
+                lines.append(content)
+                lines.append("")
+
+        return "\n".join(lines)
 
     async def import_session(
         self,
@@ -3379,3 +3503,216 @@ class LLMCore:
                 return yaml.dump(export_data, default_flow_style=True, allow_unicode=True)
 
         raise ValueError(f"Invalid format: {format}")
+
+    def create_bundle(
+        self,
+        session_id: str,
+        bundle_path: str,
+        *,
+        include_context_items: bool = True,
+        include_metadata: bool = True,
+        include_files: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Create a .llmchat bundle archive for a session.
+
+        Creates a ZIP archive containing the session export along with
+        optional files and a manifest for complete session backup.
+
+        Bundle format:
+            my_session.llmchat (ZIP)
+            ├── manifest.json    # Bundle metadata
+            ├── session.json     # Session export
+            └── files/           # Optional referenced files
+                ├── file1.py
+                └── file2.md
+
+        Args:
+            session_id: ID of the session to bundle.
+            bundle_path: Output path for the .llmchat bundle.
+            include_context_items: Include workspace/context items.
+            include_metadata: Include session metadata.
+            include_files: Optional list of file paths to include.
+
+        Returns:
+            Path to the created bundle.
+
+        Raises:
+            LLMCoreError: If session not found or bundle creation fails.
+
+        Example:
+            >>> path = llm.create_bundle(
+            ...     "session_123",
+            ...     "~/backups/my_session.llmchat",
+            ...     include_files=["~/project/main.py"]
+            ... )
+            >>> print(f"Bundle created: {path}")
+        """
+        import json as json_module
+        import zipfile
+        from pathlib import Path
+
+        # Ensure path ends with .llmchat
+        bundle_file = Path(bundle_path).expanduser()
+        if bundle_file.suffix != ".llmchat":
+            bundle_file = bundle_file.with_suffix(".llmchat")
+
+        # Export session to dict
+        try:
+            export_data = self.export_session(
+                session_id,
+                format="dict",
+                include_context_items=include_context_items,
+                include_metadata=include_metadata,
+            )
+            if not isinstance(export_data, dict):
+                raise LLMCoreError("Unexpected export format")
+        except Exception as e:
+            raise LLMCoreError(f"Failed to export session for bundle: {e}") from e
+
+        # Prepare manifest
+        manifest = {
+            "bundle_version": "1.0",
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "created_by": "llmcore",
+            "session_id": session_id,
+            "session_name": export_data.get("session", {}).get("name"),
+            "message_count": len(export_data.get("messages", [])),
+            "context_item_count": len(export_data.get("context_items", [])),
+            "contents": {
+                "session": "session.json",
+                "files": [],
+            },
+        }
+
+        # Create bundle
+        try:
+            bundle_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with zipfile.ZipFile(bundle_file, "w", zipfile.ZIP_DEFLATED) as zf:
+                # Write session.json
+                session_json = json_module.dumps(
+                    export_data, indent=2, ensure_ascii=False, default=str
+                )
+                zf.writestr("session.json", session_json)
+
+                # Include files if provided
+                if include_files:
+                    for file_path in include_files:
+                        src_path = Path(file_path).expanduser()
+                        if src_path.exists() and src_path.is_file():
+                            archive_name = f"files/{src_path.name}"
+                            zf.write(src_path, archive_name)
+                            manifest["contents"]["files"].append(archive_name)
+                        else:
+                            logger.warning(f"File not found, skipping: {file_path}")
+
+                # Write manifest.json (after files are added)
+                manifest_json = json_module.dumps(manifest, indent=2, ensure_ascii=False)
+                zf.writestr("manifest.json", manifest_json)
+
+            logger.info(f"Created bundle: {bundle_file}")
+            return str(bundle_file)
+
+        except Exception as e:
+            raise LLMCoreError(f"Failed to create bundle: {e}") from e
+
+    async def import_bundle(
+        self,
+        bundle_path: str,
+        *,
+        new_name: Optional[str] = None,
+        merge_into: Optional[str] = None,
+        extract_files_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Import a session from a .llmchat bundle archive.
+
+        Extracts and imports a session from a bundle, optionally
+        extracting included files to a specified directory.
+
+        Args:
+            bundle_path: Path to the .llmchat bundle.
+            new_name: Optional new name for the imported session.
+            merge_into: If provided, merge into existing session.
+            extract_files_to: Directory to extract included files.
+
+        Returns:
+            Dict with import results:
+            - session_id: ID of imported/merged session
+            - files_extracted: List of extracted file paths
+            - manifest: The bundle manifest
+
+        Raises:
+            LLMCoreError: If bundle is invalid or import fails.
+            FileNotFoundError: If bundle file doesn't exist.
+
+        Example:
+            >>> result = await llm.import_bundle(
+            ...     "~/backups/my_session.llmchat",
+            ...     extract_files_to="~/restored_files"
+            ... )
+            >>> print(f"Imported session: {result['session_id']}")
+            >>> print(f"Files extracted: {result['files_extracted']}")
+        """
+        import json as json_module
+        import zipfile
+        from pathlib import Path
+
+        bundle_file = Path(bundle_path).expanduser()
+        if not bundle_file.exists():
+            raise FileNotFoundError(f"Bundle not found: {bundle_file}")
+
+        try:
+            with zipfile.ZipFile(bundle_file, "r") as zf:
+                # Read and validate manifest
+                try:
+                    manifest_data = zf.read("manifest.json").decode("utf-8")
+                    manifest = json_module.loads(manifest_data)
+                except KeyError:
+                    raise LLMCoreError("Bundle missing manifest.json")
+                except json_module.JSONDecodeError as e:
+                    raise LLMCoreError(f"Invalid manifest.json: {e}")
+
+                # Read session data
+                session_file = manifest.get("contents", {}).get("session", "session.json")
+                try:
+                    session_data = zf.read(session_file).decode("utf-8")
+                except KeyError:
+                    raise LLMCoreError(f"Bundle missing session file: {session_file}")
+
+                # Import the session
+                session_id = await self.import_session(
+                    session_data,
+                    format="json",
+                    new_name=new_name,
+                    merge_into=merge_into,
+                )
+
+                # Extract files if requested
+                files_extracted: List[str] = []
+                if extract_files_to:
+                    extract_dir = Path(extract_files_to).expanduser()
+                    extract_dir.mkdir(parents=True, exist_ok=True)
+
+                    for file_entry in manifest.get("contents", {}).get("files", []):
+                        try:
+                            file_name = Path(file_entry).name
+                            target_path = extract_dir / file_name
+                            with zf.open(file_entry) as src, open(target_path, "wb") as dst:
+                                dst.write(src.read())
+                            files_extracted.append(str(target_path))
+                            logger.info(f"Extracted: {target_path}")
+                        except KeyError:
+                            logger.warning(f"File not in bundle: {file_entry}")
+                        except Exception as e:
+                            logger.warning(f"Failed to extract {file_entry}: {e}")
+
+                return {
+                    "session_id": session_id,
+                    "files_extracted": files_extracted,
+                    "manifest": manifest,
+                }
+
+        except zipfile.BadZipFile:
+            raise LLMCoreError(f"Invalid bundle file (not a valid ZIP): {bundle_file}")
