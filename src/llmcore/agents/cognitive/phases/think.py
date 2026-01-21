@@ -122,12 +122,26 @@ async def think_phase(
                 Message(role=Role.USER, content=thinking_prompt),
             ]
 
-            response = await provider.chat(
-                messages=messages, model=target_model, tools=tool_definitions, temperature=0.7
+            # Convert Tool objects to provider-compatible format
+            tools_param = tool_definitions if tool_definitions else None
+
+            response = await provider.chat_completion(
+                context=messages,
+                model=target_model,
+                stream=False,
+                tools=tools_param,
+                temperature=0.7,
             )
 
+            # Extract response content
+            response_content = provider.extract_response_content(response)
+
             # 4. Parse response
-            output = _parse_think_response(response=response, tool_manager=tool_manager)
+            output = _parse_think_response(
+                response_text=response_content,
+                response_dict=response,
+                tool_manager=tool_manager,
+            )
 
             # 5. Update agent state
             if output.proposed_action:
@@ -144,12 +158,13 @@ async def think_phase(
                 try:
                     template = prompt_registry.get_template("thinking_prompt")
                     if template.active_version:
+                        # Extract token usage from response dict
+                        usage = response.get("usage", {}) if isinstance(response, dict) else None
+                        total_tokens = usage.get("total_tokens") if usage else None
                         prompt_registry.record_use(
                             version_id=template.active_version.id,
                             success=output.proposed_action is not None or output.is_final_answer,
-                            tokens=response.usage.total_tokens
-                            if hasattr(response, "usage")
-                            else None,
+                            tokens=total_tokens,
                         )
                 except Exception as e:
                     logger.warning(f"Failed to record prompt metrics: {e}")
@@ -277,18 +292,22 @@ def _format_tools(tool_definitions: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _parse_think_response(response: Any, tool_manager: "ToolManager") -> ThinkOutput:
+def _parse_think_response(
+    response_text: str,
+    response_dict: Optional[Dict[str, Any]],
+    tool_manager: "ToolManager",
+) -> ThinkOutput:
     """
     Parse the LLM response into structured ThinkOutput.
 
     Args:
-        response: LLM response object
+        response_text: Extracted text content from the LLM response
+        response_dict: Original response dict for token usage extraction
         tool_manager: Tool manager for validation
 
     Returns:
         Parsed ThinkOutput
     """
-    response_text = response.content if hasattr(response, "content") else str(response)
 
     # Initialize output
     thought = ""
@@ -351,10 +370,12 @@ def _parse_think_response(response: Any, tool_manager: "ToolManager") -> ThinkOu
         # Determine confidence from thought content
         confidence = _determine_confidence(thought, response_text)
 
-    # Get token count if available
+    # Get token count if available from response dict
     reasoning_tokens = None
-    if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
-        reasoning_tokens = response.usage.total_tokens
+    if response_dict and isinstance(response_dict, dict):
+        usage = response_dict.get("usage", {})
+        if usage:
+            reasoning_tokens = usage.get("total_tokens")
 
     return ThinkOutput(
         thought=thought or "Processing next action...",
