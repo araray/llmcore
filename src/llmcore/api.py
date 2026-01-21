@@ -23,6 +23,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     Optional,
     Protocol,
     Tuple,
@@ -32,6 +33,7 @@ from typing import (
 )
 
 import aiofiles
+import yaml
 
 from .embedding.manager import EmbeddingManager
 from .exceptions import (
@@ -2929,3 +2931,451 @@ class LLMCore:
                     self.config["providers"][provider_name]["default_model"] = model_name
         except Exception as e:
             logger.warning(f"Could not set default model: {e}")
+
+    # =========================================================================
+    # EXPORT/IMPORT APIs (Phase 6)
+    # =========================================================================
+
+    def export_session(
+        self,
+        session_id: str,
+        *,
+        format: Literal["json", "yaml", "dict"] = "json",
+        include_context_items: bool = True,
+        include_metadata: bool = True,
+        pretty: bool = True,
+    ) -> Union[str, Dict[str, Any]]:
+        """
+        Export a session to a serialized format.
+
+        Exports the session including messages, context items, and metadata
+        in a format suitable for backup, transfer, or documentation.
+
+        Args:
+            session_id: ID of the session to export.
+            format: Output format - "json", "yaml", or "dict" for raw dict.
+            include_context_items: Whether to include workspace/context items.
+            include_metadata: Whether to include session metadata.
+            pretty: Pretty-print output (for json/yaml formats).
+
+        Returns:
+            For "json"/"yaml": Serialized string.
+            For "dict": Raw dictionary.
+
+        Raises:
+            LLMCoreError: If session not found or serialization fails.
+            ValueError: If format is invalid or YAML requested but not installed.
+
+        Example:
+            >>> # Export to JSON
+            >>> json_data = llm.export_session("session_123")
+            >>> with open("backup.json", "w") as f:
+            ...     f.write(json_data)
+            >>>
+            >>> # Export to dict for programmatic use
+            >>> data = llm.export_session("session_123", format="dict")
+            >>> print(f"Messages: {len(data['messages'])}")
+        """
+        import json as json_module
+
+        if format not in ("json", "yaml", "dict"):
+            raise ValueError(f"Invalid format '{format}'. Must be 'json', 'yaml', or 'dict'.")
+
+        # Get session from storage
+        if self._storage_manager is None:
+            raise LLMCoreError("Storage manager not initialized")
+
+        session = self._storage_manager.get_session(session_id)
+        if session is None:
+            raise LLMCoreError(f"Session '{session_id}' not found")
+
+        # Build export data structure
+        export_data: Dict[str, Any] = {
+            "llmcore_export_version": "1.0",
+            "export_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "session": {
+                "id": session.id,
+                "name": session.name,
+                "created_at": session.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": session.updated_at.isoformat().replace("+00:00", "Z"),
+            },
+        }
+
+        # Include metadata if requested
+        if include_metadata and session.metadata:
+            export_data["session"]["metadata"] = session.metadata
+
+        # Export messages
+        export_data["messages"] = []
+        if session.messages:
+            sorted_messages = sorted(session.messages, key=lambda m: m.timestamp)
+            for msg in sorted_messages:
+                msg_data = {
+                    "id": msg.id,
+                    "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat().replace("+00:00", "Z"),
+                }
+                if msg.tool_call_id:
+                    msg_data["tool_call_id"] = msg.tool_call_id
+                if msg.tokens:
+                    msg_data["tokens"] = msg.tokens
+                if include_metadata and msg.metadata:
+                    msg_data["metadata"] = msg.metadata
+                export_data["messages"].append(msg_data)
+
+        # Export context items if requested
+        if include_context_items and session.context_items:
+            export_data["context_items"] = []
+            for item in session.context_items:
+                item_data = {
+                    "id": item.id,
+                    "type": item.type.value if hasattr(item.type, "value") else str(item.type),
+                    "content": item.content,
+                    "timestamp": item.timestamp.isoformat().replace("+00:00", "Z"),
+                }
+                if item.source_id:
+                    item_data["source_id"] = item.source_id
+                if item.tokens:
+                    item_data["tokens"] = item.tokens
+                if item.original_tokens:
+                    item_data["original_tokens"] = item.original_tokens
+                if item.is_truncated:
+                    item_data["is_truncated"] = item.is_truncated
+                if include_metadata and item.metadata:
+                    item_data["metadata"] = item.metadata
+                export_data["context_items"].append(item_data)
+
+        # Return in requested format
+        if format == "dict":
+            return export_data
+
+        if format == "json":
+            indent = 2 if pretty else None
+            return json_module.dumps(export_data, indent=indent, ensure_ascii=False, default=str)
+
+        if format == "yaml":
+            try:
+                import yaml
+            except ImportError:
+                raise ValueError("YAML format requires PyYAML. Install with: pip install pyyaml")
+            if pretty:
+                return yaml.dump(
+                    export_data,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+            else:
+                return yaml.dump(export_data, default_flow_style=True, allow_unicode=True)
+
+        # Should not reach here
+        raise ValueError(f"Invalid format: {format}")
+
+    async def import_session(
+        self,
+        data: Union[str, Dict[str, Any]],
+        *,
+        format: Literal["json", "yaml", "dict"] = "json",
+        new_name: Optional[str] = None,
+        merge_into: Optional[str] = None,
+    ) -> str:
+        """
+        Import a session from serialized data.
+
+        Creates a new session from exported data, or merges into an existing
+        session. Supports JSON, YAML, and dict formats.
+
+        Args:
+            data: Serialized session data (string for json/yaml, dict for dict).
+            format: Input format - "json", "yaml", or "dict".
+            new_name: Optional name for the imported session (uses original if None).
+            merge_into: If provided, merge messages into this existing session ID
+                        instead of creating a new session.
+
+        Returns:
+            ID of the imported or merged session.
+
+        Raises:
+            LLMCoreError: If import fails or merge target not found.
+            ValueError: If format is invalid or data is malformed.
+
+        Example:
+            >>> # Import from JSON file
+            >>> with open("backup.json", "r") as f:
+            ...     json_data = f.read()
+            >>> session_id = await llm.import_session(json_data)
+            >>> print(f"Imported session: {session_id}")
+            >>>
+            >>> # Import and merge into existing session
+            >>> session_id = await llm.import_session(json_data, merge_into="existing_123")
+        """
+        import json as json_module
+
+        if format not in ("json", "yaml", "dict"):
+            raise ValueError(f"Invalid format '{format}'. Must be 'json', 'yaml', or 'dict'.")
+
+        # Parse input data
+        if format == "dict":
+            if not isinstance(data, dict):
+                raise ValueError("For format='dict', data must be a dictionary")
+            parsed_data = data
+        elif format == "json":
+            if not isinstance(data, str):
+                raise ValueError("For format='json', data must be a string")
+            try:
+                parsed_data = json_module.loads(data)
+            except json_module.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON data: {e}")
+        elif format == "yaml":
+            if not isinstance(data, str):
+                raise ValueError("For format='yaml', data must be a string")
+            try:
+                import yaml
+            except ImportError:
+                raise ValueError("YAML format requires PyYAML. Install with: pip install pyyaml")
+            try:
+                parsed_data = yaml.safe_load(data)
+            except yaml.YAMLError as e:
+                raise ValueError(f"Invalid YAML data: {e}")
+        else:
+            raise ValueError(f"Invalid format: {format}")
+
+        # Validate parsed data structure
+        if not isinstance(parsed_data, dict):
+            raise ValueError("Import data must be a dictionary/object")
+
+        if "messages" not in parsed_data and "session" not in parsed_data:
+            raise ValueError("Import data must contain 'messages' or 'session' key")
+
+        # Extract session info
+        session_info = parsed_data.get("session", {})
+        original_name = session_info.get("name")
+        messages_data = parsed_data.get("messages", [])
+        context_items_data = parsed_data.get("context_items", [])
+
+        if self._storage_manager is None:
+            raise LLMCoreError("Storage manager not initialized")
+
+        if merge_into:
+            # Merge into existing session
+            existing_session = self._storage_manager.get_session(merge_into)
+            if existing_session is None:
+                raise LLMCoreError(f"Target session '{merge_into}' not found for merge")
+
+            # Add messages to existing session
+            for msg_data in messages_data:
+                role_str = msg_data.get("role", "user")
+                try:
+                    role = Role(role_str)
+                except ValueError:
+                    role = Role.USER
+
+                message = Message(
+                    id=str(uuid.uuid4()),  # Generate new ID to avoid conflicts
+                    session_id=merge_into,
+                    role=role,
+                    content=msg_data.get("content", ""),
+                    timestamp=datetime.fromisoformat(
+                        msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                            "Z", "+00:00"
+                        )
+                    ),
+                    tool_call_id=msg_data.get("tool_call_id"),
+                    tokens=msg_data.get("tokens"),
+                    metadata=msg_data.get("metadata", {}),
+                )
+                existing_session.messages.append(message)
+
+            # Add context items
+            for item_data in context_items_data:
+                type_str = item_data.get("type", "user_text")
+                try:
+                    item_type = ContextItemType(type_str)
+                except ValueError:
+                    item_type = ContextItemType.USER_TEXT
+
+                context_item = ContextItem(
+                    id=str(uuid.uuid4()),  # Generate new ID
+                    type=item_type,
+                    source_id=item_data.get("source_id"),
+                    content=item_data.get("content", ""),
+                    tokens=item_data.get("tokens"),
+                    original_tokens=item_data.get("original_tokens"),
+                    is_truncated=item_data.get("is_truncated", False),
+                    metadata=item_data.get("metadata", {}),
+                    timestamp=datetime.fromisoformat(
+                        item_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                            "Z", "+00:00"
+                        )
+                    ),
+                )
+                existing_session.add_context_item(context_item)
+
+            existing_session.updated_at = datetime.now(timezone.utc)
+            self._storage_manager.save_session(existing_session)
+            return merge_into
+
+        else:
+            # Create new session
+            final_name = new_name or original_name
+            new_session = await self.create_session(name=final_name)
+
+            # Add messages
+            for msg_data in messages_data:
+                role_str = msg_data.get("role", "user")
+                try:
+                    role = Role(role_str)
+                except ValueError:
+                    role = Role.USER
+
+                message = Message(
+                    id=str(uuid.uuid4()),
+                    session_id=new_session.id,
+                    role=role,
+                    content=msg_data.get("content", ""),
+                    timestamp=datetime.fromisoformat(
+                        msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                            "Z", "+00:00"
+                        )
+                    ),
+                    tool_call_id=msg_data.get("tool_call_id"),
+                    tokens=msg_data.get("tokens"),
+                    metadata=msg_data.get("metadata", {}),
+                )
+                new_session.messages.append(message)
+
+            # Add context items
+            for item_data in context_items_data:
+                type_str = item_data.get("type", "user_text")
+                try:
+                    item_type = ContextItemType(type_str)
+                except ValueError:
+                    item_type = ContextItemType.USER_TEXT
+
+                context_item = ContextItem(
+                    id=str(uuid.uuid4()),
+                    type=item_type,
+                    source_id=item_data.get("source_id"),
+                    content=item_data.get("content", ""),
+                    tokens=item_data.get("tokens"),
+                    original_tokens=item_data.get("original_tokens"),
+                    is_truncated=item_data.get("is_truncated", False),
+                    metadata=item_data.get("metadata", {}),
+                    timestamp=datetime.fromisoformat(
+                        item_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                            "Z", "+00:00"
+                        )
+                    ),
+                )
+                new_session.add_context_item(context_item)
+
+            new_session.updated_at = datetime.now(timezone.utc)
+            self._storage_manager.save_session(new_session)
+            return new_session.id
+
+    def export_context_items(
+        self,
+        session_id: str,
+        item_ids: Optional[List[str]] = None,
+        *,
+        format: Literal["json", "yaml"] = "json",
+        pretty: bool = True,
+    ) -> str:
+        """
+        Export context items from a session.
+
+        Exports workspace/context items in a portable format for backup
+        or transfer to another session.
+
+        Args:
+            session_id: Session containing the items.
+            item_ids: Specific item IDs to export (all items if None).
+            format: Output format - "json" or "yaml".
+            pretty: Pretty-print output.
+
+        Returns:
+            Serialized context items as a string.
+
+        Raises:
+            LLMCoreError: If session not found.
+            ValueError: If format is invalid or YAML requested but not installed.
+
+        Example:
+            >>> # Export all context items
+            >>> items_json = llm.export_context_items("session_123")
+            >>> with open("context_backup.json", "w") as f:
+            ...     f.write(items_json)
+            >>>
+            >>> # Export specific items
+            >>> items_json = llm.export_context_items(
+            ...     "session_123",
+            ...     item_ids=["item_1", "item_2"]
+            ... )
+        """
+        import json as json_module
+
+        if format not in ("json", "yaml"):
+            raise ValueError(f"Invalid format '{format}'. Must be 'json' or 'yaml'.")
+
+        if self._storage_manager is None:
+            raise LLMCoreError("Storage manager not initialized")
+
+        session = self._storage_manager.get_session(session_id)
+        if session is None:
+            raise LLMCoreError(f"Session '{session_id}' not found")
+
+        # Filter items if specific IDs requested
+        items_to_export = session.context_items
+        if item_ids is not None:
+            item_ids_set = set(item_ids)
+            items_to_export = [item for item in items_to_export if item.id in item_ids_set]
+
+        # Build export structure
+        export_data = {
+            "llmcore_export_version": "1.0",
+            "export_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "source_session_id": session_id,
+            "context_items": [],
+        }
+
+        for item in items_to_export:
+            item_data = {
+                "id": item.id,
+                "type": item.type.value if hasattr(item.type, "value") else str(item.type),
+                "content": item.content,
+                "timestamp": item.timestamp.isoformat().replace("+00:00", "Z"),
+            }
+            if item.source_id:
+                item_data["source_id"] = item.source_id
+            if item.tokens:
+                item_data["tokens"] = item.tokens
+            if item.original_tokens:
+                item_data["original_tokens"] = item.original_tokens
+            if item.is_truncated:
+                item_data["is_truncated"] = item.is_truncated
+            if item.metadata:
+                item_data["metadata"] = item.metadata
+            export_data["context_items"].append(item_data)
+
+        # Serialize to requested format
+        if format == "json":
+            indent = 2 if pretty else None
+            return json_module.dumps(export_data, indent=indent, ensure_ascii=False, default=str)
+
+        if format == "yaml":
+            try:
+                import yaml
+            except ImportError:
+                raise ValueError("YAML format requires PyYAML. Install with: pip install pyyaml")
+            if pretty:
+                return yaml.dump(
+                    export_data,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+            else:
+                return yaml.dump(export_data, default_flow_style=True, allow_unicode=True)
+
+        raise ValueError(f"Invalid format: {format}")
