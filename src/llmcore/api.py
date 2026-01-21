@@ -85,6 +85,16 @@ except ImportError:
     except ImportError:
         tomllib = None  # type: ignore [assignment]
 
+try:
+    import tomli_w
+except ImportError:
+    tomli_w = None  # type: ignore [assignment]
+
+try:
+    from deepdiff import DeepDiff
+except ImportError:
+    DeepDiff = None  # type: ignore [assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -184,6 +194,10 @@ class LLMCore:
     _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
     _log_raw_payloads_enabled: bool
     _llmcore_log_level_str: str
+    # Phase 7: Configuration Management state
+    _config_file_path: Optional[str]
+    _runtime_config_dirty: bool
+    _original_config_dict: Dict[str, Any]
 
     def __init__(self):
         """
@@ -191,6 +205,10 @@ class LLMCore:
         """
         self._transient_sessions_cache = {}
         self._transient_last_interaction_info_cache = {}
+        # Phase 7: Initialize config tracking state
+        self._config_file_path = None
+        self._runtime_config_dirty = False
+        self._original_config_dict = {}
 
     @classmethod
     async def create(
@@ -280,6 +298,11 @@ class LLMCore:
                 env_prefix=env_prefix,
                 overrides=config_overrides,
             )
+
+            # Phase 7: Track configuration state for diff/sync operations
+            self._config_file_path = config_file_path
+            self._original_config_dict = self.config.as_dict().copy()
+            self._runtime_config_dirty = False
 
             # Set log level and raw payload logging
             self._llmcore_log_level_str = self.config.get("llmcore.log_level", "INFO")
@@ -3716,3 +3739,426 @@ class LLMCore:
 
         except zipfile.BadZipFile:
             raise LLMCoreError(f"Invalid bundle file (not a valid ZIP): {bundle_file}")
+
+    # ==========================================================================
+    # Phase 7: Configuration Management APIs
+    # ==========================================================================
+
+    def get_runtime_config(self, section: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get current runtime configuration as a dictionary.
+
+        Returns the full or partial runtime configuration. This includes all
+        merged values from defaults, config files, environment variables, and
+        any runtime modifications.
+
+        Args:
+            section: Optional dot-notation path to a specific section.
+                     If None, returns the entire configuration.
+                     Examples: "providers.openai", "storage.session", "llmcore"
+
+        Returns:
+            Configuration dictionary (full or section subset)
+
+        Raises:
+            ConfigError: If the specified section does not exist
+
+        Example:
+            ```python
+            # Get full config
+            config = llm.get_runtime_config()
+
+            # Get specific section
+            openai_config = llm.get_runtime_config("providers.openai")
+            print(f"Default model: {openai_config['default_model']}")
+
+            # Get nested value
+            session_type = llm.get_runtime_config("storage.session")["type"]
+            ```
+        """
+        try:
+            full_config = self.config.as_dict()
+
+            if section is None:
+                return full_config
+
+            # Navigate to the requested section using dot notation
+            parts = section.split(".")
+            current = full_config
+            for part in parts:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    raise ConfigError(
+                        f"Configuration section '{section}' not found. "
+                        f"Available top-level sections: {list(full_config.keys())}"
+                    )
+
+            # Ensure we return a dict (or the value if it's a leaf)
+            if isinstance(current, dict):
+                return current
+            else:
+                # Return the value wrapped in a dict with the last key
+                return {parts[-1]: current}
+
+        except Exception as e:
+            if isinstance(e, ConfigError):
+                raise
+            logger.error(f"Error getting runtime config: {e}", exc_info=True)
+            raise ConfigError(f"Failed to get runtime configuration: {e}")
+
+    def set_runtime_config(self, key: str, value: Any) -> None:
+        """
+        Set a runtime configuration value using dot notation.
+
+        Updates a configuration value in memory. The change takes effect
+        immediately but is NOT persisted to the config file automatically.
+        Use `sync_config_to_file()` to persist changes.
+
+        **Important**: Some configuration changes may require `reload_config()`
+        to take full effect (e.g., changing provider settings).
+
+        Args:
+            key: Dot-notation path to the configuration value.
+                 Examples: "providers.openai.default_model", "llmcore.log_level"
+            value: The new value to set. Type should match expected config schema.
+
+        Raises:
+            ConfigError: If the key path is invalid or update fails
+
+        Example:
+            ```python
+            # Change default model for OpenAI
+            llm.set_runtime_config("providers.openai.default_model", "gpt-4-turbo")
+
+            # Change log level
+            llm.set_runtime_config("llmcore.log_level", "DEBUG")
+
+            # Persist changes to file
+            llm.sync_config_to_file()
+            ```
+
+        Note:
+            Changes are marked as "dirty" until synced to file.
+            Use `diff_config()` to see pending changes.
+        """
+        try:
+            from confy.loader import set_by_dot
+
+            # Get current config as mutable dict
+            config_dict = self.config.as_dict()
+
+            # Set the value using dot notation
+            set_by_dot(config_dict, key, value)
+
+            # Reload the config with the updated dict as overrides
+            # This preserves the layered loading while applying our change
+            from confy.loader import Config as ActualConfyConfig
+
+            self.config = ActualConfyConfig(
+                defaults=config_dict,  # Use current state as defaults
+                config_file_path=None,  # Don't reload from file
+                env_prefix=None,  # Don't re-apply env vars
+                overrides=None,
+            )
+
+            # Mark config as dirty (modified since last file sync)
+            self._runtime_config_dirty = True
+
+            logger.info(f"Set runtime config: {key} = {value!r}")
+
+        except Exception as e:
+            logger.error(f"Error setting runtime config: {e}", exc_info=True)
+            raise ConfigError(f"Failed to set configuration value '{key}': {e}")
+
+    def diff_config(self) -> Dict[str, Any]:
+        """
+        Compare runtime configuration against the original file configuration.
+
+        Returns a dictionary describing the differences between the current
+        in-memory configuration and the configuration that was loaded from
+        the config file (at initialization or last reload).
+
+        Returns:
+            Dict with keys:
+            - 'has_changes': bool - Whether any changes exist
+            - 'added': Dict - New keys added at runtime
+            - 'removed': Dict - Keys removed at runtime
+            - 'modified': Dict - Keys with changed values {key: {'old': v1, 'new': v2}}
+            - 'type_changes': Dict - Keys with changed types
+            - 'dirty': bool - Whether runtime config has been modified since last sync
+
+        Example:
+            ```python
+            # Make some changes
+            llm.set_runtime_config("providers.openai.default_model", "gpt-4-turbo")
+
+            # See what changed
+            diff = llm.diff_config()
+            if diff['has_changes']:
+                print("Modified values:")
+                for key, change in diff['modified'].items():
+                    print(f"  {key}: {change['old']} -> {change['new']}")
+            ```
+        """
+        try:
+            current_config = self.config.as_dict()
+            original_config = self._original_config_dict
+
+            result = {
+                "has_changes": False,
+                "added": {},
+                "removed": {},
+                "modified": {},
+                "type_changes": {},
+                "dirty": self._runtime_config_dirty,
+            }
+
+            if DeepDiff is None:
+                logger.warning("deepdiff not installed; returning basic comparison")
+                result["has_changes"] = current_config != original_config
+                return result
+
+            # Use DeepDiff for comprehensive comparison
+            diff = DeepDiff(
+                original_config,
+                current_config,
+                ignore_order=True,
+                view="tree",
+            )
+
+            # Process added values
+            if "dictionary_item_added" in diff:
+                for item in diff["dictionary_item_added"]:
+                    path = self._deepdiff_path_to_dot(item.path())
+                    result["added"][path] = item.t2
+                    result["has_changes"] = True
+
+            # Process removed values
+            if "dictionary_item_removed" in diff:
+                for item in diff["dictionary_item_removed"]:
+                    path = self._deepdiff_path_to_dot(item.path())
+                    result["removed"][path] = item.t1
+                    result["has_changes"] = True
+
+            # Process modified values
+            if "values_changed" in diff:
+                for item in diff["values_changed"]:
+                    path = self._deepdiff_path_to_dot(item.path())
+                    result["modified"][path] = {
+                        "old": item.t1,
+                        "new": item.t2,
+                    }
+                    result["has_changes"] = True
+
+            # Process type changes
+            if "type_changes" in diff:
+                for item in diff["type_changes"]:
+                    path = self._deepdiff_path_to_dot(item.path())
+                    result["type_changes"][path] = {
+                        "old_type": type(item.t1).__name__,
+                        "new_type": type(item.t2).__name__,
+                        "old": item.t1,
+                        "new": item.t2,
+                    }
+                    result["has_changes"] = True
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error computing config diff: {e}", exc_info=True)
+            raise ConfigError(f"Failed to compute configuration diff: {e}")
+
+    def _deepdiff_path_to_dot(self, path: str) -> str:
+        """
+        Convert DeepDiff path format to dot notation.
+
+        DeepDiff paths look like: "root['providers']['openai']['default_model']"
+        We convert to: "providers.openai.default_model"
+        """
+        import re
+
+        # Remove 'root' prefix and brackets
+        path = path.replace("root", "")
+        # Match patterns like ['key'] or [0]
+        parts = re.findall(r"\['([^']+)'\]|\[(\d+)\]", path)
+        # Flatten and filter empty strings
+        return ".".join(p[0] or p[1] for p in parts)
+
+    def sync_config_to_file(self, path: Optional[str] = None) -> str:
+        """
+        Write current runtime configuration to a TOML file.
+
+        Persists the current in-memory configuration to disk. This allows
+        saving runtime modifications made via `set_runtime_config()`.
+
+        Args:
+            path: Optional path to write the config file.
+                  If None, uses the user config path: ~/.config/llmcore/config.toml
+
+        Returns:
+            The path to the written config file
+
+        Raises:
+            ConfigError: If writing fails or tomli_w is not installed
+
+        Example:
+            ```python
+            # Make changes
+            llm.set_runtime_config("providers.openai.default_model", "gpt-4-turbo")
+
+            # Save to default location
+            saved_path = llm.sync_config_to_file()
+            print(f"Config saved to: {saved_path}")
+
+            # Save to custom location
+            llm.sync_config_to_file("/path/to/my/config.toml")
+            ```
+        """
+        if tomli_w is None:
+            raise ConfigError(
+                "tomli-w is required for writing TOML files. Install with: pip install tomli-w"
+            )
+
+        try:
+            from pathlib import Path
+
+            # Determine output path
+            if path:
+                output_path = Path(path).expanduser()
+            else:
+                # Default to user config location
+                output_path = Path("~/.config/llmcore/config.toml").expanduser()
+
+            # Ensure parent directory exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Get current config
+            config_dict = self.config.as_dict()
+
+            # Write to file
+            with open(output_path, "wb") as f:
+                tomli_w.dump(config_dict, f)
+
+            # Update state
+            self._config_file_path = str(output_path)
+            self._original_config_dict = config_dict.copy()
+            self._runtime_config_dirty = False
+
+            logger.info(f"Configuration synced to file: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"Error syncing config to file: {e}", exc_info=True)
+            raise ConfigError(f"Failed to write configuration file: {e}")
+
+    async def reload_config_from_file(self, path: Optional[str] = None) -> None:
+        """
+        Reload configuration from file, discarding runtime changes.
+
+        Re-reads the configuration file and reinitializes all components.
+        Any runtime modifications made via `set_runtime_config()` are lost.
+        Transient state (in-memory sessions, context info) is preserved.
+
+        Args:
+            path: Optional path to config file.
+                  If None, uses the originally loaded config path or user default.
+
+        Raises:
+            ConfigError: If reload fails
+
+        Example:
+            ```python
+            # Make changes that you want to discard
+            llm.set_runtime_config("providers.openai.default_model", "gpt-4-turbo")
+
+            # Reload from file (discards the change above)
+            await llm.reload_config_from_file()
+            ```
+
+        Note:
+            This method calls `reload_config()` internally with proper
+            state preservation.
+        """
+        try:
+            # Determine config file path
+            config_path = path or self._config_file_path
+
+            # Preserve transient state
+            saved_sessions = self._transient_sessions_cache.copy()
+            saved_context_info = self._transient_last_interaction_info_cache.copy()
+
+            logger.info(f"Reloading configuration from: {config_path or 'defaults'}")
+
+            # Re-initialize with the config file
+            await self._initialize_from_config(
+                config_overrides=None,
+                config_file_path=config_path,
+                env_prefix="LLMCORE",
+            )
+
+            # Restore transient state
+            self._transient_sessions_cache = saved_sessions
+            self._transient_last_interaction_info_cache = saved_context_info
+
+            logger.info(
+                f"Configuration reloaded. Restored {len(saved_sessions)} transient sessions."
+            )
+
+        except Exception as e:
+            logger.error(f"Error reloading config from file: {e}", exc_info=True)
+            raise ConfigError(f"Failed to reload configuration: {e}")
+
+    def get_config_file_path(self) -> Optional[str]:
+        """
+        Get the path to the currently loaded configuration file.
+
+        Returns:
+            The config file path, or None if using defaults only.
+
+        Example:
+            ```python
+            path = llm.get_config_file_path()
+            if path:
+                print(f"Config loaded from: {path}")
+            else:
+                print("Using default configuration only")
+            ```
+        """
+        return self._config_file_path
+
+    def get_default_config_path(self) -> str:
+        """
+        Get the default user configuration file path.
+
+        Returns:
+            Path to ~/.config/llmcore/config.toml (expanded)
+
+        Example:
+            ```python
+            default_path = llm.get_default_config_path()
+            if not Path(default_path).exists():
+                llm.sync_config_to_file(default_path)
+            ```
+        """
+        from pathlib import Path
+
+        return str(Path("~/.config/llmcore/config.toml").expanduser())
+
+    def is_config_dirty(self) -> bool:
+        """
+        Check if runtime configuration has unsaved changes.
+
+        Returns:
+            True if configuration has been modified since last file sync.
+
+        Example:
+            ```python
+            llm.set_runtime_config("llmcore.log_level", "DEBUG")
+            assert llm.is_config_dirty()  # True
+
+            llm.sync_config_to_file()
+            assert not llm.is_config_dirty()  # False
+            ```
+        """
+        return self._runtime_config_dirty
