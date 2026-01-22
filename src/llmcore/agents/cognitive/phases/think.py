@@ -279,17 +279,51 @@ Respond now:
 
 
 def _format_tools(tool_definitions: List[Dict[str, Any]]) -> str:
-    """Format tool definitions for prompt."""
+    """
+    Format tool definitions for prompt.
+
+    Handles multiple tool definition formats:
+    - OpenAI format: {"type": "function", "function": {"name": ..., "description": ...}}
+    - Direct format: {"name": ..., "description": ..., "parameters": ...}
+    - Pydantic Tool.model_dump(): {"name": ..., "description": ..., "parameters": ...}
+
+    Args:
+        tool_definitions: List of tool definition dictionaries
+
+    Returns:
+        Formatted string listing available tools
+    """
     if not tool_definitions:
         return "No tools available."
 
     lines = []
     for tool in tool_definitions:
-        name = tool.get("function", {}).get("name", "unknown")
-        desc = tool.get("function", {}).get("description", "")
-        lines.append(f"- {name}: {desc}")
+        # Handle OpenAI function-calling format (nested under "function" key)
+        if "function" in tool and isinstance(tool.get("function"), dict):
+            name = tool["function"].get("name", "unknown")
+            desc = tool["function"].get("description", "No description")
+            params = tool["function"].get("parameters", {})
+        # Handle direct/Pydantic format (name/description at top level)
+        elif "name" in tool:
+            name = tool.get("name", "unknown")
+            desc = tool.get("description", "No description")
+            params = tool.get("parameters", {})
+        else:
+            logger.warning(f"Unknown tool definition format: {list(tool.keys())}")
+            continue
 
-    return "\n".join(lines)
+        # Build parameter summary if available
+        param_summary = ""
+        if params and isinstance(params, dict):
+            properties = params.get("properties", {})
+            if properties:
+                param_names = list(properties.keys())[:5]  # Limit to first 5 params
+                if param_names:
+                    param_summary = f" (params: {', '.join(param_names)})"
+
+        lines.append(f"- {name}: {desc}{param_summary}")
+
+    return "\n".join(lines) if lines else "No tools available."
 
 
 def _parse_think_response(

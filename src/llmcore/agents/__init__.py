@@ -35,51 +35,68 @@ References:
 # =============================================================================
 # CORE MANAGERS (Preserved for backward compatibility)
 # =============================================================================
-from .manager import AgentManager, AgentMode, EnhancedAgentManager
-from .tools import ToolManager
-
 # =============================================================================
 # COGNITIVE SYSTEM
 # =============================================================================
 from .cognitive import (
+    ActInput,
+    ActOutput,
     # Orchestrator
     CognitiveCycle,
     # Enums
     CognitivePhase,
-    IterationStatus,
-    ValidationResult,
     ConfidenceLevel,
     # Models
     CycleIteration,
     # State
     EnhancedAgentState,
+    ExecutionStrategy,
+    GoalClassification,
+    # Goal Classification (NEW)
+    GoalClassifier,
+    GoalComplexity,
+    GoalIntent,
+    IterationStatus,
+    ModelTier,
+    ObserveInput,
+    ObserveOutput,
     # Phase I/O Models (for advanced usage)
     PerceiveInput,
     PerceiveOutput,
     PlanInput,
     PlanOutput,
-    ThinkInput,
-    ThinkOutput,
-    ValidateInput,
-    ValidateOutput,
-    ActInput,
-    ActOutput,
-    ObserveInput,
-    ObserveOutput,
     ReflectInput,
     ReflectOutput,
+    ThinkInput,
+    ThinkOutput,
     UpdateInput,
     UpdateOutput,
+    ValidateInput,
+    ValidateOutput,
+    ValidationResult,
+    act_phase,
+    classify_goal,
+    is_trivial_goal,
+    needs_clarification,
+    observe_phase,
     # Individual phases (for advanced usage)
     perceive_phase,
     plan_phase,
-    think_phase,
-    validate_phase,
-    act_phase,
-    observe_phase,
     reflect_phase,
+    think_phase,
     update_phase,
+    validate_phase,
 )
+
+# =============================================================================
+# CONTEXT MANAGEMENT (NEW - Phase 1)
+# =============================================================================
+from .context import (
+    FilterStats,
+    RAGContextFilter,
+    RAGResult,
+)
+from .manager import AgentManager, AgentMode, EnhancedAgentManager
 
 # =============================================================================
 # MEMORY INTEGRATION
@@ -90,84 +107,108 @@ from .memory import CognitiveMemoryIntegrator
 # PERSONA SYSTEM
 # =============================================================================
 from .persona import (
-    PersonaManager,
     AgentPersona,
-    PersonalityTrait,
-    CommunicationStyle,
-    RiskTolerance,
-    PlanningDepth,
-    PersonaTrait,
     CommunicationPreferences,
+    CommunicationStyle,
     DecisionMakingPreferences,
+    PersonalityTrait,
+    PersonaManager,
+    PersonaTrait,
+    PlanningDepth,
     PromptModifications,
+    RiskTolerance,
 )
 
 # =============================================================================
 # PROMPT LIBRARY
 # =============================================================================
 from .prompts import (
+    PromptComposer,
     PromptRegistry,
     PromptTemplate,
     PromptVersion,
-    PromptComposer,
     TemplateLoader,
 )
 
 # =============================================================================
-# SINGLE AGENT MODE
+# RESILIENCE SYSTEM (NEW - Phase 1)
 # =============================================================================
-from .single_agent import AgentResult, IterationUpdate, SingleAgentMode
+from .resilience import (
+    AgentCircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerResult,
+    CircuitState,
+    TripReason,
+    create_circuit_breaker,
+)
+
+# =============================================================================
+# MODEL ROUTING (NEW - Phase 1)
+# =============================================================================
+from .routing import (
+    Capability,
+    CapabilityChecker,
+    CapabilityIssue,
+    CompatibilityResult,
+    IssueSeverity,
+)
 
 # =============================================================================
 # SANDBOX SYSTEM
 # =============================================================================
 from .sandbox import (
+    SANDBOX_TOOL_IMPLEMENTATIONS,
+    SANDBOX_TOOL_SCHEMAS,
+    # Providers
+    DockerSandboxProvider,
+    # Utilities
+    EphemeralResourceManager,
+    ExecutionResult,
+    FileInfo,
+    OutputTracker,
+    SandboxAccessDenied,
+    SandboxAccessLevel,
+    SandboxCleanupError,
+    SandboxConfig,
+    SandboxConnectionError,
+    # Exceptions
+    SandboxError,
+    SandboxExecutionError,
+    SandboxInitializationError,
+    SandboxMode,
+    SandboxProvider,
     # Core classes
     SandboxRegistry,
     SandboxRegistryConfig,
-    SandboxConfig,
-    SandboxProvider,
-    SandboxMode,
-    SandboxAccessLevel,
+    SandboxResourceError,
     SandboxStatus,
-    ExecutionResult,
-    FileInfo,
-    # Providers
-    DockerSandboxProvider,
+    SandboxTimeoutError,
     VMSandboxProvider,
-    # Utilities
-    EphemeralResourceManager,
-    OutputTracker,
+    clear_active_sandbox,
+    create_registry_config,
+    get_active_sandbox,
     # Configuration
     load_sandbox_config,
-    create_registry_config,
-    # Exceptions
-    SandboxError,
-    SandboxInitializationError,
-    SandboxExecutionError,
-    SandboxTimeoutError,
-    SandboxAccessDenied,
-    SandboxResourceError,
-    SandboxConnectionError,
-    SandboxCleanupError,
     # Tool management
     set_active_sandbox,
-    clear_active_sandbox,
-    get_active_sandbox,
-    SANDBOX_TOOL_IMPLEMENTATIONS,
-    SANDBOX_TOOL_SCHEMAS,
 )
 
 # =============================================================================
 # SANDBOX INTEGRATION
 # =============================================================================
 from .sandbox_integration import (
-    SandboxIntegration,
-    SandboxContext,
     SandboxAgentMixin,
-    register_sandbox_tools,
+    SandboxContext,
+    SandboxIntegration,
     get_sandbox_tool_definitions,
+    register_sandbox_tools,
 )
+
+# =============================================================================
+# SINGLE AGENT MODE
+# =============================================================================
+from .single_agent import AgentResult, IterationUpdate, SingleAgentMode
+from .tools import ToolManager
 
 # =============================================================================
 # EXPORTS
@@ -216,6 +257,33 @@ __all__ = [
     "ReflectOutput",
     "UpdateInput",
     "UpdateOutput",
+    # Goal Classification (NEW)
+    "GoalClassifier",
+    "GoalClassification",
+    "GoalComplexity",
+    "GoalIntent",
+    "ExecutionStrategy",
+    "ModelTier",
+    "classify_goal",
+    "is_trivial_goal",
+    "needs_clarification",
+    # Resilience (NEW)
+    "AgentCircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerResult",
+    "CircuitState",
+    "TripReason",
+    "create_circuit_breaker",
+    # Context Management (NEW)
+    "RAGContextFilter",
+    "RAGResult",
+    "FilterStats",
+    # Model Routing (NEW)
+    "Capability",
+    "CapabilityChecker",
+    "CapabilityIssue",
+    "CompatibilityResult",
+    "IssueSeverity",
     # Personas
     "PersonaManager",
     "AgentPersona",
@@ -277,4 +345,4 @@ __all__ = [
     "get_sandbox_tool_definitions",
 ]
 
-__version__ = "0.26.0"  # Darwin Layer 2 Complete
+__version__ = "0.27.0"  # Phase 1: Foundation (Bug Fixes + Infrastructure)

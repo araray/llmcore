@@ -4,17 +4,33 @@ Darwin Layer 2 - Enhanced Cognitive Cycle System.
 
 This package provides the 8-phase enhanced cognitive cycle:
 PERCEIVE → PLAN → THINK → VALIDATE → ACT → OBSERVE → REFLECT → UPDATE
+
+Also provides goal classification for intelligent routing.
 """
 
+from .goal_classifier import (
+    ExecutionStrategy,
+    GoalClassification,
+    GoalClassifier,
+    GoalComplexity,
+    GoalIntent,
+    ModelTier,
+    classify_goal,
+    is_trivial_goal,
+    needs_clarification,
+)
 from .models import (
-    # Enums
-    CognitivePhase,
-    ConfidenceLevel,
-    IterationStatus,
-    ValidationResult,
     # Phase I/O Models
     ActInput,
     ActOutput,
+    # Enums
+    CognitivePhase,
+    ConfidenceLevel,
+    # Iteration Tracking
+    CycleIteration,
+    # Enhanced State
+    EnhancedAgentState,
+    IterationStatus,
     ObserveInput,
     ObserveOutput,
     PerceiveInput,
@@ -29,12 +45,8 @@ from .models import (
     UpdateOutput,
     ValidateInput,
     ValidateOutput,
-    # Iteration Tracking
-    CycleIteration,
-    # Enhanced State
-    EnhancedAgentState,
+    ValidationResult,
 )
-
 from .phases import (
     act_phase,
     observe_phase,
@@ -45,14 +57,15 @@ from .phases import (
     update_phase,
     validate_phase,
 )
-
 from .phases.cycle import CognitiveCycle
 
 __all__ = [
+    # Enums
     "CognitivePhase",
     "IterationStatus",
     "ValidationResult",
     "ConfidenceLevel",
+    # Phase I/O
     "PerceiveInput",
     "PerceiveOutput",
     "PlanInput",
@@ -71,6 +84,7 @@ __all__ = [
     "UpdateOutput",
     "CycleIteration",
     "EnhancedAgentState",
+    # Phase functions
     "perceive_phase",
     "plan_phase",
     "think_phase",
@@ -79,5 +93,16 @@ __all__ = [
     "observe_phase",
     "reflect_phase",
     "update_phase",
+    # Main orchestrator
     "CognitiveCycle",
+    # Goal classification
+    "GoalClassifier",
+    "GoalClassification",
+    "GoalComplexity",
+    "GoalIntent",
+    "ExecutionStrategy",
+    "ModelTier",
+    "classify_goal",
+    "is_trivial_goal",
+    "needs_clarification",
 ]
