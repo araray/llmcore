@@ -436,10 +436,10 @@ class TestRAGFilter:
         from llmcore.agents.context.rag_filter import RAGResult
 
         results = [
-            RAGResult(content="Highly relevant content", similarity=0.9),
-            RAGResult(content="Somewhat relevant", similarity=0.75),
-            RAGResult(content="Barely relevant", similarity=0.5),  # Below threshold
-            RAGResult(content="Not relevant", similarity=0.3),  # Below threshold
+            RAGResult(content="Highly relevant content here", similarity=0.9),
+            RAGResult(content="Somewhat relevant content", similarity=0.75),
+            RAGResult(content="Barely relevant content", similarity=0.5),  # Below threshold
+            RAGResult(content="Not very relevant stuff", similarity=0.3),  # Below threshold
         ]
 
         filtered = rag_filter.filter(results)
@@ -498,9 +498,9 @@ class TestRAGFilter:
         from llmcore.agents.context.rag_filter import RAGResult
 
         results = [
-            RAGResult(content="Valid content", similarity=0.9),
+            RAGResult(content="Valid meaningful content here", similarity=0.9),
             RAGResult(content="Too short", similarity=0.9),  # Too short
-            RAGResult(content="Low similarity content", similarity=0.5),  # Low similarity
+            RAGResult(content="Low similarity content here", similarity=0.5),  # Low similarity
         ]
 
         filtered, stats = rag_filter.filter_with_stats(results)

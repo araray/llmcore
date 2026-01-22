@@ -221,7 +221,8 @@ class CognitiveCycle:
                     history=self._build_history(agent_state),
                     context="\n".join(iteration.perceive_output.retrieved_context),
                     available_tools=[
-                        t.model_dump() for t in self.tool_manager.get_tool_definitions()
+                        t.model_dump() if hasattr(t, "model_dump") else t
+                        for t in self.tool_manager.get_tool_definitions()
                     ],
                 )
 

@@ -1,4 +1,3 @@
-# src/llmcore/agents/context/rag_filter.py
 """
 RAG Context Quality Filter for LLMCore Agent System.
 
@@ -221,6 +220,47 @@ class RAGContextFilter:
 
         return filtered
 
+    def filter_with_stats(self, results: List[RAGResult]) -> tuple[List[RAGResult], FilterStats]:
+        """
+        Filter RAG results and return statistics.
+
+        Same as filter(), but also returns FilterStats for monitoring/debugging.
+
+        Args:
+            results: Raw RAG retrieval results
+
+        Returns:
+            Tuple of (filtered_results, stats)
+        """
+        if not results:
+            return [], FilterStats(input_count=0, output_count=0)
+
+        stats = FilterStats(input_count=len(results))
+
+        # Step 1: Similarity filter
+        filtered = [r for r in results if r.similarity >= self.min_similarity]
+        stats.removed_low_similarity = len(results) - len(filtered)
+
+        # Step 2: Garbage filter
+        pre_garbage = len(filtered)
+        filtered = [r for r in filtered if not self._is_garbage(r)]
+        stats.removed_garbage = pre_garbage - len(filtered)
+
+        # Step 3: Deduplication
+        pre_dedup = len(filtered)
+        filtered = self._deduplicate(filtered)
+        stats.removed_duplicate = pre_dedup - len(filtered)
+
+        # Step 4: Sort by relevance and limit
+        filtered.sort(key=lambda r: r.similarity, reverse=True)
+        pre_limit = len(filtered)
+        filtered = filtered[: self.max_results]
+        stats.removed_limit = pre_limit - len(filtered)
+
+        stats.output_count = len(filtered)
+
+        return filtered, stats
+
     def _is_garbage(self, result: RAGResult) -> bool:
         """
         Detect garbage/placeholder RAG results.
@@ -345,9 +385,16 @@ class RAGContextFilter:
         text1 = text1.lower()
         text2 = text2.lower()
 
-        # Tokenize (simple whitespace split)
-        words1 = set(text1.split())
-        words2 = set(text2.split())
+        # Strip punctuation for better matching
+        # "dog." and "dog" should be considered the same word
+        punctuation = ".,!?;:'\"()[]{}—–-"
+        for p in punctuation:
+            text1 = text1.replace(p, " ")
+            text2 = text2.replace(p, " ")
+
+        # Tokenize (whitespace split, filter empty)
+        words1 = set(w for w in text1.split() if w)
+        words2 = set(w for w in text2.split() if w)
 
         if not words1 or not words2:
             return 0.0
