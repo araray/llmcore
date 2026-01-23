@@ -205,6 +205,15 @@ from .sandbox_integration import (
 )
 
 # =============================================================================
+# OBSERVABILITY INTEGRATION (Phase 8)
+# =============================================================================
+from .observability_factory import (
+    ObservabilityComponents,
+    create_observability_from_config,
+    create_event_logger_simple,
+)
+
+# =============================================================================
 # SINGLE AGENT MODE
 # =============================================================================
 from .single_agent import AgentResult, IterationUpdate, SingleAgentMode
@@ -343,6 +352,10 @@ __all__ = [
     "SandboxAgentMixin",
     "register_sandbox_tools",
     "get_sandbox_tool_definitions",
+    # Observability Integration (Phase 8)
+    "ObservabilityComponents",
+    "create_observability_from_config",
+    "create_event_logger_simple",
 ]
 
 __version__ = "0.27.0"  # Phase 1: Foundation (Bug Fixes + Infrastructure)

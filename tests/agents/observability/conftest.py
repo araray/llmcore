@@ -75,12 +75,19 @@ _replay = _load_module(
     str(_src_path / 'llmcore' / 'agents' / 'observability' / 'replay.py')
 )
 
+_observability_factory = _load_module(
+    'llmcore.agents.observability_factory',
+    str(_src_path / 'llmcore' / 'agents' / 'observability_factory.py')
+)
+
 # Link modules into the package namespace for standard imports
 _obs_pkg = sys.modules['llmcore.agents.observability']
 _obs_pkg.events = _events
 _obs_pkg.logger = _logger
 _obs_pkg.metrics = _metrics
 _obs_pkg.replay = _replay
+_agents_pkg = sys.modules['llmcore.agents']
+_agents_pkg.observability_factory = _observability_factory
 
 # Export all symbols at the observability package level
 for _name in _events.__all__:
@@ -192,12 +199,12 @@ def fixed_timestamp():
 def timestamp_factory(fixed_timestamp):
     """Factory for generating sequential timestamps."""
     counter = [0]
-    
+
     def make_timestamp(offset_seconds: int = 0):
         ts = fixed_timestamp + timedelta(seconds=counter[0] + offset_seconds)
         counter[0] += 1
         return ts
-    
+
     return make_timestamp
 
 
@@ -430,7 +437,7 @@ def all_event_types(
 def sample_event_sequence(session_id, execution_id, fixed_timestamp):
     """Create a realistic sequence of events for testing."""
     events = []
-    
+
     # Agent start
     events.append(LifecycleEvent(
         session_id=session_id,
@@ -439,7 +446,7 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
         timestamp=fixed_timestamp,
         goal="Analyze data and generate report",
     ))
-    
+
     # Iteration 1 start
     events.append(LifecycleEvent(
         session_id=session_id,
@@ -448,7 +455,7 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
         timestamp=fixed_timestamp + timedelta(seconds=1),
         iteration=1,
     ))
-    
+
     # Cognitive phase - think
     events.append(CognitiveEvent(
         session_id=session_id,
@@ -461,7 +468,7 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
         output_summary="Determined approach",
         duration_ms=500.0,
     ))
-    
+
     # Activity execution
     events.append(ActivityEvent(
         session_id=session_id,
@@ -476,7 +483,7 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
         duration_ms=150.0,
         iteration=1,
     ))
-    
+
     # Agent completion
     events.append(LifecycleEvent(
         session_id=session_id,
@@ -486,7 +493,7 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
         final_status="success",
         total_iterations=1,
     ))
-    
+
     return events
 
 
@@ -584,7 +591,7 @@ def populated_metrics(execution_metrics):
         duration_ms=150.0,
     )
     execution_metrics.end_iteration(1)
-    
+
     # Record second iteration
     execution_metrics.start_iteration(2)
     execution_metrics.record_llm_call(
@@ -595,7 +602,7 @@ def populated_metrics(execution_metrics):
         cost=0.08,
     )
     execution_metrics.end_iteration(2)
-    
+
     return execution_metrics
 
 
@@ -624,7 +631,7 @@ def populated_collector(metrics_collector):
         )
         metrics.end_iteration(1)
         metrics.complete(success=True if i % 2 == 0 else False)
-    
+
     return metrics_collector
 
 
@@ -652,9 +659,9 @@ def execution_replay(sample_jsonl_log):
 def multi_execution_log(temp_dir, fixed_timestamp):
     """Create a log file with multiple executions."""
     log_file = temp_dir / "multi_exec.jsonl"
-    
+
     events = []
-    
+
     # Execution 1
     for i in range(3):
         events.append(LifecycleEvent(
@@ -664,7 +671,7 @@ def multi_execution_log(temp_dir, fixed_timestamp):
             timestamp=fixed_timestamp + timedelta(seconds=i),
             iteration=i + 1 if i < 2 else None,
         ))
-    
+
     # Execution 2
     for i in range(2):
         events.append(LifecycleEvent(
@@ -673,11 +680,11 @@ def multi_execution_log(temp_dir, fixed_timestamp):
             event_type=LifecycleEventType.AGENT_STARTED if i == 0 else LifecycleEventType.AGENT_FAILED,
             timestamp=fixed_timestamp + timedelta(seconds=10 + i),
         ))
-    
+
     with open(log_file, "w") as f:
         for event in events:
             f.write(event.to_json() + "\n")
-    
+
     return log_file
 
 

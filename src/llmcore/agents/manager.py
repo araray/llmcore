@@ -23,6 +23,7 @@ DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
 """
 
 import logging
+import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -39,6 +40,9 @@ from . import cognitive_cycle
 from .sandbox import SandboxError
 from .sandbox_integration import SandboxIntegration, register_sandbox_tools
 from .tools import ToolManager
+
+# Observability integration imports (Phase 8)
+from .observability_factory import ObservabilityComponents, create_observability_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +77,7 @@ class AgentManager:
         provider_manager: ProviderManager,
         memory_manager: MemoryManager,
         storage_manager: StorageManager,
+        observability: Optional[ObservabilityComponents] = None,
     ):
         """
         Initialize the AgentManager with required dependencies.
@@ -81,6 +86,8 @@ class AgentManager:
             provider_manager: The ProviderManager for LLM interactions.
             memory_manager: The MemoryManager for context retrieval.
             storage_manager: The StorageManager for episodic memory logging.
+            observability: Optional observability components (Phase 8 integration).
+                          If None, observability is disabled for this manager.
         """
         self._provider_manager = provider_manager
         self._memory_manager = memory_manager
@@ -90,6 +97,9 @@ class AgentManager:
         # NEW: Sandbox integration (optional, initialized separately)
         self._sandbox_integration: Optional[SandboxIntegration] = None
         self._sandbox_enabled: bool = False
+
+        # NEW (Phase 8): Observability integration
+        self._observability = observability
 
         # Initialize tracing
         self._tracer = None
@@ -363,6 +373,9 @@ class AgentManager:
         """
         from ..tracing import add_span_attributes, create_span, record_span_exception
 
+        # Track execution timing for observability
+        start_time = time.monotonic()
+
         with create_span(self._tracer, "agent.run_loop") as span:
             try:
                 add_span_attributes(
@@ -379,6 +392,16 @@ class AgentManager:
                     import uuid
 
                     session_id = f"agent-{uuid.uuid4().hex[:8]}"
+
+                # === Phase 8: Log lifecycle start ===
+                if self._observability and self._observability.logger:
+                    try:
+                        await self._observability.logger.log_lifecycle_start(
+                            goal=task.goal,
+                            goal_complexity=getattr(task, 'complexity', None),
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to log lifecycle start: {e}")
 
                 # Load tools for this run
                 if db_session and enabled_toolkits:
@@ -399,11 +422,37 @@ class AgentManager:
                     model_name=model_name,
                 )
 
+                # === Phase 8: Log planning complete ===
+                if self._observability and self._observability.logger:
+                    try:
+                        await self._observability.logger.log_cognitive_phase(
+                            phase="plan",
+                            input_summary=task.goal[:200],
+                            output_summary=f"Generated {len(agent_state.plan)} plan steps",
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to log plan phase: {e}")
+
+                # Track iteration for final result
+                iteration = 0
+
                 # Main cognitive loop
                 for iteration in range(max_iterations):
                     logger.debug(f"Cognitive iteration {iteration + 1}/{max_iterations}")
+                    iteration_start = time.monotonic()
+
+                    # === Phase 8: Log iteration start ===
+                    if self._observability and self._observability.logger:
+                        try:
+                            self._observability.logger.set_iteration(iteration + 1)
+                            await self._observability.logger.log_iteration_start(
+                                iteration=iteration + 1,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to log iteration start: {e}")
 
                     # Think: Decide next action
+                    think_start = time.monotonic()
                     await cognitive_cycle.think_step(
                         agent_state=agent_state,
                         session_id=session_id,
@@ -414,6 +463,19 @@ class AgentManager:
                         provider_name=provider_name,
                         model_name=model_name,
                     )
+                    think_duration = (time.monotonic() - think_start) * 1000
+
+                    # === Phase 8: Log think phase ===
+                    if self._observability and self._observability.logger:
+                        try:
+                            await self._observability.logger.log_cognitive_phase(
+                                phase="think",
+                                input_summary=f"Goal: {task.goal[:100]}",
+                                output_summary=f"Decided action: {agent_state.pending_tool_call.name if agent_state.pending_tool_call else 'finish'}",
+                                duration_ms=think_duration,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to log think phase: {e}")
 
                     # Check if agent decided to finish
                     if agent_state.is_finished:
@@ -423,17 +485,45 @@ class AgentManager:
                     # Check for HITL pause
                     if agent_state.awaiting_human_approval:
                         logger.info("Agent paused for human approval")
-                        # In a real implementation, this would pause and wait
-                        # For now, we'll just note it in the result
+                        # === Phase 8: Log HITL pause ===
+                        if self._observability and self._observability.logger:
+                            try:
+                                from .observability import HITLEventType
+                                await self._observability.logger.log_hitl(
+                                    event_type=HITLEventType.APPROVAL_REQUESTED,
+                                    request_id=f"req-{session_id}-{iteration}",
+                                    action_type="pending_action",
+                                    risk_level="medium",
+                                    approval_status="pending",
+                                )
+                            except Exception as e:
+                                logger.debug(f"Failed to log HITL pause: {e}")
                         return f"HITL_PAUSE: {agent_state.pending_approval_prompt}"
 
                     # Act: Execute the chosen tool
+                    act_start = time.monotonic()
                     tool_result = await cognitive_cycle.act_step(
                         agent_state=agent_state,
                         tool_manager=self._tool_manager,
                         session_id=session_id,
                         tracer=self._tracer,
                     )
+                    act_duration = (time.monotonic() - act_start) * 1000
+
+                    # === Phase 8: Log activity ===
+                    if self._observability and self._observability.logger and agent_state.pending_tool_call:
+                        try:
+                            success = not tool_result.content.startswith("ERROR:")
+                            await self._observability.logger.log_activity(
+                                activity_name=agent_state.pending_tool_call.name,
+                                activity_input=agent_state.pending_tool_call.arguments,
+                                activity_output=tool_result.content[:500],
+                                success=success,
+                                error_message=tool_result.content if not success else None,
+                                duration_ms=act_duration,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to log activity: {e}")
 
                     # Log execution if sandboxed
                     if sandbox_context and agent_state.pending_tool_call:
@@ -449,6 +539,7 @@ class AgentManager:
                     )
 
                     # Reflect: Update understanding
+                    reflect_start = time.monotonic()
                     await cognitive_cycle.reflect_step(
                         agent_state=agent_state,
                         session_id=session_id,
@@ -458,9 +549,45 @@ class AgentManager:
                         provider_name=provider_name,
                         model_name=model_name,
                     )
+                    reflect_duration = (time.monotonic() - reflect_start) * 1000
+
+                    # === Phase 8: Log reflect phase ===
+                    if self._observability and self._observability.logger:
+                        try:
+                            await self._observability.logger.log_cognitive_phase(
+                                phase="reflect",
+                                input_summary=f"Tool result: {tool_result.content[:100]}",
+                                output_summary=agent_state.scratchpad[:200] if agent_state.scratchpad else "Reflected",
+                                duration_ms=reflect_duration,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to log reflect phase: {e}")
+
+                    # === Phase 8: Log iteration end ===
+                    iteration_duration = (time.monotonic() - iteration_start) * 1000
+                    if self._observability and self._observability.logger:
+                        try:
+                            await self._observability.logger.log_iteration_end(
+                                iteration=iteration + 1,
+                                duration_ms=iteration_duration,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to log iteration end: {e}")
 
                 # Return final result
                 final_result = agent_state.final_answer or "Task completed without explicit answer."
+
+                # === Phase 8: Log lifecycle end (success) ===
+                total_duration = (time.monotonic() - start_time) * 1000
+                if self._observability and self._observability.logger:
+                    try:
+                        await self._observability.logger.log_lifecycle_end(
+                            status="success",
+                            total_iterations=iteration + 1,
+                            duration_ms=total_duration,
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to log lifecycle end: {e}")
 
                 add_span_attributes(
                     span, {"agent.iterations": iteration + 1, "agent.success": True}
@@ -471,6 +598,25 @@ class AgentManager:
             except Exception as e:
                 record_span_exception(span, e)
                 logger.error(f"Agent loop failed: {e}", exc_info=True)
+
+                # === Phase 8: Log lifecycle end (failure) ===
+                total_duration = (time.monotonic() - start_time) * 1000
+                if self._observability and self._observability.logger:
+                    try:
+                        await self._observability.logger.log_lifecycle_end(
+                            status="failure",
+                            exit_reason=str(e),
+                            duration_ms=total_duration,
+                        )
+                        # Also log error event
+                        await self._observability.logger.log_error(
+                            error_type="execution_error",
+                            error_message=str(e),
+                            recoverable=False,
+                        )
+                    except Exception as log_e:
+                        logger.debug(f"Failed to log lifecycle failure: {log_e}")
+
                 raise LLMCoreError(f"Agent execution failed: {str(e)}")
 
     # =========================================================================
@@ -493,7 +639,24 @@ class AgentManager:
         """
         if self._sandbox_enabled:
             await self.shutdown_sandbox()
+
+        # NEW (Phase 8): Close observability
+        if self._observability:
+            await self._observability.close()
+
         logger.info("AgentManager cleanup completed")
+
+    @property
+    def observability(self) -> Optional[ObservabilityComponents]:
+        """Get the observability components (Phase 8)."""
+        return self._observability
+
+    @property
+    def event_logger(self) -> Optional[Any]:
+        """Get the event logger if observability is enabled (Phase 8)."""
+        if self._observability and self._observability.enabled:
+            return self._observability.logger
+        return None
 
 
 # =============================================================================
@@ -554,6 +717,7 @@ class EnhancedAgentManager(AgentManager):
         prompt_registry: Optional[Any] = None,
         tracer: Optional[Any] = None,
         default_mode: AgentMode = AgentMode.SINGLE,
+        observability: Optional[ObservabilityComponents] = None,
     ):
         """
         Initialize the enhanced agent manager.
@@ -565,12 +729,14 @@ class EnhancedAgentManager(AgentManager):
             prompt_registry: Optional prompt registry (Darwin Layer 2)
             tracer: Optional OpenTelemetry tracer
             default_mode: Default mode for run() method
+            observability: Optional observability components (Phase 8)
         """
         # Initialize parent class (original AgentManager)
         super().__init__(
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             storage_manager=storage_manager,
+            observability=observability,
         )
 
         # Store additional components
@@ -780,6 +946,7 @@ class EnhancedAgentManager(AgentManager):
             "modes": [mode.value for mode in AgentMode],
             "default_mode": self.default_mode.value,
             "sandbox_enabled": self.sandbox_enabled,
+            "observability_enabled": self._observability.enabled if self._observability else False,
             "original_methods": ["run_agent_loop", "initialize_sandbox", "shutdown_sandbox"],
             "enhanced_methods": ["run", "create_persona", "consolidate_memory"],
         }
