@@ -321,6 +321,190 @@ class HITLApprover:
         self._approval_scopes.clear()
 
 
+class HITLManagerAdapter:
+    """
+    Adapter to use Phase 5 HITLManager with ActivityExecutor.
+
+    Wraps the full-featured HITLManager to provide the same interface
+    as the basic HITLApprover, enabling seamless integration with existing
+    executor code while leveraging advanced HITL features.
+
+    Features when using HITLManager:
+    - Sophisticated risk assessment with dangerous pattern detection
+    - Session and persistent approval scopes
+    - State persistence across restarts
+    - Audit logging
+    - Timeout handling with configurable policies
+    - Batch approval support
+
+    Example:
+        >>> from llmcore.agents.hitl import HITLManager, HITLConfig
+        >>> manager = HITLManager(config=HITLConfig(enabled=True))
+        >>> adapter = HITLManagerAdapter(manager)
+        >>> executor = ActivityExecutor(hitl_approver=adapter)
+    """
+
+    def __init__(
+        self,
+        hitl_manager: Any,  # "HITLManager" - avoid circular import
+        risk_threshold: RiskLevel = RiskLevel.MEDIUM,
+    ):
+        """
+        Initialize HITL adapter.
+
+        Args:
+            hitl_manager: HITLManager instance from llmcore.agents.hitl
+            risk_threshold: Minimum risk level requiring approval
+        """
+        self._manager = hitl_manager
+        self.risk_threshold = risk_threshold
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_event_loop(self) -> asyncio.AbstractEventLoop:
+        """Get or create event loop for async operations."""
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop - create one for sync context
+            if self._event_loop is None or self._event_loop.is_closed():
+                self._event_loop = asyncio.new_event_loop()
+            return self._event_loop
+
+    def _run_async(self, coro):
+        """Run async coroutine from sync context."""
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in async context - schedule as task
+            return asyncio.ensure_future(coro)
+        except RuntimeError:
+            # Not in async context - use event loop
+            loop = self._get_event_loop()
+            return loop.run_until_complete(coro)
+
+    def requires_approval(self, request: ActivityRequest, definition: ActivityDefinition) -> bool:
+        """
+        Check if activity requires HITL approval.
+
+        Uses HITLManager's risk assessor for sophisticated risk evaluation
+        including dangerous pattern detection.
+
+        Args:
+            request: Activity request
+            definition: Activity definition
+
+        Returns:
+            True if approval is required
+        """
+        # Use manager's risk assessor
+        risk = self._manager.risk_assessor.assess(
+            request.activity,
+            request.parameters,
+            {},
+        )
+        return risk.requires_approval
+
+    def approve(
+        self,
+        request: ActivityRequest,
+        definition: ActivityDefinition,
+        approval_callback: Optional[Callable[[str], bool]] = None,
+    ) -> HITLDecision:
+        """
+        Get approval for an activity using HITLManager.
+
+        Args:
+            request: Activity request
+            definition: Activity definition
+            approval_callback: Callback for user approval (passed to manager)
+
+        Returns:
+            HITLDecision with approval status
+        """
+        # Run async check_approval
+        try:
+            decision = self._run_async(
+                self._manager.check_approval(
+                    activity_type=request.activity,
+                    parameters=request.parameters,
+                    context={"definition": definition.name if definition else None},
+                    reason=request.reason,
+                )
+            )
+
+            # Handle future if returned from async context
+            if asyncio.isfuture(decision):
+                # Need to await - we're in sync context wanting async result
+                loop = self._get_event_loop()
+                decision = loop.run_until_complete(decision)
+
+            # Map HITLManager decision to executor's HITLDecision
+            return HITLDecision(
+                approved=decision.is_approved,
+                reason=decision.reason,
+                modified_params=decision.modified_params if hasattr(decision, 'modified_params') else None,
+                scope_id=decision.scope_id,
+            )
+
+        except Exception as e:
+            logger.error(f"HITL approval error: {e}")
+            return HITLDecision(
+                approved=False,
+                reason=f"HITL error: {e}",
+            )
+
+    def grant_scope(self, activity: str, max_risk: RiskLevel = RiskLevel.MEDIUM) -> None:
+        """Grant approval scope for an activity."""
+        self._manager.scope_manager.grant_session_approval(
+            tool_name=activity,
+            max_risk_level=max_risk.value,
+        )
+
+    def revoke_scope(self, activity: str) -> None:
+        """Revoke approval scope for an activity."""
+        self._manager.scope_manager.revoke_session_approval(activity)
+
+    def clear_scopes(self) -> None:
+        """Clear all approval scopes."""
+        # Clear session scopes
+        for scope_id in list(self._manager.scope_manager._session_scopes.keys()):
+            self._manager.scope_manager.revoke_session_approval(scope_id)
+
+
+def create_hitl_approver(
+    use_advanced: bool = False,
+    risk_threshold: RiskLevel = RiskLevel.MEDIUM,
+    hitl_config: Optional[Any] = None,  # HITLConfig
+    **kwargs,
+) -> "HITLApprover | HITLManagerAdapter":
+    """
+    Factory function to create appropriate HITL approver.
+
+    Args:
+        use_advanced: If True, use full HITLManager via adapter
+        risk_threshold: Minimum risk level requiring approval
+        hitl_config: Configuration for HITLManager (if use_advanced=True)
+        **kwargs: Additional arguments passed to constructor
+
+    Returns:
+        HITLApprover or HITLManagerAdapter instance
+    """
+    if use_advanced:
+        try:
+            from ..hitl import HITLManager, HITLConfig
+
+            config = hitl_config or HITLConfig(
+                enabled=True,
+                global_risk_threshold=risk_threshold.value,
+            )
+            manager = HITLManager(config=config)
+            return HITLManagerAdapter(manager, risk_threshold=risk_threshold)
+        except ImportError as e:
+            logger.warning(f"HITLManager not available, falling back to basic approver: {e}")
+            return HITLApprover(risk_threshold=risk_threshold, **kwargs)
+    else:
+        return HITLApprover(risk_threshold=risk_threshold, **kwargs)
+
+
 # =============================================================================
 # ACTIVITY EXECUTOR
 # =============================================================================

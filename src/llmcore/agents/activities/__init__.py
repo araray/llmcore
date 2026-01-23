@@ -45,7 +45,9 @@ from .executor import (
     ActivityValidator,
     HITLApprover,
     HITLDecision,
+    HITLManagerAdapter,
     ValidationResult,
+    create_hitl_approver,
 )
 
 # Loop
@@ -135,7 +137,9 @@ __all__ = [
     "ActivityValidator",
     "HITLDecision",
     "HITLApprover",
+    "HITLManagerAdapter",
     "ActivityExecutor",
+    "create_hitl_approver",
     # Loop
     "ActivityLoopConfig",
     "ActivityLoop",
