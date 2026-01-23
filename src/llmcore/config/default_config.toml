@@ -293,6 +293,275 @@ posthog = "ERROR"
   # device = "cpu"
 
 
+  # =============================================================================
+  # [agents.observability] - Agent Observability & Telemetry
+  # =============================================================================
+  # This section configures the observability system for agent executions.
+  # The observability module provides:
+  #   - Structured event logging (JSONL format)
+  #   - Execution metrics collection
+  #   - Execution replay for debugging
+  #
+  # Events are organized by category:
+  #   - LIFECYCLE: Agent start/stop events
+  #   - COGNITIVE: Phase execution (THINK, ACT, OBSERVE, REFLECT)
+  #   - ACTIVITY: Tool/activity executions
+  #   - HITL: Human-in-the-loop approvals
+  #   - ERROR: Errors and exceptions
+  #   - METRIC: Performance metrics
+  #   - MEMORY: Memory operations
+  #   - SANDBOX: Container/VM lifecycle
+  #   - RAG: Retrieval operations
+  #
+  # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Sections 26-28
+
+  [agents.observability]
+
+  # --- Master Enable/Disable ---
+  # What it does: Master switch for the entire observability system.
+  # Purpose: Quickly disable all observability features without changing other settings.
+  # Possible Options: true, false
+  # Default Value: true
+  # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__ENABLED
+  enabled = true
+
+  # =============================================================================
+  # Event Logging Settings
+  # =============================================================================
+
+      [agents.observability.events]
+      # --- Event Logging Enable ---
+      # What it does: Enable/disable structured event logging to file.
+      # Purpose: Capture detailed execution traces for debugging and analysis.
+      # Possible Options: true, false
+      # Default Value: true
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__EVENTS__ENABLED
+      enabled = true
+
+      # --- Event Log File Path ---
+      # What it does: Path to the JSONL file where events are written.
+      # Purpose: Persistent storage for execution events.
+      # Format: Events are written as newline-delimited JSON (JSONL/NDJSON).
+      # Default Value: "~/.llmcore/events.jsonl"
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__EVENTS__LOG_PATH
+      log_path = "~/.llmcore/events.jsonl"
+
+      # --- Minimum Event Severity ---
+      # What it does: Filter events by minimum severity level.
+      # Purpose: Control verbosity of event logging.
+      # Possible Options: "debug", "info", "warning", "error", "critical"
+      # Default Value: "info"
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__EVENTS__MIN_SEVERITY
+      min_severity = "info"
+
+      # --- Event Categories to Log ---
+      # What it does: Whitelist of event categories to capture.
+      # Purpose: Selectively enable/disable logging for specific event types.
+      # Possible Values: "lifecycle", "cognitive", "activity", "hitl", "error",
+      #                  "metric", "memory", "sandbox", "rag"
+      # Default Value: (all categories)
+      # Note: Empty list means log ALL categories.
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__EVENTS__CATEGORIES
+      categories = []
+
+      # --- Log Rotation Settings ---
+      # What it does: Configure automatic log file rotation.
+      # Purpose: Prevent unbounded log file growth.
+
+          [agents.observability.events.rotation]
+          # Rotation strategy: "none", "daily", "size", "both"
+          # - none: No rotation, single file grows indefinitely
+          # - daily: Rotate at midnight each day
+          # - size: Rotate when file exceeds max_size_mb
+          # - both: Rotate on either condition
+          # Default Value: "size"
+          strategy = "size"
+
+          # Maximum log file size in MB before rotation (if strategy includes "size").
+          # Default Value: 100
+          max_size_mb = 100
+
+          # Number of rotated log files to keep. 0 = keep all.
+          # Default Value: 10
+          max_files = 10
+
+          # Compress rotated files with gzip.
+          # Default Value: true
+          compress = true
+
+  # =============================================================================
+  # Buffering Settings
+  # =============================================================================
+
+      [agents.observability.buffer]
+      # --- Buffering Enable ---
+      # What it does: Enable write buffering for better performance.
+      # Purpose: Batch multiple events before writing to reduce I/O overhead.
+      # Possible Options: true, false
+      # Default Value: true
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__BUFFER__ENABLED
+      enabled = true
+
+      # --- Buffer Size ---
+      # What it does: Maximum number of events to buffer before flushing.
+      # Purpose: Balance between I/O efficiency and data freshness.
+      # Default Value: 100
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__BUFFER__SIZE
+      size = 100
+
+      # --- Flush Interval ---
+      # What it does: Maximum time (seconds) to hold events before flushing.
+      # Purpose: Ensure events are persisted even during low activity.
+      # Default Value: 5
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__BUFFER__FLUSH_INTERVAL_SECONDS
+      flush_interval_seconds = 5
+
+      # --- Flush on Shutdown ---
+      # What it does: Flush all buffered events when agent shuts down.
+      # Purpose: Prevent data loss on graceful shutdown.
+      # Possible Options: true, false
+      # Default Value: true
+      flush_on_shutdown = true
+
+  # =============================================================================
+  # Metrics Collection Settings
+  # =============================================================================
+
+      [agents.observability.metrics]
+      # --- Metrics Collection Enable ---
+      # What it does: Enable/disable execution metrics collection.
+      # Purpose: Track performance, cost, and usage statistics.
+      # Possible Options: true, false
+      # Default Value: true
+      # Environment Variable: LLMCORE_AGENTS__OBSERVABILITY__METRICS__ENABLED
+      enabled = true
+
+      # --- Metrics to Collect ---
+      # What it does: Whitelist of metric types to collect.
+      # Purpose: Control which metrics are tracked.
+      # Possible Values:
+      #   - "iterations": Cognitive loop iterations
+      #   - "llm_calls": LLM API calls (latency, tokens, cost)
+      #   - "activities": Tool/activity executions
+      #   - "hitl": Human approval metrics
+      #   - "errors": Error counts and types
+      #   - "duration": Execution timing
+      #   - "tokens": Token usage
+      #   - "cost": Estimated costs
+      # Default Value: (all metrics)
+      # Note: Empty list means collect ALL metrics.
+      collect = []
+
+      # --- Cost Tracking ---
+      # What it does: Enable estimated cost calculation for LLM calls.
+      # Purpose: Budget monitoring and optimization.
+      # Possible Options: true, false
+      # Default Value: true
+      track_cost = true
+
+      # --- Token Tracking ---
+      # What it does: Track input/output token counts per call.
+      # Purpose: Usage analysis and optimization.
+      # Possible Options: true, false
+      # Default Value: true
+      track_tokens = true
+
+      # --- Latency Percentiles ---
+      # What it does: Percentiles to calculate for latency metrics.
+      # Purpose: Understand latency distribution (p50, p95, p99).
+      # Default Value: [50, 90, 95, 99]
+      latency_percentiles = [50, 90, 95, 99]
+
+  # =============================================================================
+  # Replay Settings
+  # =============================================================================
+
+      [agents.observability.replay]
+      # --- Replay Enable ---
+      # What it does: Enable execution replay functionality.
+      # Purpose: Debug and analyze past executions step-by-step.
+      # Possible Options: true, false
+      # Default Value: true
+      # Note: Requires events.enabled = true
+      enabled = true
+
+      # --- Replay Cache ---
+      # What it does: Cache parsed events in memory for faster replay.
+      # Purpose: Speed up repeated replay operations.
+      # Possible Options: true, false
+      # Default Value: true
+      cache_enabled = true
+
+      # --- Replay Cache Size ---
+      # What it does: Maximum number of executions to cache.
+      # Purpose: Limit memory usage.
+      # Default Value: 50
+      cache_max_executions = 50
+
+  # =============================================================================
+  # Sinks Configuration
+  # =============================================================================
+  # Sinks define where events are written. Multiple sinks can be active.
+
+      [agents.observability.sinks]
+      # --- File Sink ---
+      # Primary sink - writes to JSONL file (configured above in events.log_path)
+      file_enabled = true
+
+      # --- Memory Sink (Debug) ---
+      # What it does: Store events in memory for debugging/testing.
+      # Purpose: Inspect events without file I/O during development.
+      # WARNING: Memory usage grows with event count. Use only for debugging.
+      # Possible Options: true, false
+      # Default Value: false
+      memory_enabled = false
+
+      # Maximum events to keep in memory sink. 0 = unlimited.
+      # Default Value: 1000
+      memory_max_events = 1000
+
+      # --- Callback Sink ---
+      # What it does: Call a user-defined function for each event.
+      # Purpose: Custom integrations (e.g., send to external monitoring).
+      # Note: Callback must be registered programmatically, this just enables it.
+      # Possible Options: true, false
+      # Default Value: false
+      callback_enabled = false
+
+  # =============================================================================
+  # Performance Settings
+  # =============================================================================
+
+      [agents.observability.performance]
+      # --- Async Logging ---
+      # What it does: Write events asynchronously to avoid blocking execution.
+      # Purpose: Minimize observability overhead on agent performance.
+      # Possible Options: true, false
+      # Default Value: true
+      async_logging = true
+
+      # --- Sampling Rate ---
+      # What it does: Sample rate for high-frequency events (0.0 to 1.0).
+      # Purpose: Reduce volume for very active agents.
+      # Example: 0.1 = log 10% of events, 1.0 = log all events
+      # Default Value: 1.0 (log everything)
+      # Note: Lifecycle and error events are never sampled.
+      sampling_rate = 1.0
+
+      # --- Max Event Size ---
+      # What it does: Maximum size (bytes) for event data fields.
+      # Purpose: Prevent huge events from bloating log files.
+      # Default Value: 10000 (10KB)
+      # Note: Large data is truncated with "[TRUNCATED]" marker.
+      max_event_data_bytes = 10000
+
+      # --- Overhead Warning Threshold ---
+      # What it does: Warn if logging overhead exceeds this percentage of execution time.
+      # Purpose: Detect performance problems from observability.
+      # Default Value: 5 (5%)
+      overhead_warning_threshold_percent = 5
+
+
 # ==============================================================================
 # [context_management] - Advanced Prompt Control
 # ==============================================================================
