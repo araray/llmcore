@@ -28,11 +28,11 @@ ARG SANDBOX_GID=1000
 
 # Labels for image metadata
 LABEL org.llmcore.image.name="llmcore-sandbox-base" \
-      org.llmcore.image.version="1.0.0" \
-      org.llmcore.image.tier="base" \
-      org.llmcore.image.description="Security-hardened Ubuntu base image for LLMCore agent sandboxes" \
-      org.llmcore.image.capabilities="shell" \
-      org.opencontainers.image.source="https://github.com/llmcore/llmcore"
+    org.llmcore.image.version="1.0.0" \
+    org.llmcore.image.tier="base" \
+    org.llmcore.image.description="Security-hardened Ubuntu base image for LLMCore agent sandboxes" \
+    org.llmcore.image.capabilities="shell" \
+    org.opencontainers.image.source="https://github.com/llmcore/llmcore"
 
 # Environment configuration
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -48,22 +48,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Note: We intentionally keep this minimal for the base image
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg \
-        bash \
-        coreutils \
-        findutils \
-        grep \
-        gawk \
-        sed \
-        tar \
-        gzip \
-        bzip2 \
-        xz-utils \
-        file \
-        less \
-        && \
+    ca-certificates \
+    curl \
+    gnupg \
+    bash \
+    coreutils \
+    findutils \
+    grep \
+    gawk \
+    sed \
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    file \
+    less \
+    && \
     # Security: Remove SUID/SGID bits
     find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true && \
     # Clean up
@@ -73,14 +73,17 @@ RUN apt-get update && apt-get upgrade -y && \
     rm -f /usr/bin/chfn /usr/bin/chsh /usr/bin/newgrp /usr/bin/write 2>/dev/null || true
 
 # Create non-root user
-RUN groupadd -g ${SANDBOX_GID} ${SANDBOX_USER} && \
+# Ubuntu 24.04 has 'ubuntu' user with UID/GID 1000 - remove it first
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    groupdel ubuntu 2>/dev/null || true && \
+    groupadd -g ${SANDBOX_GID} ${SANDBOX_USER} && \
     useradd -u ${SANDBOX_UID} -g ${SANDBOX_GID} -m -s /bin/bash ${SANDBOX_USER}
 
 # Create standard directories
 RUN mkdir -p /home/${SANDBOX_USER}/.local/bin \
-             /home/${SANDBOX_USER}/.config \
-             /home/${SANDBOX_USER}/work \
-             /etc/llmcore && \
+    /home/${SANDBOX_USER}/.config \
+    /home/${SANDBOX_USER}/work \
+    /etc/llmcore && \
     chown -R ${SANDBOX_USER}:${SANDBOX_USER} /home/${SANDBOX_USER}
 
 # Copy capabilities manifest (will be used by the selector)
