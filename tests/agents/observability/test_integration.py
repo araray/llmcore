@@ -27,6 +27,31 @@ import pytest
 # IMPORTS
 # =============================================================================
 
+# Check if AgentManager is available (conftest creates dummy packages that don't include it)
+try:
+    from llmcore.agents import AgentManager
+    AGENT_MANAGER_AVAILABLE = True
+except ImportError:
+    AGENT_MANAGER_AVAILABLE = False
+
+# Check if EnhancedAgentManager is available
+try:
+    from llmcore.agents import EnhancedAgentManager
+    ENHANCED_AGENT_MANAGER_AVAILABLE = True
+except ImportError:
+    ENHANCED_AGENT_MANAGER_AVAILABLE = False
+
+# Skip marker for tests that require AgentManager
+requires_agent_manager = pytest.mark.skipif(
+    not AGENT_MANAGER_AVAILABLE,
+    reason="AgentManager not available in isolated test environment"
+)
+
+requires_enhanced_agent_manager = pytest.mark.skipif(
+    not ENHANCED_AGENT_MANAGER_AVAILABLE,
+    reason="EnhancedAgentManager not available in isolated test environment"
+)
+
 
 class TestObservabilityFactoryUnit:
     """Unit tests for observability factory functions."""
@@ -171,6 +196,7 @@ class TestAgentManagerObservabilityIntegration:
         manager.add_episode = AsyncMock()
         return manager
 
+    @requires_agent_manager
     def test_agent_manager_init_without_observability(
         self,
         mock_provider_manager,
@@ -190,6 +216,7 @@ class TestAgentManagerObservabilityIntegration:
         assert manager.observability is None
         assert manager.event_logger is None
 
+    @requires_agent_manager
     def test_agent_manager_init_with_observability(
         self,
         mock_provider_manager,
@@ -217,6 +244,7 @@ class TestAgentManagerObservabilityIntegration:
         assert manager.observability is obs
         assert manager.event_logger is not None
 
+    @requires_agent_manager
     @pytest.mark.asyncio
     async def test_agent_manager_cleanup_with_observability(
         self,
@@ -421,10 +449,13 @@ class TestObservabilityMetricsCollection:
         metrics.record_iteration(duration_ms=150.0)
         metrics.record_iteration(duration_ms=200.0)
 
-        assert len(metrics.iterations) == 2
+        # Use total_iterations property (not iterations attribute)
+        assert metrics.total_iterations == 2
 
     def test_metrics_collector_complete(self, metrics_collector):
         """Test completing execution metrics."""
+        from llmcore.agents.observability import ExecutionStatus
+
         metrics = metrics_collector.start_execution(
             execution_id="exec-123",
             goal="Test goal",
@@ -433,7 +464,8 @@ class TestObservabilityMetricsCollection:
         metrics.record_iteration(duration_ms=150.0)
         metrics.complete(success=True)
 
-        assert metrics.completed is True
+        # Check status enum, not completed boolean
+        assert metrics.status == ExecutionStatus.SUCCESS
 
     def test_metrics_collector_summary(self, metrics_collector):
         """Test getting metrics summary."""
@@ -444,12 +476,15 @@ class TestObservabilityMetricsCollection:
 
         metrics.record_iteration(duration_ms=150.0)
         metrics.record_iteration(duration_ms=200.0)
-        metrics.complete(success=True)
+
+        # end_execution moves from _active_executions to _executions
+        metrics_collector.end_execution("exec-123", success=True)
 
         summary = metrics_collector.get_summary()
 
         assert summary is not None
-        assert summary.total_executions >= 1
+        # get_summary returns a dict, not an object
+        assert summary["total_executions"] >= 1
 
 
 class TestObservabilityBackwardCompatibility:
@@ -492,6 +527,7 @@ class TestObservabilityBackwardCompatibility:
         manager.add_episode = AsyncMock()
         return manager
 
+    @requires_agent_manager
     def test_agent_manager_works_without_observability(
         self,
         mock_provider_manager,
@@ -511,6 +547,7 @@ class TestObservabilityBackwardCompatibility:
         assert manager is not None
         assert manager._observability is None
 
+    @requires_enhanced_agent_manager
     def test_enhanced_agent_manager_works_without_observability(
         self,
         mock_provider_manager,
@@ -623,7 +660,9 @@ class TestObservabilityReplay:
             replay = ExecutionReplay.from_file(log_path)
             executions = replay.list_executions()
 
-            assert "exec-001" in executions
+            # list_executions returns ExecutionInfo objects, not strings
+            exec_ids = [e.execution_id for e in executions]
+            assert "exec-001" in exec_ids
 
             result = replay.replay("exec-001")
 

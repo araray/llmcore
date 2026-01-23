@@ -206,7 +206,7 @@ def create_observability_from_config(
                 ]
 
             file_sink = FilteredSink(
-                sink=file_sink,
+                inner_sink=file_sink,
                 min_severity=min_sev,
                 categories=category_filter or None,
             )
