@@ -1,0 +1,21 @@
+{
+  "name": "llmcore-sandbox-research",
+  "version": "1.0.0",
+  "tier": "task",
+  "description": "Research environment for LLMCore agent sandboxes",
+  "capabilities": ["python", "research", "network", "pdf_tools", "pandoc", "data_analysis", "visualization", "shell", "git"],
+  "tools": ["python3", "pip", "pandoc", "pdftotext", "wkhtmltopdf", "git", "curl"],
+  "parent_image": "llmcore-sandbox-python:1.0.0",
+  "default_access_mode": "full",
+  "resource_limits": {
+    "memory_mb": 4096,
+    "cpu_cores": 4,
+    "timeout_seconds": 1800,
+    "max_processes": 200
+  },
+  "environment": {
+    "LLMCORE_SANDBOX": "1",
+    "LLMCORE_IMAGE_TIER": "task",
+    "PYTHONUNBUFFERED": "1"
+  }
+}

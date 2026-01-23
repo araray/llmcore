@@ -1,0 +1,20 @@
+{
+  "name": "llmcore-sandbox-shell",
+  "version": "1.0.0",
+  "tier": "specialized",
+  "description": "Shell scripting environment for LLMCore agent sandboxes",
+  "capabilities": ["shell", "jq", "curl"],
+  "tools": ["bash", "zsh", "jq", "yq", "curl", "grep", "sed", "awk", "rsync", "parallel", "tree", "zip"],
+  "parent_image": "llmcore-sandbox-base:1.0.0",
+  "default_access_mode": "restricted",
+  "resource_limits": {
+    "memory_mb": 512,
+    "cpu_cores": 1,
+    "timeout_seconds": 300,
+    "max_processes": 50
+  },
+  "environment": {
+    "LLMCORE_SANDBOX": "1",
+    "LLMCORE_IMAGE_TIER": "specialized"
+  }
+}

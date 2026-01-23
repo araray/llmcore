@@ -57,6 +57,19 @@ from .tools import (
 )
 from .vm_provider import VMSandboxProvider
 
+# Images submodule (Phase 6)
+from . import images
+from .images import (
+    ImageCapability,
+    ImageManifest,
+    ImageMetadata,
+    ImageRegistry,
+    ImageSelector,
+    ImageTier,
+    SelectionConfig,
+    SelectionResult,
+)
+
 __all__ = [
     "SandboxProvider",
     "SandboxConfig",
@@ -96,4 +109,14 @@ __all__ = [
     "get_state",
     "set_state",
     "get_sandbox_info",
+    # Images module (Phase 6)
+    "images",
+    "ImageCapability",
+    "ImageManifest",
+    "ImageMetadata",
+    "ImageRegistry",
+    "ImageSelector",
+    "ImageTier",
+    "SelectionConfig",
+    "SelectionResult",
 ]

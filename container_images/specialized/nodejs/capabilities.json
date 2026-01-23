@@ -1,0 +1,21 @@
+{
+  "name": "llmcore-sandbox-nodejs",
+  "version": "1.0.0",
+  "tier": "specialized",
+  "description": "Node.js development environment for LLMCore agent sandboxes",
+  "capabilities": ["nodejs", "shell", "git"],
+  "tools": ["node", "npm", "npx", "git", "bash", "curl"],
+  "parent_image": "llmcore-sandbox-base:1.0.0",
+  "default_access_mode": "restricted",
+  "resource_limits": {
+    "memory_mb": 1024,
+    "cpu_cores": 2,
+    "timeout_seconds": 600,
+    "max_processes": 100
+  },
+  "environment": {
+    "LLMCORE_SANDBOX": "1",
+    "LLMCORE_IMAGE_TIER": "specialized",
+    "NODE_ENV": "development"
+  }
+}

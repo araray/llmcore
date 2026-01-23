@@ -1,0 +1,20 @@
+{
+  "name": "llmcore-sandbox-base",
+  "version": "1.0.0",
+  "tier": "base",
+  "description": "Minimal security-hardened Ubuntu base image for LLMCore agent sandboxes",
+  "capabilities": ["shell"],
+  "tools": ["bash", "curl", "grep", "sed", "awk", "tar", "gzip"],
+  "parent_image": null,
+  "default_access_mode": "restricted",
+  "resource_limits": {
+    "memory_mb": 512,
+    "cpu_cores": 1,
+    "timeout_seconds": 300,
+    "max_processes": 50
+  },
+  "environment": {
+    "LLMCORE_SANDBOX": "1",
+    "LLMCORE_IMAGE_TIER": "base"
+  }
+}

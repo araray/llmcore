@@ -1,0 +1,22 @@
+{
+  "name": "llmcore-sandbox-websearch",
+  "version": "1.0.0",
+  "tier": "task",
+  "description": "Web search and scraping environment for LLMCore agent sandboxes",
+  "capabilities": ["python", "websearch", "browser", "network", "shell", "git"],
+  "tools": ["python3", "pip", "playwright", "chromium", "curl", "git"],
+  "parent_image": "llmcore-sandbox-python:1.0.0",
+  "default_access_mode": "full",
+  "resource_limits": {
+    "memory_mb": 2048,
+    "cpu_cores": 2,
+    "timeout_seconds": 900,
+    "max_processes": 150
+  },
+  "environment": {
+    "LLMCORE_SANDBOX": "1",
+    "LLMCORE_IMAGE_TIER": "task",
+    "PYTHONUNBUFFERED": "1",
+    "PLAYWRIGHT_BROWSERS_PATH": "/home/sandbox/.cache/ms-playwright"
+  }
+}
