@@ -50,18 +50,20 @@ When you need to perform an action, use XML activity request format:
 - **file_search**: Search for files matching a pattern
   - Parameters: pattern (required), directory (optional)
 
-- **execute_python**: Execute Python code
+- **python_exec**: Execute Python code
   - Parameters: code (required)
+  - Example: <activity_request><activity>python_exec</activity><parameters><code>print(2 + 2)</code></parameters><reasoning>Calculate arithmetic</reasoning></activity_request>
 
-- **execute_shell**: Execute a shell command
+- **bash_exec**: Execute a shell/bash command
   - Parameters: command (required)
 
-- **semantic_search**: Search the codebase semantically
+- **web_search**: Search the web
   - Parameters: query (required)
 
 - **final_answer**: Complete the task with a final answer
-  - Parameters: result (required)
+  - Parameters: r (required) - the result/answer
   - Use when task is complete
+  - Example: <activity_request><activity>final_answer</activity><parameters><r>4</r></parameters><reasoning>Task complete</reasoning></activity_request>
 
 ## Important Guidelines
 
