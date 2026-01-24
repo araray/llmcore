@@ -35,8 +35,8 @@ from .cognitive import (
     EnhancedAgentState,
 )
 from .cognitive.goal_classifier import (
-    GoalClassifier,
     GoalClassification,
+    GoalClassifier,
     GoalComplexity,
 )
 from .learning.fast_path import FastPathExecutor
@@ -45,9 +45,9 @@ from .persona import (
     PersonaManager,
 )
 from .routing.capability_checker import (
+    Capability,
     CapabilityChecker,
     CompatibilityResult,
-    Capability,
 )
 
 if TYPE_CHECKING:
@@ -151,9 +151,23 @@ class SingleAgentMode:
         self.tracer = tracer
 
         # Load agents config (G3)
+        # If not provided, try to load from environment/defaults
         if agents_config is None:
-            from ..config.agents_config import AgentsConfig
-            self._agents_config = AgentsConfig()
+            import os
+
+            from ..config.agents_config import load_agents_config
+
+            # Check if config file path is set via environment
+            config_path = os.environ.get("LLMCORE_CONFIG_PATH")
+            if config_path:
+                from pathlib import Path
+
+                self._agents_config = load_agents_config(config_path=Path(config_path))
+                logger.debug(f"Loaded agents config from {config_path}")
+            else:
+                # Will use defaults + environment variable overrides
+                self._agents_config = load_agents_config()
+                logger.debug("Loaded agents config with defaults + env overrides")
         else:
             self._agents_config = agents_config
 
@@ -248,10 +262,7 @@ class SingleAgentMode:
             classification: Optional[GoalClassification] = None
             effective_max_iterations = max_iterations
 
-            if (
-                not skip_goal_classification
-                and self._agents_config.goals.classifier_enabled
-            ):
+            if not skip_goal_classification and self._agents_config.goals.classifier_enabled:
                 try:
                     classification = self.goal_classifier.classify(goal)
 
@@ -346,9 +357,7 @@ class SingleAgentMode:
                         )
                         use_activity_execution = True
                 else:
-                    logger.info(
-                        f"Capability check passed for {actual_provider}/{actual_model}"
-                    )
+                    logger.info(f"Capability check passed for {actual_provider}/{actual_model}")
 
             # CRITICAL FIX: Ensure tools are loaded before running
             # The ToolManager may have been initialized with empty tool lists.
@@ -394,7 +403,6 @@ class SingleAgentMode:
                     f"complexity={classification.complexity.value if classification else 'unknown'}"
                 )
 
-
                 # Run cognitive cycle until complete
                 final_answer = await self.cognitive_cycle.run_until_complete(
                     agent_state=agent_state,
@@ -434,7 +442,9 @@ class SingleAgentMode:
                             "agent.iterations": agent_state.iteration_count,
                             "agent.success": result.success,
                             "agent.tokens": agent_state.total_tokens_used,
-                            "agent.complexity": classification.complexity.value if classification else "unknown",
+                            "agent.complexity": classification.complexity.value
+                            if classification
+                            else "unknown",
                             "agent.fast_path": False,
                         },
                     )
@@ -570,9 +580,7 @@ class SingleAgentMode:
                 fast_path=True,
             )
 
-    def _get_complexity_iterations(
-        self, complexity: GoalComplexity, default: int
-    ) -> int:
+    def _get_complexity_iterations(self, complexity: GoalComplexity, default: int) -> int:
         """
         Get max iterations based on goal complexity.
 
@@ -607,10 +615,7 @@ class SingleAgentMode:
         issues = "\n".join(f"  - {issue}" for issue in result.issues)
         msg = f"Model '{result.model}' does not support required capabilities:\n{issues}"
 
-        if (
-            self._agents_config.capability_check.suggest_alternatives
-            and result.suggestions
-        ):
+        if self._agents_config.capability_check.suggest_alternatives and result.suggestions:
             suggestions = ", ".join(result.suggestions[:3])
             msg += f"\n\nSuggested alternatives: {suggestions}"
 

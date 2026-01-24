@@ -27,15 +27,15 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from ..models import ConfidenceLevel, EnhancedAgentState, ThinkInput, ThinkOutput
 
 if TYPE_CHECKING:
+    from ....config.agents_config import AgentsConfig
     from ....memory.manager import MemoryManager
     from ....models import Message, Role, ToolCall
     from ....providers.manager import ProviderManager
-    from ....config.agents_config import AgentsConfig
     from ...tools import ToolManager
     from ..models import EnhancedAgentState
 
-from ...activities.prompts import generate_activity_prompt, ACTIVITY_SYSTEM_PROMPT
 from ...activities.parser import ActivityRequestParser
+from ...activities.prompts import ACTIVITY_SYSTEM_PROMPT, generate_activity_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,7 @@ async def think_phase(
     # Load agents config if not provided (G3)
     if agents_config is None:
         from ....config.agents_config import AgentsConfig
+
         agents_config = AgentsConfig()
 
     with create_span(tracer, "cognitive.think") as span:
@@ -180,14 +181,17 @@ async def think_phase(
                 error_msg = str(tool_error).lower()
 
                 # Check if this is a tool support error (G3 Phase 6)
-                is_tool_error = any(phrase in error_msg for phrase in [
-                    "does not support tools",
-                    "does not support function",
-                    "tools are not supported",
-                    "function calling not supported",
-                    "tool_calls",
-                    "tool use",
-                ])
+                is_tool_error = any(
+                    phrase in error_msg
+                    for phrase in [
+                        "does not support tools",
+                        "does not support function",
+                        "tools are not supported",
+                        "function calling not supported",
+                        "tool_calls",
+                        "tool use",
+                    ]
+                )
 
                 if is_tool_error and agents_config.activities.enabled:
                     logger.info(
@@ -374,6 +378,7 @@ async def _think_phase_with_activities(
     if parse_result.has_requests and not is_final:
         first_activity = parse_result.requests[0]
         from ....models import ToolCall
+
         proposed_action = ToolCall(
             id=f"activity_{first_activity.activity}",
             name=f"activity:{first_activity.activity}",
@@ -394,9 +399,7 @@ async def _think_phase_with_activities(
         )
 
     logger.info(
-        f"Activity fallback complete: "
-        f"activities={len(parse_result.requests)}, "
-        f"is_final={is_final}"
+        f"Activity fallback complete: activities={len(parse_result.requests)}, is_final={is_final}"
     )
 
     return ThinkOutput(

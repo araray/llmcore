@@ -31,18 +31,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import LLMCoreError
 from ..memory.manager import MemoryManager
-from ..models import AgentTask, AgentState
+from ..models import AgentState, AgentTask
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import cognitive_cycle
+
+# Observability integration imports (Phase 8)
+from .observability_factory import ObservabilityComponents, create_observability_from_config
 
 # Sandbox integration imports
 from .sandbox import SandboxError
 from .sandbox_integration import SandboxIntegration, register_sandbox_tools
 from .tools import ToolManager
-
-# Observability integration imports (Phase 8)
-from .observability_factory import ObservabilityComponents, create_observability_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -398,7 +398,7 @@ class AgentManager:
                     try:
                         await self._observability.logger.log_lifecycle_start(
                             goal=task.goal,
-                            goal_complexity=getattr(task, 'complexity', None),
+                            goal_complexity=getattr(task, "complexity", None),
                         )
                     except Exception as e:
                         logger.debug(f"Failed to log lifecycle start: {e}")
@@ -489,6 +489,7 @@ class AgentManager:
                         if self._observability and self._observability.logger:
                             try:
                                 from .observability import HITLEventType
+
                                 await self._observability.logger.log_hitl(
                                     event_type=HITLEventType.APPROVAL_REQUESTED,
                                     request_id=f"req-{session_id}-{iteration}",
@@ -511,7 +512,11 @@ class AgentManager:
                     act_duration = (time.monotonic() - act_start) * 1000
 
                     # === Phase 8: Log activity ===
-                    if self._observability and self._observability.logger and agent_state.pending_tool_call:
+                    if (
+                        self._observability
+                        and self._observability.logger
+                        and agent_state.pending_tool_call
+                    ):
                         try:
                             success = not tool_result.content.startswith("ERROR:")
                             await self._observability.logger.log_activity(
@@ -557,7 +562,9 @@ class AgentManager:
                             await self._observability.logger.log_cognitive_phase(
                                 phase="reflect",
                                 input_summary=f"Tool result: {tool_result.content[:100]}",
-                                output_summary=agent_state.scratchpad[:200] if agent_state.scratchpad else "Reflected",
+                                output_summary=agent_state.scratchpad[:200]
+                                if agent_state.scratchpad
+                                else "Reflected",
                                 duration_ms=reflect_duration,
                             )
                         except Exception as e:
@@ -718,6 +725,7 @@ class EnhancedAgentManager(AgentManager):
         tracer: Optional[Any] = None,
         default_mode: AgentMode = AgentMode.SINGLE,
         observability: Optional[ObservabilityComponents] = None,
+        agents_config: Optional[Any] = None,  # G3: AgentsConfig for capability/activity settings
     ):
         """
         Initialize the enhanced agent manager.
@@ -747,6 +755,9 @@ class EnhancedAgentManager(AgentManager):
         if tracer is not None:
             self._tracer = tracer
 
+        # G3: Store agents_config (load from defaults if not provided)
+        self._agents_config = agents_config
+
         # Initialize Darwin Layer 2 components
         try:
             from .memory import CognitiveMemoryIntegrator
@@ -764,6 +775,7 @@ class EnhancedAgentManager(AgentManager):
                 tool_manager=self._tool_manager,
                 prompt_registry=prompt_registry,
                 tracer=self._tracer,
+                agents_config=self._agents_config,  # G3: Pass config for capability/activity settings
             )
 
             logger.info(f"EnhancedAgentManager initialized (default_mode={default_mode.value})")
@@ -846,7 +858,7 @@ class EnhancedAgentManager(AgentManager):
 
         elif execution_mode == AgentMode.LEGACY:
             # Use original AgentManager cognitive loop
-            from ..models import AgentTask, AgentState
+            from ..models import AgentState, AgentTask
 
             agent_state = AgentState(goal=goal)
             task = AgentTask(goal=goal, context=context or "", agent_state=agent_state)
