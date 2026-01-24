@@ -20,7 +20,7 @@ import pytest
 # Add parent directory to path to import directly
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "llmcore" / "config"))
 
-from agents_config import (
+from .agents_config import (
     ActivitiesConfig,
     AgentsConfig,
     CapabilityCheckConfig,
