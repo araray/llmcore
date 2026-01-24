@@ -47,8 +47,14 @@ if TYPE_CHECKING:
     from ...memory.manager import MemoryManager
     from ...providers.manager import ProviderManager
     from ...storage.manager import StorageManager
+    from ...config.agents_config import AgentsConfig
     from ..sandbox import SandboxProvider
     from ..tools import ToolManager
+
+from ...resilience.circuit_breaker import (
+    AgentCircuitBreaker,
+    TripReason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -387,6 +393,7 @@ class CognitiveCycle:
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
         skip_validation: bool = False,
+        agents_config: Optional["AgentsConfig"] = None,
     ) -> str:
         """
         Run cognitive iterations until task is complete or max iterations reached.
@@ -399,6 +406,7 @@ class CognitiveCycle:
             provider_name: Optional provider override
             model_name: Optional model override
             skip_validation: If True, auto-approve all actions (bypass VALIDATE phase)
+            agents_config: Optional agents configuration (G3)
 
         Returns:
             Final answer or status message
@@ -412,13 +420,39 @@ class CognitiveCycle:
             ... )
             >>> print(result)
         """
+        # =================================================================
+        # G3 Phase 5: Load Configuration and Initialize Circuit Breaker
+        # =================================================================
+        if agents_config is None:
+            from ...config.agents_config import AgentsConfig
+            agents_config = AgentsConfig()
+
+        cb_config = agents_config.circuit_breaker
+
+        # Initialize circuit breaker (G3 Phase 5)
+        circuit_breaker: Optional[AgentCircuitBreaker] = None
+        if cb_config.enabled:
+            circuit_breaker = AgentCircuitBreaker(
+                max_iterations=min(max_iterations, cb_config.max_iterations),
+                max_same_errors=cb_config.max_same_errors,
+                max_execution_time_seconds=cb_config.max_execution_time_seconds,
+                max_total_cost=cb_config.max_total_cost,
+                progress_stall_threshold=cb_config.progress_stall_threshold,
+                progress_stall_tolerance=cb_config.progress_stall_tolerance,
+            )
+            circuit_breaker.start()
+
         logger.info(
-            f"Starting cognitive cycle: max_iterations={max_iterations}, skip_validation={skip_validation}"
+            f"Starting cognitive cycle: max_iterations={max_iterations}, "
+            f"skip_validation={skip_validation}, "
+            f"circuit_breaker={'enabled' if circuit_breaker else 'disabled'}"
         )
 
         actual_iterations = 0
         stopped_early = False
         stop_reason = None
+        last_error: Optional[str] = None
+        accumulated_cost = 0.0
 
         for iteration_num in range(max_iterations):
             # Check if already finished
@@ -437,10 +471,45 @@ class CognitiveCycle:
                     skip_validation=skip_validation,
                 )
                 actual_iterations = iteration_num + 1
+                last_error = None  # Clear error on success
+
+                # Track cost if available
+                if hasattr(iteration, 'total_cost') and iteration.total_cost:
+                    accumulated_cost += iteration.total_cost
 
                 # Accumulate tokens from think phase if available
                 if iteration.think_output and iteration.think_output.reasoning_tokens:
                     iteration.total_tokens_used += iteration.think_output.reasoning_tokens
+
+                # =================================================================
+                # G3 Phase 5: Circuit Breaker Check After Successful Iteration
+                # =================================================================
+                if circuit_breaker is not None:
+                    # Estimate progress (0.0 to 1.0)
+                    progress = getattr(agent_state, 'progress_estimate', 0.0)
+                    if progress == 0.0:
+                        # Fallback: estimate based on iterations
+                        progress = actual_iterations / max_iterations
+
+                    cb_result = circuit_breaker.check(
+                        iteration=actual_iterations,
+                        progress=progress,
+                        error=None,
+                        cost=accumulated_cost,
+                    )
+
+                    if cb_result.tripped:
+                        logger.warning(
+                            f"Circuit breaker tripped: {cb_result.reason.value} - "
+                            f"{cb_result.message}"
+                        )
+                        return (
+                            f"Execution stopped by circuit breaker.\n"
+                            f"Reason: {cb_result.reason.value}\n"
+                            f"Details: {cb_result.message}\n"
+                            f"Iterations completed: {actual_iterations}\n"
+                            f"Progress: {progress:.1%}"
+                        )
 
                 # Check if we should stop
                 if iteration.update_output and not iteration.update_output.should_continue:
@@ -454,8 +523,40 @@ class CognitiveCycle:
                     break
 
             except Exception as e:
-                logger.error(f"Iteration failed: {e}")
-                return f"Task failed: {str(e)}"
+                logger.error(f"Iteration {iteration_num + 1} failed: {e}")
+                last_error = str(e)
+                actual_iterations = iteration_num + 1
+
+                # =================================================================
+                # G3 Phase 5: Circuit Breaker Check After Error
+                # =================================================================
+                if circuit_breaker is not None:
+                    progress = getattr(agent_state, 'progress_estimate', 0.0)
+
+                    cb_result = circuit_breaker.check(
+                        iteration=actual_iterations,
+                        progress=progress,
+                        error=last_error,
+                        cost=accumulated_cost,
+                    )
+
+                    if cb_result.tripped:
+                        logger.warning(
+                            f"Circuit breaker tripped on error: {cb_result.reason.value} - "
+                            f"{cb_result.message}"
+                        )
+                        return (
+                            f"Execution stopped by circuit breaker.\n"
+                            f"Reason: {cb_result.reason.value}\n"
+                            f"Details: {cb_result.message}\n"
+                            f"Last error: {last_error[:200] if last_error else 'None'}\n"
+                            f"Iterations completed: {actual_iterations}"
+                        )
+
+                # If circuit breaker hasn't tripped, the error is fatal
+                # (unlike the old behavior which silently returned)
+                if circuit_breaker is None:
+                    return f"Task failed: {str(e)}"
 
         # Check if task completed during the last iteration
         if agent_state.is_finished:

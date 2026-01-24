@@ -44,6 +44,11 @@ from .persona import (
     AgentPersona,
     PersonaManager,
 )
+from .routing.capability_checker import (
+    CapabilityChecker,
+    CompatibilityResult,
+    Capability,
+)
 
 if TYPE_CHECKING:
     from ..config.agents_config import AgentsConfig
@@ -162,6 +167,9 @@ class SingleAgentMode:
         # Use the default provider for fast-path calls
         default_provider = provider_manager.get_provider()
         self.fast_path_executor = FastPathExecutor(llm_provider=default_provider)
+
+        # Initialize capability checker (G3 Phase 4)
+        self.capability_checker = CapabilityChecker()
 
         # Initialize cognitive cycle
         self.cognitive_cycle = CognitiveCycle(
@@ -286,6 +294,58 @@ class SingleAgentMode:
             # Normal Execution Path (non-trivial goals)
             # =================================================================
 
+            # =================================================================
+            # G3 Phase 4: Capability Pre-Check
+            # =================================================================
+            if self._agents_config.capability_check.enabled:
+                # Determine if goal requires tools
+                requires_tools = True  # Default: assume tools needed
+                if classification:
+                    requires_tools = classification.requires_tools
+                
+                # Get the target model
+                actual_provider = provider_name or self.provider_manager.get_default_provider_name()
+                actual_model = model_name or self.provider_manager.get_default_model()
+                
+                # Check compatibility
+                compat_result = self.capability_checker.check_compatibility(
+                    model=actual_model,
+                    requires_tools=requires_tools,
+                    requires_vision=False,  # Could be determined from goal analysis
+                )
+                
+                if not compat_result.compatible:
+                    if self._agents_config.capability_check.strict_mode:
+                        # Fail fast with helpful message
+                        error_msg = self._format_capability_error(compat_result)
+                        logger.error(f"Model capability check failed: {error_msg}")
+                        
+                        end_time = datetime.utcnow()
+                        duration = (end_time - start_time).total_seconds()
+                        
+                        return AgentResult(
+                            goal=goal,
+                            final_answer=error_msg,
+                            success=False,
+                            iteration_count=0,
+                            total_tokens=0,
+                            total_time_seconds=duration,
+                            session_id=session_id,
+                            error=error_msg,
+                            classification=classification,
+                        )
+                    else:
+                        # Warn but continue (may use activity fallback later)
+                        logger.warning(
+                            f"Model capability warning for {actual_model}: "
+                            f"{[str(i) for i in compat_result.issues]}. "
+                            f"Will attempt activity-based execution as fallback."
+                        )
+                else:
+                    logger.info(
+                        f"Capability check passed for {actual_provider}/{actual_model}"
+                    )
+
             # CRITICAL FIX: Ensure tools are loaded before running
             # The ToolManager may have been initialized with empty tool lists.
             # If no tools are loaded, load the default built-in tools.
@@ -335,6 +395,7 @@ class SingleAgentMode:
                     provider_name=provider_name,
                     model_name=model_name,
                     skip_validation=skip_validation,
+                    agents_config=self._agents_config,
                 )
 
                 end_time = datetime.utcnow()
@@ -523,6 +584,28 @@ class SingleAgentMode:
         }
 
         return complexity_map.get(complexity, default)
+
+    def _format_capability_error(self, result: CompatibilityResult) -> str:
+        """
+        Format capability check failure into user-friendly message.
+
+        Args:
+            result: CompatibilityResult from capability checker
+
+        Returns:
+            Formatted error message with suggestions
+        """
+        issues = "\n".join(f"  - {issue}" for issue in result.issues)
+        msg = f"Model '{result.model}' does not support required capabilities:\n{issues}"
+
+        if (
+            self._agents_config.capability_check.suggest_alternatives
+            and result.suggestions
+        ):
+            suggestions = ", ".join(result.suggestions[:3])
+            msg += f"\n\nSuggested alternatives: {suggestions}"
+
+        return msg
 
     async def run_streaming(
         self,

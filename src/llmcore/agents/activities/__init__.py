@@ -65,6 +65,13 @@ from .parser import (
     parse_activity_requests,
 )
 
+# Prompts (G3 Phase 6)
+from .prompts import (
+    ACTIVITY_SYSTEM_PROMPT,
+    generate_activity_prompt,
+    get_activity_system_prompt,
+)
+
 # Registry
 from .registry import (
     ActivityHandler,
@@ -124,6 +131,10 @@ __all__ = [
     "ActivityRequestParser",
     "parse_activity_requests",
     "has_activity_request",
+    # Prompts (G3 Phase 6)
+    "ACTIVITY_SYSTEM_PROMPT",
+    "generate_activity_prompt",
+    "get_activity_system_prompt",
     # Registry
     "ActivityRegistry",
     "RegisteredActivity",

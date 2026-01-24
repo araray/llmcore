@@ -30,7 +30,12 @@ if TYPE_CHECKING:
     from ....memory.manager import MemoryManager
     from ....models import Message, Role, ToolCall
     from ....providers.manager import ProviderManager
+    from ....config.agents_config import AgentsConfig
     from ...tools import ToolManager
+    from ..models import EnhancedAgentState
+
+from ...activities.prompts import generate_activity_prompt, ACTIVITY_SYSTEM_PROMPT
+from ...activities.parser import ActivityRequestParser
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +55,7 @@ async def think_phase(
     tracer: Optional[Any] = None,
     provider_name: Optional[str] = None,
     model_name: Optional[str] = None,
+    agents_config: Optional["AgentsConfig"] = None,
 ) -> ThinkOutput:
     """
     Execute the THINK phase of the cognitive cycle.
@@ -62,6 +68,9 @@ async def think_phase(
     5. Determine confidence level
     6. Record metrics
 
+    G3 Enhancement: If native tool calling fails, falls back to activity-based
+    execution for models without function calling support.
+
     Args:
         agent_state: Current enhanced agent state
         think_input: Input configuration for thinking
@@ -72,6 +81,7 @@ async def think_phase(
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
+        agents_config: Optional agents configuration (G3)
 
     Returns:
         ThinkOutput with reasoning and proposed action
@@ -96,6 +106,11 @@ async def think_phase(
     """
     from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
+
+    # Load agents config if not provided (G3)
+    if agents_config is None:
+        from ....config.agents_config import AgentsConfig
+        agents_config = AgentsConfig()
 
     with create_span(tracer, "cognitive.think") as span:
         try:
@@ -125,18 +140,64 @@ async def think_phase(
             # Convert Tool objects to provider-compatible format
             tools_param = tool_definitions if tool_definitions else None
 
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                tools=tools_param,
-                temperature=0.7,
-            )
+            # =================================================================
+            # G3 Phase 6: Try native tools first, fall back to activities
+            # =================================================================
+            use_activity_fallback = False
+            response = None
+            response_content = ""
 
-            # Extract response content
-            response_content = provider.extract_response_content(response)
+            try:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tools=tools_param,
+                    temperature=0.7,
+                )
+                # Extract response content
+                response_content = provider.extract_response_content(response)
 
-            # 4. Parse response
+            except Exception as tool_error:
+                error_msg = str(tool_error).lower()
+                
+                # Check if this is a tool support error (G3 Phase 6)
+                is_tool_error = any(phrase in error_msg for phrase in [
+                    "does not support tools",
+                    "does not support function",
+                    "tools are not supported",
+                    "function calling not supported",
+                    "tool_calls",
+                    "tool use",
+                ])
+
+                if is_tool_error and agents_config.activities.enabled:
+                    logger.info(
+                        f"Native tools failed for {target_model}, "
+                        f"attempting activity fallback: {tool_error}"
+                    )
+                    use_activity_fallback = True
+                else:
+                    # Re-raise if not a tool support issue or activities disabled
+                    raise
+
+            # =================================================================
+            # G3 Phase 6: Activity Fallback Execution
+            # =================================================================
+            if use_activity_fallback:
+                output = await _think_phase_with_activities(
+                    agent_state=agent_state,
+                    think_input=think_input,
+                    provider=provider,
+                    target_model=target_model,
+                    prompt_registry=prompt_registry,
+                    agents_config=agents_config,
+                    tracer=tracer,
+                    span=span,
+                )
+                return output
+
+            # 4. Parse response (normal path)
             output = _parse_think_response(
                 response_text=response_content,
                 response_dict=response,
@@ -179,6 +240,7 @@ async def think_phase(
                         "think.confidence": output.confidence.value,
                         "think.provider": provider.get_name(),
                         "think.model": target_model,
+                        "think.activity_fallback": False,
                     },
                 )
 
@@ -202,6 +264,131 @@ async def think_phase(
                 is_final_answer=False,
                 confidence=ConfidenceLevel.LOW,
             )
+
+
+# =============================================================================
+# ACTIVITY FALLBACK (G3 Phase 6)
+# =============================================================================
+
+
+async def _think_phase_with_activities(
+    agent_state: EnhancedAgentState,
+    think_input: ThinkInput,
+    provider: Any,
+    target_model: str,
+    prompt_registry: Optional[Any],
+    agents_config: "AgentsConfig",
+    tracer: Optional[Any],
+    span: Optional[Any],
+) -> ThinkOutput:
+    """
+    Fallback think phase using activity system instead of native tools.
+
+    This prompts the model to output activities in XML format instead of
+    using native function calling.
+
+    Args:
+        agent_state: Current agent state
+        think_input: Think phase input
+        provider: LLM provider
+        target_model: Target model name
+        prompt_registry: Optional prompt registry
+        agents_config: Agents configuration
+        tracer: Optional tracer
+        span: Optional tracing span
+
+    Returns:
+        ThinkOutput with activity-based action
+    """
+    from ....models import Message, Role
+    from ....tracing import add_span_attributes
+
+    logger.info("Using activity fallback for think phase")
+
+    # Generate activity-aware prompt
+    activity_prompt = generate_activity_prompt(
+        goal=think_input.goal,
+        current_step=think_input.current_step,
+        history=think_input.history,
+        context=think_input.context,
+    )
+
+    # Build messages with activity system prompt
+    messages = [
+        Message(
+            role=Role.SYSTEM,
+            content=ACTIVITY_SYSTEM_PROMPT,
+        ),
+        Message(role=Role.USER, content=activity_prompt),
+    ]
+
+    # Call LLM without tools
+    response = await provider.chat_completion(
+        context=messages,
+        model=target_model,
+        stream=False,
+        temperature=0.7,
+        # No tools parameter - using activity system
+    )
+
+    response_content = provider.extract_response_content(response)
+
+    # Parse activities from response
+    parser = ActivityRequestParser()
+    parse_result = parser.parse(response_content)
+
+    # Store activity state in working memory for act_phase
+    agent_state.set_working_memory("using_activity_fallback", True)
+    agent_state.set_working_memory("pending_activities_text", response_content)
+    agent_state.set_working_memory("parsed_activity_requests", parse_result.requests)
+
+    # Determine output
+    is_final = parser.is_final_answer(response_content)
+    final_answer_text = None
+
+    if is_final:
+        final_answer_text = parser.extract_final_answer(response_content)
+        agent_state.is_finished = True
+        agent_state.final_answer = final_answer_text
+
+    # Create a pseudo-ToolCall for the first activity (for compatibility)
+    proposed_action = None
+    if parse_result.has_requests and not is_final:
+        first_activity = parse_result.requests[0]
+        from ....models import ToolCall
+        proposed_action = ToolCall(
+            id=f"activity_{first_activity.activity}",
+            name=f"activity:{first_activity.activity}",
+            arguments=first_activity.parameters,
+        )
+        agent_state.pending_tool_call = proposed_action
+
+    # Add tracing
+    if span:
+        add_span_attributes(
+            span,
+            {
+                "think.activity_fallback": True,
+                "think.activities_found": len(parse_result.requests),
+                "think.is_final": is_final,
+                "think.model": target_model,
+            },
+        )
+
+    logger.info(
+        f"Activity fallback complete: "
+        f"activities={len(parse_result.requests)}, "
+        f"is_final={is_final}"
+    )
+
+    return ThinkOutput(
+        thought=response_content[:500] if response_content else "Processing via activities...",
+        proposed_action=proposed_action,
+        is_final_answer=is_final,
+        final_answer=final_answer_text,
+        confidence=ConfidenceLevel.MEDIUM,
+        using_activity_fallback=True,
+    )
 
 
 # =============================================================================
