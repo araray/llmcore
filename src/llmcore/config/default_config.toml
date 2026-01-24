@@ -1168,3 +1168,278 @@ posthog = "ERROR"
         # Maximum number of runs to keep. 0 = no limit.
         # Default Value: 100
         max_runs = 100
+
+        # ==============================================================================
+        # [agents.goals] - Goal Classification (G3 Phase 3)
+        # ==============================================================================
+        # Configures how goals are classified by complexity to enable fast-path
+        # routing and appropriate iteration limits.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.goals]
+
+        # Enable goal complexity classification
+        # When enabled, goals are analyzed before execution to determine complexity.
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__GOALS__CLASSIFIER_ENABLED
+        classifier_enabled = true
+
+        # Use LLM for uncertain classifications
+        # Falls back to LLM when heuristic confidence is below threshold.
+        # Slower but more accurate for edge cases.
+        # Default Value: false
+        # Environment Variable: LLMCORE_AGENTS__GOALS__USE_LLM_FALLBACK
+        use_llm_fallback = false
+
+        # Confidence threshold for heuristic classification
+        # If heuristic confidence is below this, uses LLM fallback (if enabled).
+        # Default Value: 0.9
+        heuristic_confidence_threshold = 0.9
+
+        # Maximum iterations by complexity level
+        # These override max_iterations based on goal complexity.
+        trivial_max_iterations = 1
+        simple_max_iterations = 5
+        moderate_max_iterations = 10
+        complex_max_iterations = 15
+
+        # ==============================================================================
+        # [agents.fast_path] - Fast Path Execution (G3 Phase 3)
+        # ==============================================================================
+        # Configures the fast-path executor for trivial goals.
+        # Fast-path bypasses the full cognitive cycle for <5s response times.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.fast_path]
+
+        # Enable fast-path for trivial goals
+        # When enabled, trivial goals (like "hello") skip the full cognitive cycle.
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__FAST_PATH__ENABLED
+        enabled = true
+
+        # Use cached responses for identical/similar queries
+        # Default Value: true
+        cache_enabled = true
+
+        # Maximum cache entries
+        # Default Value: 100
+        cache_max_entries = 100
+
+        # Cache TTL in seconds (1 hour default)
+        # Default Value: 3600
+        cache_ttl_seconds = 3600
+
+        # Use template responses for known trivial patterns
+        # Default Value: true
+        templates_enabled = true
+
+        # Maximum response time before timeout (milliseconds)
+        # Default Value: 5000
+        max_response_time_ms = 5000
+
+        # Temperature for fast-path LLM calls
+        # Default Value: 0.7
+        temperature = 0.7
+
+        # Maximum tokens for fast-path responses
+        # Default Value: 500
+        max_tokens = 500
+
+        # Fall back to full cognitive cycle on timeout
+        # Default Value: true
+        fallback_on_timeout = true
+
+        # ==============================================================================
+        # [agents.circuit_breaker] - Circuit Breaker (G3 Phase 4)
+        # ==============================================================================
+        # Configures the circuit breaker to detect and interrupt failing agent loops.
+        # Prevents infinite loops, runaway costs, and repeated errors.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.circuit_breaker]
+
+        # Enable circuit breaker protection
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__CIRCUIT_BREAKER__ENABLED
+        enabled = true
+
+        # Maximum iterations (overrides agent max_iterations as hard limit)
+        # Default Value: 15
+        max_iterations = 15
+
+        # Trip after N identical consecutive errors
+        # Default Value: 3
+        # Environment Variable: LLMCORE_AGENTS__CIRCUIT_BREAKER__MAX_SAME_ERRORS
+        max_same_errors = 3
+
+        # Trip after N seconds of total execution time
+        # Default Value: 300 (5 minutes)
+        max_execution_time_seconds = 300
+
+        # Trip if total cost exceeds this amount (USD)
+        # Default Value: 1.0
+        max_total_cost = 1.0
+
+        # Trip if progress stalls for N iterations (no output change)
+        # Default Value: 5
+        progress_stall_threshold = 5
+
+        # Progress similarity tolerance (0.0 = exact match, 1.0 = any difference)
+        # Default Value: 0.01
+        progress_stall_tolerance = 0.01
+
+        # ==============================================================================
+        # [agents.activities] - Activity System (G3 Phase 6)
+        # ==============================================================================
+        # Configures the activity system for models without native tool/function calling.
+        # Activities use XML-based structured output as an alternative to function calls.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.activities]
+
+        # Enable activity system as fallback for models without native tool support
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__ACTIVITIES__ENABLED
+        enabled = true
+
+        # Fall back to native tools if activity parsing fails
+        # Default Value: true
+        fallback_to_native_tools = true
+
+        # Maximum activities per LLM output iteration
+        # Default Value: 10
+        max_per_iteration = 10
+
+        # Maximum total activities per session
+        # Default Value: 100
+        max_total = 100
+
+        # Default timeout for activity execution (seconds)
+        # Default Value: 60
+        default_timeout_seconds = 60
+
+        # Total timeout for activity loop (seconds)
+        # Default Value: 300
+        total_timeout_seconds = 300
+
+        # Stop processing activities on first error
+        # Default Value: false
+        stop_on_error = false
+
+        # Execute activities in parallel when possible
+        # Default Value: false
+        parallel_execution = false
+
+        # Maximum observation length in characters
+        # Default Value: 4000
+        max_observation_length = 4000
+
+        # ==============================================================================
+        # [agents.capability_check] - Pre-flight Capability Checking (G3 Phase 5)
+        # ==============================================================================
+        # Configures pre-flight capability checking before agent execution.
+        # Validates that the selected model supports required features (tools, etc.)
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.capability_check]
+
+        # Enable pre-flight capability checking
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__CAPABILITY_CHECK__ENABLED
+        enabled = true
+
+        # Consult model card registry for capability information
+        # Default Value: true
+        use_model_cards = true
+
+        # Use runtime query to verify capabilities (if model card not found)
+        # Default Value: true
+        use_runtime_query = true
+
+        # Strict mode: fail if model doesn't support required capabilities
+        # When false, falls back to activity system for non-tool models
+        # Default Value: false
+        # Environment Variable: LLMCORE_AGENTS__CAPABILITY_CHECK__STRICT_MODE
+        strict_mode = false
+
+        # Suggest alternative models if capability check fails
+        # Default Value: true
+        suggest_alternatives = true
+
+        # ==============================================================================
+        # [agents.hitl] - Human-in-the-Loop (G3 Phase 7)
+        # ==============================================================================
+        # Configures human-in-the-loop approval workflows for sensitive operations.
+        # Allows human review of agent actions before execution.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.hitl]
+
+        # Enable HITL approval system
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__HITL__ENABLED
+        enabled = true
+
+        # Global risk threshold for requiring approval
+        # Possible Values: "low", "medium", "high", "critical"
+        # Default Value: "medium"
+        # Environment Variable: LLMCORE_AGENTS__HITL__GLOBAL_RISK_THRESHOLD
+        global_risk_threshold = "medium"
+
+        # Default timeout for approval requests (seconds)
+        # Default Value: 300 (5 minutes)
+        default_timeout_seconds = 300
+
+        # Policy when approval times out
+        # Possible Values: "reject", "approve", "escalate"
+        # Default Value: "reject"
+        timeout_policy = "reject"
+
+        # Batch similar approval requests
+        # Default Value: true
+        batch_similar_requests = true
+
+        # Enable audit logging of all approval decisions
+        # Default Value: true
+        audit_logging_enabled = true
+
+        # Path for HITL audit log (JSONL format)
+        # Default Value: "~/.llmcore/logs/hitl_audit.jsonl"
+        audit_log_path = "~/.llmcore/logs/hitl_audit.jsonl"
+
+        # ==============================================================================
+        # [agents.routing] - Model Routing (G3 Phase 5)
+        # ==============================================================================
+        # Configures intelligent model routing based on task requirements.
+        # Routes goals to optimal models based on complexity, cost, and capability.
+        #
+        # Reference: LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 8
+
+        [agents.routing]
+
+        # Enable model routing
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__ROUTING__ENABLED
+        enabled = true
+
+        # Routing optimization strategy
+        # Possible Values: "cost_optimized", "quality_optimized", "latency_optimized"
+        # Default Value: "cost_optimized"
+        strategy = "cost_optimized"
+
+        # Enable fallback to alternative models on failure
+        # Default Value: true
+        fallback_enabled = true
+
+        # Model tiers for routing (fastest/cheapest to most capable)
+        [agents.routing.tiers]
+        fast = ["gpt-4o-mini", "claude-3-haiku-20240307", "gemma3:1b"]
+        balanced = ["gpt-4o", "claude-3-5-sonnet-20241022", "llama3.3:70b"]
+        capable = ["gpt-4-turbo", "claude-3-opus-20240229", "o1-preview"]
