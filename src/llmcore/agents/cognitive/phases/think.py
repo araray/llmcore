@@ -330,7 +330,7 @@ async def _think_phase_with_activities(
 
     # Get available activity names from registry
     registry = ActivityRegistry()
-    available_activities = registry.list_activities()
+    available_activities = registry.list_names()
 
     # Generate activity-aware prompt with available activities
     activity_prompt = generate_activity_prompt(
