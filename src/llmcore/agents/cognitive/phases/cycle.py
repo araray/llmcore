@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ..models import (
     ActInput,
@@ -136,6 +136,7 @@ class CognitiveCycle:
         provider_name: Optional[str] = None,
         model_name: Optional[str] = None,
         skip_validation: bool = False,
+        approval_callback: Optional[Callable[[str], bool]] = None,
     ) -> CycleIteration:
         """
         Run a single complete cognitive iteration.
@@ -175,6 +176,9 @@ class CognitiveCycle:
 
                 # Store skip_validation in working memory for activity fallback HITL
                 agent_state.set_working_memory("skip_validation", skip_validation)
+
+                # Store approval_callback in working memory for activity fallback HITL
+                agent_state.set_working_memory("approval_callback", approval_callback)
 
                 # ============================================================
                 # Phase 1: PERCEIVE
@@ -397,6 +401,7 @@ class CognitiveCycle:
         model_name: Optional[str] = None,
         skip_validation: bool = False,
         agents_config: Optional["AgentsConfig"] = None,
+        approval_callback: Optional[Callable[[str], bool]] = None,
     ) -> str:
         """
         Run cognitive iterations until task is complete or max iterations reached.
@@ -473,6 +478,7 @@ class CognitiveCycle:
                     provider_name=provider_name,
                     model_name=model_name,
                     skip_validation=skip_validation,
+                    approval_callback=approval_callback,
                 )
                 actual_iterations = iteration_num + 1
                 last_error = None  # Clear error on success

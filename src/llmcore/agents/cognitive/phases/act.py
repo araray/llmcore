@@ -280,11 +280,12 @@ async def _act_phase_with_activities(
         )
 
     # =========================================================================
-    # FIX: Check for auto-approve flag and create appropriate executor
+    # HITL Configuration: Check auto-approve flag and retrieve callback
     # =========================================================================
     skip_validation = agent_state.get_working_memory("skip_validation", False)
+    user_approval_callback = agent_state.get_working_memory("approval_callback", None)
 
-    # Create HITL approver with auto-approve callback if skip_validation is True
+    # Create HITL approver with appropriate configuration
     if skip_validation:
         logger.info("Activity auto-approve enabled (skip_validation=True)")
         # Create auto-approve callback that always returns True
@@ -293,8 +294,19 @@ async def _act_phase_with_activities(
             risk_threshold=RiskLevel.CRITICAL,  # Only require approval for critical
             auto_approve_callback=auto_approve_callback,
         )
+        # When auto-approving, the process_output callback also auto-approves
+        approval_callback = lambda prompt: True
     else:
+        # Normal mode: use user-provided callback for interactive approval
         hitl_approver = HITLApprover(risk_threshold=RiskLevel.MEDIUM)
+        # Use the callback from working memory (passed from llmchat)
+        approval_callback = user_approval_callback
+
+        if approval_callback is None:
+            logger.warning(
+                "No HITL approval callback provided. Activities requiring approval "
+                "will be rejected. Pass approval_callback to enable interactive approval."
+            )
 
     # Create executor with configured HITL approver
     registry = get_default_registry()
@@ -321,8 +333,11 @@ async def _act_phase_with_activities(
         sandbox_id=str(id(sandbox)) if sandbox else None,
     )
 
-    # Create approval callback for process_output (simple auto-approve)
-    approval_callback = (lambda prompt: True) if skip_validation else None
+    # Log HITL status for debugging
+    logger.info(
+        f"Activity execution HITL config: skip_validation={skip_validation}, "
+        f"has_callback={approval_callback is not None}"
+    )
 
     try:
         # Process activities with approval callback

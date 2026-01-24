@@ -28,7 +28,7 @@ References:
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from .cognitive import (
     CognitiveCycle,
@@ -210,6 +210,7 @@ class SingleAgentMode:
         session_id: Optional[str] = None,
         skip_validation: bool = False,
         skip_goal_classification: bool = False,
+        approval_callback: Optional[Callable[[str], bool]] = None,
     ) -> "AgentResult":
         """
         Run an autonomous agent to complete a goal.
@@ -231,6 +232,9 @@ class SingleAgentMode:
             session_id: Optional session ID (generated if not provided)
             skip_validation: If True, auto-approve all actions (bypass HITL)
             skip_goal_classification: If True, skip goal classification (use provided max_iterations)
+            approval_callback: Optional callback for HITL approval prompts.
+                Signature: (prompt: str) -> bool. Returns True to approve, False to reject.
+                If None and HITL approval is required, activities will be rejected.
 
         Returns:
             AgentResult with execution details
@@ -413,6 +417,7 @@ class SingleAgentMode:
                     model_name=model_name,
                     skip_validation=skip_validation,
                     agents_config=self._agents_config,
+                    approval_callback=approval_callback,
                 )
 
                 end_time = datetime.utcnow()
