@@ -164,12 +164,13 @@ class TestSemanticCache:
         # Should be None or miss
         assert result is None or (hasattr(result, 'hit') and not result.hit)
 
-    def test_cache_clear(self):
+    @pytest.mark.asyncio
+    async def test_cache_clear(self):
         """Test clearing all cache entries."""
         from llmcore.agents.caching import SemanticCache
 
         cache = SemanticCache()
-        cache.clear()
+        await cache.clear()
         # Should not raise
 
     def test_cache_statistics(self):
@@ -203,7 +204,8 @@ class TestPlanCache:
         assert hasattr(cache, 'store_plan')
         assert hasattr(cache, 'find_similar_plan')
 
-    def test_store_plan(self):
+    @pytest.mark.asyncio
+    async def test_store_plan(self):
         """Test storing execution plans."""
         from llmcore.agents.caching import PlanCache
 
@@ -214,40 +216,42 @@ class TestPlanCache:
             {"action": "analyze", "params": {"data": "results"}},
         ]
 
-        plan_id = cache.store_plan(
+        plan_id = await cache.store_plan(
             goal="Find and analyze test data",
             plan_steps=plan_steps,
         )
 
         assert plan_id is not None
 
-    def test_find_similar_plan(self):
+    @pytest.mark.asyncio
+    async def test_find_similar_plan(self):
         """Test finding similar plans."""
         from llmcore.agents.caching import PlanCache
 
         cache = PlanCache()
 
         plan_steps = [{"action": "search"}]
-        cache.store_plan(
+        await cache.store_plan(
             goal="Search for files in directory",
             plan_steps=plan_steps,
         )
 
         # Find similar
-        result = cache.find_similar_plan("Find files in folder")
+        result = await cache.find_similar_plan("Find files in folder")
         # May or may not find depending on similarity
 
-    def test_record_outcome(self):
+    @pytest.mark.asyncio
+    async def test_record_outcome(self):
         """Test recording plan outcomes."""
         from llmcore.agents.caching import PlanCache
 
         cache = PlanCache()
 
         plan_steps = [{"action": "test"}]
-        cache.store_plan(goal="Test goal", plan_steps=plan_steps)
+        await cache.store_plan(goal="Test goal", plan_steps=plan_steps)
 
-        cache.record_outcome("Test goal", success=True)
-        cache.record_outcome("Test goal", success=False)
+        await cache.record_outcome("Test goal", success=True)
+        await cache.record_outcome("Test goal", success=False)
         # Should not raise
 
     def test_statistics(self):
@@ -507,34 +511,36 @@ class TestMemoryManager:
         assert hasattr(manager, 'remember')
         assert hasattr(manager, 'recall')
 
-    def test_remember_to_long_term(self):
+    @pytest.mark.asyncio
+    async def test_remember_to_long_term(self):
         """Test remembering to long-term memory."""
         from llmcore.agents.memory import MemoryManager
         from llmcore.agents.memory.memory_store import MemoryType
 
         manager = MemoryManager()
 
-        manager.remember(
+        await manager.remember(
             content="Long-term fact",
             memory_type=MemoryType.SEMANTIC,
         )
 
-        results = manager.recall("Long-term fact")
+        results = await manager.recall("Long-term fact")
         assert results is not None
 
-    def test_recall(self):
+    @pytest.mark.asyncio
+    async def test_recall(self):
         """Test recalling memories."""
         from llmcore.agents.memory import MemoryManager
         from llmcore.agents.memory.memory_store import MemoryType
 
         manager = MemoryManager()
 
-        manager.remember(
+        await manager.remember(
             content="Python is a programming language",
             memory_type=MemoryType.SEMANTIC,
         )
 
-        results = manager.recall("Python programming")
+        results = await manager.recall("Python programming")
         assert results is not None
 
     def test_clear_working(self):
@@ -546,13 +552,14 @@ class TestMemoryManager:
 
         assert manager.working.count == 0
 
-    def test_statistics(self):
+    @pytest.mark.asyncio
+    async def test_statistics(self):
         """Test memory statistics."""
         from llmcore.agents.memory import MemoryManager
 
         manager = MemoryManager()
 
-        stats = manager.get_statistics()
+        stats = await manager.get_statistics()
         assert stats is not None
 
     def test_memory_stores_access(self):

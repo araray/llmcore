@@ -44,12 +44,13 @@ from typing import (
 )
 
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, ConfigDict, Field
 
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
     BaseModel = object
+    ConfigDict = dict
 
     def Field(*args, **kwargs):
         return kwargs.get("default")
@@ -200,8 +201,7 @@ if PYDANTIC_AVAILABLE:
         duration_ms: int = Field(0, description="Total duration in ms")
         error: Optional[str] = Field(None, description="Error message if failed")
 
-        class Config:
-            use_enum_values = True
+        model_config = ConfigDict(use_enum_values=True)
 else:
 
     @dataclass

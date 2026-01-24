@@ -30,11 +30,12 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Union
 
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, ConfigDict, Field
 except ImportError:
     # Fallback if pydantic not available
     from dataclasses import dataclass as BaseModel  # type: ignore
 
+    ConfigDict = dict  # type: ignore
     Field = field  # type: ignore
 
 if TYPE_CHECKING:
@@ -122,10 +123,7 @@ class ParameterSchema(BaseModel):
     max_value: Optional[float] = Field(None, description="Maximum value for numbers")
     pattern: Optional[str] = Field(None, description="Regex pattern for strings")
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # =============================================================================
@@ -173,10 +171,7 @@ class ActivityDefinition(BaseModel):
     tags: List[str] = Field(default_factory=list, description="Searchable tags")
     examples: List[str] = Field(default_factory=list, description="Usage examples")
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     def get_required_parameters(self) -> List[ParameterSchema]:
         """Get list of required parameters."""
@@ -262,10 +257,7 @@ class ActivityRequest(BaseModel):
     timeout_seconds: Optional[int] = Field(None, description="Override default timeout")
     priority: int = Field(0, description="Execution priority (higher = sooner)")
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # =============================================================================
@@ -297,10 +289,7 @@ class ActivityResult(BaseModel):
     artifacts: List[str] = Field(default_factory=list, description="Paths to created artifacts")
     timestamp: datetime = Field(default_factory=datetime.now, description="Execution timestamp")
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     @property
     def success(self) -> bool:
@@ -392,10 +381,7 @@ class ActivityLoopResult(BaseModel):
     remaining_text: str = Field("", description="Text not parsed as activities")
     parse_errors: List[str] = Field(default_factory=list, description="Errors during parsing")
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def all_succeeded(self) -> bool:

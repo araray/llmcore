@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -706,7 +706,7 @@ def mock_sink():
 @pytest.fixture
 def mock_callback():
     """Create a mock callback function."""
-    return AsyncMock()
+    return Mock()
 
 
 # =============================================================================
