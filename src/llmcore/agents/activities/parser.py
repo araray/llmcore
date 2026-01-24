@@ -458,19 +458,24 @@ class ActivityRequestParser:
         for pattern in self.FINAL_ANSWER_PATTERNS:
             if pattern.search(text):
                 return True
-        
+
         # Check for activity-based final answer (activity name = final_answer or finish)
         activity_match = self.ACTIVITY_SIMPLE_PATTERN.search(text)
         if activity_match:
             activity_name = activity_match.group(1).strip().lower()
             if activity_name in ("final_answer", "finish", "complete", "done"):
                 return True
-        
+
         return False
 
     def extract_final_answer(self, text: str) -> Optional[str]:
         """
         Extract final answer content if present.
+
+        Handles multiple formats:
+        - <final_answer>content</final_answer>
+        - <answer>content</answer>
+        - <activity>final_answer</activity> with <parameters>
 
         Args:
             text: Text potentially containing a final answer
@@ -478,10 +483,33 @@ class ActivityRequestParser:
         Returns:
             Final answer content, or None if not found
         """
+        # Check standard final answer patterns first
         for pattern in self.FINAL_ANSWER_PATTERNS[:2]:  # Only structured patterns
             match = pattern.search(text)
             if match:
                 return match.group(1).strip()
+
+        # Check for activity-based final answer
+        activity_match = self.ACTIVITY_SIMPLE_PATTERN.search(text)
+        if activity_match:
+            activity_name = activity_match.group(1).strip().lower()
+            if activity_name in ("final_answer", "finish", "complete", "done"):
+                # Try to extract content from the activity request
+                parse_result = self.parse(text)
+                if parse_result.has_requests:
+                    request = parse_result.requests[0]
+                    # Look for answer content in parameters
+                    params = request.parameters
+                    if params:
+                        # Try common parameter names for the answer
+                        for key in ("result", "answer", "content", "response", "output", "r"):
+                            if key in params:
+                                return str(params[key])
+                        # If no known key, return first parameter value
+                        first_value = next(iter(params.values()), None)
+                        if first_value:
+                            return str(first_value)
+
         return None
 
 

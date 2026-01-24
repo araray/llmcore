@@ -288,8 +288,8 @@ async def _act_phase_with_activities(
 
     # Create execution context
     context = ExecutionContext(
-        sandbox=sandbox,
-        tool_manager=tool_manager,
+        sandbox_available=sandbox is not None,
+        sandbox_id=str(id(sandbox)) if sandbox else None,
     )
 
     try:
