@@ -239,7 +239,7 @@ class TestActivityPrompts:
         # Should list available activities
         assert "file_read" in ACTIVITY_SYSTEM_PROMPT
         assert "file_write" in ACTIVITY_SYSTEM_PROMPT
-        assert "execute_python" in ACTIVITY_SYSTEM_PROMPT
+        assert "python_exec" in ACTIVITY_SYSTEM_PROMPT
         assert "final_answer" in ACTIVITY_SYSTEM_PROMPT
 
     def test_generate_activity_prompt(self):
