@@ -310,6 +310,10 @@ class TestSingleAgentMode:
         memory_manager = Mock()
         storage_manager = Mock()
         tool_manager = Mock()
+        
+        # Configure provider_manager mock to return valid string for model name
+        # This is needed for capability checker which does string operations
+        provider_manager.get_default_model.return_value = "gpt-4o"
 
         return {
             "provider_manager": provider_manager,

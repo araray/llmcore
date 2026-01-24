@@ -159,7 +159,8 @@ class ThinkOutput(BaseModel):
     )
     reasoning_tokens: Optional[int] = Field(default=None, description="Tokens used in reasoning")
     using_activity_fallback: bool = Field(
-        default=False, description="Whether activity fallback was used (G3 Phase 6)"
+        default=False, 
+        description="Whether activity fallback was used instead of native tools"
     )
 
 

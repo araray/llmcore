@@ -441,15 +441,31 @@ class ActivityRequestParser:
         """
         Check if text contains a final answer marker.
 
+        Detects final answers in multiple formats:
+        - <final_answer>...</final_answer>
+        - <answer>...</answer>
+        - FINAL ANSWER: ...
+        - <activity>final_answer</activity> (activity system)
+        - <activity>finish</activity> (activity system)
+
         Args:
             text: Text to check
 
         Returns:
             True if text appears to be a final answer
         """
+        # Check standard final answer patterns
         for pattern in self.FINAL_ANSWER_PATTERNS:
             if pattern.search(text):
                 return True
+        
+        # Check for activity-based final answer (activity name = final_answer or finish)
+        activity_match = self.ACTIVITY_SIMPLE_PATTERN.search(text)
+        if activity_match:
+            activity_name = activity_match.group(1).strip().lower()
+            if activity_name in ("final_answer", "finish", "complete", "done"):
+                return True
+        
         return False
 
     def extract_final_answer(self, text: str) -> Optional[str]:
