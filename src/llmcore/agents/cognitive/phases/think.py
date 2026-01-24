@@ -324,15 +324,21 @@ async def _think_phase_with_activities(
     """
     from ....models import Message, Role
     from ....tracing import add_span_attributes
+    from ...activities.registry import ActivityRegistry
 
     logger.info("Using activity fallback for think phase")
 
-    # Generate activity-aware prompt
+    # Get available activity names from registry
+    registry = ActivityRegistry()
+    available_activities = registry.list_activities()
+
+    # Generate activity-aware prompt with available activities
     activity_prompt = generate_activity_prompt(
         goal=think_input.goal,
         current_step=think_input.current_step,
         history=think_input.history,
         context=think_input.context,
+        available_activities=available_activities,
     )
 
     # Build messages with activity system prompt

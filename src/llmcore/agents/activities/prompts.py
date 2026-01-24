@@ -15,7 +15,6 @@ References:
 
 from typing import List, Optional
 
-
 # =============================================================================
 # ACTIVITY SYSTEM PROMPT
 # =============================================================================
@@ -47,13 +46,13 @@ When you need to perform an action, use XML activity request format:
 
 - **file_write**: Write content to a file
   - Parameters: path (required), content (required)
-  
+
 - **file_search**: Search for files matching a pattern
   - Parameters: pattern (required), directory (optional)
 
 - **execute_python**: Execute Python code
   - Parameters: code (required)
-  
+
 - **execute_shell**: Execute a shell command
   - Parameters: command (required)
 
@@ -115,6 +114,12 @@ GOAL: {goal}
 
 CURRENT STEP: {current_step}
 """
+
+    # Include available activities so model knows valid names
+    if available_activities:
+        activities_list = ", ".join(available_activities)
+        prompt += f"\nAVAILABLE ACTIVITIES: {activities_list}\n"
+        prompt += "IMPORTANT: You MUST use one of the activities listed above. Do not invent activity names.\n"
 
     if history:
         prompt += f"\n\nRECENT HISTORY:\n{history}"
