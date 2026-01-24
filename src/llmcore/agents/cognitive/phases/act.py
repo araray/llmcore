@@ -26,10 +26,10 @@ from typing import TYPE_CHECKING, Any, Optional
 from ..models import ActInput, ActOutput, EnhancedAgentState, ValidationResult
 
 if TYPE_CHECKING:
-    from ....models import ToolCall, ToolResult
     from ....config.agents_config import AgentsConfig
-    from ...tools import ToolManager
+    from ....models import ToolCall, ToolResult
     from ...sandbox import SandboxProvider
+    from ...tools import ToolManager
 
 logger = logging.getLogger(__name__)
 
@@ -254,8 +254,10 @@ async def _act_phase_with_activities(
     """
     from ....models import ToolResult
     from ....tracing import add_span_attributes
+    from ...activities.executor import ActivityExecutor, HITLApprover
     from ...activities.loop import ActivityLoop, ActivityLoopConfig
-    from ...activities.registry import ExecutionContext
+    from ...activities.registry import ExecutionContext, get_default_registry
+    from ...activities.schema import RiskLevel
 
     logger.info("Executing via activity fallback")
 
@@ -277,8 +279,35 @@ async def _act_phase_with_activities(
             success=True,
         )
 
-    # Create activity loop
+    # =========================================================================
+    # FIX: Check for auto-approve flag and create appropriate executor
+    # =========================================================================
+    skip_validation = agent_state.get_working_memory("skip_validation", False)
+
+    # Create HITL approver with auto-approve callback if skip_validation is True
+    if skip_validation:
+        logger.info("Activity auto-approve enabled (skip_validation=True)")
+        # Create auto-approve callback that always returns True
+        auto_approve_callback = lambda req: True
+        hitl_approver = HITLApprover(
+            risk_threshold=RiskLevel.CRITICAL,  # Only require approval for critical
+            auto_approve_callback=auto_approve_callback,
+        )
+    else:
+        hitl_approver = HITLApprover(risk_threshold=RiskLevel.MEDIUM)
+
+    # Create executor with configured HITL approver
+    registry = get_default_registry()
+    executor = ActivityExecutor(
+        registry=registry,
+        hitl_approver=hitl_approver,
+        sandbox=sandbox,
+    )
+
+    # Create activity loop with the configured executor
     activity_loop = ActivityLoop(
+        registry=registry,
+        executor=executor,
         config=ActivityLoopConfig(
             max_per_iteration=10,
             stop_on_error=False,
@@ -292,16 +321,23 @@ async def _act_phase_with_activities(
         sandbox_id=str(id(sandbox)) if sandbox else None,
     )
 
+    # Create approval callback for process_output (simple auto-approve)
+    approval_callback = (lambda prompt: True) if skip_validation else None
+
     try:
-        # Process activities
-        result = await activity_loop.process_output(pending_text, context=context)
+        # Process activities with approval callback
+        result = await activity_loop.process_output(
+            pending_text,
+            context=context,
+            approval_callback=approval_callback,
+        )
 
         # Calculate execution time
         end_time = time.time()
         execution_time_ms = (end_time - start_time) * 1000
 
         # Determine success
-        success = not result.has_errors if hasattr(result, 'has_errors') else True
+        success = not result.has_errors if hasattr(result, "has_errors") else True
 
         # Build result content
         observation = result.observation if result.observation else "Activities executed"
@@ -329,6 +365,7 @@ async def _act_phase_with_activities(
                     "act.success": success,
                     "act.execution_time_ms": execution_time_ms,
                     "act.is_final": result.is_final_answer,
+                    "act.auto_approve": skip_validation,
                 },
             )
 

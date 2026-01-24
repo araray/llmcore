@@ -44,10 +44,10 @@ from .update import update_phase
 from .validate import validate_phase
 
 if TYPE_CHECKING:
+    from ...config.agents_config import AgentsConfig
     from ...memory.manager import MemoryManager
     from ...providers.manager import ProviderManager
     from ...storage.manager import StorageManager
-    from ...config.agents_config import AgentsConfig
     from ..sandbox import SandboxProvider
     from ..tools import ToolManager
 
@@ -172,6 +172,9 @@ class CognitiveCycle:
 
             try:
                 logger.info(f"Starting iteration {iteration_number}")
+
+                # Store skip_validation in working memory for activity fallback HITL
+                agent_state.set_working_memory("skip_validation", skip_validation)
 
                 # ============================================================
                 # Phase 1: PERCEIVE
@@ -425,6 +428,7 @@ class CognitiveCycle:
         # =================================================================
         if agents_config is None:
             from ...config.agents_config import AgentsConfig
+
             agents_config = AgentsConfig()
 
         cb_config = agents_config.circuit_breaker
@@ -474,7 +478,7 @@ class CognitiveCycle:
                 last_error = None  # Clear error on success
 
                 # Track cost if available
-                if hasattr(iteration, 'total_cost') and iteration.total_cost:
+                if hasattr(iteration, "total_cost") and iteration.total_cost:
                     accumulated_cost += iteration.total_cost
 
                 # Accumulate tokens from think phase if available
@@ -486,7 +490,7 @@ class CognitiveCycle:
                 # =================================================================
                 if circuit_breaker is not None:
                     # Estimate progress (0.0 to 1.0)
-                    progress = getattr(agent_state, 'progress_estimate', 0.0)
+                    progress = getattr(agent_state, "progress_estimate", 0.0)
                     if progress == 0.0:
                         # Fallback: estimate based on iterations
                         progress = actual_iterations / max_iterations
@@ -531,7 +535,7 @@ class CognitiveCycle:
                 # G3 Phase 5: Circuit Breaker Check After Error
                 # =================================================================
                 if circuit_breaker is not None:
-                    progress = getattr(agent_state, 'progress_estimate', 0.0)
+                    progress = getattr(agent_state, "progress_estimate", 0.0)
 
                     cb_result = circuit_breaker.check(
                         iteration=actual_iterations,
