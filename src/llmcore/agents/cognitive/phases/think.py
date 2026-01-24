@@ -141,6 +141,24 @@ async def think_phase(
             tools_param = tool_definitions if tool_definitions else None
 
             # =================================================================
+            # G3 Phase 6: Proactive activity check (pre-enabled by capability check)
+            # =================================================================
+            use_activity_execution = agent_state.get_working_memory("use_activity_execution", False)
+
+            if use_activity_execution:
+                logger.info("Proactive activity execution - skipping native tools")
+                return await _think_phase_with_activities(
+                    agent_state=agent_state,
+                    think_input=think_input,
+                    provider=provider,
+                    target_model=target_model,
+                    prompt_registry=prompt_registry,
+                    agents_config=agents_config,
+                    tracer=tracer,
+                    span=span,
+                )
+
+            # =================================================================
             # G3 Phase 6: Try native tools first, fall back to activities
             # =================================================================
             use_activity_fallback = False
@@ -160,7 +178,7 @@ async def think_phase(
 
             except Exception as tool_error:
                 error_msg = str(tool_error).lower()
-                
+
                 # Check if this is a tool support error (G3 Phase 6)
                 is_tool_error = any(phrase in error_msg for phrase in [
                     "does not support tools",

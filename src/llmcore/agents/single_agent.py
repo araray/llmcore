@@ -294,6 +294,9 @@ class SingleAgentMode:
             # Normal Execution Path (non-trivial goals)
             # =================================================================
 
+            # G3: Track if we need proactive activity execution
+            use_activity_execution = False
+
             # =================================================================
             # G3 Phase 4: Capability Pre-Check
             # =================================================================
@@ -302,27 +305,27 @@ class SingleAgentMode:
                 requires_tools = True  # Default: assume tools needed
                 if classification:
                     requires_tools = classification.requires_tools
-                
+
                 # Get the target model
                 actual_provider = provider_name or self.provider_manager.get_default_provider_name()
                 actual_model = model_name or self.provider_manager.get_default_model()
-                
+
                 # Check compatibility
                 compat_result = self.capability_checker.check_compatibility(
                     model=actual_model,
                     requires_tools=requires_tools,
                     requires_vision=False,  # Could be determined from goal analysis
                 )
-                
+
                 if not compat_result.compatible:
                     if self._agents_config.capability_check.strict_mode:
                         # Fail fast with helpful message
                         error_msg = self._format_capability_error(compat_result)
                         logger.error(f"Model capability check failed: {error_msg}")
-                        
+
                         end_time = datetime.utcnow()
                         duration = (end_time - start_time).total_seconds()
-                        
+
                         return AgentResult(
                             goal=goal,
                             final_answer=error_msg,
@@ -335,12 +338,13 @@ class SingleAgentMode:
                             classification=classification,
                         )
                     else:
-                        # Warn but continue (may use activity fallback later)
+                        # Warn and enable proactive activity fallback
                         logger.warning(
                             f"Model capability warning for {actual_model}: "
                             f"{[str(i) for i in compat_result.issues]}. "
-                            f"Will attempt activity-based execution as fallback."
+                            f"Automatically enabling activity-based execution."
                         )
+                        use_activity_execution = True
                 else:
                     logger.info(
                         f"Capability check passed for {actual_provider}/{actual_model}"
@@ -367,6 +371,11 @@ class SingleAgentMode:
             if classification:
                 agent_state.set_working_memory("goal_classification", classification)
                 agent_state.set_working_memory("goal_complexity", classification.complexity.value)
+
+            # G3: Store activity execution flag if capability check triggered fallback
+            if use_activity_execution:
+                agent_state.set_working_memory("use_activity_execution", True)
+                logger.info("Proactive activity execution enabled via capability pre-check")
 
             # Apply persona configuration
             if agent_persona:
