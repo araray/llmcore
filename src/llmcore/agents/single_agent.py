@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from ..storage.manager import StorageManager
     from .prompts import PromptRegistry
     from .sandbox import SandboxProvider
+    from .sandbox.registry import SandboxRegistry
     from .tools import ToolManager
 
 logger = logging.getLogger(__name__)
@@ -196,6 +197,9 @@ class SingleAgentMode:
         )
 
         logger.info("SingleAgentMode initialized with G3 components")
+
+        # Sandbox registry reference (set when sandbox is created)
+        self._sandbox_registry: Optional["SandboxRegistry"] = None
 
     async def run(
         self,
@@ -722,16 +726,118 @@ class SingleAgentMode:
         # (e.g., max iterations, risk tolerance)
 
     async def _setup_sandbox(self, sandbox_type: Optional[str]) -> Optional["SandboxProvider"]:
-        """Setup sandbox for execution."""
-        # Implementation would create appropriate sandbox
-        # For now, return None
-        logger.info(f"Sandbox requested: {sandbox_type}")
-        return None
+        """
+        Setup sandbox for execution.
+
+        Creates and initializes a sandbox using the configured provider
+        (Docker or VM) based on agents.sandbox config section.
+
+        Args:
+            sandbox_type: Override for sandbox mode ("docker", "vm", or None for config default)
+
+        Returns:
+            Initialized SandboxProvider or None if sandbox disabled
+        """
+        from .sandbox.base import SandboxConfig
+        from .sandbox.config import create_registry_config, load_sandbox_config
+        from .sandbox.registry import SandboxMode, SandboxRegistry
+
+        # Load sandbox configuration from TOML / environment / defaults
+        try:
+            sandbox_system_config = load_sandbox_config()
+        except Exception as e:
+            logger.warning(f"Failed to load sandbox config: {e}")
+            return None
+
+        # Check if sandbox is enabled
+        if not sandbox_system_config.docker.enabled and not sandbox_system_config.vm.enabled:
+            logger.info("Sandbox execution disabled in config")
+            return None
+
+        # Determine mode
+        if sandbox_type:
+            try:
+                mode = SandboxMode(sandbox_type)
+            except ValueError:
+                logger.warning(f"Invalid sandbox_type '{sandbox_type}', using config default")
+                mode = SandboxMode(sandbox_system_config.mode)
+        else:
+            mode = SandboxMode(sandbox_system_config.mode)
+
+        # Create registry config from system config
+        try:
+            registry_config = create_registry_config(sandbox_system_config)
+        except Exception as e:
+            logger.error(f"Failed to create registry config: {e}")
+            return None
+
+        # Create registry and sandbox
+        try:
+            registry = SandboxRegistry(registry_config)
+
+            # Create sandbox instance config
+            instance_config = SandboxConfig(
+                sandbox_id=f"agent-{uuid.uuid4().hex[:8]}",
+                network_enabled=sandbox_system_config.docker.enabled
+                and registry_config.docker_host is not None,
+            )
+
+            # Select appropriate image based on task (uses default from config)
+            docker_image = sandbox_system_config.docker.image
+
+            sandbox = await registry.create_sandbox(
+                sandbox_config=instance_config,
+                prefer_mode=mode,
+                docker_image=docker_image,
+            )
+
+            # Store registry reference for cleanup
+            self._sandbox_registry = registry
+
+            logger.info(
+                f"Sandbox created: mode={mode.value}, "
+                f"id={instance_config.sandbox_id}, "
+                f"access_level={sandbox.get_access_level().value}"
+            )
+            return sandbox
+
+        except Exception as e:
+            logger.error(f"Failed to create sandbox: {e}", exc_info=True)
+            if sandbox_system_config.fallback_enabled:
+                logger.warning("Sandbox creation failed, falling back to local execution")
+                return None
+            raise
 
     async def _cleanup_sandbox(self, sandbox: "SandboxProvider") -> None:
-        """Cleanup sandbox after execution."""
-        # Implementation would cleanup sandbox resources
-        logger.info("Cleaning up sandbox")
+        """
+        Cleanup sandbox after execution.
+
+        Stops the sandbox container/VM and releases resources.
+        Preserves output files according to output_tracking config.
+
+        Args:
+            sandbox: The sandbox provider to cleanup
+        """
+        if sandbox is None:
+            return
+
+        try:
+            # Get sandbox ID for logging
+            sandbox_config = sandbox.get_config()
+            sandbox_id = sandbox_config.sandbox_id if sandbox_config else "unknown"
+
+            # Use registry cleanup if available (preferred)
+            if hasattr(self, "_sandbox_registry") and self._sandbox_registry:
+                await self._sandbox_registry.cleanup_sandbox(sandbox_id)
+                logger.info(f"Sandbox cleaned up via registry: {sandbox_id[:16]}")
+            else:
+                # Direct cleanup fallback
+                await sandbox.cleanup()
+                logger.info(f"Sandbox cleaned up directly: {sandbox_id[:16]}")
+
+        except Exception as e:
+            logger.error(f"Error during sandbox cleanup: {e}", exc_info=True)
+            # Don't raise - cleanup errors shouldn't fail the overall execution
 
 
 # =============================================================================
