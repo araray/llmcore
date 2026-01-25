@@ -501,11 +501,17 @@ class CognitiveCycle:
                         # Fallback: estimate based on iterations
                         progress = actual_iterations / max_iterations
 
+                    # Extract step_completed from reflect output for accurate stall detection
+                    step_completed = None
+                    if iteration.reflect_output:
+                        step_completed = getattr(iteration.reflect_output, "step_completed", None)
+
                     cb_result = circuit_breaker.check(
                         iteration=actual_iterations,
                         progress=progress,
                         error=None,
                         cost=accumulated_cost,
+                        step_completed=step_completed,
                     )
 
                     if cb_result.tripped:

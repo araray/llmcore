@@ -440,103 +440,209 @@ def _estimate_progress_from_content(text: str) -> float:
     """
     Estimate progress when explicit value not found.
 
-    Analyzes text for completion indicators and returns an estimate.
+    Analyzes text for completion indicators using context-aware pattern
+    matching. This function avoids false positives by:
+    1. Checking for negative context patterns first
+    2. Using regex with word boundaries
+    3. Prioritizing explicit negative indicators over implicit positive ones
 
     Args:
         text: Text to analyze
 
     Returns:
         Estimated progress between 0.0 and 1.0
+
+    Examples:
+        >>> _estimate_progress_from_content("Task completed successfully")
+        0.85
+        >>> _estimate_progress_from_content("STEP_COMPLETED: No")
+        0.35  # Negative context detected, not 0.85
+        >>> _estimate_progress_from_content("Task is not completed yet")
+        0.35  # Negative context detected
     """
     text_lower = text.lower()
 
-    # High progress indicators (0.85-0.95)
-    high_progress_phrases = [
-        "completed",
-        "finished",
-        "done",
-        "achieved",
-        "successfully",
-        "final step",
-        "almost there",
-        "nearly complete",
-        "wrapping up",
+    # =================================================================
+    # STRATEGY 1: Check for EXPLICIT NEGATIVE INDICATORS first
+    # These patterns indicate the task/step is explicitly NOT done
+    # =================================================================
+    negative_context_patterns = [
+        # STEP_COMPLETED: No / step_completed: false patterns
+        r"step_completed[:\s]*(no|false)",
+        r"step[_\s]completed[:\s]*(no|false)",
+        # Task/step is not done patterns
+        r"(?:task|step|action)\s+(?:is\s+)?not\s+(?:completed?|finished|done)",
+        r"not\s+(?:yet\s+)?(?:completed?|finished|done)",
+        r"hasn't\s+(?:been\s+)?(?:completed?|finished)",
+        r"have\s+not\s+(?:completed?|finished)",
+        # Incomplete patterns
+        r"\bincomplete\b",
+        r"still\s+(?:working|in\s+progress|pending|ongoing)",
+        r"needs?\s+(?:more\s+)?(?:work|steps?|actions?)",
+        r"(?:more|additional)\s+(?:work|steps?|actions?)\s+(?:needed|required)",
+        # Continuation indicators
+        r"continue\s+(?:with|to|working)",
+        r"proceeding\s+(?:to|with)",
+        r"moving\s+(?:on|forward)\s+to",
     ]
 
-    # Medium-high progress indicators (0.6-0.8)
-    medium_high_phrases = [
-        "good progress",
-        "significant progress",
-        "well underway",
-        "most of the work",
-        "majority done",
-        "halfway through",
+    for pattern in negative_context_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected negative context via pattern: '{pattern}'")
+            # Return moderate progress - task is in progress but not done
+            return 0.35
+
+    # =================================================================
+    # STRATEGY 2: Check for BLOCKED/ERROR indicators (very low progress)
+    # =================================================================
+    blocked_patterns = [
+        r"\bblocked\b",
+        r"\bstuck\b",
+        r"cannot\s+proceed",
+        r"(?:error|errors?)\s+(?:occurred|encountered|found)",
+        r"\bfailed\b",
+        r"no\s+progress",
+        r"unable\s+to\s+(?:proceed|continue|complete)",
+        r"cannot\s+(?:complete|finish|proceed)",
     ]
 
-    # Medium progress indicators (0.4-0.6)
-    medium_phrases = [
-        "making progress",
-        "some progress",
-        "partial",
-        "ongoing",
-        "working on",
-        "in progress",
-    ]
-
-    # Low progress indicators (0.1-0.3)
-    low_phrases = [
-        "just started",
-        "beginning",
-        "initial",
-        "first step",
-        "starting out",
-        "early stages",
-        "getting started",
-        "just getting started",
-        "just beginning",
-        "early phase",
-    ]
-
-    # Very low / blocked indicators (0.0-0.1)
-    blocked_phrases = [
-        "blocked",
-        "stuck",
-        "cannot proceed",
-        "error",
-        "failed",
-        "no progress",
-        "unable to",
-    ]
-
-    # Check in order of priority
-    for phrase in high_progress_phrases:
-        if phrase in text_lower:
-            logger.debug(f"Estimated high progress based on phrase: '{phrase}'")
-            return 0.85
-
-    for phrase in medium_high_phrases:
-        if phrase in text_lower:
-            logger.debug(f"Estimated medium-high progress based on phrase: '{phrase}'")
-            return 0.65
-
-    for phrase in medium_phrases:
-        if phrase in text_lower:
-            logger.debug(f"Estimated medium progress based on phrase: '{phrase}'")
-            return 0.45
-
-    for phrase in low_phrases:
-        if phrase in text_lower:
-            logger.debug(f"Estimated low progress based on phrase: '{phrase}'")
-            return 0.15
-
-    for phrase in blocked_phrases:
-        if phrase in text_lower:
-            logger.debug(f"Estimated very low progress based on phrase: '{phrase}'")
+    for pattern in blocked_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected blocked state via pattern: '{pattern}'")
             return 0.05
 
-    # Default: moderate progress (better than hardcoded 0.5 as it's contextual)
-    logger.debug("Could not extract progress, using moderate default")
-    return 0.35  # Slightly below middle to encourage continuation
+    # =================================================================
+    # STRATEGY 3: Check for HIGH progress indicators FIRST
+    # High progress should be detected before medium patterns like "working on"
+    # to avoid false negatives when text contains both.
+    # =================================================================
+    high_progress_patterns = [
+        # Explicit completion patterns
+        r"\btask\s+(?:is\s+)?(?:finally\s+)?completed?\b",
+        r"\bstep\s+(?:is\s+)?completed?\b",
+        r"\bsuccessfully\s+completed?\b",
+        r"\bcompleted\s+successfully\b",
+        r"\bfinished\s+(?:successfully|the\s+task)\b",
+        r"\bdone\s+(?:successfully|with\s+the\s+task)\b",
+        r"\bachieved\s+(?:the\s+|our\s+)?goal\b",
+        r"\bfinal\s+step\s+(?:completed?|done)\b",
+        r"\bwrapping\s+up\b",
+        r"\ball\s+(?:steps?|tasks?)\s+(?:completed?|done|finished)\b",
+        r"\bfinally\s+completed\b",
+        # STEP_COMPLETED: Yes / step_completed: true
+        r"step_completed[:\s]*(yes|true)",
+        r"step[_\s]completed[:\s]*(yes|true)",
+    ]
+
+    for pattern in high_progress_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected high progress via pattern: '{pattern}'")
+            return 0.85
+
+    # =================================================================
+    # STRATEGY 4: Check for MEDIUM-HIGH progress indicators
+    # =================================================================
+    medium_high_patterns = [
+        r"good\s+progress",
+        r"significant\s+progress",
+        r"well\s+underway",
+        r"most\s+(?:of\s+the\s+)?work\s+(?:done|completed?)",
+        r"majority\s+(?:done|completed?)",
+        r"halfway\s+(?:through|done|there)",
+        r"nearly\s+(?:complete|done|finished|there)",
+        r"almost\s+(?:complete|done|finished|there)",
+    ]
+
+    for pattern in medium_high_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected medium-high progress via pattern: '{pattern}'")
+            return 0.65
+
+    # =================================================================
+    # STRATEGY 5: Check for LOW progress indicators
+    # Check LOW before MEDIUM because "initial step in progress" should
+    # be detected as early-stage (low) not mid-stage (medium).
+    # =================================================================
+    low_progress_patterns = [
+        r"just\s+(?:started|beginning|began)",
+        r"(?:first|initial)\s+step",
+        r"starting\s+(?:out|up)",
+        r"early\s+(?:stages?|phase)",
+        r"getting\s+started",
+        r"at\s+the\s+(?:beginning|start)",
+    ]
+
+    for pattern in low_progress_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected low progress via pattern: '{pattern}'")
+            return 0.15
+
+    # =================================================================
+    # STRATEGY 6: Check for MEDIUM progress indicators
+    # =================================================================
+    medium_progress_patterns = [
+        r"making\s+progress",
+        r"some\s+progress",
+        r"partial(?:ly)?\s+(?:complete|done)?",
+        r"(?:in|currently\s+in)\s+progress",
+        r"working\s+on\s+(?:it|this|the)",
+        r"continuing\s+(?:with|to)",
+        r"underway",
+    ]
+
+    for pattern in medium_progress_patterns:
+        if re.search(pattern, text_lower):
+            logger.debug(f"Detected medium progress via pattern: '{pattern}'")
+            return 0.45
+
+    # =================================================================
+    # STRATEGY 7: Simple positive keywords (lower confidence)
+    # Only use these if no other patterns matched
+    # Use word boundaries to avoid partial matches
+    # =================================================================
+    simple_high_keywords = [
+        r"\bcompleted\b",
+        r"\bfinished\b",
+        r"\bdone\b",
+        r"\bachieved\b",
+        r"\bsuccess(?:ful|fully)?\b",
+    ]
+
+    # Before using simple keywords, check there's no nearby negation
+    # Look for "not", "no", "n't", "never", "without" within 5 words before the keyword
+    negation_prefixes = [
+        r"not\s+",
+        r"no\s+",
+        r"n't\s+",
+        r"never\s+",
+        r"without\s+",
+        r"hasn't\s+",
+        r"haven't\s+",
+        r"isn't\s+",
+        r"wasn't\s+",
+        r"weren't\s+",
+    ]
+
+    for keyword_pattern in simple_high_keywords:
+        match = re.search(keyword_pattern, text_lower)
+        if match:
+            # Check for negation within ~30 chars before the match
+            start_pos = max(0, match.start() - 30)
+            prefix_text = text_lower[start_pos : match.start()]
+
+            has_negation = any(re.search(neg, prefix_text) for neg in negation_prefixes)
+            if has_negation:
+                logger.debug(
+                    f"Keyword '{match.group()}' found but negated by prefix: '{prefix_text}'"
+                )
+                continue  # Skip this keyword, it's negated
+
+            logger.debug(f"Detected high progress via simple keyword: '{match.group()}'")
+            return 0.85
+
+    # Default: moderate progress (encourages continuation)
+    logger.debug("No progress patterns matched, using moderate default")
+    return 0.35
 
 
 # =============================================================================

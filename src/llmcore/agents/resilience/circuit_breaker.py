@@ -286,6 +286,7 @@ class AgentCircuitBreaker:
         error: Optional[str] = None,
         cost: float = 0.0,
         context: Optional[Dict[str, Any]] = None,
+        step_completed: Optional[bool] = None,
     ) -> CircuitBreakerResult:
         """
         Check if the circuit breaker should trip.
@@ -298,6 +299,11 @@ class AgentCircuitBreaker:
             error: Error message if this iteration failed, None if successful
             cost: Cost of this iteration in dollars
             context: Additional context for error tracking
+            step_completed: Whether the current step was explicitly completed.
+                If True, resets the progress stall counter even if progress
+                value hasn't changed significantly. This prevents false stall
+                trips when the agent reports low progress but is actually
+                making progress on steps.
 
         Returns:
             CircuitBreakerResult indicating if breaker tripped and why
@@ -324,8 +330,8 @@ class AgentCircuitBreaker:
         if error:
             self._record_error(error, iteration, context or {})
 
-        # Check all limits
-        result = self._check_limits(iteration, progress)
+        # Check all limits (pass step_completed for stall detection)
+        result = self._check_limits(iteration, progress, step_completed)
 
         if result.tripped:
             self._state = CircuitState.TRIPPED
@@ -377,7 +383,9 @@ class AgentCircuitBreaker:
             f"Recorded error (hash={error_hash}, count={self._error_counts[error_hash]}): {error[:50]}"
         )
 
-    def _check_limits(self, iteration: int, progress: float) -> CircuitBreakerResult:
+    def _check_limits(
+        self, iteration: int, progress: float, step_completed: Optional[bool] = None
+    ) -> CircuitBreakerResult:
         """Check all circuit breaker limits."""
 
         # Check 1: Maximum iterations
@@ -428,7 +436,7 @@ class AgentCircuitBreaker:
             )
 
         # Check 5: Progress stall
-        stall_iterations = self._check_progress_stall(progress)
+        stall_iterations = self._check_progress_stall(progress, step_completed)
         if stall_iterations >= self.config.progress_stall_threshold:
             return self._make_result(
                 tripped=True,
@@ -446,13 +454,31 @@ class AgentCircuitBreaker:
             progress_stall_iterations=stall_iterations,
         )
 
-    def _check_progress_stall(self, current_progress: float) -> int:
+    def _check_progress_stall(
+        self, current_progress: float, step_completed: Optional[bool] = None
+    ) -> int:
         """
         Check how many iterations have passed without significant progress.
 
-        Returns number of stalled iterations.
+        Args:
+            current_progress: Current progress value (0.0 to 1.0)
+            step_completed: Whether the current step was explicitly completed.
+                If True, resets the stall counter even if progress hasn't
+                changed numerically. This prevents false stall detection
+                when the model explicitly indicates step completion.
+
+        Returns:
+            Number of stalled iterations (0 if no stall or if step was completed)
         """
         if not self._progress_history:
+            return 0
+
+        # If step was explicitly completed, reset stall tracking
+        # This is the key fix for false positives - when the model says
+        # a step is done, we should trust that over the progress number
+        if step_completed is True:
+            self._last_significant_progress = self._progress_history[-1]
+            logger.debug("Step explicitly completed, resetting progress stall tracking")
             return 0
 
         # Update significant progress tracking
