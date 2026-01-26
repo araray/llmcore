@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 from .schema import (
     ActivityCategory,
@@ -65,6 +65,7 @@ class ExecutionContext:
     timeout_seconds: int = 60
     environment: Dict[str, str] = field(default_factory=dict)
     session_id: Optional[str] = None
+    working_memory: Dict[str, Any] = field(default_factory=dict)  # In-context memory for activities
 
 
 # =============================================================================

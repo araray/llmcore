@@ -56,6 +56,7 @@ from .schema import (
 
 if TYPE_CHECKING:
     from ..sandbox import SandboxProvider
+    from ..memory.memory_store import MemoryManager, MemoryType, MemoryImportance
 
 logger = logging.getLogger(__name__)
 
@@ -538,6 +539,7 @@ class ActivityExecutor:
         validator: Optional[ActivityValidator] = None,
         hitl_approver: Optional[HITLApprover] = None,
         sandbox: Optional["SandboxProvider"] = None,
+        memory_manager: Optional["MemoryManager"] = None,
         default_timeout: int = 60,
     ):
         """
@@ -548,12 +550,14 @@ class ActivityExecutor:
             validator: Request validator
             hitl_approver: HITL approval handler
             sandbox: Sandbox provider for isolated execution
+            memory_manager: Memory manager for memory activities (G3 Phase 3)
             default_timeout: Default execution timeout in seconds
         """
         self.registry = registry or get_default_registry()
         self.validator = validator or ActivityValidator(self.registry)
         self.hitl_approver = hitl_approver or HITLApprover()
         self.sandbox = sandbox
+        self.memory_manager = memory_manager
         self.default_timeout = default_timeout
 
         # Execution handlers by activity name
@@ -863,19 +867,179 @@ class ActivityExecutor:
         except Exception as e:
             raise RuntimeError(f"JSON query failed: {e}")
 
-    def _handle_memory_store(self, request: ActivityRequest, context: ExecutionContext) -> str:
-        """Handle memory_store activity."""
+    async def _handle_memory_store(
+        self, request: ActivityRequest, context: ExecutionContext
+    ) -> str:
+        """
+        Handle memory_store activity.
+
+        Stores a key-value pair in working memory (in-context) or long-term memory
+        (persistent) depending on the memory_type parameter.
+
+        Parameters from request:
+            key: Unique identifier for the memory
+            value: Content to store
+            memory_type: "working" (default) or "longterm"
+            metadata: Optional metadata dict
+
+        Returns:
+            Status message indicating where data was stored.
+        """
         key = request.parameters["key"]
         value = request.parameters["value"]
-        # Memory would be stored via context or memory manager
-        return f"Stored value under key '{key}'"
+        memory_type = request.parameters.get("memory_type", "working")
+        metadata = request.parameters.get("metadata", {})
 
-    def _handle_memory_search(self, request: ActivityRequest, context: ExecutionContext) -> str:
-        """Handle memory_search activity."""
+        # Add standard metadata
+        import time as time_module
+        from datetime import datetime
+
+        metadata.update({
+            "stored_at": datetime.utcnow().isoformat(),
+            "activity_id": request.request_id,
+            "source": "activity_memory_store",
+        })
+
+        if memory_type == "working":
+            # Store in execution context's working memory (always available)
+            context.working_memory[key] = {
+                "value": value,
+                "metadata": metadata,
+            }
+            return f"Stored in working memory: key='{key}', size={len(str(value))} chars"
+
+        elif memory_type == "longterm":
+            # Store in long-term memory via memory manager
+            if self.memory_manager is None:
+                # Fallback: store in working memory if no manager available
+                logger.warning(
+                    "Long-term memory not available (no memory_manager). "
+                    "Storing in working memory instead."
+                )
+                context.working_memory[key] = {
+                    "value": value,
+                    "metadata": {**metadata, "fallback": True},
+                }
+                return (
+                    f"[FALLBACK] Long-term memory not available. "
+                    f"Stored in working memory: key='{key}'"
+                )
+
+            try:
+                # Import memory types for proper storage
+                from ..memory.memory_store import MemoryType, MemoryImportance
+
+                # Store as semantic memory
+                item_id = await self.memory_manager.remember(
+                    content=f"{key}: {value}",
+                    memory_type=MemoryType.SEMANTIC,
+                    importance=MemoryImportance.MEDIUM,
+                    metadata={**metadata, "memory_key": key},
+                )
+                return f"Stored in long-term memory: key='{key}', id='{item_id}'"
+            except Exception as e:
+                logger.error(f"Failed to store in long-term memory: {e}", exc_info=True)
+                # Fallback to working memory
+                context.working_memory[key] = {
+                    "value": value,
+                    "metadata": {**metadata, "error": str(e)},
+                }
+                return f"[ERROR] Failed to store in long-term memory: {e}. Stored in working memory instead."
+
+        else:
+            return f"[ERROR] Unknown memory_type: '{memory_type}'. Valid values: 'working', 'longterm'"
+
+    async def _handle_memory_search(
+        self, request: ActivityRequest, context: ExecutionContext
+    ) -> str:
+        """
+        Handle memory_search activity.
+
+        Searches working memory and/or long-term memory for relevant items.
+
+        Parameters from request:
+            query: Search query
+            max_results: Maximum results to return (default: 5)
+            search_working: Search working memory (default: True)
+            search_longterm: Search long-term memory (default: True)
+
+        Returns:
+            Formatted search results.
+        """
         query = request.parameters["query"]
         max_results = request.parameters.get("max_results", 5)
-        # Memory search would use memory manager
-        return f"Memory search for '{query}' (max {max_results} results)"
+        search_working = request.parameters.get("search_working", True)
+        search_longterm = request.parameters.get("search_longterm", True)
+
+        results = []
+        query_lower = query.lower()
+
+        # Search working memory (in-context)
+        if search_working and context.working_memory:
+            for key, data in context.working_memory.items():
+                value = data.get("value", "")
+                # Simple relevance: check if query terms appear in key or value
+                content_str = f"{key} {value}".lower()
+                if query_lower in content_str or any(
+                    term in content_str for term in query_lower.split()
+                ):
+                    results.append({
+                        "source": "working",
+                        "key": key,
+                        "value": value,
+                        "metadata": data.get("metadata", {}),
+                    })
+
+        # Search long-term memory
+        if search_longterm and self.memory_manager is not None:
+            try:
+                recall_result = await self.memory_manager.recall(
+                    query=query,
+                    max_results=max_results,
+                    include_working=False,  # We handle working memory separately
+                )
+                for item in recall_result.memories:
+                    results.append({
+                        "source": "longterm",
+                        "content": item.content,
+                        "relevance": item.relevance,
+                        "memory_type": item.memory_type.value,
+                        "metadata": item.metadata,
+                    })
+            except Exception as e:
+                logger.error(f"Long-term memory search failed: {e}", exc_info=True)
+                results.append({
+                    "source": "error",
+                    "message": f"Long-term memory search failed: {e}",
+                })
+
+        # Format results
+        if not results:
+            return f"No memories found for query: '{query}'"
+
+        # Limit results
+        results = results[:max_results]
+
+        # Build output
+        output_lines = [f"Found {len(results)} memory item(s) for '{query}':"]
+        for i, item in enumerate(results, 1):
+            if item.get("source") == "working":
+                output_lines.append(
+                    f"  {i}. [Working] {item['key']}: {str(item['value'])[:100]}..."
+                    if len(str(item['value'])) > 100
+                    else f"  {i}. [Working] {item['key']}: {item['value']}"
+                )
+            elif item.get("source") == "longterm":
+                score = item.get("relevance", "N/A")
+                output_lines.append(
+                    f"  {i}. [Long-term] {item['content'][:100]}... (relevance: {score})"
+                    if len(item.get("content", "")) > 100
+                    else f"  {i}. [Long-term] {item.get('content', '')} (relevance: {score})"
+                )
+            elif item.get("source") == "error":
+                output_lines.append(f"  {i}. [Error] {item['message']}")
+
+        return "\n".join(output_lines)
 
     def _handle_final_answer(self, request: ActivityRequest, context: ExecutionContext) -> str:
         """Handle final_answer activity."""
