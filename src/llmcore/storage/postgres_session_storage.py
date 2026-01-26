@@ -25,7 +25,7 @@ from sqlalchemy import text
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
 from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role,
-                      ContextPreset, ContextPresetItem, Episode)
+                      ContextPreset, ContextPresetItem, Episode, EpisodeType)
 from .base_session import BaseSessionStorage
 
 if TYPE_CHECKING:
@@ -127,6 +127,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                         raise SessionStorageError("DB connection test failed.")
                 logger.debug("PostgreSQL connection test successful.")
 
+            # Create tables if they don't exist (legacy/non-tenant mode)
+            await self._ensure_tables_exist()
+
             logger.info("PostgreSQL storage initialized in legacy mode with connection pool.")
 
         except psycopg.Error as e:
@@ -155,6 +158,125 @@ class PostgresSessionStorage(BaseSessionStorage):
             return self._pool.connection()
         else:
             raise SessionStorageError("No database connection available (neither tenant session nor pool)")
+
+    async def _ensure_tables_exist(self) -> None:
+        """
+        Create PostgreSQL tables if they don't exist (legacy/non-tenant mode only).
+
+        This method is called during initialization to ensure all required tables
+        are present in the database. It uses CREATE TABLE IF NOT EXISTS to be
+        idempotent and safe for repeated calls.
+
+        Tables created:
+        - sessions: Chat session metadata
+        - messages: Individual messages within sessions
+        - context_items: Session-scoped context items
+        - context_presets: Named preset configurations
+        - context_preset_items: Items belonging to presets
+        - episodes: Episodic memory for agent runs
+        """
+        if self._pool is None:
+            logger.warning("Cannot ensure tables exist: no connection pool available.")
+            return
+
+        logger.debug("Ensuring PostgreSQL tables exist...")
+
+        async with self._pool.connection() as conn:
+            async with conn.transaction():
+                # Sessions table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._sessions_table} (
+                        id TEXT PRIMARY KEY,
+                        name TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        metadata JSONB DEFAULT '{{}}'::jsonb
+                    )
+                """)
+
+                # Messages table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._messages_table} (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL REFERENCES {self._sessions_table}(id) ON DELETE CASCADE,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        tool_call_id TEXT,
+                        tokens INTEGER,
+                        metadata JSONB DEFAULT '{{}}'::jsonb
+                    )
+                """)
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._messages_table}_session_timestamp
+                    ON {self._messages_table} (session_id, timestamp)
+                """)
+
+                # Session context items table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._session_context_items_table} (
+                        id TEXT NOT NULL,
+                        session_id TEXT NOT NULL REFERENCES {self._sessions_table}(id) ON DELETE CASCADE,
+                        item_type TEXT NOT NULL,
+                        source_id TEXT,
+                        content TEXT NOT NULL,
+                        tokens INTEGER,
+                        original_tokens INTEGER,
+                        is_truncated BOOLEAN DEFAULT FALSE,
+                        metadata JSONB DEFAULT '{{}}'::jsonb,
+                        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        PRIMARY KEY (session_id, id)
+                    )
+                """)
+
+                # Context presets table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._context_presets_table} (
+                        name TEXT PRIMARY KEY,
+                        description TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        metadata JSONB DEFAULT '{{}}'::jsonb
+                    )
+                """)
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._context_presets_table}_updated
+                    ON {self._context_presets_table} (updated_at)
+                """)
+
+                # Context preset items table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._context_preset_items_table} (
+                        item_id TEXT NOT NULL,
+                        preset_name TEXT NOT NULL REFERENCES {self._context_presets_table}(name) ON DELETE CASCADE,
+                        type TEXT NOT NULL,
+                        content TEXT,
+                        source_identifier TEXT,
+                        metadata JSONB DEFAULT '{{}}'::jsonb,
+                        PRIMARY KEY (preset_name, item_id)
+                    )
+                """)
+
+                # Episodes table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._episodes_table} (
+                        episode_id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL REFERENCES {self._sessions_table}(id) ON DELETE CASCADE,
+                        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        event_type TEXT NOT NULL,
+                        data JSONB DEFAULT '{{}}'::jsonb
+                    )
+                """)
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._episodes_table}_session_timestamp
+                    ON {self._episodes_table} (session_id, timestamp)
+                """)
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._episodes_table}_event_type
+                    ON {self._episodes_table} (event_type)
+                """)
+
+        logger.info("PostgreSQL tables verified/created successfully.")
 
     async def save_session(self, session: ChatSession) -> None:
         """
@@ -560,35 +682,629 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.warning(f"Attempted to update name for non-existent session '{session_id}'.")
             return False
 
-    # --- Context Preset Management Methods (abbreviated for refactoring focus) ---
+    # --- Context Preset Management Methods ---
     async def save_context_preset(self, preset: ContextPreset) -> None:
-        # Implementation would follow the same tenant/legacy pattern
-        pass
+        """
+        Save or update a context preset in PostgreSQL.
+
+        If a preset with the same name already exists, it will be updated.
+        Items are stored in a separate table with foreign key to the preset.
+        """
+        logger.debug(f"Saving context preset '{preset.name}' with {len(preset.items)} items to PostgreSQL...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                await self._save_context_preset_tenant_mode(preset)
+            else:
+                if not Jsonb:
+                    raise SessionStorageError("psycopg Jsonb adapter not available.")
+                await self._save_context_preset_legacy_mode(preset)
+
+        except Exception as e:
+            logger.error(f"Error saving context preset '{preset.name}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to save context preset '{preset.name}': {e}")
+
+    async def _save_context_preset_tenant_mode(self, preset: ContextPreset) -> None:
+        """Save context preset using tenant-scoped SQLAlchemy session."""
+        # Upsert the preset
+        await self._tenant_session.execute(
+            text(f"""
+                INSERT INTO {self._context_presets_table} (name, description, created_at, updated_at, metadata)
+                VALUES (:name, :description, :created_at, :updated_at, :metadata)
+                ON CONFLICT (name) DO UPDATE SET
+                    description = EXCLUDED.description,
+                    updated_at = EXCLUDED.updated_at,
+                    metadata = EXCLUDED.metadata
+            """),
+            {
+                "name": preset.name,
+                "description": preset.description,
+                "created_at": preset.created_at,
+                "updated_at": preset.updated_at,
+                "metadata": json.dumps(preset.metadata or {})
+            }
+        )
+
+        # Delete existing items and re-insert
+        await self._tenant_session.execute(
+            text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
+            {"preset_name": preset.name}
+        )
+
+        if preset.items:
+            items_data = [
+                {
+                    "item_id": item.item_id,
+                    "preset_name": preset.name,
+                    "type": str(item.type),
+                    "content": item.content,
+                    "source_identifier": item.source_identifier,
+                    "metadata": json.dumps(item.metadata or {})
+                } for item in preset.items
+            ]
+            await self._tenant_session.execute(
+                text(f"""
+                    INSERT INTO {self._context_preset_items_table}
+                    (item_id, preset_name, type, content, source_identifier, metadata)
+                    VALUES (:item_id, :preset_name, :type, :content, :source_identifier, :metadata)
+                """),
+                items_data
+            )
+
+        await self._tenant_session.commit()
+        logger.info(f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (tenant mode).")
+
+    async def _save_context_preset_legacy_mode(self, preset: ContextPreset) -> None:
+        """Save context preset using legacy psycopg pool mode."""
+        async with self._pool.connection() as conn:
+            async with conn.transaction():
+                # Upsert the preset
+                await conn.execute(f"""
+                    INSERT INTO {self._context_presets_table} (name, description, created_at, updated_at, metadata)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (name) DO UPDATE SET
+                        description = EXCLUDED.description,
+                        updated_at = EXCLUDED.updated_at,
+                        metadata = EXCLUDED.metadata
+                """, (preset.name, preset.description, preset.created_at, preset.updated_at, Jsonb(preset.metadata or {})))
+
+                # Delete existing items and re-insert
+                await conn.execute(
+                    f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
+                    (preset.name,)
+                )
+
+                if preset.items:
+                    items_data = [
+                        (item.item_id, preset.name, str(item.type), item.content,
+                         item.source_identifier, Jsonb(item.metadata or {}))
+                        for item in preset.items
+                    ]
+                    async with conn.cursor() as cur:
+                        await cur.executemany(f"""
+                            INSERT INTO {self._context_preset_items_table}
+                            (item_id, preset_name, type, content, source_identifier, metadata)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, items_data)
+
+        logger.info(f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (legacy mode).")
 
     async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
-        # Implementation would follow the same tenant/legacy pattern
-        return None
+        """
+        Retrieve a specific context preset by its unique name.
+
+        Args:
+            preset_name: The name of the context preset to retrieve.
+
+        Returns:
+            The ContextPreset object if found, otherwise None.
+        """
+        logger.debug(f"Loading context preset '{preset_name}' from PostgreSQL...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                return await self._get_context_preset_tenant_mode(preset_name)
+            else:
+                return await self._get_context_preset_legacy_mode(preset_name)
+
+        except Exception as e:
+            logger.error(f"Error retrieving context preset '{preset_name}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to retrieve context preset '{preset_name}': {e}")
+
+    async def _get_context_preset_tenant_mode(self, preset_name: str) -> Optional[ContextPreset]:
+        """Get context preset using tenant-scoped SQLAlchemy session."""
+        # Get preset data
+        result = await self._tenant_session.execute(
+            text(f"SELECT * FROM {self._context_presets_table} WHERE name = :preset_name"),
+            {"preset_name": preset_name}
+        )
+        preset_row = result.fetchone()
+
+        if not preset_row:
+            logger.debug(f"Context preset '{preset_name}' not found.")
+            return None
+
+        preset_data = dict(preset_row._mapping)
+        preset_data["metadata"] = json.loads(preset_data.get("metadata") or '{}')
+        preset_data["created_at"] = preset_data["created_at"].replace(tzinfo=timezone.utc) if preset_data.get("created_at") else datetime.now(timezone.utc)
+        preset_data["updated_at"] = preset_data["updated_at"].replace(tzinfo=timezone.utc) if preset_data.get("updated_at") else datetime.now(timezone.utc)
+
+        # Get preset items
+        items: List[ContextPresetItem] = []
+        result = await self._tenant_session.execute(
+            text(f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
+            {"preset_name": preset_name}
+        )
+        for item_row in result.fetchall():
+            try:
+                item_dict = dict(item_row._mapping)
+                item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                item_dict["type"] = ContextItemType(item_dict.pop("type"))
+                items.append(ContextPresetItem.model_validate(item_dict))
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Skipping invalid preset item {item_row.item_id} for preset {preset_name}: {e}")
+
+        preset_data["items"] = items
+        context_preset = ContextPreset.model_validate(preset_data)
+        logger.info(f"Context preset '{preset_name}' loaded from PostgreSQL ({len(items)} items).")
+        return context_preset
+
+    async def _get_context_preset_legacy_mode(self, preset_name: str) -> Optional[ContextPreset]:
+        """Get context preset using legacy psycopg pool mode."""
+        if not dict_row:
+            raise SessionStorageError("psycopg dict_row factory not available.")
+
+        async with self._pool.connection() as conn:
+            conn.row_factory = dict_row
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"SELECT * FROM {self._context_presets_table} WHERE name = %s",
+                    (preset_name,)
+                )
+                preset_row = await cur.fetchone()
+                if not preset_row:
+                    logger.debug(f"Context preset '{preset_name}' not found.")
+                    return None
+
+                preset_data = dict(preset_row)
+                preset_data["metadata"] = preset_data.get("metadata") or {}
+                preset_data["created_at"] = preset_data["created_at"].replace(tzinfo=timezone.utc) if preset_data.get("created_at") else datetime.now(timezone.utc)
+                preset_data["updated_at"] = preset_data["updated_at"].replace(tzinfo=timezone.utc) if preset_data.get("updated_at") else datetime.now(timezone.utc)
+
+                items: List[ContextPresetItem] = []
+                await cur.execute(
+                    f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = %s",
+                    (preset_name,)
+                )
+                async for item_row_data in cur:
+                    item_dict = dict(item_row_data)
+                    try:
+                        item_dict["metadata"] = item_dict.get("metadata") or {}
+                        item_dict["type"] = ContextItemType(item_dict.pop("type"))
+                        items.append(ContextPresetItem.model_validate(item_dict))
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Skipping invalid preset item {item_dict.get('item_id')} for preset {preset_name}: {e}")
+
+                preset_data["items"] = items
+
+        context_preset = ContextPreset.model_validate(preset_data)
+        logger.info(f"Context preset '{preset_name}' loaded from PostgreSQL ({len(items)} items).")
+        return context_preset
 
     async def list_context_presets(self) -> List[Dict[str, Any]]:
-        # Implementation would follow the same tenant/legacy pattern
-        return []
+        """
+        List available context presets, returning metadata only.
+
+        Returns a list of dictionaries containing preset metadata including
+        name, description, item_count, created_at, and updated_at.
+        """
+        logger.debug("Listing context presets from PostgreSQL...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                return await self._list_context_presets_tenant_mode()
+            else:
+                return await self._list_context_presets_legacy_mode()
+
+        except Exception as e:
+            logger.error(f"Error listing context presets: {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to list context presets: {e}")
+
+    async def _list_context_presets_tenant_mode(self) -> List[Dict[str, Any]]:
+        """List context presets using tenant-scoped SQLAlchemy session."""
+        preset_metadata_list: List[Dict[str, Any]] = []
+
+        result = await self._tenant_session.execute(
+            text(f"""
+                SELECT p.name, p.description, p.created_at, p.updated_at, p.metadata,
+                       (SELECT COUNT(*) FROM {self._context_preset_items_table} pi WHERE pi.preset_name = p.name) as item_count
+                FROM {self._context_presets_table} p ORDER BY p.updated_at DESC
+            """)
+        )
+
+        for row in result.fetchall():
+            data = dict(row._mapping)
+            data["metadata"] = json.loads(data.get("metadata") or '{}')
+            preset_metadata_list.append(data)
+
+        logger.info(f"Found {len(preset_metadata_list)} context presets in PostgreSQL.")
+        return preset_metadata_list
+
+    async def _list_context_presets_legacy_mode(self) -> List[Dict[str, Any]]:
+        """List context presets using legacy psycopg pool mode."""
+        if not dict_row:
+            raise SessionStorageError("psycopg dict_row factory not available.")
+
+        preset_metadata_list: List[Dict[str, Any]] = []
+
+        async with self._pool.connection() as conn:
+            conn.row_factory = dict_row
+            async with conn.cursor() as cur:
+                await cur.execute(f"""
+                    SELECT p.name, p.description, p.created_at, p.updated_at, p.metadata,
+                           (SELECT COUNT(*) FROM {self._context_preset_items_table} pi WHERE pi.preset_name = p.name) as item_count
+                    FROM {self._context_presets_table} p ORDER BY p.updated_at DESC
+                """)
+                async for row in cur:
+                    data = dict(row)
+                    data["metadata"] = data.get("metadata") or {}
+                    preset_metadata_list.append(data)
+
+        logger.info(f"Found {len(preset_metadata_list)} context presets in PostgreSQL.")
+        return preset_metadata_list
 
     async def delete_context_preset(self, preset_name: str) -> bool:
-        # Implementation would follow the same tenant/legacy pattern
+        """
+        Delete a specific context preset from storage by its name.
+
+        Args:
+            preset_name: The name of the context preset to delete.
+
+        Returns:
+            True if the preset was found and deleted successfully, False otherwise.
+        """
+        logger.debug(f"Deleting context preset '{preset_name}' from PostgreSQL...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                return await self._delete_context_preset_tenant_mode(preset_name)
+            else:
+                return await self._delete_context_preset_legacy_mode(preset_name)
+
+        except Exception as e:
+            logger.error(f"Error deleting context preset '{preset_name}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to delete context preset '{preset_name}': {e}")
+
+    async def _delete_context_preset_tenant_mode(self, preset_name: str) -> bool:
+        """Delete context preset using tenant-scoped SQLAlchemy session."""
+        # Items should be deleted via ON DELETE CASCADE, but delete explicitly for safety
+        await self._tenant_session.execute(
+            text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
+            {"preset_name": preset_name}
+        )
+
+        result = await self._tenant_session.execute(
+            text(f"DELETE FROM {self._context_presets_table} WHERE name = :preset_name"),
+            {"preset_name": preset_name}
+        )
+        await self._tenant_session.commit()
+
+        if result.rowcount > 0:
+            logger.info(f"Context preset '{preset_name}' and its items deleted from PostgreSQL.")
+            return True
+
+        logger.warning(f"Attempted to delete context preset '{preset_name}', but it was not found.")
+        return False
+
+    async def _delete_context_preset_legacy_mode(self, preset_name: str) -> bool:
+        """Delete context preset using legacy psycopg pool mode."""
+        async with self._pool.connection() as conn:
+            async with conn.transaction():
+                # Delete items first (if no CASCADE)
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
+                        (preset_name,)
+                    )
+                    await cur.execute(
+                        f"DELETE FROM {self._context_presets_table} WHERE name = %s",
+                        (preset_name,)
+                    )
+                    deleted_count = cur.rowcount
+
+        if deleted_count > 0:
+            logger.info(f"Context preset '{preset_name}' and its items deleted from PostgreSQL.")
+            return True
+
+        logger.warning(f"Attempted to delete context preset '{preset_name}', but it was not found.")
         return False
 
     async def rename_context_preset(self, old_name: str, new_name: str) -> bool:
-        # Implementation would follow the same tenant/legacy pattern
-        return False
+        """
+        Rename an existing context preset.
+
+        Args:
+            old_name: The current name of the preset.
+            new_name: The new name for the preset.
+
+        Returns:
+            True if the preset was found and renamed successfully, False otherwise.
+
+        Raises:
+            ValueError: If new_name is invalid (e.g., contains forbidden characters).
+            StorageError: For other storage-related issues during rename.
+        """
+        logger.debug(f"Renaming context preset '{old_name}' to '{new_name}' in PostgreSQL...")
+
+        # Validate new_name using ContextPreset model validation
+        if old_name == new_name:
+            return True
+
+        try:
+            ContextPreset(name=new_name, items=[])
+        except ValueError as ve:
+            logger.error(f"Invalid new preset name '{new_name}': {ve}")
+            raise
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                return await self._rename_context_preset_tenant_mode(old_name, new_name)
+            else:
+                return await self._rename_context_preset_legacy_mode(old_name, new_name)
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error renaming context preset '{old_name}' to '{new_name}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to rename context preset: {e}")
+
+    async def _rename_context_preset_tenant_mode(self, old_name: str, new_name: str) -> bool:
+        """Rename context preset using tenant-scoped SQLAlchemy session."""
+        # Check if new_name already exists
+        result = await self._tenant_session.execute(
+            text(f"SELECT 1 FROM {self._context_presets_table} WHERE name = :new_name"),
+            {"new_name": new_name}
+        )
+        if result.fetchone():
+            logger.warning(f"Cannot rename preset: new name '{new_name}' already exists.")
+            return False
+
+        # Get old preset to verify it exists
+        old_preset = await self._get_context_preset_tenant_mode(old_name)
+        if not old_preset:
+            logger.warning(f"Cannot rename preset: old name '{old_name}' not found.")
+            return False
+
+        # Create renamed preset
+        renamed_preset = ContextPreset(
+            name=new_name,
+            description=old_preset.description,
+            items=old_preset.items,
+            created_at=old_preset.created_at,
+            updated_at=datetime.now(timezone.utc),
+            metadata=old_preset.metadata
+        )
+
+        # Save new and delete old within a transaction
+        await self._save_context_preset_tenant_mode(renamed_preset)
+        await self._tenant_session.execute(
+            text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :old_name"),
+            {"old_name": old_name}
+        )
+        await self._tenant_session.execute(
+            text(f"DELETE FROM {self._context_presets_table} WHERE name = :old_name"),
+            {"old_name": old_name}
+        )
+        await self._tenant_session.commit()
+
+        logger.info(f"Context preset '{old_name}' successfully renamed to '{new_name}'.")
+        return True
+
+    async def _rename_context_preset_legacy_mode(self, old_name: str, new_name: str) -> bool:
+        """Rename context preset using legacy psycopg pool mode."""
+        if not dict_row:
+            raise SessionStorageError("psycopg dict_row factory not available.")
+
+        async with self._pool.connection() as conn:
+            conn.row_factory = dict_row
+
+            # Check if new_name already exists
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"SELECT 1 FROM {self._context_presets_table} WHERE name = %s",
+                    (new_name,)
+                )
+                if await cur.fetchone():
+                    logger.warning(f"Cannot rename preset: new name '{new_name}' already exists.")
+                    return False
+
+            # Get old preset
+            old_preset = await self._get_context_preset_legacy_mode(old_name)
+            if not old_preset:
+                logger.warning(f"Cannot rename preset: old name '{old_name}' not found.")
+                return False
+
+            # Create renamed preset
+            renamed_preset = ContextPreset(
+                name=new_name,
+                description=old_preset.description,
+                items=old_preset.items,
+                created_at=old_preset.created_at,
+                updated_at=datetime.now(timezone.utc),
+                metadata=old_preset.metadata
+            )
+
+            # Transaction: save new, delete old
+            async with conn.transaction():
+                # Insert renamed preset
+                await conn.execute(f"""
+                    INSERT INTO {self._context_presets_table} (name, description, created_at, updated_at, metadata)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (renamed_preset.name, renamed_preset.description, renamed_preset.created_at,
+                      renamed_preset.updated_at, Jsonb(renamed_preset.metadata or {})))
+
+                # Insert items for renamed preset
+                if renamed_preset.items:
+                    items_data = [
+                        (item.item_id, renamed_preset.name, str(item.type), item.content,
+                         item.source_identifier, Jsonb(item.metadata or {}))
+                        for item in renamed_preset.items
+                    ]
+                    async with conn.cursor() as cur:
+                        await cur.executemany(f"""
+                            INSERT INTO {self._context_preset_items_table}
+                            (item_id, preset_name, type, content, source_identifier, metadata)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, items_data)
+
+                # Delete old preset and items
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
+                        (old_name,)
+                    )
+                    await cur.execute(
+                        f"DELETE FROM {self._context_presets_table} WHERE name = %s",
+                        (old_name,)
+                    )
+
+        logger.info(f"Context preset '{old_name}' successfully renamed to '{new_name}'.")
+        return True
 
     # --- Episode Management Methods ---
     async def add_episode(self, episode: Episode) -> None:
-        # Implementation would follow the same tenant/legacy pattern
-        pass
+        """
+        Add an episode to the episodic memory log for a session.
+
+        Args:
+            episode: The Episode object to add.
+        """
+        logger.debug(f"Adding episode '{episode.episode_id}' for session '{episode.session_id}' to PostgreSQL...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                await self._add_episode_tenant_mode(episode)
+            else:
+                await self._add_episode_legacy_mode(episode)
+
+        except Exception as e:
+            logger.error(f"Error adding episode '{episode.episode_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to add episode '{episode.episode_id}': {e}")
+
+    async def _add_episode_tenant_mode(self, episode: Episode) -> None:
+        """Add episode using tenant-scoped SQLAlchemy session."""
+        await self._tenant_session.execute(
+            text(f"""
+                INSERT INTO {self._episodes_table} (episode_id, session_id, timestamp, event_type, data)
+                VALUES (:episode_id, :session_id, :timestamp, :event_type, :data)
+            """),
+            {
+                "episode_id": episode.episode_id,
+                "session_id": episode.session_id,
+                "timestamp": episode.timestamp,
+                "event_type": str(episode.event_type),
+                "data": json.dumps(episode.data or {})
+            }
+        )
+        await self._tenant_session.commit()
+        logger.debug(f"Episode '{episode.episode_id}' saved to PostgreSQL (tenant mode).")
+
+    async def _add_episode_legacy_mode(self, episode: Episode) -> None:
+        """Add episode using legacy psycopg pool mode."""
+        if not Jsonb:
+            raise SessionStorageError("psycopg Jsonb adapter not available.")
+
+        async with self._pool.connection() as conn:
+            await conn.execute(f"""
+                INSERT INTO {self._episodes_table} (episode_id, session_id, timestamp, event_type, data)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (episode.episode_id, episode.session_id, episode.timestamp,
+                  str(episode.event_type), Jsonb(episode.data or {})))
+
+        logger.debug(f"Episode '{episode.episode_id}' saved to PostgreSQL (legacy mode).")
 
     async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
-        # Implementation would follow the same tenant/legacy pattern
-        return []
+        """
+        Retrieve a list of episodes for a given session, ordered by timestamp.
+
+        Args:
+            session_id: The ID of the session to retrieve episodes for.
+            limit: The maximum number of episodes to return.
+            offset: The number of episodes to skip (for pagination).
+
+        Returns:
+            A list of Episode objects ordered by timestamp (most recent first).
+        """
+        logger.debug(f"Retrieving episodes for session '{session_id}' (limit={limit}, offset={offset})...")
+
+        try:
+            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+                return await self._get_episodes_tenant_mode(session_id, limit, offset)
+            else:
+                return await self._get_episodes_legacy_mode(session_id, limit, offset)
+
+        except Exception as e:
+            logger.error(f"Error retrieving episodes for session '{session_id}': {e}", exc_info=True)
+            raise SessionStorageError(f"Failed to retrieve episodes for session '{session_id}': {e}")
+
+    async def _get_episodes_tenant_mode(self, session_id: str, limit: int, offset: int) -> List[Episode]:
+        """Get episodes using tenant-scoped SQLAlchemy session."""
+        episodes: List[Episode] = []
+
+        result = await self._tenant_session.execute(
+            text(f"""
+                SELECT episode_id, session_id, timestamp, event_type, data
+                FROM {self._episodes_table}
+                WHERE session_id = :session_id
+                ORDER BY timestamp DESC
+                LIMIT :limit OFFSET :offset
+            """),
+            {"session_id": session_id, "limit": limit, "offset": offset}
+        )
+
+        for row in result.fetchall():
+            try:
+                row_dict = dict(row._mapping)
+                row_dict["data"] = json.loads(row_dict.get("data") or '{}')
+                row_dict["event_type"] = EpisodeType(row_dict["event_type"])
+                row_dict["timestamp"] = row_dict["timestamp"].replace(tzinfo=timezone.utc) if row_dict.get("timestamp") else datetime.now(timezone.utc)
+                episodes.append(Episode.model_validate(row_dict))
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Skipping invalid episode for session {session_id}: {e}")
+
+        logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}'.")
+        return episodes
+
+    async def _get_episodes_legacy_mode(self, session_id: str, limit: int, offset: int) -> List[Episode]:
+        """Get episodes using legacy psycopg pool mode."""
+        if not dict_row:
+            raise SessionStorageError("psycopg dict_row factory not available.")
+
+        episodes: List[Episode] = []
+
+        async with self._pool.connection() as conn:
+            conn.row_factory = dict_row
+            async with conn.cursor() as cur:
+                await cur.execute(f"""
+                    SELECT episode_id, session_id, timestamp, event_type, data
+                    FROM {self._episodes_table}
+                    WHERE session_id = %s
+                    ORDER BY timestamp DESC
+                    LIMIT %s OFFSET %s
+                """, (session_id, limit, offset))
+
+                async for row in cur:
+                    try:
+                        row_dict = dict(row)
+                        row_dict["data"] = row_dict.get("data") or {}
+                        row_dict["event_type"] = EpisodeType(row_dict["event_type"])
+                        row_dict["timestamp"] = row_dict["timestamp"].replace(tzinfo=timezone.utc) if row_dict.get("timestamp") else datetime.now(timezone.utc)
+                        episodes.append(Episode.model_validate(row_dict))
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Skipping invalid episode for session {session_id}: {e}")
+
+        logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}'.")
+        return episodes
 
     async def close(self) -> None:
         """Closes the PostgreSQL connection pool."""
