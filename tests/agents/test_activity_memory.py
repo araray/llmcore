@@ -184,23 +184,27 @@ class TestMemoryStoreWorkingMemory:
     async def test_store_complex_value(
         self, executor_no_memory_manager, execution_context
     ):
-        """Verify complex values (dict, list) can be stored."""
+        """Verify complex values (as JSON strings) can be stored."""
+        import json
         complex_value = {
             "name": "France",
             "capital": "Paris",
             "cities": ["Paris", "Lyon", "Marseille"],
         }
+        # Store complex data as JSON string
         request = make_memory_store_request(
             key="country_info",
-            value=complex_value,
+            value=json.dumps(complex_value),
         )
 
         result = await executor_no_memory_manager.execute(request, execution_context)
 
         assert result.status == ActivityStatus.SUCCESS
         stored = execution_context.working_memory["country_info"]["value"]
-        assert stored["name"] == "France"
-        assert "Lyon" in stored["cities"]
+        # Verify the JSON string was stored and can be parsed back
+        parsed = json.loads(stored)
+        assert parsed["name"] == "France"
+        assert "Lyon" in parsed["cities"]
 
 
 # =============================================================================
@@ -284,7 +288,7 @@ class TestMemoryStoreLongterm:
     async def test_invalid_memory_type(
         self, executor_no_memory_manager, execution_context
     ):
-        """Verify invalid memory_type returns error."""
+        """Verify invalid memory_type is rejected by validation."""
         request = make_memory_store_request(
             key="test",
             value="test",
@@ -293,9 +297,9 @@ class TestMemoryStoreLongterm:
 
         result = await executor_no_memory_manager.execute(request, execution_context)
 
-        assert result.status == ActivityStatus.SUCCESS  # Handler doesn't throw
-        assert "ERROR" in result.output
-        assert "Unknown memory_type" in result.output
+        # With enum constraint in activity definition, validation fails
+        assert result.status == ActivityStatus.FAILED
+        assert "Invalid value" in result.error or "invalid_type" in (result.error or "")
 
 
 # =============================================================================

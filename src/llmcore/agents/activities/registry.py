@@ -779,7 +779,7 @@ def get_builtin_activities() -> List[ActivityDefinition]:
         ActivityDefinition(
             name="memory_store",
             category=ActivityCategory.MEMORY,
-            description="Store information in working memory",
+            description="Store information in working or long-term memory",
             parameters=[
                 ParameterSchema(
                     name="key",
@@ -790,8 +790,22 @@ def get_builtin_activities() -> List[ActivityDefinition]:
                 ParameterSchema(
                     name="value",
                     type=ParameterType.STRING,
-                    description="Value to store",
+                    description="Value to store (use JSON string for complex data)",
                     required=True,
+                ),
+                ParameterSchema(
+                    name="memory_type",
+                    type=ParameterType.STRING,
+                    description="Type of memory: 'working' (default) or 'longterm'",
+                    required=False,
+                    default="working",
+                    enum=["working", "longterm"],
+                ),
+                ParameterSchema(
+                    name="metadata",
+                    type=ParameterType.OBJECT,
+                    description="Optional metadata dict to store with the value",
+                    required=False,
                 ),
             ],
             risk_level=RiskLevel.NONE,
@@ -800,7 +814,7 @@ def get_builtin_activities() -> List[ActivityDefinition]:
         ActivityDefinition(
             name="memory_search",
             category=ActivityCategory.MEMORY,
-            description="Search working memory",
+            description="Search working and/or long-term memory for relevant items",
             parameters=[
                 ParameterSchema(
                     name="query",
@@ -811,9 +825,23 @@ def get_builtin_activities() -> List[ActivityDefinition]:
                 ParameterSchema(
                     name="max_results",
                     type=ParameterType.INTEGER,
-                    description="Maximum results",
+                    description="Maximum results to return",
                     required=False,
                     default=5,
+                ),
+                ParameterSchema(
+                    name="search_working",
+                    type=ParameterType.BOOLEAN,
+                    description="Whether to search working memory (default: True)",
+                    required=False,
+                    default=True,
+                ),
+                ParameterSchema(
+                    name="search_longterm",
+                    type=ParameterType.BOOLEAN,
+                    description="Whether to search long-term memory (default: True)",
+                    required=False,
+                    default=True,
                 ),
             ],
             risk_level=RiskLevel.NONE,

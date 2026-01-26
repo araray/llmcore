@@ -891,11 +891,10 @@ class ActivityExecutor:
         metadata = request.parameters.get("metadata", {})
 
         # Add standard metadata
-        import time as time_module
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         metadata.update({
-            "stored_at": datetime.utcnow().isoformat(),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
             "activity_id": request.request_id,
             "source": "activity_memory_store",
         })
