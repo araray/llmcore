@@ -57,7 +57,7 @@ from .phases import (
     update_phase,
     validate_phase,
 )
-from .phases.cycle import CognitiveCycle
+from .phases.cycle import CognitiveCycle, StreamingIterationResult
 
 __all__ = [
     # Enums
@@ -95,6 +95,7 @@ __all__ = [
     "update_phase",
     # Main orchestrator
     "CognitiveCycle",
+    "StreamingIterationResult",
     # Goal classification
     "GoalClassifier",
     "GoalClassification",

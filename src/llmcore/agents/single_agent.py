@@ -28,11 +28,12 @@ References:
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
 
 from .cognitive import (
     CognitiveCycle,
     EnhancedAgentState,
+    StreamingIterationResult,
 )
 from .cognitive.goal_classifier import (
     GoalClassification,
@@ -634,37 +635,208 @@ class SingleAgentMode:
         self,
         goal: str,
         persona: Optional[str | AgentPersona] = None,
+        context: Optional[str] = None,
         max_iterations: int = 10,
-        **kwargs,
-    ):
+        use_sandbox: bool = False,
+        sandbox_type: Optional[str] = None,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        session_id: Optional[str] = None,
+        skip_validation: bool = False,
+        skip_goal_classification: bool = False,
+        approval_callback: Optional[Callable[[str], bool]] = None,
+    ) -> AsyncIterator["IterationUpdate"]:
         """
-        Run agent with streaming updates.
+        Run agent with real-time streaming updates.
 
-        Yields iteration updates as they complete.
+        Yields IterationUpdate objects after each cognitive cycle iteration,
+        enabling real-time progress display in UIs/CLIs. This is the streaming
+        equivalent of run(), providing the same functionality with incremental
+        updates.
 
         Args:
-            goal: The task goal
-            persona: Persona to use
-            max_iterations: Maximum iterations
-            **kwargs: Additional arguments passed to run()
+            goal: The task goal/objective
+            persona: Persona ID, AgentPersona object, or None for default
+            context: Optional initial context
+            max_iterations: Maximum iterations before stopping
+            use_sandbox: Whether to use sandbox execution
+            sandbox_type: Sandbox type (docker, vm) if use_sandbox=True
+            provider_name: Optional LLM provider override
+            model_name: Optional model override
+            session_id: Optional session ID (generated if not provided)
+            skip_validation: If True, auto-approve all actions
+            skip_goal_classification: If True, skip goal classification
+            approval_callback: Optional callback for HITL approval prompts
 
         Yields:
-            IterationUpdate objects with progress information
+            IterationUpdate objects with real-time progress information
 
         Example:
-            >>> async for update in agent.run_streaming(goal="Process files"):
-            ...     print(f"Iteration {update.iteration}: {update.progress:.0%}")
+            >>> async for update in agent.run_streaming(goal="Process data files"):
+            ...     print(f"[{update.iteration}/{update.max_iterations}] {update.progress:.0%}")
+            ...     if update.action:
+            ...         print(f"  Action: {update.action}")
+            ...     if update.observation:
+            ...         print(f"  Result: {update.observation[:50]}")
+            ...     if update.is_final:
+            ...         print(f"Completed: {update.status}")
         """
-        # Implementation would yield updates as iterations complete
-        # For now, simplified to single run
-        result = await self.run(goal=goal, persona=persona, max_iterations=max_iterations, **kwargs)
+        from ..tracing import create_span
 
-        yield IterationUpdate(
-            iteration=result.iteration_count,
-            progress=1.0,
-            status="complete",
-            message=result.final_answer,
-        )
+        with create_span(self.tracer, "single_agent.run_streaming"):
+            # Generate session ID if not provided
+            if not session_id:
+                session_id = f"session-{uuid.uuid4()}"
+
+            # =================================================================
+            # G3 Phase 1: Goal Classification
+            # =================================================================
+            classification: Optional[GoalClassification] = None
+            effective_max_iterations = max_iterations
+
+            if not skip_goal_classification and self._agents_config.goals.classifier_enabled:
+                try:
+                    classification = self.goal_classifier.classify(goal)
+
+                    logger.info(
+                        f"Goal classified: complexity={classification.complexity.value}, "
+                        f"intent={classification.intent.value}"
+                    )
+
+                    # For trivial goals with fast-path, we still stream but complete quickly
+                    # (Fast-path doesn't yield intermediate updates, so handle specially)
+                    if (
+                        classification.complexity == GoalComplexity.TRIVIAL
+                        and self._agents_config.fast_path.enabled
+                    ):
+                        # Execute fast-path and yield single update
+                        start_time = datetime.utcnow()
+                        result = await self._execute_fast_path(
+                            goal=goal,
+                            classification=classification,
+                            context=context,
+                            session_id=session_id,
+                            persona=persona,
+                            start_time=start_time,
+                            span=None,
+                        )
+                        yield IterationUpdate(
+                            iteration=1,
+                            progress=1.0,
+                            status="complete" if result.success else "error",
+                            message=result.final_answer,
+                            max_iterations=1,
+                            is_final=True,
+                            phase="fast_path",
+                            error=result.error,
+                        )
+                        return
+
+                    # Adjust max_iterations based on complexity
+                    effective_max_iterations = self._get_complexity_iterations(
+                        classification.complexity, max_iterations
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Goal classification failed: {e}")
+                    classification = None
+
+            # =================================================================
+            # Setup: Capability Check
+            # =================================================================
+            use_activity_execution = False
+
+            if self._agents_config.capability_check.enabled:
+                requires_tools = True
+                if classification:
+                    requires_tools = classification.requires_tools
+
+                actual_provider = provider_name or self.provider_manager.get_default_provider_name()
+                actual_model = model_name or self.provider_manager.get_default_model()
+
+                compat_result = self.capability_checker.check_compatibility(
+                    model=actual_model,
+                    requires_tools=requires_tools,
+                    requires_vision=False,
+                )
+
+                if not compat_result.compatible:
+                    if self._agents_config.capability_check.strict_mode:
+                        error_msg = self._format_capability_error(compat_result)
+                        logger.error(f"Capability check failed: {error_msg}")
+                        yield IterationUpdate(
+                            iteration=0,
+                            progress=0.0,
+                            status="error",
+                            message=error_msg,
+                            max_iterations=effective_max_iterations,
+                            is_final=True,
+                            error=error_msg,
+                        )
+                        return
+                    else:
+                        logger.warning(
+                            f"Capability warning for {actual_model}, enabling activity fallback"
+                        )
+                        use_activity_execution = True
+
+            # Ensure tools are loaded
+            if not self.tool_manager.get_tool_definitions():
+                logger.info("Loading default tools for streaming agent run")
+                self.tool_manager.load_default_tools()
+
+            # Resolve persona
+            agent_persona = self._resolve_persona(persona)
+
+            # Create enhanced agent state
+            agent_state = EnhancedAgentState(
+                goal=goal, session_id=session_id, context=context or ""
+            )
+
+            # Store classification in working memory
+            if classification:
+                agent_state.set_working_memory("goal_classification", classification)
+                agent_state.set_working_memory("goal_complexity", classification.complexity.value)
+
+            if use_activity_execution:
+                agent_state.set_working_memory("use_activity_execution", True)
+
+            # Apply persona configuration
+            if agent_persona:
+                self._apply_persona_config(agent_state, agent_persona)
+
+            # Setup sandbox if requested
+            sandbox = None
+            if use_sandbox:
+                sandbox = await self._setup_sandbox(sandbox_type)
+
+            try:
+                logger.info(
+                    f"Starting streaming execution: goal='{goal[:50]}...', "
+                    f"max_iterations={effective_max_iterations}"
+                )
+
+                # =================================================================
+                # Run cognitive cycle with streaming
+                # =================================================================
+                async for streaming_result in self.cognitive_cycle.run_streaming(
+                    agent_state=agent_state,
+                    session_id=session_id,
+                    max_iterations=effective_max_iterations,
+                    sandbox=sandbox,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                    skip_validation=skip_validation,
+                    agents_config=self._agents_config,
+                    approval_callback=approval_callback,
+                ):
+                    # Convert StreamingIterationResult to IterationUpdate
+                    yield IterationUpdate.from_streaming_result(streaming_result)
+
+            finally:
+                # Cleanup sandbox
+                if sandbox:
+                    await self._cleanup_sandbox(sandbox)
 
     def create_persona(self, name: str, description: str, **kwargs) -> AgentPersona:
         """
@@ -927,13 +1099,115 @@ class AgentResult:
 
 
 class IterationUpdate:
-    """Update from streaming execution."""
+    """
+    Update from streaming agent execution.
 
-    def __init__(self, iteration: int, progress: float, status: str, message: str):
+    This class provides real-time progress information during agent execution,
+    yielded after each cognitive cycle iteration.
+
+    Attributes:
+        iteration: Current iteration number (1-indexed)
+        max_iterations: Maximum allowed iterations
+        progress: Estimated progress toward goal (0.0 to 1.0)
+        status: Current status ("in_progress", "complete", "stopped", "error")
+        is_final: Whether this is the last update
+        message: Human-readable summary of the iteration
+        phase: Current/last cognitive phase executed
+        action: Name of the action taken (if any)
+        action_args: Brief summary of action arguments
+        observation: Brief observation/result summary
+        step_completed: Whether current plan step was completed
+        plan_step: Current plan step being worked on
+        error: Error message if iteration failed
+        tokens_used: Tokens used in this iteration
+        duration_ms: Duration in milliseconds
+        stop_reason: Reason for stopping (if stopped early)
+
+    Example:
+        >>> async for update in agent.run_streaming(goal="Process files"):
+        ...     print(f"[{update.iteration}/{update.max_iterations}] {update.progress:.0%}")
+        ...     if update.action:
+        ...         print(f"  Action: {update.action}")
+        ...     if update.observation:
+        ...         print(f"  Result: {update.observation[:50]}")
+        ...     if update.is_final:
+        ...         print(f"Final: {update.status} - {update.message}")
+    """
+
+    def __init__(
+        self,
+        iteration: int,
+        progress: float,
+        status: str,
+        message: str,
+        *,
+        max_iterations: int = 10,
+        is_final: bool = False,
+        phase: Optional[str] = None,
+        action: Optional[str] = None,
+        action_args: Optional[str] = None,
+        observation: Optional[str] = None,
+        step_completed: bool = False,
+        plan_step: Optional[str] = None,
+        error: Optional[str] = None,
+        tokens_used: int = 0,
+        duration_ms: float = 0.0,
+        stop_reason: Optional[str] = None,
+    ):
         self.iteration = iteration
+        self.max_iterations = max_iterations
         self.progress = progress
         self.status = status
+        self.is_final = is_final
         self.message = message
+        self.phase = phase
+        self.action = action
+        self.action_args = action_args
+        self.observation = observation
+        self.step_completed = step_completed
+        self.plan_step = plan_step
+        self.error = error
+        self.tokens_used = tokens_used
+        self.duration_ms = duration_ms
+        self.stop_reason = stop_reason
+
+    def __repr__(self) -> str:
+        return (
+            f"IterationUpdate(iteration={self.iteration}, progress={self.progress:.1%}, "
+            f"status={self.status!r}, is_final={self.is_final})"
+        )
+
+    @classmethod
+    def from_streaming_result(
+        cls, result: StreamingIterationResult
+    ) -> "IterationUpdate":
+        """
+        Create an IterationUpdate from a StreamingIterationResult.
+
+        Args:
+            result: The streaming result from CognitiveCycle
+
+        Returns:
+            Equivalent IterationUpdate instance
+        """
+        return cls(
+            iteration=result.iteration,
+            progress=result.progress,
+            status=result.status,
+            message=result.message,
+            max_iterations=result.max_iterations,
+            is_final=result.is_final,
+            phase=result.current_phase,
+            action=result.action_name,
+            action_args=result.action_summary,
+            observation=result.observation_summary,
+            step_completed=result.step_completed,
+            plan_step=result.plan_step,
+            error=result.error,
+            tokens_used=result.tokens_used,
+            duration_ms=result.duration_ms,
+            stop_reason=result.stop_reason,
+        )
 
 
 # =============================================================================

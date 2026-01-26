@@ -15,7 +15,8 @@ References:
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Optional
 
 from ..models import (
     ActInput,
@@ -44,10 +45,10 @@ from .update import update_phase
 from .validate import validate_phase
 
 if TYPE_CHECKING:
-    from ...config.agents_config import AgentsConfig
-    from ...memory.manager import MemoryManager
-    from ...providers.manager import ProviderManager
-    from ...storage.manager import StorageManager
+    from ....config.agents_config import AgentsConfig
+    from ....memory.manager import MemoryManager
+    from ....providers.manager import ProviderManager
+    from ....storage.manager import StorageManager
     from ..sandbox import SandboxProvider
     from ..tools import ToolManager
 
@@ -57,6 +58,59 @@ from ...resilience.circuit_breaker import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# STREAMING RESULT MODEL
+# =============================================================================
+
+
+@dataclass
+class StreamingIterationResult:
+    """
+    Result yielded after each cognitive cycle iteration during streaming.
+
+    Contains all relevant information for real-time progress display,
+    including the current iteration state, progress estimates, and
+    action/observation summaries.
+
+    Attributes:
+        iteration: Current iteration number (1-indexed)
+        max_iterations: Maximum allowed iterations
+        progress: Estimated progress toward goal (0.0 to 1.0)
+        is_complete: Whether the task is complete
+        is_final: Whether this is the last update (complete or stopped)
+        status: Current status string
+        current_phase: Name of the current/last phase executed
+        message: Human-readable summary of this iteration
+        action_name: Name of the action taken (if any)
+        action_summary: Brief description of the action
+        observation_summary: Brief description of the result/observation
+        step_completed: Whether the current plan step was completed
+        plan_step: Current plan step being worked on
+        error: Error message if iteration failed
+        tokens_used: Tokens used in this iteration
+        duration_ms: Duration of this iteration in milliseconds
+        stop_reason: Reason for stopping (if stopped early)
+    """
+
+    iteration: int
+    max_iterations: int
+    progress: float
+    is_complete: bool = False
+    is_final: bool = False
+    status: str = "in_progress"
+    current_phase: str = "unknown"
+    message: str = ""
+    action_name: Optional[str] = None
+    action_summary: Optional[str] = None
+    observation_summary: Optional[str] = None
+    step_completed: bool = False
+    plan_step: Optional[str] = None
+    error: Optional[str] = None
+    tokens_used: int = 0
+    duration_ms: float = 0.0
+    stop_reason: Optional[str] = None
 
 
 # =============================================================================
@@ -606,6 +660,273 @@ class CognitiveCycle:
             f"Progress: {agent_state.progress_estimate:.1%}"
         )
 
+    async def run_streaming(
+        self,
+        agent_state: EnhancedAgentState,
+        session_id: str,
+        max_iterations: int = 10,
+        sandbox: Optional["SandboxProvider"] = None,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        skip_validation: bool = False,
+        agents_config: Optional["AgentsConfig"] = None,
+        approval_callback: Optional[Callable[[str], bool]] = None,
+    ) -> AsyncIterator[StreamingIterationResult]:
+        """
+        Run cognitive iterations with streaming updates after each iteration.
+
+        This method yields a StreamingIterationResult after each completed
+        iteration, enabling real-time progress display in UIs/CLIs.
+
+        Args:
+            agent_state: Enhanced agent state
+            session_id: Session ID for memory
+            max_iterations: Maximum iterations to run
+            sandbox: Optional active sandbox
+            provider_name: Optional provider override
+            model_name: Optional model override
+            skip_validation: If True, auto-approve all actions
+            agents_config: Optional agents configuration
+            approval_callback: Optional callback for approval
+
+        Yields:
+            StreamingIterationResult after each iteration
+
+        Example:
+            >>> async for update in cycle.run_streaming(state, session_id, max_iterations=10):
+            ...     print(f"Iteration {update.iteration}: {update.progress:.0%}")
+            ...     if update.action_name:
+            ...         print(f"  Action: {update.action_name}")
+            ...     if update.is_final:
+            ...         print(f"Final status: {update.status}")
+        """
+        # Load configuration and initialize circuit breaker (same as run_until_complete)
+        if agents_config is None:
+            from ....config.agents_config import AgentsConfig
+            agents_config = AgentsConfig()
+
+        cb_config = agents_config.circuit_breaker
+
+        circuit_breaker: Optional[AgentCircuitBreaker] = None
+        if cb_config.enabled:
+            circuit_breaker = AgentCircuitBreaker(
+                max_iterations=min(max_iterations, cb_config.max_iterations),
+                max_same_errors=cb_config.max_same_errors,
+                max_execution_time_seconds=cb_config.max_execution_time_seconds,
+                max_total_cost=cb_config.max_total_cost,
+                progress_stall_threshold=cb_config.progress_stall_threshold,
+                progress_stall_tolerance=cb_config.progress_stall_tolerance,
+            )
+            circuit_breaker.start()
+
+        logger.info(
+            f"Starting streaming cognitive cycle: max_iterations={max_iterations}, "
+            f"skip_validation={skip_validation}"
+        )
+
+        accumulated_cost = 0.0
+
+        for iteration_num in range(max_iterations):
+            # Check if already finished before starting iteration
+            if agent_state.is_finished:
+                logger.info(f"Task completed in {iteration_num} iterations")
+                yield StreamingIterationResult(
+                    iteration=iteration_num,
+                    max_iterations=max_iterations,
+                    progress=1.0,
+                    is_complete=True,
+                    is_final=True,
+                    status="complete",
+                    current_phase="complete",
+                    message=agent_state.final_answer or "Task completed successfully",
+                )
+                return
+
+            # Run single iteration
+            iteration_result: Optional[CycleIteration] = None
+            error_msg: Optional[str] = None
+
+            try:
+                iteration_result = await self.run_iteration(
+                    agent_state=agent_state,
+                    session_id=session_id,
+                    sandbox=sandbox,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                    skip_validation=skip_validation,
+                    approval_callback=approval_callback,
+                )
+
+                # Track cost if available
+                if hasattr(iteration_result, "total_cost") and iteration_result.total_cost:
+                    accumulated_cost += iteration_result.total_cost
+
+            except Exception as e:
+                logger.error(f"Iteration {iteration_num + 1} failed: {e}")
+                error_msg = str(e)
+
+                # Check circuit breaker on error
+                if circuit_breaker is not None:
+                    progress = getattr(agent_state, "progress_estimate", 0.0)
+                    cb_result = circuit_breaker.check(
+                        iteration=iteration_num + 1,
+                        progress=progress,
+                        error=error_msg,
+                        cost=accumulated_cost,
+                    )
+
+                    if cb_result.tripped:
+                        logger.warning(f"Circuit breaker tripped on error: {cb_result.reason.value}")
+                        yield StreamingIterationResult(
+                            iteration=iteration_num + 1,
+                            max_iterations=max_iterations,
+                            progress=progress,
+                            is_complete=False,
+                            is_final=True,
+                            status="circuit_breaker_tripped",
+                            current_phase="error",
+                            message=f"Circuit breaker: {cb_result.message}",
+                            error=error_msg,
+                            stop_reason=cb_result.reason.value,
+                        )
+                        return
+
+                # Yield error update
+                yield StreamingIterationResult(
+                    iteration=iteration_num + 1,
+                    max_iterations=max_iterations,
+                    progress=getattr(agent_state, "progress_estimate", 0.0),
+                    is_complete=False,
+                    is_final=circuit_breaker is None,  # Fatal if no circuit breaker
+                    status="error",
+                    current_phase="error",
+                    message=f"Iteration failed: {error_msg[:100]}",
+                    error=error_msg,
+                )
+
+                if circuit_breaker is None:
+                    return  # Fatal error without circuit breaker
+                continue  # Continue to next iteration with circuit breaker
+
+            # Extract information from successful iteration
+            actual_iteration = iteration_num + 1
+            progress = getattr(agent_state, "progress_estimate", 0.0)
+
+            # Get action information
+            action_name: Optional[str] = None
+            action_summary: Optional[str] = None
+            if iteration_result.think_output and iteration_result.think_output.proposed_action:
+                action = iteration_result.think_output.proposed_action
+                action_name = action.name
+                # Create a brief summary of the action arguments
+                if hasattr(action, "arguments") and action.arguments:
+                    args_str = str(action.arguments)
+                    action_summary = args_str[:100] + "..." if len(args_str) > 100 else args_str
+
+            # Get observation summary
+            observation_summary: Optional[str] = None
+            if iteration_result.observe_output:
+                obs = iteration_result.observe_output.observation
+                observation_summary = obs[:150] + "..." if len(obs) > 150 else obs
+
+            # Get step completion info
+            step_completed = False
+            if iteration_result.reflect_output:
+                step_completed = iteration_result.reflect_output.step_completed
+
+            # Get current plan step
+            plan_step: Optional[str] = None
+            if agent_state.plan and agent_state.current_plan_step_index < len(agent_state.plan):
+                plan_step = agent_state.plan[agent_state.current_plan_step_index]
+
+            # Determine current phase (last completed phase)
+            current_phase = "update"  # Default: full iteration completed
+            if iteration_result.think_output and iteration_result.think_output.is_final_answer:
+                current_phase = "think"  # Ended early with final answer
+
+            # Check if task is complete
+            is_complete = agent_state.is_finished
+            if iteration_result.think_output and iteration_result.think_output.is_final_answer:
+                is_complete = True
+
+            # Build message
+            if is_complete:
+                message = agent_state.final_answer or "Task completed"
+            elif action_name:
+                message = f"Executed: {action_name}"
+                if observation_summary:
+                    message += f" → {observation_summary[:50]}"
+            else:
+                message = f"Iteration {actual_iteration} completed"
+
+            # Check circuit breaker
+            should_stop = False
+            stop_reason: Optional[str] = None
+
+            if circuit_breaker is not None and not is_complete:
+                cb_step_completed = None
+                if iteration_result.reflect_output:
+                    cb_step_completed = getattr(iteration_result.reflect_output, "step_completed", None)
+
+                cb_result = circuit_breaker.check(
+                    iteration=actual_iteration,
+                    progress=progress,
+                    error=None,
+                    cost=accumulated_cost,
+                    step_completed=cb_step_completed,
+                )
+
+                if cb_result.tripped:
+                    should_stop = True
+                    stop_reason = cb_result.reason.value
+                    message = f"Circuit breaker: {cb_result.message}"
+                    logger.warning(f"Circuit breaker tripped: {stop_reason}")
+
+            # Check if UPDATE phase says to stop
+            if iteration_result.update_output and not iteration_result.update_output.should_continue:
+                should_stop = True
+                if agent_state.awaiting_human_approval:
+                    stop_reason = "human_approval_required"
+                else:
+                    stop_reason = "update_stopped"
+
+            # Yield the iteration result
+            yield StreamingIterationResult(
+                iteration=actual_iteration,
+                max_iterations=max_iterations,
+                progress=progress,
+                is_complete=is_complete,
+                is_final=is_complete or should_stop,
+                status="complete" if is_complete else ("stopped" if should_stop else "in_progress"),
+                current_phase=current_phase,
+                message=message,
+                action_name=action_name,
+                action_summary=action_summary,
+                observation_summary=observation_summary,
+                step_completed=step_completed,
+                plan_step=plan_step,
+                tokens_used=iteration_result.total_tokens_used,
+                duration_ms=iteration_result.duration_ms,
+                stop_reason=stop_reason,
+            )
+
+            if is_complete or should_stop:
+                return
+
+        # Max iterations reached
+        logger.warning(f"Max iterations ({max_iterations}) reached without completion")
+        yield StreamingIterationResult(
+            iteration=max_iterations,
+            max_iterations=max_iterations,
+            progress=getattr(agent_state, "progress_estimate", 0.0),
+            is_complete=False,
+            is_final=True,
+            status="max_iterations",
+            current_phase="complete",
+            message=f"Max iterations ({max_iterations}) reached",
+            stop_reason="max_iterations",
+        )
+
     def _build_history(self, agent_state: EnhancedAgentState) -> str:
         """
         Build history string from recent iterations.
@@ -642,4 +963,4 @@ class CognitiveCycle:
 # EXPORTS
 # =============================================================================
 
-__all__ = ["CognitiveCycle"]
+__all__ = ["CognitiveCycle", "StreamingIterationResult"]
