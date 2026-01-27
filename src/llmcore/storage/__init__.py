@@ -7,11 +7,9 @@ context presets, episodic memory, and vector embeddings for RAG.
 It provides both session storage (for conversations and episodes) and
 vector storage (for semantic memory) backends.
 
-STORAGE SYSTEM V2 (Phase 1 - PRIMORDIUM):
-- Schema versioning with idempotent migrations
-- Health monitoring with circuit breakers
-- Configuration validation at startup
-- Connection pool management
+STORAGE SYSTEM V2:
+- Phase 1 (PRIMORDIUM): Schema versioning, health monitoring, config validation
+- Phase 2 (NEXUS): Multi-backend abstraction, pgvector optimization, user isolation
 """
 
 # Import key storage components for easier access
@@ -69,6 +67,34 @@ from .cli import (
     main as cli_main,
 )
 
+# Phase 2: Storage Abstraction Layer
+from .abstraction import (
+    StorageContext,
+    IsolationLevel,
+    BackendCapabilities,
+    POSTGRES_PGVECTOR_CAPABILITIES,
+    SQLITE_CAPABILITIES,
+    CHROMADB_CAPABILITIES,
+    StorageBackendProtocol,
+    QueryBuilder,
+    QueryOperator,
+    QueryCondition,
+    HNSWConfig,
+    VectorSearchConfig,
+    BatchConfig,
+    BatchResult,
+    PoolConfig,
+    chunk_list,
+    execute_with_retry,
+)
+
+# Phase 2: Enhanced PgVector Storage
+from .pgvector_enhanced import (
+    EnhancedPgVectorStorage,
+    CollectionInfo,
+    HybridSearchResult,
+)
+
 __all__ = [
     # Core components
     "StorageManager",
@@ -81,6 +107,7 @@ __all__ = [
     # Vector storage implementations
     "PgVectorStorage",
     "ChromaVectorStorage",
+    "EnhancedPgVectorStorage",  # Phase 2
     # Schema management (Phase 1)
     "BaseSchemaManager",
     "PostgresSchemaManager",
@@ -112,4 +139,25 @@ __all__ = [
     "cmd_schema",
     "cmd_info",
     "cli_main",
+    # Abstraction Layer (Phase 2)
+    "StorageContext",
+    "IsolationLevel",
+    "BackendCapabilities",
+    "POSTGRES_PGVECTOR_CAPABILITIES",
+    "SQLITE_CAPABILITIES",
+    "CHROMADB_CAPABILITIES",
+    "StorageBackendProtocol",
+    "QueryBuilder",
+    "QueryOperator",
+    "QueryCondition",
+    "HNSWConfig",
+    "VectorSearchConfig",
+    "BatchConfig",
+    "BatchResult",
+    "PoolConfig",
+    "chunk_list",
+    "execute_with_retry",
+    # Enhanced PgVector (Phase 2)
+    "CollectionInfo",
+    "HybridSearchResult",
 ]
