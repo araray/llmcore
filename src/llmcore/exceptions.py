@@ -93,6 +93,73 @@ class SessionNotFoundError(StorageError):
         super().__init__(f"{message} Session ID: '{session_id}'")
 
 
+class StorageUnavailableError(StorageError):
+    """
+    Raised when storage backend is unavailable (e.g., circuit breaker is open).
+
+    This indicates a transient failure condition where the backend may recover.
+    Applications can catch this to implement fallback behavior.
+    """
+    def __init__(
+        self,
+        backend_name: str = "unknown",
+        message: str = "Storage backend is unavailable.",
+        retry_after_seconds: Optional[int] = None
+    ):
+        self.backend_name = backend_name
+        self.retry_after_seconds = retry_after_seconds
+        detail = f" Retry after {retry_after_seconds}s." if retry_after_seconds else ""
+        super().__init__(f"{message} Backend: '{backend_name}'.{detail}")
+
+
+class StorageHealthError(StorageError):
+    """
+    Raised when storage health check fails.
+
+    Contains diagnostic information to help identify the issue.
+    """
+    def __init__(
+        self,
+        backend_name: str = "unknown",
+        check_type: str = "connectivity",
+        message: str = "Storage health check failed.",
+        latency_ms: Optional[float] = None
+    ):
+        self.backend_name = backend_name
+        self.check_type = check_type
+        self.latency_ms = latency_ms
+
+        detail = f" (check={check_type}"
+        if latency_ms is not None:
+            detail += f", latency={latency_ms:.0f}ms"
+        detail += ")"
+
+        super().__init__(f"{message} Backend: '{backend_name}'{detail}")
+
+
+class SchemaError(StorageError):
+    """
+    Raised when schema management operations fail.
+
+    This includes schema version mismatches, migration failures,
+    and DDL execution errors.
+    """
+    def __init__(
+        self,
+        message: str = "Schema operation failed.",
+        current_version: Optional[int] = None,
+        target_version: Optional[int] = None
+    ):
+        self.current_version = current_version
+        self.target_version = target_version
+
+        detail = ""
+        if current_version is not None or target_version is not None:
+            detail = f" (current=v{current_version}, target=v{target_version})"
+
+        super().__init__(f"{message}{detail}")
+
+
 # =============================================================================
 # CONTEXT EXCEPTIONS
 # =============================================================================
