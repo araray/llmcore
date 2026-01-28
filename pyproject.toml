@@ -128,8 +128,7 @@ Documentation = "https://github.com/araray/llmcore/blob/main/docs/USAGE.md"
 Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 
 [project.scripts]
-# llmcore is a pure library with no CLI entry points
-# All CLI functionality is provided by llmchat
+llmcore-storage = "llmcore.storage.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
