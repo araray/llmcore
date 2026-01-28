@@ -160,6 +160,30 @@ from .ingestion import (
     SentenceChunker,
 )
 
+# =============================================================================
+# OBSERVABILITY MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+# =============================================================================
+# These exports provide cost tracking and observability features.
+from .observability import (
+    CostTracker,
+    CostTrackingConfig,
+    PRICING_DATA,
+    UsageRecord,
+    UsageSummary,
+    create_cost_tracker,
+    get_price_per_million_tokens,
+)
+
+# =============================================================================
+# EMBEDDING CACHE MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+# =============================================================================
+# These exports provide embedding caching for cost reduction.
+from .embedding import (
+    EmbeddingCache,
+    EmbeddingCacheConfig,
+    create_embedding_cache,
+)
+
 try:
     __version__ = version("llmcore")
 except PackageNotFoundError:
@@ -316,4 +340,20 @@ __all__ = [
     # Statistics Models
     "SessionTokenStats",
     "CostEstimate",
+    # ==========================================================================
+    # Observability (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+    # ==========================================================================
+    "CostTracker",
+    "CostTrackingConfig",
+    "UsageRecord",
+    "UsageSummary",
+    "PRICING_DATA",
+    "create_cost_tracker",
+    "get_price_per_million_tokens",
+    # ==========================================================================
+    # Embedding Cache (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+    # ==========================================================================
+    "EmbeddingCache",
+    "EmbeddingCacheConfig",
+    "create_embedding_cache",
 ]

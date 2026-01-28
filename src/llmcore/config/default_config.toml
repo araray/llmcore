@@ -429,6 +429,111 @@ posthog = "ERROR"
 
 
   # =============================================================================
+  # [embedding.cache] - Embedding Cache Configuration
+  # =============================================================================
+  # Caches embedding vectors to reduce API costs and improve performance.
+  # Uses a two-tier architecture: LRU in-memory cache + SQLite disk cache.
+  #
+  # Reference: UNIFIED_IMPLEMENTATION_PLAN.md Phase 1, Task 1.2
+
+  [embedding.cache]
+  # --- Enable/Disable Caching ---
+  # What it does: Master switch for embedding caching.
+  # Purpose: Reduce API costs by caching identical embeddings.
+  # Default Value: true
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__ENABLED
+  enabled = true
+
+  # --- Memory Cache Size ---
+  # What it does: Maximum number of embeddings to keep in memory (LRU cache).
+  # Purpose: Fast access to frequently used embeddings.
+  # Default Value: 10000
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__MEMORY_SIZE
+  memory_size = 10000
+
+  # --- Disk Cache Enable ---
+  # What it does: Enable SQLite disk persistence for embeddings.
+  # Purpose: Cache survives process restarts.
+  # Default Value: true
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__DISK_ENABLED
+  disk_enabled = true
+
+  # --- Disk Cache Path ---
+  # What it does: Path to SQLite database for cached embeddings.
+  # Purpose: Persistent storage location.
+  # Default Value: "~/.cache/llmcore/embeddings.db"
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__DISK_PATH
+  disk_path = "~/.cache/llmcore/embeddings.db"
+
+  # --- Disk Cache Max Entries ---
+  # What it does: Maximum number of embeddings to store on disk (0 = unlimited).
+  # Purpose: Limit disk space usage.
+  # Default Value: 0 (unlimited)
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__DISK_MAX_ENTRIES
+  disk_max_entries = 0
+
+  # --- Cache TTL (Time-to-Live) ---
+  # What it does: Hours before cached embeddings expire (0 = never expire).
+  # Purpose: Ensure cache freshness when embedding models change.
+  # Default Value: 0 (no expiration)
+  # Environment Variable: LLMCORE_EMBEDDING__CACHE__TTL_HOURS
+  ttl_hours = 0
+
+
+  # =============================================================================
+  # [observability] - General Observability Configuration
+  # =============================================================================
+  # Observability features for tracking API usage, costs, and performance.
+  #
+  # Reference: UNIFIED_IMPLEMENTATION_PLAN.md Phase 1, Task 1.4
+
+  [observability]
+  # Top-level observability enable (affects all observability features)
+  enabled = true
+
+    # =========================================================================
+    # [observability.cost_tracking] - Cost Tracking Configuration
+    # =========================================================================
+    # Tracks token usage and estimated costs for all LLM and embedding API calls.
+
+    [observability.cost_tracking]
+    # --- Enable Cost Tracking ---
+    # What it does: Enable recording of API usage and cost estimation.
+    # Purpose: Budget monitoring and usage analytics.
+    # Default Value: true
+    # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__ENABLED
+    enabled = true
+
+    # --- Cost Database Path ---
+    # What it does: Path to SQLite database for cost records.
+    # Purpose: Persistent storage for usage analytics.
+    # Default Value: "~/.llmcore/costs.db"
+    # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__DB_PATH
+    db_path = "~/.llmcore/costs.db"
+
+    # --- Retention Period ---
+    # What it does: Days to retain cost records (0 = forever).
+    # Purpose: Manage database size.
+    # Default Value: 90
+    # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__RETENTION_DAYS
+    retention_days = 90
+
+    # --- Console Logging ---
+    # What it does: Log usage records to console.
+    # Purpose: Real-time visibility during development.
+    # Default Value: false
+    # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__LOG_TO_CONSOLE
+    log_to_console = false
+
+    # --- Track Latency ---
+    # What it does: Record request latency with usage records.
+    # Purpose: Performance monitoring.
+    # Default Value: true
+    # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__TRACK_LATENCY
+    track_latency = true
+
+
+  # =============================================================================
   # [agents.observability] - Agent Observability & Telemetry
   # =============================================================================
   # This section configures the observability system for agent executions.
