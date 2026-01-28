@@ -354,14 +354,22 @@ class LLMCoreVectorClient:
 
         This handles the common case where SemantiScan calls sync methods
         but LLMCore uses async internally.
+
+        Strategy:
+        - If no event loop is running: use asyncio.run() directly
+        - If an event loop IS running: run in a new thread to avoid blocking
         """
+        import concurrent.futures
+
         try:
-            # Try to get running loop
-            loop = asyncio.get_running_loop()
-            # We're in an async context, create a task
-            return asyncio.ensure_future(coro)
+            asyncio.get_running_loop()
+            # We're in an async context - can't use asyncio.run() directly
+            # Run the coroutine in a separate thread with its own event loop
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result(timeout=60.0)  # 60s timeout
         except RuntimeError:
-            # No running loop, use asyncio.run
+            # No running loop - safe to use asyncio.run()
             return asyncio.run(coro)
 
     # =========================================================================
@@ -496,13 +504,6 @@ class LLMCoreVectorClient:
             results = self._run_async(
                 self._query_async(query_embedding, top_k, where_filter)
             )
-
-            # Handle potential Future if we're in async context
-            if asyncio.isfuture(results):
-                # We're in async context, need to await
-                # This shouldn't happen in normal SemantiScan usage
-                logger.warning("Query called from async context, results may be a Future")
-                return []
 
             logger.info(f"Retrieved {len(results)} results.")
             return results

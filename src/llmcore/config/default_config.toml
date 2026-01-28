@@ -659,7 +659,7 @@ posthog = "ERROR"
         enable_hybrid_search = true # optional pgvector hybrid search
         # type = "chromadb"  # Currently only ChromaDB is supported by semantiscan
         # # Default path - should be synchronized with llmcore's vector storage path
-        # path = "~/.llmcore/chroma_db"
+        path = "~/.llmcore/chroma_db"
         # collection_name = "default_semantiscan"  # Default collection for ingested code
 
 
