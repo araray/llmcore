@@ -10,6 +10,8 @@ vector storage (for semantic memory) backends.
 STORAGE SYSTEM V2:
 - Phase 1 (PRIMORDIUM): Schema versioning, health monitoring, config validation
 - Phase 2 (NEXUS): Multi-backend abstraction, pgvector optimization, user isolation
+- Phase 3 (SYMBIOSIS): SemantiScan vector delegation layer
+- Phase 4 (PANOPTICON): Observability, metrics, event logging, diagnostics
 """
 
 # Import key storage components for easier access
@@ -64,6 +66,11 @@ from .cli import (
     cmd_health,
     cmd_schema,
     cmd_info,
+    # Phase 4 (PANOPTICON) CLI commands
+    cmd_stats,
+    cmd_inspect,
+    cmd_diagnose,
+    cmd_cleanup,
     main as cli_main,
 )
 
@@ -93,6 +100,39 @@ from .pgvector_enhanced import (
     EnhancedPgVectorStorage,
     CollectionInfo,
     HybridSearchResult,
+)
+
+# Phase 4 (PANOPTICON): Observability & Control Plane
+from .instrumentation import (
+    StorageInstrumentation,
+    InstrumentationConfig,
+    InstrumentationContext,
+    OperationRecord,
+    instrumented,
+    MetricsBackend as InstrumentationMetricsBackend,
+    TracingBackend,
+)
+
+from .metrics import (
+    MetricsCollector,
+    MetricsConfig,
+    MetricsBackendType,
+    InMemoryMetricsBackend,
+    PrometheusMetricsBackend,
+    NullMetricsBackend,
+)
+
+from .events import (
+    EventLogger,
+    EventLoggerConfig,
+    EventType,
+    StorageEvent,
+)
+
+from .observability import (
+    ObservabilityConfig,
+    DEFAULT_OBSERVABILITY_CONFIG,
+    OBSERVABILITY_TOML_EXAMPLE,
 )
 
 __all__ = [
@@ -138,6 +178,11 @@ __all__ = [
     "cmd_health",
     "cmd_schema",
     "cmd_info",
+    # CLI (Phase 4 - PANOPTICON)
+    "cmd_stats",
+    "cmd_inspect",
+    "cmd_diagnose",
+    "cmd_cleanup",
     "cli_main",
     # Abstraction Layer (Phase 2)
     "StorageContext",
@@ -160,4 +205,28 @@ __all__ = [
     # Enhanced PgVector (Phase 2)
     "CollectionInfo",
     "HybridSearchResult",
+    # Instrumentation (Phase 4 - PANOPTICON)
+    "StorageInstrumentation",
+    "InstrumentationConfig",
+    "InstrumentationContext",
+    "OperationRecord",
+    "instrumented",
+    "InstrumentationMetricsBackend",
+    "TracingBackend",
+    # Metrics (Phase 4 - PANOPTICON)
+    "MetricsCollector",
+    "MetricsConfig",
+    "MetricsBackendType",
+    "InMemoryMetricsBackend",
+    "PrometheusMetricsBackend",
+    "NullMetricsBackend",
+    # Events (Phase 4 - PANOPTICON)
+    "EventLogger",
+    "EventLoggerConfig",
+    "EventType",
+    "StorageEvent",
+    # Observability Config (Phase 4 - PANOPTICON)
+    "ObservabilityConfig",
+    "DEFAULT_OBSERVABILITY_CONFIG",
+    "OBSERVABILITY_TOML_EXAMPLE",
 ]

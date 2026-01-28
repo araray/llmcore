@@ -228,6 +228,141 @@ posthog = "ERROR"
   db_url = ""
 
   # ==============================================================================
+  # [storage.observability] - Storage Observability (Phase 4 - PANOPTICON)
+  # ==============================================================================
+  # Configures the observability layer for storage operations.
+  # Provides instrumentation, metrics, event logging, and diagnostics.
+  #
+  # Features:
+  # - Operation timing and slow query detection
+  # - Prometheus-compatible metrics (counters, histograms, gauges)
+  # - Persistent event logging for audit trails
+  # - Distributed tracing (OpenTelemetry integration)
+  #
+  # Reference: Storage_System_Spec_v2r0.md Phase 4 (PANOPTICON)
+  [storage.observability]
+
+  # Master switch for all observability features.
+  # When false, all observability components are disabled with zero overhead.
+  # Default Value: true
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__ENABLED
+  enabled = true
+
+  # --- Query Logging ---
+
+  # Log ALL queries at DEBUG level.
+  # WARNING: Very verbose. Use only for debugging specific issues.
+  # Default Value: false
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__LOG_QUERIES
+  log_queries = false
+
+  # Log queries that exceed the slow query threshold at WARNING level.
+  # Recommended to keep enabled for production monitoring.
+  # Default Value: true
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__LOG_SLOW_QUERIES
+  log_slow_queries = true
+
+  # Threshold (in seconds) for slow query detection.
+  # Queries taking longer than this will be logged and recorded.
+  # Default Value: 1.0
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__SLOW_QUERY_THRESHOLD_SECONDS
+  slow_query_threshold_seconds = 1.0
+
+  # Include query parameters in logs.
+  # WARNING: Security risk - may expose sensitive data in logs.
+  # Default Value: false
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__INCLUDE_QUERY_PARAMS
+  include_query_params = false
+
+  # --- Metrics Collection ---
+
+  # Enable metrics collection (counters, histograms, gauges).
+  # Default Value: true
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__METRICS_ENABLED
+  metrics_enabled = true
+
+  # Metrics backend type.
+  # Possible Values: "prometheus", "memory", "none"
+  #   - "prometheus": Expose metrics via HTTP endpoint for Prometheus scraping
+  #   - "memory": In-memory storage for testing/debugging
+  #   - "none": Disable metrics collection
+  # Default Value: "memory"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__METRICS_BACKEND
+  metrics_backend = "memory"
+
+  # Prefix for all metric names.
+  # Example: "llmcore_storage_operations_total" with prefix "llmcore_storage"
+  # Default Value: "llmcore_storage"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__METRICS_PREFIX
+  metrics_prefix = "llmcore_storage"
+
+  # Port for Prometheus metrics HTTP endpoint (when metrics_backend = "prometheus").
+  # Default Value: 9090
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__METRICS_PORT
+  metrics_port = 9090
+
+  # --- Event Logging (Persistent Audit Trail) ---
+
+  # Enable persistent event logging to database.
+  # Events are stored in the storage_events table for audit and analysis.
+  # Default Value: true
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__EVENT_LOGGING_ENABLED
+  event_logging_enabled = true
+
+  # Days to retain events in the database.
+  # Set to 0 to retain events forever (not recommended for production).
+  # Default Value: 30
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__EVENT_RETENTION_DAYS
+  event_retention_days = 30
+
+  # Database table name for event storage.
+  # Default Value: "storage_events"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__EVENT_TABLE_NAME
+  event_table_name = "storage_events"
+
+  # Number of events to batch before flushing to database.
+  # Higher values reduce database writes but increase memory usage.
+  # Default Value: 100
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__EVENT_BATCH_SIZE
+  event_batch_size = 100
+
+  # Interval (in seconds) for flushing events to database.
+  # Events are flushed when batch_size is reached OR this interval elapses.
+  # Default Value: 5.0
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__EVENT_FLUSH_INTERVAL_SECONDS
+  event_flush_interval_seconds = 5.0
+
+  # --- Distributed Tracing (OpenTelemetry) ---
+
+  # Enable distributed tracing.
+  # Requires OpenTelemetry SDK to be installed and configured.
+  # Default Value: false
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__TRACING_ENABLED
+  tracing_enabled = false
+
+  # Tracing backend type.
+  # Possible Values: "opentelemetry", "none"
+  # Default Value: "none"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__TRACING_BACKEND
+  tracing_backend = "none"
+
+  # OTLP collector endpoint for trace export.
+  # Default Value: "http://localhost:4317"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__TRACING_ENDPOINT
+  tracing_endpoint = "http://localhost:4317"
+
+  # Service name for traces.
+  # Default Value: "llmcore-storage"
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__TRACING_SERVICE_NAME
+  tracing_service_name = "llmcore-storage"
+
+  # Sampling rate for traces (0.0 to 1.0).
+  # 1.0 = trace all requests, 0.1 = trace 10% of requests.
+  # Default Value: 1.0
+  # Environment Variable: LLMCORE_STORAGE__OBSERVABILITY__TRACING_SAMPLE_RATE
+  tracing_sample_rate = 1.0
+
+  # ==============================================================================
   # [model_cards] - Model Card Library Configuration
   # ==============================================================================
   # The Model Card Library provides comprehensive metadata for LLM models,

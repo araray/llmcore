@@ -13,6 +13,13 @@ STORAGE SYSTEM V2 (Phase 1 - PRIMORDIUM):
 - Connection pool management with health checks
 - Unified health API for all backends
 
+STORAGE SYSTEM V2 (Phase 4 - PANOPTICON):
+- Integrated observability layer
+- Instrumentation for all storage operations
+- Metrics collection (Prometheus, in-memory)
+- Event logging for audit trails
+- Slow query detection and logging
+
 REFACTORED FOR LIBRARY MODE (Step 1.3): This manager now directly instantiates
 and holds storage backend instances rather than acting as a factory. All multi-tenant
 db_session parameters have been removed for single-tenant library usage.
@@ -20,7 +27,7 @@ db_session parameters have been removed for single-tenant library usage.
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional, Type, List
+from typing import Any, Dict, Optional, Type, List, Callable
 
 # Assume ConfyConfig type for hinting
 try:
@@ -45,6 +52,13 @@ from .health import (
     HealthStatus, CircuitState, StorageHealthReport,
     create_postgres_health_check, create_sqlite_health_check, create_chromadb_health_check
 )
+# Phase 4 imports: Observability (PANOPTICON)
+from .observability import ObservabilityConfig, DEFAULT_OBSERVABILITY_CONFIG
+from .instrumentation import (
+    StorageInstrumentation, InstrumentationConfig, InstrumentationContext
+)
+from .metrics import MetricsCollector, MetricsConfig, MetricsBackendType
+from .events import EventLogger, EventLoggerConfig, EventType, StorageEvent
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +87,13 @@ class StorageManager:
     - Unified health API for observability
     - Schema management (via storage backends)
 
+    STORAGE SYSTEM V2 (Phase 4 - PANOPTICON):
+    Integrated observability layer providing:
+    - Instrumentation for all storage operations with timing
+    - Metrics collection (counters, histograms, gauges)
+    - Event logging for persistent audit trails
+    - Slow query detection and logging
+
     REFACTORED (Step 1.3): Now operates in library mode. Storage backend instances
     are created once during initialization and held internally, rather than being
     created on-demand per-request. This provides a simple, single-tenant API suitable
@@ -93,10 +114,17 @@ class StorageManager:
     _health_config: HealthConfig
     _validation_result: Optional[ValidationResult] = None
 
+    # Phase 4: Observability (PANOPTICON)
+    _observability_config: ObservabilityConfig
+    _instrumentation: Optional[StorageInstrumentation] = None
+    _metrics_collector: Optional[MetricsCollector] = None
+    _event_logger: Optional[EventLogger] = None
+
     def __init__(
         self,
         config: ConfyConfig,
         health_config: Optional[HealthConfig] = None,
+        observability_config: Optional[ObservabilityConfig] = None,
         validate_config: bool = True,
         strict_validation: bool = False
     ):
@@ -106,6 +134,7 @@ class StorageManager:
         Args:
             config: The main LLMCore configuration object (ConfyConfig instance).
             health_config: Optional health monitoring configuration.
+            observability_config: Optional Phase 4 observability configuration.
             validate_config: Whether to validate configuration at startup (default: True).
             strict_validation: Whether to treat warnings as errors (default: False).
 
@@ -116,6 +145,13 @@ class StorageManager:
         self._health_config = health_config or HealthConfig()
         self._health_manager = StorageHealthManager()
         self._initialized = False
+
+        # Phase 4: Initialize observability configuration
+        # Priority: explicit parameter > config file > defaults
+        if observability_config is not None:
+            self._observability_config = observability_config
+        else:
+            self._observability_config = self._load_observability_config()
 
         # Validate configuration if requested
         if validate_config:
@@ -170,10 +206,60 @@ class StorageManager:
 
         logger.debug("Storage configuration validation passed.")
 
+    def _load_observability_config(self) -> ObservabilityConfig:
+        """
+        Load observability configuration from the config object.
+
+        Attempts to load from storage.observability section of config,
+        falls back to defaults if not present.
+
+        Returns:
+            ObservabilityConfig instance.
+        """
+        try:
+            obs_config_dict = self._config.get("storage.observability", {})
+            if obs_config_dict:
+                return ObservabilityConfig.from_dict(obs_config_dict)
+        except Exception as e:
+            logger.warning(f"Could not load observability config from file: {e}")
+
+        # Try environment variables as fallback
+        try:
+            env_config = ObservabilityConfig.from_environment()
+            if env_config != DEFAULT_OBSERVABILITY_CONFIG:
+                logger.debug("Using observability config from environment variables")
+                return env_config
+        except Exception as e:
+            logger.debug(f"No valid observability config from environment: {e}")
+
+        # Use defaults
+        logger.debug("Using default observability configuration")
+        return DEFAULT_OBSERVABILITY_CONFIG
+
     @property
     def validation_result(self) -> Optional[ValidationResult]:
         """Get the configuration validation result."""
         return self._validation_result
+
+    @property
+    def observability_config(self) -> ObservabilityConfig:
+        """Get the observability configuration."""
+        return self._observability_config
+
+    @property
+    def instrumentation(self) -> Optional[StorageInstrumentation]:
+        """Get the storage instrumentation instance (if initialized)."""
+        return self._instrumentation
+
+    @property
+    def metrics_collector(self) -> Optional[MetricsCollector]:
+        """Get the metrics collector instance (if initialized)."""
+        return self._metrics_collector
+
+    @property
+    def event_logger(self) -> Optional[EventLogger]:
+        """Get the event logger instance (if initialized)."""
+        return self._event_logger
 
     @property
     def health_manager(self) -> StorageHealthManager:
@@ -183,7 +269,8 @@ class StorageManager:
     async def initialize_storages(
         self,
         enable_health_monitoring: bool = True,
-        run_initial_health_check: bool = True
+        run_initial_health_check: bool = True,
+        enable_observability: bool = True
     ) -> None:
         """
         Parses storage configuration and creates storage backend instances.
@@ -194,9 +281,15 @@ class StorageManager:
         - Health monitor registration
         - Optional initial health check
 
+        STORAGE SYSTEM V2 (Phase 4 - PANOPTICON): Now also includes:
+        - Instrumentation layer for operation timing
+        - Metrics collector initialization
+        - Event logger initialization
+
         Args:
             enable_health_monitoring: Whether to start background health monitoring.
             run_initial_health_check: Whether to run health check immediately after init.
+            enable_observability: Whether to initialize observability components.
 
         Raises:
             ConfigError: If storage configuration is invalid.
@@ -209,6 +302,10 @@ class StorageManager:
         # Parse configuration
         await self._parse_session_storage_config()
         await self._parse_vector_storage_config()
+
+        # Phase 4: Initialize observability components (before backend instantiation)
+        if enable_observability and self._observability_config.enabled:
+            await self._initialize_observability()
 
         # Instantiate storage backends
         await self._instantiate_session_storage()
@@ -272,6 +369,80 @@ class StorageManager:
         self._vector_storage_config = vector_storage_config
         logger.info(f"Vector storage type '{vector_storage_type}' configured.")
 
+    async def _initialize_observability(self) -> None:
+        """
+        Initialize Phase 4 observability components.
+
+        Creates and configures:
+        - StorageInstrumentation: Operation timing and slow query detection
+        - MetricsCollector: Counter, histogram, and gauge metrics
+        - EventLogger: Persistent event logging to database
+
+        These components are initialized before backend instantiation so that
+        backends can optionally receive instrumentation callbacks.
+        """
+        obs_config = self._observability_config
+
+        if not obs_config.enabled:
+            logger.debug("Observability disabled; skipping initialization")
+            return
+
+        try:
+            # Initialize metrics collector first (needed by instrumentation)
+            if obs_config.metrics_enabled:
+                metrics_cfg = obs_config.get_metrics_config()
+                metrics_config = MetricsConfig(
+                    enabled=metrics_cfg.get("enabled", True),
+                    backend=MetricsBackendType(metrics_cfg.get("backend", "memory")),
+                    prefix=metrics_cfg.get("prefix", "llmcore_storage"),
+                    default_labels=metrics_cfg.get("default_labels", {}),
+                    prometheus_port=metrics_cfg.get("prometheus_port", 9090),
+                    histogram_buckets=tuple(metrics_cfg.get("histogram_buckets", ())),
+                )
+                self._metrics_collector = MetricsCollector(config=metrics_config)
+                logger.debug(f"Metrics collector initialized (backend: {obs_config.metrics_backend})")
+
+            # Initialize instrumentation with metrics collector
+            inst_config = InstrumentationConfig(**obs_config.get_instrumentation_config())
+            self._instrumentation = StorageInstrumentation(
+                config=inst_config,
+                metrics_collector=self._metrics_collector  # May be None if metrics disabled
+            )
+            logger.debug("Storage instrumentation initialized")
+
+            # Initialize event logger (requires database pool)
+            # Note: Event logger is initialized lazily when a pool becomes available
+            if obs_config.event_logging_enabled:
+                event_config = EventLoggerConfig(**obs_config.get_event_logger_config())
+                self._event_logger = EventLogger(config=event_config)
+                logger.debug("Event logger initialized (database pool will be connected later)")
+
+            logger.info("Observability components initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize observability: {e}", exc_info=True)
+            # Non-fatal: observability failure shouldn't prevent storage from working
+            logger.warning("Continuing without observability features")
+
+    async def _connect_event_logger_to_pool(self) -> None:
+        """
+        Connect the event logger to the session storage database pool.
+
+        Called after session storage is initialized to enable persistent event logging.
+        """
+        if self._event_logger is None:
+            return
+
+        # Try to get pool from session storage
+        if (self._session_storage_instance is not None and
+            hasattr(self._session_storage_instance, '_pool') and
+            self._session_storage_instance._pool is not None):
+            try:
+                await self._event_logger.set_pool(self._session_storage_instance._pool)
+                logger.debug("Event logger connected to session storage pool")
+            except Exception as e:
+                logger.warning(f"Could not connect event logger to pool: {e}")
+
     async def _instantiate_session_storage(self) -> None:
         """
         Creates and initializes the session storage backend instance.
@@ -279,6 +450,9 @@ class StorageManager:
         STORAGE SYSTEM V2 (Phase 1): Now includes:
         - Health monitor registration for the backend
         - Structured logging with backend details
+
+        STORAGE SYSTEM V2 (Phase 4): Now also includes:
+        - Connection of event logger to database pool
 
         Raises:
             StorageError: If instantiation or initialization fails.
@@ -296,6 +470,9 @@ class StorageManager:
 
             # Register health monitor for session storage
             await self._register_session_health_monitor()
+
+            # Phase 4: Connect event logger to database pool
+            await self._connect_event_logger_to_pool()
 
             logger.info(
                 f"Session storage backend '{self._session_storage_type}' instantiated and initialized.",
@@ -603,6 +780,7 @@ class StorageManager:
         Closes connections for all initialized storage backends.
 
         STORAGE SYSTEM V2 (Phase 1): Now also stops health monitoring.
+        STORAGE SYSTEM V2 (Phase 4): Now also shuts down observability components.
         """
         # Stop health monitoring first
         if self._health_manager:
@@ -611,6 +789,9 @@ class StorageManager:
                 logger.debug("Health monitoring stopped.")
             except Exception as e:
                 logger.warning(f"Error stopping health monitoring: {e}")
+
+        # Phase 4: Shutdown observability components
+        await self._shutdown_observability()
 
         if self._session_storage_instance:
             try:
@@ -628,6 +809,35 @@ class StorageManager:
 
         self._initialized = False
         logger.info("Storage manager cleanup complete.")
+
+    async def _shutdown_observability(self) -> None:
+        """
+        Shutdown Phase 4 observability components.
+
+        Flushes pending events and cleanly shuts down collectors.
+        """
+        # Shutdown event logger first (flush pending events)
+        if self._event_logger:
+            try:
+                await self._event_logger.shutdown()
+                logger.debug("Event logger shut down.")
+            except Exception as e:
+                logger.warning(f"Error shutting down event logger: {e}")
+            self._event_logger = None
+
+        # Shutdown metrics collector
+        if self._metrics_collector:
+            try:
+                await self._metrics_collector.shutdown()
+                logger.debug("Metrics collector shut down.")
+            except Exception as e:
+                logger.warning(f"Error shutting down metrics collector: {e}")
+            self._metrics_collector = None
+
+        # Clear instrumentation
+        if self._instrumentation:
+            self._instrumentation = None
+            logger.debug("Instrumentation cleared.")
 
     async def close(self) -> None:
         """
@@ -715,7 +925,7 @@ class StorageManager:
         }
 
     # =========================================================================
-    # DIAGNOSTICS (Phase 1 - PRIMORDIUM)
+    # DIAGNOSTICS (Phase 1 - PRIMORDIUM / Phase 4 - PANOPTICON)
     # =========================================================================
 
     def get_storage_info(self) -> Dict[str, Any]:
@@ -727,6 +937,14 @@ class StorageManager:
         Returns:
             Dictionary with storage configuration and status.
         """
+        # Gather instrumentation statistics if available
+        instrumentation_stats = {}
+        if self._instrumentation:
+            try:
+                instrumentation_stats = self._instrumentation.get_statistics()
+            except Exception:
+                instrumentation_stats = {"error": "Could not retrieve statistics"}
+
         return {
             "initialized": self._initialized,
             "session_storage": {
@@ -749,5 +967,72 @@ class StorageManager:
                 "valid": self._validation_result.valid if self._validation_result else None,
                 "error_count": len(self._validation_result.errors) if self._validation_result else 0,
                 "warning_count": len(self._validation_result.warnings) if self._validation_result else 0
+            },
+            # Phase 4: Observability status
+            "observability": {
+                "enabled": self._observability_config.enabled,
+                "instrumentation": {
+                    "active": self._instrumentation is not None,
+                    "slow_query_threshold_seconds": self._observability_config.slow_query_threshold_seconds,
+                    "log_queries": self._observability_config.log_queries,
+                    "statistics": instrumentation_stats
+                },
+                "metrics": {
+                    "enabled": self._observability_config.metrics_enabled,
+                    "backend": self._observability_config.metrics_backend,
+                    "collector_active": self._metrics_collector is not None
+                },
+                "event_logging": {
+                    "enabled": self._observability_config.event_logging_enabled,
+                    "table_name": self._observability_config.event_table_name,
+                    "retention_days": self._observability_config.event_retention_days,
+                    "logger_active": self._event_logger is not None,
+                    "pool_connected": (
+                        self._event_logger.pool is not None
+                        if self._event_logger and hasattr(self._event_logger, 'pool')
+                        else False
+                    )
+                },
+                "tracing": {
+                    "enabled": self._observability_config.tracing_enabled,
+                    "backend": self._observability_config.tracing_backend
+                }
             }
         }
+
+    def get_observability_statistics(self) -> Dict[str, Any]:
+        """
+        Get detailed observability statistics.
+
+        Returns statistics from instrumentation, metrics collector, and event logger.
+        Useful for dashboards and monitoring.
+
+        Returns:
+            Dictionary with detailed observability statistics.
+        """
+        stats: Dict[str, Any] = {
+            "enabled": self._observability_config.enabled,
+            "instrumentation": None,
+            "metrics": None,
+            "event_logger": None
+        }
+
+        if self._instrumentation:
+            stats["instrumentation"] = self._instrumentation.get_statistics()
+
+        if self._metrics_collector:
+            try:
+                stats["metrics"] = self._metrics_collector.get_statistics()
+            except Exception:
+                stats["metrics"] = {"error": "Could not retrieve metrics statistics"}
+
+        if self._event_logger:
+            try:
+                stats["event_logger"] = {
+                    "pool_connected": hasattr(self._event_logger, 'pool') and self._event_logger.pool is not None,
+                    "queue_size": getattr(self._event_logger, '_queue_size', 0) if hasattr(self._event_logger, '_queue_size') else 0
+                }
+            except Exception:
+                stats["event_logger"] = {"error": "Could not retrieve event logger statistics"}
+
+        return stats
