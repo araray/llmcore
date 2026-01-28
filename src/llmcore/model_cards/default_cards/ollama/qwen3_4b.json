@@ -1,0 +1,18 @@
+{
+  "model_id": "qwen3:4b",
+  "display_name": "Qwen 3 4B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "qwen",
+    "parameter_count": "4B",
+    "architecture_type": "transformer"
+  },
+  "context": { "max_input_tokens": 262144, "max_output_tokens": 8192 },
+  "capabilities": { "streaming": true, "reasoning": true, "tool_use": true },
+  "lifecycle": { "release_date": "2025-08-06", "status": "active" },
+  "provider_qwen": {
+    "thinking_mode": { "supported": true, "enable_param": "enable_thinking" }
+  },
+  "source": "builtin"
+}

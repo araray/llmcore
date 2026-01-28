@@ -1,0 +1,46 @@
+{
+  "model_id": "falcon3:3b",
+  "display_name": "Falcon 3 3B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "falcon",
+    "parameter_count": "3.2B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2024-12-17",
+    "knowledge_cutoff": "2024-10",
+    "status": "active"
+  },
+  "license": "tii-falcon-3",
+  "open_weights": true,
+  "aliases": ["falcon3-3b", "falcon3-3b-instruct"],
+  "description": "Falcon 3 3B is an efficient small language model from TII, pruned from the 7B variant. It features a 32K context window and is optimized for reasoning, STEM, and multilingual tasks (EN, FR, ES, PT).",
+  "tags": ["open-source", "local", "efficient", "multilingual", "tii"],
+  "provider_ollama": {
+    "format": "gguf",
+    "quantization_level": "Q4_K_M",
+    "file_size_bytes": 2000000000,
+    "modelfile_parameters": {
+      "num_ctx": 32768,
+      "temperature": 0.7
+    }
+  },
+  "source": "builtin"
+}
