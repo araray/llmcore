@@ -652,9 +652,16 @@ posthog = "ERROR"
         # IMPORTANT: For unified storage, this should match llmcore's [storage.vector.path]
         [semantiscan.database]
         type = "chromadb"  # Currently only ChromaDB is supported by semantiscan
-        # Default path - should be synchronized with llmcore's vector storage path
-        path = "~/.llmcore/chroma_db"
         collection_name = "default_semantiscan"  # Default collection for ingested code
+        vector_backend = "llmcore"  # or "chromadb" (default)
+        user_id = "project_123"     # optional multi-tenant isolation
+        namespace = "dev"           # optional collection prefix
+        enable_hybrid_search = true # optional pgvector hybrid search
+        # type = "chromadb"  # Currently only ChromaDB is supported by semantiscan
+        # # Default path - should be synchronized with llmcore's vector storage path
+        # path = "~/.llmcore/chroma_db"
+        # collection_name = "default_semantiscan"  # Default collection for ingested code
+
 
         # --- Metadata Store Configuration ---
         # Optional SQLite database for tracking ingestion history, Git metadata, etc.

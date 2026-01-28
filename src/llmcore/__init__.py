@@ -137,6 +137,29 @@ from .models import (
 )
 from .storage import StorageManager
 
+# =============================================================================
+# INTEGRATION MODULE (Phase 3 SYMBIOSIS)
+# =============================================================================
+# These exports provide integration points for external RAG engines.
+from .integration import (
+    LLMCoreVectorClient,
+    LLMCoreVectorClientConfig,
+    VectorClientProtocol,
+)
+
+# =============================================================================
+# INGESTION MODULE (Phase 3 SYMBIOSIS)
+# =============================================================================
+# These exports provide chunking strategies for document ingestion.
+from .ingestion import (
+    Chunk,
+    ChunkingConfig,
+    ChunkingStrategy,
+    FixedSizeChunker,
+    RecursiveTextChunker,
+    SentenceChunker,
+)
+
 try:
     __version__ = version("llmcore")
 except PackageNotFoundError:
@@ -223,6 +246,21 @@ __all__ = [
     # Storage
     # ==========================================================================
     "StorageManager",
+    # ==========================================================================
+    # Integration (Phase 3 SYMBIOSIS)
+    # ==========================================================================
+    "LLMCoreVectorClient",
+    "LLMCoreVectorClientConfig",
+    "VectorClientProtocol",
+    # ==========================================================================
+    # Ingestion (Phase 3 SYMBIOSIS)
+    # ==========================================================================
+    "Chunk",
+    "ChunkingStrategy",
+    "ChunkingConfig",
+    "FixedSizeChunker",
+    "RecursiveTextChunker",
+    "SentenceChunker",
     # ==========================================================================
     # Agents (Core)
     # ==========================================================================
