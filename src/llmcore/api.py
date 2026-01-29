@@ -2026,8 +2026,12 @@ class LLMCore:
             List of collection names
         """
         vector_storage = self._storage_manager.vector_storage
+        # Check for both method names for backend compatibility
+        # ChromaDB uses list_collections(), pgvector uses list_collection_names()
         if hasattr(vector_storage, "list_collections"):
             return await vector_storage.list_collections()
+        elif hasattr(vector_storage, "list_collection_names"):
+            return await vector_storage.list_collection_names()
         return []
 
     async def list_rag_collections(self) -> List[str]:
@@ -2054,15 +2058,53 @@ class LLMCore:
 
         Returns:
             Dict with collection info (name, count, embedding_dimension, metadata)
-            or None if collection doesn't exist
+            or None if collection doesn't exist.
+
+            Normalized fields:
+            - name: Collection name
+            - count: Number of documents
+            - embedding_dimension: Vector dimension
+            - metadata: Additional metadata dict
 
         Raises:
             VectorStorageError: If info retrieval fails
         """
         vector_storage = self._storage_manager.vector_storage
-        if hasattr(vector_storage, "get_collection_info"):
-            return await vector_storage.get_collection_info(collection_name)
-        return None
+        if not hasattr(vector_storage, "get_collection_info"):
+            return None
+
+        result = await vector_storage.get_collection_info(collection_name)
+        if result is None:
+            return None
+
+        # Normalize result to consistent dict format
+        # pgvector returns CollectionInfo dataclass, ChromaDB returns dict
+        if hasattr(result, "to_dict"):
+            # pgvector CollectionInfo has to_dict()
+            info_dict = result.to_dict()
+            # Normalize field names to match ChromaDB format
+            return {
+                "name": info_dict.get("name", collection_name),
+                "count": info_dict.get("document_count", 0),
+                "embedding_dimension": info_dict.get("vector_dimension"),
+                "metadata": info_dict.get("metadata", {}),
+                # Preserve additional pgvector fields
+                "embedding_model": info_dict.get("embedding_model_name"),
+                "embedding_model_provider": info_dict.get("embedding_model_provider"),
+                "description": info_dict.get("description"),
+                "created_at": info_dict.get("created_at"),
+            }
+        elif isinstance(result, dict):
+            # ChromaDB already returns dict with correct field names
+            return result
+        else:
+            # Fallback: try to extract attributes
+            return {
+                "name": getattr(result, "name", collection_name),
+                "count": getattr(result, "document_count", getattr(result, "count", 0)),
+                "embedding_dimension": getattr(result, "vector_dimension", getattr(result, "embedding_dimension", None)),
+                "metadata": getattr(result, "metadata", {}),
+            }
 
     async def delete_rag_collection(
         self,

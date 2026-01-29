@@ -1120,6 +1120,10 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             logger.error(f"Error listing collections: {e}", exc_info=True)
             raise VectorStorageError(f"Failed to list collections: {e}")
 
+    async def list_collections(self) -> List[str]:
+        """Alias for list_collection_names for API compatibility with ChromaDB."""
+        return await self.list_collection_names()
+
     async def get_collection_metadata(
         self,
         collection_name: Optional[str] = None

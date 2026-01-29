@@ -210,6 +210,7 @@ posthog = "ERROR"
   # Type: Determines the vector database backend.
   #   - "chromadb": (Default) Easy to set up for local development.
   #   - "pgvector": Excellent for production if you already use PostgreSQL.
+  #   - "pgvector_legacy": Uses original PgVectorStorage
   # Environment Variable: LLMCORE_STORAGE__VECTOR__TYPE
   type = "chromadb"
 

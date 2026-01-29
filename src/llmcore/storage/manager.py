@@ -43,6 +43,7 @@ from .base_vector import BaseVectorStorage
 from .chromadb_vector import ChromaVectorStorage
 from .json_session import JsonSessionStorage
 from .pgvector_storage import PgVectorStorage
+from .pgvector_enhanced import EnhancedPgVectorStorage
 from .postgres_session_storage import PostgresSessionStorage
 from .sqlite_session import SqliteSessionStorage
 # Phase 1 imports: Config validation, health monitoring, schema management
@@ -71,7 +72,8 @@ SESSION_STORAGE_MAP: Dict[str, Type[BaseSessionStorage]] = {
 
 VECTOR_STORAGE_MAP: Dict[str, Type[BaseVectorStorage]] = {
     "chromadb": ChromaVectorStorage,
-    "pgvector": PgVectorStorage,
+    "pgvector": EnhancedPgVectorStorage,  # Use enhanced version with full collection management
+    "pgvector_legacy": PgVectorStorage,   # Legacy version for backwards compatibility
 }
 # --- End Mappings ---
 
