@@ -315,6 +315,88 @@ class ChromaVectorStorage(BaseVectorStorage):
             logger.error(f"Failed to get metadata for ChromaDB collection '{collection_name or self._default_collection_name}': {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB get_collection_metadata failed: {e}")
 
+    def _sync_get_collection_info(self, collection_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """
+        Synchronous logic to get detailed collection information.
+
+        Returns dict with: name, count, embedding_dimension, metadata, or None if not found.
+        """
+        try:
+            target_name = collection_name or self._default_collection_name
+            collection = self._sync_get_collection(target_name)
+            # Get document count
+            count = collection.count()
+            # Get collection metadata
+            metadata = dict(collection.metadata) if collection.metadata else {}
+            # Try to get embedding dimension from a sample if possible
+            embedding_dimension = None
+            if count > 0:
+                try:
+                    # Get a single item to check embedding dimension
+                    sample = collection.peek(limit=1)
+                    if sample and sample.get("embeddings") and len(sample["embeddings"]) > 0:
+                        embedding_dimension = len(sample["embeddings"][0])
+                except Exception:
+                    pass  # Dimension detection is best-effort
+            return {
+                "name": target_name,
+                "count": count,
+                "embedding_dimension": embedding_dimension,
+                "metadata": metadata,
+            }
+        except CollectionNotFoundError:
+            logger.debug(f"Collection '{collection_name or self._default_collection_name}' not found.")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get info for ChromaDB collection: {e}", exc_info=True)
+            raise VectorStorageError(f"ChromaDB get_collection_info failed: {e}")
+
+    def _sync_delete_collection(self, collection_name: str, force: bool = False) -> bool:
+        """
+        Synchronous logic to delete a collection.
+
+        Args:
+            collection_name: Name of collection to delete
+            force: If False, raises error if collection has documents
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            VectorStorageError: If collection doesn't exist or has documents (when force=False)
+        """
+        if not self._client:
+            raise VectorStorageError("ChromaDB client is not initialized.")
+        try:
+            # Check if collection exists
+            try:
+                collection = self._client.get_collection(name=collection_name)
+            except Exception:
+                raise VectorStorageError(f"Collection '{collection_name}' not found.")
+
+            # Check document count if force is False
+            if not force:
+                count = collection.count()
+                if count > 0:
+                    raise VectorStorageError(
+                        f"Collection '{collection_name}' has {count} documents. "
+                        "Use force=True to delete anyway."
+                    )
+
+            # Delete the collection
+            self._client.delete_collection(name=collection_name)
+
+            # Clear from cache if present
+            if collection_name in self._collection_cache:
+                del self._collection_cache[collection_name]
+
+            logger.info(f"Deleted ChromaDB collection: {collection_name}")
+            return True
+        except VectorStorageError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to delete ChromaDB collection '{collection_name}': {e}", exc_info=True)
+            raise VectorStorageError(f"ChromaDB delete_collection failed: {e}")
 
     def _sync_close(self) -> None:
         """Synchronous closing logic for ChromaDB."""
@@ -379,6 +461,43 @@ class ChromaVectorStorage(BaseVectorStorage):
         Retrieves the metadata associated with a specific ChromaDB collection asynchronously.
         """
         return await asyncio.to_thread(self._sync_get_collection_metadata, collection_name)
+
+    # Alias for API compatibility (api.py uses list_collections)
+    async def list_collections(self) -> List[str]:
+        """Alias for list_collection_names for API compatibility."""
+        return await self.list_collection_names()
+
+    async def get_collection_info(
+        self,
+        collection_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information about a collection.
+
+        Returns dict with: name, count, embedding_dimension, metadata
+        Returns None if collection doesn't exist.
+        """
+        return await asyncio.to_thread(self._sync_get_collection_info, collection_name)
+
+    async def delete_collection(
+        self,
+        collection_name: str,
+        force: bool = False
+    ) -> bool:
+        """
+        Delete a collection from ChromaDB.
+
+        Args:
+            collection_name: Name of collection to delete
+            force: If False, raises error if collection has documents
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            VectorStorageError: If deletion fails
+        """
+        return await asyncio.to_thread(self._sync_delete_collection, collection_name, force)
 
     async def close(self) -> None:
         """Closes/resets the ChromaDB client asynchronously."""

@@ -2030,6 +2030,64 @@ class LLMCore:
             return await vector_storage.list_collections()
         return []
 
+    async def list_rag_collections(self) -> List[str]:
+        """
+        Lists all available RAG collections.
+
+        This is an alias for list_vector_collections() providing backward
+        compatibility for llmchat RAG commands.
+
+        Returns:
+            List of collection names
+        """
+        return await self.list_vector_collections()
+
+    async def get_rag_collection_info(
+        self,
+        collection_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information about a RAG collection.
+
+        Args:
+            collection_name: Name of the collection
+
+        Returns:
+            Dict with collection info (name, count, embedding_dimension, metadata)
+            or None if collection doesn't exist
+
+        Raises:
+            VectorStorageError: If info retrieval fails
+        """
+        vector_storage = self._storage_manager.vector_storage
+        if hasattr(vector_storage, "get_collection_info"):
+            return await vector_storage.get_collection_info(collection_name)
+        return None
+
+    async def delete_rag_collection(
+        self,
+        collection_name: str,
+        force: bool = False
+    ) -> bool:
+        """
+        Delete a RAG collection from the vector store.
+
+        Args:
+            collection_name: Name of collection to delete
+            force: If False, raises error if collection has documents.
+                   If True, deletes regardless of content.
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            VectorStorageError: If collection not found or has documents (when force=False)
+        """
+        vector_storage = self._storage_manager.vector_storage
+        if hasattr(vector_storage, "delete_collection"):
+            return await vector_storage.delete_collection(collection_name, force)
+        raise VectorStorageError("Vector storage does not support collection deletion")
+
     # ==============================================================================
     # Context Preset Management
     # ==============================================================================
