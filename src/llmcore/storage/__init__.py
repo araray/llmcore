@@ -135,6 +135,23 @@ from .observability import (
     OBSERVABILITY_TOML_EXAMPLE,
 )
 
+# Phase 3: Volatile Memory Tier
+from .tiers.volatile import (
+    VolatileItem,
+    VolatileMemoryTier,
+    VolatileMemoryConfig,
+    create_volatile_tier,
+)
+
+# Phase 3: Feedback System
+from .feedback import (
+    FeedbackRecord,
+    AggregatedFeedback,
+    FeedbackConfig,
+    FeedbackManager,
+    create_feedback_manager,
+)
+
 __all__ = [
     # Core components
     "StorageManager",
@@ -229,4 +246,15 @@ __all__ = [
     "ObservabilityConfig",
     "DEFAULT_OBSERVABILITY_CONFIG",
     "OBSERVABILITY_TOML_EXAMPLE",
+    # Volatile Memory Tier (Phase 3)
+    "VolatileItem",
+    "VolatileMemoryTier",
+    "VolatileMemoryConfig",
+    "create_volatile_tier",
+    # Feedback System (Phase 3)
+    "FeedbackRecord",
+    "AggregatedFeedback",
+    "FeedbackConfig",
+    "FeedbackManager",
+    "create_feedback_manager",
 ]
