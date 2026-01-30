@@ -1418,6 +1418,143 @@ posthog = "ERROR"
         max_runs = 100
 
         # ==============================================================================
+        # [agents.darwin] - Darwin Agent Enhancement Configuration
+        # ==============================================================================
+        # This section configures enhanced capabilities for the Darwin agent system,
+        # including failure learning, TDD support, and multi-attempt arbiter.
+        #
+        # PHASE 6.1: Failure Learning System
+        # PHASE 6.2: TDD (Test-Driven Development) Support (planned)
+        # PHASE 6.3: Multi-Attempt Arbiter (planned)
+
+        [agents.darwin]
+
+        # Enable Darwin agent enhancements
+        # When false, Darwin uses basic cognitive cycle without enhancements.
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__ENABLED
+        enabled = true
+
+        # ==============================================================================
+        # [agents.darwin.failure_learning] - Failure Learning System
+        # ==============================================================================
+        # Enables agents to learn from past failures and avoid repeating mistakes.
+        # When enabled, failures are logged to persistent storage and retrieved
+        # before planning to provide failure-aware context.
+
+        [agents.darwin.failure_learning]
+
+        # Enable failure learning system
+        # When true, failures are logged and retrieved for future reference.
+        # When false, failure learning is disabled (no-op).
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__ENABLED
+        enabled = true
+
+        # Storage backend for failure logs
+        # Possible Values: "sqlite", "postgres"
+        #   - sqlite: File-based storage (recommended for development)
+        #   - postgres: PostgreSQL database (recommended for production)
+        # Default Value: "sqlite"
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__BACKEND
+        backend = "sqlite"
+
+        # SQLite database path (used when backend = "sqlite")
+        # Default Value: "~/.local/share/llmcore/failures.db"
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__DB_PATH
+        db_path = "~/.local/share/llmcore/failures.db"
+
+        # PostgreSQL connection URL (used when backend = "postgres")
+        # Format: postgresql://user:password@host:port/database
+        # Default Value: "" (must be set when using postgres backend)
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__DB_URL
+        db_url = ""
+
+        # Maximum number of similar failures to retrieve before planning
+        # Higher values provide more context but increase prompt size.
+        # Default Value: 5
+        # Environment Variable: LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__MAX_FAILURES
+        max_failures_to_retrieve = 5
+
+        # PostgreSQL connection pool settings (only used when backend = "postgres")
+        [agents.darwin.failure_learning.postgres]
+
+        # Minimum number of connections in pool
+        # Default Value: 2
+        min_pool_size = 2
+
+        # Maximum number of connections in pool
+        # Default Value: 10
+        max_pool_size = 10
+
+        # Table name prefix (useful for multi-tenant deployments)
+        # Example: "tenant_123_" results in tables like "tenant_123_failure_logs"
+        # Default Value: "" (no prefix)
+        table_prefix = ""
+
+        # ==============================================================================
+        # [agents.darwin.tdd] - Test-Driven Development Support (Phase 6.2 - PLANNED)
+        # ==============================================================================
+        # Enables test-first development workflow for code generation tasks.
+        # This section will be activated in Phase 6.2.
+
+        [agents.darwin.tdd]
+
+        # Enable TDD workflow
+        # When true, tests are generated before implementation code.
+        # Default Value: false (will be true after Phase 6.2 implementation)
+        enabled = false
+
+        # Default test framework
+        # Possible Values: "pytest", "unittest", "jest" (for JavaScript)
+        # Default Value: "pytest"
+        default_framework = "pytest"
+
+        # Minimum number of tests to generate
+        # Default Value: 5
+        min_tests = 5
+
+        # Maximum TDD iteration cycles (generate tests → code → verify → retry)
+        # Default Value: 3
+        max_iterations = 3
+
+        # ==============================================================================
+        # [agents.darwin.arbiter] - Multi-Attempt Arbiter (Phase 6.3 - PLANNED)
+        # ==============================================================================
+        # Enables generating multiple solution candidates and selecting the best.
+        # This section will be activated in Phase 6.3.
+
+        [agents.darwin.arbiter]
+
+        # Enable multi-attempt generation
+        # When true, generates N candidates and uses arbiter to select best.
+        # Default Value: false (will be true after Phase 6.3 implementation)
+        enabled = false
+
+        # Number of candidates to generate
+        # Higher values increase quality but also cost and latency.
+        # Default Value: 3
+        num_candidates = 3
+
+        # Temperature values for candidate generation
+        # Different temperatures produce diverse solutions.
+        # Default Value: [0.3, 0.7, 1.0]
+        temperatures = [0.3, 0.7, 1.0]
+
+        # Use LLM-based arbiter for selection
+        # When true, uses LLM to score and select best candidate.
+        # When false, uses simple heuristics.
+        # Default Value: true
+        use_llm_arbiter = true
+
+        # Scoring criteria weights (must sum to 1.0)
+        # These determine how candidates are evaluated.
+        [agents.darwin.arbiter.scoring]
+        correctness = 0.5
+        completeness = 0.3
+        style = 0.2
+
+        # ==============================================================================
         # [agents.goals] - Goal Classification (G3 Phase 3)
         # ==============================================================================
         # Configures how goals are classified by complexity to enable fast-path

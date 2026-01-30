@@ -17,7 +17,8 @@ The configuration hierarchy:
     ├── ActivitiesConfig     - Activity system settings
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
-    └── RoutingConfig        - Model routing settings
+    ├── RoutingConfig        - Model routing settings
+    └── DarwinConfig         - Darwin agent enhancements (Phase 6)
 
 Usage:
     >>> from llmcore.config.agents_config import AgentsConfig, load_agents_config
@@ -36,6 +37,7 @@ Usage:
 References:
     - G3_COMPLETE_IMPLEMENTATION_PLAN.md
     - LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md
+    - UNIFIED_IMPLEMENTATION_PLAN.md (Phase 6)
 """
 
 from __future__ import annotations
@@ -47,6 +49,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+from .darwin_config import DarwinConfig
 
 logger = logging.getLogger(__name__)
 
@@ -472,6 +476,10 @@ class AgentsConfig(BaseModel):
     routing: RoutingConfig = Field(
         default_factory=RoutingConfig, description="Model routing settings"
     )
+    darwin: DarwinConfig = Field(
+        default_factory=DarwinConfig,
+        description="Darwin agent enhancement settings (Phase 6)",
+    )
 
 
 # =============================================================================
@@ -592,6 +600,7 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     Examples:
         LLMCORE_AGENTS__GOALS__CLASSIFIER_ENABLED=false
         LLMCORE_AGENTS__CIRCUIT_BREAKER__MAX_SAME_ERRORS=5
+        LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__BACKEND=postgres
 
     Args:
         config: Current config dictionary
@@ -667,6 +676,7 @@ CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
 RoutingConfig.model_rebuild()
+DarwinConfig.model_rebuild()
 AgentsConfig.model_rebuild()
 
 
@@ -684,6 +694,7 @@ __all__ = [
     "HITLConfig",
     "RoutingConfig",
     "RoutingTiersConfig",
+    "DarwinConfig",
     "AgentsConfig",
     # Functions
     "load_agents_config",
