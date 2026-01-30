@@ -7,6 +7,7 @@ cd "${dir_llmcore}"
 
 source "${dir_venv}/bin/activate"
 
+export TEST_POSTGRES_URL="postgresql://tester:tester@localhost:5432/postgres"
 export LLMCORE_TEST_PG_HOST=127.0.0.1
 export LLMCORE_TEST_PG_PORT=5432
 export LLMCORE_TEST_PG_USER=tester

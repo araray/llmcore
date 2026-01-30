@@ -1243,10 +1243,18 @@ class TDDManager:
             self._config = {"path": db_path}
 
         elif backend == "postgres":
-            from .postgres_tdd_storage import PostgresTDDStorage
-
+            # Validate db_url first before attempting import
             if not db_url:
                 raise ValueError("db_url required for postgres backend")
+
+            try:
+                from .postgres_tdd_storage import PostgresTDDStorage
+            except ImportError as e:
+                raise ImportError(
+                    "PostgreSQL TDD backend requires psycopg and psycopg_pool. "
+                    "Install with: pip install psycopg[binary] psycopg_pool"
+                ) from e
+
             self._backend = PostgresTDDStorage()
             self._config = {"db_url": db_url}
 
