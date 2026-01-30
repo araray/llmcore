@@ -6,10 +6,10 @@ This module provides advanced capabilities for the Darwin agent system,
 including:
 
 - Failure Learning: SQLite and PostgreSQL-backed failure tracking and pattern detection
-- TDD Support: Test-Driven Development workflow integration (coming in Phase 6.2)
+- TDD Support: Test-Driven Development workflow integration (Phase 6.2)
 - Multi-Attempt Arbiter: N-candidate generation with quality selection (coming in Phase 6.3)
 
-Usage:
+Usage - Failure Learning:
     from llmcore.agents.darwin import FailureLearningManager, FailureLog
 
     # Initialize failure learning with SQLite
@@ -30,17 +30,49 @@ Usage:
     # Get failure context before planning
     context = await manager.get_failure_context(goal="Implement authentication")
     print(context.avoidance_instructions)
+
+Usage - TDD Support:
+    from llmcore.agents.darwin import TDDManager, TestSpecification
+
+    # Initialize TDD manager with SQLite
+    manager = TDDManager(backend="sqlite")
+    await manager.initialize()
+    manager.set_llm_callable(llm_callable)
+    manager.set_sandbox_executor(sandbox_executor)
+
+    # Run TDD cycle
+    result = await manager.run_tdd_cycle(
+        requirements="Implement Calculator class with add, subtract, multiply, divide",
+        max_iterations=3,
+    )
+    print(f"Tests passed: {result.tests_passed}/{result.tests_executed}")
 """
 
+# Phase 6.1: Failure Learning
 from .failure_storage import (
     BaseFailureStorage,
     FailureContext,
+    FailureLearningManager,
     FailureLog,
     FailurePattern,
-    FailureLearningManager,
+)
+
+# Phase 6.2: TDD Support
+from .tdd_support import (
+    BaseTDDStorage,
+    GeneratedTest,
+    TDDCycleResult,
+    TDDManager,
+    TDDSession,
+    TestExecutionResult,
+    TestFileBuilder,
+    TestGenerator,
+    TestSpecification,
+    TestSuite,
 )
 
 __all__ = [
+    # === Phase 6.1: Failure Learning ===
     # Base interface
     "BaseFailureStorage",
     # Data models
@@ -49,6 +81,21 @@ __all__ = [
     "FailureContext",
     # High-level manager
     "FailureLearningManager",
+    # === Phase 6.2: TDD Support ===
+    # Base interface
+    "BaseTDDStorage",
+    # Data models
+    "TestSpecification",
+    "TestSuite",
+    "GeneratedTest",
+    "TestExecutionResult",
+    "TDDCycleResult",
+    "TDDSession",
+    # Components
+    "TestGenerator",
+    "TestFileBuilder",
+    # High-level manager
+    "TDDManager",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
