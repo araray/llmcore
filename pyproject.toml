@@ -57,7 +57,7 @@ sentence_transformers = ["sentence-transformers>=5.2.0"]
 
 # Dependencies for specific storage backends
 sqlite = []  # sqlite3 is part of standard library
-postgres = ["psycopg[binary]>=3.2.0", "pgvector>=0.4.1"]
+postgres = ["psycopg[binary]>=3.2.0", "psycopg_pool>=3.3.0", "pgvector>=0.4.1"]
 chromadb = ["chromadb>=1.4.0"]
 
 # ============================================================================
@@ -129,6 +129,11 @@ Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 
 [project.scripts]
 llmcore-storage = "llmcore.storage.cli:main"
+
+markers = [
+    "requires_postgres: Tests that require PostgreSQL database",
+    "requires_pgvector: Tests that require pgvector extension",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

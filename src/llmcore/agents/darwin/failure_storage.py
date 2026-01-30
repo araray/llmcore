@@ -50,7 +50,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     pass
@@ -131,8 +131,7 @@ class FailureLog(BaseModel):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
 
 class FailurePattern(BaseModel):
@@ -162,8 +161,7 @@ class FailurePattern(BaseModel):
     common_error_messages: List[str] = Field(default_factory=list)
     suggested_avoidance: str = ""
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
 
 class FailureContext(BaseModel):
@@ -281,9 +279,7 @@ class BaseFailureStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_patterns_for_failures(
-        self, failure_ids: List[str]
-    ) -> List[FailurePattern]:
+    async def get_patterns_for_failures(self, failure_ids: List[str]) -> List[FailurePattern]:
         """
         Retrieve patterns associated with given failures.
 
@@ -363,9 +359,56 @@ class FailureLearningManager:
     """
 
     # Stopwords for similarity hash computation
+    # Includes common words that don't add meaningful context
     STOPWORDS = {
-        "a", "an", "the", "to", "for", "of", "in", "on", "is", "it",
-        "and", "or", "but", "with", "from", "as", "at", "by"
+        # Articles and determiners
+        "a",
+        "an",
+        "the",
+        # Prepositions
+        "to",
+        "for",
+        "of",
+        "in",
+        "on",
+        "at",
+        "by",
+        "with",
+        "from",
+        "as",
+        # Conjunctions
+        "and",
+        "or",
+        "but",
+        # Common verbs
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        # Pronouns
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        # Common technical words that don't add specificity
+        "system",
+        "application",
+        "app",
+        "service",
+        "module",
+        "component",
+        "using",
+        "create",
+        "implement",
+        "build",
+        "make",
+        "add",
+        "update",
     }
 
     def __init__(
@@ -400,6 +443,7 @@ class FailureLearningManager:
         # Import backends only when needed
         if backend == "sqlite":
             from .sqlite_failure_storage import SqliteFailureStorage
+
             if not db_path:
                 db_path = "~/.local/share/llmcore/failures.db"
             self._backend = SqliteFailureStorage()
@@ -407,6 +451,7 @@ class FailureLearningManager:
 
         elif backend == "postgres":
             from .postgres_failure_storage import PostgresFailureStorage
+
             if not db_url:
                 raise ValueError("db_url required for postgres backend")
             self._backend = PostgresFailureStorage()
@@ -464,7 +509,10 @@ class FailureLearningManager:
 
         # Generate ID if not set
         if not failure.id:
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            # Use microseconds for uniqueness (prevents collisions within same second)
+            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[
+                :18
+            ]  # YYYYMMDDHHMMSSuuuuuu -> 18 chars
             failure.id = f"fail_{timestamp}_{failure.task_id[:8]}"
 
         # Compute similarity hash
@@ -474,9 +522,7 @@ class FailureLearningManager:
             )
 
         logged = await self._backend.log_failure(failure)
-        logger.info(
-            f"Logged failure {logged.id}: {logged.failure_type} in {logged.phase}"
-        )
+        logger.info(f"Logged failure {logged.id}: {logged.failure_type} in {logged.phase}")
         return logged
 
     async def get_failure_context(
@@ -573,9 +619,7 @@ class FailureLearningManager:
                 lines.append("### Recurring Issues (HIGH PRIORITY)")
                 lines.append("")
                 for p in recurring:
-                    lines.append(
-                        f"- {p.failure_type}: Occurred {p.occurrence_count} times"
-                    )
+                    lines.append(f"- {p.failure_type}: Occurred {p.occurrence_count} times")
                     if p.suggested_avoidance:
                         lines.append(f"  - Suggestion: {p.suggested_avoidance}")
                 lines.append("")
