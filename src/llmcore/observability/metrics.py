@@ -759,6 +759,24 @@ class Timer:
 
         return (time.perf_counter() - self._start_time) * self.unit_multiplier
 
+    @property
+    def elapsed_ms(self) -> float:
+        """Get the elapsed time in milliseconds.
+
+        Returns:
+            Elapsed time in milliseconds.
+        """
+        return self.elapsed()
+
+    @property
+    def elapsed_seconds(self) -> float:
+        """Get the elapsed time in seconds.
+
+        Returns:
+            Elapsed time in seconds.
+        """
+        return self.elapsed() / 1000.0
+
     def __enter__(self) -> "Timer":
         self._start_time = time.perf_counter()
         return self
@@ -918,12 +936,12 @@ class MetricsRegistry:
             Dictionary with metric names as keys and metric objects as values.
         """
         with self._registry_lock:
-            return {
-                "counters": dict(self._counters),
-                "gauges": dict(self._gauges),
-                "histograms": dict(self._histograms),
-                "rate_counters": dict(self._rate_counters),
-            }
+            metrics: Dict[str, Any] = {}
+            metrics.update(self._counters)
+            metrics.update(self._gauges)
+            metrics.update(self._histograms)
+            metrics.update(self._rate_counters)
+            return metrics
 
     def reset_all(self) -> None:
         """Reset all metrics."""
