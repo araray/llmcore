@@ -101,6 +101,35 @@ from .analytics import (
     # Factory
     create_cost_analyzer,
 )
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+from .config import (
+    BufferConfig,
+    # Sub-configs
+    EventsConfig,
+    MetricsConfig,
+    # Main config
+    ObservabilityConfig,
+    PerformanceConfig,
+    ReplayConfig,
+    SinksConfig,
+    get_default_config,
+    # Loaders
+    load_observability_config,
+    to_legacy_config,
+)
+from .config import (
+    EventRotationConfig as RotationConfig,
+)
+from .config import (
+    # Enums (re-export)
+    RotationStrategy as ConfigRotationStrategy,
+)
+from .config import (
+    Severity as ConfigSeverity,
+)
 from .cost_tracker import (
     PRICING_DATA,
     CostTracker,
@@ -127,13 +156,15 @@ from .events import (
     ExecutionReplayer,
     # Replay
     ExecutionTrace,
-    ObservabilityConfig,
     ObservabilityLogger,
     RotationStrategy,
     Severity,
     # Factories
     create_observability_logger,
     load_events_from_file,
+)
+from .events import (
+    ObservabilityConfig as LegacyObservabilityConfig,
 )
 
 # =============================================================================
@@ -231,7 +262,7 @@ __all__ = [
     "Event",
     "EventRotationConfig",
     "EventBufferConfig",
-    "ObservabilityConfig",
+    "LegacyObservabilityConfig",
     "EventBuffer",
     "EventFileWriter",
     "ObservabilityLogger",
@@ -239,4 +270,18 @@ __all__ = [
     "ExecutionReplayer",
     "create_observability_logger",
     "load_events_from_file",
+    # Configuration (new)
+    "ObservabilityConfig",
+    "EventsConfig",
+    "RotationConfig",
+    "BufferConfig",
+    "MetricsConfig",
+    "ReplayConfig",
+    "SinksConfig",
+    "PerformanceConfig",
+    "ConfigRotationStrategy",
+    "ConfigSeverity",
+    "load_observability_config",
+    "get_default_config",
+    "to_legacy_config",
 ]

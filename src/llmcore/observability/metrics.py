@@ -1277,10 +1277,8 @@ class SystemMetricsCollector:
     def collect(self) -> None:
         """
         Collect current system metrics.
-
-        Note: This is a stub implementation. For real metrics,
-        install psutil and uncomment the actual collection code.
         """
+
         self._cpu_usage.set(psutil.cpu_percent())
         mem = psutil.virtual_memory()
         self._memory_usage.set(mem.used)
