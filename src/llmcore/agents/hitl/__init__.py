@@ -44,28 +44,28 @@ from __future__ import annotations
 
 # Models
 from .models import (
+    # Request/Response
+    ActivityInfo,
     # Enums
     ApprovalScope,
     ApprovalStatus,
-    HITLEventType,
-    TimeoutPolicy,
-    # Risk
-    RiskAssessment,
-    RiskFactor,
-    # Request/Response
-    ActivityInfo,
+    # Audit
+    HITLAuditEvent,
+    # Config
+    HITLConfig,
     HITLDecision,
+    HITLEventType,
     HITLRequest,
     HITLResponse,
     # Scopes
     PersistentScope,
+    # Risk
+    RiskAssessment,
+    RiskFactor,
     ScopeGrant,
     SessionScope,
+    TimeoutPolicy,
     ToolScope,
-    # Config
-    HITLConfig,
-    # Audit
-    HITLAuditEvent,
 )
 
 # Risk Assessor
@@ -91,6 +91,23 @@ from .state import (
     InMemoryHITLStore,
 )
 
+# Database-backed State Stores
+try:
+    from .sqlite_state import SqliteHITLStore
+
+    SQLITE_HITL_AVAILABLE = True
+except ImportError:
+    SqliteHITLStore = None  # type: ignore
+    SQLITE_HITL_AVAILABLE = False
+
+try:
+    from .postgres_state import PostgresHITLStore
+
+    POSTGRES_HITL_AVAILABLE = True
+except ImportError:
+    PostgresHITLStore = None  # type: ignore
+    POSTGRES_HITL_AVAILABLE = False
+
 # Callbacks
 from .callbacks import (
     AutoApproveCallback,
@@ -105,7 +122,6 @@ from .manager import (
     HITLManager,
     create_hitl_manager,
 )
-
 
 # =============================================================================
 # VERSION
@@ -152,6 +168,10 @@ __all__ = [
     "HITLStateStore",
     "InMemoryHITLStore",
     "FileHITLStore",
+    "SqliteHITLStore",
+    "PostgresHITLStore",
+    "SQLITE_HITL_AVAILABLE",
+    "POSTGRES_HITL_AVAILABLE",
     # Callbacks
     "HITLCallback",
     "ConsoleHITLCallback",
