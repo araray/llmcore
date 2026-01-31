@@ -44,6 +44,7 @@ from .models import (
     HITLEventType,
     HITLRequest,
     HITLResponse,
+    HITLStorageConfig,
     RiskAssessment,
     TimeoutPolicy,
 )
@@ -223,6 +224,24 @@ class HITLManager:
         ...     result = await execute_activity(activity_request)
         ... else:
         ...     print(f"Rejected: {decision.reason}")
+
+    Storage Backend Usage:
+        >>> # SQLite backend (development/single-user)
+        >>> config = HITLConfig(
+        ...     storage=HITLStorageConfig(backend="sqlite", sqlite_path="/tmp/hitl.db")
+        ... )
+        >>> manager = HITLManager(config=config)
+        >>> await manager.initialize()
+        >>>
+        >>> # PostgreSQL backend (production/multi-user)
+        >>> config = HITLConfig(
+        ...     storage=HITLStorageConfig(
+        ...         backend="postgres",
+        ...         postgres_url="postgresql://user:pass@localhost/db"
+        ...     )
+        ... )
+        >>> manager = HITLManager(config=config)
+        >>> await manager.initialize()
     """
 
     def __init__(
@@ -239,11 +258,11 @@ class HITLManager:
         Initialize HITL manager.
 
         Args:
-            config: HITL configuration
+            config: HITL configuration (includes storage config)
             risk_assessor: Custom risk assessor
             scope_manager: Custom scope manager
             callback: UI callback for approvals
-            state_store: State persistence store
+            state_store: State persistence store (overrides config if provided)
             session_id: Current session ID
             user_id: Current user ID
         """
@@ -259,7 +278,13 @@ class HITLManager:
             config=self.config,
         )
         self.callback = callback or ConsoleHITLCallback()
-        self.state_store = state_store or InMemoryHITLStore()
+
+        # State store: use provided or create from config
+        self._state_store_provided = state_store is not None
+        if state_store is not None:
+            self.state_store = state_store
+        else:
+            self.state_store = self._create_store_from_config()
 
         # Audit logger
         audit_path = Path(self.config.audit_log_path) if self.config.audit_log_path else None
@@ -285,6 +310,89 @@ class HITLManager:
             "requests_timed_out": 0,
             "scope_grants": 0,
         }
+
+        # Initialization flag
+        self._initialized = False
+
+    def _create_store_from_config(self) -> HITLStateStore:
+        """
+        Create storage backend from configuration.
+
+        Returns:
+            Appropriate HITLStateStore implementation based on config.
+
+        Raises:
+            ValueError: If unknown backend type specified
+        """
+        storage_config = self.config.storage
+
+        if storage_config.backend == "memory":
+            return InMemoryHITLStore()
+
+        elif storage_config.backend == "file":
+            path = storage_config.file_path or "~/.local/share/llmcore/hitl_state"
+            return FileHITLStore(path)
+
+        elif storage_config.backend == "sqlite":
+            from .sqlite_state import SqliteHITLStore
+
+            return SqliteHITLStore()
+
+        elif storage_config.backend == "postgres":
+            from .postgres_state import PostgresHITLStore
+
+            return PostgresHITLStore()
+
+        else:
+            raise ValueError(f"Unknown storage backend: {storage_config.backend}")
+
+    async def initialize(self) -> None:
+        """
+        Initialize the manager and storage backend.
+
+        Must be called before using database backends (sqlite/postgres).
+        Memory and file backends work without initialization for backwards compatibility.
+
+        Raises:
+            RuntimeError: If initialization fails
+        """
+        if self._initialized:
+            return
+
+        storage_config = self.config.storage
+
+        # Only initialize database backends that have an initialize method
+        if hasattr(self.state_store, "initialize"):
+            try:
+                if storage_config.backend == "sqlite":
+                    await self.state_store.initialize({"path": storage_config.sqlite_path})
+                elif storage_config.backend == "postgres":
+                    storage_config.validate_backend()
+                    await self.state_store.initialize(
+                        {
+                            "db_url": storage_config.postgres_url,
+                            "min_pool_size": storage_config.postgres_min_pool_size,
+                            "max_pool_size": storage_config.postgres_max_pool_size,
+                            "table_prefix": storage_config.postgres_table_prefix,
+                        }
+                    )
+                # Memory and File stores don't need initialization
+                logger.info(f"HITL Manager initialized with {storage_config.backend} backend")
+            except Exception as e:
+                raise RuntimeError(f"Failed to initialize HITL storage: {e}") from e
+
+        self._initialized = True
+
+    async def close(self) -> None:
+        """
+        Close the manager and storage backend.
+
+        Should be called when done using the manager to clean up resources.
+        """
+        if hasattr(self.state_store, "close"):
+            await self.state_store.close()
+        self._initialized = False
+        logger.debug("HITL Manager closed")
 
     async def check_approval(
         self,
@@ -462,9 +570,7 @@ class HITLManager:
     def _handle_timeout(self, request: HITLRequest) -> HITLDecision:
         """Handle approval timeout based on policy."""
         risk_level = request.risk_assessment.overall_level
-        policy = self.config.timeout_policies_by_risk.get(
-            risk_level, self.config.timeout_policy
-        )
+        policy = self.config.timeout_policies_by_risk.get(risk_level, self.config.timeout_policy)
 
         if policy == TimeoutPolicy.APPROVE:
             return HITLDecision(
@@ -507,15 +613,11 @@ class HITLManager:
                 max_risk_level=risk_level,
                 granted_by=self.user_id,
             )
-            self.audit.log_scope_granted(
-                scope, activity_type, self.user_id, self.session_id
-            )
+            self.audit.log_scope_granted(scope, activity_type, self.user_id, self.session_id)
 
         elif scope == ApprovalScope.SESSION:
             self.scope_manager.grant_full_session_approval()
-            self.audit.log_scope_granted(
-                scope, "all", self.user_id, self.session_id
-            )
+            self.audit.log_scope_granted(scope, "all", self.user_id, self.session_id)
 
         self._stats["scope_grants"] += 1
 
@@ -560,7 +662,9 @@ class HITLManager:
 
         # Process response
         if response.approved:
-            status = ApprovalStatus.MODIFIED if response.modified_parameters else ApprovalStatus.APPROVED
+            status = (
+                ApprovalStatus.MODIFIED if response.modified_parameters else ApprovalStatus.APPROVED
+            )
         else:
             status = ApprovalStatus.REJECTED
 
@@ -573,9 +677,7 @@ class HITLManager:
         )
 
         # Update state
-        await self.state_store.update_request_status(
-            response.request_id, status, response
-        )
+        await self.state_store.update_request_status(response.request_id, status, response)
         await self.state_store.save_response(response)
 
         # Audit
@@ -603,18 +705,14 @@ class HITLManager:
             max_risk_level=max_risk_level,
             granted_by=self.user_id,
         )
-        self.audit.log_scope_granted(
-            ApprovalScope.TOOL, tool_name, self.user_id, self.session_id
-        )
+        self.audit.log_scope_granted(ApprovalScope.TOOL, tool_name, self.user_id, self.session_id)
         self._stats["scope_grants"] += 1
         return scope_id
 
     def grant_pattern_approval(self, pattern: str) -> str:
         """Grant pattern-based approval."""
         scope_id = self.scope_manager.grant_pattern_approval(pattern)
-        self.audit.log_scope_granted(
-            ApprovalScope.PATTERN, pattern, self.user_id, self.session_id
-        )
+        self.audit.log_scope_granted(ApprovalScope.PATTERN, pattern, self.user_id, self.session_id)
         return scope_id
 
     def revoke_session_approval(self, tool_name: str) -> bool:
@@ -659,39 +757,129 @@ def create_hitl_manager(
     persist_path: Optional[str] = None,
     session_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    storage_backend: str = "memory",
+    storage_config: Optional[Dict[str, Any]] = None,
 ) -> HITLManager:
     """
-    Create HITL manager with common settings.
+    Create HITL manager with common settings (sync convenience function).
+
+    For database backends (sqlite/postgres), use create_hitl_manager_async() instead
+    or call manager.initialize() after creating.
 
     Args:
         enabled: Whether HITL is enabled
         risk_threshold: Risk threshold for approvals
         callback: UI callback (default: ConsoleHITLCallback)
-        persist_path: Path for state persistence
+        persist_path: Path for file-based state persistence (legacy, use storage_config)
         session_id: Session ID
         user_id: User ID
+        storage_backend: Storage backend type (memory, file, sqlite, postgres)
+        storage_config: Additional storage configuration options
 
     Returns:
-        Configured HITLManager
+        Configured HITLManager (not initialized for database backends)
+
+    Example:
+        >>> # Memory backend (default, no initialization needed)
+        >>> manager = create_hitl_manager(enabled=True)
+        >>>
+        >>> # SQLite backend (requires initialization)
+        >>> manager = create_hitl_manager(
+        ...     storage_backend="sqlite",
+        ...     storage_config={"sqlite_path": "/tmp/hitl.db"}
+        ... )
+        >>> await manager.initialize()
     """
+    # Build storage config
+    storage_cfg_dict = {"backend": storage_backend}
+
+    # Handle legacy persist_path for file backend
+    if persist_path and storage_backend == "file":
+        storage_cfg_dict["file_path"] = persist_path
+    elif persist_path and storage_backend == "memory":
+        # Legacy behavior: use file backend if persist_path provided
+        storage_cfg_dict["backend"] = "file"
+        storage_cfg_dict["file_path"] = persist_path
+
+    # Apply any additional storage config
+    if storage_config:
+        storage_cfg_dict.update(storage_config)
+
     config = HITLConfig(
         enabled=enabled,
         global_risk_threshold=risk_threshold,
+        storage=HITLStorageConfig(**storage_cfg_dict),
     )
-
-    state_store: HITLStateStore
-    if persist_path:
-        state_store = FileHITLStore(persist_path)
-    else:
-        state_store = InMemoryHITLStore()
 
     return HITLManager(
         config=config,
         callback=callback,
-        state_store=state_store,
         session_id=session_id,
         user_id=user_id,
     )
+
+
+async def create_hitl_manager_async(
+    config: Optional[HITLConfig] = None,
+    state_store: Optional[HITLStateStore] = None,
+    callback: Optional[HITLCallback] = None,
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> HITLManager:
+    """
+    Async factory function to create and initialize an HITLManager.
+
+    This is the preferred way to create managers with database backends.
+
+    Args:
+        config: HITL configuration (dict will be converted to HITLConfig)
+        state_store: Optional pre-configured storage backend (overrides config)
+        callback: UI callback for approvals
+        session_id: Session ID
+        user_id: User ID
+
+    Returns:
+        Initialized HITLManager ready for use
+
+    Example:
+        >>> # SQLite backend
+        >>> manager = await create_hitl_manager_async(
+        ...     HITLConfig(storage=HITLStorageConfig(
+        ...         backend="sqlite",
+        ...         sqlite_path="/tmp/hitl.db"
+        ...     ))
+        ... )
+        >>>
+        >>> # PostgreSQL backend
+        >>> manager = await create_hitl_manager_async(
+        ...     HITLConfig(storage=HITLStorageConfig(
+        ...         backend="postgres",
+        ...         postgres_url="postgresql://user:pass@localhost/db"
+        ...     ))
+        ... )
+        >>>
+        >>> # From dict
+        >>> manager = await create_hitl_manager_async(
+        ...     HITLConfig(**{
+        ...         "storage": {"backend": "sqlite", "sqlite_path": "/tmp/hitl.db"}
+        ...     })
+        ... )
+
+    Raises:
+        RuntimeError: If storage initialization fails
+    """
+    if config is None:
+        config = HITLConfig()
+
+    manager = HITLManager(
+        config=config,
+        state_store=state_store,
+        callback=callback,
+        session_id=session_id,
+        user_id=user_id,
+    )
+    await manager.initialize()
+    return manager
 
 
 # =============================================================================
@@ -702,4 +890,5 @@ __all__ = [
     "HITLManager",
     "HITLAuditLogger",
     "create_hitl_manager",
+    "create_hitl_manager_async",
 ]

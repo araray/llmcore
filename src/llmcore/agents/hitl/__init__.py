@@ -57,6 +57,7 @@ from .models import (
     HITLEventType,
     HITLRequest,
     HITLResponse,
+    HITLStorageConfig,
     # Scopes
     PersistentScope,
     # Risk
@@ -121,6 +122,7 @@ from .manager import (
     HITLAuditLogger,
     HITLManager,
     create_hitl_manager,
+    create_hitl_manager_async,
 )
 
 # =============================================================================
@@ -140,9 +142,11 @@ __all__ = [
     # Manager (primary API)
     "HITLManager",
     "create_hitl_manager",
+    "create_hitl_manager_async",
     "HITLAuditLogger",
     # Config
     "HITLConfig",
+    "HITLStorageConfig",
     # Enums
     "ApprovalScope",
     "ApprovalStatus",

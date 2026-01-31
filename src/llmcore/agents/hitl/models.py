@@ -25,7 +25,8 @@ try:
     from pydantic import BaseModel, Field
 except ImportError:
     # Fallback if pydantic not available
-    from dataclasses import dataclass, field as dataclass_field
+    from dataclasses import dataclass
+    from dataclasses import field as dataclass_field
 
     BaseModel = object  # type: ignore
 
@@ -103,7 +104,9 @@ class RiskFactor(BaseModel):
 class RiskAssessment(BaseModel):
     """Complete risk assessment for an activity."""
 
-    overall_level: str = Field(..., description="Overall risk level (none/low/medium/high/critical)")
+    overall_level: str = Field(
+        ..., description="Overall risk level (none/low/medium/high/critical)"
+    )
     factors: List[RiskFactor] = Field(default_factory=list, description="Contributing risk factors")
     requires_approval: bool = Field(False, description="Whether approval is required")
     reason: str = Field("", description="Human-readable reason")
@@ -234,7 +237,9 @@ class HITLRequest(BaseModel):
             created_at=datetime.fromisoformat(data["created_at"])
             if "created_at" in data
             else datetime.now(),
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+            expires_at=datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None,
             status=ApprovalStatus(data.get("status", "pending")),
             session_id=data.get("session_id"),
             user_id=data.get("user_id"),
@@ -333,7 +338,11 @@ class HITLDecision(BaseModel):
     @property
     def is_approved(self) -> bool:
         """Check if action was approved."""
-        return self.status in (ApprovalStatus.APPROVED, ApprovalStatus.AUTO_APPROVED, ApprovalStatus.MODIFIED)
+        return self.status in (
+            ApprovalStatus.APPROVED,
+            ApprovalStatus.AUTO_APPROVED,
+            ApprovalStatus.MODIFIED,
+        )
 
 
 # =============================================================================
@@ -407,7 +416,9 @@ class SessionScope(BaseModel):
             ],
             approved_patterns=data.get("approved_patterns", []),
             session_approval=data.get("session_approval", False),
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+            expires_at=datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None,
             created_at=datetime.fromisoformat(data["created_at"])
             if "created_at" in data
             else datetime.now(),
@@ -418,7 +429,9 @@ class PersistentScope(BaseModel):
     """Approvals persisted across sessions."""
 
     user_id: str = Field(..., description="User ID")
-    approved_tools: List[ToolScope] = Field(default_factory=list, description="Persistent tool approvals")
+    approved_tools: List[ToolScope] = Field(
+        default_factory=list, description="Persistent tool approvals"
+    )
     created_at: datetime = Field(default_factory=datetime.now, description="Creation time")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update time")
 
@@ -451,12 +464,8 @@ class ScopeGrant(BaseModel):
     """
 
     tool_name: str = Field(..., description="Tool/activity name to grant scope for")
-    scope_type: ApprovalScope = Field(
-        ApprovalScope.SESSION, description="Type of scope to grant"
-    )
-    max_risk_level: str = Field(
-        "medium", description="Maximum risk level allowed under this scope"
-    )
+    scope_type: ApprovalScope = Field(ApprovalScope.SESSION, description="Type of scope to grant")
+    max_risk_level: str = Field("medium", description="Maximum risk level allowed under this scope")
     conditions: Optional[Dict[str, Any]] = Field(
         None, description="Optional conditions (e.g., path_pattern)"
     )
@@ -484,6 +493,75 @@ class ScopeGrant(BaseModel):
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
+
+
+class HITLStorageConfig(BaseModel):
+    """
+    Storage backend configuration for HITL system.
+
+    Supports multiple storage backends:
+    - memory: In-memory storage (testing/ephemeral)
+    - file: JSON file-based persistence
+    - sqlite: SQLite database (development/single-user)
+    - postgres: PostgreSQL database (production/multi-user)
+
+    Example:
+        >>> # SQLite backend
+        >>> storage = HITLStorageConfig(backend="sqlite", sqlite_path="/tmp/hitl.db")
+        >>>
+        >>> # PostgreSQL backend
+        >>> storage = HITLStorageConfig(
+        ...     backend="postgres",
+        ...     postgres_url="postgresql://user:pass@localhost/db"
+        ... )
+    """
+
+    backend: str = Field(
+        "memory",
+        description="Storage backend type: memory, file, sqlite, postgres",
+    )
+
+    # File backend options
+    file_path: Optional[str] = Field(
+        None,
+        description="Path for file-based storage (used when backend='file')",
+    )
+
+    # SQLite options
+    sqlite_path: str = Field(
+        "~/.local/share/llmcore/hitl.db",
+        description="Path to SQLite database file",
+    )
+
+    # PostgreSQL options
+    postgres_url: Optional[str] = Field(
+        None,
+        description="PostgreSQL connection URL",
+    )
+    postgres_min_pool_size: int = Field(
+        2,
+        description="Minimum connection pool size for PostgreSQL",
+    )
+    postgres_max_pool_size: int = Field(
+        10,
+        description="Maximum connection pool size for PostgreSQL",
+    )
+    postgres_table_prefix: str = Field(
+        "",
+        description="Table name prefix for multi-tenancy",
+    )
+
+    def validate_backend(self) -> None:
+        """
+        Validate that required fields are set for the selected backend.
+
+        Raises:
+            ValueError: If required configuration is missing
+        """
+        if self.backend == "postgres" and not self.postgres_url:
+            raise ValueError("postgres_url is required when backend='postgres'")
+        if self.backend == "file" and not self.file_path:
+            raise ValueError("file_path is required when backend='file'")
 
 
 class HITLConfig(BaseModel):
@@ -534,6 +612,12 @@ class HITLConfig(BaseModel):
     # Audit
     audit_logging_enabled: bool = Field(True, description="Enable audit logging")
     audit_log_path: Optional[str] = Field(None, description="Path for audit log file")
+
+    # Storage backend configuration (NEW for Phase 7.2)
+    storage: HITLStorageConfig = Field(
+        default_factory=HITLStorageConfig,
+        description="Storage backend configuration",
+    )
 
 
 # =============================================================================
@@ -593,7 +677,9 @@ __all__ = [
     "ToolScope",
     "SessionScope",
     "PersistentScope",
+    "ScopeGrant",
     # Config
+    "HITLStorageConfig",
     "HITLConfig",
     # Audit
     "HITLAuditEvent",
