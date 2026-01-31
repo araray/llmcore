@@ -356,6 +356,31 @@ class Gauge:
             labels=labels.model_dump(exclude_none=True) if labels else {},
         )
 
+    def value(self, labels: Optional[MetricLabels] = None) -> float:
+        """Alias for get() - get current gauge value."""
+        return self.get(labels)
+
+    @contextmanager
+    def track_inprogress(
+        self,
+        labels: Optional[MetricLabels] = None,
+    ) -> Generator[None, None, None]:
+        """
+        Context manager to track in-progress operations.
+
+        Increments gauge on entry, decrements on exit.
+
+        Usage:
+            >>> gauge = Gauge("active_requests", "Active requests")
+            >>> with gauge.track_inprogress():
+            ...     process_request()
+        """
+        self.inc(1.0, labels)
+        try:
+            yield
+        finally:
+            self.dec(1.0, labels)
+
 
 @dataclass
 class HistogramBucket:
@@ -436,10 +461,19 @@ class Histogram:
             self._buckets[key].add(value, self.max_samples)
 
     def count(self, labels: Optional[MetricLabels] = None) -> int:
-        """Get observation count."""
-        key = labels.to_key() if labels else "__default__"
-        bucket = self._buckets.get(key)
-        return bucket.count if bucket else 0
+        """Get observation count.
+
+        Args:
+            labels: Optional labels. If None, returns total count across all labels.
+        """
+        if labels is not None:
+            key = labels.to_key()
+            bucket = self._buckets.get(key)
+            return bucket.count if bucket else 0
+
+        # No labels specified - sum across all buckets
+        with self._lock:
+            return sum(bucket.count for bucket in self._buckets.values())
 
     def sum(self, labels: Optional[MetricLabels] = None) -> float:
         """Get sum of all observations."""
@@ -625,6 +659,21 @@ class RateCounter:
             events = self._events.get(key, [])
             return sum(v for t, v in events if t >= cutoff)
 
+    def total(self, labels: Optional[MetricLabels] = None) -> float:
+        """Get total value of all events (regardless of window).
+
+        Args:
+            labels: Optional labels to filter by.
+
+        Returns:
+            Total accumulated value.
+        """
+        key = labels.to_key() if labels else "__default__"
+
+        with self._lock:
+            events = self._events.get(key, [])
+            return sum(v for _, v in events)
+
     def snapshot(self, labels: Optional[MetricLabels] = None) -> MetricSnapshot:
         """Get a snapshot of this metric."""
         return MetricSnapshot(
@@ -674,6 +723,41 @@ class Timer:
         self.labels = labels
         self.unit_multiplier = unit_multiplier
         self._start_time: Optional[float] = None
+        self._elapsed: Optional[float] = None
+
+    def start(self) -> "Timer":
+        """Start the timer manually."""
+        self._start_time = time.perf_counter()
+        self._elapsed = None
+        return self
+
+    def stop(self) -> float:
+        """Stop the timer and record the duration.
+
+        Returns:
+            Elapsed time in the configured units (default: milliseconds).
+        """
+        if self._start_time is None:
+            raise RuntimeError("Timer was not started")
+
+        self._elapsed = (time.perf_counter() - self._start_time) * self.unit_multiplier
+        self.histogram.observe(self._elapsed, self.labels)
+        return self._elapsed
+
+    def elapsed(self) -> float:
+        """Get the elapsed time without stopping.
+
+        Returns:
+            Elapsed time in the configured units (default: milliseconds).
+            If timer was stopped, returns the final elapsed time.
+        """
+        if self._elapsed is not None:
+            return self._elapsed
+
+        if self._start_time is None:
+            return 0.0
+
+        return (time.perf_counter() - self._start_time) * self.unit_multiplier
 
     def __enter__(self) -> "Timer":
         self._start_time = time.perf_counter()
@@ -682,6 +766,7 @@ class Timer:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self._start_time is not None:
             duration = (time.perf_counter() - self._start_time) * self.unit_multiplier
+            self._elapsed = duration
             self.histogram.observe(duration, self.labels)
 
 
@@ -826,6 +911,20 @@ class MetricsRegistry:
 
         return snapshots
 
+    def get_all_metrics(self) -> Dict[str, Any]:
+        """Get all registered metrics as a dictionary.
+
+        Returns:
+            Dictionary with metric names as keys and metric objects as values.
+        """
+        with self._registry_lock:
+            return {
+                "counters": dict(self._counters),
+                "gauges": dict(self._gauges),
+                "histograms": dict(self._histograms),
+                "rate_counters": dict(self._rate_counters),
+            }
+
     def reset_all(self) -> None:
         """Reset all metrics."""
         with self._registry_lock:
@@ -849,11 +948,11 @@ def get_metrics_registry() -> MetricsRegistry:
 def record_llm_call(
     provider: str,
     model: str,
-    operation: str,
-    latency_ms: float,
     input_tokens: int,
     output_tokens: int,
+    latency_ms: float,
     success: bool = True,
+    operation: str = "chat",
     error_type: Optional[str] = None,
 ) -> None:
     """
@@ -865,11 +964,11 @@ def record_llm_call(
     Args:
         provider: Provider name (e.g., "openai").
         model: Model identifier (e.g., "gpt-4o").
-        operation: Operation type (e.g., "chat", "embedding").
-        latency_ms: Request latency in milliseconds.
         input_tokens: Number of input tokens.
         output_tokens: Number of output tokens.
+        latency_ms: Request latency in milliseconds.
         success: Whether the call succeeded.
+        operation: Operation type (e.g., "chat", "embedding"). Defaults to "chat".
         error_type: Error type if failed.
     """
     registry = get_metrics_registry()
