@@ -7,7 +7,7 @@ including:
 
 - Failure Learning: SQLite and PostgreSQL-backed failure tracking and pattern detection
 - TDD Support: Test-Driven Development workflow integration (Phase 6.2)
-- Multi-Attempt Arbiter: N-candidate generation with quality selection (coming in Phase 6.3)
+- Multi-Attempt Arbiter: N-candidate generation with quality selection (Phase 6.3)
 
 Usage - Failure Learning:
     from llmcore.agents.darwin import FailureLearningManager, FailureLog
@@ -46,9 +46,34 @@ Usage - TDD Support:
         max_iterations=3,
     )
     print(f"Tests passed: {result.tests_passed}/{result.tests_executed}")
+
+Usage - Multi-Attempt Arbiter:
+    from llmcore.agents.darwin import MultiAttemptArbiter, ArbiterConfig
+
+    # Initialize arbiter with LLM client
+    arbiter = MultiAttemptArbiter(llm_client=my_llm, config=ArbiterConfig(num_candidates=3))
+
+    # Generate multiple candidates and select the best
+    decision = await arbiter.generate_and_select(
+        task="Implement a binary search function",
+        context="Must handle edge cases like empty arrays",
+    )
+    print(f"Selected: {decision.selected_id}")
+    print(f"Confidence: {decision.confidence}")
+    best_code = decision.selected_content
 """
 
 # Phase 6.1: Failure Learning
+# Phase 6.3: Multi-Attempt Arbiter
+from .arbiter import (
+    ArbiterConfig,
+    ArbiterDecision,
+    ArbiterPrompts,
+    Candidate,
+    CandidateScore,
+    EvaluationCriteria,
+    MultiAttemptArbiter,
+)
 from .failure_storage import (
     BaseFailureStorage,
     FailureContext,
@@ -96,6 +121,17 @@ __all__ = [
     "TestFileBuilder",
     # High-level manager
     "TDDManager",
+    # === Phase 6.3: Multi-Attempt Arbiter ===
+    # Data models
+    "Candidate",
+    "EvaluationCriteria",
+    "CandidateScore",
+    "ArbiterDecision",
+    "ArbiterConfig",
+    # Prompts
+    "ArbiterPrompts",
+    # High-level manager
+    "MultiAttemptArbiter",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
