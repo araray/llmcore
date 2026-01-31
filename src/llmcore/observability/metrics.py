@@ -79,6 +79,7 @@ from typing import (
     Union,
 )
 
+import psutil
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -1280,14 +1281,10 @@ class SystemMetricsCollector:
         Note: This is a stub implementation. For real metrics,
         install psutil and uncomment the actual collection code.
         """
-        # Stub implementation - returns placeholder values
-        # For real implementation:
-        # import psutil
-        # self._cpu_usage.set(psutil.cpu_percent())
-        # mem = psutil.virtual_memory()
-        # self._memory_usage.set(mem.used)
-        # self._memory_percent.set(mem.percent)
-        pass
+        self._cpu_usage.set(psutil.cpu_percent())
+        mem = psutil.virtual_memory()
+        self._memory_usage.set(mem.used)
+        self._memory_percent.set(mem.percent)
 
     def get_stats(self) -> Dict[str, Any]:
         """
