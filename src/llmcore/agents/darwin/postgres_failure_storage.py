@@ -103,8 +103,7 @@ class PostgresFailureStorage(BaseFailureStorage):
         """
         if not PSYCOPG_AVAILABLE:
             raise ImportError(
-                "psycopg library is not installed. "
-                "Install with: pip install 'psycopg[binary,pool]'"
+                "psycopg library is not installed. Install with: pip install 'psycopg[binary,pool]'"
             )
 
         db_url = config.get("db_url")
@@ -287,9 +286,7 @@ class PostgresFailureStorage(BaseFailureStorage):
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
             async with conn.cursor() as cur:
-                await cur.execute(
-                    f"SELECT * FROM {table_name} WHERE id = %s", (failure_id,)
-                )
+                await cur.execute(f"SELECT * FROM {table_name} WHERE id = %s", (failure_id,))
                 row = await cur.fetchone()
 
         if row:
@@ -323,6 +320,7 @@ class PostgresFailureStorage(BaseFailureStorage):
 
         # Compute similarity hashes
         from .failure_storage import FailureLearningManager
+
         manager = FailureLearningManager.__new__(FailureLearningManager)
 
         types_to_check = failure_types or [
@@ -400,9 +398,7 @@ class PostgresFailureStorage(BaseFailureStorage):
             return self._row_to_pattern(row)
         return None
 
-    async def get_patterns_for_failures(
-        self, failure_ids: List[str]
-    ) -> List[FailurePattern]:
+    async def get_patterns_for_failures(self, failure_ids: List[str]) -> List[FailurePattern]:
         """
         Retrieve patterns associated with given failures.
 
@@ -428,7 +424,9 @@ class PostgresFailureStorage(BaseFailureStorage):
                     (failure_ids,),
                 )
 
-                hashes = [row["similarity_hash"] for row in await cur.fetchall() if row["similarity_hash"]]
+                hashes = [
+                    row["similarity_hash"] for row in await cur.fetchall() if row["similarity_hash"]
+                ]
 
                 if not hashes:
                     return []
@@ -545,14 +543,14 @@ class PostgresFailureStorage(BaseFailureStorage):
             genotype_summary=row["genotype_summary"],
             failure_type=row["failure_type"],
             error_message=row["error_message"],
-            error_details=json.loads(row["error_details"]) if row["error_details"] else {},
+            error_details=self._parse_json_field(row["error_details"], {}),
             phenotype_id=row["phenotype_id"],
             phenotype_summary=row["phenotype_summary"],
-            test_results=json.loads(row["test_results"]) if row["test_results"] else None,
+            test_results=self._parse_json_field(row["test_results"], None),
             arbiter_critique=row["arbiter_critique"],
             arbiter_score=row["arbiter_score"],
             similarity_hash=row["similarity_hash"],
-            tags=json.loads(row["tags"]) if row["tags"] else [],
+            tags=self._parse_json_field(row["tags"], []),
             created_at=row["created_at"],
         )
 
@@ -565,11 +563,33 @@ class PostgresFailureStorage(BaseFailureStorage):
             occurrence_count=row["occurrence_count"],
             first_seen=row["first_seen"],
             last_seen=row["last_seen"],
-            common_error_messages=json.loads(row["common_error_messages"])
-            if row["common_error_messages"]
-            else [],
+            common_error_messages=self._parse_json_field(row["common_error_messages"], []),
             suggested_avoidance=row["suggested_avoidance"] or "",
         )
+
+    def _parse_json_field(self, value: Any, default: Any) -> Any:
+        """
+        Parse a JSON field that may already be deserialized by psycopg.
+
+        PostgreSQL JSONB columns are auto-deserialized by psycopg into
+        Python dicts/lists, so we need to handle both cases.
+
+        Args:
+            value: The field value (str, dict, list, or None)
+            default: Default value if field is None/empty
+
+        Returns:
+            Parsed JSON value or default
+        """
+        if value is None:
+            return default
+        if isinstance(value, (dict, list)):
+            # Already deserialized by psycopg
+            return value
+        if isinstance(value, str):
+            # String that needs parsing
+            return json.loads(value) if value else default
+        return default
 
     async def close(self) -> None:
         """Close the connection pool."""
