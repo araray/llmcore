@@ -7,6 +7,8 @@ Uses the official 'anthropic' Python SDK.
 Accepts context as List[Message] and supports standardized tool-calling.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -23,6 +25,7 @@ try:
     anthropic_available = True
 except ImportError:
     anthropic_available = False
+    anthropic = None  # type: ignore
     AsyncAnthropic = None  # type: ignore
     AnthropicError = Exception  # type: ignore
     MessageParam = Dict[str, Any]  # type: ignore
@@ -55,7 +58,7 @@ class AnthropicProvider(BaseProvider):
     """
 
     _client: Optional[AsyncAnthropic] = None
-    _sync_client_for_counting: Optional[anthropic.Anthropic] = None
+    _sync_client_for_counting: Any = None  # Type varies - use Any to avoid import errors
     _api_key_env_var: Optional[str] = None
 
     def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
