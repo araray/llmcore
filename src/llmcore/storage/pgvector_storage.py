@@ -52,11 +52,11 @@ else:
         psycopg_available = False
 
 try:
-    from pgvector.psycopg import register_vector
+    from pgvector.psycopg import register_vector_async
     pgvector_available = True
 except ImportError:
     pgvector_available = False
-    register_vector = None
+    register_vector_async = None
 
 
 logger = logging.getLogger(__name__)
@@ -117,10 +117,10 @@ class PgVectorStorage(BaseVectorStorage):
             self._pool = AsyncConnectionPool(conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size)
 
             async with self._pool.connection() as conn:
-                if register_vector:
-                    await register_vector(conn)
+                if register_vector_async:
+                    await register_vector_async(conn)
                 else:
-                    raise VectorStorageError("pgvector register_vector not available.")
+                    raise VectorStorageError("pgvector register_vector_async not available.")
 
                 async with conn.transaction():
                     await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -216,8 +216,8 @@ class PgVectorStorage(BaseVectorStorage):
         doc_ids_added: List[str] = []
 
         async with self._pool.connection() as conn:
-            if register_vector:
-                await register_vector(conn)
+            if register_vector_async:
+                await register_vector_async(conn)
             async with conn.transaction():
                 collection_dimension = self._default_vector_dimension
                 first_doc_embedding = documents[0].embedding if documents and documents[0].embedding else None
@@ -320,8 +320,8 @@ class PgVectorStorage(BaseVectorStorage):
         query_dimension = len(query_embedding)
 
         async with self._pool.connection() as conn:
-            if register_vector:
-                await register_vector(conn)
+            if register_vector_async:
+                await register_vector_async(conn)
             conn.row_factory = dict_row
 
             collection_dimension = self._default_vector_dimension
