@@ -9,10 +9,8 @@ Tests the efficiency and resource management components:
 - Memory Store (Working + Long-term)
 """
 
+
 import pytest
-import tempfile
-from pathlib import Path
-from typing import Any, Dict, List
 
 # =============================================================================
 # MODEL ROUTER TESTS
@@ -55,8 +53,8 @@ class TestModelRouter:
 
     def test_select_model_with_complexity(self):
         """Test model selection with complexity hint."""
-        from llmcore.agents.routing import ModelRouter
         from llmcore.agents.cognitive import GoalComplexity
+        from llmcore.agents.routing import ModelRouter
 
         router = ModelRouter()
 
@@ -108,8 +106,8 @@ class TestModelTierSelection:
 
     def test_select_model_for_complexity_helper(self):
         """Test the helper function for complexity-based selection."""
-        from llmcore.agents.routing.model_router import select_model_for_complexity
         from llmcore.agents.cognitive import GoalComplexity
+        from llmcore.agents.routing.model_router import select_model_for_complexity
 
         for complexity in GoalComplexity:
             result = select_model_for_complexity(complexity)
@@ -481,8 +479,9 @@ class TestLongTermMemory:
 
     def test_in_memory_store(self):
         """Test InMemoryStore."""
-        from llmcore.agents.memory.memory_store import InMemoryStore, MemoryType
         import asyncio
+
+        from llmcore.agents.memory.memory_store import InMemoryStore, MemoryType
 
         store = InMemoryStore(memory_type=MemoryType.SEMANTIC)
 
@@ -583,10 +582,10 @@ class TestPhase4Integration:
 
     def test_all_components_importable(self):
         """Test all Phase 4 components can be imported."""
-        from llmcore.agents.routing import ModelRouter
-        from llmcore.agents.caching import SemanticCache, PlanCache
+        from llmcore.agents.caching import PlanCache, SemanticCache
         from llmcore.agents.context import ContextManager
         from llmcore.agents.memory import MemoryManager, WorkingMemory
+        from llmcore.agents.routing import ModelRouter
 
         assert ModelRouter is not None
         assert SemanticCache is not None
@@ -597,10 +596,10 @@ class TestPhase4Integration:
 
     def test_components_initialize(self):
         """Test all components initialize without error."""
-        from llmcore.agents.routing import ModelRouter
-        from llmcore.agents.caching import SemanticCache, PlanCache
+        from llmcore.agents.caching import PlanCache, SemanticCache
         from llmcore.agents.context import ContextManager
         from llmcore.agents.memory import MemoryManager
+        from llmcore.agents.routing import ModelRouter
 
         router = ModelRouter()
         sem_cache = SemanticCache()

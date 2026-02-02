@@ -6,9 +6,6 @@ These tests verify end-to-end workflows using the mock provider.
 Real Docker/VM tests are in separate files and require actual infrastructure.
 """
 
-import asyncio
-import json
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -19,10 +16,7 @@ from llmcore.agents.sandbox import (
     EphemeralResourceManager,
     ExecutionResult,
     OutputTracker,
-    SandboxAccessDenied,
     SandboxAccessLevel,
-    SandboxConfig,
-    SandboxError,
     SandboxMode,
     SandboxRegistry,
     SandboxRegistryConfig,
@@ -31,14 +25,8 @@ from llmcore.agents.sandbox import (
     create_registry_config,
     execute_python,
     execute_shell,
-    get_sandbox_info,
-    get_state,
-    list_files,
-    load_file,
     load_sandbox_config,
-    save_file,
     set_active_sandbox,
-    set_state,
 )
 
 # Assumes llmcore is installed or in PYTHONPATH

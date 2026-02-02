@@ -8,13 +8,13 @@ Tests:
 - ConsoleHITLCallback (mocked)
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
+
+import pytest
 
 from llmcore.agents.hitl import (
     ActivityInfo,
-    ApprovalScope,
     ApprovalStatus,
     AutoApproveCallback,
     ConsoleHITLCallback,
@@ -24,9 +24,7 @@ from llmcore.agents.hitl import (
     HITLResponse,
     QueueHITLCallback,
     RiskAssessment,
-    RiskLevel,
 )
-
 
 # =============================================================================
 # FIXTURES

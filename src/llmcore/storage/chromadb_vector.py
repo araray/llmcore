@@ -10,8 +10,7 @@ import asyncio
 import logging
 import os
 import pathlib
-from typing import (TYPE_CHECKING, Any, Dict, List,
-                    Optional, Tuple, Type)
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 

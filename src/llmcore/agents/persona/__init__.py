@@ -5,29 +5,28 @@ Persona System for Darwin Layer 2.
 Provides agent personality customization through personas.
 """
 
+from .manager import PersonaManager
 from .models import (
     AgentPersona,
-    PersonalityTrait,
-    CommunicationStyle,
-    RiskTolerance,
-    PlanningDepth,
-    PersonaTrait,
     CommunicationPreferences,
+    CommunicationStyle,
     DecisionMakingPreferences,
+    PersonalityTrait,
+    PersonaTrait,
+    PlanningDepth,
     PromptModifications,
+    RiskTolerance,
 )
-
-from .manager import PersonaManager
 
 __all__ = [
     "AgentPersona",
-    "PersonalityTrait",
-    "CommunicationStyle",
-    "RiskTolerance",
-    "PlanningDepth",
-    "PersonaTrait",
     "CommunicationPreferences",
+    "CommunicationStyle",
     "DecisionMakingPreferences",
-    "PromptModifications",
     "PersonaManager",
+    "PersonaTrait",
+    "PersonalityTrait",
+    "PlanningDepth",
+    "PromptModifications",
+    "RiskTolerance",
 ]

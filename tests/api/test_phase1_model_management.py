@@ -17,9 +17,7 @@ And the supporting data models:
 Ref: LLMCHAT_LLMCORE_MASTER_PLAN_v2.md Section 5
 """
 
-import asyncio
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -36,7 +34,7 @@ try:
     )
 except ImportError:
     # Fallback: import new classes directly from models module
-    from llmcore import ConfigError, LLMCore, ModelDetails, ProviderError
+    from llmcore import ConfigError, ModelDetails
     from llmcore.models import ModelValidationResult, PullProgress, PullResult
 
 

@@ -31,11 +31,11 @@ Usage:
 
 from .chunking import (
     Chunk,
+    ChunkingConfig,
     ChunkingStrategy,
     FixedSizeChunker,
     RecursiveTextChunker,
     SentenceChunker,
-    ChunkingConfig,
 )
 
 __all__ = [

@@ -43,7 +43,7 @@ import logging
 import re
 from typing import Dict, List, Optional, Set
 
-from .models import PromptSnippet, PromptVariable
+from .models import PromptSnippet
 
 logger = logging.getLogger(__name__)
 
@@ -372,9 +372,9 @@ class PromptComposer:
 # =============================================================================
 
 __all__ = [
-    "PromptComposer",
-    "ComposerError",
-    "MissingVariableError",
-    "MissingSnippetError",
     "CircularInclusionError",
+    "ComposerError",
+    "MissingSnippetError",
+    "MissingVariableError",
+    "PromptComposer",
 ]

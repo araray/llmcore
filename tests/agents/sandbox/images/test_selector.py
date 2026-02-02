@@ -10,20 +10,17 @@ Tests cover:
     - Access mode determination
 """
 
-import pytest
 
 from llmcore.agents.sandbox.images import (
+    RUNTIME_IMAGE_MAP,
+    TASK_CAPABILITY_MAP,
+    TASK_IMAGE_MAP,
     AccessMode,
     ImageCapability,
     ImageRegistry,
     ImageSelector,
     SelectionConfig,
-    SelectionResult,
-    TASK_CAPABILITY_MAP,
-    TASK_IMAGE_MAP,
-    RUNTIME_IMAGE_MAP,
 )
-
 
 # ==============================================================================
 # Basic Selection Tests

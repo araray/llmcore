@@ -7,23 +7,22 @@ Episode, ChatSession, and other fundamental types.
 """
 
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
 from llmcore.models import (
-    Role,
-    Message,
-    ContextItemType,
-    ContextItem,
-    EpisodeType,
-    Episode,
+    AgentState,
     ChatSession,
+    ContextItem,
+    ContextItemType,
     ContextPreset,
+    Episode,
+    EpisodeType,
+    Message,
+    Role,
     Tool,
     ToolCall,
     ToolResult,
-    AgentState,
 )
 
 

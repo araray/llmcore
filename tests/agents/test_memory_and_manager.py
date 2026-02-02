@@ -14,16 +14,13 @@ References:
     - Integration Audit: INTEGRATION_AUDIT.md
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from llmcore.agents import AgentResult
 from llmcore.agents.cognitive import (
-    CycleIteration,
     EnhancedAgentState,
-    IterationStatus,
     ReflectOutput,
 )
 from llmcore.agents.manager import AgentManager, AgentMode, EnhancedAgentManager

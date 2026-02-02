@@ -46,7 +46,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -505,7 +505,7 @@ def create_registry_config(
     Returns:
         SandboxRegistryConfig instance
     """
-    from .registry import SandboxRegistryConfig, SandboxMode
+    from .registry import SandboxMode, SandboxRegistryConfig
 
     mode_map = {
         "docker": SandboxMode.DOCKER,

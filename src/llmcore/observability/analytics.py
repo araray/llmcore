@@ -42,12 +42,10 @@ References:
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from statistics import linear_regression, mean, stdev
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -575,7 +573,7 @@ class CostAnalyzer:
             daily_forecast=daily_forecast,
             assumptions=[
                 f"Based on {history_days} days of historical data.",
-                f"Assumes current usage patterns continue.",
+                "Assumes current usage patterns continue.",
                 f"Trend slope: ${slope:.4f}/day.",
             ],
         )

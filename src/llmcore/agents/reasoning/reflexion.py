@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -38,8 +37,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Tuple,
-    Union,
 )
 
 try:
@@ -60,7 +57,6 @@ from .react import (
     ReActReasoner,
     ReActResult,
     ReActStatus,
-    ReActTrajectory,
 )
 
 if TYPE_CHECKING:

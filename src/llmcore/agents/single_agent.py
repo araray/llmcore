@@ -46,7 +46,6 @@ from .persona import (
     PersonaManager,
 )
 from .routing.capability_checker import (
-    Capability,
     CapabilityChecker,
     CompatibilityResult,
 )
@@ -476,7 +475,7 @@ class SingleAgentMode:
 
                 return AgentResult(
                     goal=goal,
-                    final_answer=f"Task failed: {str(e)}",
+                    final_answer=f"Task failed: {e!s}",
                     success=False,
                     iteration_count=agent_state.iteration_count,
                     total_tokens=agent_state.total_tokens_used,
@@ -579,7 +578,7 @@ class SingleAgentMode:
 
             return AgentResult(
                 goal=goal,
-                final_answer=f"Fast-path failed: {str(e)}",
+                final_answer=f"Fast-path failed: {e!s}",
                 success=False,
                 iteration_count=0,
                 total_tokens=0,
@@ -1215,7 +1214,7 @@ class IterationUpdate:
 # =============================================================================
 
 __all__ = [
-    "SingleAgentMode",
     "AgentResult",
     "IterationUpdate",
+    "SingleAgentMode",
 ]

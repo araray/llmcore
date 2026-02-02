@@ -29,7 +29,6 @@ from .models import (
     ImageCapability,
     ImageManifest,
     ImageTier,
-    ResourceLimits,
 )
 
 logger = logging.getLogger(__name__)

@@ -46,12 +46,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from statistics import mean, median, stdev
-from typing import Any, Dict, List, Optional, Tuple, Union
+from statistics import mean, stdev
+from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 class MetricType(str, Enum):
     """Types of metrics."""
-    
+
     COUNTER = "counter"      # Monotonically increasing
     GAUGE = "gauge"          # Point-in-time value
     HISTOGRAM = "histogram"  # Distribution of values
@@ -72,7 +71,7 @@ class MetricType(str, Enum):
 
 class ExecutionStatus(str, Enum):
     """Execution completion status."""
-    
+
     RUNNING = "running"
     SUCCESS = "success"
     FAILURE = "failure"
@@ -88,7 +87,7 @@ class ExecutionStatus(str, Enum):
 @dataclass
 class IterationMetrics:
     """Metrics for a single iteration."""
-    
+
     iteration: int
     duration_ms: float
     phase_durations: Dict[str, float] = field(default_factory=dict)
@@ -100,7 +99,7 @@ class IterationMetrics:
 @dataclass
 class LLMCallMetrics:
     """Metrics for a single LLM call."""
-    
+
     model: str
     tokens_input: int
     tokens_output: int
@@ -113,7 +112,7 @@ class LLMCallMetrics:
 @dataclass
 class ActivityMetrics:
     """Metrics for a single activity execution."""
-    
+
     activity_name: str
     success: bool
     duration_ms: float
@@ -124,7 +123,7 @@ class ActivityMetrics:
 @dataclass
 class HITLMetrics:
     """Metrics for HITL interactions."""
-    
+
     request_id: str
     action_type: str
     risk_level: str
@@ -154,7 +153,7 @@ class ExecutionMetrics:
         end_time: When execution ended
         status: Execution status
     """
-    
+
     def __init__(
         self,
         execution_id: str,
@@ -172,30 +171,30 @@ class ExecutionMetrics:
         self.execution_id = execution_id
         self.session_id = session_id or f"sess-{uuid4().hex[:12]}"
         self.goal = goal
-        
+
         # Timing
         self.start_time = datetime.now(timezone.utc)
         self.end_time: Optional[datetime] = None
         self._start_monotonic = time.monotonic()
-        
+
         # Status
         self.status = ExecutionStatus.RUNNING
         self.exit_reason: Optional[str] = None
-        
+
         # Iterations
         self._iterations: List[IterationMetrics] = []
         self._current_iteration: int = 0
         self._iteration_start: Optional[float] = None
-        
+
         # LLM calls
         self._llm_calls: List[LLMCallMetrics] = []
-        
+
         # Activities
         self._activities: List[ActivityMetrics] = []
-        
+
         # HITL
         self._hitl_interactions: List[HITLMetrics] = []
-        
+
         # Aggregates
         self._total_tokens_input: int = 0
         self._total_tokens_output: int = 0
@@ -203,11 +202,11 @@ class ExecutionMetrics:
         self._error_count: int = 0
         self._cache_hits: int = 0
         self._cache_misses: int = 0
-    
+
     # =========================================================================
     # RECORDING METHODS
     # =========================================================================
-    
+
     def start_iteration(self) -> int:
         """
         Start a new iteration.
@@ -218,7 +217,7 @@ class ExecutionMetrics:
         self._current_iteration += 1
         self._iteration_start = time.monotonic()
         return self._current_iteration
-    
+
     def end_iteration(
         self,
         phase_durations: Optional[Dict[str, float]] = None,
@@ -242,7 +241,7 @@ class ExecutionMetrics:
             duration_ms = 0.0
         else:
             duration_ms = (time.monotonic() - self._iteration_start) * 1000
-        
+
         metrics = IterationMetrics(
             iteration=self._current_iteration,
             duration_ms=duration_ms,
@@ -254,9 +253,9 @@ class ExecutionMetrics:
         self._iterations.append(metrics)
         self._error_count += errors_occurred
         self._iteration_start = None
-        
+
         return metrics
-    
+
     def record_iteration(
         self,
         duration_ms: float,
@@ -290,9 +289,9 @@ class ExecutionMetrics:
         )
         self._iterations.append(metrics)
         self._error_count += errors_occurred
-        
+
         return metrics
-    
+
     def record_llm_call(
         self,
         model: str,
@@ -326,7 +325,7 @@ class ExecutionMetrics:
             cache_hit=cache_hit,
         )
         self._llm_calls.append(metrics)
-        
+
         # Update aggregates
         self._total_tokens_input += tokens_input
         self._total_tokens_output += tokens_output
@@ -335,9 +334,9 @@ class ExecutionMetrics:
             self._cache_hits += 1
         else:
             self._cache_misses += 1
-        
+
         return metrics
-    
+
     def record_tokens(
         self,
         input: int,
@@ -355,7 +354,7 @@ class ExecutionMetrics:
         self._total_tokens_input += input
         self._total_tokens_output += output
         self._total_cost += cost
-    
+
     def record_activity(
         self,
         activity_name: str,
@@ -383,12 +382,12 @@ class ExecutionMetrics:
             retry_count=retry_count,
         )
         self._activities.append(metrics)
-        
+
         if not success:
             self._error_count += 1
-        
+
         return metrics
-    
+
     def record_hitl(
         self,
         request_id: str,
@@ -422,25 +421,25 @@ class ExecutionMetrics:
             timeout_occurred=timeout_occurred,
         )
         self._hitl_interactions.append(metrics)
-        
+
         return metrics
-    
+
     def record_error(self) -> None:
         """Record an error occurrence."""
         self._error_count += 1
-    
+
     def record_cache_hit(self) -> None:
         """Record a cache hit."""
         self._cache_hits += 1
-    
+
     def record_cache_miss(self) -> None:
         """Record a cache miss."""
         self._cache_misses += 1
-    
+
     # =========================================================================
     # COMPLETION
     # =========================================================================
-    
+
     def complete(
         self,
         success: bool,
@@ -459,7 +458,7 @@ class ExecutionMetrics:
             else ExecutionStatus.FAILURE
         )
         self.exit_reason = exit_reason
-    
+
     def timeout(self, reason: str = "Timeout exceeded") -> None:
         """
         Mark execution as timed out.
@@ -470,7 +469,7 @@ class ExecutionMetrics:
         self.end_time = datetime.now(timezone.utc)
         self.status = ExecutionStatus.TIMEOUT
         self.exit_reason = reason
-    
+
     def cancel(self, reason: str = "Cancelled by user") -> None:
         """
         Mark execution as cancelled.
@@ -481,11 +480,11 @@ class ExecutionMetrics:
         self.end_time = datetime.now(timezone.utc)
         self.status = ExecutionStatus.CANCELLED
         self.exit_reason = reason
-    
+
     # =========================================================================
     # COMPUTED PROPERTIES
     # =========================================================================
-    
+
     @property
     def total_duration_ms(self) -> float:
         """Get total execution duration in milliseconds."""
@@ -493,27 +492,27 @@ class ExecutionMetrics:
             delta = self.end_time - self.start_time
             return delta.total_seconds() * 1000
         return (time.monotonic() - self._start_monotonic) * 1000
-    
+
     @property
     def total_iterations(self) -> int:
         """Get total iterations."""
         return len(self._iterations)
-    
+
     @property
     def total_tokens(self) -> int:
         """Get total tokens (input + output)."""
         return self._total_tokens_input + self._total_tokens_output
-    
+
     @property
     def total_cost(self) -> float:
         """Get total estimated cost."""
         return self._total_cost
-    
+
     @property
     def total_activities(self) -> int:
         """Get total activities executed."""
         return len(self._activities)
-    
+
     @property
     def activity_success_rate(self) -> float:
         """Get activity success rate (0-1)."""
@@ -521,7 +520,7 @@ class ExecutionMetrics:
             return 1.0
         successes = sum(1 for a in self._activities if a.success)
         return successes / len(self._activities)
-    
+
     @property
     def cache_hit_rate(self) -> float:
         """Get cache hit rate (0-1)."""
@@ -529,25 +528,25 @@ class ExecutionMetrics:
         if total == 0:
             return 0.0
         return self._cache_hits / total
-    
+
     @property
     def avg_iteration_duration_ms(self) -> float:
         """Get average iteration duration."""
         if not self._iterations:
             return 0.0
         return mean(i.duration_ms for i in self._iterations)
-    
+
     @property
     def avg_llm_call_duration_ms(self) -> float:
         """Get average LLM call duration."""
         if not self._llm_calls:
             return 0.0
         return mean(c.duration_ms for c in self._llm_calls)
-    
+
     # =========================================================================
     # SUMMARY
     # =========================================================================
-    
+
     def to_summary(self) -> Dict[str, Any]:
         """
         Get comprehensive execution summary.
@@ -559,13 +558,13 @@ class ExecutionMetrics:
         activity_counts: Dict[str, int] = defaultdict(int)
         activity_successes: Dict[str, int] = defaultdict(int)
         activity_durations: Dict[str, List[float]] = defaultdict(list)
-        
+
         for act in self._activities:
             activity_counts[act.activity_name] += 1
             if act.success:
                 activity_successes[act.activity_name] += 1
             activity_durations[act.activity_name].append(act.duration_ms)
-        
+
         activity_breakdown = {
             name: {
                 "count": activity_counts[name],
@@ -577,17 +576,17 @@ class ExecutionMetrics:
             }
             for name in activity_counts
         }
-        
+
         # Model breakdown
         model_calls: Dict[str, int] = defaultdict(int)
         model_tokens: Dict[str, int] = defaultdict(int)
         model_costs: Dict[str, float] = defaultdict(float)
-        
+
         for call in self._llm_calls:
             model_calls[call.model] += 1
             model_tokens[call.model] += call.tokens_input + call.tokens_output
             model_costs[call.model] += call.cost
-        
+
         model_breakdown = {
             model: {
                 "calls": model_calls[model],
@@ -596,7 +595,7 @@ class ExecutionMetrics:
             }
             for model in model_calls
         }
-        
+
         return {
             "execution_id": self.execution_id,
             "session_id": self.session_id,
@@ -676,7 +675,7 @@ class MetricsCollector:
         # Get summary
         summary = collector.get_summary()
     """
-    
+
     def __init__(
         self,
         max_history: int = 1000,
@@ -691,7 +690,7 @@ class MetricsCollector:
         self._executions: Dict[str, ExecutionMetrics] = {}
         self._execution_order: List[str] = []  # For FIFO eviction
         self._active_executions: Dict[str, ExecutionMetrics] = {}
-    
+
     def start_execution(
         self,
         execution_id: str,
@@ -715,11 +714,11 @@ class MetricsCollector:
             session_id=session_id,
             goal=goal,
         )
-        
+
         self._active_executions[execution_id] = metrics
-        
+
         return metrics
-    
+
     def end_execution(
         self,
         execution_id: str,
@@ -740,12 +739,12 @@ class MetricsCollector:
         metrics = self._active_executions.pop(execution_id, None)
         if metrics is None:
             return None
-        
+
         metrics.complete(success=success, exit_reason=exit_reason)
         self._store_execution(execution_id, metrics)
-        
+
         return metrics
-    
+
     def _store_execution(
         self,
         execution_id: str,
@@ -756,10 +755,10 @@ class MetricsCollector:
         while len(self._execution_order) >= self.max_history:
             oldest = self._execution_order.pop(0)
             self._executions.pop(oldest, None)
-        
+
         self._executions[execution_id] = metrics
         self._execution_order.append(execution_id)
-    
+
     def get_execution(
         self,
         execution_id: str,
@@ -777,7 +776,7 @@ class MetricsCollector:
         if execution_id in self._active_executions:
             return self._active_executions[execution_id]
         return self._executions.get(execution_id)
-    
+
     def list_executions(
         self,
         *,
@@ -797,25 +796,25 @@ class MetricsCollector:
             List of execution IDs
         """
         result = []
-        
+
         for exec_id in reversed(self._execution_order):
             if len(result) >= limit:
                 break
-            
+
             metrics = self._executions.get(exec_id)
             if metrics is None:
                 continue
-            
+
             if status is not None and metrics.status != status:
                 continue
-            
+
             if since is not None and metrics.start_time < since:
                 continue
-            
+
             result.append(exec_id)
-        
+
         return result
-    
+
     def get_summary(
         self,
         *,
@@ -834,28 +833,28 @@ class MetricsCollector:
         """
         # Collect relevant executions
         executions: List[ExecutionMetrics] = []
-        
+
         for metrics in self._executions.values():
             if since is not None and metrics.start_time < since:
                 continue
             executions.append(metrics)
-        
+
         if include_active:
             executions.extend(self._active_executions.values())
-        
+
         if not executions:
             return self._empty_summary()
-        
+
         # Compute aggregates
         total = len(executions)
         completed = [e for e in executions if e.status != ExecutionStatus.RUNNING]
         successes = [e for e in completed if e.status == ExecutionStatus.SUCCESS]
-        
+
         durations = [e.total_duration_ms for e in completed]
         iterations = [e.total_iterations for e in executions]
         tokens = [e.total_tokens for e in executions]
         costs = [e.total_cost for e in executions]
-        
+
         return {
             "total_executions": total,
             "active_executions": len(self._active_executions),
@@ -888,7 +887,7 @@ class MetricsCollector:
                 if executions else 0.0
             ),
         }
-    
+
     def _compute_percentiles(
         self,
         values: List[float],
@@ -896,14 +895,14 @@ class MetricsCollector:
         """Compute percentile statistics."""
         if not values:
             return {}
-        
+
         sorted_values = sorted(values)
         n = len(sorted_values)
-        
+
         def percentile(p: float) -> float:
             idx = int(p * n)
             return sorted_values[min(idx, n - 1)]
-        
+
         result = {
             "min": min(values),
             "max": max(values),
@@ -913,12 +912,12 @@ class MetricsCollector:
             "p95": percentile(0.95),
             "p99": percentile(0.99),
         }
-        
+
         if n >= 2:
             result["stddev"] = stdev(values)
-        
+
         return result
-    
+
     def _empty_summary(self) -> Dict[str, Any]:
         """Return empty summary structure."""
         return {
@@ -934,13 +933,13 @@ class MetricsCollector:
             "activity_success_rate": 0.0,
             "cache_hit_rate": 0.0,
         }
-    
+
     def clear(self) -> None:
         """Clear all stored metrics."""
         self._executions.clear()
         self._execution_order.clear()
         # Note: Does not clear active executions
-    
+
     def reset(self) -> None:
         """Reset collector completely."""
         self._executions.clear()
@@ -955,21 +954,21 @@ class MetricsCollector:
 
 class MetricsSummary(BaseModel):
     """Pydantic model for metrics summary response."""
-    
+
     total_executions: int = Field(description="Total executions tracked")
     active_executions: int = Field(description="Currently active executions")
     completed_executions: int = Field(description="Completed executions")
     success_rate: float = Field(description="Success rate (0-1)")
-    
+
     status_breakdown: Dict[str, int] = Field(
         description="Count by status"
     )
-    
+
     latency: Dict[str, float] = Field(
         default_factory=dict,
         description="Latency percentiles"
     )
-    
+
     iterations: Dict[str, Union[int, float]] = Field(
         description="Iteration statistics"
     )
@@ -979,7 +978,7 @@ class MetricsSummary(BaseModel):
     cost: Dict[str, float] = Field(
         description="Cost statistics"
     )
-    
+
     activity_success_rate: float = Field(
         description="Activity success rate"
     )
@@ -990,13 +989,13 @@ class MetricsSummary(BaseModel):
 
 class ExecutionSummary(BaseModel):
     """Pydantic model for single execution summary."""
-    
+
     execution_id: str
     session_id: str
     goal: Optional[str]
     status: str
     exit_reason: Optional[str]
-    
+
     timing: Dict[str, Any]
     iterations: Dict[str, Any]
     tokens: Dict[str, Any]

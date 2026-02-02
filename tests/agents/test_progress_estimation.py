@@ -16,8 +16,6 @@ References:
     - Technical Spec: Section 5.3.7 (REFLECT Phase)
 """
 
-from datetime import datetime
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -27,7 +25,6 @@ from llmcore.agents.cognitive.phases.reflect import (
 )
 from llmcore.agents.resilience.circuit_breaker import (
     AgentCircuitBreaker,
-    CircuitBreakerConfig,
     TripReason,
 )
 

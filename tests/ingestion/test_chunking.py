@@ -17,14 +17,11 @@ import pytest
 
 from llmcore.ingestion import (
     Chunk,
-    ChunkingConfig,
-    ChunkingStrategy,
     FixedSizeChunker,
     RecursiveTextChunker,
     SentenceChunker,
 )
-from llmcore.ingestion.chunking import create_chunker, chunk_text
-
+from llmcore.ingestion.chunking import chunk_text, create_chunker
 
 # =============================================================================
 # TESTS FOR CHUNK DATA MODEL

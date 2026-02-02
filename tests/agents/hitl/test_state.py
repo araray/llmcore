@@ -9,11 +9,11 @@ Tests:
 - Cleanup operations
 """
 
-import pytest
 import asyncio
 import tempfile
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+
+import pytest
 
 from llmcore.agents.hitl import (
     ActivityInfo,
@@ -21,11 +21,9 @@ from llmcore.agents.hitl import (
     FileHITLStore,
     HITLRequest,
     HITLResponse,
-    HITLStateStore,
     InMemoryHITLStore,
     RiskAssessment,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -298,7 +296,7 @@ class TestScopePersistence:
     @pytest.mark.asyncio
     async def test_save_session_scope(self, file_store):
         """Should save session scope."""
-        from llmcore.agents.hitl import SessionScope, ToolScope, RiskLevel
+        from llmcore.agents.hitl import RiskLevel, SessionScope, ToolScope
 
         tool_scope = ToolScope(
             tool_name="bash_exec",
@@ -319,7 +317,7 @@ class TestScopePersistence:
     @pytest.mark.asyncio
     async def test_save_persistent_scope(self, file_store):
         """Should save persistent scope."""
-        from llmcore.agents.hitl import PersistentScope, ToolScope, RiskLevel
+        from llmcore.agents.hitl import PersistentScope, RiskLevel, ToolScope
 
         tool_scope = ToolScope(
             tool_name="file_read",
@@ -340,7 +338,7 @@ class TestScopePersistence:
     @pytest.mark.asyncio
     async def test_scope_persistence_across_instances(self, temp_dir):
         """Should persist scopes across store instances."""
-        from llmcore.agents.hitl import SessionScope, ToolScope, RiskLevel
+        from llmcore.agents.hitl import RiskLevel, SessionScope, ToolScope
 
         tool_scope = ToolScope(
             tool_name="test_tool",

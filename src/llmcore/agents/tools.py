@@ -19,7 +19,7 @@ Security Model:
 import asyncio
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,7 +76,7 @@ async def semantic_search(
 
     except Exception as e:
         logger.error(f"Semantic search failed: {e}")
-        return f"Search error: {str(e)}"
+        return f"Search error: {e!s}"
 
 
 async def episodic_search(
@@ -119,7 +119,7 @@ async def episodic_search(
 
     except Exception as e:
         logger.error(f"Episodic search failed: {e}")
-        return f"Search error: {str(e)}"
+        return f"Search error: {e!s}"
 
 
 def calculator(expression: str) -> str:
@@ -159,7 +159,7 @@ def calculator(expression: str) -> str:
         result = eval(clean_expr, {"__builtins__": {}}, safe_dict)
         return str(result)
     except Exception as e:
-        return f"Calculation error: {str(e)}"
+        return f"Calculation error: {e!s}"
 
 
 def finish(answer: str) -> str:
@@ -384,7 +384,7 @@ class ToolManager:
 
         except Exception as e:
             logger.error(f"Error loading tools for run: {e}", exc_info=True)
-            raise LLMCoreError(f"Failed to load tools: {str(e)}")
+            raise LLMCoreError(f"Failed to load tools: {e!s}")
 
     def load_default_tools(self) -> None:
         """
@@ -489,14 +489,14 @@ class ToolManager:
             )
 
         except TypeError as e:
-            error_msg = f"Invalid arguments for tool '{tool_name}': {str(e)}"
+            error_msg = f"Invalid arguments for tool '{tool_name}': {e!s}"
             logger.error(error_msg, exc_info=True)
             return ToolResult(
                 tool_call_id=tool_call.id,
                 content=f"ERROR: {error_msg}"
             )
         except Exception as e:
-            error_msg = f"Error executing tool '{tool_name}': {str(e)}"
+            error_msg = f"Error executing tool '{tool_name}': {e!s}"
             logger.error(error_msg, exc_info=True)
             return ToolResult(
                 tool_call_id=tool_call.id,

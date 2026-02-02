@@ -11,27 +11,25 @@ Tests cover:
     - ImageMetadata dataclass
 """
 
-from datetime import datetime
 from typing import Any, Dict
 
 import pytest
 
 from llmcore.agents.sandbox.images import (
+    BASE_IMAGE_MANIFEST,
+    BUILTIN_MANIFESTS,
+    NODEJS_IMAGE_MANIFEST,
+    PYTHON_IMAGE_MANIFEST,
+    RESEARCH_IMAGE_MANIFEST,
+    SHELL_IMAGE_MANIFEST,
+    WEBSEARCH_IMAGE_MANIFEST,
     AccessMode,
     ImageCapability,
     ImageManifest,
     ImageMetadata,
     ImageTier,
     ResourceLimits,
-    BUILTIN_MANIFESTS,
-    BASE_IMAGE_MANIFEST,
-    PYTHON_IMAGE_MANIFEST,
-    NODEJS_IMAGE_MANIFEST,
-    SHELL_IMAGE_MANIFEST,
-    RESEARCH_IMAGE_MANIFEST,
-    WEBSEARCH_IMAGE_MANIFEST,
 )
-
 
 # ==============================================================================
 # ImageTier Tests

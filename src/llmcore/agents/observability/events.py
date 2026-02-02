@@ -62,8 +62,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ConfigDict
-
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +87,7 @@ class EventCategory(str, Enum):
     - SANDBOX: Container/VM sandbox events
     - RAG: Retrieval-augmented generation events
     """
-    
+
     LIFECYCLE = "lifecycle"
     COGNITIVE = "cognitive"
     ACTIVITY = "activity"
@@ -110,7 +109,7 @@ class EventSeverity(str, Enum):
     ERROR: Errors that prevent specific operations
     CRITICAL: Severe errors that may halt execution
     """
-    
+
     DEBUG = "debug"
     INFO = "info"
     WARNING = "warning"
@@ -120,7 +119,7 @@ class EventSeverity(str, Enum):
 
 class LifecycleEventType(str, Enum):
     """Specific lifecycle event types."""
-    
+
     AGENT_STARTED = "agent_started"
     AGENT_COMPLETED = "agent_completed"
     AGENT_FAILED = "agent_failed"
@@ -133,7 +132,7 @@ class LifecycleEventType(str, Enum):
 
 class CognitiveEventType(str, Enum):
     """Specific cognitive phase event types."""
-    
+
     PHASE_STARTED = "phase_started"
     PHASE_COMPLETED = "phase_completed"
     PHASE_FAILED = "phase_failed"
@@ -144,7 +143,7 @@ class CognitiveEventType(str, Enum):
 
 class ActivityEventType(str, Enum):
     """Specific activity/tool event types."""
-    
+
     ACTIVITY_STARTED = "activity_started"
     ACTIVITY_COMPLETED = "activity_completed"
     ACTIVITY_FAILED = "activity_failed"
@@ -155,7 +154,7 @@ class ActivityEventType(str, Enum):
 
 class HITLEventType(str, Enum):
     """Specific HITL event types."""
-    
+
     APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_GRANTED = "approval_granted"
     APPROVAL_DENIED = "approval_denied"
@@ -167,7 +166,7 @@ class HITLEventType(str, Enum):
 
 class ErrorEventType(str, Enum):
     """Specific error event types."""
-    
+
     EXCEPTION = "exception"
     VALIDATION_ERROR = "validation_error"
     TIMEOUT_ERROR = "timeout_error"
@@ -180,7 +179,7 @@ class ErrorEventType(str, Enum):
 
 class MetricEventType(str, Enum):
     """Specific metric event types."""
-    
+
     LATENCY = "latency"
     TOKEN_USAGE = "token_usage"
     COST = "cost"
@@ -191,7 +190,7 @@ class MetricEventType(str, Enum):
 
 class MemoryEventType(str, Enum):
     """Specific memory event types."""
-    
+
     MEMORY_READ = "memory_read"
     MEMORY_WRITE = "memory_write"
     MEMORY_UPDATE = "memory_update"
@@ -201,7 +200,7 @@ class MemoryEventType(str, Enum):
 
 class SandboxEventType(str, Enum):
     """Specific sandbox event types."""
-    
+
     SANDBOX_CREATED = "sandbox_created"
     SANDBOX_STARTED = "sandbox_started"
     SANDBOX_STOPPED = "sandbox_stopped"
@@ -212,7 +211,7 @@ class SandboxEventType(str, Enum):
 
 class RAGEventType(str, Enum):
     """Specific RAG event types."""
-    
+
     QUERY_STARTED = "query_started"
     QUERY_COMPLETED = "query_completed"
     DOCUMENTS_RETRIEVED = "documents_retrieved"
@@ -262,7 +261,7 @@ class AgentEvent(BaseModel):
         correlation_id: ID for correlating related events
         tags: Additional tags for filtering/categorization
     """
-    
+
     model_config = ConfigDict(
         extra="allow",
         use_enum_values=True,
@@ -277,7 +276,7 @@ class AgentEvent(BaseModel):
             }
         }
     )
-    
+
     # Identity
     event_id: str = Field(
         default_factory=_generate_event_id,
@@ -287,14 +286,14 @@ class AgentEvent(BaseModel):
         default_factory=_utc_now,
         description="Event timestamp (UTC)"
     )
-    
+
     # Context
     session_id: str = Field(..., description="Agent session ID")
     execution_id: Optional[str] = Field(
         None,
         description="Specific execution/run ID"
     )
-    
+
     # Classification
     category: EventCategory = Field(..., description="Event category")
     event_type: str = Field(..., description="Specific event type")
@@ -302,7 +301,7 @@ class AgentEvent(BaseModel):
         default=EventSeverity.INFO,
         description="Event severity"
     )
-    
+
     # State
     phase: Optional[str] = Field(
         None,
@@ -313,20 +312,20 @@ class AgentEvent(BaseModel):
         ge=0,
         description="Current iteration number"
     )
-    
+
     # Payload
     data: Dict[str, Any] = Field(
         default_factory=dict,
         description="Event-specific data payload"
     )
-    
+
     # Timing
     duration_ms: Optional[float] = Field(
         None,
         ge=0,
         description="Duration in milliseconds"
     )
-    
+
     # Relationships
     parent_event_id: Optional[str] = Field(
         None,
@@ -336,13 +335,13 @@ class AgentEvent(BaseModel):
         None,
         description="Correlation ID for related events"
     )
-    
+
     # Metadata
     tags: List[str] = Field(
         default_factory=list,
         description="Tags for filtering"
     )
-    
+
     def with_duration(self, start_time: datetime) -> "AgentEvent":
         """
         Set duration based on start time.
@@ -356,7 +355,7 @@ class AgentEvent(BaseModel):
         delta = _utc_now() - start_time
         self.duration_ms = delta.total_seconds() * 1000
         return self
-    
+
     def with_parent(self, parent_id: str) -> "AgentEvent":
         """
         Set parent event ID.
@@ -369,7 +368,7 @@ class AgentEvent(BaseModel):
         """
         self.parent_event_id = parent_id
         return self
-    
+
     def with_correlation(self, correlation_id: str) -> "AgentEvent":
         """
         Set correlation ID.
@@ -382,7 +381,7 @@ class AgentEvent(BaseModel):
         """
         self.correlation_id = correlation_id
         return self
-    
+
     def add_tag(self, tag: str) -> "AgentEvent":
         """
         Add a tag to the event.
@@ -396,7 +395,7 @@ class AgentEvent(BaseModel):
         if tag not in self.tags:
             self.tags.append(tag)
         return self
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert event to dictionary for serialization.
@@ -405,7 +404,7 @@ class AgentEvent(BaseModel):
             Dictionary representation of the event
         """
         return self.model_dump(mode="json")
-    
+
     def to_json(self) -> str:
         """
         Convert event to JSON string.
@@ -437,12 +436,12 @@ class LifecycleEvent(AgentEvent):
         goal_complexity: Classified goal complexity
         recommended_strategy: Recommended execution strategy
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.LIFECYCLE,
         frozen=True
     )
-    
+
     # Lifecycle-specific fields
     goal: Optional[str] = Field(None, description="Goal being processed")
     final_status: Optional[str] = Field(None, description="Final status")
@@ -457,7 +456,7 @@ class LifecycleEvent(AgentEvent):
         description="Total tokens used"
     )
     exit_reason: Optional[str] = Field(None, description="Exit reason")
-    
+
     # Complexity classification
     goal_complexity: Optional[str] = Field(
         None,
@@ -486,12 +485,12 @@ class CognitiveEvent(AgentEvent):
         phase_order: Order in cognitive cycle
         decisions: Decisions made in this phase
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.COGNITIVE,
         frozen=True
     )
-    
+
     # Cognitive-specific fields
     input_summary: Optional[str] = Field(
         None,
@@ -516,7 +515,7 @@ class CognitiveEvent(AgentEvent):
         le=1,
         description="Confidence score (0-1)"
     )
-    
+
     # Phase metadata
     phase_name: Optional[str] = Field(None, description="Specific phase name")
     phase_order: Optional[int] = Field(
@@ -524,7 +523,7 @@ class CognitiveEvent(AgentEvent):
         ge=0,
         description="Order in cognitive cycle"
     )
-    
+
     # Decisions made
     decisions: List[str] = Field(
         default_factory=list,
@@ -550,19 +549,19 @@ class ActivityEvent(AgentEvent):
         sandbox_type: Sandbox type used
         container_id: Container ID if applicable
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.ACTIVITY,
         frozen=True
     )
-    
+
     # Activity identification
     activity_name: str = Field(..., description="Activity/tool name")
     activity_type: Optional[str] = Field(
         None,
         description="Activity type/category"
     )
-    
+
     # Execution details
     activity_input: Dict[str, Any] = Field(
         default_factory=dict,
@@ -576,16 +575,16 @@ class ActivityEvent(AgentEvent):
         default=False,
         description="Whether output was truncated"
     )
-    
+
     # Status
     success: bool = Field(default=True, description="Execution success")
     error_message: Optional[str] = Field(None, description="Error if failed")
     error_type: Optional[str] = Field(None, description="Error type/class")
-    
+
     # Retry information
     retry_count: int = Field(default=0, ge=0, description="Retry attempts")
     max_retries: Optional[int] = Field(None, ge=0, description="Max retries")
-    
+
     # Sandbox context
     sandbox_type: Optional[str] = Field(
         None,
@@ -607,12 +606,12 @@ class MemoryEvent(AgentEvent):
         value_summary: Summary of stored/retrieved value
         items_affected: Number of items affected
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.MEMORY,
         frozen=True
     )
-    
+
     # Operation details
     operation: str = Field(
         ...,
@@ -622,14 +621,14 @@ class MemoryEvent(AgentEvent):
         ...,
         description="Memory type (working, episodic, semantic, etc.)"
     )
-    
+
     # Content
     key: Optional[str] = Field(None, description="Memory key")
     value_summary: Optional[str] = Field(
         None,
         description="Summary of value"
     )
-    
+
     # Metrics
     items_affected: int = Field(
         default=1,
@@ -655,16 +654,16 @@ class HITLEvent(AgentEvent):
         feedback: Human feedback/comments
         scope_granted: Approval scope if granted
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.HITL,
         frozen=True
     )
-    
+
     # Request identification
     request_id: str = Field(..., description="HITL request ID")
     action_type: str = Field(..., description="Action requiring approval")
-    
+
     # Risk assessment
     risk_level: str = Field(
         ...,
@@ -674,7 +673,7 @@ class HITLEvent(AgentEvent):
         default_factory=list,
         description="Contributing risk factors"
     )
-    
+
     # Response
     approval_status: str = Field(
         ...,
@@ -689,11 +688,11 @@ class HITLEvent(AgentEvent):
         ge=0,
         description="Timeout duration"
     )
-    
+
     # Human response
     responder_id: Optional[str] = Field(None, description="Responder ID")
     feedback: Optional[str] = Field(None, description="Human feedback")
-    
+
     # Scope
     scope_granted: Optional[str] = Field(
         None,
@@ -720,7 +719,7 @@ class ErrorEvent(AgentEvent):
         recovery_action: Recovery action taken
         source_component: Component where error occurred
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.ERROR,
         frozen=True
@@ -729,12 +728,12 @@ class ErrorEvent(AgentEvent):
         default=EventSeverity.ERROR,
         description="Error severity"
     )
-    
+
     # Error details
     error_type: str = Field(..., description="Error type/class")
     error_message: str = Field(..., description="Error message")
     error_code: Optional[str] = Field(None, description="Error code")
-    
+
     # Debug info
     stack_trace: Optional[str] = Field(None, description="Stack trace")
     source_component: Optional[str] = Field(
@@ -743,7 +742,7 @@ class ErrorEvent(AgentEvent):
     )
     source_file: Optional[str] = Field(None, description="Source file")
     source_line: Optional[int] = Field(None, ge=0, description="Source line")
-    
+
     # Recovery
     recoverable: bool = Field(default=True, description="Is recoverable")
     recovery_action: Optional[str] = Field(
@@ -754,7 +753,7 @@ class ErrorEvent(AgentEvent):
         None,
         description="Whether recovery succeeded"
     )
-    
+
     # Context
     context_snapshot: Dict[str, Any] = Field(
         default_factory=dict,
@@ -775,29 +774,29 @@ class MetricEvent(AgentEvent):
         metric_type: Type (counter, gauge, histogram)
         aggregation: Aggregation type
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.METRIC,
         frozen=True
     )
-    
+
     # Metric identification
     metric_name: str = Field(..., description="Metric name")
     metric_type: Optional[str] = Field(
         None,
         description="Metric type (counter, gauge, histogram, etc.)"
     )
-    
+
     # Value
     metric_value: Union[int, float] = Field(..., description="Metric value")
     metric_unit: Optional[str] = Field(None, description="Unit (ms, bytes, etc.)")
-    
+
     # Aggregation
     aggregation: Optional[str] = Field(
         None,
         description="Aggregation type (sum, avg, max, min, etc.)"
     )
-    
+
     # Additional values for distributions
     min_value: Optional[float] = Field(None, description="Minimum value")
     max_value: Optional[float] = Field(None, description="Maximum value")
@@ -825,37 +824,37 @@ class SandboxEvent(AgentEvent):
         operation: Sandbox operation
         exit_code: Process exit code
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.SANDBOX,
         frozen=True
     )
-    
+
     # Sandbox identification
     sandbox_type: str = Field(
         ...,
         description="Sandbox type (docker, vm, ephemeral)"
     )
     sandbox_id: Optional[str] = Field(None, description="Sandbox ID")
-    
+
     # Configuration
     image: Optional[str] = Field(None, description="Image used")
     access_mode: Optional[str] = Field(
         None,
         description="Access mode (restricted, full)"
     )
-    
+
     # Operation
     operation: str = Field(
         ...,
         description="Operation (create, start, execute, stop, destroy)"
     )
-    
+
     # Execution results
     exit_code: Optional[int] = Field(None, description="Exit code")
     stdout_length: Optional[int] = Field(None, ge=0, description="Stdout bytes")
     stderr_length: Optional[int] = Field(None, ge=0, description="Stderr bytes")
-    
+
     # Resource usage
     memory_used_mb: Optional[float] = Field(
         None,
@@ -883,33 +882,33 @@ class RAGEvent(AgentEvent):
         top_score: Highest similarity score
         documents_used: IDs of documents used
     """
-    
+
     category: EventCategory = Field(
         default=EventCategory.RAG,
         frozen=True
     )
-    
+
     # Query
     query: str = Field(..., description="Search query")
     query_type: Optional[str] = Field(
         None,
         description="Query type (semantic, keyword, hybrid)"
     )
-    
+
     # Source
     source: str = Field(
         ...,
         description="RAG source (vector_store, documents, etc.)"
     )
     source_id: Optional[str] = Field(None, description="Specific source ID")
-    
+
     # Results
     num_results: int = Field(default=0, ge=0, description="Results count")
     results_truncated: bool = Field(
         default=False,
         description="Whether results were truncated"
     )
-    
+
     # Scores
     top_score: Optional[float] = Field(
         None,
@@ -923,7 +922,7 @@ class RAGEvent(AgentEvent):
         None,
         description="Score threshold used"
     )
-    
+
     # Documents
     documents_used: List[str] = Field(
         default_factory=list,
@@ -961,7 +960,7 @@ def create_lifecycle_event(
     """
     if isinstance(event_type, LifecycleEventType):
         event_type = event_type.value
-    
+
     return LifecycleEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1001,7 +1000,7 @@ def create_cognitive_event(
     """
     if isinstance(event_type, CognitiveEventType):
         event_type = event_type.value
-    
+
     return CognitiveEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1042,7 +1041,7 @@ def create_activity_event(
     """
     if isinstance(event_type, ActivityEventType):
         event_type = event_type.value
-    
+
     return ActivityEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1085,7 +1084,7 @@ def create_error_event(
     """
     if isinstance(event_type, ErrorEventType):
         event_type = event_type.value
-    
+
     return ErrorEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1102,7 +1101,7 @@ def create_error_event(
 def create_metric_event(
     session_id: str,
     metric_name: str,
-    metric_value: Union[int, float],
+    metric_value: float,
     *,
     execution_id: Optional[str] = None,
     event_type: Union[MetricEventType, str] = "measurement",
@@ -1126,7 +1125,7 @@ def create_metric_event(
     """
     if isinstance(event_type, MetricEventType):
         event_type = event_type.value
-    
+
     return MetricEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1167,7 +1166,7 @@ def create_hitl_event(
     """
     if isinstance(event_type, HITLEventType):
         event_type = event_type.value
-    
+
     return HITLEvent(
         session_id=session_id,
         execution_id=execution_id,
@@ -1209,7 +1208,7 @@ def create_sandbox_event(
     """
     if isinstance(event_type, SandboxEventType):
         event_type = event_type.value
-    
+
     return SandboxEvent(
         session_id=session_id,
         execution_id=execution_id,

@@ -892,11 +892,11 @@ class EventLogger:
 # =============================================================================
 
 __all__ = [
-    "EventLoggerConfig",
-    "EventType",
-    "StorageEvent",
-    "EventLogger",
     "DEFAULT_EVENT_LOGGER_CONFIG",
     "POSTGRES_EVENTS_SCHEMA",
     "SQLITE_EVENTS_SCHEMA",
+    "EventLogger",
+    "EventLoggerConfig",
+    "EventType",
+    "StorageEvent",
 ]

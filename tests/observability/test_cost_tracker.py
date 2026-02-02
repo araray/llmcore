@@ -14,23 +14,19 @@ Reference: UNIFIED_IMPLEMENTATION_PLAN.md Phase 1, Task 1.4
 """
 
 import json
-import tempfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List
 
 import pytest
 
 from llmcore.observability.cost_tracker import (
     PRICING_DATA,
     CostTracker,
-    CostTrackingConfig,
     UsageRecord,
     UsageSummary,
     create_cost_tracker,
     get_price_per_million_tokens,
 )
-
 
 # =============================================================================
 # PRICING DATA TESTS

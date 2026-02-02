@@ -17,7 +17,6 @@ Run with: pytest tests/test_model_cards.py -v
 
 import json
 import tempfile
-from datetime import date
 from pathlib import Path
 from typing import Dict
 
@@ -25,22 +24,12 @@ import pytest
 
 # Import the model_cards package from llmcore
 from llmcore.model_cards import (
-    AnthropicExtension,
-    # Enums
-    ArchitectureType,
-    EmbeddingConfig,
-    # Core structures
-    ModelArchitecture,
-    ModelCapabilities,
-    # Main models
     ModelCard,
     # Registry
     ModelCardRegistry,
     ModelCardSummary,
     ModelContext,
-    ModelLifecycle,
     ModelPricing,
-    ModelStatus,
     ModelType,
     # Provider extensions
     OllamaExtension,

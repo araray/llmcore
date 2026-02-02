@@ -7,21 +7,15 @@ in actual usage scenarios.
 """
 
 import json
-import tempfile
-import time
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
 
 import pytest
 
 from llmcore.embedding.cache import (
-    EmbeddingCache,
     EmbeddingCacheConfig,
     create_embedding_cache,
 )
 from llmcore.observability.cost_tracker import (
-    CostTracker,
     CostTrackingConfig,
     create_cost_tracker,
     get_price_per_million_tokens,

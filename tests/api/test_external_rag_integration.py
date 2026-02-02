@@ -12,18 +12,15 @@ These tests ensure zero breaking changes and full backward compatibility.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import pytest
 
 from llmcore.api import LLMCore, LLMCoreProtocol
-from llmcore.exceptions import LLMCoreError, ProviderError, SessionNotFoundError
+from llmcore.exceptions import LLMCoreError, SessionNotFoundError
 from llmcore.models import (
-    ChatSession,
     ContextItem,
     ContextItemType,
-    ContextPreparationDetails,
     Message,
     Role,
 )

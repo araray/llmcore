@@ -14,31 +14,23 @@ Test Categories:
     5. Edge cases and error handling
 """
 
-import asyncio
-import pytest
-from datetime import datetime
-from typing import List, Optional
+from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from llmcore.agents.cognitive.phases.cycle import (
-    CognitiveCycle,
-    StreamingIterationResult,
-)
+import pytest
+
 from llmcore.agents.cognitive.models import (
     CycleIteration,
     EnhancedAgentState,
-    IterationStatus,
-    ReflectOutput,
-    ThinkOutput,
-    ObserveOutput,
-    UpdateOutput,
-    ActOutput,
+)
+from llmcore.agents.cognitive.phases.cycle import (
+    CognitiveCycle,
+    StreamingIterationResult,
 )
 from llmcore.agents.single_agent import (
     IterationUpdate,
     SingleAgentMode,
 )
-
 
 # =============================================================================
 # FIXTURES

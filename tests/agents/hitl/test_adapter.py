@@ -6,17 +6,18 @@ Tests the adapter layer that bridges the Phase 5 HITLManager with
 the existing ActivityExecutor interface.
 """
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-
 # Test imports
 import sys
+from unittest.mock import MagicMock
+
+import pytest
+
 sys.path.insert(0, "src")
 
 from llmcore.agents.activities.executor import (
     HITLApprover,
-    HITLManagerAdapter,
     HITLDecision,
+    HITLManagerAdapter,
     create_hitl_approver,
 )
 from llmcore.agents.activities.schema import (
@@ -166,7 +167,7 @@ class TestIntegrationWithRealHITLManager:
 
     def test_adapter_with_real_manager(self):
         """Test adapter works with actual HITLManager."""
-        from llmcore.agents.hitl import HITLManager, HITLConfig
+        from llmcore.agents.hitl import HITLConfig, HITLManager
 
         config = HITLConfig(enabled=False)  # Disabled for quick testing
         manager = HITLManager(config=config)

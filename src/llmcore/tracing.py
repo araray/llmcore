@@ -37,14 +37,14 @@ def configure_tracer(service_name: str = "llmcore") -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-        from opentelemetry.sdk.resources import Resource
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-        from opentelemetry.instrumentation.redis import RedisInstrumentor
         from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+        from opentelemetry.instrumentation.redis import RedisInstrumentor
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
         # Create resource with service information
         resource = Resource.create({
@@ -96,8 +96,8 @@ def _configure_auto_instrumentation() -> None:
     """
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-        from opentelemetry.instrumentation.redis import RedisInstrumentor
         from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+        from opentelemetry.instrumentation.redis import RedisInstrumentor
 
         # Instrument HTTP clients (for LLM provider calls)
         HTTPXClientInstrumentor().instrument()
@@ -200,8 +200,8 @@ def extract_and_set_trace_context(carrier: dict) -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.propagate import extract
         from opentelemetry.context import attach
+        from opentelemetry.propagate import extract
 
         # Extract the trace context from the carrier
         context = extract(carrier)

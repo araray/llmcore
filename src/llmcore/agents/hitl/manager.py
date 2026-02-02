@@ -28,12 +28,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
-from .callbacks import AutoApproveCallback, ConsoleHITLCallback, HITLCallback
+from .callbacks import ConsoleHITLCallback, HITLCallback
 from .models import (
     ActivityInfo,
     ApprovalScope,
@@ -45,7 +44,6 @@ from .models import (
     HITLRequest,
     HITLResponse,
     HITLStorageConfig,
-    RiskAssessment,
     TimeoutPolicy,
 )
 from .risk_assessor import RiskAssessor, RiskLevel
@@ -887,8 +885,8 @@ async def create_hitl_manager_async(
 # =============================================================================
 
 __all__ = [
-    "HITLManager",
     "HITLAuditLogger",
+    "HITLManager",
     "create_hitl_manager",
     "create_hitl_manager_async",
 ]

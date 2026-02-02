@@ -27,10 +27,17 @@ except ImportError:
     aiosqlite = None
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
-from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role,
-                      ContextPreset, Episode)
+from ..models import (
+    ChatSession,
+    ContextItem,
+    ContextItemType,
+    ContextPreset,
+    Episode,
+    Message,
+    Role,
+)
+from . import sqlite_episode_helpers, sqlite_preset_helpers
 from .base_session import BaseSessionStorage
-from . import sqlite_preset_helpers, sqlite_episode_helpers
 
 logger = logging.getLogger(__name__)
 

@@ -27,9 +27,7 @@ Requirements:
 """
 
 import asyncio
-import base64
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -44,13 +42,10 @@ from .base import (
     SandboxStatus,
 )
 from .exceptions import (
-    SandboxAccessDenied,
     SandboxCleanupError,
     SandboxConnectionError,
-    SandboxExecutionError,
     SandboxInitializationError,
     SandboxNotInitializedError,
-    SandboxTimeoutError,
 )
 
 logger = logging.getLogger(__name__)

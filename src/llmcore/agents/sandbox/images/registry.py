@@ -26,18 +26,17 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
-from .models import (
-    BUILTIN_MANIFESTS,
-    AccessMode,
-    ImageCapability,
-    ImageManifest,
-    ImageMetadata,
-    ImageTier,
-)
 from .manifest import (
     ManifestError,
     get_builtin_manifest,
     load_manifest_from_docker,
+)
+from .models import (
+    BUILTIN_MANIFESTS,
+    ImageCapability,
+    ImageManifest,
+    ImageMetadata,
+    ImageTier,
 )
 
 logger = logging.getLogger(__name__)

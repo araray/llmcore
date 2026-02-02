@@ -15,9 +15,9 @@ Resolves: ModuleNotFoundError in cycle.py:157
 Tests Fixed: TestCognitiveCycle::test_cognitive_cycle_single_iteration
 """
 
-from contextlib import contextmanager
-from typing import Any, Dict, Optional, Generator
 import logging
+from contextlib import contextmanager
+from typing import Any, Dict, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def create_span(
     logger.debug(f"[TRACE] Entering span: {name} (kind={kind})")
     if attributes:
         logger.debug(f"[TRACE] Span attributes: {attributes}")
-    
+
     try:
         yield None  # Stub: no actual span object
     finally:
@@ -104,11 +104,11 @@ def record_span_exception(
 # Optional: Tracer configuration for future use
 class TracerConfig:
     """Configuration for tracing backend."""
-    
+
     enabled: bool = False
     backend: str = "noop"  # "noop", "opentelemetry", "custom"
     service_name: str = "llmcore-agents"
-    
+
     @classmethod
     def configure(cls, enabled: bool = False, backend: str = "noop", **kwargs) -> None:
         """Configure the tracer."""
@@ -118,8 +118,8 @@ class TracerConfig:
 
 
 __all__ = [
-    "create_span",
-    "add_span_attributes", 
-    "record_span_exception",
     "TracerConfig",
+    "add_span_attributes",
+    "create_span",
+    "record_span_exception",
 ]

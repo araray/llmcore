@@ -13,12 +13,11 @@ Run with:
     PYTHONPATH=src:$PYTHONPATH pytest tests/agents/test_phase2_activities.py -v
 """
 
-import asyncio
-import pytest
-import tempfile
 import os
+import tempfile
 from pathlib import Path
 
+import pytest
 
 # =============================================================================
 # SCHEMA TESTS
@@ -48,8 +47,8 @@ class TestActivitySchema:
     def test_activity_definition_creation(self):
         """Test creating an ActivityDefinition."""
         from llmcore.agents.activities.schema import (
-            ActivityDefinition,
             ActivityCategory,
+            ActivityDefinition,
             ParameterSchema,
             ParameterType,
             RiskLevel,
@@ -84,8 +83,8 @@ class TestActivitySchema:
     def test_activity_definition_to_prompt_format(self):
         """Test formatting activity for prompts."""
         from llmcore.agents.activities.schema import (
-            ActivityDefinition,
             ActivityCategory,
+            ActivityDefinition,
             ParameterSchema,
             ParameterType,
             RiskLevel,
@@ -370,8 +369,8 @@ class TestActivityRegistry:
     def test_register_custom_activity(self, registry):
         """Test registering a custom activity."""
         from llmcore.agents.activities.schema import (
-            ActivityDefinition,
             ActivityCategory,
+            ActivityDefinition,
             RiskLevel,
         )
 
@@ -390,8 +389,8 @@ class TestActivityRegistry:
     def test_unregister_activity(self, registry):
         """Test unregistering an activity."""
         from llmcore.agents.activities.schema import (
-            ActivityDefinition,
             ActivityCategory,
+            ActivityDefinition,
             RiskLevel,
         )
 
@@ -505,9 +504,8 @@ class TestActivityExecutor:
     @pytest.mark.asyncio
     async def test_execute_file_write(self, executor):
         """Test executing file_write activity."""
-        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus
         from llmcore.agents.activities.executor import HITLApprover
-        from llmcore.agents.activities.schema import RiskLevel
+        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus, RiskLevel
 
         # Allow medium risk for this test
         executor.hitl_approver = HITLApprover(risk_threshold=RiskLevel.HIGH)
@@ -555,9 +553,8 @@ class TestActivityExecutor:
     @pytest.mark.asyncio
     async def test_execute_with_timeout(self, executor):
         """Test that execution respects timeout."""
-        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus
         from llmcore.agents.activities.executor import HITLApprover
-        from llmcore.agents.activities.schema import RiskLevel
+        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus, RiskLevel
 
         # Allow high risk for this test
         executor.hitl_approver = HITLApprover(risk_threshold=RiskLevel.CRITICAL)
@@ -578,9 +575,8 @@ class TestActivityExecutor:
     @pytest.mark.asyncio
     async def test_hitl_rejection(self, executor):
         """Test HITL rejection of risky activity."""
-        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus
         from llmcore.agents.activities.executor import HITLApprover
-        from llmcore.agents.activities.schema import RiskLevel
+        from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus, RiskLevel
 
         # Set low threshold so file_delete requires approval
         executor.hitl_approver = HITLApprover(risk_threshold=RiskLevel.LOW)
@@ -606,8 +602,8 @@ class TestActivityLoop:
 
     @pytest.fixture
     def loop(self):
-        from llmcore.agents.activities.loop import ActivityLoop, ActivityLoopConfig
         from llmcore.agents.activities.executor import HITLApprover
+        from llmcore.agents.activities.loop import ActivityLoop, ActivityLoopConfig
         from llmcore.agents.activities.schema import RiskLevel
 
         config = ActivityLoopConfig(max_per_iteration=5, max_total=20)
@@ -716,41 +712,6 @@ class TestPhase2Integration:
 
     def test_imports(self):
         """Test that all Phase 2 components can be imported."""
-        from llmcore.agents.activities import (
-            # Schema
-            ActivityCategory,
-            RiskLevel,
-            ExecutionTarget,
-            ActivityStatus,
-            ParameterType,
-            ParameterSchema,
-            ActivityDefinition,
-            ActivityRequest,
-            ActivityResult,
-            ActivityExecution,
-            ActivityLoopResult,
-            # Parser
-            ParseResult,
-            ActivityRequestParser,
-            parse_activity_requests,
-            has_activity_request,
-            # Registry
-            ActivityRegistry,
-            RegisteredActivity,
-            ExecutionContext,
-            get_builtin_activities,
-            get_default_registry,
-            # Executor
-            ValidationResult,
-            ActivityValidator,
-            HITLDecision,
-            HITLApprover,
-            ActivityExecutor,
-            # Loop
-            ActivityLoopConfig,
-            ActivityLoop,
-            process_llm_output,
-        )
 
     @pytest.mark.asyncio
     async def test_end_to_end_workflow(self):

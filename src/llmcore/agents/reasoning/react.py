@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -38,8 +37,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Protocol,
-    Tuple,
     Union,
 )
 
@@ -58,7 +55,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from llmcore.agents.activities.loop import ActivityLoop
-    from llmcore.agents.activities.schema import ActivityRequest, ActivityResult
     from llmcore.providers.base import BaseLLMProvider
 
 logger = logging.getLogger(__name__)

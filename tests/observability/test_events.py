@@ -1,14 +1,10 @@
 # tests/observability/test_events.py
 """Tests for the event logging system."""
 
-import gzip
 import json
-import tempfile
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -582,7 +578,6 @@ class TestExecutionTrace:
         )
 
         # Simulate time passing
-        import time
 
         time.sleep(0.1)
 

@@ -25,9 +25,8 @@ and holds storage backend instances rather than acting as a factory. All multi-t
 db_session parameters have been removed for single-tenant library usage.
 """
 
-import asyncio
 import logging
-from typing import Any, Dict, Optional, Type, List, Callable
+from typing import Any, Dict, List, Optional, Type
 
 # Assume ConfyConfig type for hinting
 try:
@@ -39,27 +38,32 @@ from ..exceptions import ConfigError, StorageError
 from ..models import Episode
 from .base_session import BaseSessionStorage
 from .base_vector import BaseVectorStorage
+
 # Import concrete storage implementations
 from .chromadb_vector import ChromaVectorStorage
+
+# Phase 1 imports: Config validation, health monitoring, schema management
+from .config_validator import StorageConfigValidator, ValidationResult
+from .events import EventLogger, EventLoggerConfig
+from .health import (
+    HealthConfig,
+    HealthStatus,
+    StorageHealthManager,
+    StorageHealthMonitor,
+    create_chromadb_health_check,
+    create_postgres_health_check,
+    create_sqlite_health_check,
+)
+from .instrumentation import InstrumentationConfig, StorageInstrumentation
 from .json_session import JsonSessionStorage
-from .pgvector_storage import PgVectorStorage
+from .metrics import MetricsBackendType, MetricsCollector, MetricsConfig
+
+# Phase 4 imports: Observability (PANOPTICON)
+from .observability import DEFAULT_OBSERVABILITY_CONFIG, ObservabilityConfig
 from .pgvector_enhanced import EnhancedPgVectorStorage
+from .pgvector_storage import PgVectorStorage
 from .postgres_session_storage import PostgresSessionStorage
 from .sqlite_session import SqliteSessionStorage
-# Phase 1 imports: Config validation, health monitoring, schema management
-from .config_validator import StorageConfigValidator, ValidationResult, ValidationSeverity
-from .health import (
-    StorageHealthManager, StorageHealthMonitor, HealthConfig,
-    HealthStatus, CircuitState, StorageHealthReport,
-    create_postgres_health_check, create_sqlite_health_check, create_chromadb_health_check
-)
-# Phase 4 imports: Observability (PANOPTICON)
-from .observability import ObservabilityConfig, DEFAULT_OBSERVABILITY_CONFIG
-from .instrumentation import (
-    StorageInstrumentation, InstrumentationConfig, InstrumentationContext
-)
-from .metrics import MetricsCollector, MetricsConfig, MetricsBackendType
-from .events import EventLogger, EventLoggerConfig, EventType, StorageEvent
 
 logger = logging.getLogger(__name__)
 

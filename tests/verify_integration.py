@@ -26,12 +26,10 @@ Author: Darwin Integration
 Date: December 2025
 """
 
-import sys
 import importlib
-import traceback
+import sys
 from pathlib import Path
-from typing import List, Tuple, Optional
-
+from typing import List, Optional, Tuple
 
 # =============================================================================
 # CONFIGURATION
@@ -149,14 +147,14 @@ def check_imports(imports: List[Tuple[str, str]], category: str) -> Tuple[int, i
     """
     print(f"\n{bold(category)}")
     print("-" * 60)
-    
+
     passed = 0
     failed = 0
-    
+
     for module_name, attribute in imports:
         full_name = f"{module_name}.{attribute}" if attribute else module_name
         success, error = check_import(module_name, attribute)
-        
+
         if success:
             print(f"  {green('✓')} {full_name}")
             passed += 1
@@ -164,7 +162,7 @@ def check_imports(imports: List[Tuple[str, str]], category: str) -> Tuple[int, i
             print(f"  {red('✗')} {full_name}")
             print(f"      {red(error)}")
             failed += 1
-    
+
     return passed, failed
 
 
@@ -172,7 +170,7 @@ def check_python_path() -> bool:
     """Check if src directory is in Python path."""
     cwd = Path.cwd()
     src_path = cwd / "src"
-    
+
     if src_path.exists() and str(src_path) not in sys.path:
         sys.path.insert(0, str(src_path))
         return True
@@ -189,14 +187,14 @@ def check_test_collection() -> Tuple[bool, str]:
             text=True,
             timeout=30
         )
-        
+
         if result.returncode == 0:
             # Count tests
             lines = result.stdout.strip().split('\n')
             for line in lines:
                 if 'test' in line.lower() and 'selected' in line.lower():
                     return True, line
-            return True, f"Tests collected successfully"
+            return True, "Tests collected successfully"
         else:
             return False, result.stderr or result.stdout
     except FileNotFoundError:
@@ -210,19 +208,19 @@ def check_test_collection() -> Tuple[bool, str]:
 def check_sandbox_instantiation() -> Tuple[bool, str]:
     """Check if sandbox components can be instantiated."""
     try:
-        from llmcore.agents.sandbox import SandboxConfig, SandboxRegistryConfig, SandboxMode
-        
+        from llmcore.agents.sandbox import SandboxConfig, SandboxMode, SandboxRegistryConfig
+
         # Create basic config
         config = SandboxConfig()
         assert config.sandbox_id is not None
-        
+
         # Create registry config
         reg_config = SandboxRegistryConfig(
             mode=SandboxMode.DOCKER,
             docker_enabled=True
         )
         assert reg_config.mode == SandboxMode.DOCKER
-        
+
         return True, "SandboxConfig and SandboxRegistryConfig created successfully"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
@@ -233,11 +231,11 @@ def check_layer2_instantiation() -> Tuple[bool, str]:
     try:
         # Try to import Layer 2 components
         from llmcore.agents import PersonaManager
-        
+
         # Create persona manager
         manager = PersonaManager()
         personas = manager.list_personas()
-        
+
         return True, f"PersonaManager created with {len(personas)} personas"
     except ImportError:
         return False, "Layer 2 components not found (may not be integrated yet)"
@@ -253,50 +251,50 @@ def main():
     print("=" * 70)
     print(bold("llmcore Integration Verification"))
     print("=" * 70)
-    
+
     # Check and add src to path
     added_src = check_python_path()
     if added_src:
         print(f"\n{yellow('Note:')} Added src/ to Python path")
-    
+
     total_passed = 0
     total_failed = 0
-    
+
     # Check core imports
     passed, failed = check_imports(CORE_IMPORTS, "Core llmcore Imports")
     total_passed += passed
     total_failed += failed
-    
+
     if failed > 0:
         print(f"\n{red('CRITICAL:')} Core imports failed. llmcore is not usable.")
         sys.exit(2)
-    
+
     # Check sandbox imports
     passed, failed = check_imports(SANDBOX_IMPORTS, "Sandbox System (Layer 1) Imports")
     total_passed += passed
     total_failed += failed
-    
+
     # Check Layer 2 imports (optional)
     print(f"\n{bold('Darwin Layer 2 Imports (Optional)')}")
     print("-" * 60)
     layer2_passed = 0
     layer2_failed = 0
-    
+
     for module_name, attribute in LAYER2_IMPORTS:
         full_name = f"{module_name}.{attribute}" if attribute else module_name
         success, error = check_import(module_name, attribute)
-        
+
         if success:
             print(f"  {green('✓')} {full_name}")
             layer2_passed += 1
         else:
             print(f"  {yellow('○')} {full_name} (not found)")
             layer2_failed += 1
-    
+
     # Component instantiation checks
     print(f"\n{bold('Component Instantiation Checks')}")
     print("-" * 60)
-    
+
     # Sandbox
     success, msg = check_sandbox_instantiation()
     if success:
@@ -304,14 +302,14 @@ def main():
     else:
         print(f"  {red('✗')} Sandbox: {msg}")
         total_failed += 1
-    
+
     # Layer 2
     success, msg = check_layer2_instantiation()
     if success:
         print(f"  {green('✓')} Layer 2: {msg}")
     else:
         print(f"  {yellow('○')} Layer 2: {msg}")
-    
+
     # Test collection check
     print(f"\n{bold('Test Collection Check')}")
     print("-" * 60)
@@ -321,7 +319,7 @@ def main():
     else:
         print(f"  {red('✗')} pytest: {msg}")
         total_failed += 1
-    
+
     # Summary
     print("\n" + "=" * 70)
     print(bold("Summary"))
@@ -330,7 +328,7 @@ def main():
     print(f"  Sandbox imports: {green(str(passed)) if failed == 0 else f'{green(str(passed))} passed, {red(str(failed))} failed'}")
     print(f"  Layer 2 imports: {green(str(layer2_passed))} found, {yellow(str(layer2_failed))} not found")
     print()
-    
+
     if total_failed == 0:
         print(green(bold("✓ All critical checks passed!")))
         print()

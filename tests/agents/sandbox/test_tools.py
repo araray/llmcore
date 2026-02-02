@@ -14,7 +14,6 @@ may not be imported at module level in the way expected.
 Fix approach: Patch at the correct location or use create=True.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,7 +25,6 @@ from llmcore.agents.sandbox.base import (
     SandboxConfig,
     SandboxStatus,
 )
-from llmcore.agents.sandbox.registry import SandboxMode, SandboxRegistry, SandboxRegistryConfig
 
 # Assumes llmcore is installed or in PYTHONPATH
 from llmcore.agents.sandbox.tools import (
@@ -528,7 +526,6 @@ class TestInformationTools:
     async def test_get_recorded_files(self, setup_sandbox):
         """Test getting recorded files."""
         _, _, mock_ephemeral = setup_sandbox
-        from llmcore.agents.sandbox.ephemeral import FileRecord
 
         mock_ephemeral.list_recorded_files = AsyncMock(
             return_value=[

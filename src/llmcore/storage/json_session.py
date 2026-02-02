@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import pathlib
-import re # For validating preset names as filenames
+import re  # For validating preset names as filenames
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -20,7 +20,11 @@ import aiofiles
 import aiofiles.os as aios
 
 from ..exceptions import ConfigError, SessionStorageError, StorageError
-from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role, ContextPreset, ContextPresetItem, Episode, EpisodeType)
+from ..models import (
+    ChatSession,
+    ContextPreset,
+    Episode,
+)
 from .base_session import BaseSessionStorage
 
 logger = logging.getLogger(__name__)

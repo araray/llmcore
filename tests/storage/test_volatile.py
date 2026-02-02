@@ -17,7 +17,6 @@ References:
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, List
 
@@ -33,7 +32,6 @@ from volatile import (
     VolatileMemoryTier,
     create_volatile_tier,
 )
-
 
 # =============================================================================
 # VOLATILE ITEM TESTS
@@ -916,7 +914,7 @@ class TestVolatileMemoryTierIntegration:
                     if tier.exists(hot_key):
                         tier.get(hot_key)
                     else:
-                        tier.set(hot_key, f"hot_value")
+                        tier.set(hot_key, "hot_value")
 
         # Hot keys should still be present (or recently re-added)
         # due to LRU keeping frequently accessed items

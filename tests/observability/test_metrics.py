@@ -3,8 +3,6 @@
 
 import threading
 import time
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,15 +15,10 @@ from llmcore.observability.metrics import (
     LLMMetricsCollector,
     # Data models
     MetricLabels,
-    MetricSnapshot,
-    # Registry
     MetricsRegistry,
-    MetricsSummary,
-    # Enums
     MetricType,
     MetricUnit,
     RateCounter,
-    SystemMetricsCollector,
     Timer,
     # Factories and utilities
     create_metrics_registry,

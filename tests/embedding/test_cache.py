@@ -13,8 +13,6 @@ Tests cover:
 Reference: UNIFIED_IMPLEMENTATION_PLAN.md Phase 1, Task 1.2
 """
 
-import os
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -29,7 +27,6 @@ from llmcore.embedding.cache import (
     LRUCache,
     create_embedding_cache,
 )
-
 
 # =============================================================================
 # LRU CACHE TESTS

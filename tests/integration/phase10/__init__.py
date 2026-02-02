@@ -32,9 +32,9 @@ References:
 """
 
 __all__ = [
-    "test_hitl_integration",
-    "test_rag_integration",
-    "test_observability_integration",
     "test_config_validation",
+    "test_hitl_integration",
+    "test_observability_integration",
     "test_performance_benchmarks",
+    "test_rag_integration",
 ]

@@ -20,10 +20,11 @@ except ImportError:
     ConfyConfig = Dict[str, Any]  # type: ignore
 
 
-from ..exceptions import ConfigError, ProviderError
+from ..exceptions import ConfigError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
 from .gemini_provider import GeminiProvider
+
 # Import concrete implementations
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider

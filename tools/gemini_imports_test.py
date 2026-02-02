@@ -34,7 +34,7 @@ def run_import_tests():
             from google.genai import types as genai_types
 
             # Try accessing a type to be sure
-            _ = genai_types.ContentDict 
+            _ = genai_types.ContentDict
             print("  SUCCESS: 'google.genai.types' (as genai_types) imported and accessible.")
             google_genai_types_module_available = True
         except ImportError:
@@ -73,7 +73,7 @@ def run_import_tests():
 
     except ImportError:
         print("  CRITICAL FAILURE: Could not import the base 'google.genai' module. Is it installed?")
-    
+
     print("\nAttempting to import from 'google.api_core.exceptions'...")
     # Test 2: 'google.api_core.exceptions'
     google_api_core_exceptions_available = False
@@ -81,13 +81,11 @@ def run_import_tests():
     permission_denied_class_available = False
     invalid_argument_class_available = False
     try:
-        from google.api_core.exceptions import \
-            GoogleAPIError as CoreGoogleAPIError
-        from google.api_core.exceptions import (InvalidArgument,
-                                                PermissionDenied)
+        from google.api_core.exceptions import GoogleAPIError as CoreGoogleAPIError
+        from google.api_core.exceptions import InvalidArgument, PermissionDenied
         print("  SUCCESS: 'google.api_core.exceptions' imported (CoreGoogleAPIError, PermissionDenied, InvalidArgument).")
         google_api_core_exceptions_available = True
-        
+
         # Test instantiation of these exceptions
         try:
             _ = CoreGoogleAPIError("test")
@@ -127,7 +125,7 @@ def run_import_tests():
     print(f"  'google.genai.errors.APIError' class: {'AVAILABLE' if genai_api_error_class_available else 'MISSING/FAILED'}")
     print(f"  'google.genai.Client' class: {'AVAILABLE' if genai_client_class_available else 'MISSING/FAILED'}")
     print(f"  'google.api_core.exceptions' module (for PermissionDenied, InvalidArgument): {'AVAILABLE' if google_api_core_exceptions_available else 'MISSING/FAILED'}")
-    
+
     if all_critical_available:
         print("\nCONCLUSION: All critical imports for GeminiProvider appear to be AVAILABLE.")
         print("If GeminiProvider still fails, the issue might be elsewhere (e.g., runtime API key, network, specific model access).")

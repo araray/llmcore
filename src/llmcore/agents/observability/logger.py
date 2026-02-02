@@ -38,23 +38,21 @@ References:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
 from .events import (
-    AgentEvent,
     ActivityEvent,
     ActivityEventType,
+    AgentEvent,
     CognitiveEvent,
     CognitiveEventType,
     ErrorEvent,
-    ErrorEventType,
     EventCategory,
     EventSeverity,
     HITLEvent,
@@ -62,22 +60,16 @@ from .events import (
     LifecycleEvent,
     LifecycleEventType,
     MetricEvent,
-    MetricEventType,
-    MemoryEvent,
-    MemoryEventType,
-    RAGEvent,
-    RAGEventType,
     SandboxEvent,
     SandboxEventType,
-    create_lifecycle_event,
-    create_cognitive_event,
     create_activity_event,
+    create_cognitive_event,
     create_error_event,
-    create_metric_event,
     create_hitl_event,
+    create_lifecycle_event,
+    create_metric_event,
     create_sandbox_event,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +86,7 @@ class EventSink(ABC):
     Event sinks receive events from the EventLogger and write them
     to their destination (file, database, network, etc.).
     """
-    
+
     @abstractmethod
     async def write(self, event: AgentEvent) -> None:
         """
@@ -104,17 +96,17 @@ class EventSink(ABC):
             event: Event to write
         """
         ...
-    
+
     @abstractmethod
     async def flush(self) -> None:
         """Flush any buffered events."""
         ...
-    
+
     @abstractmethod
     async def close(self) -> None:
         """Close the sink and release resources."""
         ...
-    
+
     @property
     def name(self) -> str:
         """Return the sink name for identification."""
@@ -138,7 +130,7 @@ class JSONLFileSink(EventSink):
         buffer_size: Number of events to buffer before flushing
         create_dirs: Whether to create parent directories
     """
-    
+
     def __init__(
         self,
         path: Union[str, Path],
@@ -160,14 +152,14 @@ class JSONLFileSink(EventSink):
         self._buffer: List[str] = []
         self._file = None
         self._lock = asyncio.Lock()
-    
+
     async def _ensure_file(self) -> None:
         """Ensure the output file is open."""
         if self._file is None:
             if self.create_dirs:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
             self._file = open(self.path, "a", encoding="utf-8")
-    
+
     async def write(self, event: AgentEvent) -> None:
         """
         Write event to file.
@@ -178,26 +170,26 @@ class JSONLFileSink(EventSink):
         async with self._lock:
             line = event.model_dump_json() + "\n"
             self._buffer.append(line)
-            
+
             if len(self._buffer) >= self.buffer_size:
                 await self._flush_buffer()
-    
+
     async def _flush_buffer(self) -> None:
         """Flush buffered events to file."""
         if not self._buffer:
             return
-        
+
         await self._ensure_file()
         for line in self._buffer:
             self._file.write(line)
         self._file.flush()
         self._buffer.clear()
-    
+
     async def flush(self) -> None:
         """Flush all buffered events."""
         async with self._lock:
             await self._flush_buffer()
-    
+
     async def close(self) -> None:
         """Close the file."""
         async with self._lock:
@@ -217,7 +209,7 @@ class InMemorySink(EventSink):
     Attributes:
         max_events: Maximum events to store (oldest discarded)
     """
-    
+
     def __init__(self, max_events: int = 10000) -> None:
         """
         Initialize in-memory sink.
@@ -228,7 +220,7 @@ class InMemorySink(EventSink):
         self.max_events = max_events
         self._events: List[AgentEvent] = []
         self._lock = asyncio.Lock()
-    
+
     async def write(self, event: AgentEvent) -> None:
         """
         Store event in memory.
@@ -241,21 +233,21 @@ class InMemorySink(EventSink):
             # Trim if over limit
             if len(self._events) > self.max_events:
                 self._events = self._events[-self.max_events:]
-    
+
     async def flush(self) -> None:
         """No-op for memory sink."""
         pass
-    
+
     async def close(self) -> None:
         """Clear stored events."""
         async with self._lock:
             self._events.clear()
-    
+
     @property
     def events(self) -> List[AgentEvent]:
         """Get all stored events."""
         return list(self._events)
-    
+
     def get_events(
         self,
         *,
@@ -283,7 +275,7 @@ class InMemorySink(EventSink):
             Filtered list of events
         """
         result = list(self._events)
-        
+
         if category is not None:
             result = [e for e in result if e.category == category]
         if session_id is not None:
@@ -298,9 +290,9 @@ class InMemorySink(EventSink):
             result = [e for e in result if e.timestamp >= since]
         if until is not None:
             result = [e for e in result if e.timestamp <= until]
-        
+
         return result
-    
+
     def clear(self) -> None:
         """Clear all stored events."""
         self._events.clear()
@@ -313,7 +305,7 @@ class CallbackSink(EventSink):
     Useful for integration with custom logging systems or
     real-time event processing.
     """
-    
+
     def __init__(
         self,
         callback: Callable[[AgentEvent], None],
@@ -329,7 +321,7 @@ class CallbackSink(EventSink):
         """
         self._callback = callback
         self._async_callback = async_callback
-    
+
     async def write(self, event: AgentEvent) -> None:
         """
         Forward event to callback.
@@ -341,11 +333,11 @@ class CallbackSink(EventSink):
             await self._async_callback(event)
         else:
             self._callback(event)
-    
+
     async def flush(self) -> None:
         """No-op for callback sink."""
         pass
-    
+
     async def close(self) -> None:
         """No-op for callback sink."""
         pass
@@ -357,7 +349,7 @@ class FilteredSink(EventSink):
     
     Only forwards events that match the filter criteria.
     """
-    
+
     def __init__(
         self,
         inner_sink: EventSink,
@@ -382,7 +374,7 @@ class FilteredSink(EventSink):
         self._min_severity = min_severity
         self._include_types = set(include_types) if include_types else None
         self._exclude_types = set(exclude_types) if exclude_types else None
-        
+
         # Severity ordering for comparison
         self._severity_order = {
             EventSeverity.DEBUG: 0,
@@ -391,45 +383,45 @@ class FilteredSink(EventSink):
             EventSeverity.ERROR: 3,
             EventSeverity.CRITICAL: 4,
         }
-    
+
     def _matches(self, event: AgentEvent) -> bool:
         """Check if event matches filter criteria."""
         # Category filter
         if self._categories is not None:
             if event.category not in self._categories:
                 return False
-        
+
         # Severity filter
         if self._min_severity is not None:
             event_level = self._severity_order.get(event.severity, 0)
             min_level = self._severity_order.get(self._min_severity, 0)
             if event_level < min_level:
                 return False
-        
+
         # Type filters
         if self._include_types is not None:
             if event.event_type not in self._include_types:
                 return False
-        
+
         if self._exclude_types is not None:
             if event.event_type in self._exclude_types:
                 return False
-        
+
         return True
-    
+
     async def write(self, event: AgentEvent) -> None:
         """Write event if it matches filter."""
         if self._matches(event):
             await self._inner.write(event)
-    
+
     async def flush(self) -> None:
         """Flush inner sink."""
         await self._inner.flush()
-    
+
     async def close(self) -> None:
         """Close inner sink."""
         await self._inner.close()
-    
+
     @property
     def name(self) -> str:
         return f"Filtered({self._inner.name})"
@@ -468,7 +460,7 @@ class EventLogger:
         execution_id: Current execution identifier
         sinks: List of event sinks
     """
-    
+
     def __init__(
         self,
         session_id: str,
@@ -490,28 +482,28 @@ class EventLogger:
         self.execution_id = execution_id or f"exec-{uuid4().hex[:12]}"
         self.sinks: List[EventSink] = sinks or []
         self.default_tags = default_tags or []
-        
+
         # State tracking
         self._iteration: int = 0
         self._phase: Optional[str] = None
         self._correlation_id: Optional[str] = None
         self._parent_event_id: Optional[str] = None
         self._event_stack: List[str] = []  # For nested events
-        
+
         # Statistics
         self._event_count: int = 0
         self._error_count: int = 0
-        
+
         self._logger = logging.getLogger(__name__)
-    
+
     async def __aenter__(self) -> "EventLogger":
         """Async context manager entry."""
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit - flush and close."""
         await self.close()
-    
+
     def add_sink(self, sink: EventSink) -> None:
         """
         Add an event sink.
@@ -520,7 +512,7 @@ class EventLogger:
             sink: Sink to add
         """
         self.sinks.append(sink)
-    
+
     def remove_sink(self, sink: EventSink) -> bool:
         """
         Remove an event sink.
@@ -536,7 +528,7 @@ class EventLogger:
             return True
         except ValueError:
             return False
-    
+
     def set_iteration(self, iteration: int) -> None:
         """
         Set current iteration number.
@@ -545,7 +537,7 @@ class EventLogger:
             iteration: Iteration number
         """
         self._iteration = iteration
-    
+
     def set_phase(self, phase: Optional[str]) -> None:
         """
         Set current cognitive phase.
@@ -554,7 +546,7 @@ class EventLogger:
             phase: Phase name
         """
         self._phase = phase
-    
+
     def set_correlation_id(self, correlation_id: Optional[str]) -> None:
         """
         Set correlation ID for related events.
@@ -563,7 +555,7 @@ class EventLogger:
             correlation_id: Correlation identifier
         """
         self._correlation_id = correlation_id
-    
+
     @asynccontextmanager
     async def event_scope(
         self,
@@ -591,7 +583,7 @@ class EventLogger:
             self._parent_event_id = old_parent
             if parent_event:
                 self._event_stack.pop()
-    
+
     async def log(self, event: AgentEvent) -> AgentEvent:
         """
         Log an event to all sinks.
@@ -613,16 +605,16 @@ class EventLogger:
             event.correlation_id = self._correlation_id
         if event.parent_event_id is None and self._parent_event_id:
             event.parent_event_id = self._parent_event_id
-        
+
         # Add default tags
         for tag in self.default_tags:
             event.add_tag(tag)
-        
+
         # Update statistics
         self._event_count += 1
         if event.category == EventCategory.ERROR:
             self._error_count += 1
-        
+
         # Write to all sinks
         for sink in self.sinks:
             try:
@@ -631,9 +623,9 @@ class EventLogger:
                 self._logger.error(
                     f"Failed to write to sink {sink.name}: {e}"
                 )
-        
+
         return event
-    
+
     async def flush(self) -> None:
         """Flush all sinks."""
         for sink in self.sinks:
@@ -643,7 +635,7 @@ class EventLogger:
                 self._logger.error(
                     f"Failed to flush sink {sink.name}: {e}"
                 )
-    
+
     async def close(self) -> None:
         """Close all sinks."""
         await self.flush()
@@ -654,11 +646,11 @@ class EventLogger:
                 self._logger.error(
                     f"Failed to close sink {sink.name}: {e}"
                 )
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - LIFECYCLE
     # =========================================================================
-    
+
     async def log_lifecycle_start(
         self,
         goal: str,
@@ -688,7 +680,7 @@ class EventLogger:
             **kwargs,
         )
         return await self.log(event)
-    
+
     async def log_lifecycle_end(
         self,
         status: str,
@@ -718,7 +710,7 @@ class EventLogger:
             if status == "success"
             else LifecycleEventType.AGENT_FAILED
         )
-        
+
         event = create_lifecycle_event(
             session_id=self.session_id,
             event_type=event_type,
@@ -730,9 +722,9 @@ class EventLogger:
         )
         if duration_ms:
             event.duration_ms = duration_ms
-        
+
         return await self.log(event)
-    
+
     async def log_iteration_start(
         self,
         iteration: int,
@@ -755,7 +747,7 @@ class EventLogger:
             **kwargs,
         )
         return await self.log(event)
-    
+
     async def log_iteration_end(
         self,
         iteration: int,
@@ -780,13 +772,13 @@ class EventLogger:
         )
         if duration_ms:
             event.duration_ms = duration_ms
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - COGNITIVE
     # =========================================================================
-    
+
     async def log_cognitive_phase(
         self,
         phase: str,
@@ -834,13 +826,13 @@ class EventLogger:
             event.confidence = confidence
         if duration_ms:
             event.duration_ms = duration_ms
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - ACTIVITY
     # =========================================================================
-    
+
     async def log_activity(
         self,
         activity_name: str,
@@ -883,13 +875,13 @@ class EventLogger:
             event.error_message = error_message
         if duration_ms:
             event.duration_ms = duration_ms
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - ERROR
     # =========================================================================
-    
+
     async def log_error(
         self,
         error_type: str,
@@ -927,17 +919,17 @@ class EventLogger:
         )
         if source_component:
             event.source_component = source_component
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - METRICS
     # =========================================================================
-    
+
     async def log_metric(
         self,
         metric_name: str,
-        metric_value: Union[int, float],
+        metric_value: float,
         *,
         metric_unit: Optional[str] = None,
         metric_type: Optional[str] = None,
@@ -965,13 +957,13 @@ class EventLogger:
         )
         if metric_type:
             event.metric_type = metric_type
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - HITL
     # =========================================================================
-    
+
     async def log_hitl(
         self,
         event_type: Union[HITLEventType, str],
@@ -1016,13 +1008,13 @@ class EventLogger:
             event.responder_id = responder_id
         if feedback:
             event.feedback = feedback
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # CONVENIENCE METHODS - SANDBOX
     # =========================================================================
-    
+
     async def log_sandbox(
         self,
         event_type: Union[SandboxEventType, str],
@@ -1064,23 +1056,23 @@ class EventLogger:
             event.exit_code = exit_code
         if duration_ms:
             event.duration_ms = duration_ms
-        
+
         return await self.log(event)
-    
+
     # =========================================================================
     # STATISTICS
     # =========================================================================
-    
+
     @property
     def event_count(self) -> int:
         """Get total event count."""
         return self._event_count
-    
+
     @property
     def error_count(self) -> int:
         """Get error event count."""
         return self._error_count
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get logger statistics.
@@ -1126,13 +1118,13 @@ def create_event_logger(
         Configured EventLogger
     """
     sinks: List[EventSink] = []
-    
+
     if log_path:
         sinks.append(JSONLFileSink(Path(log_path)))
-    
+
     if in_memory:
         sinks.append(InMemorySink())
-    
+
     return EventLogger(
         session_id=session_id,
         execution_id=execution_id,

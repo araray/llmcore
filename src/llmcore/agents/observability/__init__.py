@@ -69,97 +69,93 @@ from __future__ import annotations
 # =============================================================================
 # EVENTS
 # =============================================================================
-
 from .events import (
+    ActivityEvent,
+    ActivityEventType,
+    # Base event
+    AgentEvent,
+    CognitiveEvent,
+    CognitiveEventType,
+    ErrorEvent,
+    ErrorEventType,
     # Enums
     EventCategory,
     EventSeverity,
-    LifecycleEventType,
-    CognitiveEventType,
-    ActivityEventType,
+    HITLEvent,
     HITLEventType,
-    ErrorEventType,
-    MetricEventType,
-    MemoryEventType,
-    SandboxEventType,
-    RAGEventType,
-    # Base event
-    AgentEvent,
     # Specialized events
     LifecycleEvent,
-    CognitiveEvent,
-    ActivityEvent,
+    LifecycleEventType,
     MemoryEvent,
-    HITLEvent,
-    ErrorEvent,
+    MemoryEventType,
     MetricEvent,
-    SandboxEvent,
+    MetricEventType,
     RAGEvent,
+    RAGEventType,
+    SandboxEvent,
+    SandboxEventType,
+    create_activity_event,
+    create_cognitive_event,
+    create_error_event,
+    create_hitl_event,
     # Factory functions
     create_lifecycle_event,
-    create_cognitive_event,
-    create_activity_event,
-    create_error_event,
     create_metric_event,
-    create_hitl_event,
     create_sandbox_event,
 )
 
 # =============================================================================
 # LOGGER
 # =============================================================================
-
 from .logger import (
-    # Sinks
-    EventSink,
-    JSONLFileSink,
-    InMemorySink,
     CallbackSink,
-    FilteredSink,
     # Logger
     EventLogger,
+    # Sinks
+    EventSink,
+    FilteredSink,
+    InMemorySink,
+    JSONLFileSink,
     create_event_logger,
 )
 
 # =============================================================================
 # METRICS
 # =============================================================================
-
 from .metrics import (
-    # Enums
-    MetricType,
+    ActivityMetrics,
+    # Main classes
+    ExecutionMetrics,
     ExecutionStatus,
+    ExecutionSummary,
+    HITLMetrics,
     # Data classes
     IterationMetrics,
     LLMCallMetrics,
-    ActivityMetrics,
-    HITLMetrics,
-    # Main classes
-    ExecutionMetrics,
     MetricsCollector,
     # Pydantic models
     MetricsSummary,
-    ExecutionSummary,
+    # Enums
+    MetricType,
 )
 
 # =============================================================================
 # REPLAY
 # =============================================================================
-
 from .replay import (
-    # Data classes
-    ReplayStep,
+    EVENT_CLASS_MAP,
     ExecutionInfo,
-    ReplayResult,
+    ExecutionInfoModel,
     # Main class
     ExecutionReplay,
-    # Helpers
-    parse_event,
-    EVENT_CLASS_MAP,
+    ReplayResult,
+    ReplayResultModel,
+    # Data classes
+    ReplayStep,
     # Pydantic models
     ReplayStepModel,
-    ReplayResultModel,
-    ExecutionInfoModel,
+    # Helpers
+    parse_event,
 )
 
 # =============================================================================
@@ -175,7 +171,7 @@ __version__ = "1.0.0"
 __all__ = [
     # Version
     "__version__",
-    
+
     # === EVENTS ===
     # Enums
     "EventCategory",
@@ -209,7 +205,7 @@ __all__ = [
     "create_metric_event",
     "create_hitl_event",
     "create_sandbox_event",
-    
+
     # === LOGGER ===
     # Sinks
     "EventSink",
@@ -220,7 +216,7 @@ __all__ = [
     # Logger
     "EventLogger",
     "create_event_logger",
-    
+
     # === METRICS ===
     # Enums
     "MetricType",
@@ -236,7 +232,7 @@ __all__ = [
     # Pydantic models
     "MetricsSummary",
     "ExecutionSummary",
-    
+
     # === REPLAY ===
     # Data classes
     "ReplayStep",

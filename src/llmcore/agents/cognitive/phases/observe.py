@@ -198,17 +198,17 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
     import re
     expected_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', expected_lower)
     result_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', result_lower)
-    
+
     # If expected contains specific values, check if they appear in result
     if expected_values:
         for val in expected_values:
             if val in result_values or val in result_lower:
                 return True
-    
+
     # Strategy 2: Result content appears in expected or vice versa
     if result_lower in expected_lower or expected_lower in result_lower:
         return True
-    
+
     # Strategy 3: Word overlap for complex expectations
     # Check if key words from expected are in result
     expected_words = set(expected_lower.split())
@@ -222,7 +222,7 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
     # Calculate overlap
     if not expected_words:
         return True  # If no meaningful expected words, assume match
-        
+
     overlap = len(expected_words & result_words)
     total = len(expected_words)
 

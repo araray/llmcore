@@ -61,7 +61,7 @@ async def build_context_payload(
 
     all_categories = set(inclusion_priority) | set(truncation_priority)
     components: Dict[str, List[Message]] = {cat: [] for cat in all_categories}
-    component_tokens: Dict[str, int] = {cat: 0 for cat in all_categories}
+    component_tokens: Dict[str, int] = dict.fromkeys(all_categories, 0)
 
     # 1. Gather and Prepare All Potential Components
     # System messages from session history

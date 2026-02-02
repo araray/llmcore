@@ -27,10 +27,9 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict
 
 import pytest
-
 
 # =============================================================================
 # POSTGRESQL CONFIGURATION
@@ -216,7 +215,7 @@ def mock_documents():
     except ImportError:
         # Create a simple stand-in
         from dataclasses import dataclass, field
-        from typing import Optional, List
+        from typing import List, Optional
 
         @dataclass
         class ContextDocument:

@@ -10,21 +10,14 @@ Tests:
     - Health checks
 """
 
-import pytest
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
-from llmcore.agents.sandbox.base import SandboxConfig, SandboxAccessLevel
-from llmcore.agents.sandbox.registry import (
-    SandboxRegistry,
-    SandboxRegistryConfig,
-    SandboxMode
-)
-from llmcore.agents.sandbox.exceptions import (
-    SandboxInitializationError,
-    SandboxAccessDenied
-)
+import pytest
+
+from llmcore.agents.sandbox.base import SandboxAccessLevel, SandboxConfig
+from llmcore.agents.sandbox.exceptions import SandboxInitializationError
+from llmcore.agents.sandbox.registry import SandboxMode, SandboxRegistry, SandboxRegistryConfig
 
 
 class TestSandboxMode:

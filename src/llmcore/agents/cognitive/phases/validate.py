@@ -20,7 +20,7 @@ References:
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import (
     ConfidenceLevel,
@@ -31,7 +31,6 @@ from ..models import (
 )
 
 if TYPE_CHECKING:
-    from ....models import Message, Role
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -213,7 +212,7 @@ async def validate_phase(
             return ValidateOutput(
                 result=ValidationResult.REQUIRES_HUMAN_APPROVAL,
                 confidence=ConfidenceLevel.LOW,
-                concerns=[f"Validation error: {str(e)}"],
+                concerns=[f"Validation error: {e!s}"],
                 suggestions=["Manual review recommended"],
                 requires_human_approval=True,
                 approval_prompt=f"Validation failed with error. Review action: {validate_input.proposed_action.name}",

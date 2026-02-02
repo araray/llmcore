@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import os
-from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 try:

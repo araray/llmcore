@@ -4,9 +4,8 @@ Unit tests for llmcore.memory.rag_utils module.
 Tests the RAG utility functions for template rendering and document formatting.
 """
 
-import pytest
-from llmcore.models import ContextDocument
 from llmcore.memory import rag_utils
+from llmcore.models import ContextDocument
 
 
 class TestRenderPromptTemplate:

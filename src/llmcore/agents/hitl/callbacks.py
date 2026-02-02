@@ -21,10 +21,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import sys
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .models import (
     ApprovalScope,
@@ -294,7 +292,7 @@ class ConsoleHITLCallback(HITLCallback):
                     self._output_fn(f"Request ID: {request.request_id}")
                     self._output_fn(f"Activity: {request.activity.activity_type}")
                     self._output_fn(f"Parameters:\n{json.dumps(request.activity.parameters, indent=2)}")
-                    self._output_fn(f"\nRisk Assessment:")
+                    self._output_fn("\nRisk Assessment:")
                     self._output_fn(f"  Level: {request.risk_assessment.overall_level}")
                     self._output_fn(f"  Requires Approval: {request.risk_assessment.requires_approval}")
                     self._output_fn(f"  Reason: {request.risk_assessment.reason}")

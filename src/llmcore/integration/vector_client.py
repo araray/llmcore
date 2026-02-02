@@ -41,7 +41,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -49,14 +49,11 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Tuple,
-    Union,
     runtime_checkable,
 )
 
 if TYPE_CHECKING:
     from llmcore.api import LLMCore
-    from llmcore.storage.abstraction import StorageContext
 
 logger = logging.getLogger(__name__)
 
@@ -437,10 +434,8 @@ class LLMCoreVectorClient:
 
         # Check if we have batch support (EnhancedPgVectorStorage)
         if hasattr(vector_storage, 'batch_upsert_documents'):
-            from llmcore.storage.abstraction import (
-                StorageContext, BatchConfig
-            )
             from llmcore.models import ContextDocument
+            from llmcore.storage.abstraction import BatchConfig, StorageContext
 
             ctx = StorageContext(user_id=self._config.user_id)
             batch_config = BatchConfig(
@@ -536,9 +531,7 @@ class LLMCoreVectorClient:
 
         # Check if we have enhanced similarity search
         if hasattr(vector_storage, 'similarity_search'):
-            from llmcore.storage.abstraction import (
-                StorageContext, VectorSearchConfig
-            )
+            from llmcore.storage.abstraction import StorageContext, VectorSearchConfig
 
             ctx = StorageContext(user_id=self._config.user_id)
             search_config = VectorSearchConfig(

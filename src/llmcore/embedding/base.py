@@ -8,7 +8,7 @@ must adhere to within the LLMCore library. This is essential for the RAG functio
 """
 
 import abc
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class BaseEmbeddingModel(abc.ABC):

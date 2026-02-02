@@ -20,13 +20,12 @@ Date: December 2025
 Version: 1.0.1 - Fixed EnhancedAgentState verification
 """
 
-import importlib
 import os
 import sys
 import traceback
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
 # =============================================================================
 # VERIFICATION RESULT TYPES

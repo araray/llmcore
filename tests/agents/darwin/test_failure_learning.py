@@ -6,20 +6,20 @@ Tests both SQLite and PostgreSQL backends with the same test suite.
 """
 
 import os
-import pytest
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from llmcore.agents.darwin import (
-    FailureLog,
-    FailurePattern,
     FailureContext,
     FailureLearningManager,
+    FailureLog,
+    FailurePattern,
 )
-from llmcore.agents.darwin.sqlite_failure_storage import SqliteFailureStorage
 from llmcore.agents.darwin.postgres_failure_storage import PostgresFailureStorage
-
+from llmcore.agents.darwin.sqlite_failure_storage import SqliteFailureStorage
 
 # =============================================================================
 # Fixtures
@@ -610,8 +610,6 @@ class TestIntegration:
         await sqlite_manager.close()
 
         # Create new manager with same database
-        import tempfile
-        from pathlib import Path
 
         # Note: This test assumes sqlite_manager uses a temporary directory
         # In a real scenario, you'd use the same db_path

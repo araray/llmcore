@@ -13,7 +13,7 @@ References:
 """
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -33,7 +33,6 @@ from llmcore.agents.cognitive import (
     PlanOutput,
     ThinkInput,
     ThinkOutput,
-    ValidateInput,
     ValidateOutput,
     ValidationResult,
     # Phase Functions
@@ -41,7 +40,7 @@ from llmcore.agents.cognitive import (
     plan_phase,
     think_phase,
 )
-from llmcore.models import ToolCall, ToolResult
+from llmcore.models import ToolCall
 
 # =============================================================================
 # MODEL TESTS

@@ -9,8 +9,8 @@ Tests:
 - Scope revocation
 """
 
+
 import pytest
-from datetime import datetime, timedelta
 
 from llmcore.agents.hitl import (
     ApprovalScopeManager,
@@ -18,7 +18,6 @@ from llmcore.agents.hitl import (
     RiskLevel,
     ScopeConditionMatcher,
 )
-
 
 # =============================================================================
 # FIXTURES

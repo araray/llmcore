@@ -10,8 +10,6 @@ Tests the critical bug fixes and new infrastructure:
 - RAG Filter
 """
 
-import re
-from typing import Any, Dict, List
 
 import pytest
 
@@ -279,7 +277,7 @@ class TestGoalClassifier:
 
     def test_execution_strategy_mapping(self, classifier):
         """Test that complexity maps to appropriate execution strategy."""
-        from llmcore.agents.cognitive.goal_classifier import ExecutionStrategy, GoalComplexity
+        from llmcore.agents.cognitive.goal_classifier import ExecutionStrategy
 
         # Trivial -> DIRECT
         result = classifier.classify("hello")
@@ -523,23 +521,6 @@ class TestPhase1Integration:
         # Circuit breaker
         # RAG filter
         # Capability checker
-        from llmcore.agents import (
-            AgentCircuitBreaker,
-            Capability,
-            CapabilityChecker,
-            CircuitBreakerConfig,
-            CompatibilityResult,
-            FilterStats,
-            GoalClassification,
-            GoalClassifier,
-            GoalComplexity,
-            RAGContextFilter,
-            RAGResult,
-            TripReason,
-            classify_goal,
-            create_circuit_breaker,
-            is_trivial_goal,
-        )
 
     def test_goal_classifier_with_circuit_breaker(self):
         """Test goal classifier determining circuit breaker settings."""

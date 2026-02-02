@@ -11,10 +11,10 @@ These tests verify the RAG collection management functionality
 added in Phase 4 of the UNIFIED_IMPLEMENTATION_PLAN.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock
 
+import pytest
 
 # =============================================================================
 # MOCK INFRASTRUCTURE

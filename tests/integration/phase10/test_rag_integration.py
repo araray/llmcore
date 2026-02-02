@@ -8,30 +8,24 @@ IMPORTANT: Both storage backend combinations are FIRST-CLASS CITIZENS:
 Tests cover both backends with equal depth and rigor.
 """
 
-import asyncio
 import os
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
-import uuid
+from typing import Any, Dict, List
 
 import pytest
 
 # Storage imports
 from llmcore.storage import (
-    SqliteSessionStorage,
-    PostgresSessionStorage,
-    JsonSessionStorage,
-    ChromaVectorStorage,
-    PgVectorStorage,
-    EnhancedPgVectorStorage,
     BaseSessionStorage,
     BaseVectorStorage,
+    ChromaVectorStorage,
+    EnhancedPgVectorStorage,
+    PgVectorStorage,
+    PostgresSessionStorage,
+    SqliteSessionStorage,
     StorageManager,
 )
 from llmcore.storage.manager import SESSION_STORAGE_MAP, VECTOR_STORAGE_MAP
-
 
 # ============================================================================
 # Fixtures for Both Backends
@@ -262,8 +256,8 @@ class TestSqliteSessionStorage:
         try:
             assert hasattr(storage, 'add_episode')
             assert hasattr(storage, 'get_episodes')
-            assert callable(getattr(storage, 'add_episode'))
-            assert callable(getattr(storage, 'get_episodes'))
+            assert callable(storage.add_episode)
+            assert callable(storage.get_episodes)
         finally:
             await storage.close()
 

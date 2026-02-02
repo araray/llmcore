@@ -12,15 +12,14 @@ Phase: 3 - Activity System Completion
 Reference: LLMCORE_CORRECTION_MASTER_PLAN.md Section 5
 """
 
-import asyncio
-import pytest
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, Dict, Optional
+from unittest.mock import AsyncMock, MagicMock
 
-from llmcore.agents.activities.executor import ActivityExecutor, ActivityValidator
+import pytest
+
+from llmcore.agents.activities.executor import ActivityExecutor
 from llmcore.agents.activities.registry import ExecutionContext, get_default_registry
 from llmcore.agents.activities.schema import ActivityRequest, ActivityStatus
-
 
 # =============================================================================
 # Test Fixtures

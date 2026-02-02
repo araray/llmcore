@@ -12,33 +12,34 @@ Usage:
 
 import sys
 
+
 def main():
     """Run quick sanity check."""
     print("🔍 Darwin Layer 2 Quick Sanity Check\n")
-    
+
     errors = []
-    
+
     # Check 1: Core imports
     print("1. Testing core imports...")
     try:
         from llmcore.agents import (
-            EnhancedAgentManager,
             AgentMode,
-            SingleAgentMode,
             AgentResult,
+            EnhancedAgentManager,
+            SingleAgentMode,
         )
         print("   ✅ Core imports OK")
     except ImportError as e:
         errors.append(f"Core imports failed: {e}")
         print(f"   ❌ Core imports FAILED: {e}")
-    
+
     # Check 2: Cognitive cycle
     print("2. Testing cognitive cycle imports...")
     try:
         from llmcore.agents import (
             CognitiveCycle,
-            EnhancedAgentState,
             CognitivePhase,
+            EnhancedAgentState,
         )
         # Verify 8 phases
         phases = list(CognitivePhase)
@@ -47,13 +48,12 @@ def main():
     except (ImportError, AssertionError) as e:
         errors.append(f"Cognitive cycle failed: {e}")
         print(f"   ❌ Cognitive cycle FAILED: {e}")
-    
+
     # Check 3: Persona system
     print("3. Testing persona system imports...")
     try:
         from llmcore.agents import (
             PersonaManager,
-            AgentPersona,
         )
         manager = PersonaManager()
         personas = manager.list_personas()
@@ -61,20 +61,19 @@ def main():
     except Exception as e:
         errors.append(f"Persona system failed: {e}")
         print(f"   ❌ Persona system FAILED: {e}")
-    
+
     # Check 4: Prompt library
     print("4. Testing prompt library imports...")
     try:
         from llmcore.agents import (
             PromptRegistry,
-            PromptTemplate,
         )
         registry = PromptRegistry()
         print("   ✅ Prompt library OK")
     except Exception as e:
         errors.append(f"Prompt library failed: {e}")
         print(f"   ❌ Prompt library FAILED: {e}")
-    
+
     # Check 5: Memory integration
     print("5. Testing memory integration imports...")
     try:
@@ -83,18 +82,18 @@ def main():
     except ImportError as e:
         errors.append(f"Memory integration failed: {e}")
         print(f"   ❌ Memory integration FAILED: {e}")
-    
+
     # Check 6: Backward compatibility
     print("6. Testing backward compatibility...")
     try:
-        from llmcore.agents.manager import AgentManager
         from llmcore.agents import EnhancedAgentManager
+        from llmcore.agents.manager import AgentManager
         assert issubclass(EnhancedAgentManager, AgentManager)
         print("   ✅ Backward compatibility OK (EnhancedAgentManager extends AgentManager)")
     except Exception as e:
         errors.append(f"Backward compatibility failed: {e}")
         print(f"   ❌ Backward compatibility FAILED: {e}")
-    
+
     # Summary
     print("\n" + "=" * 50)
     if errors:

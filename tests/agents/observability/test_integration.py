@@ -14,12 +14,9 @@ References:
 
 from __future__ import annotations
 
-import asyncio
-import json
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -226,7 +223,6 @@ class TestAgentManagerObservabilityIntegration:
         """Test AgentManager init with observability enabled."""
         from llmcore.agents import AgentManager
         from llmcore.agents.observability_factory import (
-            ObservabilityComponents,
             create_observability_from_config,
         )
 
@@ -602,6 +598,7 @@ class TestObservabilityPerformance:
     async def test_logging_overhead_acceptable(self):
         """Verify logging adds acceptable overhead (< 100ms for 100 events)."""
         import time
+
         from llmcore.agents.observability import EventLogger, InMemorySink
 
         sink = InMemorySink()
@@ -675,12 +672,12 @@ class TestObservabilityReplay:
 # =============================================================================
 
 __all__ = [
-    "TestObservabilityFactoryUnit",
     "TestAgentManagerObservabilityIntegration",
-    "TestObservabilityEventLogging",
-    "TestObservabilityMetricsCollection",
     "TestObservabilityBackwardCompatibility",
     "TestObservabilityConfiguration",
+    "TestObservabilityEventLogging",
+    "TestObservabilityFactoryUnit",
+    "TestObservabilityMetricsCollection",
     "TestObservabilityPerformance",
     "TestObservabilityReplay",
 ]

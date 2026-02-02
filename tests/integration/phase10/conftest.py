@@ -8,13 +8,11 @@ interfere with each other.
 """
 
 import os
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # =============================================================================
 # ENVIRONMENT FIXTURES

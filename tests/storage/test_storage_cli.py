@@ -11,28 +11,27 @@ Tests cover:
 
 import json
 import os
-import pytest
 import sys
 import tempfile
-from io import StringIO
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+
+import pytest
 
 # Direct import to avoid circular dependency
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src" / "llmcore" / "storage"))
 from cli import (
     OutputFormatter,
     StorageCommands,
-    cmd_validate,
-    cmd_health,
-    cmd_schema,
-    cmd_info,
-    create_parser,
-    main,
     _load_config,
     _mask_url_password,
+    cmd_health,
+    cmd_info,
+    cmd_schema,
+    cmd_validate,
+    create_parser,
+    main,
 )
-
 
 # =============================================================================
 # FIXTURES

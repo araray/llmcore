@@ -8,6 +8,8 @@ NOTE: SandboxIntegration, SandboxContext, SandboxAgentMixin are in
       llmcore.agents.sandbox_integration, not this package.
 """
 
+# Images submodule (Phase 6)
+from . import images
 from .base import (
     ExecutionResult,
     FileInfo,
@@ -34,6 +36,16 @@ from .exceptions import (
     SandboxResourceError,
     SandboxTimeoutError,
 )
+from .images import (
+    ImageCapability,
+    ImageManifest,
+    ImageMetadata,
+    ImageRegistry,
+    ImageSelector,
+    ImageTier,
+    SelectionConfig,
+    SelectionResult,
+)
 from .output_tracker import OutputTracker
 from .registry import (
     SandboxMode,
@@ -56,19 +68,6 @@ from .tools import (
     set_state,
 )
 from .vm_provider import VMSandboxProvider
-
-# Images submodule (Phase 6)
-from . import images
-from .images import (
-    ImageCapability,
-    ImageManifest,
-    ImageMetadata,
-    ImageRegistry,
-    ImageSelector,
-    ImageTier,
-    SelectionConfig,
-    SelectionResult,
-)
 
 __all__ = [
     "SandboxProvider",

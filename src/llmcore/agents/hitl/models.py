@@ -25,8 +25,6 @@ try:
     from pydantic import BaseModel, Field
 except ImportError:
     # Fallback if pydantic not available
-    from dataclasses import dataclass
-    from dataclasses import field as dataclass_field
 
     BaseModel = object  # type: ignore
 

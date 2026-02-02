@@ -107,8 +107,8 @@ class TestCircuitBreakerIntegration:
     @pytest.mark.asyncio
     async def test_circuit_breaker_disabled(self, cognitive_cycle):
         """Test that circuit breaker can be disabled."""
-        from llmcore.config.agents_config import AgentsConfig
         from llmcore.agents.cognitive.models import EnhancedAgentState
+        from llmcore.config.agents_config import AgentsConfig
 
         # Disable circuit breaker
         config = AgentsConfig()
@@ -140,7 +140,7 @@ class TestCircuitBreakerIntegration:
         self, cognitive_cycle, agents_config
     ):
         """Test that circuit breaker respects max_iterations limit."""
-        from llmcore.agents.cognitive.models import EnhancedAgentState, CycleIteration
+        from llmcore.agents.cognitive.models import CycleIteration, EnhancedAgentState
 
         agent_state = EnhancedAgentState(
             goal="Test goal",

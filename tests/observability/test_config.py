@@ -1,7 +1,6 @@
 # tests/observability/test_config.py
 """Tests for observability configuration module."""
 
-from typing import Any, Dict
 
 import pytest
 

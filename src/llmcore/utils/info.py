@@ -1,4 +1,3 @@
-import inspect
 
 def list_class_members(cls):
     """

@@ -22,9 +22,16 @@ import os
 import uuid
 
 # Import the main class and relevant exceptions/models
-from llmcore import (ConfigError, ContextLengthError, EmbeddingError, LLMCore,
-                     LLMCoreError, ProviderError, SessionNotFoundError,
-                     VectorStorageError)
+from llmcore import (
+    ConfigError,
+    ContextLengthError,
+    EmbeddingError,
+    LLMCore,
+    LLMCoreError,
+    ProviderError,
+    SessionNotFoundError,
+    VectorStorageError,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -81,7 +88,7 @@ async def main():
             logger.info("\n--- 2. Streaming Chat ---")
             prompt2 = "Write a short poem about space exploration."
             logger.info(f"User: {prompt2}")
-            print(f"Gemini (Streaming): ", end="", flush=True)
+            print("Gemini (Streaming): ", end="", flush=True)
             try:
                 response_stream = await llm.chat(
                     message=prompt2,

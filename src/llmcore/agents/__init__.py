@@ -104,6 +104,15 @@ from .manager import AgentManager, AgentMode, EnhancedAgentManager
 from .memory import CognitiveMemoryIntegrator
 
 # =============================================================================
+# OBSERVABILITY INTEGRATION (Phase 8)
+# =============================================================================
+from .observability_factory import (
+    ObservabilityComponents,
+    create_event_logger_simple,
+    create_observability_from_config,
+)
+
+# =============================================================================
 # PERSONA SYSTEM
 # =============================================================================
 from .persona import (
@@ -202,15 +211,6 @@ from .sandbox_integration import (
     SandboxIntegration,
     get_sandbox_tool_definitions,
     register_sandbox_tools,
-)
-
-# =============================================================================
-# OBSERVABILITY INTEGRATION (Phase 8)
-# =============================================================================
-from .observability_factory import (
-    ObservabilityComponents,
-    create_observability_from_config,
-    create_event_logger_simple,
 )
 
 # =============================================================================

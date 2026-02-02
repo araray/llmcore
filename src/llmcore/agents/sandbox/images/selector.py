@@ -22,7 +22,7 @@ Example:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from .models import (
     AccessMode,

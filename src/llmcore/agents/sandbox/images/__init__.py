@@ -63,27 +63,10 @@ See Also:
 """
 
 # Models - Core data structures
-from .models import (
-    # Enums
-    AccessMode,
-    ImageCapability,
-    ImageTier,
-    # Data classes
-    ImageManifest,
-    ImageMetadata,
-    ResourceLimits,
-    # Builtin manifests
-    BASE_IMAGE_MANIFEST,
-    BUILTIN_MANIFESTS,
-    NODEJS_IMAGE_MANIFEST,
-    PYTHON_IMAGE_MANIFEST,
-    RESEARCH_IMAGE_MANIFEST,
-    SHELL_IMAGE_MANIFEST,
-    WEBSEARCH_IMAGE_MANIFEST,
-)
-
 # Manifest utilities
 from .manifest import (
+    # Constants
+    MANIFEST_PATH_IN_CONTAINER,
     # Exceptions
     ManifestError,
     ManifestNotFoundError,
@@ -98,29 +81,45 @@ from .manifest import (
     parse_manifest,
     save_manifest_to_file,
     validate_manifest,
-    # Constants
-    MANIFEST_PATH_IN_CONTAINER,
+)
+from .models import (
+    # Builtin manifests
+    BASE_IMAGE_MANIFEST,
+    BUILTIN_MANIFESTS,
+    NODEJS_IMAGE_MANIFEST,
+    PYTHON_IMAGE_MANIFEST,
+    RESEARCH_IMAGE_MANIFEST,
+    SHELL_IMAGE_MANIFEST,
+    WEBSEARCH_IMAGE_MANIFEST,
+    # Enums
+    AccessMode,
+    ImageCapability,
+    # Data classes
+    ImageManifest,
+    ImageMetadata,
+    ImageTier,
+    ResourceLimits,
 )
 
 # Registry
 from .registry import (
     # Exceptions
     ImageNotFoundError,
-    ImageRegistryError,
     # Classes
     ImageRegistry,
+    ImageRegistryError,
 )
 
 # Selector
 from .selector import (
-    # Classes
-    ImageSelector,
-    SelectionConfig,
-    SelectionResult,
     # Mappings
     RUNTIME_IMAGE_MAP,
     TASK_CAPABILITY_MAP,
     TASK_IMAGE_MAP,
+    # Classes
+    ImageSelector,
+    SelectionConfig,
+    SelectionResult,
 )
 
 __all__ = [

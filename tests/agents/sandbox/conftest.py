@@ -10,27 +10,23 @@ This module provides fixtures for:
 """
 
 import asyncio
-import os
-import sys
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 # Assumes llmcore is installed or PYTHONPATH includes src/
-
 from llmcore.agents.sandbox.base import (
-    SandboxProvider,
-    SandboxConfig,
-    SandboxAccessLevel,
-    SandboxStatus,
     ExecutionResult,
-    FileInfo
+    FileInfo,
+    SandboxAccessLevel,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxStatus,
 )
-from llmcore.agents.sandbox.registry import SandboxRegistry, SandboxRegistryConfig, SandboxMode
-
+from llmcore.agents.sandbox.registry import SandboxMode, SandboxRegistryConfig
 
 # ==============================================================================
 # Event Loop Configuration

@@ -4,31 +4,39 @@ Phase 10 Integration Tests: Observability System.
 Tests for metrics collection, event logging, cost tracking, and analytics.
 """
 
-import asyncio
-import os
-import tempfile
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import time
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 # Observability imports
 from llmcore.observability import (
-    Counter, Histogram, Gauge, Timer,
-    CostTracker, CostAnalyzer,
-    EventBuffer, ExecutionReplayer,
-)
-from llmcore.observability.metrics import (
-    LLMMetricsCollector, MetricsRegistry, MetricUnit,
+    CostAnalyzer,
+    CostTracker,
+    Counter,
+    EventBuffer,
+    ExecutionReplayer,
+    Gauge,
+    Histogram,
+    Timer,
 )
 from llmcore.observability.events import (
-    ObservabilityConfig, ObservabilityLogger, create_observability_logger,
-    Event, EventCategory, Severity, EventBuffer, ExecutionTrace,
+    Event,
+    EventBuffer,
+    EventCategory,
+    ExecutionTrace,
+    ObservabilityConfig,
+    ObservabilityLogger,
+    Severity,
+    create_observability_logger,
 )
-
+from llmcore.observability.metrics import (
+    LLMMetricsCollector,
+    MetricsRegistry,
+    MetricUnit,
+)
 
 # ============================================================================
 # Metrics Tests

@@ -7,9 +7,7 @@ Tests cover:
 - These tests are isolated and don't require the full llmchat import chain
 """
 
-import sys
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock
+from typing import Any, Dict, List
 
 import pytest
 

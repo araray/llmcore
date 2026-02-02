@@ -42,7 +42,7 @@ from .schema import (
 )
 
 if TYPE_CHECKING:
-    from .executor import ActivityExecutor
+    pass
 
 logger = logging.getLogger(__name__)
 

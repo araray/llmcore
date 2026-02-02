@@ -22,7 +22,6 @@ Configure via environment variables:
     LLMCORE_TEST_PG_DATABASE: PostgreSQL database
 """
 
-import asyncio
 import random
 import sys
 from dataclasses import dataclass, field
@@ -35,11 +34,11 @@ import pytest
 # Try to import from installed llmcore package first, then fallback to direct path
 try:
     from llmcore.storage.abstraction import (
-        StorageContext,
-        HNSWConfig,
-        VectorSearchConfig,
         BatchConfig,
         BatchResult,
+        HNSWConfig,
+        StorageContext,
+        VectorSearchConfig,
     )
     ABSTRACTION_AVAILABLE = True
 except ImportError:
@@ -49,11 +48,11 @@ except ImportError:
         sys.path.insert(0, str(_storage_path))
     try:
         from abstraction import (
-            StorageContext,
-            HNSWConfig,
-            VectorSearchConfig,
             BatchConfig,
             BatchResult,
+            HNSWConfig,
+            StorageContext,
+            VectorSearchConfig,
         )
         ABSTRACTION_AVAILABLE = True
     except ImportError:
@@ -63,25 +62,25 @@ except ImportError:
 PGVECTOR_ENHANCED_AVAILABLE = False
 try:
     from llmcore.storage.pgvector_enhanced import (
-        EnhancedPgVectorStorage,
-        CollectionInfo,
-        HybridSearchResult,
-        DEFAULT_VECTORS_TABLE,
         DEFAULT_COLLECTIONS_TABLE,
+        DEFAULT_VECTORS_TABLE,
+        CollectionInfo,
+        EnhancedPgVectorStorage,
+        HybridSearchResult,
     )
     PGVECTOR_ENHANCED_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     # Try direct import if llmcore not installed
     try:
         _storage_path = Path(__file__).parent.parent.parent / "src" / "llmcore" / "storage"
         if str(_storage_path) not in sys.path:
             sys.path.insert(0, str(_storage_path))
         from pgvector_enhanced import (
-            EnhancedPgVectorStorage,
-            CollectionInfo,
-            HybridSearchResult,
-            DEFAULT_VECTORS_TABLE,
             DEFAULT_COLLECTIONS_TABLE,
+            DEFAULT_VECTORS_TABLE,
+            CollectionInfo,
+            EnhancedPgVectorStorage,
+            HybridSearchResult,
         )
         PGVECTOR_ENHANCED_AVAILABLE = True
     except ImportError as e2:
@@ -397,6 +396,7 @@ class TestSearchConfigMocked:
 
 import os
 
+
 def _get_pg_config() -> Dict[str, Any]:
     """Get PostgreSQL configuration from environment variables."""
     return {
@@ -422,7 +422,7 @@ def _should_skip_pg_tests() -> bool:
 
 # Try to import from conftest, fallback to local functions
 try:
-    from conftest import requires_postgres, requires_pgvector, get_pg_url, should_skip_pg_tests
+    from conftest import get_pg_url, requires_pgvector, requires_postgres, should_skip_pg_tests
 except ImportError:
     # Define fallbacks if conftest not loaded
     requires_postgres = pytest.mark.skipif(_should_skip_pg_tests(), reason="PostgreSQL tests disabled")

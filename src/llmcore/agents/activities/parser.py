@@ -551,10 +551,10 @@ def has_activity_request(text: str) -> bool:
 # =============================================================================
 
 __all__ = [
-    "ParseResult",
     "ActivityRequestParser",
-    "parse_activity_requests",
+    "ParseResult",
     "has_activity_request",
+    "parse_activity_requests",
 ]
 
 

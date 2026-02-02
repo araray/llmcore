@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Optional
 
 from ..models import (
@@ -54,7 +54,6 @@ if TYPE_CHECKING:
 
 from ...resilience.circuit_breaker import (
     AgentCircuitBreaker,
-    TripReason,
 )
 
 logger = logging.getLogger(__name__)
@@ -626,7 +625,7 @@ class CognitiveCycle:
                 # If circuit breaker hasn't tripped, the error is fatal
                 # (unlike the old behavior which silently returned)
                 if circuit_breaker is None:
-                    return f"Task failed: {str(e)}"
+                    return f"Task failed: {e!s}"
 
         # Check if task completed during the last iteration
         if agent_state.is_finished:

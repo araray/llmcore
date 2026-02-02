@@ -30,7 +30,6 @@ import asyncio
 import base64
 import fnmatch
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -48,11 +47,9 @@ from .exceptions import (
     SandboxAccessDenied,
     SandboxCleanupError,
     SandboxConnectionError,
-    SandboxExecutionError,
     SandboxImageNotFoundError,
     SandboxInitializationError,
     SandboxNotInitializedError,
-    SandboxTimeoutError,
 )
 
 logger = logging.getLogger(__name__)

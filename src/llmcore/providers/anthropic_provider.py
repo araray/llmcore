@@ -183,7 +183,7 @@ class AnthropicProvider(BaseProvider):
                 # This logic should be handled by the caller who constructs the context.
                 # For now, we'll skip tool messages here as they are handled differently.
                 logger.warning(
-                    f"Skipping message with role 'tool' during conversion. Tool results should be part of an assistant message."
+                    "Skipping message with role 'tool' during conversion. Tool results should be part of an assistant message."
                 )
                 continue
             else:

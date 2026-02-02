@@ -41,33 +41,32 @@ Usage:
     )
 """
 
-import asyncio
 import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import ConfigError, VectorStorageError
 from ..models import ContextDocument
-from .base_vector import BaseVectorStorage
 from .abstraction import (
-    StorageContext,
-    BackendCapabilities,
     POSTGRES_PGVECTOR_CAPABILITIES,
-    HNSWConfig,
-    VectorSearchConfig,
+    BackendCapabilities,
     BatchConfig,
     BatchResult,
+    HNSWConfig,
     PoolConfig,
+    StorageContext,
+    VectorSearchConfig,
     chunk_list,
     execute_with_retry,
 )
+from .base_vector import BaseVectorStorage
 
 if TYPE_CHECKING:
     try:
@@ -601,7 +600,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 # Prepare documents for insertion
                 for doc in documents:
                     if not doc.id or not doc.embedding:
-                        raise VectorStorageError(f"Document must have id and embedding")
+                        raise VectorStorageError("Document must have id and embedding")
 
                     if len(doc.embedding) != dimension:
                         raise VectorStorageError(
@@ -857,7 +856,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             # Metadata filters
             if config.filter_metadata:
                 for key, value in config.filter_metadata.items():
-                    sql += f" AND metadata->>%s = %s"
+                    sql += " AND metadata->>%s = %s"
                     params.extend([key, str(value)])
 
             # Minimum score threshold
@@ -868,7 +867,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 sql += f" AND embedding {distance_op} %s::vector < %s"
                 params.extend([query_embedding, max_distance])
 
-            sql += f" ORDER BY distance ASC LIMIT %s"
+            sql += " ORDER BY distance ASC LIMIT %s"
             params.append(k)
 
             conn.row_factory = dict_row
@@ -1016,7 +1015,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
                 if filter_metadata:
                     for key, value in filter_metadata.items():
-                        vector_cte += f" AND metadata->>%s = %s"
+                        vector_cte += " AND metadata->>%s = %s"
                         params.extend([key, str(value)])
 
                 vector_cte += f" LIMIT {k * 3})"  # Fetch more for RRF
@@ -1039,7 +1038,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
                 if filter_metadata:
                     for key, value in filter_metadata.items():
-                        text_cte += f" AND metadata->>%s = %s"
+                        text_cte += " AND metadata->>%s = %s"
                         params.extend([key, str(value)])
 
                 text_cte += f" LIMIT {k * 3})"
@@ -1477,7 +1476,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 # =============================================================================
 
 __all__ = [
-    "EnhancedPgVectorStorage",
     "CollectionInfo",
+    "EnhancedPgVectorStorage",
     "HybridSearchResult",
 ]

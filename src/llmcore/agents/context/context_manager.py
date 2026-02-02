@@ -43,18 +43,15 @@ from __future__ import annotations
 
 import logging
 import re
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     Optional,
     Protocol,
     Tuple,
-    Union,
 )
 
 try:

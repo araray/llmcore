@@ -7,7 +7,6 @@ Uses the OpenAI Python SDK to generate embeddings via their API.
 
 import asyncio
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 # Import OpenAI library

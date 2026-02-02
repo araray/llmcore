@@ -39,15 +39,15 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .events import (
-    AgentEvent,
     ActivityEvent,
+    AgentEvent,
     CognitiveEvent,
     ErrorEvent,
     EventCategory,
@@ -59,7 +59,6 @@ from .events import (
     RAGEvent,
     SandboxEvent,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ class ReplayStep:
         duration_ms: Duration (if available)
         event: Full event data
     """
-    
+
     timestamp: datetime
     event_id: str
     category: EventCategory
@@ -112,7 +111,7 @@ class ExecutionInfo:
         event_count: Number of events
         error_count: Number of error events
     """
-    
+
     execution_id: str
     session_id: str
     start_time: datetime
@@ -142,7 +141,7 @@ class ReplayResult:
         errors: Errors encountered
         summary: Execution summary
     """
-    
+
     execution_id: str
     session_id: str
     start_time: datetime
@@ -187,7 +186,7 @@ def parse_event(data: Dict[str, Any]) -> AgentEvent:
     """
     category = data.get("category", "")
     event_class = EVENT_CLASS_MAP.get(category, AgentEvent)
-    
+
     try:
         return event_class.model_validate(data)
     except Exception as e:
@@ -225,7 +224,7 @@ class ExecutionReplay:
         # Filter events
         errors = replay.get_events(category=EventCategory.ERROR)
     """
-    
+
     def __init__(self, events: Optional[List[AgentEvent]] = None) -> None:
         """
         Initialize replay with events.
@@ -237,10 +236,10 @@ class ExecutionReplay:
         self._by_session: Dict[str, List[AgentEvent]] = {}
         self._by_execution: Dict[str, List[AgentEvent]] = {}
         self._execution_info: Dict[str, ExecutionInfo] = {}
-        
+
         if self._events:
             self._index_events()
-    
+
     @classmethod
     def from_file(
         cls,
@@ -260,20 +259,20 @@ class ExecutionReplay:
         """
         path = Path(path)
         events: List[AgentEvent] = []
-        
+
         if not path.exists():
             logger.warning(f"Event log not found: {path}")
             return cls(events)
-        
+
         with open(path, "r", encoding="utf-8") as f:
             for i, line in enumerate(f):
                 if max_events and i >= max_events:
                     break
-                
+
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 try:
                     data = json.loads(line)
                     event = parse_event(data)
@@ -282,10 +281,10 @@ class ExecutionReplay:
                     logger.warning(f"Invalid JSON on line {i + 1}: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to parse event on line {i + 1}: {e}")
-        
+
         logger.info(f"Loaded {len(events)} events from {path}")
         return cls(events)
-    
+
     @classmethod
     def from_events(cls, events: List[AgentEvent]) -> "ExecutionReplay":
         """
@@ -298,30 +297,30 @@ class ExecutionReplay:
             ExecutionReplay instance
         """
         return cls(list(events))
-    
+
     def _index_events(self) -> None:
         """Index events by session and execution."""
         self._by_session.clear()
         self._by_execution.clear()
         self._execution_info.clear()
-        
+
         for event in self._events:
             # Index by session
             session_id = event.session_id
             if session_id not in self._by_session:
                 self._by_session[session_id] = []
             self._by_session[session_id].append(event)
-            
+
             # Index by execution
             exec_id = event.execution_id
             if exec_id:
                 if exec_id not in self._by_execution:
                     self._by_execution[exec_id] = []
                 self._by_execution[exec_id].append(event)
-                
+
                 # Track execution info
                 self._update_execution_info(exec_id, event)
-    
+
     def _update_execution_info(
         self,
         execution_id: str,
@@ -334,29 +333,29 @@ class ExecutionReplay:
                 session_id=event.session_id,
                 start_time=event.timestamp,
             )
-        
+
         info = self._execution_info[execution_id]
         info.event_count += 1
-        
+
         # Update end time
         if info.end_time is None or event.timestamp > info.end_time:
             info.end_time = event.timestamp
-        
+
         # Update from lifecycle events
         if isinstance(event, LifecycleEvent):
             if event.goal:
                 info.goal = event.goal
             if event.final_status:
                 info.status = event.final_status
-        
+
         # Count errors
         if event.category == EventCategory.ERROR:
             info.error_count += 1
-    
+
     # =========================================================================
     # LISTING METHODS
     # =========================================================================
-    
+
     def list_executions(
         self,
         *,
@@ -378,7 +377,7 @@ class ExecutionReplay:
             List of execution info
         """
         results: List[ExecutionInfo] = []
-        
+
         for info in sorted(
             self._execution_info.values(),
             key=lambda x: x.start_time,
@@ -386,20 +385,20 @@ class ExecutionReplay:
         ):
             if len(results) >= limit:
                 break
-            
+
             if session_id and info.session_id != session_id:
                 continue
-            
+
             if since and info.start_time < since:
                 continue
-            
+
             if until and info.start_time > until:
                 continue
-            
+
             results.append(info)
-        
+
         return results
-    
+
     def list_sessions(self) -> List[str]:
         """
         List all session IDs.
@@ -408,11 +407,11 @@ class ExecutionReplay:
             List of session IDs
         """
         return sorted(self._by_session.keys())
-    
+
     # =========================================================================
     # REPLAY METHODS
     # =========================================================================
-    
+
     def replay(
         self,
         execution_id: str,
@@ -432,27 +431,27 @@ class ExecutionReplay:
         events = self._by_execution.get(execution_id, [])
         if not events:
             raise ValueError(f"Execution not found: {execution_id}")
-        
+
         # Sort by timestamp
         events = sorted(events, key=lambda e: e.timestamp)
-        
+
         # Build timeline
         timeline: List[ReplayStep] = []
         phases: Set[str] = set()
         activities: Set[str] = set()
         errors: List[str] = []
-        
+
         goal: Optional[str] = None
         status: Optional[str] = None
         session_id = events[0].session_id
         start_time = events[0].timestamp
         end_time = events[-1].timestamp
-        
+
         for event in events:
             # Skip metrics unless requested
             if not include_metrics and event.category == EventCategory.METRIC:
                 continue
-            
+
             # Build step
             step = ReplayStep(
                 timestamp=event.timestamp,
@@ -466,26 +465,26 @@ class ExecutionReplay:
                 event=event,
             )
             timeline.append(step)
-            
+
             # Collect metadata
             if event.phase:
                 phases.add(event.phase)
-            
+
             if isinstance(event, ActivityEvent):
                 activities.add(event.activity_name)
-            
+
             if isinstance(event, ErrorEvent):
                 errors.append(event.error_message)
-            
+
             if isinstance(event, LifecycleEvent):
                 if event.goal:
                     goal = event.goal
                 if event.final_status:
                     status = event.final_status
-        
+
         # Build summary
         summary = self._build_execution_summary(events)
-        
+
         return ReplayResult(
             execution_id=execution_id,
             session_id=session_id,
@@ -500,7 +499,7 @@ class ExecutionReplay:
             errors=errors,
             summary=summary,
         )
-    
+
     def _summarize_event(self, event: AgentEvent) -> str:
         """Generate human-readable summary for event."""
         if isinstance(event, LifecycleEvent):
@@ -516,7 +515,7 @@ class ExecutionReplay:
                 return f"Iteration {event.iteration} completed"
             else:
                 return f"Lifecycle: {event.event_type}"
-        
+
         elif isinstance(event, CognitiveEvent):
             phase = event.phase_name or event.phase or "unknown"
             if event.event_type == "phase_started":
@@ -528,32 +527,32 @@ class ExecutionReplay:
                 return f"Phase '{phase}' completed: {output}"
             else:
                 return f"Cognitive: {phase} - {event.event_type}"
-        
+
         elif isinstance(event, ActivityEvent):
             status = "✓" if event.success else "✗"
             return f"{status} Activity '{event.activity_name}'"
-        
+
         elif isinstance(event, HITLEvent):
             return f"HITL: {event.action_type} - {event.approval_status}"
-        
+
         elif isinstance(event, ErrorEvent):
             return f"Error: {event.error_type}: {event.error_message[:50]}"
-        
+
         elif isinstance(event, SandboxEvent):
             return f"Sandbox: {event.sandbox_type} - {event.operation}"
-        
+
         elif isinstance(event, RAGEvent):
             return f"RAG: {event.num_results} results for '{event.query[:30]}'"
-        
+
         elif isinstance(event, MemoryEvent):
             return f"Memory: {event.operation} on {event.memory_type}"
-        
+
         elif isinstance(event, MetricEvent):
             return f"Metric: {event.metric_name} = {event.metric_value}"
-        
+
         else:
             return f"{event.category.value}: {event.event_type}"
-    
+
     def _build_execution_summary(
         self,
         events: List[AgentEvent],
@@ -565,19 +564,19 @@ class ExecutionReplay:
             # Handle both enum and string categories
             cat = event.category.value if hasattr(event.category, 'value') else str(event.category)
             category_counts[cat] = category_counts.get(cat, 0) + 1
-        
+
         # Count iterations
         iterations = set()
         for event in events:
             if event.iteration is not None:
                 iterations.add(event.iteration)
-        
+
         # Collect durations
         durations: List[float] = []
         for event in events:
             if event.duration_ms is not None:
                 durations.append(event.duration_ms)
-        
+
         # Collect activities
         activity_results: Dict[str, Dict[str, int]] = {}
         for event in events:
@@ -589,18 +588,18 @@ class ExecutionReplay:
                     activity_results[name]["success"] += 1
                 else:
                     activity_results[name]["failure"] += 1
-        
+
         return {
             "event_counts": category_counts,
             "total_iterations": len(iterations),
             "duration_sum_ms": sum(durations) if durations else 0,
             "activity_results": activity_results,
         }
-    
+
     # =========================================================================
     # FILTERING METHODS
     # =========================================================================
-    
+
     def get_events(
         self,
         *,
@@ -642,44 +641,44 @@ class ExecutionReplay:
             events = self._by_session.get(session_id, [])
         else:
             events = self._events
-        
+
         # Apply filters
         result: List[AgentEvent] = []
-        
+
         for event in events:
             if limit and len(result) >= limit:
                 break
-            
+
             if category is not None and event.category != category:
                 continue
-            
+
             if event_type is not None and event.event_type != event_type:
                 continue
-            
+
             if severity is not None and event.severity != severity:
                 continue
-            
+
             if phase is not None and event.phase != phase:
                 continue
-            
+
             if iteration is not None and event.iteration != iteration:
                 continue
-            
+
             if since is not None and event.timestamp < since:
                 continue
-            
+
             if until is not None and event.timestamp > until:
                 continue
-            
+
             if has_duration is not None:
                 has_dur = event.duration_ms is not None
                 if has_dur != has_duration:
                     continue
-            
+
             result.append(event)
-        
+
         return result
-    
+
     def get_errors(
         self,
         *,
@@ -702,7 +701,7 @@ class ExecutionReplay:
             category=EventCategory.ERROR,
         )
         return [e for e in events if isinstance(e, ErrorEvent)]
-    
+
     def get_activities(
         self,
         *,
@@ -727,29 +726,29 @@ class ExecutionReplay:
             execution_id=execution_id,
             category=EventCategory.ACTIVITY,
         )
-        
+
         result: List[ActivityEvent] = []
         for event in events:
             if not isinstance(event, ActivityEvent):
                 continue
-            
+
             if activity_name and event.activity_name != activity_name:
                 continue
-            
+
             if success_only and not event.success:
                 continue
-            
+
             if failed_only and event.success:
                 continue
-            
+
             result.append(event)
-        
+
         return result
-    
+
     # =========================================================================
     # ITERATION METHODS
     # =========================================================================
-    
+
     def iter_events(
         self,
         *,
@@ -768,24 +767,24 @@ class ExecutionReplay:
             events = self._by_execution.get(execution_id, [])
         else:
             events = self._events
-        
+
         for event in sorted(events, key=lambda e: e.timestamp):
             yield event
-    
+
     # =========================================================================
     # PROPERTIES
     # =========================================================================
-    
+
     @property
     def event_count(self) -> int:
         """Get total event count."""
         return len(self._events)
-    
+
     @property
     def execution_count(self) -> int:
         """Get number of executions."""
         return len(self._execution_info)
-    
+
     @property
     def session_count(self) -> int:
         """Get number of sessions."""
@@ -799,7 +798,7 @@ class ExecutionReplay:
 
 class ReplayStepModel(BaseModel):
     """Pydantic model for replay step."""
-    
+
     timestamp: datetime
     event_id: str
     category: str
@@ -812,7 +811,7 @@ class ReplayStepModel(BaseModel):
 
 class ReplayResultModel(BaseModel):
     """Pydantic model for replay result."""
-    
+
     execution_id: str
     session_id: str
     start_time: datetime
@@ -829,7 +828,7 @@ class ReplayResultModel(BaseModel):
 
 class ExecutionInfoModel(BaseModel):
     """Pydantic model for execution info."""
-    
+
     execution_id: str
     session_id: str
     start_time: datetime

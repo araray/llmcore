@@ -16,7 +16,6 @@ configuration. However, these models can be used for:
 Note: The models here should be kept in sync with semantiscan/config/models.py
 """
 
-from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator

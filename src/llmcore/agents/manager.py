@@ -25,19 +25,19 @@ DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
 import logging
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import LLMCoreError
 from ..memory.manager import MemoryManager
-from ..models import AgentState, AgentTask
+from ..models import AgentTask
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import cognitive_cycle
 
 # Observability integration imports (Phase 8)
-from .observability_factory import ObservabilityComponents, create_observability_from_config
+from .observability_factory import ObservabilityComponents
 
 # Sandbox integration imports
 from .sandbox import SandboxError
@@ -624,7 +624,7 @@ class AgentManager:
                     except Exception as log_e:
                         logger.debug(f"Failed to log lifecycle failure: {log_e}")
 
-                raise LLMCoreError(f"Agent execution failed: {str(e)}")
+                raise LLMCoreError(f"Agent execution failed: {e!s}")
 
     # =========================================================================
     # UTILITY METHODS
@@ -982,6 +982,6 @@ class EnhancedAgentManager(AgentManager):
 
 __all__ = [
     "AgentManager",  # Original (preserved)
-    "EnhancedAgentManager",  # New Darwin Layer 2
     "AgentMode",  # New enum
+    "EnhancedAgentManager",  # New Darwin Layer 2
 ]

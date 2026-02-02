@@ -15,12 +15,10 @@ Following patterns from:
 """
 
 import asyncio
-import json
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
 
 import pytest
 
@@ -29,7 +27,6 @@ from llmcore.agents.hitl import (
     ApprovalStatus,
     HITLRequest,
     HITLResponse,
-    HITLStateStore,
     InMemoryHITLStore,
     PersistentScope,
     RiskAssessment,

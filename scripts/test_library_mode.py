@@ -14,14 +14,14 @@ async def test_library_instantiation():
     """Test that LLMCore can be created in library mode without database/Redis."""
     print("🧪 Testing LLMCore library mode instantiation...")
     print("")
-    
+
     try:
         from llmcore import LLMCore
         print("✅ Successfully imported LLMCore")
     except ImportError as e:
         print(f"❌ Failed to import LLMCore: {e}")
         return False
-    
+
     # Create a minimal config override for testing
     # Use JSON session storage to avoid database dependencies
     config_overrides = {
@@ -29,7 +29,7 @@ async def test_library_instantiation():
         "storage.session.type": "json",
         "storage.session.path": str(Path(tempfile.gettempdir()) / "test_sessions"),
     }
-    
+
     try:
         print("🔧 Creating LLMCore instance with JSON storage (no DB required)...")
         llm = await LLMCore.create(config_overrides=config_overrides)
@@ -39,7 +39,7 @@ async def test_library_instantiation():
         import traceback
         traceback.print_exc()
         return False
-    
+
     # Test basic methods
     try:
         print("🔍 Testing get_available_providers()...")
@@ -48,7 +48,7 @@ async def test_library_instantiation():
     except Exception as e:
         print(f"❌ Failed to get available providers: {e}")
         return False
-    
+
     # Test that we can access the configuration
     try:
         print("🔍 Testing configuration access...")
@@ -57,7 +57,7 @@ async def test_library_instantiation():
     except Exception as e:
         print(f"❌ Failed to access configuration: {e}")
         return False
-    
+
     # Test session listing (should work with JSON storage)
     try:
         print("🔍 Testing list_sessions()...")
@@ -66,14 +66,14 @@ async def test_library_instantiation():
     except Exception as e:
         print(f"❌ Failed to list sessions: {e}")
         return False
-    
+
     # Cleanup
     try:
         await llm.close()
         print("✅ LLMCore instance closed successfully")
     except Exception as e:
         print(f"⚠️  Warning during cleanup: {e}")
-    
+
     print("")
     print("🎉 All library mode tests passed!")
     return True
@@ -84,7 +84,7 @@ async def test_agent_availability():
     print("")
     print("🧪 Testing AgentManager availability (optional feature)...")
     print("")
-    
+
     try:
         from llmcore import AgentManager, ToolManager
         print("✅ AgentManager can be imported")
@@ -102,13 +102,13 @@ async def main():
     print("LLMCore Library Mode Functional Test")
     print("═══════════════════════════════════════════════════")
     print("")
-    
+
     test1 = await test_library_instantiation()
     test2 = await test_agent_availability()
-    
+
     print("")
     print("═══════════════════════════════════════════════════")
-    
+
     if test1 and test2:
         print("✅ All tests passed - llmcore is ready for library use!")
         sys.exit(0)

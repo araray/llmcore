@@ -7,30 +7,25 @@ and conversion functionality.
 """
 
 import os
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import sys
 # Assumes llmcore is installed or in PYTHONPATH
-
 from llmcore.agents.sandbox.config import (
-    SandboxSystemConfig,
+    DEFAULT_CONFIG,
     DockerConfig,
+    SandboxSystemConfig,
+    ToolsConfig,
     VMConfig,
     VolumeConfig,
-    ToolsConfig,
-    OutputTrackingConfig,
-    load_sandbox_config,
+    _deep_merge,
     create_registry_config,
     generate_sample_config,
+    load_sandbox_config,
     write_sample_config,
-    DEFAULT_CONFIG,
-    _deep_merge
 )
 from llmcore.agents.sandbox.registry import SandboxMode
-
 
 # =============================================================================
 # DEFAULT CONFIG TESTS

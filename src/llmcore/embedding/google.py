@@ -7,10 +7,8 @@ Uses the google-genai Python SDK (v0.8.0+) to generate embeddings via their API.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # --- Use the new google-genai library ---
 try:

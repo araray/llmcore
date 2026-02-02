@@ -13,10 +13,8 @@ Tests for llmcore's configuration management APIs:
 - get_default_config_path()
 """
 
-import json
 import os
 import tempfile
-from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -208,7 +206,7 @@ class TestSetRuntimeConfig:
 
         # Also verify the method signature exists on the class
         assert hasattr(LLMCore, "set_runtime_config")
-        assert callable(getattr(LLMCore, "set_runtime_config"))
+        assert callable(LLMCore.set_runtime_config)
 
     def test_set_marks_config_dirty(self) -> None:
         """Test that setting a value marks config as dirty."""

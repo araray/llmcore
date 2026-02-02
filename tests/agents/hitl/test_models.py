@@ -10,9 +10,7 @@ Tests:
 - Serialization/deserialization
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 from llmcore.agents.hitl import (
     ActivityInfo,
@@ -31,7 +29,6 @@ from llmcore.agents.hitl import (
     TimeoutPolicy,
     ToolScope,
 )
-
 
 # =============================================================================
 # ENUM TESTS

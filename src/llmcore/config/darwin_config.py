@@ -27,10 +27,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # =============================================================================
 # FAILURE LEARNING CONFIGURATION
@@ -377,11 +376,11 @@ def load_darwin_config_from_env() -> DarwinConfig:
 # =============================================================================
 
 __all__ = [
+    "ArbiterConfig",
+    "ArbiterScoringConfig",
     "DarwinConfig",
     "FailureLearningConfig",
     "FailureLearningPostgresConfig",
     "TDDConfig",
-    "ArbiterConfig",
-    "ArbiterScoringConfig",
     "load_darwin_config_from_env",
 ]

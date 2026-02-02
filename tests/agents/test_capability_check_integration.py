@@ -139,8 +139,8 @@ class TestCapabilityCheckIntegration:
         mock_tool_manager,
     ):
         """Test that capability check can be disabled."""
-        from llmcore.config.agents_config import AgentsConfig
         from llmcore.agents.single_agent import SingleAgentMode
+        from llmcore.config.agents_config import AgentsConfig
 
         # Create config with capability check disabled
         config = AgentsConfig()
@@ -159,7 +159,7 @@ class TestCapabilityCheckIntegration:
         # (will fail later in the process, but that's not what we're testing)
         with patch.object(agent.cognitive_cycle, 'run_until_complete', new_callable=AsyncMock) as mock_run:
             mock_run.return_value = "Task complete"
-            
+
             result = await agent.run(
                 goal="Search for files",
                 model_name="gemma3:4b",
@@ -178,8 +178,8 @@ class TestCapabilityCheckIntegration:
         mock_tool_manager,
     ):
         """Test that non-strict mode only warns but continues."""
-        from llmcore.config.agents_config import AgentsConfig
         from llmcore.agents.single_agent import SingleAgentMode
+        from llmcore.config.agents_config import AgentsConfig
 
         # Create config with non-strict mode
         config = AgentsConfig()
@@ -198,7 +198,7 @@ class TestCapabilityCheckIntegration:
         # Run with non-tool model - should warn but continue
         with patch.object(agent.cognitive_cycle, 'run_until_complete', new_callable=AsyncMock) as mock_run:
             mock_run.return_value = "Task complete via activity fallback"
-            
+
             result = await agent.run(
                 goal="Search for files",
                 model_name="gemma3:4b",
@@ -254,8 +254,8 @@ class TestCapabilityChecker:
     def test_suggest_alternatives(self):
         """Test that alternatives are suggested for incompatible models."""
         from llmcore.agents.routing.capability_checker import (
-            CapabilityChecker,
             Capability,
+            CapabilityChecker,
         )
 
         checker = CapabilityChecker()

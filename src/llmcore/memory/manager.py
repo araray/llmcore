@@ -18,10 +18,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from ..embedding.manager import EmbeddingManager
-from ..exceptions import (ConfigError, ContextError, ContextLengthError)
-from ..models import (ChatSession, ContextDocument, ContextItem,
-                      ContextItemType, Message, ContextPreparationDetails,
-                      Role as LLMCoreRole)
+from ..exceptions import ConfigError, ContextError
+from ..models import (
+    ChatSession,
+    ContextDocument,
+    ContextItem,
+    ContextItemType,
+    ContextPreparationDetails,
+    Message,
+)
+from ..models import Role as LLMCoreRole
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import context_builder, rag_utils

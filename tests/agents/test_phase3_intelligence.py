@@ -10,9 +10,8 @@ Tests the reasoning frameworks and learning components:
 - Fast Path Executor
 """
 
+
 import pytest
-from datetime import datetime
-from typing import Any, Dict, List
 
 # =============================================================================
 # REACT REASONER TESTS
@@ -101,7 +100,7 @@ class TestReflexionReasoner:
 
     def test_has_react_reasoner(self):
         """Test that ReflexionReasoner contains ReActReasoner."""
-        from llmcore.agents.reasoning import ReflexionReasoner, ReActReasoner
+        from llmcore.agents.reasoning import ReActReasoner, ReflexionReasoner
 
         reasoner = ReflexionReasoner()
 
@@ -153,7 +152,7 @@ class TestReflectionBridge:
     def test_add_insight(self):
         """Test adding insights directly."""
         from llmcore.agents.learning import ReflectionBridge
-        from llmcore.agents.learning.reflection_bridge import ReflectionInsight, InsightType
+        from llmcore.agents.learning.reflection_bridge import InsightType, ReflectionInsight
 
         bridge = ReflectionBridge()
 
@@ -364,8 +363,8 @@ class TestPhase3Integration:
 
     def test_all_components_importable(self):
         """Test all Phase 3 components can be imported."""
+        from llmcore.agents.learning import FailureMemory, FastPathExecutor, ReflectionBridge
         from llmcore.agents.reasoning import ReActReasoner, ReflexionReasoner
-        from llmcore.agents.learning import ReflectionBridge, FailureMemory, FastPathExecutor
 
         assert ReActReasoner is not None
         assert ReflexionReasoner is not None
@@ -375,8 +374,8 @@ class TestPhase3Integration:
 
     def test_components_initialize(self):
         """Test all components initialize without error."""
+        from llmcore.agents.learning import FailureMemory, FastPathExecutor, ReflectionBridge
         from llmcore.agents.reasoning import ReActReasoner, ReflexionReasoner
-        from llmcore.agents.learning import ReflectionBridge, FailureMemory, FastPathExecutor
 
         react = ReActReasoner()
         reflexion = ReflexionReasoner()
@@ -419,7 +418,7 @@ class TestPhase3Integration:
 
     def test_reflexion_has_react(self):
         """Test ReflexionReasoner contains ReActReasoner."""
-        from llmcore.agents.reasoning import ReflexionReasoner, ReActReasoner
+        from llmcore.agents.reasoning import ReActReasoner, ReflexionReasoner
 
         reflexion = ReflexionReasoner()
 

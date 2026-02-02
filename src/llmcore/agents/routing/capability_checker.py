@@ -38,7 +38,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -663,21 +663,21 @@ if __name__ == "__main__":
     print("Test 1: Tool-capable model (gpt-4o)")
     result = checker.check_compatibility("gpt-4o", requires_tools=True)
     if result.compatible:
-        print(f"  ✅ gpt-4o is compatible with tools")
+        print("  ✅ gpt-4o is compatible with tools")
         passed += 1
     else:
-        print(f"  ❌ gpt-4o should be compatible")
+        print("  ❌ gpt-4o should be compatible")
         failed += 1
 
     # Test 2: Non-tool model
     print("\nTest 2: Non-tool model (gemma3:4b)")
     result = checker.check_compatibility("gemma3:4b", requires_tools=True)
     if not result.compatible:
-        print(f"  ✅ gemma3:4b correctly flagged as incompatible for tools")
+        print("  ✅ gemma3:4b correctly flagged as incompatible for tools")
         print(f"     Issues: {[str(i) for i in result.issues]}")
         passed += 1
     else:
-        print(f"  ❌ gemma3:4b should be flagged as incompatible")
+        print("  ❌ gemma3:4b should be flagged as incompatible")
         failed += 1
 
     # Test 3: Vision check
@@ -686,20 +686,20 @@ if __name__ == "__main__":
     result_llama = checker.check_compatibility("llama3:8b", requires_vision=True)
 
     if result_gpt.compatible and not result_llama.compatible:
-        print(f"  ✅ Vision check: gpt-4o=yes, llama3=no")
+        print("  ✅ Vision check: gpt-4o=yes, llama3=no")
         passed += 1
     else:
-        print(f"  ❌ Vision check failed")
+        print("  ❌ Vision check failed")
         failed += 1
 
     # Test 4: Context window check
     print("\nTest 4: Context window check")
     result = checker.check_compatibility("llama3:8b", min_context_window=100000)
     if not result.compatible:
-        print(f"  ✅ Correctly flagged insufficient context window")
+        print("  ✅ Correctly flagged insufficient context window")
         passed += 1
     else:
-        print(f"  ❌ Should flag context window issue")
+        print("  ❌ Should flag context window issue")
         failed += 1
 
     # Test 5: Model suggestions
@@ -715,16 +715,16 @@ if __name__ == "__main__":
         print(f"  ✅ Found {len(suggestions)} alternatives: {[s.name for s in suggestions]}")
         passed += 1
     else:
-        print(f"  ❌ Failed to find suitable alternatives")
+        print("  ❌ Failed to find suitable alternatives")
         failed += 1
 
     # Test 6: Convenience function
     print("\nTest 6: Convenience function")
     if model_supports_tools("gpt-4o") and not model_supports_tools("gemma3:4b"):
-        print(f"  ✅ model_supports_tools() works correctly")
+        print("  ✅ model_supports_tools() works correctly")
         passed += 1
     else:
-        print(f"  ❌ Convenience function failed")
+        print("  ❌ Convenience function failed")
         failed += 1
 
     # Summary

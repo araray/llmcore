@@ -11,11 +11,9 @@ These tests verify the ChromaDB collection management functionality
 added in Phase 4 of the UNIFIED_IMPLEMENTATION_PLAN.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from typing import Any, Dict, List, Optional
-import time
 
+import pytest
 
 # =============================================================================
 # MOCK CHROMADB CLIENT

@@ -22,10 +22,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, List, Optional
 
-from .executor import ActivityExecutor, HITLApprover
+from .executor import ActivityExecutor
 from .parser import ActivityRequestParser, ParseResult
 from .registry import ActivityRegistry, ExecutionContext, get_default_registry
 from .schema import (
@@ -387,7 +387,7 @@ async def process_llm_output(
 # =============================================================================
 
 __all__ = [
-    "ActivityLoopConfig",
     "ActivityLoop",
+    "ActivityLoopConfig",
     "process_llm_output",
 ]

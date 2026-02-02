@@ -16,41 +16,35 @@ Performance Targets (Section 1.4):
 - Cost tracking: <0.5ms per record
 """
 
-import asyncio
-import gc
+import hashlib
 import os
+import random
 import statistics
-import tempfile
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
-import hashlib
-import random
-import uuid
+from typing import Any, Callable, Dict, List
 
 import pytest
-
-# Storage imports
-from llmcore.storage import (
-    SqliteSessionStorage,
-    ChromaVectorStorage,
-    PostgresSessionStorage,
-    PgVectorStorage,
-    StorageManager,
-)
-
-# Observability imports
-from llmcore.observability import (
-    Counter, Histogram, Timer,
-    CostTracker, CostAnalyzer,
-)
-from llmcore.observability.metrics import LLMMetricsCollector
-from llmcore.observability.events import create_observability_logger
 
 # Embedding imports
 from llmcore.embedding.cache import EmbeddingCache
 
+# Observability imports
+from llmcore.observability import (
+    CostTracker,
+)
+from llmcore.observability.events import create_observability_logger
+from llmcore.observability.metrics import LLMMetricsCollector
+
+# Storage imports
+from llmcore.storage import (
+    ChromaVectorStorage,
+    PgVectorStorage,
+    PostgresSessionStorage,
+    SqliteSessionStorage,
+)
 
 # ============================================================================
 # Benchmark Utilities
@@ -464,7 +458,6 @@ class TestMemoryBenchmarks:
 
     def test_embedding_cache_memory(self, tmp_path: Path) -> None:
         """Embedding cache should have bounded memory usage."""
-        import sys
 
         cache = EmbeddingCache(
             disk_path=str(tmp_path / "embeddings.db"),

@@ -3,14 +3,14 @@
 Pytest configuration and fixtures for HITL tests.
 """
 
-import pytest
 import asyncio
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from llmcore.agents.hitl import (
     ActivityInfo,
-    ApprovalScope,
     ApprovalStatus,
     AutoApproveCallback,
     HITLConfig,
@@ -20,10 +20,8 @@ from llmcore.agents.hitl import (
     HITLResponse,
     InMemoryHITLStore,
     RiskAssessment,
-    RiskLevel,
     TimeoutPolicy,
 )
-
 
 # =============================================================================
 # EVENT LOOP CONFIGURATION

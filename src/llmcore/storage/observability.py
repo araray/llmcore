@@ -40,10 +40,9 @@ STORAGE SYSTEM V2 (Phase 4 - PANOPTICON):
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-
 
 # =============================================================================
 # OBSERVABILITY CONFIGURATION
@@ -434,7 +433,7 @@ tracing_sample_rate = 1.0        # 1.0 = 100%
 # =============================================================================
 
 __all__ = [
-    "ObservabilityConfig",
     "DEFAULT_OBSERVABILITY_CONFIG",
     "OBSERVABILITY_TOML_EXAMPLE",
+    "ObservabilityConfig",
 ]

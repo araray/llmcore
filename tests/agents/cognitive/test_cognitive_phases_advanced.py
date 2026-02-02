@@ -14,29 +14,21 @@ References:
     - Dossier: Steps 2.6-2.7 (Advanced Phases & Orchestrator)
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from llmcore.agents.cognitive import (
     ActInput,
-    ActOutput,
-    # Orchestrator
     CognitiveCycle,
     ConfidenceLevel,
     # Enhanced State
     EnhancedAgentState,
     ObserveInput,
-    ObserveOutput,
     ReflectInput,
     ReflectOutput,
     UpdateInput,
-    UpdateOutput,
-    # Phase I/O Models
     ValidateInput,
-    ValidateOutput,
-    # Enums
     ValidationResult,
     act_phase,
     observe_phase,

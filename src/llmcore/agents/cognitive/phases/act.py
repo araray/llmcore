@@ -27,7 +27,6 @@ from ..models import ActInput, ActOutput, EnhancedAgentState, ValidationResult
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
-    from ....models import ToolCall, ToolResult
     from ...sandbox import SandboxProvider
     from ...tools import ToolManager
 
@@ -169,7 +168,7 @@ async def act_phase(
                         # Create error result
                         tool_result = ToolResult(
                             tool_call_id=act_input.tool_call.id,
-                            content=f"Execution failed: {str(e)}",
+                            content=f"Execution failed: {e!s}",
                             is_error=True,
                         )
 
@@ -219,7 +218,7 @@ async def act_phase(
             return ActOutput(
                 tool_result=ToolResult(
                     tool_call_id=act_input.tool_call.id,
-                    content=f"ACT phase error: {str(e)}",
+                    content=f"ACT phase error: {e!s}",
                     is_error=True,
                 ),
                 execution_time_ms=0.0,
@@ -409,7 +408,7 @@ async def _act_phase_with_activities(
         return ActOutput(
             tool_result=ToolResult(
                 tool_call_id="activity_fallback",
-                content=f"Activity execution failed: {str(e)}",
+                content=f"Activity execution failed: {e!s}",
                 is_error=True,
             ),
             execution_time_ms=execution_time_ms,

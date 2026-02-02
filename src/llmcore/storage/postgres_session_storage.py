@@ -20,12 +20,21 @@ import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..exceptions import ConfigError, SessionStorageError, StorageError
-from ..models import (ChatSession, ContextItem, ContextItemType, Message, Role,
-                      ContextPreset, ContextPresetItem, Episode, EpisodeType)
+from ..exceptions import ConfigError, SessionStorageError
+from ..models import (
+    ChatSession,
+    ContextItem,
+    ContextItemType,
+    ContextPreset,
+    ContextPresetItem,
+    Episode,
+    EpisodeType,
+    Message,
+    Role,
+)
 from .base_session import BaseSessionStorage
 
 if TYPE_CHECKING:

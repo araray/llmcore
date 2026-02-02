@@ -15,14 +15,22 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..memory.manager import MemoryManager
-from ..models import (AgentState, AgentTask, Episode, EpisodeType, Message,
-                      Role, ToolCall, ToolResult)
+from ..models import (
+    AgentState,
+    AgentTask,
+    Episode,
+    EpisodeType,
+    Message,
+    Role,
+    ToolCall,
+    ToolResult,
+)
 from ..providers.manager import ProviderManager
 from ..storage.manager import StorageManager
 from . import prompt_utils
@@ -49,7 +57,7 @@ async def plan_step(
         provider_name: Optional provider override.
         model_name: Optional model override.
     """
-    from ..tracing import create_span, add_span_attributes, record_span_exception
+    from ..tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "agent.plan_step") as span:
         try:
@@ -143,7 +151,7 @@ async def reflect_step(
         provider_name: Optional provider override.
         model_name: Optional model override.
     """
-    from ..tracing import create_span, add_span_attributes, record_span_exception
+    from ..tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "agent.reflect_step") as span:
         try:
@@ -251,7 +259,7 @@ async def think_step(
     Returns:
         Tuple of (thought, tool_call) or (None, None) if parsing fails.
     """
-    from ..tracing import create_span, add_span_attributes, record_span_exception
+    from ..tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "agent.think_step") as span:
         try:
@@ -330,7 +338,7 @@ async def act_step(
     Returns:
         ToolResult containing the execution result.
     """
-    from ..tracing import create_span, add_span_attributes, record_span_exception
+    from ..tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "agent.act_step") as span:
         logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
@@ -387,7 +395,7 @@ async def act_step(
             logger.error(f"Error in act step: {e}", exc_info=True)
             if span:
                 record_span_exception(span, e)
-            return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {str(e)}")
+            return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {e!s}")
 
 async def observe_step(
     agent_state: AgentState,
@@ -410,7 +418,7 @@ async def observe_step(
         storage_manager: The manager for episodic memory logging.
         tracer: The OpenTelemetry tracer instance.
     """
-    from ..tracing import create_span, add_span_attributes, record_span_exception
+    from ..tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "agent.observe_step") as span:
         try:

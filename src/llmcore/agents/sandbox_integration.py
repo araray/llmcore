@@ -36,27 +36,26 @@ SECURITY INVARIANT:
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any, AsyncGenerator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, Optional
 
 from .sandbox import (
-    SandboxRegistry,
-    SandboxRegistryConfig,
-    SandboxConfig,
-    SandboxMode,
-    SandboxProvider,
-    OutputTracker,
-    set_active_sandbox,
-    clear_active_sandbox,
     SANDBOX_TOOL_IMPLEMENTATIONS,
     SANDBOX_TOOL_SCHEMAS,
-    load_sandbox_config,
+    OutputTracker,
+    SandboxConfig,
+    SandboxError,
+    SandboxProvider,
+    SandboxRegistry,
+    SandboxRegistryConfig,
+    clear_active_sandbox,
     create_registry_config,
-    SandboxError
+    load_sandbox_config,
+    set_active_sandbox,
 )
 
 if TYPE_CHECKING:
-    from .tools import ToolManager
     from ..models import AgentTask
+    from .tools import ToolManager
 
 logger = logging.getLogger(__name__)
 

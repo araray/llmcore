@@ -30,7 +30,6 @@ from .schema import (
     ModelCardSummary,
     ModelStatus,
     ModelType,
-    Provider,
 )
 
 logger = logging.getLogger(__name__)

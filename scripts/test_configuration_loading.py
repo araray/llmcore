@@ -1,5 +1,7 @@
-from llmcore.api import LLMCore
 import asyncio
+
+from llmcore.api import LLMCore
+
 
 async def test_config():
     core = await LLMCore.create()

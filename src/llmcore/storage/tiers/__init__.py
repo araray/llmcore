@@ -17,14 +17,14 @@ References:
 
 from .volatile import (
     VolatileItem,
-    VolatileMemoryTier,
     VolatileMemoryConfig,
+    VolatileMemoryTier,
     create_volatile_tier,
 )
 
 __all__ = [
     "VolatileItem",
-    "VolatileMemoryTier",
     "VolatileMemoryConfig",
+    "VolatileMemoryTier",
     "create_volatile_tier",
 ]

@@ -5,18 +5,22 @@ This conftest provides mocked managers, sessions, and test data
 for all memory module tests.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock, MagicMock
 
-from llmcore.models import (
-    ChatSession, Message, Role, ContextItem, ContextItemType,
-    ContextDocument, ContextPreparationDetails
-)
+import pytest
+
 from llmcore.embedding.manager import EmbeddingManager
+from llmcore.models import (
+    ChatSession,
+    ContextDocument,
+    ContextItem,
+    ContextItemType,
+    Message,
+    Role,
+)
 from llmcore.providers.manager import ProviderManager
 from llmcore.storage.manager import StorageManager
-
 
 # ============================================================================
 # CONFIG FIXTURES
@@ -84,7 +88,7 @@ def mock_embedding_manager() -> MagicMock:
 def mock_provider():
     """Provides a mocked BaseProvider with token counting capabilities."""
     provider = MagicMock()
-    
+
     # Mock count_message_tokens to return realistic token counts
     async def mock_count_tokens(messages: List[Message], model: str) -> int:
         """Mock token counting: ~4 chars per token average."""
@@ -94,7 +98,7 @@ def mock_provider():
                 # Approximate: 1 token per 4 characters + metadata tokens
                 total_tokens += max(1, len(msg.content) // 4) + 10
         return total_tokens
-    
+
     provider.count_message_tokens = AsyncMock(side_effect=mock_count_tokens)
     provider.get_context_length.return_value = 4096
     provider.model_name = "gpt-4"

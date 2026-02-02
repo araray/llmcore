@@ -15,19 +15,16 @@ Tests cover both tenant mode (SQLAlchemy session) and legacy mode (psycopg pool)
 """
 
 import json
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any, Dict, List
+
+import pytest
+
+from llmcore.exceptions import SessionStorageError
 
 # Standard imports - package must be installed or PYTHONPATH=src set
-from llmcore.models import (
-    ContextPreset, ContextPresetItem, ContextItemType,
-    Episode, EpisodeType
-)
-from llmcore.exceptions import SessionStorageError
+from llmcore.models import ContextItemType, ContextPreset, ContextPresetItem, Episode, EpisodeType
 from llmcore.storage.postgres_session_storage import PostgresSessionStorage
-
 
 # =============================================================================
 # FIXTURES

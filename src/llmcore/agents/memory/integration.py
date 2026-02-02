@@ -15,12 +15,11 @@ References:
 """
 
 import logging
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from ...memory.manager import MemoryManager
-    from ...models import Episode, EpisodeType
+    from ...models import Episode
     from ...storage.manager import StorageManager
     from ..cognitive import CycleIteration, EnhancedAgentState
 
@@ -93,7 +92,6 @@ class CognitiveMemoryIntegrator:
             session_id: Session identifier
             extract_learnings: Whether to extract learnings
         """
-        from ...models import Episode, EpisodeType
 
         try:
             # Create episode from iteration

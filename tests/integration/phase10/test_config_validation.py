@@ -8,14 +8,13 @@ Uses confy.loader.Config for config loading as per llmcore's actual implementati
 """
 
 import os
-import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 
 # Import confy for config operations
-from confy.loader import Config, set_by_dot, get_by_dot
+from confy.loader import Config, get_by_dot, set_by_dot
 
 
 class TestConfigurationLoading:

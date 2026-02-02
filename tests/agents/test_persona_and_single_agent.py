@@ -11,12 +11,10 @@ References:
     - Dossier: Steps 2.8-2.9 (Persona System & Single Agent Mode)
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from llmcore.agents.cognitive import EnhancedAgentState
 from llmcore.agents.persona import (
     AgentPersona,
     CommunicationPreferences,
@@ -310,7 +308,7 @@ class TestSingleAgentMode:
         memory_manager = Mock()
         storage_manager = Mock()
         tool_manager = Mock()
-        
+
         # Configure provider_manager mock to return valid string for model name
         # This is needed for capability checker which does string operations
         provider_manager.get_default_model.return_value = "gpt-4o"

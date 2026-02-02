@@ -17,8 +17,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..exceptions import ConfigError, VectorStorageError
 from ..models import ContextDocument
@@ -295,7 +295,7 @@ class PgVectorStorage(BaseVectorStorage):
             if filter_conditions:
                 sql_query += " AND " + " AND ".join(filter_conditions)
 
-        sql_query += f" ORDER BY distance ASC LIMIT :k"
+        sql_query += " ORDER BY distance ASC LIMIT :k"
         params["k"] = k
 
         search_res = await self._tenant_session.execute(text(sql_query), params)
@@ -343,12 +343,12 @@ class PgVectorStorage(BaseVectorStorage):
             if filter_metadata:
                 filter_conditions = []
                 for key, value in filter_metadata.items():
-                    filter_conditions.append(f"metadata->>%s = %s")
+                    filter_conditions.append("metadata->>%s = %s")
                     params.extend([key, str(value)])
                 if filter_conditions:
                     sql_query += " AND " + " AND ".join(filter_conditions)
 
-            sql_query += f" ORDER BY distance ASC LIMIT %s"
+            sql_query += " ORDER BY distance ASC LIMIT %s"
             params.append(k)
 
             async with conn.cursor() as cur:

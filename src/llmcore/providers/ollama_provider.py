@@ -10,7 +10,6 @@ Accepts context as List[Message].
 import asyncio
 import json
 import logging
-from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 # Use the official ollama library
@@ -36,7 +35,6 @@ except ImportError:
 
 from ..exceptions import ConfigError, ProviderError
 from ..models import Message, ModelDetails, Tool
-from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)

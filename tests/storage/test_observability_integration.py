@@ -13,32 +13,30 @@ STORAGE SYSTEM V2 (Phase 4 - PANOPTICON)
 
 import asyncio
 import logging
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any, Dict, Optional
+from unittest.mock import MagicMock
 
-# Phase 4 imports
-from llmcore.storage.observability import (
-    ObservabilityConfig,
-    DEFAULT_OBSERVABILITY_CONFIG,
-)
-from llmcore.storage.instrumentation import (
-    StorageInstrumentation,
-    InstrumentationConfig,
-    InstrumentationContext,
-)
-from llmcore.storage.metrics import (
-    MetricsCollector,
-    MetricsConfig,
-    MetricsBackendType,
-)
+import pytest
+
 from llmcore.storage.events import (
     EventLogger,
     EventLoggerConfig,
     EventType,
     StorageEvent,
 )
+from llmcore.storage.instrumentation import (
+    InstrumentationConfig,
+    StorageInstrumentation,
+)
+from llmcore.storage.metrics import (
+    MetricsBackendType,
+    MetricsCollector,
+    MetricsConfig,
+)
 
+# Phase 4 imports
+from llmcore.storage.observability import (
+    ObservabilityConfig,
+)
 
 # =============================================================================
 # TEST FIXTURES

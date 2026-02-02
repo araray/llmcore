@@ -2,8 +2,7 @@
 """Tests for the cost analytics system."""
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

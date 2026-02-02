@@ -8,7 +8,7 @@ the think_phase and act_phase when native tools fail.
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -50,8 +50,8 @@ class TestActivityFallback:
         self, agents_config, mock_provider, agent_state
     ):
         """Test that activity fallback activates on tool support error."""
-        from llmcore.agents.cognitive.phases.think import think_phase
         from llmcore.agents.cognitive.models import ThinkInput
+        from llmcore.agents.cognitive.phases.think import think_phase
 
         # Mock provider to fail with tool error, then succeed without tools
         call_count = 0
@@ -59,7 +59,7 @@ class TestActivityFallback:
         async def mock_chat(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if 'tools' in kwargs and kwargs['tools']:
+            if kwargs.get('tools'):
                 raise Exception("Model gemma3:4b does not support tools")
             # Activity-based response
             return {
@@ -133,9 +133,9 @@ class TestActivityFallback:
         self, mock_provider, agent_state
     ):
         """Test that activity fallback doesn't activate when disabled."""
-        from llmcore.config.agents_config import AgentsConfig
-        from llmcore.agents.cognitive.phases.think import think_phase
         from llmcore.agents.cognitive.models import ThinkInput
+        from llmcore.agents.cognitive.phases.think import think_phase
+        from llmcore.config.agents_config import AgentsConfig
 
         # Disable activities
         config = AgentsConfig()
@@ -176,8 +176,8 @@ class TestActivityFallback:
         This test verifies the act_phase handles tool execution correctly
         when activity fallback state is present.
         """
-        from llmcore.agents.cognitive.phases.act import act_phase
         from llmcore.agents.cognitive.models import ActInput, ValidationResult
+        from llmcore.agents.cognitive.phases.act import act_phase
         from llmcore.models import ToolCall, ToolResult
 
         # Set up activity fallback state (as would be set by think_phase)

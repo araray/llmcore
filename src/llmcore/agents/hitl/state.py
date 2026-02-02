@@ -24,7 +24,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .models import (
     ApprovalStatus,
@@ -543,7 +543,7 @@ class FileHITLStore(HITLStateStore):
 # =============================================================================
 
 __all__ = [
+    "FileHITLStore",
     "HITLStateStore",
     "InMemoryHITLStore",
-    "FileHITLStore",
 ]

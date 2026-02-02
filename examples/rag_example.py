@@ -23,10 +23,14 @@ import logging
 import uuid
 
 # Import the main class and relevant exceptions/models
-from llmcore import \
-    ContextDocument  # Import ContextDocument if needed for direct search result inspection
-from llmcore import (ConfigError, EmbeddingError, LLMCore, LLMCoreError,
-                     ProviderError, VectorStorageError)
+from llmcore import (
+    ConfigError,
+    EmbeddingError,
+    LLMCore,
+    LLMCoreError,
+    ProviderError,
+    VectorStorageError,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -107,7 +111,7 @@ async def main():
 
             # --- Step 4: Chat with RAG enabled ---
             chat_query = "Tell me about LLMCore's configuration system based on the provided documents."
-            logger.info(f"\n--- Sending chat message with RAG enabled ---")
+            logger.info("\n--- Sending chat message with RAG enabled ---")
             logger.info(f"User: {chat_query}")
             print("\nLLM Response (RAG): ", end="", flush=True) # Use print for streaming output
 
@@ -135,7 +139,7 @@ async def main():
 
             # --- Step 5: Ask another question using RAG ---
             chat_query_2 = "What is RAG?"
-            logger.info(f"\n--- Sending second chat message with RAG enabled ---")
+            logger.info("\n--- Sending second chat message with RAG enabled ---")
             logger.info(f"User: {chat_query_2}")
             print("\nLLM Response 2 (RAG): ", end="", flush=True) # Use print for streaming output
 

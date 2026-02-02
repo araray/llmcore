@@ -17,7 +17,7 @@ References:
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .registry import PromptRegistry
@@ -27,8 +27,6 @@ from .models import (
     PromptSnippet,
     PromptTemplate,
     PromptVariable,
-    PromptVersion,
-    VersionStatus,
 )
 
 logger = logging.getLogger(__name__)

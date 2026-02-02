@@ -51,7 +51,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +267,7 @@ class InMemoryMetricsBackend(MetricsBackend):
                 self._histograms[full_name][key] = HistogramValue(
                     name=full_name,
                     labels=merged_labels,
-                    buckets={b: 0 for b in self.config.histogram_buckets},
+                    buckets=dict.fromkeys(self.config.histogram_buckets, 0),
                 )
 
             hist = self._histograms[full_name][key]
@@ -774,12 +774,12 @@ class MetricsCollector:
 # =============================================================================
 
 __all__ = [
-    "MetricsConfig",
-    "MetricsBackendType",
-    "MetricsBackend",
-    "MetricsCollector",
-    "InMemoryMetricsBackend",
-    "PrometheusMetricsBackend",
-    "NullMetricsBackend",
     "DEFAULT_METRICS_CONFIG",
+    "InMemoryMetricsBackend",
+    "MetricsBackend",
+    "MetricsBackendType",
+    "MetricsCollector",
+    "MetricsConfig",
+    "NullMetricsBackend",
+    "PrometheusMetricsBackend",
 ]

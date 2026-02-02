@@ -99,8 +99,8 @@ def check_imports() -> List[Tuple[str, bool, str]]:
         from llmcore.agents.hitl import (
             ApprovalScopeManager,
             PersistentScope,
-            SessionScope,
             ScopeConditionMatcher,
+            SessionScope,
             ToolScope,
         )
         results.append(("Scope manager imports", True, "All components"))
@@ -252,9 +252,7 @@ def check_state_persistence() -> List[Tuple[str, bool, str]]:
     try:
         from llmcore.agents.hitl import (
             ActivityInfo,
-            ApprovalStatus,
             HITLRequest,
-            HITLResponse,
             InMemoryHITLStore,
             RiskAssessment,
         )
@@ -408,10 +406,10 @@ def check_integration() -> List[Tuple[str, bool, str]]:
 
     # Check executor integration point exists
     try:
-        from llmcore.agents.activities.executor import ActivityExecutor
-
         # Check executor can accept hitl_manager
         import inspect
+
+        from llmcore.agents.activities.executor import ActivityExecutor
         sig = inspect.signature(ActivityExecutor.__init__)
 
         # Looking for hitl or approval related param
@@ -433,7 +431,6 @@ def check_integration() -> List[Tuple[str, bool, str]]:
             HITLManagerAdapter,
             create_hitl_approver,
         )
-        from llmcore.agents.hitl import HITLManager, HITLConfig
 
         # Create adapter using factory
         approver = create_hitl_approver(use_advanced=True)

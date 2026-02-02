@@ -13,14 +13,12 @@ These tests verify:
 - Protocol compliance
 """
 
-import asyncio
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # =============================================================================
 # TEST FIXTURES

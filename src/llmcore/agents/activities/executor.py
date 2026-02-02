@@ -39,7 +39,6 @@ import os
 import subprocess
 import tempfile
 import time
-import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
@@ -50,13 +49,12 @@ from .schema import (
     ActivityRequest,
     ActivityResult,
     ActivityStatus,
-    ExecutionTarget,
     RiskLevel,
 )
 
 if TYPE_CHECKING:
+    from ..memory.memory_store import MemoryManager
     from ..sandbox import SandboxProvider
-    from ..memory.memory_store import MemoryManager, MemoryType, MemoryImportance
 
 logger = logging.getLogger(__name__)
 
@@ -491,7 +489,7 @@ def create_hitl_approver(
     """
     if use_advanced:
         try:
-            from ..hitl import HITLManager, HITLConfig
+            from ..hitl import HITLConfig, HITLManager
 
             config = hitl_config or HITLConfig(
                 enabled=True,
@@ -926,7 +924,7 @@ class ActivityExecutor:
 
             try:
                 # Import memory types for proper storage
-                from ..memory.memory_store import MemoryType, MemoryImportance
+                from ..memory.memory_store import MemoryImportance, MemoryType
 
                 # Store as semantic memory
                 item_id = await self.memory_manager.remember(
@@ -1062,9 +1060,9 @@ class ActivityExecutor:
 # =============================================================================
 
 __all__ = [
-    "ValidationResult",
-    "ActivityValidator",
-    "HITLDecision",
-    "HITLApprover",
     "ActivityExecutor",
+    "ActivityValidator",
+    "HITLApprover",
+    "HITLDecision",
+    "ValidationResult",
 ]

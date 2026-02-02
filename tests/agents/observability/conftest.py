@@ -12,26 +12,23 @@ Provides shared fixtures for testing the observability module including:
 from __future__ import annotations
 
 import asyncio
-import json
-import tempfile
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, Mock
-
-import pytest
-
+import importlib.util
 
 # =============================================================================
 # IMPORT OBSERVABILITY MODULE
 # =============================================================================
-
 # Import directly from observability submodules to avoid full llmcore import chain
 # This isolates the tests from unrelated dependency issues
 import sys
+import tempfile
 import types
-import importlib.util
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from pathlib import Path as _Path
+from typing import Any, Dict
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 # Pre-register observability modules to bypass llmcore/__init__.py chain
 _src_path = _Path(__file__).parent.parent.parent.parent / "src"
@@ -101,75 +98,48 @@ for _name in _replay.__all__:
 
 # Now use standard imports (they'll find the pre-registered modules)
 from llmcore.agents.observability.events import (
+    ActivityEvent,
+    ActivityEventType,
+    # Events
+    AgentEvent,
+    CognitiveEvent,
+    CognitiveEventType,
+    ErrorEvent,
+    ErrorEventType,
     # Enums
     EventCategory,
     EventSeverity,
-    LifecycleEventType,
-    CognitiveEventType,
-    ActivityEventType,
-    HITLEventType,
-    ErrorEventType,
-    MetricEventType,
-    MemoryEventType,
-    SandboxEventType,
-    RAGEventType,
-    # Events
-    AgentEvent,
-    LifecycleEvent,
-    CognitiveEvent,
-    ActivityEvent,
-    MemoryEvent,
     HITLEvent,
-    ErrorEvent,
+    HITLEventType,
+    LifecycleEvent,
+    LifecycleEventType,
+    MemoryEvent,
+    MemoryEventType,
     MetricEvent,
-    SandboxEvent,
+    MetricEventType,
     RAGEvent,
-    # Factory functions
-    create_lifecycle_event,
-    create_cognitive_event,
-    create_activity_event,
-    create_error_event,
-    create_metric_event,
-    create_hitl_event,
-    create_sandbox_event,
+    RAGEventType,
+    SandboxEvent,
+    SandboxEventType,
 )
-
 from llmcore.agents.observability.logger import (
+    CallbackSink,
+    EventLogger,
     # Logger
     EventSink,
-    JSONLFileSink,
-    InMemorySink,
-    CallbackSink,
     FilteredSink,
-    EventLogger,
-    create_event_logger,
+    InMemorySink,
+    JSONLFileSink,
 )
-
 from llmcore.agents.observability.metrics import (
     # Enums
-    MetricType,
-    ExecutionStatus,
-    # Metrics
-    IterationMetrics,
-    LLMCallMetrics,
-    ActivityMetrics,
-    HITLMetrics,
     ExecutionMetrics,
     MetricsCollector,
-    MetricsSummary,
-    ExecutionSummary,
 )
-
 from llmcore.agents.observability.replay import (
     # Replay
-    ReplayStep,
-    ExecutionInfo,
-    ReplayResult,
     ExecutionReplay,
-    parse_event,
-    EVENT_CLASS_MAP,
 )
-
 
 # =============================================================================
 # EVENT LOOP CONFIGURATION

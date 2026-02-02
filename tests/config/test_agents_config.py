@@ -10,7 +10,6 @@ Tests cover:
 5. Validation constraints
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -34,7 +33,6 @@ from llmcore.config.agents_config import (
     TimeoutPolicy,
     load_agents_config,
 )
-
 
 # =============================================================================
 # TEST: Default Values

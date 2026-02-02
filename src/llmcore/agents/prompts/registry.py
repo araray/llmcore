@@ -40,7 +40,7 @@ References:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 import toml
 
@@ -619,7 +619,7 @@ class PromptRegistry:
 __all__ = [
     "PromptRegistry",
     "RegistryError",
-    "TemplateNotFoundError",
     "SnippetNotFoundError",
     "TemplateExistsError",
+    "TemplateNotFoundError",
 ]

@@ -6,15 +6,15 @@ This script generates secure API keys and their corresponding database records
 for use with the llmcore authentication system.
 """
 
+import asyncio
 import secrets
 import string
-import bcrypt
-import asyncio
-from uuid import uuid4
 from datetime import datetime, timezone
 from typing import Optional
+from uuid import uuid4
 
 import asyncpg
+import bcrypt
 
 
 def generate_secure_key(prefix: str, secret_length: int = 32) -> tuple[str, str]:

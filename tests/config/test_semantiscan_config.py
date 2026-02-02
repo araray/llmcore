@@ -10,10 +10,10 @@ These tests verify that:
 5. Validation rules work as expected
 """
 
-import pytest
 import importlib.resources
-from typing import Dict, Any
-from pathlib import Path
+from typing import Any, Dict
+
+import pytest
 
 try:
     import tomllib
@@ -27,8 +27,8 @@ except ImportError:
 
 from llmcore.config.models import (
     SemantiscanConfig,
+    semantiscan_config_to_dict,
     validate_semantiscan_config,
-    semantiscan_config_to_dict
 )
 
 

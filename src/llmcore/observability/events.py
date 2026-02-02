@@ -61,12 +61,10 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-import os
 import shutil
 import threading
 import uuid
 from collections import deque
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -76,11 +74,9 @@ from typing import (
     Callable,
     Deque,
     Dict,
-    Generator,
     List,
     Optional,
     Set,
-    TypeVar,
     Union,
 )
 

@@ -14,44 +14,44 @@ Covers:
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
+
 import pytest
-from datetime import datetime, timezone, timedelta
 from pydantic import ValidationError
 
 from llmcore.agents.observability import (
+    ActivityEvent,
+    ActivityEventType,
+    # Events
+    AgentEvent,
+    CognitiveEvent,
+    CognitiveEventType,
+    ErrorEvent,
+    ErrorEventType,
     # Enums
     EventCategory,
     EventSeverity,
-    LifecycleEventType,
-    CognitiveEventType,
-    ActivityEventType,
-    HITLEventType,
-    ErrorEventType,
-    MetricEventType,
-    MemoryEventType,
-    SandboxEventType,
-    RAGEventType,
-    # Events
-    AgentEvent,
-    LifecycleEvent,
-    CognitiveEvent,
-    ActivityEvent,
-    MemoryEvent,
     HITLEvent,
-    ErrorEvent,
+    HITLEventType,
+    LifecycleEvent,
+    LifecycleEventType,
+    MemoryEvent,
+    MemoryEventType,
     MetricEvent,
-    SandboxEvent,
+    MetricEventType,
     RAGEvent,
+    RAGEventType,
+    SandboxEvent,
+    SandboxEventType,
+    create_activity_event,
+    create_cognitive_event,
+    create_error_event,
+    create_hitl_event,
     # Factory functions
     create_lifecycle_event,
-    create_cognitive_event,
-    create_activity_event,
-    create_error_event,
     create_metric_event,
-    create_hitl_event,
     create_sandbox_event,
 )
-
 
 # =============================================================================
 # ENUM TESTS
@@ -60,7 +60,7 @@ from llmcore.agents.observability import (
 
 class TestEventCategory:
     """Tests for EventCategory enum."""
-    
+
     def test_all_categories_exist(self):
         """Verify all expected categories are defined."""
         expected = {
@@ -69,13 +69,13 @@ class TestEventCategory:
         }
         actual = {cat.name for cat in EventCategory}
         assert actual == expected
-    
+
     def test_category_values_are_lowercase(self):
         """All category values should be lowercase strings."""
         for cat in EventCategory:
             assert cat.value == cat.value.lower()
             assert cat.value == cat.name.lower()
-    
+
     def test_category_is_string_enum(self):
         """EventCategory should be usable as a string."""
         assert EventCategory.LIFECYCLE == "lifecycle"
@@ -84,18 +84,18 @@ class TestEventCategory:
 
 class TestEventSeverity:
     """Tests for EventSeverity enum."""
-    
+
     def test_all_severities_exist(self):
         """Verify all expected severities are defined."""
         expected = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         actual = {sev.name for sev in EventSeverity}
         assert actual == expected
-    
+
     def test_severity_values_are_lowercase(self):
         """All severity values should be lowercase."""
         for sev in EventSeverity:
             assert sev.value == sev.value.lower()
-    
+
     def test_severity_is_string_enum(self):
         """EventSeverity should be usable as a string."""
         assert EventSeverity.INFO == "info"
@@ -104,7 +104,7 @@ class TestEventSeverity:
 
 class TestLifecycleEventType:
     """Tests for LifecycleEventType enum."""
-    
+
     def test_all_lifecycle_types_exist(self):
         """Verify all lifecycle event types."""
         expected = {
@@ -118,7 +118,7 @@ class TestLifecycleEventType:
 
 class TestCognitiveEventType:
     """Tests for CognitiveEventType enum."""
-    
+
     def test_all_cognitive_types_exist(self):
         """Verify all cognitive event types."""
         expected = {
@@ -131,7 +131,7 @@ class TestCognitiveEventType:
 
 class TestActivityEventType:
     """Tests for ActivityEventType enum."""
-    
+
     def test_all_activity_types_exist(self):
         """Verify all activity event types."""
         expected = {
@@ -144,7 +144,7 @@ class TestActivityEventType:
 
 class TestHITLEventType:
     """Tests for HITLEventType enum."""
-    
+
     def test_all_hitl_types_exist(self):
         """Verify all HITL event types."""
         expected = {
@@ -158,7 +158,7 @@ class TestHITLEventType:
 
 class TestErrorEventType:
     """Tests for ErrorEventType enum."""
-    
+
     def test_all_error_types_exist(self):
         """Verify all error event types."""
         expected = {
@@ -172,7 +172,7 @@ class TestErrorEventType:
 
 class TestMetricEventType:
     """Tests for MetricEventType enum."""
-    
+
     def test_all_metric_types_exist(self):
         """Verify all metric event types."""
         expected = {
@@ -185,7 +185,7 @@ class TestMetricEventType:
 
 class TestMemoryEventType:
     """Tests for MemoryEventType enum."""
-    
+
     def test_all_memory_types_exist(self):
         """Verify all memory event types."""
         expected = {
@@ -198,7 +198,7 @@ class TestMemoryEventType:
 
 class TestSandboxEventType:
     """Tests for SandboxEventType enum."""
-    
+
     def test_all_sandbox_types_exist(self):
         """Verify all sandbox event types."""
         expected = {
@@ -211,7 +211,7 @@ class TestSandboxEventType:
 
 class TestRAGEventType:
     """Tests for RAGEventType enum."""
-    
+
     def test_all_rag_types_exist(self):
         """Verify all RAG event types."""
         expected = {
@@ -229,7 +229,7 @@ class TestRAGEventType:
 
 class TestAgentEvent:
     """Tests for base AgentEvent model."""
-    
+
     def test_create_minimal_event(self, session_id, execution_id):
         """Create event with only required fields."""
         event = AgentEvent(
@@ -238,7 +238,7 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test_event",
         )
-        
+
         assert event.session_id == session_id
         assert event.execution_id == execution_id
         assert event.category == EventCategory.LIFECYCLE
@@ -248,7 +248,7 @@ class TestAgentEvent:
         assert event.timestamp is not None
         assert event.data == {}
         assert event.tags == []
-    
+
     def test_event_id_auto_generated(self, session_id):
         """Event IDs should be auto-generated and unique."""
         event1 = AgentEvent(
@@ -261,11 +261,11 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         assert event1.event_id.startswith("evt-")
         assert event2.event_id.startswith("evt-")
         assert event1.event_id != event2.event_id
-    
+
     def test_timestamp_auto_generated(self, session_id):
         """Timestamps should be auto-generated in UTC."""
         event = AgentEvent(
@@ -273,12 +273,12 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         assert event.timestamp.tzinfo == timezone.utc
         # Should be within last few seconds
         delta = datetime.now(timezone.utc) - event.timestamp
         assert delta.total_seconds() < 5
-    
+
     def test_custom_timestamp(self, session_id, fixed_timestamp):
         """Allow custom timestamp to be set."""
         event = AgentEvent(
@@ -287,9 +287,9 @@ class TestAgentEvent:
             event_type="test",
             timestamp=fixed_timestamp,
         )
-        
+
         assert event.timestamp == fixed_timestamp
-    
+
     def test_optional_fields_none_by_default(self, session_id):
         """Optional fields should default to None."""
         event = AgentEvent(
@@ -297,14 +297,14 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         assert event.execution_id is None
         assert event.phase is None
         assert event.iteration is None
         assert event.duration_ms is None
         assert event.parent_event_id is None
         assert event.correlation_id is None
-    
+
     def test_full_event_creation(self, session_id, execution_id, correlation_id):
         """Create event with all fields populated."""
         event = AgentEvent(
@@ -321,7 +321,7 @@ class TestAgentEvent:
             correlation_id=correlation_id,
             tags=["tag1", "tag2"],
         )
-        
+
         assert event.severity == EventSeverity.WARNING
         assert event.phase == "act"
         assert event.iteration == 3
@@ -330,25 +330,25 @@ class TestAgentEvent:
         assert event.parent_event_id == "parent-123"
         assert event.correlation_id == correlation_id
         assert event.tags == ["tag1", "tag2"]
-    
+
     def test_with_duration(self, session_id):
         """Test with_duration method calculates duration correctly."""
         start_time = datetime.now(timezone.utc) - timedelta(milliseconds=500)
-        
+
         event = AgentEvent(
             session_id=session_id,
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         result = event.with_duration(start_time)
-        
+
         # Should return self for chaining
         assert result is event
         # Duration should be approximately 500ms (allow some tolerance)
         assert event.duration_ms is not None
         assert 400 < event.duration_ms < 700
-    
+
     def test_with_parent(self, session_id):
         """Test with_parent method sets parent_event_id."""
         event = AgentEvent(
@@ -356,12 +356,12 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         result = event.with_parent("parent-abc")
-        
+
         assert result is event
         assert event.parent_event_id == "parent-abc"
-    
+
     def test_with_correlation(self, session_id, correlation_id):
         """Test with_correlation method sets correlation_id."""
         event = AgentEvent(
@@ -369,12 +369,12 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         result = event.with_correlation(correlation_id)
-        
+
         assert result is event
         assert event.correlation_id == correlation_id
-    
+
     def test_add_tag(self, session_id):
         """Test add_tag method adds tags."""
         event = AgentEvent(
@@ -382,65 +382,65 @@ class TestAgentEvent:
             category=EventCategory.LIFECYCLE,
             event_type="test",
         )
-        
+
         result = event.add_tag("tag1")
         assert result is event
         assert "tag1" in event.tags
-        
+
         # Adding same tag again should not duplicate
         event.add_tag("tag1")
         assert event.tags.count("tag1") == 1
-        
+
         # Adding different tag should work
         event.add_tag("tag2")
         assert "tag2" in event.tags
-    
+
     def test_method_chaining(self, session_id, correlation_id):
         """Test that helper methods can be chained."""
         start_time = datetime.now(timezone.utc) - timedelta(milliseconds=100)
-        
+
         event = AgentEvent(
             session_id=session_id,
             category=EventCategory.LIFECYCLE,
             event_type="test",
         ).with_parent("parent-1").with_correlation(correlation_id).with_duration(start_time).add_tag("chained")
-        
+
         assert event.parent_event_id == "parent-1"
         assert event.correlation_id == correlation_id
         assert event.duration_ms is not None
         assert "chained" in event.tags
-    
+
     def test_to_dict(self, sample_agent_event):
         """Test to_dict serialization."""
         result = sample_agent_event.to_dict()
-        
+
         assert isinstance(result, dict)
         assert result["session_id"] == sample_agent_event.session_id
         assert result["category"] == "lifecycle"
         assert result["event_type"] == "test_event"
         assert "timestamp" in result
         assert "event_id" in result
-    
+
     def test_to_json(self, sample_agent_event):
         """Test to_json serialization."""
         result = sample_agent_event.to_json()
-        
+
         assert isinstance(result, str)
         parsed = json.loads(result)
         assert parsed["session_id"] == sample_agent_event.session_id
         assert parsed["category"] == "lifecycle"
-    
+
     def test_json_round_trip(self, sample_agent_event):
         """Test that JSON serialization round-trips correctly."""
         json_str = sample_agent_event.to_json()
         data = json.loads(json_str)
-        
+
         # Should be able to recreate the event
         recreated = AgentEvent(**data)
         assert recreated.session_id == sample_agent_event.session_id
         assert recreated.category == sample_agent_event.category
         assert recreated.event_type == sample_agent_event.event_type
-    
+
     def test_iteration_validation(self, session_id):
         """Test iteration must be non-negative."""
         # Valid iteration
@@ -451,7 +451,7 @@ class TestAgentEvent:
             iteration=0,
         )
         assert event.iteration == 0
-        
+
         # Invalid iteration
         with pytest.raises(ValidationError):
             AgentEvent(
@@ -460,7 +460,7 @@ class TestAgentEvent:
                 event_type="test",
                 iteration=-1,
             )
-    
+
     def test_duration_validation(self, session_id):
         """Test duration_ms must be non-negative."""
         # Valid duration
@@ -471,7 +471,7 @@ class TestAgentEvent:
             duration_ms=0.0,
         )
         assert event.duration_ms == 0.0
-        
+
         # Invalid duration
         with pytest.raises(ValidationError):
             AgentEvent(
@@ -480,7 +480,7 @@ class TestAgentEvent:
                 event_type="test",
                 duration_ms=-1.0,
             )
-    
+
     def test_extra_fields_allowed(self, session_id):
         """Test that extra fields are allowed (pydantic extra='allow')."""
         event = AgentEvent(
@@ -489,7 +489,7 @@ class TestAgentEvent:
             event_type="test",
             custom_field="custom_value",
         )
-        
+
         assert event.custom_field == "custom_value"
 
 
@@ -500,7 +500,7 @@ class TestAgentEvent:
 
 class TestLifecycleEvent:
     """Tests for LifecycleEvent model."""
-    
+
     def test_create_lifecycle_event(self, session_id, execution_id):
         """Create basic lifecycle event."""
         event = LifecycleEvent(
@@ -509,23 +509,23 @@ class TestLifecycleEvent:
             event_type=LifecycleEventType.AGENT_STARTED,
             goal="Test goal",
         )
-        
+
         assert event.category == EventCategory.LIFECYCLE
         assert event.event_type == LifecycleEventType.AGENT_STARTED
         assert event.goal == "Test goal"
-    
+
     def test_category_is_frozen(self, session_id):
         """Category should be immutable for LifecycleEvent."""
         event = LifecycleEvent(
             session_id=session_id,
             event_type=LifecycleEventType.AGENT_STARTED,
         )
-        
+
         assert event.category == EventCategory.LIFECYCLE
         # Cannot change category via assignment after creation (frozen field)
         with pytest.raises((ValidationError, TypeError, AttributeError)):
             event.category = EventCategory.COGNITIVE
-    
+
     def test_completion_event_fields(self, session_id, execution_id):
         """Test completion event with all status fields."""
         event = LifecycleEvent(
@@ -537,12 +537,12 @@ class TestLifecycleEvent:
             total_tokens=15000,
             exit_reason="Goal achieved",
         )
-        
+
         assert event.final_status == "success"
         assert event.total_iterations == 5
         assert event.total_tokens == 15000
         assert event.exit_reason == "Goal achieved"
-    
+
     def test_goal_classification_fields(self, session_id):
         """Test goal classification event fields."""
         event = LifecycleEvent(
@@ -552,14 +552,14 @@ class TestLifecycleEvent:
             goal_complexity="complex",
             recommended_strategy="full_cycle",
         )
-        
+
         assert event.goal_complexity == "complex"
         assert event.recommended_strategy == "full_cycle"
-    
+
     def test_lifecycle_serialization(self, sample_lifecycle_event):
         """Test lifecycle event serialization."""
         data = sample_lifecycle_event.to_dict()
-        
+
         assert data["category"] == "lifecycle"
         assert data["event_type"] == "agent_started"
         assert "goal" in data
@@ -572,7 +572,7 @@ class TestLifecycleEvent:
 
 class TestCognitiveEvent:
     """Tests for CognitiveEvent model."""
-    
+
     def test_create_cognitive_event(self, session_id, execution_id):
         """Create basic cognitive event."""
         event = CognitiveEvent(
@@ -582,11 +582,11 @@ class TestCognitiveEvent:
             phase="think",
             iteration=1,
         )
-        
+
         assert event.category == EventCategory.COGNITIVE
         assert event.event_type == CognitiveEventType.PHASE_COMPLETED
         assert event.phase == "think"
-    
+
     def test_cognitive_phase_fields(self, session_id, execution_id):
         """Test cognitive phase with all fields."""
         event = CognitiveEvent(
@@ -604,21 +604,21 @@ class TestCognitiveEvent:
             phase_order=2,
             decisions=["use_pandas", "read_csv"],
         )
-        
+
         assert event.input_summary == "User asked about data processing"
         assert event.output_summary == "Decided to use pandas library"
         assert event.tokens_used == 500
         assert event.reasoning == "Analysis of user requirements"
         assert event.confidence == 0.85
         assert event.decisions == ["use_pandas", "read_csv"]
-    
+
     def test_category_is_frozen(self, session_id):
         """Category should be immutable for CognitiveEvent."""
         event = CognitiveEvent(
             session_id=session_id,
             event_type=CognitiveEventType.PHASE_STARTED,
         )
-        
+
         assert event.category == EventCategory.COGNITIVE
 
 
@@ -629,7 +629,7 @@ class TestCognitiveEvent:
 
 class TestActivityEvent:
     """Tests for ActivityEvent model."""
-    
+
     def test_create_activity_event(self, session_id, execution_id):
         """Create basic activity event."""
         event = ActivityEvent(
@@ -639,10 +639,10 @@ class TestActivityEvent:
             activity_type="execute_python",
             activity_name="execute_python",
         )
-        
+
         assert event.category == EventCategory.ACTIVITY
         assert event.activity_type == "execute_python"
-    
+
     def test_activity_full_fields(self, session_id, execution_id):
         """Test activity event with all fields."""
         event = ActivityEvent(
@@ -659,13 +659,13 @@ class TestActivityEvent:
             retry_count=0,
             sandbox_id="sandbox-123",
         )
-        
+
         assert event.parameters == {"code": "import pandas", "timeout": 30}
         assert event.result == "Success: module imported"
         assert event.success is True
         assert event.retry_count == 0
         assert event.sandbox_id == "sandbox-123"
-    
+
     def test_failed_activity(self, session_id, execution_id):
         """Test activity event for failed execution."""
         event = ActivityEvent(
@@ -678,7 +678,7 @@ class TestActivityEvent:
             error_message="Permission denied",
             retry_count=3,
         )
-        
+
         assert event.success is False
         assert event.error_message == "Permission denied"
 
@@ -690,7 +690,7 @@ class TestActivityEvent:
 
 class TestMemoryEvent:
     """Tests for MemoryEvent model."""
-    
+
     def test_create_memory_event(self, session_id, execution_id):
         """Create basic memory event."""
         event = MemoryEvent(
@@ -700,10 +700,10 @@ class TestMemoryEvent:
             memory_type="short_term",
             operation="write",
         )
-        
+
         assert event.category == EventCategory.MEMORY
         assert event.memory_type == "short_term"
-    
+
     def test_memory_full_fields(self, session_id, execution_id):
         """Test memory event with all fields."""
         event = MemoryEvent(
@@ -718,7 +718,7 @@ class TestMemoryEvent:
             hit=True,
             ttl_seconds=3600,
         )
-        
+
         assert event.key == "user_preferences"
         assert event.value_summary == "User prefers Python"
         assert event.size_bytes == 256
@@ -733,7 +733,7 @@ class TestMemoryEvent:
 
 class TestHITLEvent:
     """Tests for HITLEvent model."""
-    
+
     def test_create_hitl_event(self, session_id, execution_id):
         """Create basic HITL event."""
         event = HITLEvent(
@@ -745,12 +745,12 @@ class TestHITLEvent:
             risk_level="high",
             approval_status="pending",
         )
-        
+
         assert event.category == EventCategory.HITL
         assert event.request_id == "req-12345"
         assert event.risk_level == "high"
         assert event.approval_status == "pending"
-    
+
     def test_hitl_full_fields(self, session_id, execution_id):
         """Test HITL event with all fields."""
         event = HITLEvent(
@@ -767,7 +767,7 @@ class TestHITLEvent:
             scope_granted="full_shell_access",
             timeout_seconds=300,
         )
-        
+
         assert event.risk_level == "high"
         assert event.risk_factors == ["shell_access", "file_write"]
         assert event.approval_status == "approved"
@@ -781,7 +781,7 @@ class TestHITLEvent:
 
 class TestErrorEvent:
     """Tests for ErrorEvent model."""
-    
+
     def test_create_error_event(self, session_id, execution_id):
         """Create basic error event."""
         event = ErrorEvent(
@@ -792,11 +792,11 @@ class TestErrorEvent:
             error_type="ValueError",
             error_message="Invalid input",
         )
-        
+
         assert event.category == EventCategory.ERROR
         assert event.severity == EventSeverity.ERROR
         assert event.error_type == "ValueError"
-    
+
     def test_error_full_fields(self, session_id, execution_id):
         """Test error event with all fields."""
         event = ErrorEvent(
@@ -812,7 +812,7 @@ class TestErrorEvent:
             recovery_action="restart",
             context={"module": "sandbox", "operation": "execute"},
         )
-        
+
         assert event.error_code == "E500"
         assert event.stack_trace == "Traceback..."
         assert event.recoverable is False
@@ -826,7 +826,7 @@ class TestErrorEvent:
 
 class TestMetricEvent:
     """Tests for MetricEvent model."""
-    
+
     def test_create_metric_event(self, session_id, execution_id):
         """Create basic metric event."""
         event = MetricEvent(
@@ -836,11 +836,11 @@ class TestMetricEvent:
             metric_name="input_tokens",
             metric_value=1500.0,
         )
-        
+
         assert event.category == EventCategory.METRIC
         assert event.metric_name == "input_tokens"
         assert event.metric_value == 1500.0
-    
+
     def test_metric_full_fields(self, session_id, execution_id):
         """Test metric event with all fields."""
         event = MetricEvent(
@@ -853,7 +853,7 @@ class TestMetricEvent:
             metric_context="gpt-4 completion",
             dimensions={"model": "gpt-4", "operation": "completion"},
         )
-        
+
         assert event.metric_unit == "ms"
         assert event.metric_context == "gpt-4 completion"
         assert event.dimensions == {"model": "gpt-4", "operation": "completion"}
@@ -866,7 +866,7 @@ class TestMetricEvent:
 
 class TestSandboxEvent:
     """Tests for SandboxEvent model."""
-    
+
     def test_create_sandbox_event(self, session_id, execution_id):
         """Create basic sandbox event."""
         event = SandboxEvent(
@@ -877,12 +877,12 @@ class TestSandboxEvent:
             sandbox_type="docker",
             operation="create",
         )
-        
+
         assert event.category == EventCategory.SANDBOX
         assert event.sandbox_id == "sandbox-abc123"
         assert event.sandbox_type == "docker"
         assert event.operation == "create"
-    
+
     def test_sandbox_full_fields(self, session_id, execution_id):
         """Test sandbox event with all fields."""
         event = SandboxEvent(
@@ -900,7 +900,7 @@ class TestSandboxEvent:
             memory_used_mb=256.5,
             cpu_time_ms=150.0,
         )
-        
+
         assert event.image == "python:3.11"
         assert event.operation == "execute"
         assert event.exit_code == 0
@@ -914,7 +914,7 @@ class TestSandboxEvent:
 
 class TestRAGEvent:
     """Tests for RAGEvent model."""
-    
+
     def test_create_rag_event(self, session_id, execution_id):
         """Create basic RAG event."""
         event = RAGEvent(
@@ -924,11 +924,11 @@ class TestRAGEvent:
             query="What is machine learning?",
             source="vector_store",
         )
-        
+
         assert event.category == EventCategory.RAG
         assert event.query == "What is machine learning?"
         assert event.source == "vector_store"
-    
+
     def test_rag_full_fields(self, session_id, execution_id):
         """Test RAG event with all fields."""
         event = RAGEvent(
@@ -946,7 +946,7 @@ class TestRAGEvent:
             threshold_score=0.7,
             documents_used=["doc-1", "doc-2", "doc-3", "doc-4", "doc-5"],
         )
-        
+
         assert event.source == "vector_store"
         assert event.num_results == 5
         assert event.top_score == 0.95
@@ -960,7 +960,7 @@ class TestRAGEvent:
 
 class TestCreateLifecycleEvent:
     """Tests for create_lifecycle_event factory function."""
-    
+
     def test_create_agent_started(self, session_id, execution_id):
         """Test creating agent_started event."""
         event = create_lifecycle_event(
@@ -969,11 +969,11 @@ class TestCreateLifecycleEvent:
             event_type=LifecycleEventType.AGENT_STARTED,
             goal="Analyze data",
         )
-        
+
         assert isinstance(event, LifecycleEvent)
         assert event.event_type == LifecycleEventType.AGENT_STARTED
         assert event.goal == "Analyze data"
-    
+
     def test_create_agent_completed(self, session_id, execution_id):
         """Test creating agent_completed event."""
         event = create_lifecycle_event(
@@ -983,7 +983,7 @@ class TestCreateLifecycleEvent:
             final_status="success",
             total_iterations=3,
         )
-        
+
         assert event.event_type == LifecycleEventType.AGENT_COMPLETED
         assert event.final_status == "success"
         assert event.total_iterations == 3
@@ -991,7 +991,7 @@ class TestCreateLifecycleEvent:
 
 class TestCreateCognitiveEvent:
     """Tests for create_cognitive_event factory function."""
-    
+
     def test_create_phase_completed(self, session_id, execution_id):
         """Test creating phase_completed event."""
         event = create_cognitive_event(
@@ -1003,7 +1003,7 @@ class TestCreateCognitiveEvent:
             input_summary="User query",
             output_summary="Decision made",
         )
-        
+
         assert isinstance(event, CognitiveEvent)
         assert event.phase == "think"
         assert event.input_summary == "User query"
@@ -1011,7 +1011,7 @@ class TestCreateCognitiveEvent:
 
 class TestCreateActivityEvent:
     """Tests for create_activity_event factory function."""
-    
+
     def test_create_activity_completed(self, session_id, execution_id):
         """Test creating activity_completed event."""
         event = create_activity_event(
@@ -1023,7 +1023,7 @@ class TestCreateActivityEvent:
             success=True,
             result="Output",
         )
-        
+
         assert isinstance(event, ActivityEvent)
         assert event.activity_type == "execute_python"
         assert event.success is True
@@ -1031,7 +1031,7 @@ class TestCreateActivityEvent:
 
 class TestCreateErrorEvent:
     """Tests for create_error_event factory function."""
-    
+
     def test_create_exception_event(self, session_id, execution_id):
         """Test creating exception event."""
         event = create_error_event(
@@ -1042,7 +1042,7 @@ class TestCreateErrorEvent:
             error_message="Bad input",
             recoverable=True,
         )
-        
+
         assert isinstance(event, ErrorEvent)
         assert event.error_type == "ValueError"
         assert event.recoverable is True
@@ -1050,7 +1050,7 @@ class TestCreateErrorEvent:
 
 class TestCreateMetricEvent:
     """Tests for create_metric_event factory function."""
-    
+
     def test_create_token_usage_event(self, session_id, execution_id):
         """Test creating token_usage event."""
         event = create_metric_event(
@@ -1061,7 +1061,7 @@ class TestCreateMetricEvent:
             metric_value=5000.0,
             metric_unit="tokens",
         )
-        
+
         assert isinstance(event, MetricEvent)
         assert event.metric_name == "total_tokens"
         assert event.metric_value == 5000.0
@@ -1069,7 +1069,7 @@ class TestCreateMetricEvent:
 
 class TestCreateHITLEvent:
     """Tests for create_hitl_event factory function."""
-    
+
     def test_create_approval_requested(self, session_id, execution_id):
         """Test creating approval_requested event."""
         event = create_hitl_event(
@@ -1081,7 +1081,7 @@ class TestCreateHITLEvent:
             approval_status="pending",
             execution_id=execution_id,
         )
-        
+
         assert isinstance(event, HITLEvent)
         assert event.request_id == "req-123"
         assert event.risk_level == "high"
@@ -1090,7 +1090,7 @@ class TestCreateHITLEvent:
 
 class TestCreateSandboxEvent:
     """Tests for create_sandbox_event factory function."""
-    
+
     def test_create_sandbox_created(self, session_id, execution_id):
         """Test creating sandbox_created event."""
         event = create_sandbox_event(
@@ -1102,7 +1102,7 @@ class TestCreateSandboxEvent:
             sandbox_id="sandbox-123",
             image="python:3.11",
         )
-        
+
         assert isinstance(event, SandboxEvent)
         assert event.sandbox_id == "sandbox-123"
         assert event.image == "python:3.11"
@@ -1116,7 +1116,7 @@ class TestCreateSandboxEvent:
 
 class TestSerializationEdgeCases:
     """Tests for serialization edge cases."""
-    
+
     def test_empty_data_dict(self, session_id):
         """Empty data dict should serialize correctly."""
         event = AgentEvent(
@@ -1125,10 +1125,10 @@ class TestSerializationEdgeCases:
             event_type="test",
             data={},
         )
-        
+
         result = event.to_dict()
         assert result["data"] == {}
-    
+
     def test_nested_data(self, session_id):
         """Nested data should serialize correctly."""
         event = AgentEvent(
@@ -1144,11 +1144,11 @@ class TestSerializationEdgeCases:
                 "list": [1, 2, {"nested": True}],
             },
         )
-        
+
         result = event.to_dict()
         assert result["data"]["level1"]["level2"]["level3"] == "value"
         assert result["data"]["list"][2]["nested"] is True
-    
+
     def test_special_characters_in_strings(self, session_id):
         """Special characters should serialize correctly."""
         event = AgentEvent(
@@ -1157,11 +1157,11 @@ class TestSerializationEdgeCases:
             event_type="test",
             data={"message": "Hello\n\"World\"\t\\path"},
         )
-        
+
         json_str = event.to_json()
         parsed = json.loads(json_str)
         assert parsed["data"]["message"] == "Hello\n\"World\"\t\\path"
-    
+
     def test_unicode_characters(self, session_id):
         """Unicode characters should serialize correctly."""
         event = AgentEvent(
@@ -1170,13 +1170,13 @@ class TestSerializationEdgeCases:
             event_type="test",
             data={"emoji": "🎉", "chinese": "你好", "arabic": "مرحبا"},
         )
-        
+
         json_str = event.to_json()
         parsed = json.loads(json_str)
         assert parsed["data"]["emoji"] == "🎉"
         assert parsed["data"]["chinese"] == "你好"
         assert parsed["data"]["arabic"] == "مرحبا"
-    
+
     def test_large_data_payload(self, session_id):
         """Large data payloads should serialize correctly."""
         large_list = list(range(1000))
@@ -1186,7 +1186,7 @@ class TestSerializationEdgeCases:
             event_type="test",
             data={"large_list": large_list},
         )
-        
+
         json_str = event.to_json()
         parsed = json.loads(json_str)
         assert len(parsed["data"]["large_list"]) == 1000

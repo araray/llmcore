@@ -54,7 +54,7 @@ import threading
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
@@ -916,9 +916,9 @@ def create_embedding_cache(
 # =============================================================================
 
 __all__ = [
+    "DiskCache",
     "EmbeddingCache",
     "EmbeddingCacheConfig",
     "LRUCache",
-    "DiskCache",
     "create_embedding_cache",
 ]

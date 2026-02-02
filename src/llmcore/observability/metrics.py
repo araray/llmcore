@@ -66,17 +66,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from statistics import mean, median, stdev
 from typing import (
     Any,
-    Callable,
     Dict,
     Generator,
     List,
     Optional,
     Tuple,
-    TypeVar,
-    Union,
 )
 
 import psutil

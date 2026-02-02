@@ -21,8 +21,7 @@ import logging
 import uuid  # To generate unique session IDs for demonstration
 
 # Import the main class and relevant exceptions
-from llmcore import (ConfigError, LLMCore, LLMCoreError, ProviderError,
-                     SessionNotFoundError)
+from llmcore import ConfigError, LLMCore, LLMCoreError, ProviderError, SessionNotFoundError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

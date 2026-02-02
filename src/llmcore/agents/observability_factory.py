@@ -33,7 +33,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from ..config.models import LLMCoreConfig
@@ -135,13 +135,13 @@ def create_observability_from_config(
     # Import observability module
     try:
         from .observability import (
-            EventLogger,
-            MetricsCollector,
-            JSONLFileSink,
-            InMemorySink,
-            FilteredSink,
-            EventSeverity,
             EventCategory,
+            EventLogger,
+            EventSeverity,
+            FilteredSink,
+            InMemorySink,
+            JSONLFileSink,
+            MetricsCollector,
         )
     except ImportError as e:
         logger.warning(f"Observability module not available: {e}")
@@ -339,6 +339,6 @@ def create_event_logger_simple(
 
 __all__ = [
     "ObservabilityComponents",
-    "create_observability_from_config",
     "create_event_logger_simple",
+    "create_observability_from_config",
 ]

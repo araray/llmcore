@@ -14,7 +14,6 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -234,7 +233,6 @@ class TestExportSession:
 
         # Import the actual export_session function by loading the module
         import importlib.util
-        import sys
         from pathlib import Path
 
         module_path = Path(__file__).parent.parent.parent / "src" / "llmcore" / "api.py"

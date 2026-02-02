@@ -283,7 +283,7 @@ class RAGContextFilter:
         # Check 3: Corruption patterns
         for pattern in self._corruption_patterns:
             if pattern.search(content):
-                logger.debug(f"Filtered: contains corruption pattern")
+                logger.debug("Filtered: contains corruption pattern")
                 return True
 
         # Check 4: Excessive repetition
@@ -294,7 +294,7 @@ class RAGContextFilter:
         # Check 5: All same character
         unique_chars = set(content.replace(" ", "").replace("\n", ""))
         if len(unique_chars) < 3:
-            logger.debug(f"Filtered: too few unique characters")
+            logger.debug("Filtered: too few unique characters")
             return True
 
         return False
@@ -541,7 +541,7 @@ if __name__ == "__main__":
 
     filtered = filter.filter(results)
     if len(filtered) == 2:
-        print(f"  ✅ Filtered from 3 to 2 (removed low similarity)")
+        print("  ✅ Filtered from 3 to 2 (removed low similarity)")
         passed += 1
     else:
         print(f"  ❌ Expected 2 results, got {len(filtered)}")
@@ -581,7 +581,7 @@ if __name__ == "__main__":
 
     filtered = filter.filter(results)
     if len(filtered) == 2:
-        print(f"  ✅ Deduplicated from 3 to 2")
+        print("  ✅ Deduplicated from 3 to 2")
         passed += 1
     else:
         print(f"  ❌ Expected 2 results, got {len(filtered)}")
@@ -600,7 +600,7 @@ if __name__ == "__main__":
 
     filtered = filter_limited.filter(results)
     if len(filtered) == 2 and filtered[0].similarity >= filtered[1].similarity:
-        print(f"  ✅ Limited to 2 results, highest similarity first")
+        print("  ✅ Limited to 2 results, highest similarity first")
         passed += 1
     else:
         print(f"  ❌ Expected 2 results sorted by similarity, got {len(filtered)}")
@@ -622,10 +622,10 @@ if __name__ == "__main__":
 
     filtered = filter.filter(results)
     if len(filtered) == 1 and "Line A" in filtered[0].content:
-        print(f"  ✅ Filtered repetitive content")
+        print("  ✅ Filtered repetitive content")
         passed += 1
     else:
-        print(f"  ❌ Expected to filter repetitive content")
+        print("  ❌ Expected to filter repetitive content")
         failed += 1
 
     # Test 6: Format output
@@ -639,10 +639,10 @@ if __name__ == "__main__":
     formatted = format_rag_context(results, include_sources=True)
 
     if "[1]" in formatted and "Source: doc1.txt" in formatted:
-        print(f"  ✅ Formatted context with sources")
+        print("  ✅ Formatted context with sources")
         passed += 1
     else:
-        print(f"  ❌ Formatting failed")
+        print("  ❌ Formatting failed")
         failed += 1
 
     # Summary

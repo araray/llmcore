@@ -681,5 +681,5 @@ if __name__ == "__main__":
     if failed == 0:
         print("All tests passed! ✅")
     else:
-        print(f"Some tests failed ❌")
+        print("Some tests failed ❌")
         exit(1)

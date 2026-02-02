@@ -9,9 +9,7 @@ UPDATED: Enhanced chat() method to support external RAG engines (like semantisca
 accepting pre-constructed context via explicitly_staged_items parameter.
 """
 
-import asyncio
 import importlib.resources
-import json
 import logging
 import pathlib
 import time
@@ -27,24 +25,16 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
-    Type,
     Union,
     runtime_checkable,
 )
 
-import aiofiles
-import yaml
-
 from .embedding.manager import EmbeddingManager
 from .exceptions import (
     ConfigError,
-    ContextLengthError,
-    EmbeddingError,
     LLMCoreError,
     ProviderError,
     SessionNotFoundError,
-    SessionStorageError,
-    StorageError,
     VectorStorageError,
 )
 from .memory.manager import MemoryManager
@@ -55,7 +45,6 @@ from .models import (
     ContextItemType,
     ContextPreparationDetails,
     ContextPreset,
-    ContextPresetItem,
     CostEstimate,
     Message,
     ModelDetails,
@@ -65,8 +54,6 @@ from .models import (
     Role,
     SessionTokenStats,
     Tool,
-    ToolCall,
-    ToolResult,
 )
 from .providers.base import BaseProvider
 from .providers.manager import ProviderManager

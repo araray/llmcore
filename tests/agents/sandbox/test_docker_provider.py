@@ -19,15 +19,12 @@ Alternative approach: Patch at the point of use (inside the class) or
 use sys.modules patching.
 """
 
-import asyncio
 import sys
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from llmcore.agents.sandbox.base import (
-    ExecutionResult,
     SandboxAccessLevel,
     SandboxConfig,
     SandboxStatus,
@@ -38,8 +35,6 @@ from llmcore.agents.sandbox.docker_provider import MAX_OUTPUT_SIZE, DockerSandbo
 from llmcore.agents.sandbox.exceptions import (
     SandboxAccessDenied,
     SandboxConnectionError,
-    SandboxImageNotFoundError,
-    SandboxInitializationError,
     SandboxNotInitializedError,
 )
 

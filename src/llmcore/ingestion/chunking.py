@@ -39,12 +39,8 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Iterator,
     List,
     Optional,
-    Sequence,
-    Tuple,
-    Union,
 )
 
 logger = logging.getLogger(__name__)

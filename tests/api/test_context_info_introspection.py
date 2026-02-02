@@ -20,8 +20,6 @@ Phase: 4, Step 4.3
 Version: 0.25.0
 """
 
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

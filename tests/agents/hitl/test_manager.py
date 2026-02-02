@@ -11,27 +11,21 @@ Tests:
 - Statistics
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from llmcore.agents.hitl import (
-    ActivityInfo,
-    ApprovalScope,
     ApprovalStatus,
     AutoApproveCallback,
     HITLConfig,
-    HITLDecision,
     HITLManager,
-    HITLRequest,
     HITLResponse,
     InMemoryHITLStore,
-    RiskAssessment,
     RiskLevel,
     TimeoutPolicy,
     create_hitl_manager,
 )
-
 
 # =============================================================================
 # FIXTURES

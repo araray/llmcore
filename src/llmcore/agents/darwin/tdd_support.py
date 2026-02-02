@@ -54,11 +54,10 @@ References:
 from __future__ import annotations
 
 import abc
-import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -983,8 +982,8 @@ Output only the implementation code, no explanations or markdown backticks.
             elif language in ("javascript", "typescript"):
                 if (
                     stripped.startswith("import ")
-                    or stripped.startswith("const ")
-                    and "require" in stripped
+                    or (stripped.startswith("const ")
+                    and "require" in stripped)
                 ):
                     imports.append(stripped)
                 else:

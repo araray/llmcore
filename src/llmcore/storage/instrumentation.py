@@ -54,10 +54,8 @@ from typing import (
     Dict,
     Iterator,
     List,
-    Literal,
     Optional,
     TypeVar,
-    Union,
 )
 
 logger = logging.getLogger(__name__)
@@ -787,12 +785,12 @@ def instrumented(
 # =============================================================================
 
 __all__ = [
+    "DEFAULT_INSTRUMENTATION_CONFIG",
     "InstrumentationConfig",
     "InstrumentationContext",
+    "MetricsBackend",
     "OperationRecord",
     "StorageInstrumentation",
-    "MetricsBackend",
     "TracingBackend",
-    "DEFAULT_INSTRUMENTATION_CONFIG",
     "instrumented",
 ]

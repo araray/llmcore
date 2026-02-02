@@ -62,6 +62,16 @@ from .agents import (
     set_active_sandbox,
 )
 from .api import LLMCore
+
+# =============================================================================
+# EMBEDDING CACHE MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+# =============================================================================
+# These exports provide embedding caching for cost reduction.
+from .embedding import (
+    EmbeddingCache,
+    EmbeddingCacheConfig,
+    create_embedding_cache,
+)
 from .exceptions import (
     ConfigError,
     ContextError,
@@ -73,6 +83,29 @@ from .exceptions import (
     SessionStorageError,
     StorageError,
     VectorStorageError,
+)
+
+# =============================================================================
+# INGESTION MODULE (Phase 3 SYMBIOSIS)
+# =============================================================================
+# These exports provide chunking strategies for document ingestion.
+from .ingestion import (
+    Chunk,
+    ChunkingConfig,
+    ChunkingStrategy,
+    FixedSizeChunker,
+    RecursiveTextChunker,
+    SentenceChunker,
+)
+
+# =============================================================================
+# INTEGRATION MODULE (Phase 3 SYMBIOSIS)
+# =============================================================================
+# These exports provide integration points for external RAG engines.
+from .integration import (
+    LLMCoreVectorClient,
+    LLMCoreVectorClientConfig,
+    VectorClientProtocol,
 )
 
 # =============================================================================
@@ -135,54 +168,21 @@ from .models import (
     ToolCall,
     ToolResult,
 )
-from .storage import StorageManager
-
-# =============================================================================
-# INTEGRATION MODULE (Phase 3 SYMBIOSIS)
-# =============================================================================
-# These exports provide integration points for external RAG engines.
-from .integration import (
-    LLMCoreVectorClient,
-    LLMCoreVectorClientConfig,
-    VectorClientProtocol,
-)
-
-# =============================================================================
-# INGESTION MODULE (Phase 3 SYMBIOSIS)
-# =============================================================================
-# These exports provide chunking strategies for document ingestion.
-from .ingestion import (
-    Chunk,
-    ChunkingConfig,
-    ChunkingStrategy,
-    FixedSizeChunker,
-    RecursiveTextChunker,
-    SentenceChunker,
-)
 
 # =============================================================================
 # OBSERVABILITY MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
 # =============================================================================
 # These exports provide cost tracking and observability features.
 from .observability import (
+    PRICING_DATA,
     CostTracker,
     CostTrackingConfig,
-    PRICING_DATA,
     UsageRecord,
     UsageSummary,
     create_cost_tracker,
     get_price_per_million_tokens,
 )
-
-# =============================================================================
-# EMBEDDING CACHE MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
-# =============================================================================
-# These exports provide embedding caching for cost reduction.
-from .embedding import (
-    EmbeddingCache,
-    EmbeddingCacheConfig,
-    create_embedding_cache,
-)
+from .storage import StorageManager
 
 try:
     __version__ = version("llmcore")

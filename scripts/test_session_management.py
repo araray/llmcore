@@ -6,8 +6,8 @@ Tests all SessionManager methods: list_sessions, get_session, delete_session
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Add the src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -47,7 +47,7 @@ async def main():
         # Test 5: List sessions (should work now)
         print("\n🧪 Test 5: Testing list_sessions()...")
         sessions = await llmcore.list_sessions()
-        print(f"✅ list_sessions() succeeded")
+        print("✅ list_sessions() succeeded")
         print(f"   Found {len(sessions)} existing sessions")
         if sessions:
             for sess in sessions[:3]:  # Show first 3
@@ -67,7 +67,7 @@ async def main():
         # Test 7: Get specific session
         print("\n🧪 Test 7: Testing get_session()...")
         retrieved_session = await llmcore.get_session("test-session-123")
-        print(f"✅ get_session() succeeded")
+        print("✅ get_session() succeeded")
         print(f"   Session name: {retrieved_session.name}")
         print(f"   Message count: {len(retrieved_session.messages)}")
 

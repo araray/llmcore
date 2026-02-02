@@ -10,7 +10,6 @@ Tests cover:
     - Error handling
 """
 
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,12 +18,10 @@ from llmcore.agents.sandbox.images import (
     ImageCapability,
     ImageManifest,
     ImageMetadata,
-    ImageRegistry,
     ImageNotFoundError,
-    ImageRegistryError,
+    ImageRegistry,
     ImageTier,
 )
-
 
 # ==============================================================================
 # Registry Initialization Tests

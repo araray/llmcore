@@ -23,23 +23,17 @@ CRITICAL FIX (2026-01-10):
   fresh mocks with properly configured channel attributes.
 """
 
-import asyncio
 import sys
-from datetime import datetime
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from llmcore.agents.sandbox.base import (
-    ExecutionResult,
     SandboxAccessLevel,
     SandboxConfig,
     SandboxStatus,
 )
 from llmcore.agents.sandbox.exceptions import (
-    SandboxAccessDenied,
-    SandboxConnectionError,
     SandboxInitializationError,
     SandboxNotInitializedError,
 )

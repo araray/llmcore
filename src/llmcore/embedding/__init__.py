@@ -26,10 +26,10 @@ Usage:
 # Import necessary classes to be available when importing the package
 from .base import BaseEmbeddingModel
 from .cache import (
+    DiskCache,
     EmbeddingCache,
     EmbeddingCacheConfig,
     LRUCache,
-    DiskCache,
     create_embedding_cache,
 )
 from .manager import EmbeddingManager

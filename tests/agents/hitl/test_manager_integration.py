@@ -38,12 +38,11 @@ import os
 import tempfile
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import AsyncIterator
 
 import pytest
 
-from llmcore.agents.hitl.callbacks import AutoApproveCallback, HITLCallback
+from llmcore.agents.hitl.callbacks import AutoApproveCallback
 from llmcore.agents.hitl.manager import (
     HITLManager,
     create_hitl_manager,
@@ -54,12 +53,10 @@ from llmcore.agents.hitl.models import (
     ApprovalStatus,
     HITLConfig,
     HITLRequest,
-    HITLResponse,
     HITLStorageConfig,
     RiskAssessment,
     RiskFactor,
 )
-from llmcore.agents.hitl.state import HITLStateStore, InMemoryHITLStore
 
 # =============================================================================
 # FIXTURES
@@ -685,7 +682,6 @@ class TestScopeManagement:
     @pytest.mark.asyncio
     async def test_grant_session_approval(self, memory_manager: HITLManager):
         """Test granting session-level approval."""
-        from llmcore.agents.hitl.risk_assessor import RiskLevel
 
         scope_id = memory_manager.grant_session_approval("test_tool")
         assert scope_id is not None

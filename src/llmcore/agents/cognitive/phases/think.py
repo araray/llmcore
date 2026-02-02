@@ -22,14 +22,13 @@ References:
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from ..models import ConfidenceLevel, EnhancedAgentState, ThinkInput, ThinkOutput
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
     from ....memory.manager import MemoryManager
-    from ....models import Message, Role, ToolCall
     from ....providers.manager import ProviderManager
     from ...tools import ToolManager
     from ..models import EnhancedAgentState
@@ -281,7 +280,7 @@ async def think_phase(
 
             # Return error output
             return ThinkOutput(
-                thought=f"Error in thinking: {str(e)}",
+                thought=f"Error in thinking: {e!s}",
                 proposed_action=None,
                 is_final_answer=False,
                 confidence=ConfidenceLevel.LOW,

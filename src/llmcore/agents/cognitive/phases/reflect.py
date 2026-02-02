@@ -20,12 +20,11 @@ References:
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, ReflectInput, ReflectOutput
 
 if TYPE_CHECKING:
-    from ....models import Message, Role
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -175,7 +174,7 @@ async def reflect_phase(
 
             # Return minimal reflection on error
             return ReflectOutput(
-                evaluation=f"Reflection error: {str(e)}",
+                evaluation=f"Reflection error: {e!s}",
                 progress_estimate=agent_state.progress_estimate,  # Keep current
                 insights=[],
                 plan_needs_update=False,

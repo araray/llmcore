@@ -17,15 +17,13 @@ References:
     - Dossier: Step 2.5 (Cognitive Phases - PLAN)
 """
 
-import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, PlanInput, PlanOutput
 
 if TYPE_CHECKING:
-    from ....models import Message, Role
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -170,7 +168,7 @@ async def plan_phase(
             # Return minimal plan on error
             return PlanOutput(
                 plan_steps=["Analyze the problem", "Execute solution"],
-                reasoning=f"Fallback plan due to error: {str(e)}",
+                reasoning=f"Fallback plan due to error: {e!s}",
             )
 
 
@@ -218,7 +216,7 @@ GOAL:
         prompt += f"\n\nCONSTRAINTS:\n{plan_input.constraints}"
 
     if plan_input.existing_plan:
-        prompt += f"\n\nEXISTING PLAN:\n"
+        prompt += "\n\nEXISTING PLAN:\n"
         for i, step in enumerate(plan_input.existing_plan, 1):
             prompt += f"{i}. {step}\n"
         prompt += "\nRefine or update this plan as needed."
