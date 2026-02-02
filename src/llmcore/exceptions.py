@@ -33,8 +33,10 @@ from typing import Any, Dict, Optional
 # BASE EXCEPTION
 # =============================================================================
 
+
 class LLMCoreError(Exception):
     """Base class for all LLMCore specific errors."""
+
     def __init__(self, message: str = "An unspecified error occurred in LLMCore."):
         super().__init__(message)
 
@@ -43,8 +45,10 @@ class LLMCoreError(Exception):
 # CONFIGURATION EXCEPTIONS
 # =============================================================================
 
+
 class ConfigError(LLMCoreError):
     """Raised for errors related to configuration loading or validation."""
+
     def __init__(self, message: str = "Configuration error."):
         super().__init__(message)
 
@@ -53,8 +57,10 @@ class ConfigError(LLMCoreError):
 # PROVIDER EXCEPTIONS
 # =============================================================================
 
+
 class ProviderError(LLMCoreError):
     """Raised for errors originating from an LLM provider (e.g., API errors, connection issues)."""
+
     def __init__(self, provider_name: str = "Unknown", message: str = "Provider error."):
         self.provider_name = provider_name
         super().__init__(f"Error with provider '{provider_name}': {message}")
@@ -64,20 +70,24 @@ class ProviderError(LLMCoreError):
 # STORAGE EXCEPTIONS
 # =============================================================================
 
+
 class StorageError(LLMCoreError):
     """Base class for errors related to storage operations."""
+
     def __init__(self, message: str = "Storage error."):
         super().__init__(message)
 
 
 class SessionStorageError(StorageError):
     """Raised for errors specific to session storage operations."""
+
     def __init__(self, message: str = "Session storage error."):
         super().__init__(message)
 
 
 class VectorStorageError(StorageError):
     """Raised for errors specific to vector storage operations."""
+
     def __init__(self, message: str = "Vector storage error."):
         super().__init__(message)
 
@@ -87,6 +97,7 @@ class SessionNotFoundError(StorageError):
     Raised when a specified session ID is not found in storage.
     Inherits from StorageError as it's a storage-related lookup failure.
     """
+
     def __init__(self, session_id: str, message: str = "Session not found."):
         self.session_id = session_id
         super().__init__(f"{message} Session ID: '{session_id}'")
@@ -99,11 +110,12 @@ class StorageUnavailableError(StorageError):
     This indicates a transient failure condition where the backend may recover.
     Applications can catch this to implement fallback behavior.
     """
+
     def __init__(
         self,
         backend_name: str = "unknown",
         message: str = "Storage backend is unavailable.",
-        retry_after_seconds: Optional[int] = None
+        retry_after_seconds: Optional[int] = None,
     ):
         self.backend_name = backend_name
         self.retry_after_seconds = retry_after_seconds
@@ -117,12 +129,13 @@ class StorageHealthError(StorageError):
 
     Contains diagnostic information to help identify the issue.
     """
+
     def __init__(
         self,
         backend_name: str = "unknown",
         check_type: str = "connectivity",
         message: str = "Storage health check failed.",
-        latency_ms: Optional[float] = None
+        latency_ms: Optional[float] = None,
     ):
         self.backend_name = backend_name
         self.check_type = check_type
@@ -143,11 +156,12 @@ class SchemaError(StorageError):
     This includes schema version mismatches, migration failures,
     and DDL execution errors.
     """
+
     def __init__(
         self,
         message: str = "Schema operation failed.",
         current_version: Optional[int] = None,
-        target_version: Optional[int] = None
+        target_version: Optional[int] = None,
     ):
         self.current_version = current_version
         self.target_version = target_version
@@ -163,20 +177,23 @@ class SchemaError(StorageError):
 # CONTEXT EXCEPTIONS
 # =============================================================================
 
+
 class ContextError(LLMCoreError):
     """Base class for errors related to context management."""
+
     def __init__(self, message: str = "Context management error."):
         super().__init__(message)
 
 
 class ContextLengthError(ContextError):
     """Raised when the context length exceeds the model's maximum limit, even after truncation attempts."""
+
     def __init__(
         self,
         model_name: str = "Unknown",
         limit: int = 0,
         actual: int = 0,
-        message: str = "Context length exceeded."
+        message: str = "Context length exceeded.",
     ):
         self.model_name = model_name
         self.limit = limit
@@ -190,8 +207,10 @@ class ContextLengthError(ContextError):
 # EMBEDDING EXCEPTIONS
 # =============================================================================
 
+
 class EmbeddingError(LLMCoreError):
     """Raised for errors related to embedding generation."""
+
     def __init__(self, model_name: str = "Unknown", message: str = "Embedding generation error."):
         self.model_name = model_name
         super().__init__(f"Error with embedding model '{model_name}': {message}")
@@ -202,6 +221,7 @@ class EmbeddingError(LLMCoreError):
 # =============================================================================
 # These exceptions are re-exported from llmcore.agents.sandbox.exceptions
 # for convenience. The canonical definitions are in the sandbox module.
+
 
 class SandboxError(LLMCoreError):
     """
@@ -220,7 +240,7 @@ class SandboxError(LLMCoreError):
         self,
         message: str = "Sandbox error.",
         details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None
+        sandbox_id: Optional[str] = None,
     ):
         self.message = message
         self.details = details or {}
@@ -242,7 +262,7 @@ class SandboxError(LLMCoreError):
             "error_type": self.__class__.__name__,
             "message": self.message,
             "details": self.details,
-            "sandbox_id": self.sandbox_id
+            "sandbox_id": self.sandbox_id,
         }
 
 
@@ -263,7 +283,7 @@ class SandboxInitializationError(SandboxError):
         message: str = "Failed to initialize sandbox.",
         details: Optional[Dict[str, Any]] = None,
         sandbox_id: Optional[str] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
     ):
         self.provider = provider
         if provider and "provider" not in (details or {}):
@@ -286,7 +306,7 @@ class SandboxExecutionError(SandboxError):
         details: Optional[Dict[str, Any]] = None,
         sandbox_id: Optional[str] = None,
         exit_code: Optional[int] = None,
-        stderr: Optional[str] = None
+        stderr: Optional[str] = None,
     ):
         self.exit_code = exit_code
         self.stderr = stderr
@@ -312,7 +332,7 @@ class SandboxTimeoutError(SandboxError):
         details: Optional[Dict[str, Any]] = None,
         sandbox_id: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
-        operation: Optional[str] = None
+        operation: Optional[str] = None,
     ):
         self.timeout_seconds = timeout_seconds
         self.operation = operation
@@ -342,7 +362,7 @@ class SandboxAccessDenied(SandboxError):
         sandbox_id: Optional[str] = None,
         required_level: Optional[str] = None,
         current_level: Optional[str] = None,
-        denied_operation: Optional[str] = None
+        denied_operation: Optional[str] = None,
     ):
         self.required_level = required_level
         self.current_level = current_level
@@ -375,7 +395,7 @@ class SandboxResourceError(SandboxError):
         sandbox_id: Optional[str] = None,
         resource_type: Optional[str] = None,
         limit: Optional[str] = None,
-        actual: Optional[str] = None
+        actual: Optional[str] = None,
     ):
         self.resource_type = resource_type
         self.limit = limit
@@ -406,7 +426,7 @@ class SandboxConnectionError(SandboxError):
         details: Optional[Dict[str, Any]] = None,
         sandbox_id: Optional[str] = None,
         host: Optional[str] = None,
-        port: Optional[int] = None
+        port: Optional[int] = None,
     ):
         self.host = host
         self.port = port
@@ -431,7 +451,7 @@ class SandboxCleanupError(SandboxError):
         message: str = "Failed to cleanup sandbox resources.",
         details: Optional[Dict[str, Any]] = None,
         sandbox_id: Optional[str] = None,
-        partial_cleanup: bool = False
+        partial_cleanup: bool = False,
     ):
         self.partial_cleanup = partial_cleanup
         details = details or {}

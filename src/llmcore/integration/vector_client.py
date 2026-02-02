@@ -110,6 +110,7 @@ class LLMCoreVectorClientConfig:
         enable_hybrid_search: Enable hybrid search if backend supports it.
         vector_weight: Weight for vector similarity in hybrid search (default: 0.7).
     """
+
     collection_name: str = "codebase_default"
     user_id: Optional[str] = None
     namespace: Optional[str] = None
@@ -153,9 +154,9 @@ class ChunkAdapter:
             Dictionary suitable for LLMCore add_documents_to_vector_store.
         """
         # Extract fields using duck typing (Chunk has id, content, metadata)
-        chunk_id = getattr(chunk, 'id', str(uuid.uuid4()))
-        content = getattr(chunk, 'content', '')
-        metadata = getattr(chunk, 'metadata', {})
+        chunk_id = getattr(chunk, "id", str(uuid.uuid4()))
+        content = getattr(chunk, "content", "")
+        metadata = getattr(chunk, "metadata", {})
 
         # Build core metadata (same filtering as ChromaDBClient)
         core_metadata = {}
@@ -313,7 +314,7 @@ class LLMCoreVectorClient:
         """
         try:
             # Verify LLMCore is ready
-            if not hasattr(self._llmcore, '_storage_manager'):
+            if not hasattr(self._llmcore, "_storage_manager"):
                 raise RuntimeError("LLMCore instance not properly initialized")
 
             # For pgvector backend, we might need to create the collection
@@ -321,10 +322,11 @@ class LLMCoreVectorClient:
             vector_storage = self._llmcore._storage_manager.vector_storage
 
             # Check if we have EnhancedPgVectorStorage
-            if hasattr(vector_storage, 'create_collection'):
+            if hasattr(vector_storage, "create_collection"):
                 try:
                     # Try to get or create the collection
                     from llmcore.storage.abstraction import StorageContext
+
                     ctx = StorageContext(user_id=self._config.user_id)
                     await vector_storage.create_collection(
                         self._collection_name,
@@ -337,9 +339,7 @@ class LLMCoreVectorClient:
                     logger.debug(f"Collection creation note: {e}")
 
             self._initialized = True
-            logger.info(
-                f"LLMCoreVectorClient initialized: collection='{self._collection_name}'"
-            )
+            logger.info(f"LLMCoreVectorClient initialized: collection='{self._collection_name}'")
 
         except Exception as e:
             logger.error(f"Failed to initialize LLMCoreVectorClient: {e}", exc_info=True)
@@ -414,8 +414,7 @@ class LLMCoreVectorClient:
 
         except Exception as e:
             logger.error(
-                f"Failed to add chunks to collection '{self._collection_name}': {e}",
-                exc_info=True
+                f"Failed to add chunks to collection '{self._collection_name}': {e}", exc_info=True
             )
             # Don't re-raise to match ChromaDBClient behavior
 
@@ -433,7 +432,7 @@ class LLMCoreVectorClient:
         vector_storage = self._llmcore._storage_manager.vector_storage
 
         # Check if we have batch support (EnhancedPgVectorStorage)
-        if hasattr(vector_storage, 'batch_upsert_documents'):
+        if hasattr(vector_storage, "batch_upsert_documents"):
             from llmcore.models import ContextDocument
             from llmcore.storage.abstraction import BatchConfig, StorageContext
 
@@ -496,17 +495,14 @@ class LLMCoreVectorClient:
         logger.info(log_msg)
 
         try:
-            results = self._run_async(
-                self._query_async(query_embedding, top_k, where_filter)
-            )
+            results = self._run_async(self._query_async(query_embedding, top_k, where_filter))
 
             logger.info(f"Retrieved {len(results)} results.")
             return results
 
         except Exception as e:
             logger.error(
-                f"Failed to query collection '{self._collection_name}': {e}",
-                exc_info=True
+                f"Failed to query collection '{self._collection_name}': {e}", exc_info=True
             )
             return []
 
@@ -530,7 +526,7 @@ class LLMCoreVectorClient:
         vector_storage = self._llmcore._storage_manager.vector_storage
 
         # Check if we have enhanced similarity search
-        if hasattr(vector_storage, 'similarity_search'):
+        if hasattr(vector_storage, "similarity_search"):
             from llmcore.storage.abstraction import StorageContext, VectorSearchConfig
 
             ctx = StorageContext(user_id=self._config.user_id)
@@ -551,12 +547,14 @@ class LLMCoreVectorClient:
             formatted_results = []
             for doc in results:
                 # doc is ContextDocument or similar
-                formatted_results.append({
-                    "id": doc.id,
-                    "distance": getattr(doc, 'score', 0.0) or getattr(doc, 'distance', 0.0),
-                    "metadata": doc.metadata or {},
-                    "document": doc.content,
-                })
+                formatted_results.append(
+                    {
+                        "id": doc.id,
+                        "distance": getattr(doc, "score", 0.0) or getattr(doc, "distance", 0.0),
+                        "metadata": doc.metadata or {},
+                        "document": doc.content,
+                    }
+                )
 
             return formatted_results
 
@@ -572,12 +570,14 @@ class LLMCoreVectorClient:
             # Convert to ChromaDB-compatible format
             formatted_results = []
             for doc in results:
-                formatted_results.append({
-                    "id": doc.id,
-                    "distance": getattr(doc, 'score', 0.0),
-                    "metadata": doc.metadata or {},
-                    "document": doc.content,
-                })
+                formatted_results.append(
+                    {
+                        "id": doc.id,
+                        "distance": getattr(doc, "score", 0.0),
+                        "metadata": doc.metadata or {},
+                        "document": doc.content,
+                    }
+                )
 
             return formatted_results
 
@@ -613,7 +613,7 @@ class LLMCoreVectorClient:
 
         vector_storage = self._llmcore._storage_manager.vector_storage
 
-        if hasattr(vector_storage, 'hybrid_search'):
+        if hasattr(vector_storage, "hybrid_search"):
             from llmcore.storage.abstraction import StorageContext
 
             ctx = StorageContext(user_id=self._config.user_id)
@@ -631,15 +631,17 @@ class LLMCoreVectorClient:
             # Convert to ChromaDB-compatible format with hybrid scores
             formatted_results = []
             for result in results:
-                formatted_results.append({
-                    "id": result.document.id,
-                    "distance": 1.0 - result.combined_score,  # Convert score to distance
-                    "metadata": result.document.metadata or {},
-                    "document": result.document.content,
-                    "vector_score": result.vector_score,
-                    "text_score": result.text_score,
-                    "combined_score": result.combined_score,
-                })
+                formatted_results.append(
+                    {
+                        "id": result.document.id,
+                        "distance": 1.0 - result.combined_score,  # Convert score to distance
+                        "metadata": result.document.metadata or {},
+                        "document": result.document.content,
+                        "vector_score": result.vector_score,
+                        "text_score": result.text_score,
+                        "combined_score": result.combined_score,
+                    }
+                )
 
             return formatted_results
 
@@ -668,12 +670,11 @@ class LLMCoreVectorClient:
         """Async implementation of count."""
         vector_storage = self._llmcore._storage_manager.vector_storage
 
-        if hasattr(vector_storage, 'get_collection_info'):
+        if hasattr(vector_storage, "get_collection_info"):
             from llmcore.storage.abstraction import StorageContext
+
             ctx = StorageContext(user_id=self._config.user_id)
-            info = await vector_storage.get_collection_info(
-                self._collection_name, context=ctx
-            )
+            info = await vector_storage.get_collection_info(self._collection_name, context=ctx)
             return info.document_count if info else 0
 
         return 0

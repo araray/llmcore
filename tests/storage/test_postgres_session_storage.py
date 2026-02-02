@@ -30,6 +30,7 @@ from llmcore.storage.postgres_session_storage import PostgresSessionStorage
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def sample_preset() -> ContextPreset:
     """Create a sample ContextPreset for testing."""
@@ -39,14 +40,14 @@ def sample_preset() -> ContextPreset:
             type=ContextItemType.PRESET_TEXT_CONTENT,
             content="You are a helpful assistant.",
             source_identifier="system",
-            metadata={"priority": "high"}
+            metadata={"priority": "high"},
         ),
         ContextPresetItem(
             item_id="item-002",
             type=ContextItemType.USER_FILE,
             content="File content here",
             source_identifier="file:///test.txt",
-            metadata={}
+            metadata={},
         ),
     ]
     return ContextPreset(
@@ -55,7 +56,7 @@ def sample_preset() -> ContextPreset:
         items=items,
         created_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         updated_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        metadata={"author": "test_user"}
+        metadata={"author": "test_user"},
     )
 
 
@@ -67,7 +68,7 @@ def sample_episode() -> Episode:
         session_id="session-abc",
         timestamp=datetime(2025, 1, 10, 14, 30, 0, tzinfo=timezone.utc),
         event_type=EpisodeType.ACTION,
-        data={"action": "search", "query": "test query", "result_count": 5}
+        data={"action": "search", "query": "test query", "result_count": 5},
     )
 
 
@@ -92,21 +93,24 @@ def mock_pool_connection():
 
     mock_conn = AsyncMock()
     mock_conn.execute = AsyncMock()
-    mock_conn.cursor = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_cursor),
-        __aexit__=AsyncMock(return_value=None)
-    ))
-    mock_conn.transaction = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=None),
-        __aexit__=AsyncMock(return_value=None)
-    ))
+    mock_conn.cursor = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_cursor), __aexit__=AsyncMock(return_value=None)
+        )
+    )
+    mock_conn.transaction = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=None)
+        )
+    )
     mock_conn.row_factory = None
 
     mock_pool = MagicMock()
-    mock_pool.connection = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_conn),
-        __aexit__=AsyncMock(return_value=None)
-    ))
+    mock_pool.connection = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)
+        )
+    )
 
     return mock_pool, mock_conn, mock_cursor
 
@@ -140,11 +144,14 @@ def storage_legacy_mode(mock_pool_connection):
 # TEST: save_context_preset()
 # =============================================================================
 
+
 class TestSaveContextPresetTenantMode:
     """Tests for save_context_preset in tenant mode."""
 
     @pytest.mark.asyncio
-    async def test_save_preset_executes_upsert(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_save_preset_executes_upsert(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify preset upsert SQL is executed."""
         await storage_tenant_mode.save_context_preset(sample_preset)
 
@@ -153,7 +160,9 @@ class TestSaveContextPresetTenantMode:
         assert mock_tenant_session.commit.called
 
     @pytest.mark.asyncio
-    async def test_save_preset_with_items(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_save_preset_with_items(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify preset items are saved."""
         await storage_tenant_mode.save_context_preset(sample_preset)
 
@@ -170,7 +179,9 @@ class TestSaveContextPresetTenantMode:
         assert mock_tenant_session.commit.called
 
     @pytest.mark.asyncio
-    async def test_save_preset_error_handling(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_save_preset_error_handling(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify error handling when save fails."""
         mock_tenant_session.execute.side_effect = Exception("DB connection lost")
 
@@ -199,11 +210,14 @@ class TestSaveContextPresetLegacyMode:
 # TEST: get_context_preset()
 # =============================================================================
 
+
 class TestGetContextPresetTenantMode:
     """Tests for get_context_preset in tenant mode."""
 
     @pytest.mark.asyncio
-    async def test_get_preset_returns_preset(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_get_preset_returns_preset(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify preset is retrieved correctly."""
         # Mock the result
         preset_row = MagicMock()
@@ -212,7 +226,7 @@ class TestGetContextPresetTenantMode:
             "description": sample_preset.description,
             "created_at": sample_preset.created_at,
             "updated_at": sample_preset.updated_at,
-            "metadata": json.dumps(sample_preset.metadata)
+            "metadata": json.dumps(sample_preset.metadata),
         }
 
         item_rows = []
@@ -224,7 +238,7 @@ class TestGetContextPresetTenantMode:
                 "type": str(item.type),
                 "content": item.content,
                 "source_identifier": item.source_identifier,
-                "metadata": json.dumps(item.metadata)
+                "metadata": json.dumps(item.metadata),
             }
             item_rows.append(item_mock)
 
@@ -270,6 +284,7 @@ class TestGetContextPresetTenantMode:
 # TEST: list_context_presets()
 # =============================================================================
 
+
 class TestListContextPresetsTenantMode:
     """Tests for list_context_presets in tenant mode."""
 
@@ -283,7 +298,7 @@ class TestListContextPresetsTenantMode:
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
             "metadata": "{}",
-            "item_count": 3
+            "item_count": 3,
         }
         row2 = MagicMock()
         row2._mapping = {
@@ -292,7 +307,7 @@ class TestListContextPresetsTenantMode:
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
             "metadata": '{"key": "value"}',
-            "item_count": 1
+            "item_count": 1,
         }
 
         result_mock = MagicMock()
@@ -321,6 +336,7 @@ class TestListContextPresetsTenantMode:
 # =============================================================================
 # TEST: delete_context_preset()
 # =============================================================================
+
 
 class TestDeleteContextPresetTenantMode:
     """Tests for delete_context_preset in tenant mode."""
@@ -357,6 +373,7 @@ class TestDeleteContextPresetTenantMode:
 # =============================================================================
 # TEST: rename_context_preset()
 # =============================================================================
+
 
 class TestRenameContextPresetTenantMode:
     """Tests for rename_context_preset in tenant mode."""
@@ -407,11 +424,14 @@ class TestRenameContextPresetTenantMode:
 # TEST: add_episode()
 # =============================================================================
 
+
 class TestAddEpisodeTenantMode:
     """Tests for add_episode in tenant mode."""
 
     @pytest.mark.asyncio
-    async def test_add_episode_success(self, storage_tenant_mode, sample_episode, mock_tenant_session):
+    async def test_add_episode_success(
+        self, storage_tenant_mode, sample_episode, mock_tenant_session
+    ):
         """Verify episode is added successfully."""
         await storage_tenant_mode.add_episode(sample_episode)
 
@@ -419,7 +439,9 @@ class TestAddEpisodeTenantMode:
         assert mock_tenant_session.commit.called
 
     @pytest.mark.asyncio
-    async def test_add_episode_error_handling(self, storage_tenant_mode, sample_episode, mock_tenant_session):
+    async def test_add_episode_error_handling(
+        self, storage_tenant_mode, sample_episode, mock_tenant_session
+    ):
         """Verify error handling when add fails."""
         mock_tenant_session.execute.side_effect = Exception("Insert failed")
 
@@ -447,11 +469,14 @@ class TestAddEpisodeLegacyMode:
 # TEST: get_episodes()
 # =============================================================================
 
+
 class TestGetEpisodesTenantMode:
     """Tests for get_episodes in tenant mode."""
 
     @pytest.mark.asyncio
-    async def test_get_episodes_success(self, storage_tenant_mode, sample_episode, mock_tenant_session):
+    async def test_get_episodes_success(
+        self, storage_tenant_mode, sample_episode, mock_tenant_session
+    ):
         """Verify episodes are retrieved correctly."""
         row = MagicMock()
         row._mapping = {
@@ -459,7 +484,7 @@ class TestGetEpisodesTenantMode:
             "session_id": sample_episode.session_id,
             "timestamp": sample_episode.timestamp,
             "event_type": str(sample_episode.event_type),
-            "data": json.dumps(sample_episode.data)
+            "data": json.dumps(sample_episode.data),
         }
 
         result_mock = MagicMock()
@@ -513,6 +538,7 @@ class TestGetEpisodesTenantMode:
 # TEST: API Compatibility and Backward Compatibility
 # =============================================================================
 
+
 class TestAPICompatibility:
     """Tests for API backward compatibility."""
 
@@ -526,16 +552,17 @@ class TestAPICompatibility:
         """Verify all required methods exist on the class."""
         storage = PostgresSessionStorage()
 
-        assert hasattr(storage, 'save_context_preset')
-        assert hasattr(storage, 'get_context_preset')
-        assert hasattr(storage, 'list_context_presets')
-        assert hasattr(storage, 'delete_context_preset')
-        assert hasattr(storage, 'rename_context_preset')
-        assert hasattr(storage, 'add_episode')
-        assert hasattr(storage, 'get_episodes')
+        assert hasattr(storage, "save_context_preset")
+        assert hasattr(storage, "get_context_preset")
+        assert hasattr(storage, "list_context_presets")
+        assert hasattr(storage, "delete_context_preset")
+        assert hasattr(storage, "rename_context_preset")
+        assert hasattr(storage, "add_episode")
+        assert hasattr(storage, "get_episodes")
 
         # All should be async methods
         import asyncio
+
         assert asyncio.iscoroutinefunction(storage.save_context_preset)
         assert asyncio.iscoroutinefunction(storage.get_context_preset)
         assert asyncio.iscoroutinefunction(storage.list_context_presets)
@@ -549,24 +576,30 @@ class TestAPICompatibility:
 # TEST: Multiple Episode Types
 # =============================================================================
 
+
 class TestEpisodeTypes:
     """Tests for different episode types."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("event_type", [
-        EpisodeType.THOUGHT,
-        EpisodeType.ACTION,
-        EpisodeType.OBSERVATION,
-        EpisodeType.USER_INTERACTION,
-        EpisodeType.AGENT_REFLECTION,
-    ])
-    async def test_episode_type_variations(self, storage_tenant_mode, mock_tenant_session, event_type):
+    @pytest.mark.parametrize(
+        "event_type",
+        [
+            EpisodeType.THOUGHT,
+            EpisodeType.ACTION,
+            EpisodeType.OBSERVATION,
+            EpisodeType.USER_INTERACTION,
+            EpisodeType.AGENT_REFLECTION,
+        ],
+    )
+    async def test_episode_type_variations(
+        self, storage_tenant_mode, mock_tenant_session, event_type
+    ):
         """Verify all episode types can be saved."""
         episode = Episode(
             episode_id=f"ep-{event_type.value}",
             session_id="session-test",
             event_type=event_type,
-            data={"type_test": True}
+            data={"type_test": True},
         )
 
         await storage_tenant_mode.add_episode(episode)
@@ -579,19 +612,26 @@ class TestEpisodeTypes:
 # TEST: Regression Tests
 # =============================================================================
 
+
 class TestRegressionPhase4:
     """Regression tests for Phase 4 bug fixes."""
 
     @pytest.mark.asyncio
-    async def test_save_preset_not_stub(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_save_preset_not_stub(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify save_context_preset is not a stub (previously just 'pass')."""
         await storage_tenant_mode.save_context_preset(sample_preset)
 
         # The stub version did nothing - now it should call execute
-        assert mock_tenant_session.execute.called, "save_context_preset should execute SQL, not be a stub"
+        assert mock_tenant_session.execute.called, (
+            "save_context_preset should execute SQL, not be a stub"
+        )
 
     @pytest.mark.asyncio
-    async def test_get_preset_not_always_none(self, storage_tenant_mode, sample_preset, mock_tenant_session):
+    async def test_get_preset_not_always_none(
+        self, storage_tenant_mode, sample_preset, mock_tenant_session
+    ):
         """Verify get_context_preset doesn't always return None."""
         # Setup mock to return valid preset data
         preset_row = MagicMock()
@@ -600,7 +640,7 @@ class TestRegressionPhase4:
             "description": sample_preset.description,
             "created_at": sample_preset.created_at,
             "updated_at": sample_preset.updated_at,
-            "metadata": "{}"
+            "metadata": "{}",
         }
         result1 = MagicMock()
         result1.fetchone.return_value = preset_row
@@ -623,7 +663,7 @@ class TestRegressionPhase4:
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
             "metadata": "{}",
-            "item_count": 0
+            "item_count": 0,
         }
         result_mock = MagicMock()
         result_mock.fetchall.return_value = [row]
@@ -645,14 +685,18 @@ class TestRegressionPhase4:
         assert result is True, "delete_context_preset should not always return False"
 
     @pytest.mark.asyncio
-    async def test_add_episode_not_stub(self, storage_tenant_mode, sample_episode, mock_tenant_session):
+    async def test_add_episode_not_stub(
+        self, storage_tenant_mode, sample_episode, mock_tenant_session
+    ):
         """Verify add_episode is not a stub (previously just 'pass')."""
         await storage_tenant_mode.add_episode(sample_episode)
 
         assert mock_tenant_session.execute.called, "add_episode should execute SQL, not be a stub"
 
     @pytest.mark.asyncio
-    async def test_get_episodes_not_always_empty(self, storage_tenant_mode, sample_episode, mock_tenant_session):
+    async def test_get_episodes_not_always_empty(
+        self, storage_tenant_mode, sample_episode, mock_tenant_session
+    ):
         """Verify get_episodes doesn't always return []."""
         row = MagicMock()
         row._mapping = {
@@ -660,7 +704,7 @@ class TestRegressionPhase4:
             "session_id": sample_episode.session_id,
             "timestamp": sample_episode.timestamp,
             "event_type": str(sample_episode.event_type),
-            "data": json.dumps(sample_episode.data)
+            "data": json.dumps(sample_episode.data),
         }
         result_mock = MagicMock()
         result_mock.fetchall.return_value = [row]
@@ -675,6 +719,7 @@ class TestRegressionPhase4:
 # TEST: Edge Cases
 # =============================================================================
 
+
 class TestEdgeCases:
     """Edge case tests."""
 
@@ -686,12 +731,14 @@ class TestEdgeCases:
         assert mock_tenant_session.commit.called
 
     @pytest.mark.asyncio
-    async def test_preset_with_special_characters_in_description(self, storage_tenant_mode, mock_tenant_session):
+    async def test_preset_with_special_characters_in_description(
+        self, storage_tenant_mode, mock_tenant_session
+    ):
         """Verify preset with special characters in description can be saved."""
         preset = ContextPreset(
             name="special_preset",
             description="Description with 'quotes', \"double quotes\", and emoji 🎉",
-            items=[]
+            items=[],
         )
         await storage_tenant_mode.save_context_preset(preset)
         assert mock_tenant_session.commit.called
@@ -708,8 +755,8 @@ class TestEdgeCases:
                 "list": [1, 2, 3],
                 "string": "test",
                 "null": None,
-                "bool": True
-            }
+                "bool": True,
+            },
         )
         await storage_tenant_mode.add_episode(episode)
         assert mock_tenant_session.commit.called

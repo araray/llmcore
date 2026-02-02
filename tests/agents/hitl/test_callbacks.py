@@ -34,21 +34,14 @@ from llmcore.agents.hitl import (
 @pytest.fixture
 def sample_request():
     """Create sample HITL request."""
-    activity = ActivityInfo(
-        activity_type="bash_exec",
-        parameters={"command": "ls -la"}
-    )
-    risk = RiskAssessment(
-        overall_level="medium",
-        requires_approval=True,
-        factors=[]
-    )
+    activity = ActivityInfo(activity_type="bash_exec", parameters={"command": "ls -la"})
+    risk = RiskAssessment(overall_level="medium", requires_approval=True, factors=[])
     request = HITLRequest(
         activity=activity,
         risk_assessment=risk,
         session_id="test-session",
         user_id="test-user",
-        context_summary="Test context"
+        context_summary="Test context",
     )
     request.set_expiration(300)
     return request
@@ -58,9 +51,7 @@ def sample_request():
 def sample_decision(sample_request):
     """Create sample decision."""
     return HITLDecision(
-        status=ApprovalStatus.APPROVED,
-        reason="Test approved",
-        request=sample_request
+        status=ApprovalStatus.APPROVED, reason="Test approved", request=sample_request
     )
 
 
@@ -131,9 +122,7 @@ class TestQueueHITLCallback:
         callback = QueueHITLCallback()
 
         # Start request in background
-        request_task = asyncio.create_task(
-            callback.request_approval(sample_request)
-        )
+        request_task = asyncio.create_task(callback.request_approval(sample_request))
 
         # Give it time to queue
         await asyncio.sleep(0.01)
@@ -144,10 +133,7 @@ class TestQueueHITLCallback:
         assert queued.request_id == sample_request.request_id
 
         # Submit response
-        response = HITLResponse(
-            request_id=sample_request.request_id,
-            approved=True
-        )
+        response = HITLResponse(request_id=sample_request.request_id, approved=True)
         await callback.submit_response(response)
 
         # Get result
@@ -178,9 +164,7 @@ class TestQueueHITLCallback:
             assert pending is not None
 
             response = HITLResponse(
-                request_id=pending.request_id,
-                approved=True,
-                feedback=f"Approved {i}"
+                request_id=pending.request_id, approved=True, feedback=f"Approved {i}"
             )
             await callback.submit_response(response)
 
@@ -198,9 +182,7 @@ class TestQueueHITLCallback:
 
         # Submit rejection
         response = HITLResponse(
-            request_id=sample_request.request_id,
-            approved=False,
-            feedback="Too risky"
+            request_id=sample_request.request_id, approved=False, feedback="Too risky"
         )
         await callback.submit_response(response)
 
@@ -218,11 +200,11 @@ class TestConsoleHITLCallback:
     """Test ConsoleHITLCallback with mocked I/O."""
 
     @pytest.mark.asyncio
-    @patch('builtins.input')
-    @patch('builtins.print')
+    @patch("builtins.input")
+    @patch("builtins.print")
     async def test_approve_via_console(self, mock_print, mock_input, sample_request):
         """Should handle 'y' input as approval."""
-        mock_input.return_value = 'y'
+        mock_input.return_value = "y"
 
         callback = ConsoleHITLCallback()
         response = await callback.request_approval(sample_request)
@@ -230,11 +212,11 @@ class TestConsoleHITLCallback:
         assert response.approved
 
     @pytest.mark.asyncio
-    @patch('builtins.input')
-    @patch('builtins.print')
+    @patch("builtins.input")
+    @patch("builtins.print")
     async def test_reject_via_console(self, mock_print, mock_input, sample_request):
         """Should handle 'n' input as rejection."""
-        mock_input.return_value = 'n'
+        mock_input.return_value = "n"
 
         callback = ConsoleHITLCallback()
         response = await callback.request_approval(sample_request)
@@ -257,18 +239,23 @@ class TestCallbackInterface:
             HITLCallback()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("callback_class,kwargs", [
-        (AutoApproveCallback, {}),
-        (QueueHITLCallback, {}),
-    ])
-    async def test_callback_interface(self, callback_class, kwargs, sample_request, sample_decision):
+    @pytest.mark.parametrize(
+        "callback_class,kwargs",
+        [
+            (AutoApproveCallback, {}),
+            (QueueHITLCallback, {}),
+        ],
+    )
+    async def test_callback_interface(
+        self, callback_class, kwargs, sample_request, sample_decision
+    ):
         """All callbacks should implement interface."""
         callback = callback_class(**kwargs)
 
         # Check interface methods exist
-        assert hasattr(callback, 'request_approval')
-        assert hasattr(callback, 'notify_timeout')
-        assert hasattr(callback, 'notify_result')
+        assert hasattr(callback, "request_approval")
+        assert hasattr(callback, "notify_timeout")
+        assert hasattr(callback, "notify_result")
 
         # Test actual calls don't raise
         if callback_class == AutoApproveCallback:
@@ -292,10 +279,7 @@ class TestCallbackEdgeCases:
         """Should handle response for unknown request."""
         callback = QueueHITLCallback()
 
-        response = HITLResponse(
-            request_id="unknown-id",
-            approved=True
-        )
+        response = HITLResponse(request_id="unknown-id", approved=True)
 
         # Should not raise, but log warning
         await callback.submit_response(response)
@@ -308,8 +292,8 @@ class TestCallbackEdgeCases:
         assert response.approved
 
     @pytest.mark.asyncio
-    @patch('builtins.input')
-    @patch('builtins.print')
+    @patch("builtins.input")
+    @patch("builtins.print")
     async def test_console_keyboard_interrupt(self, mock_print, mock_input, sample_request):
         """Should handle KeyboardInterrupt gracefully."""
         mock_input.side_effect = KeyboardInterrupt()
@@ -321,8 +305,8 @@ class TestCallbackEdgeCases:
         assert not response.approved
 
     @pytest.mark.asyncio
-    @patch('builtins.input')
-    @patch('builtins.print')
+    @patch("builtins.input")
+    @patch("builtins.print")
     async def test_console_eof_error(self, mock_print, mock_input, sample_request):
         """Should handle EOFError gracefully."""
         mock_input.side_effect = EOFError()

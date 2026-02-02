@@ -28,6 +28,7 @@ import pytest
 @dataclass
 class MockChunk:
     """Mock SemantiScan Chunk for testing."""
+
     id: str
     content: str
     metadata: Dict[str, Any]
@@ -44,6 +45,7 @@ class MockChunk:
 @dataclass
 class MockContextDocument:
     """Mock ContextDocument for testing."""
+
     id: str
     content: str
     metadata: Dict[str, Any]
@@ -478,10 +480,10 @@ class TestProtocolCompliance:
         mock_llmcore = MockLLMCore()
         client = await LLMCoreVectorClient.create(mock_llmcore)
 
-        assert hasattr(client, 'add_chunks')
+        assert hasattr(client, "add_chunks")
         assert callable(client.add_chunks)
 
-        assert hasattr(client, 'query')
+        assert hasattr(client, "query")
         assert callable(client.query)
 
 

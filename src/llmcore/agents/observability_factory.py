@@ -199,11 +199,7 @@ def create_observability_from_config(
                     "sandbox": EventCategory.SANDBOX,
                     "rag": EventCategory.RAG,
                 }
-                category_filter = [
-                    cat_map[c.lower()]
-                    for c in categories
-                    if c.lower() in cat_map
-                ]
+                category_filter = [cat_map[c.lower()] for c in categories if c.lower() in cat_map]
 
             file_sink = FilteredSink(
                 inner_sink=file_sink,

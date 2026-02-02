@@ -33,6 +33,7 @@ import pytest
 # Pre-register observability modules to bypass llmcore/__init__.py chain
 _src_path = _Path(__file__).parent.parent.parent.parent / "src"
 
+
 def _load_module(name: str, filepath: str):
     """Load module directly from file without triggering package __init__.py"""
     spec = importlib.util.spec_from_file_location(name, filepath)
@@ -40,6 +41,7 @@ def _load_module(name: str, filepath: str):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
 
 def _register_dummy_package(name: str):
     """Register a dummy package module to prevent import chain"""
@@ -49,41 +51,42 @@ def _register_dummy_package(name: str):
         sys.modules[name] = pkg
     return sys.modules[name]
 
+
 # Register parent packages as dummies to prevent cascade
-_register_dummy_package('llmcore')
-_register_dummy_package('llmcore.agents')
-_register_dummy_package('llmcore.agents.observability')
+_register_dummy_package("llmcore")
+_register_dummy_package("llmcore.agents")
+_register_dummy_package("llmcore.agents.observability")
 
 # Load observability modules in order (events first, since others depend on it)
 _events = _load_module(
-    'llmcore.agents.observability.events',
-    str(_src_path / 'llmcore' / 'agents' / 'observability' / 'events.py')
+    "llmcore.agents.observability.events",
+    str(_src_path / "llmcore" / "agents" / "observability" / "events.py"),
 )
 _logger = _load_module(
-    'llmcore.agents.observability.logger',
-    str(_src_path / 'llmcore' / 'agents' / 'observability' / 'logger.py')
+    "llmcore.agents.observability.logger",
+    str(_src_path / "llmcore" / "agents" / "observability" / "logger.py"),
 )
 _metrics = _load_module(
-    'llmcore.agents.observability.metrics',
-    str(_src_path / 'llmcore' / 'agents' / 'observability' / 'metrics.py')
+    "llmcore.agents.observability.metrics",
+    str(_src_path / "llmcore" / "agents" / "observability" / "metrics.py"),
 )
 _replay = _load_module(
-    'llmcore.agents.observability.replay',
-    str(_src_path / 'llmcore' / 'agents' / 'observability' / 'replay.py')
+    "llmcore.agents.observability.replay",
+    str(_src_path / "llmcore" / "agents" / "observability" / "replay.py"),
 )
 
 _observability_factory = _load_module(
-    'llmcore.agents.observability_factory',
-    str(_src_path / 'llmcore' / 'agents' / 'observability_factory.py')
+    "llmcore.agents.observability_factory",
+    str(_src_path / "llmcore" / "agents" / "observability_factory.py"),
 )
 
 # Link modules into the package namespace for standard imports
-_obs_pkg = sys.modules['llmcore.agents.observability']
+_obs_pkg = sys.modules["llmcore.agents.observability"]
 _obs_pkg.events = _events
 _obs_pkg.logger = _logger
 _obs_pkg.metrics = _metrics
 _obs_pkg.replay = _replay
-_agents_pkg = sys.modules['llmcore.agents']
+_agents_pkg = sys.modules["llmcore.agents"]
 _agents_pkg.observability_factory = _observability_factory
 
 # Export all symbols at the observability package level
@@ -409,60 +412,70 @@ def sample_event_sequence(session_id, execution_id, fixed_timestamp):
     events = []
 
     # Agent start
-    events.append(LifecycleEvent(
-        session_id=session_id,
-        execution_id=execution_id,
-        event_type=LifecycleEventType.AGENT_STARTED,
-        timestamp=fixed_timestamp,
-        goal="Analyze data and generate report",
-    ))
+    events.append(
+        LifecycleEvent(
+            session_id=session_id,
+            execution_id=execution_id,
+            event_type=LifecycleEventType.AGENT_STARTED,
+            timestamp=fixed_timestamp,
+            goal="Analyze data and generate report",
+        )
+    )
 
     # Iteration 1 start
-    events.append(LifecycleEvent(
-        session_id=session_id,
-        execution_id=execution_id,
-        event_type=LifecycleEventType.ITERATION_STARTED,
-        timestamp=fixed_timestamp + timedelta(seconds=1),
-        iteration=1,
-    ))
+    events.append(
+        LifecycleEvent(
+            session_id=session_id,
+            execution_id=execution_id,
+            event_type=LifecycleEventType.ITERATION_STARTED,
+            timestamp=fixed_timestamp + timedelta(seconds=1),
+            iteration=1,
+        )
+    )
 
     # Cognitive phase - think
-    events.append(CognitiveEvent(
-        session_id=session_id,
-        execution_id=execution_id,
-        event_type=CognitiveEventType.PHASE_COMPLETED,
-        timestamp=fixed_timestamp + timedelta(seconds=2),
-        phase="think",
-        iteration=1,
-        input_summary="User query",
-        output_summary="Determined approach",
-        duration_ms=500.0,
-    ))
+    events.append(
+        CognitiveEvent(
+            session_id=session_id,
+            execution_id=execution_id,
+            event_type=CognitiveEventType.PHASE_COMPLETED,
+            timestamp=fixed_timestamp + timedelta(seconds=2),
+            phase="think",
+            iteration=1,
+            input_summary="User query",
+            output_summary="Determined approach",
+            duration_ms=500.0,
+        )
+    )
 
     # Activity execution
-    events.append(ActivityEvent(
-        session_id=session_id,
-        execution_id=execution_id,
-        event_type=ActivityEventType.ACTIVITY_COMPLETED,
-        timestamp=fixed_timestamp + timedelta(seconds=3),
-        activity_type="execute_python",
-        activity_name="execute_python",
-        parameters={"code": "import pandas"},
-        result="Success",
-        success=True,
-        duration_ms=150.0,
-        iteration=1,
-    ))
+    events.append(
+        ActivityEvent(
+            session_id=session_id,
+            execution_id=execution_id,
+            event_type=ActivityEventType.ACTIVITY_COMPLETED,
+            timestamp=fixed_timestamp + timedelta(seconds=3),
+            activity_type="execute_python",
+            activity_name="execute_python",
+            parameters={"code": "import pandas"},
+            result="Success",
+            success=True,
+            duration_ms=150.0,
+            iteration=1,
+        )
+    )
 
     # Agent completion
-    events.append(LifecycleEvent(
-        session_id=session_id,
-        execution_id=execution_id,
-        event_type=LifecycleEventType.AGENT_COMPLETED,
-        timestamp=fixed_timestamp + timedelta(seconds=5),
-        final_status="success",
-        total_iterations=1,
-    ))
+    events.append(
+        LifecycleEvent(
+            session_id=session_id,
+            execution_id=execution_id,
+            event_type=LifecycleEventType.AGENT_COMPLETED,
+            timestamp=fixed_timestamp + timedelta(seconds=5),
+            final_status="success",
+            total_iterations=1,
+        )
+    )
 
     return events
 
@@ -634,22 +647,30 @@ def multi_execution_log(temp_dir, fixed_timestamp):
 
     # Execution 1
     for i in range(3):
-        events.append(LifecycleEvent(
-            session_id="session-1",
-            execution_id="exec-1",
-            event_type=LifecycleEventType.ITERATION_STARTED if i < 2 else LifecycleEventType.AGENT_COMPLETED,
-            timestamp=fixed_timestamp + timedelta(seconds=i),
-            iteration=i + 1 if i < 2 else None,
-        ))
+        events.append(
+            LifecycleEvent(
+                session_id="session-1",
+                execution_id="exec-1",
+                event_type=LifecycleEventType.ITERATION_STARTED
+                if i < 2
+                else LifecycleEventType.AGENT_COMPLETED,
+                timestamp=fixed_timestamp + timedelta(seconds=i),
+                iteration=i + 1 if i < 2 else None,
+            )
+        )
 
     # Execution 2
     for i in range(2):
-        events.append(LifecycleEvent(
-            session_id="session-2",
-            execution_id="exec-2",
-            event_type=LifecycleEventType.AGENT_STARTED if i == 0 else LifecycleEventType.AGENT_FAILED,
-            timestamp=fixed_timestamp + timedelta(seconds=10 + i),
-        ))
+        events.append(
+            LifecycleEvent(
+                session_id="session-2",
+                execution_id="exec-2",
+                event_type=LifecycleEventType.AGENT_STARTED
+                if i == 0
+                else LifecycleEventType.AGENT_FAILED,
+                timestamp=fixed_timestamp + timedelta(seconds=10 + i),
+            )
+        )
 
     with open(log_file, "w") as f:
         for event in events:
@@ -689,7 +710,7 @@ def create_event_dict(
     execution_id: str = "test-exec",
     category: str = "lifecycle",
     event_type: str = "agent_started",
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """Create an event dictionary for testing parsing."""
     return {

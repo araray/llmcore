@@ -12,7 +12,6 @@ References:
     - Dossier: Step 2.1-2.3 (Prompt Library Implementation)
 """
 
-
 import pytest
 
 from llmcore.agents.prompts import (

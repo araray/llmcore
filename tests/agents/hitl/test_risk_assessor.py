@@ -186,8 +186,11 @@ class TestResourceScope:
         assert risk.overall_level in ("medium", "high", "critical")
         assert risk.requires_approval
         # Verify the dangerous pattern was detected
-        assert any("configuration" in f.reason.lower() or "System" in f.reason
-                   for f in risk.factors if f.level == "high")
+        assert any(
+            "configuration" in f.reason.lower() or "System" in f.reason
+            for f in risk.factors
+            if f.level == "high"
+        )
 
     def test_root_home_high_risk(self, assessor):
         """Root home should be at least medium risk for read operations.

@@ -45,7 +45,7 @@ class TestSandboxConfig:
             timeout_seconds=300,
             memory_limit="2g",
             cpu_limit=4.0,
-            network_enabled=True
+            network_enabled=True,
         )
 
         assert config.access_level == SandboxAccessLevel.FULL
@@ -64,10 +64,7 @@ class TestSandboxConfig:
 
     def test_to_dict_serialization(self):
         """Test serialization to dictionary."""
-        config = SandboxConfig(
-            timeout_seconds=120,
-            labels={"env": "test"}
-        )
+        config = SandboxConfig(timeout_seconds=120, labels={"env": "test"})
 
         data = config.to_dict()
 
@@ -80,11 +77,11 @@ class TestSandboxConfig:
     def test_path_string_conversion(self):
         """Test that string paths are converted to Path objects."""
         config = SandboxConfig(
-            share_mount_host="~/test_share",
-            output_mount_host="/tmp/test_output"
+            share_mount_host="~/test_share", output_mount_host="/tmp/test_output"
         )
 
         from pathlib import Path
+
         assert isinstance(config.share_mount_host, Path)
         assert isinstance(config.output_mount_host, Path)
 
@@ -126,11 +123,7 @@ class TestExecutionResult:
 
     def test_to_tool_output_timeout(self):
         """Test tool output formatting for timed out execution."""
-        result = ExecutionResult(
-            exit_code=-1,
-            timed_out=True,
-            execution_time_seconds=60.0
-        )
+        result = ExecutionResult(exit_code=-1, timed_out=True, execution_time_seconds=60.0)
 
         output = result.to_tool_output()
 
@@ -159,7 +152,7 @@ class TestExecutionResult:
             stdout="output",
             stderr="",
             execution_time_seconds=1.5,
-            metadata={"test": True}
+            metadata={"test": True},
         )
 
         data = result.to_dict()
@@ -177,10 +170,7 @@ class TestFileInfo:
     def test_file_info_creation(self):
         """Test FileInfo creation."""
         info = FileInfo(
-            path="/workspace/test.py",
-            name="test.py",
-            is_directory=False,
-            size_bytes=1024
+            path="/workspace/test.py", name="test.py", is_directory=False, size_bytes=1024
         )
 
         assert info.path == "/workspace/test.py"
@@ -190,11 +180,7 @@ class TestFileInfo:
 
     def test_directory_info(self):
         """Test FileInfo for directories."""
-        info = FileInfo(
-            path="/workspace/data",
-            name="data",
-            is_directory=True
-        )
+        info = FileInfo(path="/workspace/data", name="data", is_directory=True)
 
         assert info.is_directory is True
         assert info.size_bytes == 0  # Default
@@ -207,7 +193,7 @@ class TestFileInfo:
             is_directory=False,
             size_bytes=500,
             permissions="rw-r--r--",
-            modified_at=datetime(2024, 1, 1, 12, 0, 0)
+            modified_at=datetime(2024, 1, 1, 12, 0, 0),
         )
 
         data = info.to_dict()
@@ -250,7 +236,7 @@ class TestSandboxStatus:
             SandboxStatus.PAUSED,
             SandboxStatus.ERROR,
             SandboxStatus.CLEANING_UP,
-            SandboxStatus.TERMINATED
+            SandboxStatus.TERMINATED,
         ]
 
         for status in statuses:
@@ -266,7 +252,7 @@ class TestSandboxStatus:
             SandboxStatus.EXECUTING,
             SandboxStatus.READY,
             SandboxStatus.CLEANING_UP,
-            SandboxStatus.TERMINATED
+            SandboxStatus.TERMINATED,
         ]
 
         # Just verify all statuses are valid
@@ -301,7 +287,7 @@ class TestSandboxProviderAbstract:
             "get_access_level",
             "get_status",
             "get_config",
-            "get_info"
+            "get_info",
         ]
 
         for method_name in abstract_methods:

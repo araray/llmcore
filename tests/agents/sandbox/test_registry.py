@@ -52,33 +52,20 @@ class TestSandboxRegistryConfig:
     def test_docker_mode_validation(self):
         """Test that docker mode requires docker enabled."""
         with pytest.raises(ValueError, match="docker_enabled"):
-            SandboxRegistryConfig(
-                mode=SandboxMode.DOCKER,
-                docker_enabled=False
-            )
+            SandboxRegistryConfig(mode=SandboxMode.DOCKER, docker_enabled=False)
 
     def test_vm_mode_validation(self):
         """Test that VM mode requires VM enabled and host set."""
         with pytest.raises(ValueError, match="vm_enabled"):
-            SandboxRegistryConfig(
-                mode=SandboxMode.VM,
-                vm_enabled=False
-            )
+            SandboxRegistryConfig(mode=SandboxMode.VM, vm_enabled=False)
 
         with pytest.raises(ValueError, match="vm_host"):
-            SandboxRegistryConfig(
-                mode=SandboxMode.VM,
-                vm_enabled=True,
-                vm_host=None
-            )
+            SandboxRegistryConfig(mode=SandboxMode.VM, vm_enabled=True, vm_host=None)
 
     def test_valid_vm_config(self):
         """Test valid VM configuration."""
         config = SandboxRegistryConfig(
-            mode=SandboxMode.VM,
-            vm_enabled=True,
-            vm_host="192.168.1.100",
-            docker_enabled=False
+            mode=SandboxMode.VM, vm_enabled=True, vm_host="192.168.1.100", docker_enabled=False
         )
 
         assert config.mode == SandboxMode.VM
@@ -99,7 +86,7 @@ class TestSandboxRegistry:
             share_path=str(temp_dir / "share"),
             outputs_path=str(temp_dir / "outputs"),
             allowed_tools=["execute_shell", "save_file"],
-            denied_tools=["sudo_execute"]
+            denied_tools=["sudo_execute"],
         )
 
     @pytest.fixture
@@ -120,16 +107,13 @@ class TestSandboxRegistry:
         assert config.docker_image == registry_config.docker_image
 
     @pytest.mark.asyncio
-    async def test_create_sandbox_docker_not_available(
-        self,
-        registry: SandboxRegistry
-    ):
+    async def test_create_sandbox_docker_not_available(self, registry: SandboxRegistry):
         """Test sandbox creation fails gracefully when Docker unavailable."""
         sandbox_config = SandboxConfig()
 
         # Mock Docker provider to fail
         with patch(
-            'llmcore.agents.sandbox.docker_provider.DockerSandboxProvider._connect_docker'
+            "llmcore.agents.sandbox.docker_provider.DockerSandboxProvider._connect_docker"
         ) as mock_connect:
             mock_connect.side_effect = Exception("Docker not available")
 
@@ -189,61 +173,53 @@ class TestToolAccessControl:
             docker_enabled=True,
             share_path=str(temp_dir / "share"),
             outputs_path=str(temp_dir / "outputs"),
-            allowed_tools=[
-                "execute_shell",
-                "execute_python",
-                "save_file",
-                "load_file"
-            ],
-            denied_tools=[
-                "sudo_execute",
-                "network_request"
-            ]
+            allowed_tools=["execute_shell", "execute_python", "save_file", "load_file"],
+            denied_tools=["sudo_execute", "network_request"],
         )
         return SandboxRegistry(config)
 
     def test_tool_allowed_full_access(self, registry_with_tools):
         """Test that full access bypasses tool restrictions."""
         # All tools should be allowed for FULL access
-        assert registry_with_tools.is_tool_allowed(
-            "sudo_execute", SandboxAccessLevel.FULL
-        ) is True
+        assert registry_with_tools.is_tool_allowed("sudo_execute", SandboxAccessLevel.FULL) is True
 
-        assert registry_with_tools.is_tool_allowed(
-            "network_request", SandboxAccessLevel.FULL
-        ) is True
+        assert (
+            registry_with_tools.is_tool_allowed("network_request", SandboxAccessLevel.FULL) is True
+        )
 
-        assert registry_with_tools.is_tool_allowed(
-            "random_tool", SandboxAccessLevel.FULL
-        ) is True
+        assert registry_with_tools.is_tool_allowed("random_tool", SandboxAccessLevel.FULL) is True
 
     def test_tool_allowed_restricted(self, registry_with_tools):
         """Test tool allowance for restricted access."""
         # Allowed tools should be allowed
-        assert registry_with_tools.is_tool_allowed(
-            "execute_shell", SandboxAccessLevel.RESTRICTED
-        ) is True
+        assert (
+            registry_with_tools.is_tool_allowed("execute_shell", SandboxAccessLevel.RESTRICTED)
+            is True
+        )
 
-        assert registry_with_tools.is_tool_allowed(
-            "save_file", SandboxAccessLevel.RESTRICTED
-        ) is True
+        assert (
+            registry_with_tools.is_tool_allowed("save_file", SandboxAccessLevel.RESTRICTED) is True
+        )
 
     def test_tool_denied_restricted(self, registry_with_tools):
         """Test tool denial for restricted access."""
         # Denied tools should be denied
-        assert registry_with_tools.is_tool_allowed(
-            "sudo_execute", SandboxAccessLevel.RESTRICTED
-        ) is False
+        assert (
+            registry_with_tools.is_tool_allowed("sudo_execute", SandboxAccessLevel.RESTRICTED)
+            is False
+        )
 
-        assert registry_with_tools.is_tool_allowed(
-            "network_request", SandboxAccessLevel.RESTRICTED
-        ) is False
+        assert (
+            registry_with_tools.is_tool_allowed("network_request", SandboxAccessLevel.RESTRICTED)
+            is False
+        )
 
     def test_tool_not_in_allowed_list(self, registry_with_tools):
         """Test tool not in allowed list is denied for restricted."""
-        assert registry_with_tools.is_tool_allowed(
-            "random_tool", SandboxAccessLevel.RESTRICTED
-        ) is False
+        assert (
+            registry_with_tools.is_tool_allowed("random_tool", SandboxAccessLevel.RESTRICTED)
+            is False
+        )
 
     def test_get_allowed_tools_full(self, registry_with_tools):
         """Test getting allowed tools for full access."""
@@ -271,10 +247,7 @@ class TestRegistryWithMockProvider:
 
     @pytest.mark.asyncio
     async def test_registry_tracks_sandbox(
-        self,
-        mock_sandbox_provider,
-        sandbox_config,
-        temp_dir: Path
+        self, mock_sandbox_provider, sandbox_config, temp_dir: Path
     ):
         """Test that registry tracks created sandboxes."""
         # Create registry
@@ -282,7 +255,7 @@ class TestRegistryWithMockProvider:
             mode=SandboxMode.DOCKER,
             docker_enabled=True,
             share_path=str(temp_dir / "share"),
-            outputs_path=str(temp_dir / "outputs")
+            outputs_path=str(temp_dir / "outputs"),
         )
         registry = SandboxRegistry(config)
 
@@ -304,10 +277,7 @@ class TestRegistryWithMockProvider:
 
     @pytest.mark.asyncio
     async def test_health_check_with_mock(
-        self,
-        mock_sandbox_provider,
-        sandbox_config,
-        temp_dir: Path
+        self, mock_sandbox_provider, sandbox_config, temp_dir: Path
     ):
         """Test health check with mock provider."""
         # Create registry
@@ -315,7 +285,7 @@ class TestRegistryWithMockProvider:
             mode=SandboxMode.DOCKER,
             docker_enabled=True,
             share_path=str(temp_dir / "share"),
-            outputs_path=str(temp_dir / "outputs")
+            outputs_path=str(temp_dir / "outputs"),
         )
         registry = SandboxRegistry(config)
 

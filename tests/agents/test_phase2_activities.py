@@ -39,7 +39,13 @@ class TestActivitySchema:
         """Test RiskLevel enum values and ordering."""
         from llmcore.agents.activities.schema import RiskLevel
 
-        levels = [RiskLevel.NONE, RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL]
+        levels = [
+            RiskLevel.NONE,
+            RiskLevel.LOW,
+            RiskLevel.MEDIUM,
+            RiskLevel.HIGH,
+            RiskLevel.CRITICAL,
+        ]
         assert len(levels) == 5
         assert levels[0].value == "none"
         assert levels[-1].value == "critical"
@@ -358,9 +364,7 @@ class TestActivityRegistry:
         """Test formatting activities for prompt."""
         from llmcore.agents.activities.schema import ActivityCategory
 
-        prompt = registry.format_for_prompt(
-            categories=[ActivityCategory.FILE_OPERATIONS]
-        )
+        prompt = registry.format_for_prompt(categories=[ActivityCategory.FILE_OPERATIONS])
 
         assert "file_read" in prompt
         assert "file_write" in prompt

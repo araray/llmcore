@@ -32,7 +32,7 @@ from llmcore import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # --- Configuration Note ---
@@ -44,18 +44,27 @@ logger = logging.getLogger(__name__)
 # default_model = "mistral"
 # --- End Configuration Note ---
 
+
 async def main():
     """Runs the Ollama provider example."""
     llm = None
     # Use unique IDs/names for this run
     session_id = f"ollama_session_{uuid.uuid4().hex[:8]}"
     rag_collection_name = f"ollama_rag_docs_{uuid.uuid4().hex[:8]}"
-    provider_name = "ollama" # Explicitly specify the provider
+    provider_name = "ollama"  # Explicitly specify the provider
 
     # Sample documents for RAG specific to this example
     rag_documents = [
-        {"id": "ollama_doc_1", "content": "Ollama allows running large language models locally.", "metadata": {"source": "ollama_example"}},
-        {"id": "ollama_doc_2", "content": "Common models served by Ollama include Llama 3, Mistral, and Gemma.", "metadata": {"source": "ollama_example"}},
+        {
+            "id": "ollama_doc_1",
+            "content": "Ollama allows running large language models locally.",
+            "metadata": {"source": "ollama_example"},
+        },
+        {
+            "id": "ollama_doc_2",
+            "content": "Common models served by Ollama include Llama 3, Mistral, and Gemma.",
+            "metadata": {"source": "ollama_example"},
+        },
     ]
 
     try:
@@ -65,8 +74,10 @@ async def main():
         async with await LLMCore.create() as llm:
             # Check if Ollama provider was actually loaded
             if provider_name not in llm.get_available_providers():
-                 logger.error(f"Ollama provider ('{provider_name}') failed to load. Is it configured correctly and dependencies installed?")
-                 return
+                logger.error(
+                    f"Ollama provider ('{provider_name}') failed to load. Is it configured correctly and dependencies installed?"
+                )
+                return
             logger.info(f"LLMCore initialized. Using provider: {provider_name}")
 
             # --- Simple Chat (Stateless, Non-Streaming) ---
@@ -95,9 +106,7 @@ async def main():
             print("Ollama (Streaming): ", end="", flush=True)
             try:
                 response_stream = await llm.chat(
-                    message=prompt2,
-                    provider_name=provider_name,
-                    stream=True
+                    message=prompt2, provider_name=provider_name, stream=True
                 )
                 # The llm.chat(stream=True) yields string deltas directly
                 async for text_delta in response_stream:
@@ -120,7 +129,7 @@ async def main():
                     message=prompt3_1,
                     session_id=session_id,
                     provider_name=provider_name,
-                    system_message="You are a helpful AI assistant discussing local LLMs."
+                    system_message="You are a helpful AI assistant discussing local LLMs.",
                 )
                 logger.info(f"Ollama (Turn 1): {response3_1}")
 
@@ -128,8 +137,8 @@ async def main():
                 logger.info(f"User (Turn 2): {prompt3_2}")
                 response3_2 = await llm.chat(
                     message=prompt3_2,
-                    session_id=session_id, # Continue the same session
-                    provider_name=provider_name
+                    session_id=session_id,  # Continue the same session
+                    provider_name=provider_name,
                 )
                 logger.info(f"Ollama (Turn 2): {response3_2}")
 
@@ -144,11 +153,10 @@ async def main():
             logger.info(f"Adding documents to RAG collection: {rag_collection_name}")
             try:
                 added_ids = await llm.add_documents_to_vector_store(
-                    documents=rag_documents,
-                    collection_name=rag_collection_name
+                    documents=rag_documents, collection_name=rag_collection_name
                 )
                 logger.info(f"Added documents with IDs: {added_ids}")
-                await asyncio.sleep(1) # Give vector store a moment
+                await asyncio.sleep(1)  # Give vector store a moment
             except (VectorStorageError, EmbeddingError, ConfigError) as e:
                 logger.error(f"Failed to add RAG documents: {e}. Skipping RAG chat.")
             else:
@@ -162,11 +170,11 @@ async def main():
                         enable_rag=True,
                         rag_collection_name=rag_collection_name,
                         rag_retrieval_k=1,
-                        system_message="Answer based *only* on the provided context documents."
+                        system_message="Answer based *only* on the provided context documents.",
                     )
                     logger.info(f"Ollama (RAG): {response4}")
                 except ProviderError as e:
-                     logger.error(f"RAG chat failed: {e}. Is Ollama running?")
+                    logger.error(f"RAG chat failed: {e}. Is Ollama running?")
                 except (ConfigError, ContextLengthError, VectorStorageError, EmbeddingError) as e:
                     logger.error(f"RAG chat failed: {e}")
 
@@ -177,6 +185,7 @@ async def main():
     except Exception as e:
         logger.exception(f"An unexpected error occurred: {e}")
     # llm.close() is handled by 'async with'
+
 
 if __name__ == "__main__":
     asyncio.run(main())

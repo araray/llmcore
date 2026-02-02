@@ -20,7 +20,6 @@ Phase: 4, Step 4.3
 Version: 0.25.0
 """
 
-
 import pytest
 
 from llmcore import LLMCore

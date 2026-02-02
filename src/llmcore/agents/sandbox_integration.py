@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 # TOOL REGISTRATION
 # =============================================================================
 
+
 def register_sandbox_tools(tool_manager: "ToolManager") -> None:
     """
     Register sandbox tools with the ToolManager's implementation registry.
@@ -99,15 +100,16 @@ def register_sandbox_tools(tool_manager: "ToolManager") -> None:
     from . import tools as tool_module
 
     # Add sandbox tool implementations to the registry
-    if hasattr(tool_module, '_IMPLEMENTATION_REGISTRY'):
+    if hasattr(tool_module, "_IMPLEMENTATION_REGISTRY"):
         tool_module._IMPLEMENTATION_REGISTRY.update(SANDBOX_TOOL_IMPLEMENTATIONS)
         logger.info(f"Registered {len(SANDBOX_TOOL_IMPLEMENTATIONS)} sandbox tools")
     else:
         logger.warning("Could not find _IMPLEMENTATION_REGISTRY in tools module")
 
     # Add descriptions
-    if hasattr(tool_module, '_IMPLEMENTATION_DESCRIPTIONS'):
+    if hasattr(tool_module, "_IMPLEMENTATION_DESCRIPTIONS"):
         from .sandbox.tools import SANDBOX_TOOL_DESCRIPTIONS
+
         tool_module._IMPLEMENTATION_DESCRIPTIONS.update(SANDBOX_TOOL_DESCRIPTIONS)
 
 
@@ -129,6 +131,7 @@ def get_sandbox_tool_definitions() -> list:
 # =============================================================================
 # SANDBOX INTEGRATION CLASS
 # =============================================================================
+
 
 class SandboxIntegration:
     """
@@ -193,9 +196,9 @@ class SandboxIntegration:
         # Extract sandbox config section
         sandbox_dict = {}
 
-        if hasattr(llmcore_config, 'agents') and hasattr(llmcore_config.agents, 'sandbox'):
+        if hasattr(llmcore_config, "agents") and hasattr(llmcore_config.agents, "sandbox"):
             sandbox_section = llmcore_config.agents.sandbox
-            if hasattr(sandbox_section, 'as_dict'):
+            if hasattr(sandbox_section, "as_dict"):
                 sandbox_dict = sandbox_section.as_dict()
             elif isinstance(sandbox_section, dict):
                 sandbox_dict = sandbox_section
@@ -231,9 +234,7 @@ class SandboxIntegration:
             return
 
         self._registry = SandboxRegistry(self._config)
-        self._tracker = OutputTracker(
-            base_path=self._config.outputs_path
-        )
+        self._tracker = OutputTracker(base_path=self._config.outputs_path)
         self._initialized = True
 
         logger.info("Sandbox integration initialized")
@@ -250,9 +251,7 @@ class SandboxIntegration:
 
     @asynccontextmanager
     async def sandbox_context(
-        self,
-        task: "AgentTask",
-        sandbox_config: Optional[SandboxConfig] = None
+        self, task: "AgentTask", sandbox_config: Optional[SandboxConfig] = None
     ) -> AsyncGenerator["SandboxContext", None]:
         """
         Context manager for sandbox-scoped agent execution.
@@ -282,8 +281,8 @@ class SandboxIntegration:
         # Create sandbox config if not provided
         if sandbox_config is None:
             sandbox_config = SandboxConfig(
-                timeout_seconds=getattr(task, 'timeout', 600) or 600,
-                network_enabled=getattr(task, 'network_enabled', False)
+                timeout_seconds=getattr(task, "timeout", 600) or 600,
+                network_enabled=getattr(task, "network_enabled", False),
             )
 
         # Create sandbox
@@ -295,11 +294,11 @@ class SandboxIntegration:
             sandbox_id=sandbox_id,
             sandbox_type=sandbox.get_info().get("provider", "unknown"),
             access_level=sandbox.get_access_level().value,
-            task_description=getattr(task, 'goal', str(task)),
+            task_description=getattr(task, "goal", str(task)),
             metadata={
-                "task_id": getattr(task, 'id', None),
-                "tenant_id": getattr(task, 'tenant_id', None)
-            }
+                "task_id": getattr(task, "id", None),
+                "tenant_id": getattr(task, "tenant_id", None),
+            },
         )
 
         # Set as active for tool execution
@@ -307,10 +306,7 @@ class SandboxIntegration:
 
         # Create context object
         ctx = SandboxContext(
-            sandbox=sandbox,
-            registry=self._registry,
-            tracker=self._tracker,
-            run_id=run_id
+            sandbox=sandbox, registry=self._registry, tracker=self._tracker, run_id=run_id
         )
 
         success = False
@@ -335,7 +331,7 @@ class SandboxIntegration:
                 sandbox=sandbox,
                 success=success,
                 error_message=error_message,
-                preserve_state=True
+                preserve_state=True,
             )
 
             # Cleanup sandbox
@@ -374,7 +370,7 @@ class SandboxContext:
         sandbox: SandboxProvider,
         registry: SandboxRegistry,
         tracker: OutputTracker,
-        run_id: str
+        run_id: str,
     ):
         self.sandbox = sandbox
         self._registry = registry
@@ -391,12 +387,7 @@ class SandboxContext:
         """Get the sandbox access level."""
         return self.sandbox.get_access_level().value
 
-    async def log_execution(
-        self,
-        tool_name: str,
-        input_text: str,
-        result: Any
-    ) -> None:
+    async def log_execution(self, tool_name: str, input_text: str, result: Any) -> None:
         """
         Log a tool execution to the output tracker.
 
@@ -405,19 +396,9 @@ class SandboxContext:
             input_text: Input provided to the tool
             result: ExecutionResult or similar from the tool
         """
-        await self._tracker.log_execution(
-            self.run_id,
-            tool_name,
-            input_text,
-            result
-        )
+        await self._tracker.log_execution(self.run_id, tool_name, input_text, result)
 
-    async def track_file(
-        self,
-        path: str,
-        size_bytes: int = 0,
-        description: str = ""
-    ) -> None:
+    async def track_file(self, path: str, size_bytes: int = 0, description: str = "") -> None:
         """
         Track a file created in the sandbox.
 
@@ -426,12 +407,7 @@ class SandboxContext:
             size_bytes: File size in bytes
             description: Description of the file
         """
-        await self._tracker.track_file(
-            self.run_id,
-            path,
-            size_bytes,
-            description
-        )
+        await self._tracker.track_file(self.run_id, path, size_bytes, description)
 
     def is_tool_allowed(self, tool_name: str) -> bool:
         """
@@ -443,10 +419,7 @@ class SandboxContext:
         Returns:
             True if tool is allowed
         """
-        return self._registry.is_tool_allowed(
-            tool_name,
-            self.sandbox.get_access_level()
-        )
+        return self._registry.is_tool_allowed(tool_name, self.sandbox.get_access_level())
 
     async def execute_shell(self, command: str, timeout: int = None) -> Any:
         """
@@ -487,6 +460,7 @@ class SandboxContext:
 # AGENTMANAGER MIXIN
 # =============================================================================
 
+
 class SandboxAgentMixin:
     """
     Mixin class that adds sandbox capabilities to AgentManager.
@@ -505,10 +479,7 @@ class SandboxAgentMixin:
 
     _sandbox_integration: Optional[SandboxIntegration] = None
 
-    async def initialize_sandbox(
-        self,
-        config: Optional[Dict[str, Any]] = None
-    ) -> None:
+    async def initialize_sandbox(self, config: Optional[Dict[str, Any]] = None) -> None:
         """
         Initialize sandbox support for the agent manager.
 
@@ -519,7 +490,7 @@ class SandboxAgentMixin:
             self._sandbox_integration = SandboxIntegration.from_dict(config)
         else:
             # Try to get from llmcore config
-            if hasattr(self, '_provider_manager') and hasattr(self._provider_manager, 'config'):
+            if hasattr(self, "_provider_manager") and hasattr(self._provider_manager, "config"):
                 self._sandbox_integration = SandboxIntegration.from_llmcore_config(
                     self._provider_manager.config
                 )
@@ -530,7 +501,7 @@ class SandboxAgentMixin:
         await self._sandbox_integration.initialize()
 
         # Register sandbox tools with our tool manager
-        if hasattr(self, '_tool_manager'):
+        if hasattr(self, "_tool_manager"):
             register_sandbox_tools(self._tool_manager)
 
     async def shutdown_sandbox(self) -> None:
@@ -538,11 +509,7 @@ class SandboxAgentMixin:
         if self._sandbox_integration:
             await self._sandbox_integration.shutdown()
 
-    async def run_agent_loop_sandboxed(
-        self,
-        task: "AgentTask",
-        **kwargs
-    ) -> str:
+    async def run_agent_loop_sandboxed(self, task: "AgentTask", **kwargs) -> str:
         """
         Run the agent loop with sandbox isolation.
 

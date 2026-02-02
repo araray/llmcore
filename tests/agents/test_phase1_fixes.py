@@ -10,7 +10,6 @@ Tests the critical bug fixes and new infrastructure:
 - RAG Filter
 """
 
-
 import pytest
 
 # =============================================================================

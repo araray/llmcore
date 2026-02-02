@@ -122,7 +122,7 @@ class TestConfigurationValidation:
                     "type": "openai",
                     "model": "gpt-4",
                 }
-            }
+            },
         }
 
         cfg = Config(defaults=config)
@@ -168,7 +168,7 @@ class TestConfigSectionExtraction:
         embedding_section = cfg.get("embedding", {})
 
         assert embedding_section is not None
-        assert isinstance(embedding_section, dict) or hasattr(embedding_section, 'get')
+        assert isinstance(embedding_section, dict) or hasattr(embedding_section, "get")
 
     def test_extract_storage_config(self, full_config_dict: Dict[str, Any]) -> None:
         """Test extracting storage configuration section."""
@@ -356,10 +356,10 @@ class TestConfigMerging:
         result = deep_merge(base, updates)
 
         assert result["a"]["b"] == 10  # Updated
-        assert result["a"]["c"] == 2   # Preserved from base
-        assert result["a"]["e"] == 5   # Added from updates
-        assert result["d"] == 3        # Preserved from base
-        assert result["f"] == 6        # Added from updates
+        assert result["a"]["c"] == 2  # Preserved from base
+        assert result["a"]["e"] == 5  # Added from updates
+        assert result["d"] == 3  # Preserved from base
+        assert result["f"] == 6  # Added from updates
 
     def test_override_precedence(self, temp_config_file: Path) -> None:
         """Test that override precedence is respected."""
@@ -400,6 +400,7 @@ default_provider = "openai"
 # Fixtures specific to config tests
 # ============================================================================
 
+
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file path."""
@@ -438,13 +439,13 @@ def full_config_dict() -> Dict[str, Any]:
             "cache": {
                 "enabled": True,
                 "max_size": 10000,
-            }
+            },
         },
         "storage": {
             "default_backend": "chromadb",
             "chromadb": {
                 "persist_directory": "/tmp/chromadb",
-            }
+            },
         },
         "agents": {
             "sandbox": {
@@ -454,7 +455,7 @@ def full_config_dict() -> Dict[str, Any]:
             "hitl": {
                 "enabled": True,
                 "timeout": 60,
-            }
+            },
         },
         "observability": {
             "metrics": {
@@ -462,7 +463,7 @@ def full_config_dict() -> Dict[str, Any]:
             },
             "cost_tracking": {
                 "enabled": True,
-            }
+            },
         },
         "providers": {
             "openai": {
@@ -470,5 +471,5 @@ def full_config_dict() -> Dict[str, Any]:
                 "model": "gpt-4",
                 "api_key": "test-key",
             }
-        }
+        },
     }

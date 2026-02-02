@@ -69,7 +69,7 @@ def sample_activity():
     return ActivityInfo(
         activity_type="bash_exec",
         parameters={"command": "ls -la /workspace"},
-        reason="List workspace files"
+        reason="List workspace files",
     )
 
 
@@ -81,7 +81,7 @@ def sample_risk_assessment():
         requires_approval=True,
         factors=[],
         dangerous_patterns=[],
-        scope_risk=None
+        scope_risk=None,
     )
 
 
@@ -93,7 +93,7 @@ def sample_hitl_request(sample_activity, sample_risk_assessment):
         risk_assessment=sample_risk_assessment,
         session_id="test-session-123",
         user_id="test-user-456",
-        context_summary="Testing HITL workflow"
+        context_summary="Testing HITL workflow",
     )
     request.set_expiration(300)
     return request
@@ -106,7 +106,7 @@ def sample_hitl_response(sample_hitl_request):
         request_id=sample_hitl_request.request_id,
         approved=True,
         responder_id="test-user-456",
-        feedback="Approved for testing"
+        feedback="Approved for testing",
     )
 
 
@@ -117,7 +117,7 @@ def sample_decision(sample_hitl_request, sample_hitl_response):
         status=ApprovalStatus.APPROVED,
         reason="Approved by user",
         request=sample_hitl_request,
-        response=sample_hitl_response
+        response=sample_hitl_response,
     )
 
 
@@ -134,7 +134,7 @@ def auto_approve_manager(default_config):
         callback=AutoApproveCallback(delay_seconds=0),
         state_store=InMemoryHITLStore(),
         session_id="test-session",
-        user_id="test-user"
+        user_id="test-user",
     )
 
 
@@ -146,7 +146,7 @@ def auto_reject_manager(default_config):
         callback=AutoApproveCallback(approve=False, delay_seconds=0),
         state_store=InMemoryHITLStore(),
         session_id="test-session",
-        user_id="test-user"
+        user_id="test-user",
     )
 
 
@@ -154,7 +154,4 @@ def auto_reject_manager(default_config):
 def disabled_manager():
     """Create disabled HITL manager."""
     config = HITLConfig(enabled=False)
-    return HITLManager(
-        config=config,
-        state_store=InMemoryHITLStore()
-    )
+    return HITLManager(config=config, state_store=InMemoryHITLStore())

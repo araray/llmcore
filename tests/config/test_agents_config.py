@@ -191,9 +191,7 @@ class TestAgentsConfigOverride:
 
     def test_partial_override_preserves_defaults(self):
         """Partial overrides should preserve other defaults."""
-        config = AgentsConfig(
-            goals=GoalsConfig(classifier_enabled=False)
-        )
+        config = AgentsConfig(goals=GoalsConfig(classifier_enabled=False))
 
         # Overridden value
         assert config.goals.classifier_enabled is False
@@ -306,9 +304,7 @@ max_iterations = 25
 max_same_errors = 5
 max_execution_time_seconds = 600
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             config_file = Path(f.name)
 
@@ -390,9 +386,7 @@ class TestEnvVarOverrides:
 
     def test_env_override_float(self, monkeypatch):
         """Environment variables should override float values."""
-        monkeypatch.setenv(
-            "LLMCORE_AGENTS__GOALS__HEURISTIC_CONFIDENCE_THRESHOLD", "0.85"
-        )
+        monkeypatch.setenv("LLMCORE_AGENTS__GOALS__HEURISTIC_CONFIDENCE_THRESHOLD", "0.85")
 
         config = load_agents_config()
 
@@ -493,10 +487,7 @@ class TestConfigSerialization:
 
         assert restored.max_iterations == original.max_iterations
         assert restored.goals.classifier_enabled == original.goals.classifier_enabled
-        assert (
-            restored.circuit_breaker.max_same_errors
-            == original.circuit_breaker.max_same_errors
-        )
+        assert restored.circuit_breaker.max_same_errors == original.circuit_breaker.max_same_errors
 
 
 # =============================================================================
@@ -551,9 +542,7 @@ timeout_policy = "approve"
 enabled = true
 strategy = "quality_optimized"
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             config_file = Path(f.name)
 

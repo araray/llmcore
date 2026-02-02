@@ -17,7 +17,7 @@ from pathlib import Path
 def test_import(module_path: str, names: list = None) -> tuple:
     """
     Test importing from a module.
-    
+
     Returns:
         (success: bool, error: str or None)
     """
@@ -45,7 +45,7 @@ def main():
         print(f"\n📁 Added to path: {src_path.absolute()}")
 
     # Clear any cached imports
-    modules_to_clear = [k for k in sys.modules.keys() if k.startswith('llmcore')]
+    modules_to_clear = [k for k in sys.modules.keys() if k.startswith("llmcore")]
     for mod in modules_to_clear:
         del sys.modules[mod]
     print(f"   Cleared {len(modules_to_clear)} cached modules")
@@ -55,61 +55,43 @@ def main():
         # Level 0: Base llmcore
         ("llmcore.models", ["AgentState", "ToolCall"]),
         ("llmcore.exceptions", ["LLMCoreError"]),
-
         # Level 1: Agents base
         ("llmcore.agents.tools", ["ToolManager"]),
         ("llmcore.agents.manager", ["AgentManager"]),
-
         # Level 2: Sandbox exceptions
         ("llmcore.agents.sandbox.exceptions", ["SandboxError"]),
-
         # Level 3: Sandbox base
         ("llmcore.agents.sandbox.base", ["SandboxProvider", "SandboxConfig"]),
-
         # Level 4: Sandbox providers
         ("llmcore.agents.sandbox.docker_provider", ["DockerSandboxProvider"]),
         ("llmcore.agents.sandbox.vm_provider", ["VMSandboxProvider"]),
-
         # Level 5: Sandbox registry
         ("llmcore.agents.sandbox.registry", ["SandboxRegistry"]),
-
         # Level 6: Sandbox __init__
         ("llmcore.agents.sandbox", ["SandboxError", "SandboxRegistry"]),
-
         # Level 7: Cognitive models
         ("llmcore.agents.cognitive.models", ["CognitivePhase", "ActInput", "EnhancedAgentState"]),
-
         # Level 8: Cognitive phases (individual)
         ("llmcore.agents.cognitive.phases.perceive", ["perceive_phase"]),
         ("llmcore.agents.cognitive.phases.act", ["act_phase"]),
-
         # Level 9: Cognitive phases __init__
         ("llmcore.agents.cognitive.phases", ["perceive_phase", "act_phase"]),
-
         # Level 10: Cognitive cycle
         ("llmcore.agents.cognitive.phases.cycle", ["CognitiveCycle"]),
-
         # Level 11: Cognitive __init__
         ("llmcore.agents.cognitive", ["CognitivePhase", "ActInput", "CognitiveCycle"]),
-
         # Level 12: Persona
         ("llmcore.agents.persona", ["PersonaManager", "AgentPersona"]),
-
         # Level 13: Prompts
         ("llmcore.agents.prompts", ["PromptRegistry", "PromptTemplate"]),
-
         # Level 14: Memory integration
         ("llmcore.agents.memory", ["CognitiveMemoryIntegrator"]),
-
         # Level 15: Enhanced manager
         ("llmcore.agents.manager", ["EnhancedAgentManager", "AgentMode"]),
-
         # Level 16: Single agent
         ("llmcore.agents.single_agent", ["SingleAgentMode", "AgentResult"]),
-
         # Level 17: Agents __init__
         ("llmcore.agents", ["AgentManager", "SandboxError", "CognitiveCycle"]),
-
         # Level 18: llmcore __init__
         ("llmcore", ["LLMCore", "AgentManager", "SandboxError"]),
     ]

@@ -9,7 +9,6 @@ Tests:
     - Custom attributes
 """
 
-
 from llmcore.agents.sandbox.exceptions import (
     SandboxAccessDenied,
     SandboxCleanupError,
@@ -38,20 +37,14 @@ class TestSandboxError:
 
     def test_error_with_details(self):
         """Test error with details dictionary."""
-        error = SandboxError(
-            "Test error",
-            details={"key": "value", "count": 42}
-        )
+        error = SandboxError("Test error", details={"key": "value", "count": 42})
 
         assert error.details == {"key": "value", "count": 42}
         assert "key=value" in str(error)
 
     def test_error_with_sandbox_id(self):
         """Test error with sandbox ID."""
-        error = SandboxError(
-            "Test error",
-            sandbox_id="abc12345-def6-7890-ghij-klmnopqrstuv"
-        )
+        error = SandboxError("Test error", sandbox_id="abc12345-def6-7890-ghij-klmnopqrstuv")
 
         assert error.sandbox_id == "abc12345-def6-7890-ghij-klmnopqrstuv"
         # First 8 chars of sandbox_id in message
@@ -59,11 +52,7 @@ class TestSandboxError:
 
     def test_to_dict_serialization(self):
         """Test serialization to dictionary."""
-        error = SandboxError(
-            "Test error",
-            details={"reason": "test"},
-            sandbox_id="test-id"
-        )
+        error = SandboxError("Test error", details={"reason": "test"}, sandbox_id="test-id")
 
         data = error.to_dict()
 
@@ -87,7 +76,7 @@ class TestSandboxInitializationError:
         """Test error creation."""
         error = SandboxInitializationError(
             "Failed to pull Docker image",
-            details={"image": "python:3.11", "reason": "network timeout"}
+            details={"image": "python:3.11", "reason": "network timeout"},
         )
 
         assert "Failed to pull Docker image" in str(error)
@@ -100,11 +89,7 @@ class TestSandboxExecutionError:
     def test_execution_error_attributes(self):
         """Test execution error custom attributes."""
         error = SandboxExecutionError(
-            "Command failed",
-            command="rm -rf /",
-            exit_code=1,
-            stdout="",
-            stderr="Permission denied"
+            "Command failed", command="rm -rf /", exit_code=1, stdout="", stderr="Permission denied"
         )
 
         assert error.command == "rm -rf /"
@@ -115,11 +100,7 @@ class TestSandboxExecutionError:
     def test_to_dict_with_execution_details(self):
         """Test serialization includes execution details."""
         error = SandboxExecutionError(
-            "Failed",
-            command="test command",
-            exit_code=127,
-            stdout="out",
-            stderr="err"
+            "Failed", command="test command", exit_code=127, stdout="out", stderr="err"
         )
 
         data = error.to_dict()
@@ -145,9 +126,7 @@ class TestSandboxTimeoutError:
     def test_timeout_attributes(self):
         """Test timeout error custom attributes."""
         error = SandboxTimeoutError(
-            "Command timed out",
-            timeout_seconds=60,
-            operation="execute_shell"
+            "Command timed out", timeout_seconds=60, operation="execute_shell"
         )
 
         assert error.timeout_seconds == 60
@@ -155,11 +134,7 @@ class TestSandboxTimeoutError:
 
     def test_to_dict_with_timeout_details(self):
         """Test serialization includes timeout details."""
-        error = SandboxTimeoutError(
-            "Timeout",
-            timeout_seconds=30.5,
-            operation="python execution"
-        )
+        error = SandboxTimeoutError("Timeout", timeout_seconds=30.5, operation="python execution")
 
         data = error.to_dict()
 
@@ -176,7 +151,7 @@ class TestSandboxAccessDenied:
             "Image not whitelisted",
             resource="python:latest",
             reason="Not in allowed list",
-            policy="image_whitelist"
+            policy="image_whitelist",
         )
 
         assert error.resource == "python:latest"
@@ -186,10 +161,7 @@ class TestSandboxAccessDenied:
     def test_to_dict_serialization(self):
         """Test serialization includes access details."""
         error = SandboxAccessDenied(
-            "Denied",
-            resource="/etc/passwd",
-            reason="Outside sandbox",
-            policy="filesystem_boundary"
+            "Denied", resource="/etc/passwd", reason="Outside sandbox", policy="filesystem_boundary"
         )
 
         data = error.to_dict()
@@ -205,10 +177,7 @@ class TestSandboxResourceError:
     def test_resource_error_attributes(self):
         """Test resource error attributes."""
         error = SandboxResourceError(
-            "Out of memory",
-            resource_type="memory",
-            limit="1g",
-            actual="1.5g"
+            "Out of memory", resource_type="memory", limit="1g", actual="1.5g"
         )
 
         assert error.resource_type == "memory"
@@ -218,10 +187,7 @@ class TestSandboxResourceError:
     def test_to_dict_serialization(self):
         """Test serialization includes resource details."""
         error = SandboxResourceError(
-            "CPU limit exceeded",
-            resource_type="cpu",
-            limit="2.0",
-            actual="2.5"
+            "CPU limit exceeded", resource_type="cpu", limit="2.0", actual="2.5"
         )
 
         data = error.to_dict()
@@ -237,10 +203,7 @@ class TestSandboxConnectionError:
     def test_connection_error_attributes(self):
         """Test connection error attributes."""
         error = SandboxConnectionError(
-            "SSH connection failed",
-            host="192.168.1.100",
-            port=22,
-            connection_type="ssh"
+            "SSH connection failed", host="192.168.1.100", port=22, connection_type="ssh"
         )
 
         assert error.host == "192.168.1.100"
@@ -250,10 +213,7 @@ class TestSandboxConnectionError:
     def test_to_dict_serialization(self):
         """Test serialization includes connection details."""
         error = SandboxConnectionError(
-            "Docker unreachable",
-            host="docker.local",
-            port=2375,
-            connection_type="docker_api"
+            "Docker unreachable", host="docker.local", port=2375, connection_type="docker_api"
         )
 
         data = error.to_dict()
@@ -271,7 +231,7 @@ class TestSandboxCleanupError:
         error = SandboxCleanupError(
             "Cleanup failed",
             resources_leaked=["container:abc123", "volume:data"],
-            partial_cleanup=True
+            partial_cleanup=True,
         )
 
         assert error.resources_leaked == ["container:abc123", "volume:data"]
@@ -280,9 +240,7 @@ class TestSandboxCleanupError:
     def test_to_dict_serialization(self):
         """Test serialization includes cleanup details."""
         error = SandboxCleanupError(
-            "Partial cleanup",
-            resources_leaked=["temp_file"],
-            partial_cleanup=True
+            "Partial cleanup", resources_leaked=["temp_file"], partial_cleanup=True
         )
 
         data = error.to_dict()
@@ -313,9 +271,7 @@ class TestSandboxImageNotFoundError:
     def test_image_not_found_attributes(self):
         """Test image not found error attributes."""
         error = SandboxImageNotFoundError(
-            "Image not found",
-            image="myapp:v1.0",
-            registry="docker.io"
+            "Image not found", image="myapp:v1.0", registry="docker.io"
         )
 
         assert error.image == "myapp:v1.0"
@@ -324,9 +280,7 @@ class TestSandboxImageNotFoundError:
     def test_to_dict_serialization(self):
         """Test serialization includes image details."""
         error = SandboxImageNotFoundError(
-            "Pull failed",
-            image="private/repo:tag",
-            registry="gcr.io"
+            "Pull failed", image="private/repo:tag", registry="gcr.io"
         )
 
         data = error.to_dict()
@@ -349,7 +303,7 @@ class TestExceptionHierarchy:
             SandboxConnectionError,
             SandboxCleanupError,
             SandboxNotInitializedError,
-            SandboxImageNotFoundError
+            SandboxImageNotFoundError,
         ]
 
         for exc_class in exception_classes:
@@ -368,7 +322,7 @@ class TestExceptionHierarchy:
             SandboxConnectionError("test"),
             SandboxCleanupError("test"),
             SandboxNotInitializedError("test"),
-            SandboxImageNotFoundError("test")
+            SandboxImageNotFoundError("test"),
         ]
 
         for exc in exceptions_to_test:

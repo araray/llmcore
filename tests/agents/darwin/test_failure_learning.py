@@ -412,15 +412,11 @@ class TestFailureLearningManager:
         """Test similarity hash computation."""
         manager = FailureLearningManager(enabled=False)
 
-        hash1 = manager._compute_similarity_hash(
-            "Implement user authentication", "test_failure"
-        )
+        hash1 = manager._compute_similarity_hash("Implement user authentication", "test_failure")
         hash2 = manager._compute_similarity_hash(
             "Implement user authentication system", "test_failure"
         )
-        hash3 = manager._compute_similarity_hash(
-            "Implement user authentication", "runtime_error"
-        )
+        hash3 = manager._compute_similarity_hash("Implement user authentication", "runtime_error")
 
         # Same goal, same type -> same hash
         assert hash1 == hash2

@@ -196,29 +196,35 @@ def main():
 
     try:
         # Add src to path if needed
-        src_path = str(llmcore_path.parent if llmcore_path.name == "llmcore" else llmcore_path.parent / "src")
+        src_path = str(
+            llmcore_path.parent if llmcore_path.name == "llmcore" else llmcore_path.parent / "src"
+        )
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
         from llmcore.agents.cognitive import CognitivePhase
+
         print("  ✅ CognitivePhase imports successfully")
     except ImportError as e:
         print(f"  ❌ Import failed: {e}")
 
     try:
         from llmcore.agents.cognitive import ActInput
+
         print("  ✅ ActInput imports successfully")
     except ImportError as e:
         print(f"  ❌ Import failed: {e}")
 
     try:
         from llmcore.agents.cognitive import act_phase
+
         print("  ✅ act_phase imports successfully")
     except ImportError as e:
         print(f"  ❌ Import failed: {e}")
 
     try:
         from llmcore.agents.cognitive import CognitiveCycle
+
         print("  ✅ CognitiveCycle imports successfully")
     except ImportError as e:
         print(f"  ❌ Import failed: {e}")

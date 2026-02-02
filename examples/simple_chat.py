@@ -23,13 +23,13 @@ import logging
 from llmcore import ConfigError, LLMCore, LLMCoreError, ProviderError
 
 # Configure logging for better visibility (optional)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def main():
     """Runs the simple chat examples."""
-    llm = None # Initialize llm to None for the finally block
+    llm = None  # Initialize llm to None for the finally block
     try:
         # 1. Initialize LLMCore
         # This loads configuration from default locations (packaged defaults,
@@ -57,9 +57,9 @@ async def main():
             # This requires the OpenAI provider to be configured (e.g., via env var API key).
             response2 = await llm.chat(
                 message=prompt2,
-                provider_name="openai", # Explicitly choose OpenAI
-                model_name="gpt-4o", # Use a specific OpenAI model
-                temperature=0.6      # Pass optional parameter to the provider
+                provider_name="openai",  # Explicitly choose OpenAI
+                model_name="gpt-4o",  # Use a specific OpenAI model
+                temperature=0.6,  # Pass optional parameter to the provider
             )
             logger.info(f"LLM Response 2 (OpenAI):\n{response2}")
         except (ConfigError, ProviderError) as e:
@@ -68,21 +68,21 @@ async def main():
         except LLMCoreError as e:
             logger.error(f"An LLMCore error occurred during OpenAI chat: {e}")
 
-
     except ConfigError as e:
         logger.error(f"Configuration error during initialization: {e}")
     except ProviderError as e:
-         logger.error(f"Provider error during initialization or chat: {e}")
+        logger.error(f"Provider error during initialization or chat: {e}")
     except LLMCoreError as e:
         logger.error(f"An LLMCore error occurred: {e}")
     except Exception as e:
-        logger.exception(f"An unexpected error occurred: {e}") # Log full traceback
+        logger.exception(f"An unexpected error occurred: {e}")  # Log full traceback
     finally:
         # Ensure resources (like network connections) are closed gracefully.
         if llm:
             logger.info("Closing LLMCore resources...")
             await llm.close()
             logger.info("LLMCore resources closed.")
+
 
 if __name__ == "__main__":
     # Run the main asynchronous function

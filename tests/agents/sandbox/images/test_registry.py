@@ -67,7 +67,9 @@ class TestImageRegistration:
         assert empty_registry.count == 1
         assert empty_registry.has_image(sample_metadata.full_name)
 
-    def test_register_overwrites(self, empty_registry: ImageRegistry, sample_metadata: ImageMetadata):
+    def test_register_overwrites(
+        self, empty_registry: ImageRegistry, sample_metadata: ImageMetadata
+    ):
         """Test that registering same image overwrites."""
         empty_registry.register(sample_metadata)
 
@@ -79,7 +81,9 @@ class TestImageRegistration:
         retrieved = empty_registry.get(sample_metadata.full_name)
         assert retrieved.size_bytes == 999
 
-    def test_unregister_image(self, populated_registry: ImageRegistry, sample_metadata: ImageMetadata):
+    def test_unregister_image(
+        self, populated_registry: ImageRegistry, sample_metadata: ImageMetadata
+    ):
         """Test unregistering an image."""
         full_name = sample_metadata.full_name
         assert populated_registry.has_image(full_name)
@@ -173,9 +177,7 @@ class TestImageListing:
 
     def test_list_by_capability(self, builtin_registry: ImageRegistry):
         """Test listing images by required capability."""
-        python_images = builtin_registry.list_images(
-            capabilities={ImageCapability.PYTHON}
-        )
+        python_images = builtin_registry.list_images(capabilities={ImageCapability.PYTHON})
         assert len(python_images) >= 2  # python, research, websearch
         for img in python_images:
             assert ImageCapability.PYTHON in img.capabilities

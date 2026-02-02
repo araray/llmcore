@@ -45,6 +45,7 @@ class SandboxAccessLevel(Enum):
         - Docker: Image labels and name patterns
         - VM: Host being in full_access_hosts list or having proper tags
     """
+
     RESTRICTED = "restricted"
     FULL = "full"
 
@@ -55,14 +56,15 @@ class SandboxStatus(Enum):
 
     Used for lifecycle management and health monitoring.
     """
-    CREATED = "created"          # Config created, not yet initialized
+
+    CREATED = "created"  # Config created, not yet initialized
     INITIALIZING = "initializing"  # Being set up
-    READY = "ready"              # Ready to accept commands
-    EXECUTING = "executing"      # Currently running a command
-    PAUSED = "paused"           # Temporarily suspended
-    ERROR = "error"             # In error state
+    READY = "ready"  # Ready to accept commands
+    EXECUTING = "executing"  # Currently running a command
+    PAUSED = "paused"  # Temporarily suspended
+    ERROR = "error"  # In error state
     CLEANING_UP = "cleaning_up"  # Being torn down
-    TERMINATED = "terminated"    # Fully cleaned up
+    TERMINATED = "terminated"  # Fully cleaned up
 
 
 @dataclass
@@ -97,6 +99,7 @@ class SandboxConfig:
         ...     network_enabled=True
         ... )
     """
+
     # Identity
     sandbox_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
@@ -157,7 +160,7 @@ class SandboxConfig:
             "ephemeral_db_path": self.ephemeral_db_path,
             "working_directory": self.working_directory,
             "labels": self.labels,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
 
 
@@ -185,6 +188,7 @@ class ExecutionResult:
         >>> print(result.to_tool_output())
         Hello, World!
     """
+
     exit_code: int
     stdout: str = ""
     stderr: str = ""
@@ -245,7 +249,7 @@ class ExecutionResult:
             "truncated": self.truncated,
             "timed_out": self.timed_out,
             "success": self.success,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
@@ -256,6 +260,7 @@ class FileInfo:
 
     Used for file listing and inspection operations.
     """
+
     path: str
     name: str
     is_directory: bool
@@ -271,7 +276,7 @@ class FileInfo:
             "is_directory": self.is_directory,
             "size_bytes": self.size_bytes,
             "modified_at": self.modified_at.isoformat() if self.modified_at else None,
-            "permissions": self.permissions
+            "permissions": self.permissions,
         }
 
 
@@ -333,10 +338,7 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     async def execute_shell(
-        self,
-        command: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute a shell command in the sandbox.
@@ -362,10 +364,7 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     async def execute_python(
-        self,
-        code: str,
-        timeout: Optional[int] = None,
-        working_dir: Optional[str] = None
+        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
     ) -> ExecutionResult:
         """
         Execute Python code in the sandbox.
@@ -390,12 +389,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    async def write_file(
-        self,
-        path: str,
-        content: str,
-        mode: str = "w"
-    ) -> bool:
+    async def write_file(self, path: str, content: str, mode: str = "w") -> bool:
         """
         Write content to a file in the sandbox.
 
@@ -471,11 +465,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    async def list_files(
-        self,
-        path: str = ".",
-        recursive: bool = False
-    ) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
         """
         List files in a directory within the sandbox.
 

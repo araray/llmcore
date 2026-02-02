@@ -63,10 +63,10 @@ logger = logging.getLogger(__name__)
 class MetricType(str, Enum):
     """Types of metrics."""
 
-    COUNTER = "counter"      # Monotonically increasing
-    GAUGE = "gauge"          # Point-in-time value
+    COUNTER = "counter"  # Monotonically increasing
+    GAUGE = "gauge"  # Point-in-time value
     HISTOGRAM = "histogram"  # Distribution of values
-    SUMMARY = "summary"      # Statistical summary
+    SUMMARY = "summary"  # Statistical summary
 
 
 class ExecutionStatus(str, Enum):
@@ -141,10 +141,10 @@ class HITLMetrics:
 class ExecutionMetrics:
     """
     Metrics for a single agent execution.
-    
+
     Tracks all metrics during an execution lifecycle including
     iterations, LLM calls, activities, and HITL interactions.
-    
+
     Attributes:
         execution_id: Unique execution identifier
         session_id: Session identifier
@@ -162,7 +162,7 @@ class ExecutionMetrics:
     ) -> None:
         """
         Initialize execution metrics.
-        
+
         Args:
             execution_id: Execution identifier
             session_id: Session identifier
@@ -210,7 +210,7 @@ class ExecutionMetrics:
     def start_iteration(self) -> int:
         """
         Start a new iteration.
-        
+
         Returns:
             Iteration number
         """
@@ -227,13 +227,13 @@ class ExecutionMetrics:
     ) -> IterationMetrics:
         """
         End current iteration and record metrics.
-        
+
         Args:
             phase_durations: Duration of each phase
             tokens_used: Tokens used in iteration
             activities_executed: Activities executed
             errors_occurred: Errors that occurred
-            
+
         Returns:
             Iteration metrics
         """
@@ -267,14 +267,14 @@ class ExecutionMetrics:
     ) -> IterationMetrics:
         """
         Record a completed iteration.
-        
+
         Args:
             duration_ms: Iteration duration
             phase_durations: Duration of each phase
             tokens_used: Tokens used
             activities_executed: Activities executed
             errors_occurred: Errors occurred
-            
+
         Returns:
             Iteration metrics
         """
@@ -304,7 +304,7 @@ class ExecutionMetrics:
     ) -> LLMCallMetrics:
         """
         Record an LLM call.
-        
+
         Args:
             model: Model used
             tokens_input: Input tokens
@@ -312,7 +312,7 @@ class ExecutionMetrics:
             duration_ms: Call duration
             cost: Estimated cost
             cache_hit: Whether cached
-            
+
         Returns:
             LLM call metrics
         """
@@ -345,7 +345,7 @@ class ExecutionMetrics:
     ) -> None:
         """
         Record token usage without full LLM call details.
-        
+
         Args:
             input: Input tokens
             output: Output tokens
@@ -365,13 +365,13 @@ class ExecutionMetrics:
     ) -> ActivityMetrics:
         """
         Record an activity execution.
-        
+
         Args:
             activity_name: Name of activity
             success: Whether succeeded
             duration_ms: Execution duration
             retry_count: Number of retries
-            
+
         Returns:
             Activity metrics
         """
@@ -400,7 +400,7 @@ class ExecutionMetrics:
     ) -> HITLMetrics:
         """
         Record HITL interaction.
-        
+
         Args:
             request_id: Request ID
             action_type: Action type
@@ -408,7 +408,7 @@ class ExecutionMetrics:
             approved: Whether approved
             wait_time_ms: Wait time
             timeout_occurred: If timed out
-            
+
         Returns:
             HITL metrics
         """
@@ -447,22 +447,19 @@ class ExecutionMetrics:
     ) -> None:
         """
         Mark execution as complete.
-        
+
         Args:
             success: Whether execution succeeded
             exit_reason: Reason for completion
         """
         self.end_time = datetime.now(timezone.utc)
-        self.status = (
-            ExecutionStatus.SUCCESS if success
-            else ExecutionStatus.FAILURE
-        )
+        self.status = ExecutionStatus.SUCCESS if success else ExecutionStatus.FAILURE
         self.exit_reason = exit_reason
 
     def timeout(self, reason: str = "Timeout exceeded") -> None:
         """
         Mark execution as timed out.
-        
+
         Args:
             reason: Timeout reason
         """
@@ -473,7 +470,7 @@ class ExecutionMetrics:
     def cancel(self, reason: str = "Cancelled by user") -> None:
         """
         Mark execution as cancelled.
-        
+
         Args:
             reason: Cancellation reason
         """
@@ -550,7 +547,7 @@ class ExecutionMetrics:
     def to_summary(self) -> Dict[str, Any]:
         """
         Get comprehensive execution summary.
-        
+
         Returns:
             Summary dictionary
         """
@@ -570,7 +567,8 @@ class ExecutionMetrics:
                 "count": activity_counts[name],
                 "success_rate": (
                     activity_successes[name] / activity_counts[name]
-                    if activity_counts[name] > 0 else 0.0
+                    if activity_counts[name] > 0
+                    else 0.0
                 ),
                 "avg_duration_ms": mean(activity_durations[name]),
             }
@@ -604,9 +602,7 @@ class ExecutionMetrics:
             "exit_reason": self.exit_reason,
             "timing": {
                 "start_time": self.start_time.isoformat(),
-                "end_time": (
-                    self.end_time.isoformat() if self.end_time else None
-                ),
+                "end_time": (self.end_time.isoformat() if self.end_time else None),
                 "total_duration_ms": self.total_duration_ms,
                 "avg_iteration_duration_ms": self.avg_iteration_duration_ms,
                 "avg_llm_call_duration_ms": self.avg_llm_call_duration_ms,
@@ -642,9 +638,7 @@ class ExecutionMetrics:
                 "total": len(self._hitl_interactions),
                 "approved": sum(1 for h in self._hitl_interactions if h.approved),
                 "denied": sum(1 for h in self._hitl_interactions if not h.approved),
-                "timeouts": sum(
-                    1 for h in self._hitl_interactions if h.timeout_occurred
-                ),
+                "timeouts": sum(1 for h in self._hitl_interactions if h.timeout_occurred),
             },
             "errors": {
                 "total": self._error_count,
@@ -660,18 +654,18 @@ class ExecutionMetrics:
 class MetricsCollector:
     """
     Collects and aggregates metrics across multiple executions.
-    
+
     Provides historical tracking and statistical summaries for
     monitoring and analysis.
-    
+
     Usage:
         collector = MetricsCollector()
-        
+
         # Track execution
         metrics = collector.start_execution("exec-1", goal="...")
         # ... record metrics ...
         metrics.complete(success=True)
-        
+
         # Get summary
         summary = collector.get_summary()
     """
@@ -682,7 +676,7 @@ class MetricsCollector:
     ) -> None:
         """
         Initialize metrics collector.
-        
+
         Args:
             max_history: Maximum executions to track
         """
@@ -700,12 +694,12 @@ class MetricsCollector:
     ) -> ExecutionMetrics:
         """
         Start tracking a new execution.
-        
+
         Args:
             execution_id: Unique execution ID
             session_id: Session ID
             goal: Goal being executed
-            
+
         Returns:
             ExecutionMetrics instance for tracking
         """
@@ -727,12 +721,12 @@ class MetricsCollector:
     ) -> Optional[ExecutionMetrics]:
         """
         End execution tracking and store metrics.
-        
+
         Args:
             execution_id: Execution ID
             success: Whether succeeded
             exit_reason: Exit reason
-            
+
         Returns:
             Completed metrics or None if not found
         """
@@ -765,10 +759,10 @@ class MetricsCollector:
     ) -> Optional[ExecutionMetrics]:
         """
         Get metrics for a specific execution.
-        
+
         Args:
             execution_id: Execution ID
-            
+
         Returns:
             Execution metrics or None
         """
@@ -786,12 +780,12 @@ class MetricsCollector:
     ) -> List[str]:
         """
         List execution IDs.
-        
+
         Args:
             status: Filter by status
             since: Filter by start time
             limit: Maximum results
-            
+
         Returns:
             List of execution IDs
         """
@@ -823,11 +817,11 @@ class MetricsCollector:
     ) -> Dict[str, Any]:
         """
         Get aggregated summary statistics.
-        
+
         Args:
             since: Only include executions after this time
             include_active: Include active executions
-            
+
         Returns:
             Summary statistics dictionary
         """
@@ -879,13 +873,9 @@ class MetricsCollector:
                 "avg": mean(costs) if costs else 0,
             },
             "activity_success_rate": (
-                mean(e.activity_success_rate for e in executions)
-                if executions else 0.0
+                mean(e.activity_success_rate for e in executions) if executions else 0.0
             ),
-            "cache_hit_rate": (
-                mean(e.cache_hit_rate for e in executions)
-                if executions else 0.0
-            ),
+            "cache_hit_rate": (mean(e.cache_hit_rate for e in executions) if executions else 0.0),
         }
 
     def _compute_percentiles(
@@ -960,31 +950,16 @@ class MetricsSummary(BaseModel):
     completed_executions: int = Field(description="Completed executions")
     success_rate: float = Field(description="Success rate (0-1)")
 
-    status_breakdown: Dict[str, int] = Field(
-        description="Count by status"
-    )
+    status_breakdown: Dict[str, int] = Field(description="Count by status")
 
-    latency: Dict[str, float] = Field(
-        default_factory=dict,
-        description="Latency percentiles"
-    )
+    latency: Dict[str, float] = Field(default_factory=dict, description="Latency percentiles")
 
-    iterations: Dict[str, Union[int, float]] = Field(
-        description="Iteration statistics"
-    )
-    tokens: Dict[str, Union[int, float]] = Field(
-        description="Token statistics"
-    )
-    cost: Dict[str, float] = Field(
-        description="Cost statistics"
-    )
+    iterations: Dict[str, Union[int, float]] = Field(description="Iteration statistics")
+    tokens: Dict[str, Union[int, float]] = Field(description="Token statistics")
+    cost: Dict[str, float] = Field(description="Cost statistics")
 
-    activity_success_rate: float = Field(
-        description="Activity success rate"
-    )
-    cache_hit_rate: float = Field(
-        description="Cache hit rate"
-    )
+    activity_success_rate: float = Field(description="Activity success rate")
+    cache_hit_rate: float = Field(description="Cache hit rate")
 
 
 class ExecutionSummary(BaseModel):

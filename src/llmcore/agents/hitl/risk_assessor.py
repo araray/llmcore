@@ -487,7 +487,8 @@ class RiskAssessor:
         for value in parameters.values():
             if isinstance(value, str):
                 if any(
-                    kw in value.lower() for kw in ["delete", "remove", "drop", "truncate", "destroy"]
+                    kw in value.lower()
+                    for kw in ["delete", "remove", "drop", "truncate", "destroy"]
                 ):
                     return RiskLevel.HIGH
 
@@ -586,7 +587,9 @@ class RiskAssessor:
 
     def is_safe_tool(self, tool_name: str) -> bool:
         """Check if tool is classified as safe (no approval needed)."""
-        return tool_name in self.config.safe_tools or self._tool_risks.get(tool_name) == RiskLevel.NONE
+        return (
+            tool_name in self.config.safe_tools or self._tool_risks.get(tool_name) == RiskLevel.NONE
+        )
 
 
 # =============================================================================

@@ -209,8 +209,13 @@ class TestHITLRiskLevels:
 
     def test_risk_level_values(self) -> None:
         """Test that all risk levels are defined."""
-        levels = [RiskLevel.NONE, RiskLevel.LOW, RiskLevel.MEDIUM,
-                  RiskLevel.HIGH, RiskLevel.CRITICAL]
+        levels = [
+            RiskLevel.NONE,
+            RiskLevel.LOW,
+            RiskLevel.MEDIUM,
+            RiskLevel.HIGH,
+            RiskLevel.CRITICAL,
+        ]
 
         assert len(levels) == 5
 
@@ -228,8 +233,12 @@ class TestApprovalStatus:
 
     def test_approval_status_values(self) -> None:
         """Test that all approval statuses are defined."""
-        statuses = [ApprovalStatus.PENDING, ApprovalStatus.APPROVED,
-                    ApprovalStatus.REJECTED, ApprovalStatus.TIMEOUT]
+        statuses = [
+            ApprovalStatus.PENDING,
+            ApprovalStatus.APPROVED,
+            ApprovalStatus.REJECTED,
+            ApprovalStatus.TIMEOUT,
+        ]
 
         assert len(statuses) >= 3  # At minimum: pending, approved, rejected
 

@@ -37,6 +37,7 @@ from cli import (
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def formatter():
     """Create a non-color formatter for testing."""
@@ -61,7 +62,7 @@ db_url = "postgresql://user:pass@localhost:5432/testdb"
 type = "chromadb"
 path = "/tmp/chromadb"
 """
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(content)
         f.flush()
         yield f.name
@@ -79,7 +80,7 @@ type = "postgres"
 [storage.vector]
 type = "unknown_backend"
 """
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(content)
         f.flush()
         yield f.name
@@ -89,6 +90,7 @@ type = "unknown_backend"
 # =============================================================================
 # TESTS - OUTPUT FORMATTER
 # =============================================================================
+
 
 class TestOutputFormatter:
     """Tests for OutputFormatter class."""
@@ -138,6 +140,7 @@ class TestOutputFormatter:
 # TESTS - URL PASSWORD MASKING
 # =============================================================================
 
+
 class TestPasswordMasking:
     """Tests for URL password masking."""
 
@@ -167,6 +170,7 @@ class TestPasswordMasking:
 # =============================================================================
 # TESTS - VALIDATE COMMAND
 # =============================================================================
+
 
 class TestCmdValidate:
     """Tests for validate command."""
@@ -205,7 +209,7 @@ class TestCmdValidate:
 type = "chromadb"
 # No path = warning about in-memory storage
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(content)
             f.flush()
 
@@ -223,6 +227,7 @@ type = "chromadb"
 # =============================================================================
 # TESTS - SCHEMA COMMAND
 # =============================================================================
+
 
 class TestCmdSchema:
     """Tests for schema command."""
@@ -276,6 +281,7 @@ class TestCmdSchema:
 # TESTS - INFO COMMAND
 # =============================================================================
 
+
 class TestCmdInfo:
     """Tests for info command."""
 
@@ -311,6 +317,7 @@ class TestCmdInfo:
 # TESTS - HEALTH COMMAND
 # =============================================================================
 
+
 class TestCmdHealth:
     """Tests for health command."""
 
@@ -335,6 +342,7 @@ class TestCmdHealth:
 # =============================================================================
 # TESTS - CLI PARSER
 # =============================================================================
+
 
 class TestCliParser:
     """Tests for CLI argument parser."""
@@ -380,6 +388,7 @@ class TestCliParser:
 # TESTS - MAIN FUNCTION
 # =============================================================================
 
+
 class TestMain:
     """Tests for main CLI entry point."""
 
@@ -406,6 +415,7 @@ class TestMain:
 # =============================================================================
 # TESTS - STORAGE COMMANDS (REPL INTEGRATION)
 # =============================================================================
+
 
 class TestStorageCommands:
     """Tests for StorageCommands class (REPL integration)."""
@@ -443,9 +453,9 @@ class TestStorageCommands:
                 "session_postgres": {
                     "status": "healthy",
                     "average_latency_ms": 5.0,
-                    "uptime_percentage": 99.9
+                    "uptime_percentage": 99.9,
                 }
-            }
+            },
         }
 
         commands = StorageCommands(storage_manager=mock_manager)
@@ -458,6 +468,7 @@ class TestStorageCommands:
 # =============================================================================
 # TESTS - CONFIG LOADING
 # =============================================================================
+
 
 class TestConfigLoading:
     """Tests for configuration loading."""
@@ -480,11 +491,7 @@ class TestConfigLoading:
         """Test auto-detection of config file."""
         # Create a config in current directory
         with tempfile.NamedTemporaryFile(
-            mode='w',
-            suffix='.toml',
-            dir=os.getcwd(),
-            prefix='llmcore',
-            delete=False
+            mode="w", suffix=".toml", dir=os.getcwd(), prefix="llmcore", delete=False
         ) as f:
             f.write("[storage.session]\ntype = 'json'\npath = '/tmp/test.json'\n")
             f.flush()

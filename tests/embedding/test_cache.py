@@ -81,7 +81,7 @@ class TestLRUCache:
 
         assert cache2.get("a") == [1.0]  # Still present
         assert cache2.get("c") == [3.0]  # New item
-        assert cache2.get("b") is None   # Evicted
+        assert cache2.get("b") is None  # Evicted
 
     def test_update_existing_key(self) -> None:
         """Test that updating an existing key moves it to end."""
@@ -126,7 +126,7 @@ class TestLRUCache:
         stats = cache.stats
         assert stats["hits"] == 2
         assert stats["misses"] == 1
-        assert stats["hit_rate"] == pytest.approx(2/3, rel=0.01)
+        assert stats["hit_rate"] == pytest.approx(2 / 3, rel=0.01)
         assert stats["size"] == 1
 
     def test_clear(self) -> None:

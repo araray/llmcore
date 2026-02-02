@@ -118,7 +118,7 @@ class TestContextItem:
             content="Text",
             tokens=100,
             original_tokens=150,
-            is_truncated=True
+            is_truncated=True,
         )
         assert item.tokens == 100
         assert item.original_tokens == 150
@@ -140,9 +140,7 @@ class TestEpisode:
     def test_create_basic_episode(self):
         """Test creating a basic episode."""
         ep = Episode(
-            session_id="session_123",
-            event_type=EpisodeType.THOUGHT,
-            data={"content": "Thinking"}
+            session_id="session_123", event_type=EpisodeType.THOUGHT, data={"content": "Thinking"}
         )
         assert ep.session_id == "session_123"
         assert ep.event_type == "thought"
@@ -174,7 +172,7 @@ class TestTool:
         tool = Tool(
             name="search",
             description="Search the web",
-            parameters={"type": "object", "properties": {"query": {"type": "string"}}}
+            parameters={"type": "object", "properties": {"query": {"type": "string"}}},
         )
         assert tool.name == "search"
 

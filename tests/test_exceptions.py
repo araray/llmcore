@@ -232,9 +232,7 @@ class TestSandboxError:
     def test_to_dict(self):
         """Test serialization to dictionary."""
         error = SandboxError(
-            message="Test error",
-            details={"key": "value"},
-            sandbox_id="sandbox-123"
+            message="Test error", details={"key": "value"}, sandbox_id="sandbox-123"
         )
         d = error.to_dict()
         assert d["error_type"] == "SandboxError"
@@ -361,7 +359,9 @@ class TestExceptionHierarchy:
             SandboxCleanupError(),
         ]
         for exc in exceptions:
-            assert isinstance(exc, LLMCoreError), f"{type(exc).__name__} should inherit from LLMCoreError"
+            assert isinstance(exc, LLMCoreError), (
+                f"{type(exc).__name__} should inherit from LLMCoreError"
+            )
 
     def test_sandbox_hierarchy(self):
         """Test sandbox exception hierarchy."""

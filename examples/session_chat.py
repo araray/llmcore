@@ -24,7 +24,7 @@ import uuid  # To generate unique session IDs for demonstration
 from llmcore import ConfigError, LLMCore, LLMCoreError, ProviderError, SessionNotFoundError
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -52,12 +52,14 @@ async def main():
                 message=prompt1,
                 session_id=session_id,
                 system_message="You are a helpful AI assistant explaining complex topics simply.",
-                save_session=True # Ensure this turn is saved (default is True)
+                save_session=True,  # Ensure this turn is saved (default is True)
             )
             logger.info(f"LLM: {response1}")
 
             # --- Interaction 2: Follow-up question ---
-            prompt2 = "That's interesting. How does that relate to my name?" # A slightly silly follow-up
+            prompt2 = (
+                "That's interesting. How does that relate to my name?"  # A slightly silly follow-up
+            )
             logger.info(f"\n--- Sending prompt 2 (Session: {session_id}) ---")
             logger.info(f"Alex: {prompt2}")
 
@@ -66,7 +68,7 @@ async def main():
             response2 = await llm.chat(
                 message=prompt2,
                 session_id=session_id,
-                save_session=True
+                save_session=True,
                 # No need to provide system_message again for existing session
             )
             logger.info(f"LLM: {response2}")
@@ -76,38 +78,40 @@ async def main():
             logger.info(f"\n--- Sending prompt 3 (Session: {session_id}) ---")
             logger.info(f"Alex: {prompt3}")
 
-            response3 = await llm.chat(
-                message=prompt3,
-                session_id=session_id
-            )
+            response3 = await llm.chat(message=prompt3, session_id=session_id)
             logger.info(f"LLM: {response3}")
-
 
             # --- Optional: Verify session was saved ---
             logger.info(f"\n--- Verifying session '{session_id}' content ---")
             saved_session = await llm.get_session(session_id)
             if saved_session:
-                 logger.info(f"Session '{saved_session.name}' found with {len(saved_session.messages)} messages.")
-                 # Log first user message and last assistant message for verification
-                 if len(saved_session.messages) > 1:
-                      logger.info(f"  First user message content: '{saved_session.messages[1].content[:50]}...'")
-                 if len(saved_session.messages) > 0:
-                      logger.info(f"  Last assistant message content: '{saved_session.messages[-1].content[:50]}...'")
+                logger.info(
+                    f"Session '{saved_session.name}' found with {len(saved_session.messages)} messages."
+                )
+                # Log first user message and last assistant message for verification
+                if len(saved_session.messages) > 1:
+                    logger.info(
+                        f"  First user message content: '{saved_session.messages[1].content[:50]}...'"
+                    )
+                if len(saved_session.messages) > 0:
+                    logger.info(
+                        f"  Last assistant message content: '{saved_session.messages[-1].content[:50]}...'"
+                    )
             else:
-                 logger.warning(f"Could not retrieve session '{session_id}' after chat.")
-
+                logger.warning(f"Could not retrieve session '{session_id}' after chat.")
 
     except SessionNotFoundError as e:
-         logger.error(f"Session error: {e}")
+        logger.error(f"Session error: {e}")
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
     except ProviderError as e:
-         logger.error(f"Provider error: {e}")
+        logger.error(f"Provider error: {e}")
     except LLMCoreError as e:
         logger.error(f"An LLMCore error occurred: {e}")
     except Exception as e:
         logger.exception(f"An unexpected error occurred: {e}")
     # No finally block needed for llm.close() when using 'async with'
+
 
 if __name__ == "__main__":
     asyncio.run(main())

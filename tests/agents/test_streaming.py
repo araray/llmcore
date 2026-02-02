@@ -347,6 +347,7 @@ class TestCognitiveCycleStreaming:
     @pytest.mark.asyncio
     async def test_stops_on_max_iterations(self, cognitive_cycle, agent_state):
         """Test that streaming stops at max_iterations."""
+
         # Mock run_iteration to never complete the task
         async def mock_run_iteration(*args, **kwargs):
             iteration = CycleIteration(iteration_number=agent_state.iteration_count + 1)
@@ -460,7 +461,7 @@ class TestSingleAgentModeStreaming:
     @pytest.fixture
     def single_agent(self, mock_provider_manager, mock_agents_config):
         """Create a SingleAgentMode with mocks."""
-        with patch.object(SingleAgentMode, '__init__', lambda self, *args, **kwargs: None):
+        with patch.object(SingleAgentMode, "__init__", lambda self, *args, **kwargs: None):
             agent = SingleAgentMode.__new__(SingleAgentMode)
             agent.provider_manager = mock_provider_manager
             agent._agents_config = mock_agents_config
@@ -572,26 +573,41 @@ class TestStreamingRegression:
     def test_streaming_iteration_result_is_dataclass(self):
         """Verify StreamingIterationResult is a proper dataclass."""
         from dataclasses import is_dataclass
+
         assert is_dataclass(StreamingIterationResult)
 
     def test_run_streaming_is_async_generator(self):
         """Verify run_streaming is an async generator method."""
         import inspect
+
         assert inspect.isasyncgenfunction(CognitiveCycle.run_streaming)
         assert inspect.isasyncgenfunction(SingleAgentMode.run_streaming)
 
     def test_iteration_update_has_from_streaming_result(self):
         """Verify IterationUpdate has conversion method."""
-        assert hasattr(IterationUpdate, 'from_streaming_result')
+        assert hasattr(IterationUpdate, "from_streaming_result")
         assert callable(IterationUpdate.from_streaming_result)
 
     def test_streaming_result_fields_exist(self):
         """Verify all expected fields exist on StreamingIterationResult."""
         expected_fields = [
-            'iteration', 'max_iterations', 'progress', 'is_complete', 'is_final',
-            'status', 'current_phase', 'message', 'action_name', 'action_summary',
-            'observation_summary', 'step_completed', 'plan_step', 'error',
-            'tokens_used', 'duration_ms', 'stop_reason'
+            "iteration",
+            "max_iterations",
+            "progress",
+            "is_complete",
+            "is_final",
+            "status",
+            "current_phase",
+            "message",
+            "action_name",
+            "action_summary",
+            "observation_summary",
+            "step_completed",
+            "plan_step",
+            "error",
+            "tokens_used",
+            "duration_ms",
+            "stop_reason",
         ]
 
         result = StreamingIterationResult(iteration=1, max_iterations=10, progress=0.5)
@@ -655,10 +671,7 @@ class TestStreamingIntegration:
         )
 
         # Convert to IterationUpdates and verify
-        updates = [
-            IterationUpdate.from_streaming_result(r)
-            for r in [result1, result2, result3]
-        ]
+        updates = [IterationUpdate.from_streaming_result(r) for r in [result1, result2, result3]]
 
         assert len(updates) == 3
 

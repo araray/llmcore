@@ -13,11 +13,12 @@ from typing import Any, Dict, List, Optional
 try:
     import ollama
     from ollama import AsyncClient, ResponseError
+
     ollama_available = True
 except ImportError:
     ollama_available = False
-    AsyncClient = None # type: ignore
-    ResponseError = Exception # type: ignore
+    AsyncClient = None  # type: ignore
+    ResponseError = Exception  # type: ignore
 
 
 from ..exceptions import ConfigError, EmbeddingError
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 # User needs to ensure the model is pulled in Ollama.
 DEFAULT_OLLAMA_EMBEDDING_MODEL = "mxbai-embed-large"
 
+
 class OllamaEmbedding(BaseEmbeddingModel):
     """
     Generates text embeddings using a local Ollama instance via the official library.
@@ -36,6 +38,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
     Requires the `ollama` library to be installed.
     Configuration for the host and model is read from `[embedding.ollama]`.
     """
+
     _client: Optional[AsyncClient] = None
     _model_name: str
     _host: Optional[str] = None
@@ -59,14 +62,17 @@ class OllamaEmbedding(BaseEmbeddingModel):
 
         embedding_specific_config = config
 
-        self._host = embedding_specific_config.get("host") # Can be None
-        self._model_name = embedding_specific_config.get("default_model", DEFAULT_OLLAMA_EMBEDDING_MODEL)
+        self._host = embedding_specific_config.get("host")  # Can be None
+        self._model_name = embedding_specific_config.get(
+            "default_model", DEFAULT_OLLAMA_EMBEDDING_MODEL
+        )
         timeout_val = embedding_specific_config.get("timeout")
         self._timeout = float(timeout_val) if timeout_val is not None else None
 
-
-        logger.info(f"OllamaEmbedding configured with model '{self._model_name}'. "
-                    f"Host: {self._host or 'default'}.")
+        logger.info(
+            f"OllamaEmbedding configured with model '{self._model_name}'. "
+            f"Host: {self._host or 'default'}."
+        )
         # Client initialization is deferred to `initialize`
 
     async def initialize(self) -> None:
@@ -81,17 +87,19 @@ class OllamaEmbedding(BaseEmbeddingModel):
         try:
             client_args = {}
             if self._host:
-                client_args['host'] = self._host
+                client_args["host"] = self._host
             if self._timeout:
-                client_args['timeout'] = self._timeout
+                client_args["timeout"] = self._timeout
 
             self._client = AsyncClient(**client_args)
             # Optionally test connection or model availability
             # await self._client.list() # Example check, might be slow
             logger.info("AsyncOllama client for embeddings initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to initialize AsyncOllama client for embeddings: {e}", exc_info=True)
-            self._client = None # Ensure client is None on failure
+            logger.error(
+                f"Failed to initialize AsyncOllama client for embeddings: {e}", exc_info=True
+            )
+            self._client = None  # Ensure client is None on failure
             raise ConfigError(f"Ollama client initialization for embeddings failed: {e}")
 
     async def generate_embedding(self, text: str) -> List[float]:
@@ -108,38 +116,64 @@ class OllamaEmbedding(BaseEmbeddingModel):
             EmbeddingError: If the embedding generation fails or the client is not initialized.
         """
         if not self._client:
-            raise EmbeddingError(model_name=self._model_name, message="Ollama client not initialized. Call initialize() first.")
+            raise EmbeddingError(
+                model_name=self._model_name,
+                message="Ollama client not initialized. Call initialize() first.",
+            )
         if not text:
             logger.warning("generate_embedding called with empty text for Ollama.")
             # Ollama API might error on empty string. Let's raise an error proactively.
-            raise EmbeddingError(model_name=self._model_name, message="Input text cannot be empty for Ollama embeddings.")
+            raise EmbeddingError(
+                model_name=self._model_name,
+                message="Input text cannot be empty for Ollama embeddings.",
+            )
 
-        logger.debug(f"Generating Ollama embedding for single text (length: {len(text)}, model: {self._model_name})...")
+        logger.debug(
+            f"Generating Ollama embedding for single text (length: {len(text)}, model: {self._model_name})..."
+        )
         try:
             # The ollama library's embeddings method handles single prompts
             response = await self._client.embeddings(
                 model=self._model_name,
-                prompt=text
+                prompt=text,
                 # options=... # Add options if needed (e.g., temperature for some models?)
             )
-            embedding_data = response.get('embedding')
+            embedding_data = response.get("embedding")
             if embedding_data and isinstance(embedding_data, list):
-                logger.debug(f"Successfully generated Ollama embedding, dimension: {len(embedding_data)}.")
-                return embedding_data # type: ignore # Expect List[float]
+                logger.debug(
+                    f"Successfully generated Ollama embedding, dimension: {len(embedding_data)}."
+                )
+                return embedding_data  # type: ignore # Expect List[float]
             else:
-                logger.error(f"Ollama embedding API returned no embedding data for model '{self._model_name}'. Response: {response}")
-                raise EmbeddingError(model_name=self._model_name, message="API returned no embedding data.")
+                logger.error(
+                    f"Ollama embedding API returned no embedding data for model '{self._model_name}'. Response: {response}"
+                )
+                raise EmbeddingError(
+                    model_name=self._model_name, message="API returned no embedding data."
+                )
         except ResponseError as e:
-            error_detail = e.error if hasattr(e, 'error') else str(e)
-            logger.error(f"Ollama API error during embedding generation (model: {self._model_name}): {e.status_code} - {error_detail}", exc_info=True)
+            error_detail = e.error if hasattr(e, "error") else str(e)
+            logger.error(
+                f"Ollama API error during embedding generation (model: {self._model_name}): {e.status_code} - {error_detail}",
+                exc_info=True,
+            )
             if "model not found" in str(error_detail).lower():
-                 raise EmbeddingError(model_name=self._model_name, message=f"Model '{self._model_name}' not found locally. Pull it with 'ollama pull {self._model_name}'.")
-            raise EmbeddingError(model_name=self._model_name, message=f"Ollama API Error ({e.status_code}): {error_detail}")
+                raise EmbeddingError(
+                    model_name=self._model_name,
+                    message=f"Model '{self._model_name}' not found locally. Pull it with 'ollama pull {self._model_name}'.",
+                )
+            raise EmbeddingError(
+                model_name=self._model_name,
+                message=f"Ollama API Error ({e.status_code}): {error_detail}",
+            )
         except asyncio.TimeoutError:
             logger.error(f"Request to Ollama embeddings API timed out (model: {self._model_name}).")
             raise EmbeddingError(model_name=self._model_name, message="Request timed out.")
         except Exception as e:
-            logger.error(f"Unexpected error generating Ollama embedding (model: {self._model_name}): {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error generating Ollama embedding (model: {self._model_name}): {e}",
+                exc_info=True,
+            )
             raise EmbeddingError(model_name=self._model_name, message=f"Unexpected error: {e}")
 
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -161,11 +195,16 @@ class OllamaEmbedding(BaseEmbeddingModel):
             EmbeddingError: If the embedding generation fails for any text or the client is not initialized.
         """
         if not self._client:
-            raise EmbeddingError(model_name=self._model_name, message="Ollama client not initialized. Call initialize() first.")
+            raise EmbeddingError(
+                model_name=self._model_name,
+                message="Ollama client not initialized. Call initialize() first.",
+            )
         if not texts:
             return []
 
-        logger.debug(f"Generating Ollama embeddings sequentially for batch of {len(texts)} texts (model: {self._model_name})...")
+        logger.debug(
+            f"Generating Ollama embeddings sequentially for batch of {len(texts)} texts (model: {self._model_name})..."
+        )
         embeddings_list: List[List[float]] = []
         try:
             # Call generate_embedding for each text sequentially
@@ -177,31 +216,53 @@ class OllamaEmbedding(BaseEmbeddingModel):
             # Process results, raising error if any task failed
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    logger.error(f"Error generating embedding for text at index {i} in batch: {result}")
+                    logger.error(
+                        f"Error generating embedding for text at index {i} in batch: {result}"
+                    )
                     # Re-raise the first encountered error
-                    if isinstance(result, EmbeddingError): raise result
-                    raise EmbeddingError(model_name=self._model_name, message=f"Batch embedding failed at index {i}: {result}")
+                    if isinstance(result, EmbeddingError):
+                        raise result
+                    raise EmbeddingError(
+                        model_name=self._model_name,
+                        message=f"Batch embedding failed at index {i}: {result}",
+                    )
                 elif isinstance(result, list):
                     embeddings_list.append(result)
                 else:
                     # Should not happen if generate_embedding returns correctly
-                    logger.error(f"Unexpected result type for embedding at index {i}: {type(result)}")
-                    raise EmbeddingError(model_name=self._model_name, message=f"Unexpected result type in batch at index {i}")
+                    logger.error(
+                        f"Unexpected result type for embedding at index {i}: {type(result)}"
+                    )
+                    raise EmbeddingError(
+                        model_name=self._model_name,
+                        message=f"Unexpected result type in batch at index {i}",
+                    )
 
             if len(embeddings_list) != len(texts):
-                 # This case might occur if an error wasn't caught properly by gather
-                 logger.error(f"Mismatch in expected ({len(texts)}) and generated ({len(embeddings_list)}) embeddings count.")
-                 raise EmbeddingError(model_name=self._model_name, message="Failed to generate embeddings for all texts in the batch.")
+                # This case might occur if an error wasn't caught properly by gather
+                logger.error(
+                    f"Mismatch in expected ({len(texts)}) and generated ({len(embeddings_list)}) embeddings count."
+                )
+                raise EmbeddingError(
+                    model_name=self._model_name,
+                    message="Failed to generate embeddings for all texts in the batch.",
+                )
 
-            logger.debug(f"Successfully generated batch of {len(embeddings_list)} Ollama embeddings sequentially.")
+            logger.debug(
+                f"Successfully generated batch of {len(embeddings_list)} Ollama embeddings sequentially."
+            )
             return embeddings_list
 
-        except EmbeddingError: # Re-raise specific EmbeddingErrors from gather
+        except EmbeddingError:  # Re-raise specific EmbeddingErrors from gather
             raise
-        except Exception as e: # Catch any other unexpected errors during gather or processing
-            logger.error(f"Unexpected error generating batch Ollama embeddings (model: {self._model_name}): {e}", exc_info=True)
-            raise EmbeddingError(model_name=self._model_name, message=f"Unexpected batch error: {e}")
-
+        except Exception as e:  # Catch any other unexpected errors during gather or processing
+            logger.error(
+                f"Unexpected error generating batch Ollama embeddings (model: {self._model_name}): {e}",
+                exc_info=True,
+            )
+            raise EmbeddingError(
+                model_name=self._model_name, message=f"Unexpected batch error: {e}"
+            )
 
     async def close(self) -> None:
         """
@@ -212,12 +273,14 @@ class OllamaEmbedding(BaseEmbeddingModel):
             logger.debug("Closing OllamaEmbedding client...")
             # The ollama library's AsyncClient might have an aclose method or manage httpx client internally.
             # Checking if 'aclose' exists is safer.
-            if hasattr(self._client, 'aclose') and asyncio.iscoroutinefunction(self._client.aclose):
+            if hasattr(self._client, "aclose") and asyncio.iscoroutinefunction(self._client.aclose):
                 try:
                     await self._client.aclose()
                     logger.info("OllamaEmbedding client closed successfully.")
                 except Exception as e:
                     logger.error(f"Error closing OllamaEmbedding client: {e}", exc_info=True)
             else:
-                 logger.debug("Ollama AsyncClient does not have an explicit 'aclose' method. Closure handled by library/GC.")
+                logger.debug(
+                    "Ollama AsyncClient does not have an explicit 'aclose' method. Closure handled by library/GC."
+                )
             self._client = None

@@ -84,14 +84,14 @@ class TestCacheWithCostTracking:
         assert stats["memory"]["hits"] == 1  # "Hello world" hit
         assert stats["memory"]["misses"] == 2  # Two initial misses
 
-    def test_cost_tracking_accuracy_with_realistic_usage(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cost_tracking_accuracy_with_realistic_usage(self, tmp_path: Path) -> None:
         """Test cost tracking with realistic multi-model usage."""
-        tracker = create_cost_tracker({
-            "enabled": True,
-            "db_path": str(tmp_path / "costs.db"),
-        })
+        tracker = create_cost_tracker(
+            {
+                "enabled": True,
+                "db_path": str(tmp_path / "costs.db"),
+            }
+        )
 
         # Simulate a typical session with mixed models
         # 1. GPT-4o for complex reasoning
@@ -181,10 +181,12 @@ class TestCacheWithCostTracking:
 
     def test_cost_export_for_reporting(self, tmp_path: Path) -> None:
         """Test exporting cost data for external reporting."""
-        tracker = create_cost_tracker({
-            "enabled": True,
-            "db_path": str(tmp_path / "costs.db"),
-        })
+        tracker = create_cost_tracker(
+            {
+                "enabled": True,
+                "db_path": str(tmp_path / "costs.db"),
+            }
+        )
 
         # Record some usage
         for i in range(5):
@@ -230,10 +232,12 @@ class TestConfigurationIntegration:
 
     def test_tracker_disabled_by_config(self, tmp_path: Path) -> None:
         """Verify tracker respects enabled=false config."""
-        tracker = create_cost_tracker({
-            "enabled": False,
-            "db_path": str(tmp_path / "costs.db"),
-        })
+        tracker = create_cost_tracker(
+            {
+                "enabled": False,
+                "db_path": str(tmp_path / "costs.db"),
+            }
+        )
 
         # Record should be no-op
         record = tracker.record(
@@ -259,11 +263,13 @@ class TestEdgeCases:
 
     def test_cache_handles_empty_embedding(self, tmp_path: Path) -> None:
         """Test cache behavior with empty embedding vectors."""
-        cache = create_embedding_cache({
-            "enabled": True,
-            "disk_enabled": True,
-            "disk_path": str(tmp_path / "cache.db"),
-        })
+        cache = create_embedding_cache(
+            {
+                "enabled": True,
+                "disk_enabled": True,
+                "disk_path": str(tmp_path / "cache.db"),
+            }
+        )
 
         text = "text"
         model = "model"
@@ -276,10 +282,12 @@ class TestEdgeCases:
 
     def test_tracker_handles_zero_tokens(self, tmp_path: Path) -> None:
         """Test tracker with zero token counts."""
-        tracker = create_cost_tracker({
-            "enabled": True,
-            "db_path": str(tmp_path / "costs.db"),
-        })
+        tracker = create_cost_tracker(
+            {
+                "enabled": True,
+                "db_path": str(tmp_path / "costs.db"),
+            }
+        )
 
         record = tracker.record(
             provider="openai",

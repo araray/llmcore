@@ -195,7 +195,9 @@ class BaseSessionStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+    async def get_episodes(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Episode]:
         """
         Retrieves a list of episodes for a given session, ordered by timestamp.
 

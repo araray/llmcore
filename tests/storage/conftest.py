@@ -35,6 +35,7 @@ import pytest
 # POSTGRESQL CONFIGURATION
 # =============================================================================
 
+
 def get_pg_config() -> Dict[str, Any]:
     """
     Get PostgreSQL configuration from environment variables.
@@ -80,15 +81,14 @@ def should_skip_pg_tests() -> bool:
 # PYTEST MARKERS
 # =============================================================================
 
+
 def pytest_configure(config):
     """Configure pytest markers."""
     config.addinivalue_line(
-        "markers",
-        "requires_postgres: mark test as requiring PostgreSQL (skip if not available)"
+        "markers", "requires_postgres: mark test as requiring PostgreSQL (skip if not available)"
     )
     config.addinivalue_line(
-        "markers",
-        "requires_pgvector: mark test as requiring pgvector extension"
+        "markers", "requires_pgvector: mark test as requiring pgvector extension"
     )
 
 
@@ -104,6 +104,7 @@ def pytest_collection_modifyitems(config, items):
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -157,6 +158,7 @@ async def pg_pool(pg_url: str) -> AsyncGenerator[Any, None]:
     """
     try:
         from psycopg_pool import AsyncConnectionPool
+
         pool = AsyncConnectionPool(conninfo=pg_url, min_size=1, max_size=3)
         yield pool
         await pool.close()
@@ -191,6 +193,7 @@ async def clean_test_tables(pg_pool) -> AsyncGenerator[None, None]:
 # =============================================================================
 # HELPER FIXTURES FOR MOCKING
 # =============================================================================
+
 
 @pytest.fixture
 def mock_context():
@@ -227,16 +230,19 @@ def mock_documents():
 
     # Generate test documents with random embeddings
     import random
+
     random.seed(42)
 
     docs = []
     for i in range(5):
-        docs.append(ContextDocument(
-            id=f"doc_{i}",
-            content=f"This is test document number {i} with some content for testing.",
-            metadata={"source": "test", "index": i},
-            embedding=[random.random() for _ in range(384)],
-        ))
+        docs.append(
+            ContextDocument(
+                id=f"doc_{i}",
+                content=f"This is test document number {i} with some content for testing.",
+                metadata={"source": "test", "index": i},
+                embedding=[random.random() for _ in range(384)],
+            )
+        )
     return docs
 
 
@@ -244,6 +250,7 @@ def mock_documents():
 def sample_embedding():
     """Create a sample embedding vector."""
     import random
+
     random.seed(42)
     return [random.random() for _ in range(384)]
 
@@ -258,15 +265,13 @@ requires_pgvector = pytest.mark.requires_pgvector
 
 def skip_if_no_postgres(func):
     """Decorator to skip test if PostgreSQL is not available."""
-    return pytest.mark.skipif(
-        should_skip_pg_tests(),
-        reason="PostgreSQL tests disabled"
-    )(func)
+    return pytest.mark.skipif(should_skip_pg_tests(), reason="PostgreSQL tests disabled")(func)
 
 
 # =============================================================================
 # ASYNC TEST HELPERS
 # =============================================================================
+
 
 @pytest.fixture
 def async_test_timeout():

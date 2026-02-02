@@ -25,31 +25,52 @@ logger = logging.getLogger(__name__)
 
 
 async def save_context_preset(
-    conn: "aiosqlite.Connection",
-    preset: ContextPreset,
-    presets_table: str,
-    preset_items_table: str
+    conn: "aiosqlite.Connection", preset: ContextPreset, presets_table: str, preset_items_table: str
 ) -> None:
     """Saves or updates a context preset and its items in SQLite."""
     preset_metadata_json = json.dumps(preset.metadata or {})
     try:
         await conn.execute("BEGIN;")
-        await conn.execute(f"""
+        await conn.execute(
+            f"""
             INSERT OR REPLACE INTO {presets_table} (name, description, created_at, updated_at, metadata)
             VALUES (?, ?, ?, ?, ?)
-        """, (preset.name, preset.description, preset.created_at.isoformat(), preset.updated_at.isoformat(), preset_metadata_json))
+        """,
+            (
+                preset.name,
+                preset.description,
+                preset.created_at.isoformat(),
+                preset.updated_at.isoformat(),
+                preset_metadata_json,
+            ),
+        )
 
-        await conn.execute(f"DELETE FROM {preset_items_table} WHERE preset_name = ?", (preset.name,))
+        await conn.execute(
+            f"DELETE FROM {preset_items_table} WHERE preset_name = ?", (preset.name,)
+        )
         if preset.items:
-            items_data = [(item.item_id, preset.name, str(item.type), item.content,
-                           item.source_identifier, json.dumps(item.metadata or {}))
-                          for item in preset.items]
-            await conn.executemany(f"""
+            items_data = [
+                (
+                    item.item_id,
+                    preset.name,
+                    str(item.type),
+                    item.content,
+                    item.source_identifier,
+                    json.dumps(item.metadata or {}),
+                )
+                for item in preset.items
+            ]
+            await conn.executemany(
+                f"""
                 INSERT INTO {preset_items_table} (item_id, preset_name, type, content, source_identifier, metadata)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, items_data)
+            """,
+                items_data,
+            )
         await conn.commit()
-        logger.info(f"Context preset '{preset.name}' with {len(preset.items)} items saved to SQLite.")
+        logger.info(
+            f"Context preset '{preset.name}' with {len(preset.items)} items saved to SQLite."
+        )
     except aiosqlite.Error as e:
         logger.error(f"aiosqlite error saving context preset '{preset.name}': {e}")
         try:
@@ -60,33 +81,40 @@ async def save_context_preset(
 
 
 async def get_context_preset(
-    conn: "aiosqlite.Connection",
-    preset_name: str,
-    presets_table: str,
-    preset_items_table: str
+    conn: "aiosqlite.Connection", preset_name: str, presets_table: str, preset_items_table: str
 ) -> Optional[ContextPreset]:
     """Retrieves a specific context preset and its items by name from SQLite."""
     try:
-        async with conn.execute(f"SELECT * FROM {presets_table} WHERE name = ?", (preset_name,)) as cursor:
+        async with conn.execute(
+            f"SELECT * FROM {presets_table} WHERE name = ?", (preset_name,)
+        ) as cursor:
             preset_row = await cursor.fetchone()
         if not preset_row:
             logger.debug(f"Context preset '{preset_name}' not found in SQLite.")
             return None
 
         preset_data = dict(preset_row)
-        preset_data["metadata"] = json.loads(preset_data.get("metadata") or '{}')
-        preset_data["created_at"] = datetime.fromisoformat(preset_data["created_at"].replace('Z', '+00:00'))
-        preset_data["updated_at"] = datetime.fromisoformat(preset_data["updated_at"].replace('Z', '+00:00'))
+        preset_data["metadata"] = json.loads(preset_data.get("metadata") or "{}")
+        preset_data["created_at"] = datetime.fromisoformat(
+            preset_data["created_at"].replace("Z", "+00:00")
+        )
+        preset_data["updated_at"] = datetime.fromisoformat(
+            preset_data["updated_at"].replace("Z", "+00:00")
+        )
 
         items: List[ContextPresetItem] = []
-        async with conn.execute(f"SELECT * FROM {preset_items_table} WHERE preset_name = ?", (preset_name,)) as cursor:
+        async with conn.execute(
+            f"SELECT * FROM {preset_items_table} WHERE preset_name = ?", (preset_name,)
+        ) as cursor:
             async for item_row_data in cursor:
                 item_dict = dict(item_row_data)
                 try:
-                    item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                    item_dict["metadata"] = json.loads(item_dict.get("metadata") or "{}")
                     items.append(ContextPresetItem.model_validate(item_dict))
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
-                    logger.warning(f"Skipping invalid context_preset_item data for preset {preset_name}, item_id {item_dict.get('item_id')}: {e}")
+                    logger.warning(
+                        f"Skipping invalid context_preset_item data for preset {preset_name}, item_id {item_dict.get('item_id')}: {e}"
+                    )
         preset_data["items"] = items
 
         context_preset = ContextPreset.model_validate(preset_data)
@@ -97,9 +125,7 @@ async def get_context_preset(
 
 
 async def list_context_presets(
-    conn: "aiosqlite.Connection",
-    presets_table: str,
-    preset_items_table: str
+    conn: "aiosqlite.Connection", presets_table: str, preset_items_table: str
 ) -> List[Dict[str, Any]]:
     """Lists context preset metadata from SQLite, including item counts."""
     preset_metadata_list: List[Dict[str, Any]] = []
@@ -112,7 +138,7 @@ async def list_context_presets(
             async for row in cursor:
                 data = dict(row)
                 try:
-                    data["metadata"] = json.loads(data.get("metadata") or '{}')
+                    data["metadata"] = json.loads(data.get("metadata") or "{}")
                 except json.JSONDecodeError:
                     data["metadata"] = {}
                 preset_metadata_list.append(data)
@@ -123,9 +149,7 @@ async def list_context_presets(
 
 
 async def delete_context_preset(
-    conn: "aiosqlite.Connection",
-    preset_name: str,
-    presets_table: str
+    conn: "aiosqlite.Connection", preset_name: str, presets_table: str
 ) -> bool:
     """Deletes a context preset and its items (due to CASCADE DELETE) from SQLite."""
     try:
@@ -149,7 +173,7 @@ async def rename_context_preset(
     old_name: str,
     new_name: str,
     presets_table: str,
-    preset_items_table: str
+    preset_items_table: str,
 ) -> bool:
     """Renames a context preset in SQLite."""
     if old_name == new_name:
@@ -162,7 +186,9 @@ async def rename_context_preset(
         raise
 
     try:
-        async with conn.execute(f"SELECT 1 FROM {presets_table} WHERE name = ?", (new_name,)) as cursor:
+        async with conn.execute(
+            f"SELECT 1 FROM {presets_table} WHERE name = ?", (new_name,)
+        ) as cursor:
             if await cursor.fetchone():
                 logger.warning(f"Cannot rename preset: new name '{new_name}' already exists.")
                 return False
@@ -178,7 +204,7 @@ async def rename_context_preset(
             items=old_preset.items,
             created_at=old_preset.created_at,
             updated_at=datetime.now(timezone.utc),
-            metadata=old_preset.metadata
+            metadata=old_preset.metadata,
         )
 
         await conn.execute("BEGIN;")
@@ -186,7 +212,9 @@ async def rename_context_preset(
         cursor = await conn.execute(f"DELETE FROM {presets_table} WHERE name = ?", (old_name,))
         if cursor.rowcount == 0:
             await conn.rollback()
-            raise StorageError(f"Rename failed: old preset '{old_name}' disappeared during transaction.")
+            raise StorageError(
+                f"Rename failed: old preset '{old_name}' disappeared during transaction."
+            )
 
         await conn.commit()
         logger.info(f"Context preset '{old_name}' successfully renamed to '{new_name}'.")

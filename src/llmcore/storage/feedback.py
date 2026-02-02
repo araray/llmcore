@@ -107,9 +107,7 @@ class FeedbackConfig(BaseModel):
     max_feedbacks_per_item: int = Field(
         default=100, ge=1, description="Max feedbacks stored per item"
     )
-    retention_days: int = Field(
-        default=0, ge=0, description="Days to retain feedback (0=forever)"
-    )
+    retention_days: int = Field(default=0, ge=0, description="Days to retain feedback (0=forever)")
 
 
 # =============================================================================
@@ -139,17 +137,13 @@ class FeedbackRecord(BaseModel):
     item_id: str = Field(..., description="Retrieved item identifier")
     collection: str = Field(..., description="Collection name")
     query: str = Field(..., description="Query that triggered retrieval")
-    relevance_score: float = Field(
-        ..., ge=0.0, le=10.0, description="Relevance score 0-10"
-    )
+    relevance_score: float = Field(..., ge=0.0, le=10.0, description="Relevance score 0-10")
     feedback_type: Literal["explicit", "implicit", "agent"] = Field(
         default="explicit", description="Type of feedback"
     )
     provider_id: str = Field(default="user", description="Feedback provider ID")
     session_id: Optional[str] = Field(default=None, description="Session identifier")
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Creation timestamp"
-    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
 
 
 class AggregatedFeedback(BaseModel):
@@ -684,12 +678,8 @@ class FeedbackManager:
                 positive_count=row[5],
                 negative_count=row[6],
                 trend=row[7],
-                first_feedback_at=(
-                    datetime.fromisoformat(row[8]) if row[8] else None
-                ),
-                last_feedback_at=(
-                    datetime.fromisoformat(row[9]) if row[9] else None
-                ),
+                first_feedback_at=(datetime.fromisoformat(row[8]) if row[8] else None),
+                last_feedback_at=(datetime.fromisoformat(row[9]) if row[9] else None),
                 updated_at=datetime.fromisoformat(row[10]),
             )
 

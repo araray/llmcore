@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 class ReplayStep:
     """
     A single step in an execution replay timeline.
-    
+
     Attributes:
         timestamp: When the event occurred
         event_id: Event identifier
@@ -100,7 +100,7 @@ class ReplayStep:
 class ExecutionInfo:
     """
     Information about an execution found in the log.
-    
+
     Attributes:
         execution_id: Execution identifier
         session_id: Session identifier
@@ -126,7 +126,7 @@ class ExecutionInfo:
 class ReplayResult:
     """
     Result of replaying an execution.
-    
+
     Attributes:
         execution_id: Execution identifier
         session_id: Session identifier
@@ -177,10 +177,10 @@ EVENT_CLASS_MAP: Dict[str, Type[AgentEvent]] = {
 def parse_event(data: Dict[str, Any]) -> AgentEvent:
     """
     Parse event data into appropriate event class.
-    
+
     Args:
         data: Event data dictionary
-        
+
     Returns:
         Parsed event instance
     """
@@ -190,7 +190,9 @@ def parse_event(data: Dict[str, Any]) -> AgentEvent:
     try:
         return event_class.model_validate(data)
     except Exception as e:
-        logger.warning(f"Failed to parse as {event_class.__name__}, falling back to AgentEvent: {e}")
+        logger.warning(
+            f"Failed to parse as {event_class.__name__}, falling back to AgentEvent: {e}"
+        )
         return AgentEvent.model_validate(data)
 
 
@@ -202,25 +204,25 @@ def parse_event(data: Dict[str, Any]) -> AgentEvent:
 class ExecutionReplay:
     """
     Load and replay agent executions from event logs.
-    
+
     Provides capabilities for:
     - Loading events from JSONL files
     - Listing available executions
     - Replaying specific executions
     - Filtering events by various criteria
     - Generating execution summaries
-    
+
     Usage:
         # Load from file
         replay = ExecutionReplay.from_file("events.jsonl")
-        
+
         # List executions
         for info in replay.list_executions():
             print(f"{info.execution_id}: {info.goal}")
-        
+
         # Replay execution
         result = replay.replay("exec-123")
-        
+
         # Filter events
         errors = replay.get_events(category=EventCategory.ERROR)
     """
@@ -228,7 +230,7 @@ class ExecutionReplay:
     def __init__(self, events: Optional[List[AgentEvent]] = None) -> None:
         """
         Initialize replay with events.
-        
+
         Args:
             events: List of events to replay
         """
@@ -249,11 +251,11 @@ class ExecutionReplay:
     ) -> "ExecutionReplay":
         """
         Load replay from JSONL file.
-        
+
         Args:
             path: Path to JSONL file
             max_events: Maximum events to load
-            
+
         Returns:
             ExecutionReplay instance
         """
@@ -289,10 +291,10 @@ class ExecutionReplay:
     def from_events(cls, events: List[AgentEvent]) -> "ExecutionReplay":
         """
         Create replay from list of events.
-        
+
         Args:
             events: List of events
-            
+
         Returns:
             ExecutionReplay instance
         """
@@ -366,13 +368,13 @@ class ExecutionReplay:
     ) -> List[ExecutionInfo]:
         """
         List available executions.
-        
+
         Args:
             session_id: Filter by session
             since: Only after this time
             until: Only before this time
             limit: Maximum results
-            
+
         Returns:
             List of execution info
         """
@@ -402,7 +404,7 @@ class ExecutionReplay:
     def list_sessions(self) -> List[str]:
         """
         List all session IDs.
-        
+
         Returns:
             List of session IDs
         """
@@ -420,11 +422,11 @@ class ExecutionReplay:
     ) -> ReplayResult:
         """
         Replay a specific execution.
-        
+
         Args:
             execution_id: Execution to replay
             include_metrics: Include metric events in timeline
-            
+
         Returns:
             ReplayResult with timeline and summary
         """
@@ -562,7 +564,7 @@ class ExecutionReplay:
         category_counts: Dict[str, int] = {}
         for event in events:
             # Handle both enum and string categories
-            cat = event.category.value if hasattr(event.category, 'value') else str(event.category)
+            cat = event.category.value if hasattr(event.category, "value") else str(event.category)
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         # Count iterations
@@ -617,7 +619,7 @@ class ExecutionReplay:
     ) -> List[AgentEvent]:
         """
         Get filtered events.
-        
+
         Args:
             session_id: Filter by session
             execution_id: Filter by execution
@@ -630,7 +632,7 @@ class ExecutionReplay:
             until: Events before this time
             has_duration: Filter by presence of duration
             limit: Maximum results
-            
+
         Returns:
             Filtered list of events
         """
@@ -687,11 +689,11 @@ class ExecutionReplay:
     ) -> List[ErrorEvent]:
         """
         Get all error events.
-        
+
         Args:
             execution_id: Filter by execution
             session_id: Filter by session
-            
+
         Returns:
             List of error events
         """
@@ -712,13 +714,13 @@ class ExecutionReplay:
     ) -> List[ActivityEvent]:
         """
         Get activity events.
-        
+
         Args:
             execution_id: Filter by execution
             activity_name: Filter by activity name
             success_only: Only successful activities
             failed_only: Only failed activities
-            
+
         Returns:
             List of activity events
         """
@@ -756,10 +758,10 @@ class ExecutionReplay:
     ) -> Iterator[AgentEvent]:
         """
         Iterate over events in chronological order.
-        
+
         Args:
             execution_id: Filter by execution
-            
+
         Yields:
             Events in order
         """

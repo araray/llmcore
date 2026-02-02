@@ -74,6 +74,7 @@ if TYPE_CHECKING:
         from psycopg.rows import dict_row
         from psycopg.types.json import Jsonb
         from psycopg_pool import AsyncConnectionPool, PoolTimeout
+
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -88,6 +89,7 @@ else:
         from psycopg.rows import dict_row
         from psycopg.types.json import Jsonb
         from psycopg_pool import AsyncConnectionPool, PoolTimeout
+
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -99,11 +101,13 @@ else:
 
 try:
     from pgvector.psycopg import register_vector_async
+
     pgvector_available = True
 except ImportError:
     try:
         # Fallback for older pgvector versions
         from pgvector.psycopg import register_vector as register_vector_async
+
         pgvector_available = True
     except ImportError:
         pgvector_available = False
@@ -127,9 +131,11 @@ DEFAULT_VECTOR_DIMENSION = 1536  # OpenAI ada-002 dimension
 # HELPER DATACLASSES
 # =============================================================================
 
+
 @dataclass
 class CollectionInfo:
     """Metadata about a vector collection."""
+
     name: str
     vector_dimension: int
     description: Optional[str] = None
@@ -156,6 +162,7 @@ class CollectionInfo:
 @dataclass
 class HybridSearchResult:
     """Result from hybrid search operation."""
+
     document: ContextDocument
     vector_score: float
     text_score: float
@@ -166,6 +173,7 @@ class HybridSearchResult:
 # =============================================================================
 # ENHANCED PGVECTOR STORAGE
 # =============================================================================
+
 
 class EnhancedPgVectorStorage(BaseVectorStorage):
     """
@@ -236,16 +244,15 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 "Install with: pip install 'psycopg[binary]' psycopg_pool"
             )
         if not pgvector_available:
-            raise ConfigError(
-                "pgvector library not installed. "
-                "Install with: pip install pgvector"
-            )
+            raise ConfigError("pgvector library not installed. Install with: pip install pgvector")
 
         # Table configuration
         self._vectors_table = config.get("vectors_table_name", DEFAULT_VECTORS_TABLE)
         self._collections_table = config.get("collections_table_name", DEFAULT_COLLECTIONS_TABLE)
         self._default_collection_name = config.get("default_collection", DEFAULT_COLLECTION_NAME)
-        self._default_vector_dimension = int(config.get("default_vector_dimension", DEFAULT_VECTOR_DIMENSION))
+        self._default_vector_dimension = int(
+            config.get("default_vector_dimension", DEFAULT_VECTOR_DIMENSION)
+        )
 
         # HNSW configuration
         self._hnsw_config = HNSWConfig(
@@ -264,7 +271,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         )
 
         # If tenant session is already configured, skip pool initialization
-        if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+        if hasattr(self, "_tenant_session") and self._tenant_session is not None:
             logger.debug("Enhanced PgVector storage initialized in tenant-scoped mode")
             self._initialized = True
             return
@@ -351,9 +358,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
                 # Ensure default collection exists
                 await self._ensure_collection_exists(
-                    conn,
-                    self._default_collection_name,
-                    self._default_vector_dimension
+                    conn, self._default_collection_name, self._default_vector_dimension
                 )
 
                 # Vectors table with user_id for isolation
@@ -426,7 +431,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         description: Optional[str] = None,
         provider: Optional[str] = None,
         model_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Ensure a collection record exists, creating or updating as needed.
@@ -445,8 +450,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
-                f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s",
-                (name,)
+                f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s", (name,)
             )
             existing = await cur.fetchone()
 
@@ -477,7 +481,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                         params.append(name)
                         await cur.execute(
                             f"UPDATE {self._collections_table} SET {', '.join(updates)} WHERE name = %s",
-                            tuple(params)
+                            tuple(params),
                         )
             else:
                 # Create new collection
@@ -489,10 +493,15 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
-                        name, dimension, description, provider, model_name,
-                        self._hnsw_config.m, self._hnsw_config.ef_construction,
-                        Jsonb(metadata or {})
-                    )
+                        name,
+                        dimension,
+                        description,
+                        provider,
+                        model_name,
+                        self._hnsw_config.m,
+                        self._hnsw_config.ef_construction,
+                        Jsonb(metadata or {}),
+                    ),
                 )
                 logger.info(f"Created vector collection '{name}' with dimension {dimension}")
 
@@ -531,7 +540,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         self,
         documents: List[ContextDocument],
         collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None
+        context: Optional[StorageContext] = None,
     ) -> List[str]:
         """
         Add or update documents in the vector store.
@@ -554,7 +563,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         user_id = context.user_id if context else None
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._add_documents_tenant(documents, target_collection, user_id)
             else:
                 return await self._add_documents_pool(documents, target_collection, user_id)
@@ -563,10 +572,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to add documents: {e}")
 
     async def _add_documents_pool(
-        self,
-        documents: List[ContextDocument],
-        collection_name: str,
-        user_id: Optional[str]
+        self, documents: List[ContextDocument], collection_name: str, user_id: Optional[str]
     ) -> List[str]:
         """Add documents using connection pool."""
         if not Jsonb:
@@ -593,8 +599,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
                 # Ensure collection exists
                 await self._ensure_collection_exists(
-                    conn, collection_name, dimension,
-                    provider=provider, model_name=model_name
+                    conn, collection_name, dimension, provider=provider, model_name=model_name
                 )
 
                 # Prepare documents for insertion
@@ -627,9 +632,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                                 updated_at = CURRENT_TIMESTAMP
                             """,
                             (
-                                doc.id, collection_name, user_id,
-                                doc.content, doc.embedding, Jsonb(doc_metadata)
-                            )
+                                doc.id,
+                                collection_name,
+                                user_id,
+                                doc.content,
+                                doc.embedding,
+                                Jsonb(doc_metadata),
+                            ),
                         )
                     added_ids.append(doc.id)
 
@@ -637,10 +646,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         return added_ids
 
     async def _add_documents_tenant(
-        self,
-        documents: List[ContextDocument],
-        collection_name: str,
-        user_id: Optional[str]
+        self, documents: List[ContextDocument], collection_name: str, user_id: Optional[str]
     ) -> List[str]:
         """Add documents using tenant session."""
         # Implementation similar to pool version but using SQLAlchemy text()
@@ -673,7 +679,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                     "content": doc.content,
                     "embedding": str(doc.embedding),
                     "metadata": json.dumps(doc_metadata),
-                }
+                },
             )
             added_ids.append(doc.id)
 
@@ -686,7 +692,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         documents: List[ContextDocument],
         collection_name: Optional[str] = None,
         context: Optional[StorageContext] = None,
-        batch_config: Optional[BatchConfig] = None
+        batch_config: Optional[BatchConfig] = None,
     ) -> BatchResult[str]:
         """
         Batch upsert documents with chunking and retry logic.
@@ -715,6 +721,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
         for chunk_idx, chunk in enumerate(chunks):
             try:
+
                 async def upsert_chunk():
                     return await self.add_documents(chunk, target_collection, context)
 
@@ -722,13 +729,18 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                     chunk_ids = await execute_with_retry(
                         upsert_chunk,
                         max_retries=config.max_retries,
-                        retryable_exceptions=(VectorStorageError, psycopg.Error if psycopg else Exception)
+                        retryable_exceptions=(
+                            VectorStorageError,
+                            psycopg.Error if psycopg else Exception,
+                        ),
                     )
                 else:
                     chunk_ids = await upsert_chunk()
 
                 successful.extend(chunk_ids)
-                logger.debug(f"Batch chunk {chunk_idx + 1}/{len(chunks)}: {len(chunk_ids)} documents")
+                logger.debug(
+                    f"Batch chunk {chunk_idx + 1}/{len(chunks)}: {len(chunk_ids)} documents"
+                )
 
             except Exception as e:
                 error_msg = str(e)
@@ -745,7 +757,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             successful=successful,
             failed=[(doc.id, msg) for doc, msg in failed],
             total=len(documents),
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
         )
 
         logger.info(
@@ -766,7 +778,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         collection_name: Optional[str] = None,
         filter_metadata: Optional[Dict[str, Any]] = None,
         context: Optional[StorageContext] = None,
-        search_config: Optional[VectorSearchConfig] = None
+        search_config: Optional[VectorSearchConfig] = None,
     ) -> List[ContextDocument]:
         """
         Perform similarity search with user isolation and metadata filtering.
@@ -787,7 +799,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         config = search_config or VectorSearchConfig(k=k, filter_metadata=filter_metadata)
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._similarity_search_tenant(
                     query_embedding, k, target_collection, user_id, config
                 )
@@ -805,7 +817,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         k: int,
         collection_name: str,
         user_id: Optional[str],
-        config: VectorSearchConfig
+        config: VectorSearchConfig,
     ) -> List[ContextDocument]:
         """Similarity search using connection pool."""
         if not dict_row:
@@ -828,7 +840,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             async with conn.cursor(row_factory=dict_row) as cur:
                 await cur.execute(
                     f"SELECT vector_dimension FROM {self._collections_table} WHERE name = %s",
-                    (collection_name,)
+                    (collection_name,),
                 )
                 coll = await cur.fetchone()
                 if not coll:
@@ -882,7 +894,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                         id=row["id"],
                         content=row.get("content", ""),
                         metadata=row.get("metadata") or {},
-                        score=score
+                        score=score,
                     )
 
                     if config.include_embeddings:
@@ -900,7 +912,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         k: int,
         collection_name: str,
         user_id: Optional[str],
-        config: VectorSearchConfig
+        config: VectorSearchConfig,
     ) -> List[ContextDocument]:
         """Similarity search using tenant session."""
         results: List[ContextDocument] = []
@@ -936,12 +948,14 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             distance = float(row_map["distance"]) if row_map.get("distance") is not None else 0.0
             score = 1.0 - distance if config.distance_metric == "cosine" else -distance
 
-            results.append(ContextDocument(
-                id=row_map["id"],
-                content=row_map.get("content", ""),
-                metadata=json.loads(row_map.get("metadata") or '{}'),
-                score=score
-            ))
+            results.append(
+                ContextDocument(
+                    id=row_map["id"],
+                    content=row_map.get("content", ""),
+                    metadata=json.loads(row_map.get("metadata") or "{}"),
+                    score=score,
+                )
+            )
 
         return results
 
@@ -957,7 +971,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         collection_name: Optional[str] = None,
         context: Optional[StorageContext] = None,
         vector_weight: float = 0.7,
-        filter_metadata: Optional[Dict[str, Any]] = None
+        filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[HybridSearchResult]:
         """
         Perform hybrid search combining vector similarity and full-text search.
@@ -1079,16 +1093,18 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                             id=row["id"],
                             content=row.get("content", ""),
                             metadata=row.get("metadata") or {},
-                            score=float(row["rrf_score"])
+                            score=float(row["rrf_score"]),
                         )
 
-                        results.append(HybridSearchResult(
-                            document=doc,
-                            vector_score=vector_score,
-                            text_score=text_score,
-                            combined_score=float(row["rrf_score"]),
-                            rank=rank
-                        ))
+                        results.append(
+                            HybridSearchResult(
+                                document=doc,
+                                vector_score=vector_score,
+                                text_score=text_score,
+                                combined_score=float(row["rrf_score"]),
+                                rank=rank,
+                            )
+                        )
                         rank += 1
 
                 logger.debug(f"Hybrid search returned {len(results)} results")
@@ -1105,7 +1121,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
     async def list_collection_names(self) -> List[str]:
         """List all collection names."""
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 result = await self._tenant_session.execute(
                     text(f"SELECT name FROM {self._collections_table} ORDER BY name")
                 )
@@ -1113,7 +1129,9 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             else:
                 async with self._pool.connection() as conn:
                     async with conn.cursor() as cur:
-                        await cur.execute(f"SELECT name FROM {self._collections_table} ORDER BY name")
+                        await cur.execute(
+                            f"SELECT name FROM {self._collections_table} ORDER BY name"
+                        )
                         return [row[0] async for row in cur]
         except Exception as e:
             logger.error(f"Error listing collections: {e}", exc_info=True)
@@ -1124,21 +1142,20 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         return await self.list_collection_names()
 
     async def get_collection_metadata(
-        self,
-        collection_name: Optional[str] = None
+        self, collection_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """Get metadata for a collection."""
         target = collection_name or self._default_collection_name
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 result = await self._tenant_session.execute(
                     text(f"""
                         SELECT name, vector_dimension, description, embedding_model_provider,
                                embedding_model_name, hnsw_m, hnsw_ef_construction, created_at, metadata
                         FROM {self._collections_table} WHERE name = :name
                     """),
-                    {"name": target}
+                    {"name": target},
                 )
                 row = result.fetchone()
             else:
@@ -1151,14 +1168,14 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                                    embedding_model_name, hnsw_m, hnsw_ef_construction, created_at, metadata
                             FROM {self._collections_table} WHERE name = %s
                             """,
-                            (target,)
+                            (target,),
                         )
                         row = await cur.fetchone()
 
             if not row:
                 return None
 
-            if hasattr(row, '_mapping'):
+            if hasattr(row, "_mapping"):
                 row = row._mapping
 
             return {
@@ -1178,9 +1195,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to get collection metadata: {e}")
 
     async def get_collection_info(
-        self,
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None
+        self, collection_name: Optional[str] = None, context: Optional[StorageContext] = None
     ) -> Optional[CollectionInfo]:
         """
         Get detailed collection information including document count.
@@ -1220,7 +1235,9 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 description=metadata.get("description"),
                 embedding_model_provider=metadata.get("embedding_model_provider"),
                 embedding_model_name=metadata.get("embedding_model_name"),
-                created_at=datetime.fromisoformat(metadata["created_at"]) if metadata.get("created_at") else None,
+                created_at=datetime.fromisoformat(metadata["created_at"])
+                if metadata.get("created_at")
+                else None,
                 metadata=metadata.get("metadata", {}),
                 document_count=doc_count,
             )
@@ -1237,7 +1254,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         embedding_model_provider: Optional[str] = None,
         embedding_model_name: Optional[str] = None,
         hnsw_config: Optional[HNSWConfig] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> CollectionInfo:
         """
         Create a new vector collection.
@@ -1265,19 +1282,20 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                     # Check if collection exists
                     async with conn.cursor() as cur:
                         await cur.execute(
-                            f"SELECT 1 FROM {self._collections_table} WHERE name = %s",
-                            (name,)
+                            f"SELECT 1 FROM {self._collections_table} WHERE name = %s", (name,)
                         )
                         if await cur.fetchone():
                             raise VectorStorageError(f"Collection '{name}' already exists")
 
                     # Create collection
                     await self._ensure_collection_exists(
-                        conn, name, dimension,
+                        conn,
+                        name,
+                        dimension,
                         description=description,
                         provider=embedding_model_provider,
                         model_name=embedding_model_name,
-                        metadata=metadata
+                        metadata=metadata,
                     )
 
             return CollectionInfo(
@@ -1297,11 +1315,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             logger.error(f"Error creating collection: {e}", exc_info=True)
             raise VectorStorageError(f"Failed to create collection: {e}")
 
-    async def delete_collection(
-        self,
-        collection_name: str,
-        force: bool = False
-    ) -> bool:
+    async def delete_collection(self, collection_name: str, force: bool = False) -> bool:
         """
         Delete a collection and all its documents.
 
@@ -1319,7 +1333,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                     async with conn.cursor() as cur:
                         await cur.execute(
                             f"SELECT COUNT(*) FROM {self._vectors_table} WHERE collection_name = %s",
-                            (collection_name,)
+                            (collection_name,),
                         )
                         count = (await cur.fetchone())[0]
 
@@ -1332,7 +1346,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                         # Delete collection (cascades to vectors)
                         await cur.execute(
                             f"DELETE FROM {self._collections_table} WHERE name = %s",
-                            (collection_name,)
+                            (collection_name,),
                         )
                         deleted = cur.rowcount > 0
 
@@ -1354,7 +1368,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         self,
         document_ids: List[str],
         collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None
+        context: Optional[StorageContext] = None,
     ) -> bool:
         """
         Delete documents by ID.
@@ -1399,7 +1413,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         document_id: str,
         collection_name: Optional[str] = None,
         context: Optional[StorageContext] = None,
-        include_embedding: bool = False
+        include_embedding: bool = False,
     ) -> Optional[ContextDocument]:
         """
         Get a single document by ID.

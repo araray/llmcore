@@ -99,8 +99,7 @@ class SqliteFailureStorage(BaseFailureStorage):
         """
         if not AIOSQLITE_AVAILABLE:
             raise ImportError(
-                "aiosqlite library is not installed. "
-                "Install with: pip install aiosqlite"
+                "aiosqlite library is not installed. Install with: pip install aiosqlite"
             )
 
         db_path_str = config.get("path")
@@ -241,9 +240,7 @@ class SqliteFailureStorage(BaseFailureStorage):
         if not self._conn:
             raise RuntimeError("Storage not initialized")
 
-        cursor = await self._conn.execute(
-            "SELECT * FROM failure_logs WHERE id = ?", (failure_id,)
-        )
+        cursor = await self._conn.execute("SELECT * FROM failure_logs WHERE id = ?", (failure_id,))
         row = await cursor.fetchone()
 
         if row:
@@ -276,6 +273,7 @@ class SqliteFailureStorage(BaseFailureStorage):
 
         # Compute similarity hashes
         from .failure_storage import FailureLearningManager
+
         manager = FailureLearningManager.__new__(FailureLearningManager)
 
         types_to_check = failure_types or [
@@ -311,7 +309,7 @@ class SqliteFailureStorage(BaseFailureStorage):
 
             cursor = await self._conn.execute(
                 f"""SELECT * FROM failure_logs
-                   WHERE goal LIKE ? AND id NOT IN ({','.join('?' * len(failures)) if failures else 'SELECT NULL WHERE 1=0'})
+                   WHERE goal LIKE ? AND id NOT IN ({",".join("?" * len(failures)) if failures else "SELECT NULL WHERE 1=0"})
                    ORDER BY created_at DESC
                    LIMIT ?""",
                 (f"%{keyword_pattern}%", *[f.id for f in failures], limit - len(failures)),
@@ -345,9 +343,7 @@ class SqliteFailureStorage(BaseFailureStorage):
             return self._row_to_pattern(row)
         return None
 
-    async def get_patterns_for_failures(
-        self, failure_ids: List[str]
-    ) -> List[FailurePattern]:
+    async def get_patterns_for_failures(self, failure_ids: List[str]) -> List[FailurePattern]:
         """
         Retrieve patterns associated with given failures.
 

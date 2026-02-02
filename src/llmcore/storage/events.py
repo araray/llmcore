@@ -73,6 +73,7 @@ logger = logging.getLogger(__name__)
 
 class EventType(str, Enum):
     """Standard event types for storage operations."""
+
     # Session events
     SESSION_CREATE = "session_create"
     SESSION_UPDATE = "session_update"
@@ -118,6 +119,7 @@ class EventLoggerConfig:
         include_metadata: Include metadata in events.
         max_metadata_size: Maximum size of metadata JSON (bytes).
     """
+
     enabled: bool = True
     table_name: str = "storage_events"
     retention_days: int = 30
@@ -153,6 +155,7 @@ class StorageEvent:
         metadata: Additional event context as JSON.
         error_message: Error message (if event is an error).
     """
+
     event_type: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     user_id: Optional[str] = None
@@ -436,7 +439,7 @@ class EventLogger:
         async with self._pool.connection() as conn:
             for event in events:
                 metadata_json = (
-                    json.dumps(event.metadata)[:self.config.max_metadata_size]
+                    json.dumps(event.metadata)[: self.config.max_metadata_size]
                     if event.metadata and self.config.include_metadata
                     else None
                 )
@@ -463,7 +466,7 @@ class EventLogger:
 
         for event in events:
             metadata_json = (
-                json.dumps(event.metadata)[:self.config.max_metadata_size]
+                json.dumps(event.metadata)[: self.config.max_metadata_size]
                 if event.metadata and self.config.include_metadata
                 else None
             )
@@ -571,9 +574,7 @@ class EventLogger:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                loop.call_soon_threadsafe(
-                    lambda: self._event_queue.put_nowait(event)
-                )
+                loop.call_soon_threadsafe(lambda: self._event_queue.put_nowait(event))
             else:
                 # No running loop; queue directly (may block)
                 self._sync_queue.put_nowait(event)
@@ -680,17 +681,19 @@ class EventLogger:
             rows = await result.fetchall()
 
             for row in rows:
-                events.append(StorageEvent(
-                    id=row[0],
-                    event_type=row[1],
-                    timestamp=row[2],
-                    user_id=row[3],
-                    session_id=row[4],
-                    collection_name=row[5],
-                    operation_duration_ms=row[6],
-                    metadata=json.loads(row[7]) if row[7] else None,
-                    error_message=row[8],
-                ))
+                events.append(
+                    StorageEvent(
+                        id=row[0],
+                        event_type=row[1],
+                        timestamp=row[2],
+                        user_id=row[3],
+                        session_id=row[4],
+                        collection_name=row[5],
+                        operation_duration_ms=row[6],
+                        metadata=json.loads(row[7]) if row[7] else None,
+                        error_message=row[8],
+                    )
+                )
 
         return events
 
@@ -746,17 +749,19 @@ class EventLogger:
 
         for row in rows:
             timestamp = datetime.fromisoformat(row[2]) if row[2] else datetime.now(timezone.utc)
-            events.append(StorageEvent(
-                id=row[0],
-                event_type=row[1],
-                timestamp=timestamp,
-                user_id=row[3],
-                session_id=row[4],
-                collection_name=row[5],
-                operation_duration_ms=row[6],
-                metadata=json.loads(row[7]) if row[7] else None,
-                error_message=row[8],
-            ))
+            events.append(
+                StorageEvent(
+                    id=row[0],
+                    event_type=row[1],
+                    timestamp=timestamp,
+                    user_id=row[3],
+                    session_id=row[4],
+                    collection_name=row[5],
+                    operation_duration_ms=row[6],
+                    metadata=json.loads(row[7]) if row[7] else None,
+                    error_message=row[8],
+                )
+            )
 
         return events
 
@@ -786,7 +791,9 @@ class EventLogger:
         params = []
 
         if event_type:
-            conditions.append("event_type = $1" if self._backend == "postgres" else "event_type = ?")
+            conditions.append(
+                "event_type = $1" if self._backend == "postgres" else "event_type = ?"
+            )
             params.append(event_type)
 
         if user_id:
@@ -796,15 +803,25 @@ class EventLogger:
 
         if session_id:
             idx = len(params) + 1
-            conditions.append(f"session_id = ${idx}" if self._backend == "postgres" else "session_id = ?")
+            conditions.append(
+                f"session_id = ${idx}" if self._backend == "postgres" else "session_id = ?"
+            )
             params.append(session_id)
 
         if since:
             idx = len(params) + 1
-            conditions.append(f"timestamp >= ${idx}" if self._backend == "postgres" else "timestamp >= ?")
+            conditions.append(
+                f"timestamp >= ${idx}" if self._backend == "postgres" else "timestamp >= ?"
+            )
             params.append(since if self._backend == "postgres" else since.isoformat())
 
-        where_clause = " AND ".join(conditions) if conditions else "TRUE" if self._backend == "postgres" else "1=1"
+        where_clause = (
+            " AND ".join(conditions)
+            if conditions
+            else "TRUE"
+            if self._backend == "postgres"
+            else "1=1"
+        )
 
         sql = f"SELECT COUNT(*) FROM {self.config.table_name} WHERE {where_clause}"
 
@@ -846,7 +863,7 @@ class EventLogger:
             sql = f"DELETE FROM {self.config.table_name} WHERE timestamp < $1"
             async with self._pool.connection() as conn:
                 result = await conn.execute(sql, cutoff)
-                deleted = result.rowcount if hasattr(result, 'rowcount') else 0
+                deleted = result.rowcount if hasattr(result, "rowcount") else 0
         else:
             sql = f"DELETE FROM {self.config.table_name} WHERE timestamp < ?"
             cursor = await self._pool.execute(sql, (cutoff.isoformat(),))

@@ -322,18 +322,20 @@ def sample_chunks(sample_code_files: Dict[str, str]) -> list:
     """Create sample chunks from code files."""
     chunks = []
     for i, (path, content) in enumerate(sample_code_files.items()):
-        chunks.append({
-            "id": f"chunk_{i}",
-            "content": content,
-            "metadata": {
-                "file_path": path,
-                "language": "python",
-                "start_line": 1,
-                "end_line": content.count("\n") + 1,
-            },
-            "embedding": [0.1 + (i * 0.1)] * 1536,
-            "score": 1.0 - (i * 0.1),
-        })
+        chunks.append(
+            {
+                "id": f"chunk_{i}",
+                "content": content,
+                "metadata": {
+                    "file_path": path,
+                    "language": "python",
+                    "start_line": 1,
+                    "end_line": content.count("\n") + 1,
+                },
+                "embedding": [0.1 + (i * 0.1)] * 1536,
+                "score": 1.0 - (i * 0.1),
+            }
+        )
     return chunks
 
 
@@ -350,6 +352,7 @@ def cleanup_metrics():
     # Reset singleton registries
     try:
         from llmcore.observability.metrics import MetricsRegistry
+
         MetricsRegistry._instances = {}
     except Exception:
         pass
@@ -392,9 +395,5 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers", "benchmark: marks tests as benchmarks"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
+    config.addinivalue_line("markers", "benchmark: marks tests as benchmarks")
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")

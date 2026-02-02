@@ -1,7 +1,6 @@
 # tests/observability/test_config.py
 """Tests for observability configuration module."""
 
-
 import pytest
 
 from llmcore.observability.config import (

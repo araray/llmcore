@@ -702,6 +702,7 @@ class CognitiveCycle:
         # Load configuration and initialize circuit breaker (same as run_until_complete)
         if agents_config is None:
             from ....config.agents_config import AgentsConfig
+
             agents_config = AgentsConfig()
 
         cb_config = agents_config.circuit_breaker
@@ -775,7 +776,9 @@ class CognitiveCycle:
                     )
 
                     if cb_result.tripped:
-                        logger.warning(f"Circuit breaker tripped on error: {cb_result.reason.value}")
+                        logger.warning(
+                            f"Circuit breaker tripped on error: {cb_result.reason.value}"
+                        )
                         yield StreamingIterationResult(
                             iteration=iteration_num + 1,
                             max_iterations=max_iterations,
@@ -865,7 +868,9 @@ class CognitiveCycle:
             if circuit_breaker is not None and not is_complete:
                 cb_step_completed = None
                 if iteration_result.reflect_output:
-                    cb_step_completed = getattr(iteration_result.reflect_output, "step_completed", None)
+                    cb_step_completed = getattr(
+                        iteration_result.reflect_output, "step_completed", None
+                    )
 
                 cb_result = circuit_breaker.check(
                     iteration=actual_iteration,
@@ -882,7 +887,10 @@ class CognitiveCycle:
                     logger.warning(f"Circuit breaker tripped: {stop_reason}")
 
             # Check if UPDATE phase says to stop
-            if iteration_result.update_output and not iteration_result.update_output.should_continue:
+            if (
+                iteration_result.update_output
+                and not iteration_result.update_output.should_continue
+            ):
                 should_stop = True
                 if agent_state.awaiting_human_approval:
                     stop_reason = "human_approval_required"

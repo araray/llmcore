@@ -77,9 +77,7 @@ class VolatileMemoryConfig(BaseModel):
     """
 
     enabled: bool = Field(default=True, description="Enable volatile memory tier")
-    max_items: int = Field(
-        default=10000, ge=0, le=10000000, description="Maximum number of items"
-    )
+    max_items: int = Field(default=10000, ge=0, le=10000000, description="Maximum number of items")
     max_size_bytes: int = Field(
         default=100 * 1024 * 1024,  # 100 MB
         ge=0,
@@ -314,9 +312,7 @@ class VolatileMemoryTier:
             return 0
 
         # Sort by last_accessed (oldest first)
-        sorted_items = sorted(
-            self._store.items(), key=lambda x: x[1].last_accessed
-        )
+        sorted_items = sorted(self._store.items(), key=lambda x: x[1].last_accessed)
 
         evicted = 0
         space_freed = 0
@@ -333,9 +329,7 @@ class VolatileMemoryTier:
             self._stats["evictions"] += 1
 
         if evicted > 0:
-            logger.debug(
-                f"Evicted {evicted} LRU items, freed {space_freed} bytes"
-            )
+            logger.debug(f"Evicted {evicted} LRU items, freed {space_freed} bytes")
 
         return evicted
 
@@ -525,9 +519,7 @@ class VolatileMemoryTier:
             if pattern is None:
                 return [k for k, v in self._store.items() if not v.is_expired()]
             return [
-                k
-                for k, v in self._store.items()
-                if k.startswith(pattern) and not v.is_expired()
+                k for k, v in self._store.items() if k.startswith(pattern) and not v.is_expired()
             ]
 
     def clear(self) -> int:

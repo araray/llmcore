@@ -52,6 +52,7 @@ class ProviderManager:
     UPDATED: Now accepts an optional log_raw_payloads parameter for explicit
     control from LLMCore.create(), while maintaining backward compatibility.
     """
+
     _providers: Dict[str, BaseProvider]
     _config: ConfyConfig
     _default_provider_name: str
@@ -76,8 +77,10 @@ class ProviderManager:
         self._providers = {}
         self._log_raw_payloads_override = log_raw_payloads
         self._initialized = False
-        self._default_provider_name = self._config.get('llmcore.default_provider', 'ollama').lower()
-        logger.info(f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'.")
+        self._default_provider_name = self._config.get("llmcore.default_provider", "ollama").lower()
+        logger.info(
+            f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'."
+        )
 
         self._load_configured_providers()
 
@@ -121,7 +124,7 @@ class ProviderManager:
         1. The explicitly passed parameter to __init__ (if True)
         2. Otherwise, the config value 'llmcore.log_raw_payloads'
         """
-        providers_config = self._config.get('providers', {})
+        providers_config = self._config.get("providers", {})
         if not isinstance(providers_config, dict):
             logger.warning("'[providers]' section is not a valid dictionary. No providers loaded.")
             return
@@ -130,43 +133,62 @@ class ProviderManager:
         log_raw_payloads_global = (
             self._log_raw_payloads_override
             if self._log_raw_payloads_override
-            else self._config.get('llmcore.log_raw_payloads', False)
+            else self._config.get("llmcore.log_raw_payloads", False)
         )
         logger.debug(f"Global 'log_raw_payloads' setting for providers: {log_raw_payloads_global}")
 
         for section_name, provider_specific_config in providers_config.items():
             current_section_name_lower = section_name.lower()
             if not isinstance(provider_specific_config, dict):
-                logger.warning(f"Config for provider '{current_section_name_lower}' is not a dict. Skipping.")
+                logger.warning(
+                    f"Config for provider '{current_section_name_lower}' is not a dict. Skipping."
+                )
                 continue
 
-            provider_type_key = provider_specific_config.get("type", current_section_name_lower).lower()
+            provider_type_key = provider_specific_config.get(
+                "type", current_section_name_lower
+            ).lower()
             provider_cls = PROVIDER_MAP.get(provider_type_key)
 
             if not provider_cls:
-                logger.warning(f"Provider type '{provider_type_key}' for section '{current_section_name_lower}' is not supported. Skipping.")
+                logger.warning(
+                    f"Provider type '{provider_type_key}' for section '{current_section_name_lower}' is not supported. Skipping."
+                )
                 continue
 
             # Handle flexible API key loading
-            if 'api_key' not in provider_specific_config and 'api_key_env_var' in provider_specific_config:
-                env_var_name = provider_specific_config['api_key_env_var']
+            if (
+                "api_key" not in provider_specific_config
+                and "api_key_env_var" in provider_specific_config
+            ):
+                env_var_name = provider_specific_config["api_key_env_var"]
                 api_key = os.environ.get(env_var_name)
                 if api_key:
-                    provider_specific_config['api_key'] = api_key
-                    logger.info(f"Loaded API key for provider '{current_section_name_lower}' from environment variable '{env_var_name}'.")
+                    provider_specific_config["api_key"] = api_key
+                    logger.info(
+                        f"Loaded API key for provider '{current_section_name_lower}' from environment variable '{env_var_name}'."
+                    )
                 else:
-                    logger.warning(f"Environment variable '{env_var_name}' specified for provider '{current_section_name_lower}' but it is not set.")
+                    logger.warning(
+                        f"Environment variable '{env_var_name}' specified for provider '{current_section_name_lower}' but it is not set."
+                    )
 
             try:
                 self._providers[current_section_name_lower] = provider_cls(
-                    provider_specific_config,
-                    log_raw_payloads=log_raw_payloads_global
+                    provider_specific_config, log_raw_payloads=log_raw_payloads_global
                 )
-                logger.info(f"Provider instance '{current_section_name_lower}' (type: '{provider_type_key}') initialized.")
+                logger.info(
+                    f"Provider instance '{current_section_name_lower}' (type: '{provider_type_key}') initialized."
+                )
             except ImportError as e:
-                logger.error(f"Failed to init '{current_section_name_lower}': Missing library. Install with 'pip install llmcore[{provider_type_key}]'. Error: {e}")
+                logger.error(
+                    f"Failed to init '{current_section_name_lower}': Missing library. Install with 'pip install llmcore[{provider_type_key}]'. Error: {e}"
+                )
             except Exception as e:
-                logger.error(f"Failed to initialize provider '{current_section_name_lower}': {e}", exc_info=True)
+                logger.error(
+                    f"Failed to initialize provider '{current_section_name_lower}': {e}",
+                    exc_info=True,
+                )
 
         if not self._providers:
             logger.warning("No provider instances were successfully loaded.")
@@ -216,7 +238,9 @@ class ProviderManager:
             try:
                 provider_instance.log_raw_payloads_enabled = enable
             except Exception as e_update:
-                logger.error(f"Error updating raw_payload_logging for provider '{provider_name}': {e_update}")
+                logger.error(
+                    f"Error updating raw_payload_logging for provider '{provider_name}': {e_update}"
+                )
 
     async def close_providers(self) -> None:
         """Closes connections or cleans up resources for all loaded providers."""

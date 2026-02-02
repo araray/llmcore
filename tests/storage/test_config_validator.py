@@ -39,6 +39,7 @@ from config_validator import (
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def valid_postgres_config() -> Dict[str, Any]:
     """Valid PostgreSQL storage configuration."""
@@ -48,13 +49,13 @@ def valid_postgres_config() -> Dict[str, Any]:
                 "type": "postgres",
                 "db_url": "postgresql://user:pass@localhost:5432/llmcore",
                 "min_pool_size": 2,
-                "max_pool_size": 10
+                "max_pool_size": 10,
             },
             "vector": {
                 "type": "pgvector",
                 "db_url": "postgresql://user:pass@localhost:5432/llmcore",
-                "default_vector_dimension": 1536
-            }
+                "default_vector_dimension": 1536,
+            },
         }
     }
 
@@ -64,14 +65,8 @@ def valid_sqlite_config() -> Dict[str, Any]:
     """Valid SQLite storage configuration."""
     return {
         "storage": {
-            "session": {
-                "type": "sqlite",
-                "path": "/tmp/llmcore_test.db"
-            },
-            "vector": {
-                "type": "chromadb",
-                "path": "/tmp/llmcore_chroma"
-            }
+            "session": {"type": "sqlite", "path": "/tmp/llmcore_test.db"},
+            "vector": {"type": "chromadb", "path": "/tmp/llmcore_chroma"},
         }
     }
 
@@ -85,6 +80,7 @@ def empty_config() -> Dict[str, Any]:
 # =============================================================================
 # TESTS - ENVIRONMENT VARIABLE RESOLUTION
 # =============================================================================
+
 
 class TestEnvVarResolution:
     """Tests for environment variable resolution."""
@@ -110,12 +106,7 @@ class TestEnvVarResolution:
     def test_resolve_nested_dict(self):
         """Test resolving env vars in nested dictionaries."""
         with patch.dict(os.environ, {"DB_HOST": "localhost", "DB_PORT": "5432"}):
-            config = {
-                "database": {
-                    "host": "${DB_HOST}",
-                    "port": "${DB_PORT}"
-                }
-            }
+            config = {"database": {"host": "${DB_HOST}", "port": "${DB_PORT}"}}
             result = _resolve_env_vars(config)
 
             assert result["database"]["host"] == "localhost"
@@ -145,6 +136,7 @@ class TestEnvVarResolution:
 # =============================================================================
 # TESTS - POSTGRES URL VALIDATION
 # =============================================================================
+
 
 class TestPostgresUrlValidation:
     """Tests for PostgreSQL connection URL validation."""
@@ -188,6 +180,7 @@ class TestPostgresUrlValidation:
 # TESTS - PATH VALIDATION
 # =============================================================================
 
+
 class TestPathValidation:
     """Tests for filesystem path validation."""
 
@@ -221,6 +214,7 @@ class TestPathValidation:
 # TESTS - VALIDATION RESULT
 # =============================================================================
 
+
 class TestValidationResult:
     """Tests for ValidationResult class."""
 
@@ -235,11 +229,9 @@ class TestValidationResult:
     def test_add_error_makes_invalid(self):
         """Test that adding an error makes result invalid."""
         result = ValidationResult(valid=True)
-        result.add_issue(ValidationIssue(
-            severity=ValidationSeverity.ERROR,
-            field="test",
-            message="Test error"
-        ))
+        result.add_issue(
+            ValidationIssue(severity=ValidationSeverity.ERROR, field="test", message="Test error")
+        )
 
         assert result.valid is False
         assert len(result.errors) == 1
@@ -247,11 +239,11 @@ class TestValidationResult:
     def test_add_warning_keeps_valid(self):
         """Test that warnings don't make result invalid."""
         result = ValidationResult(valid=True)
-        result.add_issue(ValidationIssue(
-            severity=ValidationSeverity.WARNING,
-            field="test",
-            message="Test warning"
-        ))
+        result.add_issue(
+            ValidationIssue(
+                severity=ValidationSeverity.WARNING, field="test", message="Test warning"
+            )
+        )
 
         assert result.valid is True
         assert len(result.warnings) == 1
@@ -259,17 +251,21 @@ class TestValidationResult:
     def test_format_report(self):
         """Test report formatting."""
         result = ValidationResult(valid=True)
-        result.add_issue(ValidationIssue(
-            severity=ValidationSeverity.ERROR,
-            field="db_url",
-            message="Missing required field",
-            suggestion="Add storage.session.db_url"
-        ))
-        result.add_issue(ValidationIssue(
-            severity=ValidationSeverity.WARNING,
-            field="path",
-            message="Path may not be writable"
-        ))
+        result.add_issue(
+            ValidationIssue(
+                severity=ValidationSeverity.ERROR,
+                field="db_url",
+                message="Missing required field",
+                suggestion="Add storage.session.db_url",
+            )
+        )
+        result.add_issue(
+            ValidationIssue(
+                severity=ValidationSeverity.WARNING,
+                field="path",
+                message="Path may not be writable",
+            )
+        )
 
         report = result.format_report()
 
@@ -282,6 +278,7 @@ class TestValidationResult:
 # =============================================================================
 # TESTS - STORAGE CONFIG VALIDATOR
 # =============================================================================
+
 
 class TestStorageConfigValidator:
     """Tests for StorageConfigValidator class."""
@@ -385,7 +382,7 @@ class TestStorageConfigValidator:
                     "type": "postgres",
                     "db_url": "postgresql://localhost/db",
                     "min_pool_size": 10,
-                    "max_pool_size": 5  # min > max
+                    "max_pool_size": 5,  # min > max
                 }
             }
         }
@@ -403,7 +400,7 @@ class TestStorageConfigValidator:
                 "vector": {
                     "type": "pgvector",
                     "db_url": "postgresql://localhost/db",
-                    "default_vector_dimension": -100  # Invalid
+                    "default_vector_dimension": -100,  # Invalid
                 }
             }
         }
@@ -421,7 +418,7 @@ class TestStorageConfigValidator:
                 "vector": {
                     "type": "pgvector",
                     "db_url": "postgresql://localhost/db",
-                    "default_vector_dimension": 8192  # Very high
+                    "default_vector_dimension": 8192,  # Very high
                 }
             }
         }
@@ -462,14 +459,11 @@ class TestStorageConfigValidator:
         """Test info message when session and vector use different DBs."""
         config = {
             "storage": {
-                "session": {
-                    "type": "postgres",
-                    "db_url": "postgresql://localhost/sessions"
-                },
+                "session": {"type": "postgres", "db_url": "postgresql://localhost/sessions"},
                 "vector": {
                     "type": "pgvector",
-                    "db_url": "postgresql://localhost/vectors"  # Different
-                }
+                    "db_url": "postgresql://localhost/vectors",  # Different
+                },
             }
         }
 
@@ -499,14 +493,7 @@ class TestStorageConfigValidator:
     def test_env_var_in_config(self):
         """Test that environment variables are resolved."""
         with patch.dict(os.environ, {"TEST_DB_URL": "postgresql://localhost/test"}):
-            config = {
-                "storage": {
-                    "session": {
-                        "type": "postgres",
-                        "db_url": "${TEST_DB_URL}"
-                    }
-                }
-            }
+            config = {"storage": {"session": {"type": "postgres", "db_url": "${TEST_DB_URL}"}}}
 
             validator = StorageConfigValidator()
             result = validator.validate(config)
@@ -516,7 +503,9 @@ class TestStorageConfigValidator:
 
     def test_env_var_fallback(self):
         """Test db_url fallback from environment variable."""
-        with patch.dict(os.environ, {"LLMCORE_STORAGE_SESSION_DB_URL": "postgresql://localhost/fallback"}):
+        with patch.dict(
+            os.environ, {"LLMCORE_STORAGE_SESSION_DB_URL": "postgresql://localhost/fallback"}
+        ):
             config = {
                 "storage": {
                     "session": {
@@ -538,6 +527,7 @@ class TestStorageConfigValidator:
 # =============================================================================
 # TESTS - CONVENIENCE FUNCTION
 # =============================================================================
+
 
 class TestValidateStorageConfig:
     """Tests for the validate_storage_config convenience function."""
@@ -570,15 +560,14 @@ class TestValidateStorageConfig:
 # TESTS - VALIDATION ISSUE
 # =============================================================================
 
+
 class TestValidationIssue:
     """Tests for ValidationIssue class."""
 
     def test_str_without_suggestion(self):
         """Test string representation without suggestion."""
         issue = ValidationIssue(
-            severity=ValidationSeverity.ERROR,
-            field="db_url",
-            message="Missing required field"
+            severity=ValidationSeverity.ERROR, field="db_url", message="Missing required field"
         )
 
         result = str(issue)
@@ -593,7 +582,7 @@ class TestValidationIssue:
             severity=ValidationSeverity.ERROR,
             field="db_url",
             message="Missing required field",
-            suggestion="Add storage.session.db_url to config"
+            suggestion="Add storage.session.db_url to config",
         )
 
         result = str(issue)
@@ -604,10 +593,6 @@ class TestValidationIssue:
     def test_severity_levels(self):
         """Test all severity levels."""
         for severity in ValidationSeverity:
-            issue = ValidationIssue(
-                severity=severity,
-                field="test",
-                message="Test"
-            )
+            issue = ValidationIssue(severity=severity, field="test", message="Test")
             result = str(issue)
             assert severity.value.upper() in result

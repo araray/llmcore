@@ -66,6 +66,7 @@ class TestCircuitBreakerIntegration:
     def agents_config(self):
         """Create an agents config with circuit breaker enabled."""
         from llmcore.config.agents_config import AgentsConfig
+
         config = AgentsConfig()
         config.circuit_breaker.enabled = True
         config.circuit_breaker.max_same_errors = 3
@@ -74,9 +75,7 @@ class TestCircuitBreakerIntegration:
         return config
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_trips_on_repeated_errors(
-        self, cognitive_cycle, agents_config
-    ):
+    async def test_circuit_breaker_trips_on_repeated_errors(self, cognitive_cycle, agents_config):
         """Test that circuit breaker trips after N identical errors."""
         from llmcore.agents.cognitive.models import EnhancedAgentState
 
@@ -88,7 +87,7 @@ class TestCircuitBreakerIntegration:
         # Mock run_iteration to always raise the same error
         with patch.object(
             cognitive_cycle,
-            'run_iteration',
+            "run_iteration",
             side_effect=Exception("Model does not support tools"),
         ):
             result = await cognitive_cycle.run_until_complete(
@@ -122,7 +121,7 @@ class TestCircuitBreakerIntegration:
         # Mock run_iteration to always raise the same error
         with patch.object(
             cognitive_cycle,
-            'run_iteration',
+            "run_iteration",
             side_effect=Exception("Model does not support tools"),
         ):
             result = await cognitive_cycle.run_until_complete(
@@ -136,9 +135,7 @@ class TestCircuitBreakerIntegration:
         assert "Task failed" in result
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_max_iterations(
-        self, cognitive_cycle, agents_config
-    ):
+    async def test_circuit_breaker_max_iterations(self, cognitive_cycle, agents_config):
         """Test that circuit breaker respects max_iterations limit."""
         from llmcore.agents.cognitive.models import CycleIteration, EnhancedAgentState
 
@@ -159,7 +156,7 @@ class TestCircuitBreakerIntegration:
 
         with patch.object(
             cognitive_cycle,
-            'run_iteration',
+            "run_iteration",
             new_callable=AsyncMock,
             return_value=mock_iteration,
         ):

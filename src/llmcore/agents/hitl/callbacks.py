@@ -291,17 +291,25 @@ class ConsoleHITLCallback(HITLCallback):
                     self._output_fn("\n--- Full Details ---")
                     self._output_fn(f"Request ID: {request.request_id}")
                     self._output_fn(f"Activity: {request.activity.activity_type}")
-                    self._output_fn(f"Parameters:\n{json.dumps(request.activity.parameters, indent=2)}")
+                    self._output_fn(
+                        f"Parameters:\n{json.dumps(request.activity.parameters, indent=2)}"
+                    )
                     self._output_fn("\nRisk Assessment:")
                     self._output_fn(f"  Level: {request.risk_assessment.overall_level}")
-                    self._output_fn(f"  Requires Approval: {request.risk_assessment.requires_approval}")
+                    self._output_fn(
+                        f"  Requires Approval: {request.risk_assessment.requires_approval}"
+                    )
                     self._output_fn(f"  Reason: {request.risk_assessment.reason}")
                     if request.risk_assessment.factors:
                         self._output_fn("  Factors:")
                         for factor in request.risk_assessment.factors:
-                            self._output_fn(f"    - {factor.name}: {factor.level} ({factor.reason})")
+                            self._output_fn(
+                                f"    - {factor.name}: {factor.level} ({factor.reason})"
+                            )
                     if request.risk_assessment.dangerous_patterns:
-                        self._output_fn(f"  Dangerous Patterns: {request.risk_assessment.dangerous_patterns}")
+                        self._output_fn(
+                            f"  Dangerous Patterns: {request.risk_assessment.dangerous_patterns}"
+                        )
                     self._output_fn(f"\nContext: {request.context_summary}")
                     self._output_fn("---\n")
 

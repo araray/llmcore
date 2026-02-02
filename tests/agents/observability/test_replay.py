@@ -57,8 +57,15 @@ class TestEventClassMap:
     def test_all_categories_mapped(self):
         """Verify all event categories are in the map."""
         expected_categories = {
-            "lifecycle", "cognitive", "activity", "memory",
-            "hitl", "error", "metric", "sandbox", "rag"
+            "lifecycle",
+            "cognitive",
+            "activity",
+            "memory",
+            "hitl",
+            "error",
+            "metric",
+            "sandbox",
+            "rag",
         }
 
         assert set(EVENT_CLASS_MAP.keys()) == expected_categories
@@ -270,7 +277,9 @@ class TestExecutionInfo:
 class TestReplayResult:
     """Tests for ReplayResult data class."""
 
-    def test_create_replay_result(self, execution_id, session_id, fixed_timestamp, sample_lifecycle_event):
+    def test_create_replay_result(
+        self, execution_id, session_id, fixed_timestamp, sample_lifecycle_event
+    ):
         """Test creating a replay result."""
         step = ReplayStep(
             timestamp=fixed_timestamp,
@@ -299,7 +308,9 @@ class TestReplayResult:
         assert len(result.timeline) == 1
         assert result.total_events == 1
 
-    def test_replay_result_duration(self, execution_id, session_id, fixed_timestamp, sample_lifecycle_event):
+    def test_replay_result_duration(
+        self, execution_id, session_id, fixed_timestamp, sample_lifecycle_event
+    ):
         """Test replay result with time range."""
         end_time = fixed_timestamp + timedelta(seconds=120)
 
@@ -470,7 +481,7 @@ class TestExecutionReplayReplay:
         # Steps should be ordered by timestamp
         if len(result.timeline) > 1:
             for i in range(1, len(result.timeline)):
-                assert result.timeline[i].timestamp >= result.timeline[i-1].timestamp
+                assert result.timeline[i].timestamp >= result.timeline[i - 1].timestamp
 
     def test_replay_nonexistent_execution(self, execution_replay):
         """Test replaying a nonexistent execution raises error."""
@@ -508,7 +519,10 @@ class TestEventSummarization:
         replay = ExecutionReplay.from_events([event])
         result = replay.replay(execution_id=execution_id)
 
-        assert "started" in result.timeline[0].summary.lower() or "agent" in result.timeline[0].summary.lower()
+        assert (
+            "started" in result.timeline[0].summary.lower()
+            or "agent" in result.timeline[0].summary.lower()
+        )
 
     def test_summarize_activity_completed(self, session_id, execution_id):
         """Test summarizing activity_completed event."""
@@ -586,7 +600,10 @@ class TestGetEventsFiltering:
         events = execution_replay.get_events(event_type="agent_started")
 
         for event in events:
-            assert event.event_type == LifecycleEventType.AGENT_STARTED or event.event_type == "agent_started"
+            assert (
+                event.event_type == LifecycleEventType.AGENT_STARTED
+                or event.event_type == "agent_started"
+            )
 
     def test_filter_by_severity(self, sample_event_sequence, session_id, execution_id):
         """Test filtering by minimum severity."""
@@ -607,7 +624,12 @@ class TestGetEventsFiltering:
         error_events = replay.get_events(severity=EventSeverity.ERROR)
 
         for event in error_events:
-            assert event.severity in [EventSeverity.ERROR, EventSeverity.CRITICAL, "error", "critical"]
+            assert event.severity in [
+                EventSeverity.ERROR,
+                EventSeverity.CRITICAL,
+                "error",
+                "critical",
+            ]
 
     def test_filter_by_iteration(self, sample_event_sequence):
         """Test filtering by iteration."""
@@ -887,7 +909,9 @@ class TestExecutionSummaryGeneration:
         # sample_event_sequence has multiple events
         assert exec_info.event_count >= 1
 
-    def test_execution_info_tracks_time_range(self, sample_event_sequence, execution_id, fixed_timestamp):
+    def test_execution_info_tracks_time_range(
+        self, sample_event_sequence, execution_id, fixed_timestamp
+    ):
         """Test execution info tracks start/end time."""
         replay = ExecutionReplay.from_events(sample_event_sequence)
 

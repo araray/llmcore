@@ -52,19 +52,10 @@ def file_store(temp_dir):
 @pytest.fixture
 def sample_request():
     """Create sample HITL request."""
-    activity = ActivityInfo(
-        activity_type="bash_exec",
-        parameters={"command": "ls -la"}
-    )
-    risk = RiskAssessment(
-        overall_level="medium",
-        requires_approval=True
-    )
+    activity = ActivityInfo(activity_type="bash_exec", parameters={"command": "ls -la"})
+    risk = RiskAssessment(overall_level="medium", requires_approval=True)
     request = HITLRequest(
-        activity=activity,
-        risk_assessment=risk,
-        session_id="test-session",
-        user_id="test-user"
+        activity=activity, risk_assessment=risk, session_id="test-session", user_id="test-user"
     )
     request.set_expiration(300)
     return request
@@ -77,7 +68,7 @@ def sample_response(sample_request):
         request_id=sample_request.request_id,
         approved=True,
         responder_id="test-user",
-        feedback="Approved for testing"
+        feedback="Approved for testing",
     )
 
 
@@ -120,9 +111,7 @@ class TestInMemoryStore:
         await memory_store.save_request(sample_request)
 
         await memory_store.update_request_status(
-            sample_request.request_id,
-            ApprovalStatus.APPROVED,
-            None
+            sample_request.request_id, ApprovalStatus.APPROVED, None
         )
 
         retrieved = await memory_store.get_request(sample_request.request_id)
@@ -135,11 +124,7 @@ class TestInMemoryStore:
         for i in range(3):
             activity = ActivityInfo(activity_type=f"tool_{i}", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id="test-session"
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
             req.set_expiration(300)
             await memory_store.save_request(req)
 
@@ -153,11 +138,7 @@ class TestInMemoryStore:
         for session in ["sess-1", "sess-2", "sess-1"]:
             activity = ActivityInfo(activity_type="test", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id=session
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id=session)
             req.set_expiration(300)
             await memory_store.save_request(req)
 
@@ -170,20 +151,12 @@ class TestInMemoryStore:
         # Create expired request
         activity = ActivityInfo(activity_type="test", parameters={})
         risk = RiskAssessment(overall_level="medium")
-        req = HITLRequest(
-            activity=activity,
-            risk_assessment=risk,
-            session_id="test-session"
-        )
+        req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
         req.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
         await memory_store.save_request(req)
 
         # Create non-expired request
-        req2 = HITLRequest(
-            activity=activity,
-            risk_assessment=risk,
-            session_id="test-session"
-        )
+        req2 = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
         req2.set_expiration(300)
         await memory_store.save_request(req2)
 
@@ -241,9 +214,7 @@ class TestFileStore:
         await file_store.save_request(sample_request)
 
         await file_store.update_request_status(
-            sample_request.request_id,
-            ApprovalStatus.REJECTED,
-            None
+            sample_request.request_id, ApprovalStatus.REJECTED, None
         )
 
         retrieved = await file_store.get_request(sample_request.request_id)
@@ -256,11 +227,7 @@ class TestFileStore:
         for i in range(3):
             activity = ActivityInfo(activity_type=f"tool_{i}", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id="test-session"
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
             req.set_expiration(300)
             await file_store.save_request(req)
 
@@ -273,11 +240,7 @@ class TestFileStore:
         # Create expired request
         activity = ActivityInfo(activity_type="test", parameters={})
         risk = RiskAssessment(overall_level="medium")
-        req = HITLRequest(
-            activity=activity,
-            risk_assessment=risk,
-            session_id="test-session"
-        )
+        req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
         req.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
         await file_store.save_request(req)
 
@@ -298,14 +261,8 @@ class TestScopePersistence:
         """Should save session scope."""
         from llmcore.agents.hitl import RiskLevel, SessionScope, ToolScope
 
-        tool_scope = ToolScope(
-            tool_name="bash_exec",
-            max_risk_level=RiskLevel.HIGH
-        )
-        session_scope = SessionScope(
-            session_id="sess-123",
-            approved_tools=[tool_scope]
-        )
+        tool_scope = ToolScope(tool_name="bash_exec", max_risk_level=RiskLevel.HIGH)
+        session_scope = SessionScope(session_id="sess-123", approved_tools=[tool_scope])
 
         await file_store.save_session_scope(session_scope)
         retrieved = await file_store.get_session_scope("sess-123")
@@ -319,14 +276,8 @@ class TestScopePersistence:
         """Should save persistent scope."""
         from llmcore.agents.hitl import PersistentScope, RiskLevel, ToolScope
 
-        tool_scope = ToolScope(
-            tool_name="file_read",
-            max_risk_level=RiskLevel.MEDIUM
-        )
-        persistent_scope = PersistentScope(
-            user_id="user-123",
-            approved_tools=[tool_scope]
-        )
+        tool_scope = ToolScope(tool_name="file_read", max_risk_level=RiskLevel.MEDIUM)
+        persistent_scope = PersistentScope(user_id="user-123", approved_tools=[tool_scope])
 
         await file_store.save_persistent_scope(persistent_scope)
         retrieved = await file_store.get_persistent_scope("user-123")
@@ -340,14 +291,8 @@ class TestScopePersistence:
         """Should persist scopes across store instances."""
         from llmcore.agents.hitl import RiskLevel, SessionScope, ToolScope
 
-        tool_scope = ToolScope(
-            tool_name="test_tool",
-            max_risk_level=RiskLevel.LOW
-        )
-        session_scope = SessionScope(
-            session_id="sess-456",
-            approved_tools=[tool_scope]
-        )
+        tool_scope = ToolScope(tool_name="test_tool", max_risk_level=RiskLevel.LOW)
+        session_scope = SessionScope(session_id="sess-456", approved_tools=[tool_scope])
 
         # Save with one store
         store1 = FileHITLStore(temp_dir)
@@ -373,14 +318,11 @@ class TestConcurrentAccess:
     @pytest.mark.asyncio
     async def test_concurrent_saves(self, memory_store):
         """Should handle concurrent saves."""
+
         async def save_request(i):
             activity = ActivityInfo(activity_type=f"tool_{i}", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id="test-session"
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
             req.set_expiration(300)
             await memory_store.save_request(req)
 
@@ -397,11 +339,7 @@ class TestConcurrentAccess:
         for i in range(5):
             activity = ActivityInfo(activity_type=f"tool_{i}", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id="test-session"
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
             req.set_expiration(300)
             await memory_store.save_request(req)
 
@@ -411,11 +349,7 @@ class TestConcurrentAccess:
         async def save_new(i):
             activity = ActivityInfo(activity_type=f"new_tool_{i}", parameters={})
             risk = RiskAssessment(overall_level="medium")
-            req = HITLRequest(
-                activity=activity,
-                risk_assessment=risk,
-                session_id="test-session"
-            )
+            req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
             req.set_expiration(300)
             await memory_store.save_request(req)
 
@@ -459,11 +393,7 @@ class TestStateEdgeCases:
     async def test_update_nonexistent_request(self, memory_store):
         """Should handle updating nonexistent request."""
         # Should not raise
-        await memory_store.update_request_status(
-            "nonexistent",
-            ApprovalStatus.APPROVED,
-            None
-        )
+        await memory_store.update_request_status("nonexistent", ApprovalStatus.APPROVED, None)
 
     @pytest.mark.asyncio
     async def test_file_store_invalid_path(self):
@@ -479,11 +409,7 @@ class TestStateEdgeCases:
         """Should handle request with no expiration."""
         activity = ActivityInfo(activity_type="test", parameters={})
         risk = RiskAssessment(overall_level="medium")
-        req = HITLRequest(
-            activity=activity,
-            risk_assessment=risk,
-            session_id="test-session"
-        )
+        req = HITLRequest(activity=activity, risk_assessment=risk, session_id="test-session")
         # No expiration set
 
         await memory_store.save_request(req)
@@ -514,13 +440,13 @@ class TestInterfaceCompliance:
             store = store_class()
 
         # Test all interface methods
-        assert hasattr(store, 'save_request')
-        assert hasattr(store, 'get_request')
-        assert hasattr(store, 'save_response')
-        assert hasattr(store, 'get_response')
-        assert hasattr(store, 'update_request_status')
-        assert hasattr(store, 'get_pending_requests')
-        assert hasattr(store, 'cleanup_expired')
+        assert hasattr(store, "save_request")
+        assert hasattr(store, "get_request")
+        assert hasattr(store, "save_response")
+        assert hasattr(store, "get_response")
+        assert hasattr(store, "update_request_status")
+        assert hasattr(store, "get_pending_requests")
+        assert hasattr(store, "cleanup_expired")
 
         # Test actual operations
         await store.save_request(sample_request)

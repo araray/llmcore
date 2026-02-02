@@ -23,7 +23,9 @@ from typing import Any, List
 import pytest
 
 # Add src to path for test discovery - direct module import to avoid heavy deps
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src" / "llmcore" / "storage" / "tiers"))
+sys.path.insert(
+    0, str(Path(__file__).parent.parent.parent / "src" / "llmcore" / "storage" / "tiers")
+)
 
 # Direct import from module to avoid triggering full llmcore init
 from volatile import (
@@ -93,17 +95,13 @@ class TestVolatileItem:
         assert item_no_ttl.time_until_expiry() is None
 
         # Item with future expiry
-        item_future = VolatileItem(
-            key="test", value="data", expires_at=time.time() + 100
-        )
+        item_future = VolatileItem(key="test", value="data", expires_at=time.time() + 100)
         remaining = item_future.time_until_expiry()
         assert remaining is not None
         assert 99 <= remaining <= 101
 
         # Item already expired
-        item_expired = VolatileItem(
-            key="test", value="data", expires_at=time.time() - 10
-        )
+        item_expired = VolatileItem(key="test", value="data", expires_at=time.time() - 10)
         assert item_expired.time_until_expiry() == 0.0
 
     def test_item_age_seconds(self):
@@ -374,7 +372,8 @@ class TestVolatileMemoryTierEviction:
     def test_eviction_on_item_limit(self):
         """Test LRU eviction when item limit is reached."""
         tier = VolatileMemoryTier(
-            max_items=5, default_ttl_seconds=None  # No expiry
+            max_items=5,
+            default_ttl_seconds=None,  # No expiry
         )
 
         # Fill to capacity
@@ -412,9 +411,7 @@ class TestVolatileMemoryTierEviction:
 
     def test_lru_order_preserved(self):
         """Test that LRU order is maintained on access."""
-        tier = VolatileMemoryTier(
-            max_items=3, default_ttl_seconds=None
-        )
+        tier = VolatileMemoryTier(max_items=3, default_ttl_seconds=None)
 
         tier.set("key1", "value1")
         time.sleep(0.01)
@@ -486,9 +483,7 @@ class TestVolatileMemoryTierStats:
 
     def test_eviction_count_tracking(self):
         """Test eviction counting."""
-        tier = VolatileMemoryTier(
-            max_items=2, default_ttl_seconds=None
-        )
+        tier = VolatileMemoryTier(max_items=2, default_ttl_seconds=None)
 
         tier.set("key1", "value1")
         tier.set("key2", "value2")
@@ -630,9 +625,7 @@ class TestVolatileMemoryTierThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=write_values, args=(i,)) for i in range(10)
-        ]
+        threads = [threading.Thread(target=write_values, args=(i,)) for i in range(10)]
         for t in threads:
             t.start()
         for t in threads:
@@ -692,9 +685,7 @@ class TestVolatileMemoryTierThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=write_and_evict, args=(i,)) for i in range(5)
-        ]
+        threads = [threading.Thread(target=write_and_evict, args=(i,)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -783,9 +774,7 @@ class TestVolatileMemoryTierEdgeCases:
 
     def test_many_small_items(self):
         """Test storing many small items."""
-        tier = VolatileMemoryTier(
-            max_items=10000, default_ttl_seconds=None
-        )
+        tier = VolatileMemoryTier(max_items=10000, default_ttl_seconds=None)
 
         for i in range(10000):
             tier.set(f"key_{i}", i)
@@ -840,7 +829,8 @@ class TestVolatileMemoryTierIntegration:
     def test_session_storage_pattern(self):
         """Test pattern for session data storage."""
         tier = VolatileMemoryTier(
-            max_items=1000, default_ttl_seconds=1800  # 30 min
+            max_items=1000,
+            default_ttl_seconds=1800,  # 30 min
         )
 
         # Simulate multiple user sessions
@@ -864,7 +854,8 @@ class TestVolatileMemoryTierIntegration:
     def test_cache_pattern(self):
         """Test pattern for computation result caching."""
         tier = VolatileMemoryTier(
-            max_items=100, default_ttl_seconds=300  # 5 min
+            max_items=100,
+            default_ttl_seconds=300,  # 5 min
         )
 
         computation_count = 0
@@ -897,9 +888,7 @@ class TestVolatileMemoryTierIntegration:
 
     def test_working_set_pattern(self):
         """Test pattern for working set with eviction."""
-        tier = VolatileMemoryTier(
-            max_items=10, default_ttl_seconds=None
-        )
+        tier = VolatileMemoryTier(max_items=10, default_ttl_seconds=None)
 
         # Simulate working set larger than capacity
         # with some items being "hot" (frequently accessed)

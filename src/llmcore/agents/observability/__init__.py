@@ -25,24 +25,24 @@ Usage:
     >>> # Create logger
     >>> async with EventLogger(session_id="sess-123") as logger:
     ...     logger.add_sink(JSONLFileSink(Path("events.jsonl")))
-    ...     
+    ...
     ...     # Log lifecycle events
     ...     await logger.log_lifecycle_start(goal="Analyze data")
-    ...     
+    ...
     ...     # Log cognitive phases
     ...     await logger.log_cognitive_phase(
     ...         "think",
     ...         input_summary="User query",
     ...         output_summary="Determined approach",
     ...     )
-    ...     
+    ...
     ...     # Log activities
     ...     await logger.log_activity(
     ...         "execute_python",
     ...         {"code": "print('hello')"},
     ...         "hello",
     ...     )
-    ...     
+    ...
     ...     # Log completion
     ...     await logger.log_lifecycle_end(status="success")
     >>>
@@ -171,7 +171,6 @@ __version__ = "1.0.0"
 __all__ = [
     # Version
     "__version__",
-
     # === EVENTS ===
     # Enums
     "EventCategory",
@@ -205,7 +204,6 @@ __all__ = [
     "create_metric_event",
     "create_hitl_event",
     "create_sandbox_event",
-
     # === LOGGER ===
     # Sinks
     "EventSink",
@@ -216,7 +214,6 @@ __all__ = [
     # Logger
     "EventLogger",
     "create_event_logger",
-
     # === METRICS ===
     # Enums
     "MetricType",
@@ -232,7 +229,6 @@ __all__ = [
     # Pydantic models
     "MetricsSummary",
     "ExecutionSummary",
-
     # === REPLAY ===
     # Data classes
     "ReplayStep",

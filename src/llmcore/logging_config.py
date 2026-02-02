@@ -32,6 +32,7 @@ from typing import Any, Dict, Optional, Union
 # Try to import confy for config loading
 try:
     from confy import Confy
+
     CONFY_AVAILABLE = True
 except ImportError:
     CONFY_AVAILABLE = False
@@ -57,7 +58,7 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
         "httpcore": "WARNING",
         "asyncio": "WARNING",
         "aiosqlite": "WARNING",
-    }
+    },
 }
 
 
@@ -102,7 +103,7 @@ class UnifiedLoggingManager:
         app_name: str = "llmcore",
         config: Optional[Dict[str, Any]] = None,
         config_file_path: Optional[Union[str, Path]] = None,
-        force_reconfigure: bool = False
+        force_reconfigure: bool = False,
     ) -> Path:
         """
         Configure unified logging for the application.
@@ -163,9 +164,7 @@ class UnifiedLoggingManager:
         return self._log_file_path or Path("/dev/null")
 
     def _load_config(
-        self,
-        config: Optional[Dict[str, Any]],
-        config_file_path: Optional[Union[str, Path]]
+        self, config: Optional[Dict[str, Any]], config_file_path: Optional[Union[str, Path]]
     ) -> Dict[str, Any]:
         """Load logging configuration from various sources."""
 
@@ -178,7 +177,7 @@ class UnifiedLoggingManager:
             try:
                 confy = Confy(
                     app_name="llmcore",
-                    config_file_path=str(config_file_path) if config_file_path else None
+                    config_file_path=str(config_file_path) if config_file_path else None,
                 )
                 logging_section = confy.get("logging", {})
                 if logging_section:
@@ -205,9 +204,7 @@ class UnifiedLoggingManager:
         return handler
 
     def _create_file_handler(
-        self,
-        config: Dict[str, Any],
-        app_name: str
+        self, config: Dict[str, Any], app_name: str
     ) -> tuple[Optional[logging.Handler], Optional[Path]]:
         """Create and configure the file handler."""
 
@@ -298,7 +295,10 @@ class UnifiedLoggingManager:
         if self._console_handler is not None:
             return  # Already enabled
 
-        config = {"console_level": level, "console_format": DEFAULT_LOGGING_CONFIG["console_format"]}
+        config = {
+            "console_level": level,
+            "console_format": DEFAULT_LOGGING_CONFIG["console_format"],
+        }
         self._console_handler = self._create_console_handler(config)
         logging.getLogger().addHandler(self._console_handler)
 
@@ -307,7 +307,7 @@ def configure_logging(
     app_name: str = "llmcore",
     config: Optional[Dict[str, Any]] = None,
     config_file_path: Optional[Union[str, Path]] = None,
-    force_reconfigure: bool = False
+    force_reconfigure: bool = False,
 ) -> Path:
     """
     Configure unified logging for the application.
@@ -345,7 +345,7 @@ def configure_logging(
         app_name=app_name,
         config=config,
         config_file_path=config_file_path,
-        force_reconfigure=force_reconfigure
+        force_reconfigure=force_reconfigure,
     )
 
 

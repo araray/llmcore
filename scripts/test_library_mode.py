@@ -17,6 +17,7 @@ async def test_library_instantiation():
 
     try:
         from llmcore import LLMCore
+
         print("✅ Successfully imported LLMCore")
     except ImportError as e:
         print(f"❌ Failed to import LLMCore: {e}")
@@ -37,6 +38,7 @@ async def test_library_instantiation():
     except Exception as e:
         print(f"❌ Failed to create LLMCore instance: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -44,7 +46,9 @@ async def test_library_instantiation():
     try:
         print("🔍 Testing get_available_providers()...")
         providers = llm.get_available_providers()
-        print(f"✅ Available providers: {providers if providers else 'None (expected without API keys)'}")
+        print(
+            f"✅ Available providers: {providers if providers else 'None (expected without API keys)'}"
+        )
     except Exception as e:
         print(f"❌ Failed to get available providers: {e}")
         return False
@@ -52,7 +56,7 @@ async def test_library_instantiation():
     # Test that we can access the configuration
     try:
         print("🔍 Testing configuration access...")
-        log_level = llm.config.get('llmcore.log_level', 'INFO')
+        log_level = llm.config.get("llmcore.log_level", "INFO")
         print(f"✅ Configuration accessible (log_level: {log_level})")
     except Exception as e:
         print(f"❌ Failed to access configuration: {e}")
@@ -87,6 +91,7 @@ async def test_agent_availability():
 
     try:
         from llmcore import AgentManager, ToolManager
+
         print("✅ AgentManager can be imported")
         print("✅ ToolManager can be imported")
         print("ℹ️  Note: AgentManager is available but not auto-initialized in LLMCore")

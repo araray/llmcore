@@ -497,8 +497,12 @@ class FileHITLStore(HITLStateStore):
                     scope = PersistentScope(
                         user_id=data["user_id"],
                         approved_tools=[],
-                        created_at=datetime.fromisoformat(data.get("created_at", datetime.now().isoformat())),
-                        updated_at=datetime.fromisoformat(data.get("updated_at", datetime.now().isoformat())),
+                        created_at=datetime.fromisoformat(
+                            data.get("created_at", datetime.now().isoformat())
+                        ),
+                        updated_at=datetime.fromisoformat(
+                            data.get("updated_at", datetime.now().isoformat())
+                        ),
                     )
                     self._persistent_scopes[user_id] = scope
                     return scope

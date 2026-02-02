@@ -89,9 +89,7 @@ class EmbeddingCacheConfig(BaseModel):
     disk_path: str = Field(
         default="~/.cache/llmcore/embeddings.db", description="Path to SQLite cache DB"
     )
-    disk_max_entries: int = Field(
-        default=0, ge=0, description="Max disk entries (0=unlimited)"
-    )
+    disk_max_entries: int = Field(default=0, ge=0, description="Max disk entries (0=unlimited)")
     ttl_hours: int = Field(default=0, ge=0, description="Cache TTL in hours (0=no expiry)")
     compression_enabled: bool = Field(
         default=False, description="Compress embeddings on disk (future)"
@@ -515,9 +513,7 @@ class DiskCache:
                 cursor = conn.execute("SELECT COUNT(*) FROM embeddings")
                 count = cursor.fetchone()[0]
 
-                cursor = conn.execute(
-                    "SELECT MIN(created_at), MAX(accessed_at) FROM embeddings"
-                )
+                cursor = conn.execute("SELECT MIN(created_at), MAX(accessed_at) FROM embeddings")
                 oldest, newest = cursor.fetchone()
 
                 # Get file size
@@ -620,9 +616,7 @@ class EmbeddingCache:
         self._enabled = self._config.enabled
 
         # Initialize memory cache
-        self._memory_cache = LRUCache(
-            maxsize=self._config.memory_size if self._enabled else 0
-        )
+        self._memory_cache = LRUCache(maxsize=self._config.memory_size if self._enabled else 0)
 
         # Initialize disk cache if enabled
         self._disk_cache: Optional[DiskCache] = None
@@ -759,9 +753,7 @@ class EmbeddingCache:
         results: List[Optional[List[float]]] = [None] * len(texts)
         missing_indices: List[int] = []
 
-        cache_keys = [
-            self._make_cache_key(text, model, provider) for text in texts
-        ]
+        cache_keys = [self._make_cache_key(text, model, provider) for text in texts]
 
         # Check memory cache
         disk_lookup_needed: List[Tuple[int, str]] = []
@@ -818,9 +810,7 @@ class EmbeddingCache:
             return
 
         if len(texts) != len(embeddings):
-            raise ValueError(
-                f"Length mismatch: {len(texts)} texts vs {len(embeddings)} embeddings"
-            )
+            raise ValueError(f"Length mismatch: {len(texts)} texts vs {len(embeddings)} embeddings")
 
         for text, embedding in zip(texts, embeddings):
             self.set(text, model, provider, embedding)

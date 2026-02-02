@@ -43,7 +43,7 @@ def hitl_config():
         safe_tools=["final_answer", "respond", "think_aloud"],
         low_risk_tools=["file_read", "search"],
         high_risk_tools=["bash_exec", "file_write", "file_delete"],
-        critical_tools=["sudo_exec", "network_request"]
+        critical_tools=["sudo_exec", "network_request"],
     )
 
 
@@ -55,7 +55,7 @@ def manager(hitl_config):
         callback=AutoApproveCallback(delay_seconds=0),
         state_store=InMemoryHITLStore(),
         session_id="test-session",
-        user_id="test-user"
+        user_id="test-user",
     )
 
 
@@ -67,7 +67,7 @@ def auto_reject_manager(hitl_config):
         callback=AutoApproveCallback(approve_all=False, delay_seconds=0),
         state_store=InMemoryHITLStore(),
         session_id="test-session",
-        user_id="test-user"
+        user_id="test-user",
     )
 
 
@@ -82,22 +82,19 @@ class TestBasicWorkflow:
     @pytest.mark.asyncio
     async def test_safe_tool_auto_approved(self, manager):
         """Safe tools should be auto-approved without callback."""
-        decision = await manager.check_approval(
-            "final_answer",
-            {"answer": "Hello world"}
-        )
+        decision = await manager.check_approval("final_answer", {"answer": "Hello world"})
 
         assert decision.is_approved
         assert decision.status == ApprovalStatus.AUTO_APPROVED
-        assert "low risk" in decision.reason.lower() or "no approval required" in decision.reason.lower()
+        assert (
+            "low risk" in decision.reason.lower()
+            or "no approval required" in decision.reason.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_high_risk_tool_requires_approval(self, manager):
         """High risk tools should require approval."""
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "ls -la"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "ls -la"})
 
         assert decision.is_approved  # Auto-approve callback
         assert decision.status == ApprovalStatus.APPROVED
@@ -105,10 +102,7 @@ class TestBasicWorkflow:
     @pytest.mark.asyncio
     async def test_rejection(self, auto_reject_manager):
         """Should handle rejection."""
-        decision = await auto_reject_manager.check_approval(
-            "bash_exec",
-            {"command": "ls"}
-        )
+        decision = await auto_reject_manager.check_approval("bash_exec", {"command": "ls"})
 
         assert not decision.is_approved
         assert decision.status == ApprovalStatus.REJECTED
@@ -119,10 +113,7 @@ class TestBasicWorkflow:
         hitl_config.enabled = False
         manager = HITLManager(config=hitl_config)
 
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "rm -rf /"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "rm -rf /"})
 
         assert decision.is_approved
         assert decision.status == ApprovalStatus.AUTO_APPROVED
@@ -140,10 +131,7 @@ class TestRiskBasedDecisions:
     @pytest.mark.asyncio
     async def test_dangerous_command_flagged(self, manager):
         """Dangerous commands should be flagged."""
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "rm -rf /"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "rm -rf /"})
 
         # Should still go through approval (auto-approve in test)
         assert decision.is_approved
@@ -154,20 +142,14 @@ class TestRiskBasedDecisions:
     @pytest.mark.asyncio
     async def test_low_risk_path(self, manager):
         """Low risk operations should pass easily."""
-        decision = await manager.check_approval(
-            "file_read",
-            {"path": "/workspace/readme.md"}
-        )
+        decision = await manager.check_approval("file_read", {"path": "/workspace/readme.md"})
 
         assert decision.is_approved
 
     @pytest.mark.asyncio
     async def test_sensitive_path_flagged(self, manager):
         """Sensitive paths should increase risk."""
-        decision = await manager.check_approval(
-            "file_read",
-            {"path": "/etc/passwd"}
-        )
+        decision = await manager.check_approval("file_read", {"path": "/etc/passwd"})
 
         # Should still approve (auto-approve) but risk is higher
         assert decision.is_approved
@@ -187,10 +169,7 @@ class TestScopeIntegration:
         # Grant approval first
         manager.grant_session_approval("bash_exec", max_risk_level=RiskLevel.HIGH)
 
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "ls"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "ls"})
 
         assert decision.is_approved
         assert decision.status == ApprovalStatus.AUTO_APPROVED
@@ -203,13 +182,12 @@ class TestScopeIntegration:
         manager.grant_session_approval(
             "file_write",
             conditions={"path_pattern": "/workspace/*"},
-            max_risk_level=RiskLevel.MEDIUM
+            max_risk_level=RiskLevel.MEDIUM,
         )
 
         # Should approve matching path
         decision = await manager.check_approval(
-            "file_write",
-            {"path": "/workspace/test.txt", "content": "test"}
+            "file_write", {"path": "/workspace/test.txt", "content": "test"}
         )
         assert decision.is_approved
 
@@ -229,10 +207,7 @@ class TestScopeIntegration:
 
         manager.callback.request_approval = tracking_callback
 
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "ls"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "ls"})
 
         # Callback should have been called
         assert len(callback_called) > 0
@@ -278,9 +253,7 @@ class TestTimeoutHandling:
                 pass
 
         manager = HITLManager(
-            config=hitl_config,
-            callback=HangingCallback(),
-            state_store=InMemoryHITLStore()
+            config=hitl_config, callback=HangingCallback(), state_store=InMemoryHITLStore()
         )
 
         decision = await manager.check_approval("bash_exec", {"command": "ls"})
@@ -310,16 +283,11 @@ class TestTimeoutHandling:
                 pass
 
         manager = HITLManager(
-            config=hitl_config,
-            callback=HangingCallback(),
-            state_store=InMemoryHITLStore()
+            config=hitl_config, callback=HangingCallback(), state_store=InMemoryHITLStore()
         )
 
         # Low risk operation
-        decision = await manager.check_approval(
-            "file_read",
-            {"path": "/workspace/test.txt"}
-        )
+        decision = await manager.check_approval("file_read", {"path": "/workspace/test.txt"})
 
         # Depends on how risk is assessed - may auto-approve or timeout-approve
 
@@ -342,10 +310,7 @@ class TestEventCallbacks:
 
         manager.on_approval(on_approval)
 
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "ls"}
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "ls"})
 
         assert decision.is_approved
         assert len(approvals) == 1
@@ -361,10 +326,7 @@ class TestEventCallbacks:
 
         auto_reject_manager.on_rejection(on_rejection)
 
-        decision = await auto_reject_manager.check_approval(
-            "bash_exec",
-            {"command": "ls"}
-        )
+        decision = await auto_reject_manager.check_approval("bash_exec", {"command": "ls"})
 
         assert not decision.is_approved
         assert len(rejections) == 1
@@ -446,15 +408,11 @@ class TestAsyncWorkflow:
 
         callback = QueueHITLCallback()
         manager = HITLManager(
-            config=hitl_config,
-            callback=callback,
-            state_store=InMemoryHITLStore()
+            config=hitl_config, callback=callback, state_store=InMemoryHITLStore()
         )
 
         # Start approval request in background
-        approval_task = asyncio.create_task(
-            manager.check_approval("bash_exec", {"command": "ls"})
-        )
+        approval_task = asyncio.create_task(manager.check_approval("bash_exec", {"command": "ls"}))
 
         await asyncio.sleep(0.01)
 
@@ -462,10 +420,7 @@ class TestAsyncWorkflow:
         pending = await manager.get_pending_requests()
         if pending:
             # Submit response
-            response = HITLResponse(
-                request_id=pending[0].request_id,
-                approved=True
-            )
+            response = HITLResponse(request_id=pending[0].request_id, approved=True)
             await callback.submit_response(response)
 
         # Wait for result
@@ -499,9 +454,7 @@ class TestConvenienceFunctions:
 
     def test_create_hitl_manager_with_persistence(self, tmp_path):
         """Should create manager with file persistence."""
-        manager = create_hitl_manager(
-            persist_path=str(tmp_path / "hitl_state")
-        )
+        manager = create_hitl_manager(persist_path=str(tmp_path / "hitl_state"))
 
         assert manager is not None
         # State store should be file-based
@@ -509,9 +462,7 @@ class TestConvenienceFunctions:
     def test_create_hitl_manager_custom_config(self):
         """Should accept custom configuration."""
         manager = create_hitl_manager(
-            risk_threshold="high",
-            session_id="custom-session",
-            user_id="custom-user"
+            risk_threshold="high", session_id="custom-session", user_id="custom-user"
         )
 
         assert manager.config.global_risk_threshold == "high"
@@ -561,20 +512,13 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_none_context(self, manager):
         """Should handle None context."""
-        decision = await manager.check_approval(
-            "bash_exec",
-            {"command": "ls"},
-            context=None
-        )
+        decision = await manager.check_approval("bash_exec", {"command": "ls"}, context=None)
         assert decision is not None
 
     @pytest.mark.asyncio
     async def test_concurrent_approvals(self, manager):
         """Should handle concurrent approval requests."""
-        tasks = [
-            manager.check_approval(f"tool_{i}", {"param": i})
-            for i in range(5)
-        ]
+        tasks = [manager.check_approval(f"tool_{i}", {"param": i}) for i in range(5)]
 
         decisions = await asyncio.gather(*tasks)
         assert len(decisions) == 5
@@ -582,6 +526,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_callback_error_handling(self, hitl_config):
         """Should handle callback errors gracefully."""
+
         class ErrorCallback:
             async def request_approval(self, request):
                 raise RuntimeError("Callback error")
@@ -593,9 +538,7 @@ class TestEdgeCases:
                 pass
 
         manager = HITLManager(
-            config=hitl_config,
-            callback=ErrorCallback(),
-            state_store=InMemoryHITLStore()
+            config=hitl_config, callback=ErrorCallback(), state_store=InMemoryHITLStore()
         )
 
         decision = await manager.check_approval("bash_exec", {"command": "ls"})
@@ -606,6 +549,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_approval_callback_exception(self, manager):
         """Should handle exception in approval callback."""
+
         def bad_callback(request, decision):
             raise RuntimeError("Callback error")
 

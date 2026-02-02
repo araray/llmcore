@@ -58,12 +58,8 @@ class TestPricingData:
 
     def test_get_price_embedding_model(self) -> None:
         """Test price lookup for embedding models (output should be 0)."""
-        input_price = get_price_per_million_tokens(
-            "openai", "text-embedding-3-small", "input"
-        )
-        output_price = get_price_per_million_tokens(
-            "openai", "text-embedding-3-small", "output"
-        )
+        input_price = get_price_per_million_tokens("openai", "text-embedding-3-small", "input")
+        output_price = get_price_per_million_tokens("openai", "text-embedding-3-small", "output")
 
         assert input_price == 0.02
         assert output_price == 0.0
@@ -90,9 +86,7 @@ class TestPricingData:
         """Test that model card pricing takes precedence."""
         model_card_pricing = {"input": 99.0, "output": 199.0}
 
-        price = get_price_per_million_tokens(
-            "openai", "gpt-4o", "input", model_card_pricing
-        )
+        price = get_price_per_million_tokens("openai", "gpt-4o", "input", model_card_pricing)
 
         assert price == 99.0  # Model card price, not default
 
@@ -325,12 +319,16 @@ class TestCostTracker:
         tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
 
         tracker.record(
-            provider="openai", model="gpt-4o",
-            input_tokens=1000, output_tokens=500,
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=1000,
+            output_tokens=500,
         )
         tracker.record(
-            provider="openai", model="gpt-4o-mini",
-            input_tokens=1000, output_tokens=500,
+            provider="openai",
+            model="gpt-4o-mini",
+            input_tokens=1000,
+            output_tokens=500,
         )
 
         by_model = tracker.get_summary_by_model(days=1)

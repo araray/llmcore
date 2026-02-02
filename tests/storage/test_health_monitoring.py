@@ -40,6 +40,7 @@ from health import (
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def health_config() -> HealthConfig:
     """Create a test health config with short intervals."""
@@ -53,45 +54,48 @@ def health_config() -> HealthConfig:
         latency_critical_ms=500.0,
         history_size=10,
         enabled=True,
-        log_health_checks=False  # Reduce test noise
+        log_health_checks=False,  # Reduce test noise
     )
 
 
 @pytest.fixture
 def healthy_check_fn() -> AsyncMock:
     """Create a health check function that always returns healthy."""
+
     async def check():
         return HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            latency_ms=10.0,
-            details={"test": "healthy"}
+            status=HealthStatus.HEALTHY, latency_ms=10.0, details={"test": "healthy"}
         )
+
     return check
 
 
 @pytest.fixture
 def unhealthy_check_fn() -> AsyncMock:
     """Create a health check function that always returns unhealthy."""
+
     async def check():
         return HealthCheckResult(
-            status=HealthStatus.UNHEALTHY,
-            latency_ms=50.0,
-            error_message="Test failure"
+            status=HealthStatus.UNHEALTHY, latency_ms=50.0, error_message="Test failure"
         )
+
     return check
 
 
 @pytest.fixture
 def failing_check_fn():
     """Create a health check function that raises exceptions."""
+
     async def check():
         raise ConnectionError("Database connection failed")
+
     return check
 
 
 # =============================================================================
 # UNIT TESTS - HEALTH STATUS
 # =============================================================================
+
 
 class TestHealthStatus:
     """Tests for HealthStatus enum."""
@@ -119,15 +123,14 @@ class TestCircuitState:
 # UNIT TESTS - HEALTH CHECK RESULT
 # =============================================================================
 
+
 class TestHealthCheckResult:
     """Tests for HealthCheckResult dataclass."""
 
     def test_healthy_result(self):
         """Test creating a healthy result."""
         result = HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            latency_ms=5.5,
-            details={"query": "SELECT 1"}
+            status=HealthStatus.HEALTHY, latency_ms=5.5, details={"query": "SELECT 1"}
         )
 
         assert result.status == HealthStatus.HEALTHY
@@ -139,9 +142,7 @@ class TestHealthCheckResult:
     def test_unhealthy_result(self):
         """Test creating an unhealthy result."""
         result = HealthCheckResult(
-            status=HealthStatus.UNHEALTHY,
-            latency_ms=1000.0,
-            error_message="Connection timeout"
+            status=HealthStatus.UNHEALTHY, latency_ms=1000.0, error_message="Connection timeout"
         )
 
         assert result.status == HealthStatus.UNHEALTHY
@@ -150,9 +151,7 @@ class TestHealthCheckResult:
     def test_to_dict(self):
         """Test serialization to dictionary."""
         result = HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            latency_ms=10.0,
-            details={"test": True}
+            status=HealthStatus.HEALTHY, latency_ms=10.0, details={"test": True}
         )
 
         d = result.to_dict()
@@ -166,6 +165,7 @@ class TestHealthCheckResult:
 # =============================================================================
 # UNIT TESTS - HEALTH CONFIG
 # =============================================================================
+
 
 class TestHealthConfig:
     """Tests for HealthConfig dataclass."""
@@ -189,6 +189,7 @@ class TestHealthConfig:
 # =============================================================================
 # UNIT TESTS - CIRCUIT BREAKER
 # =============================================================================
+
 
 class TestCircuitBreaker:
     """Tests for CircuitBreaker class."""
@@ -303,6 +304,7 @@ class TestCircuitBreaker:
 # UNIT TESTS - STORAGE HEALTH MONITOR
 # =============================================================================
 
+
 class TestStorageHealthMonitor:
     """Tests for StorageHealthMonitor class."""
 
@@ -313,7 +315,7 @@ class TestStorageHealthMonitor:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         result = await monitor.check_health()
@@ -329,7 +331,7 @@ class TestStorageHealthMonitor:
             backend_name="test_backend",
             backend_type="session",
             check_fn=failing_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         result = await monitor.check_health()
@@ -341,16 +343,14 @@ class TestStorageHealthMonitor:
     @pytest.mark.asyncio
     async def test_check_health_timeout(self, health_config):
         """Test health check timeout."""
+
         async def slow_check():
             await asyncio.sleep(5)  # Longer than timeout
             return HealthCheckResult(status=HealthStatus.HEALTHY, latency_ms=5000)
 
         config = HealthConfig(check_timeout_seconds=0.1, log_health_checks=False)
         monitor = StorageHealthMonitor(
-            backend_name="test_backend",
-            backend_type="session",
-            check_fn=slow_check,
-            config=config
+            backend_name="test_backend", backend_type="session", check_fn=slow_check, config=config
         )
 
         result = await monitor.check_health()
@@ -361,17 +361,18 @@ class TestStorageHealthMonitor:
     @pytest.mark.asyncio
     async def test_latency_degradation_warning(self, health_config):
         """Test that high latency is flagged as degraded."""
+
         async def slow_check():
             return HealthCheckResult(
                 status=HealthStatus.HEALTHY,
-                latency_ms=600.0  # Above critical threshold of 500ms
+                latency_ms=600.0,  # Above critical threshold of 500ms
             )
 
         monitor = StorageHealthMonitor(
             backend_name="test_backend",
             backend_type="session",
             check_fn=slow_check,
-            config=health_config
+            config=health_config,
         )
 
         result = await monitor.check_health()
@@ -386,7 +387,7 @@ class TestStorageHealthMonitor:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         # Run more checks than history size
@@ -403,7 +404,7 @@ class TestStorageHealthMonitor:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         await monitor.check_health()
@@ -422,7 +423,7 @@ class TestStorageHealthMonitor:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         await monitor.start()
@@ -443,6 +444,7 @@ class TestStorageHealthMonitor:
 # UNIT TESTS - STORAGE HEALTH MANAGER
 # =============================================================================
 
+
 class TestStorageHealthManager:
     """Tests for StorageHealthManager class."""
 
@@ -454,7 +456,7 @@ class TestStorageHealthManager:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         manager.register_monitor(monitor)
@@ -469,7 +471,7 @@ class TestStorageHealthManager:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         manager.register_monitor(monitor)
@@ -487,7 +489,7 @@ class TestStorageHealthManager:
                 backend_name=name,
                 backend_type=name,
                 check_fn=healthy_check_fn,
-                config=health_config
+                config=health_config,
             )
             manager.register_monitor(monitor)
             await monitor.check_health()  # Populate history
@@ -495,7 +497,9 @@ class TestStorageHealthManager:
         assert manager.is_healthy() is True
 
     @pytest.mark.asyncio
-    async def test_is_healthy_specific_backend(self, health_config, healthy_check_fn, failing_check_fn):
+    async def test_is_healthy_specific_backend(
+        self, health_config, healthy_check_fn, failing_check_fn
+    ):
         """Test is_healthy for specific backend."""
         manager = StorageHealthManager()
 
@@ -504,7 +508,7 @@ class TestStorageHealthManager:
             backend_name="healthy_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
         manager.register_monitor(healthy_monitor)
         await healthy_monitor.check_health()
@@ -514,7 +518,7 @@ class TestStorageHealthManager:
             backend_name="unhealthy_backend",
             backend_type="vector",
             check_fn=failing_check_fn,
-            config=health_config
+            config=health_config,
         )
         manager.register_monitor(unhealthy_monitor)
         await unhealthy_monitor.check_health()
@@ -532,7 +536,7 @@ class TestStorageHealthManager:
             backend_name="test_backend",
             backend_type="session",
             check_fn=healthy_check_fn,
-            config=health_config
+            config=health_config,
         )
         manager.register_monitor(monitor)
         await monitor.check_health()
@@ -553,7 +557,7 @@ class TestStorageHealthManager:
                 backend_name=name,
                 backend_type=name,
                 check_fn=healthy_check_fn,
-                config=health_config
+                config=health_config,
             )
             manager.register_monitor(monitor)
 
@@ -570,6 +574,7 @@ class TestStorageHealthManager:
 # UNIT TESTS - HEALTH CHECK FACTORY FUNCTIONS
 # =============================================================================
 
+
 class TestHealthCheckFactories:
     """Tests for health check factory functions."""
 
@@ -582,10 +587,11 @@ class TestHealthCheckFactories:
         mock_result = AsyncMock()
         mock_result.fetchone = AsyncMock(return_value=(1,))
         mock_conn.execute = AsyncMock(return_value=mock_result)
-        mock_pool.connection = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=None)
-        ))
+        mock_pool.connection = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)
+            )
+        )
         mock_pool.get_stats = MagicMock(return_value={"pool_size": 5})
 
         check_fn = await create_postgres_health_check(mock_pool)
@@ -624,6 +630,7 @@ class TestHealthCheckFactories:
 # INTEGRATION TESTS
 # =============================================================================
 
+
 class TestHealthMonitoringIntegration:
     """Integration tests for health monitoring workflow."""
 
@@ -634,7 +641,7 @@ class TestHealthMonitoringIntegration:
             backend_name="test_backend",
             backend_type="session",
             check_fn=failing_check_fn,
-            config=health_config
+            config=health_config,
         )
 
         # Run health checks to trigger circuit breaker
@@ -657,16 +664,13 @@ class TestHealthMonitoringIntegration:
             call_count += 1
             if call_count <= 3:
                 raise ConnectionError("Temporary failure")
-            return HealthCheckResult(
-                status=HealthStatus.HEALTHY,
-                latency_ms=10.0
-            )
+            return HealthCheckResult(status=HealthStatus.HEALTHY, latency_ms=10.0)
 
         monitor = StorageHealthMonitor(
             backend_name="test_backend",
             backend_type="session",
             check_fn=flaky_check,
-            config=health_config
+            config=health_config,
         )
 
         # Fail initially

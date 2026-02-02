@@ -36,11 +36,9 @@ logger = logging.getLogger(__name__)
 # BUILT-IN TOOL IMPLEMENTATIONS
 # =============================================================================
 
+
 async def semantic_search(
-    query: str,
-    memory_manager: MemoryManager,
-    top_k: int = 5,
-    collection_name: Optional[str] = None
+    query: str, memory_manager: MemoryManager, top_k: int = 5, collection_name: Optional[str] = None
 ) -> str:
     """
     Search the knowledge base (vector store) for relevant information.
@@ -58,9 +56,7 @@ async def semantic_search(
 
     try:
         results = await memory_manager.search_semantic(
-            query=query,
-            top_k=top_k,
-            collection_name=collection_name
+            query=query, top_k=top_k, collection_name=collection_name
         )
 
         if not results:
@@ -80,10 +76,7 @@ async def semantic_search(
 
 
 async def episodic_search(
-    query: str,
-    storage_manager: StorageManager,
-    session_id: Optional[str] = None,
-    limit: int = 10
+    query: str, storage_manager: StorageManager, session_id: Optional[str] = None, limit: int = 10
 ) -> str:
     """
     Search past experiences and interactions in episodic memory.
@@ -101,9 +94,7 @@ async def episodic_search(
 
     try:
         results = await storage_manager.search_episodes(
-            query=query,
-            session_id=session_id,
-            limit=limit
+            query=query, session_id=session_id, limit=limit
         )
 
         if not results:
@@ -207,14 +198,11 @@ _IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
     # Core search tools
     "llmcore.tools.search.semantic": semantic_search,
     "llmcore.tools.search.episodic": episodic_search,
-
     # Calculation tools
     "llmcore.tools.calculation.calculator": calculator,
-
     # Flow control tools
     "llmcore.tools.flow.finish": finish,
     "llmcore.tools.flow.human_approval": human_approval,
-
     # NOTE: Sandbox tools are registered dynamically via register_sandbox_tools()
     # This keeps the sandbox system optional and modular
 }
@@ -275,6 +263,7 @@ def get_registered_implementations() -> List[str]:
 # TOOLMANAGER CLASS
 # =============================================================================
 
+
 class ToolManager:
     """
     Manages the registration, validation, and execution of tools available to agents.
@@ -309,9 +298,7 @@ class ToolManager:
         logger.info("ToolManager initialized for dynamic tool loading")
 
     async def load_tools_for_run(
-        self,
-        db_session: AsyncSession,
-        enabled_toolkits: Optional[List[str]] = None
+        self, db_session: AsyncSession, enabled_toolkits: Optional[List[str]] = None
     ) -> None:
         """
         Load tool definitions from the database for a specific tenant and toolkits.
@@ -366,14 +353,16 @@ class ToolManager:
 
                 # Security check: ensure implementation key exists in secure registry
                 if implementation_key not in _IMPLEMENTATION_REGISTRY:
-                    logger.error(f"Invalid implementation key '{implementation_key}' for tool '{tool_name}'")
-                    raise LLMCoreError(f"Tool '{tool_name}' has invalid implementation key: {implementation_key}")
+                    logger.error(
+                        f"Invalid implementation key '{implementation_key}' for tool '{tool_name}'"
+                    )
+                    raise LLMCoreError(
+                        f"Tool '{tool_name}' has invalid implementation key: {implementation_key}"
+                    )
 
                 # Create Tool model from database data
                 tool = Tool(
-                    name=tool_name,
-                    description=row.description,
-                    parameters=row.parameters_schema
+                    name=tool_name, description=row.description, parameters=row.parameters_schema
                 )
 
                 # Store the mappings
@@ -396,16 +385,27 @@ class ToolManager:
         self._implementation_map.clear()
 
         default_tools = [
-            ("semantic_search", "Search the knowledge base for relevant information",
-             "llmcore.tools.search.semantic"),
-            ("episodic_search", "Search past experiences in episodic memory",
-             "llmcore.tools.search.episodic"),
-            ("calculator", "Perform mathematical calculations",
-             "llmcore.tools.calculation.calculator"),
-            ("finish", "Complete the task with a final answer",
-             "llmcore.tools.flow.finish"),
-            ("human_approval", "Request human approval for sensitive actions",
-             "llmcore.tools.flow.human_approval"),
+            (
+                "semantic_search",
+                "Search the knowledge base for relevant information",
+                "llmcore.tools.search.semantic",
+            ),
+            (
+                "episodic_search",
+                "Search past experiences in episodic memory",
+                "llmcore.tools.search.episodic",
+            ),
+            (
+                "calculator",
+                "Perform mathematical calculations",
+                "llmcore.tools.calculation.calculator",
+            ),
+            ("finish", "Complete the task with a final answer", "llmcore.tools.flow.finish"),
+            (
+                "human_approval",
+                "Request human approval for sensitive actions",
+                "llmcore.tools.flow.human_approval",
+            ),
         ]
 
         for name, desc, impl_key in default_tools:
@@ -425,7 +425,9 @@ class ToolManager:
         """
         return self._tool_definitions.copy()
 
-    async def execute_tool(self, tool_call: ToolCall, session_id: Optional[str] = None) -> ToolResult:
+    async def execute_tool(
+        self, tool_call: ToolCall, session_id: Optional[str] = None
+    ) -> ToolResult:
         """
         Execute a tool call and return the result.
 
@@ -443,12 +445,11 @@ class ToolManager:
 
         if tool_name not in self._implementation_map:
             available_tools = list(self._implementation_map.keys())
-            error_msg = f"Tool '{tool_name}' not loaded for this run. Available tools: {available_tools}"
-            logger.error(error_msg)
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                content=f"ERROR: {error_msg}"
+            error_msg = (
+                f"Tool '{tool_name}' not loaded for this run. Available tools: {available_tools}"
             )
+            logger.error(error_msg)
+            return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {error_msg}")
 
         try:
             # Get the implementation key and function
@@ -459,21 +460,24 @@ class ToolManager:
 
             # Inject dependencies based on tool function signature
             import inspect
+
             sig = inspect.signature(tool_func)
 
             # Inject memory_manager if the tool needs it
-            if 'memory_manager' in sig.parameters:
-                arguments['memory_manager'] = self._memory_manager
+            if "memory_manager" in sig.parameters:
+                arguments["memory_manager"] = self._memory_manager
 
             # Inject storage_manager if the tool needs it
-            if 'storage_manager' in sig.parameters:
-                arguments['storage_manager'] = self._storage_manager
+            if "storage_manager" in sig.parameters:
+                arguments["storage_manager"] = self._storage_manager
 
             # Inject session_id if the tool needs it and we have one
-            if 'session_id' in sig.parameters and session_id:
-                arguments['session_id'] = session_id
+            if "session_id" in sig.parameters and session_id:
+                arguments["session_id"] = session_id
 
-            logger.debug(f"Executing tool '{tool_name}' (key: {implementation_key}) with arguments: {list(arguments.keys())}")
+            logger.debug(
+                f"Executing tool '{tool_name}' (key: {implementation_key}) with arguments: {list(arguments.keys())}"
+            )
 
             # Execute the tool function
             if asyncio.iscoroutinefunction(tool_func):
@@ -483,25 +487,16 @@ class ToolManager:
 
             logger.debug(f"Tool '{tool_name}' executed successfully")
 
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                content=str(result)
-            )
+            return ToolResult(tool_call_id=tool_call.id, content=str(result))
 
         except TypeError as e:
             error_msg = f"Invalid arguments for tool '{tool_name}': {e!s}"
             logger.error(error_msg, exc_info=True)
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                content=f"ERROR: {error_msg}"
-            )
+            return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {error_msg}")
         except Exception as e:
             error_msg = f"Error executing tool '{tool_name}': {e!s}"
             logger.error(error_msg, exc_info=True)
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                content=f"ERROR: {error_msg}"
-            )
+            return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {error_msg}")
 
     def get_tool_names(self) -> List[str]:
         """Get a list of all loaded tool names for the current run."""
@@ -519,6 +514,7 @@ class ToolManager:
 # =============================================================================
 # SANDBOX TOOL REGISTRATION (NEW)
 # =============================================================================
+
 
 def register_sandbox_tools_to_manager(tool_manager: ToolManager) -> None:
     """
@@ -545,7 +541,7 @@ def register_sandbox_tools_to_manager(tool_manager: ToolManager) -> None:
                 tool = Tool(
                     name=tool_name,
                     description=schema.get("description", ""),
-                    parameters=schema.get("parameters", {})
+                    parameters=schema.get("parameters", {}),
                 )
                 tool_manager._tool_definitions.append(tool)
                 tool_manager._implementation_map[tool_name] = impl_key

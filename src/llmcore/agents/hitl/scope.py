@@ -445,9 +445,7 @@ class ApprovalScopeManager:
 
     def clear_session_scopes(self) -> int:
         """Clear all session scopes."""
-        count = len(self._session_scope.approved_tools) + len(
-            self._session_scope.approved_patterns
-        )
+        count = len(self._session_scope.approved_tools) + len(self._session_scope.approved_patterns)
         self._session_scope = SessionScope(session_id=self.session_id)
         logger.info(f"Cleared {count} session scopes")
         return count

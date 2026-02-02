@@ -82,11 +82,13 @@ def run_tests(test_paths, coverage=False, verbose=False):
         cmd.append("-q")
 
     if coverage:
-        cmd.extend([
-            "--cov=src/llmcore/agents",
-            "--cov-report=term-missing",
-            "--cov-report=html:htmlcov_darwin",
-        ])
+        cmd.extend(
+            [
+                "--cov=src/llmcore/agents",
+                "--cov-report=term-missing",
+                "--cov-report=html:htmlcov_darwin",
+            ]
+        )
 
     cmd.extend(test_paths)
 
@@ -107,22 +109,22 @@ def generate_report(results: dict):
 
 SUMMARY
 -------
-  Tests found:    {results.get('tests_found', 0)}
-  Tests missing:  {results.get('tests_missing', 0)}
-  Exit code:      {results.get('exit_code', 'N/A')}
-  Status:         {"✅ PASSED" if results.get('exit_code') == 0 else "❌ FAILED"}
+  Tests found:    {results.get("tests_found", 0)}
+  Tests missing:  {results.get("tests_missing", 0)}
+  Exit code:      {results.get("exit_code", "N/A")}
+  Status:         {"✅ PASSED" if results.get("exit_code") == 0 else "❌ FAILED"}
 
 TEST FILES
 ----------
   Found:
 """
 
-    for path in results.get('existing_tests', []):
+    for path in results.get("existing_tests", []):
         report += f"    ✅ {path}\n"
 
-    if results.get('missing_tests'):
+    if results.get("missing_tests"):
         report += "\n  Missing:\n"
-        for path in results.get('missing_tests', []):
+        for path in results.get("missing_tests", []):
             report += f"    ⚠️ {path}\n"
 
     report += """
@@ -130,7 +132,7 @@ RECOMMENDATIONS
 ---------------
 """
 
-    if results.get('exit_code') == 0:
+    if results.get("exit_code") == 0:
         report += """  • All tests passed! Darwin Layer 2 is properly integrated.
   • You can proceed with Layer 3 implementation.
   • Consider running with --coverage for detailed coverage report.
@@ -186,20 +188,16 @@ def main():
 
     # Run tests
     print("\n" + "─" * 60)
-    exit_code = run_tests(
-        existing,
-        coverage=args.coverage and not args.quick,
-        verbose=args.verbose
-    )
+    exit_code = run_tests(existing, coverage=args.coverage and not args.quick, verbose=args.verbose)
     print("─" * 60)
 
     # Generate report if requested
     results = {
-        'tests_found': len(existing),
-        'tests_missing': len(missing),
-        'existing_tests': existing,
-        'missing_tests': missing,
-        'exit_code': exit_code,
+        "tests_found": len(existing),
+        "tests_missing": len(missing),
+        "existing_tests": existing,
+        "missing_tests": missing,
+        "exit_code": exit_code,
     }
 
     if args.report:
@@ -208,7 +206,7 @@ def main():
 
         # Save report to file
         report_file = f"darwin_test_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             f.write(report)
         print(f"\n📄 Report saved to: {report_file}")
 

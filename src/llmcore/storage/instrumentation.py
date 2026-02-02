@@ -71,6 +71,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 class MetricsBackend(str, Enum):
     """Supported metrics backends."""
+
     PROMETHEUS = "prometheus"
     STATSD = "statsd"
     NONE = "none"
@@ -78,6 +79,7 @@ class MetricsBackend(str, Enum):
 
 class TracingBackend(str, Enum):
     """Supported tracing backends."""
+
     OPENTELEMETRY = "opentelemetry"
     NONE = "none"
 
@@ -100,6 +102,7 @@ class InstrumentationConfig:
         sample_rate: Sampling rate for high-volume operations (default: 1.0 = 100%).
         operation_timeout_seconds: Default timeout for operations (default: 30.0).
     """
+
     enabled: bool = True
     log_queries: bool = False
     log_slow_queries: bool = True
@@ -149,6 +152,7 @@ class InstrumentationContext:
         rows_affected: Number of rows affected (for write operations).
         rows_returned: Number of rows returned (for read operations).
     """
+
     operation: str
     backend: str
     table: str
@@ -226,6 +230,7 @@ class OperationRecord:
     Used for tracking operation history, computing statistics,
     and detecting patterns (e.g., repeated slow queries).
     """
+
     operation: str
     backend: str
     table: str
@@ -318,7 +323,7 @@ class StorageInstrumentation:
                     "slow_query_threshold_seconds": self.config.slow_query_threshold_seconds,
                     "metrics_enabled": self.config.metrics_enabled,
                 }
-            }
+            },
         )
 
     @property
@@ -354,9 +359,7 @@ class StorageInstrumentation:
         return list(reversed(self._history[-count:]))
 
     def get_slow_queries(
-        self,
-        threshold_ms: Optional[float] = None,
-        count: int = 100
+        self, threshold_ms: Optional[float] = None, count: int = 100
     ) -> List[OperationRecord]:
         """
         Get recent slow queries.
@@ -369,10 +372,7 @@ class StorageInstrumentation:
             List of slow query records (newest first).
         """
         threshold = threshold_ms or (self.config.slow_query_threshold_seconds * 1000)
-        slow_queries = [
-            r for r in self._history
-            if r.duration_ms > threshold
-        ]
+        slow_queries = [r for r in self._history if r.duration_ms > threshold]
         return list(reversed(slow_queries[-count:]))
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -383,9 +383,7 @@ class StorageInstrumentation:
             Dictionary with operation counts, error rates, etc.
         """
         error_rate = (
-            self._total_errors / self._total_operations
-            if self._total_operations > 0
-            else 0.0
+            self._total_errors / self._total_operations if self._total_operations > 0 else 0.0
         )
 
         durations = [r.duration_ms for r in self._history]
@@ -401,7 +399,7 @@ class StorageInstrumentation:
             "config": {
                 "enabled": self.config.enabled,
                 "slow_query_threshold_ms": self.config.slow_query_threshold_seconds * 1000,
-            }
+            },
         }
 
     def _should_sample(self) -> bool:
@@ -409,6 +407,7 @@ class StorageInstrumentation:
         if self.config.sample_rate >= 1.0:
             return True
         import random
+
         return random.random() < self.config.sample_rate
 
     @contextmanager
@@ -596,7 +595,7 @@ class StorageInstrumentation:
         logger.warning(
             f"Slow storage operation detected: {ctx.operation} took {ctx.duration_ms:.1f}ms "
             f"(threshold: {self.config.slow_query_threshold_seconds * 1000:.0f}ms)",
-            extra=log_extra
+            extra=log_extra,
         )
 
     def _record_error(self, ctx: InstrumentationContext) -> None:
@@ -615,7 +614,7 @@ class StorageInstrumentation:
 
         logger.error(
             f"Storage operation failed: {ctx.operation} on {ctx.backend}.{ctx.table}",
-            extra=log_extra
+            extra=log_extra,
         )
 
     def _log_operation(self, ctx: InstrumentationContext) -> None:
@@ -725,7 +724,7 @@ class StorageInstrumentation:
 
         # Trim history if needed
         if len(self._history) > self._history_max_size:
-            self._history = self._history[-self._history_max_size:]
+            self._history = self._history[-self._history_max_size :]
 
     def reset_statistics(self) -> None:
         """Reset instrumentation statistics and history."""
@@ -764,19 +763,25 @@ def instrumented(
     Returns:
         Decorated function.
     """
+
     def decorator(func: F) -> F:
         if asyncio.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 async with instrumentation.instrument_async(operation, backend, table):
                     return await func(*args, **kwargs)
+
             return async_wrapper  # type: ignore
         else:
+
             @wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 with instrumentation.instrument(operation, backend, table):
                     return func(*args, **kwargs)
+
             return sync_wrapper  # type: ignore
+
     return decorator
 
 

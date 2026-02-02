@@ -10,7 +10,6 @@ Tests the reasoning frameworks and learning components:
 - Fast Path Executor
 """
 
-
 import pytest
 
 # =============================================================================
@@ -28,8 +27,8 @@ class TestReActReasoner:
         reasoner = ReActReasoner()
 
         assert reasoner is not None
-        assert hasattr(reasoner, 'config')
-        assert hasattr(reasoner, 'reason')
+        assert hasattr(reasoner, "config")
+        assert hasattr(reasoner, "reason")
 
     def test_reasoner_with_config(self):
         """Test ReActReasoner accepts configuration."""
@@ -48,7 +47,7 @@ class TestReActReasoner:
         config = ReActConfig()
 
         assert config.max_iterations > 0
-        assert hasattr(config, 'max_iterations')
+        assert hasattr(config, "max_iterations")
 
     def test_reason_method_exists(self):
         """Test reason method exists and is callable."""
@@ -56,7 +55,7 @@ class TestReActReasoner:
 
         reasoner = ReActReasoner()
 
-        assert hasattr(reasoner, 'reason')
+        assert hasattr(reasoner, "reason")
         assert callable(reasoner.reason)
 
 
@@ -75,9 +74,9 @@ class TestReflexionReasoner:
         reasoner = ReflexionReasoner()
 
         assert reasoner is not None
-        assert hasattr(reasoner, 'config')
-        assert hasattr(reasoner, 'reflections')
-        assert hasattr(reasoner, 'trials')
+        assert hasattr(reasoner, "config")
+        assert hasattr(reasoner, "reflections")
+        assert hasattr(reasoner, "trials")
 
     def test_reflexion_with_config(self):
         """Test ReflexionReasoner with custom config."""
@@ -104,7 +103,7 @@ class TestReflexionReasoner:
 
         reasoner = ReflexionReasoner()
 
-        assert hasattr(reasoner, 'react_reasoner')
+        assert hasattr(reasoner, "react_reasoner")
         assert isinstance(reasoner.react_reasoner, ReActReasoner)
 
     def test_reason_with_reflection_method(self):
@@ -113,7 +112,7 @@ class TestReflexionReasoner:
 
         reasoner = ReflexionReasoner()
 
-        assert hasattr(reasoner, 'reason_with_reflection')
+        assert hasattr(reasoner, "reason_with_reflection")
         assert callable(reasoner.reason_with_reflection)
 
 
@@ -132,8 +131,8 @@ class TestReflectionBridge:
         bridge = ReflectionBridge()
 
         assert bridge is not None
-        assert hasattr(bridge, 'insights')
-        assert hasattr(bridge, 'max_insights')
+        assert hasattr(bridge, "insights")
+        assert hasattr(bridge, "max_insights")
 
     def test_add_reflection(self):
         """Test adding reflections to the bridge."""
@@ -322,8 +321,8 @@ class TestFastPathExecutor:
         executor = FastPathExecutor()
 
         assert executor is not None
-        assert hasattr(executor, 'config')
-        assert hasattr(executor, 'execute')
+        assert hasattr(executor, "config")
+        assert hasattr(executor, "execute")
 
     def test_has_execute_method(self):
         """Test that execute method exists."""
@@ -331,7 +330,7 @@ class TestFastPathExecutor:
 
         executor = FastPathExecutor()
 
-        assert hasattr(executor, 'execute')
+        assert hasattr(executor, "execute")
         assert callable(executor.execute)
 
     def test_statistics(self):
@@ -422,7 +421,7 @@ class TestPhase3Integration:
 
         reflexion = ReflexionReasoner()
 
-        assert hasattr(reflexion, 'react_reasoner')
+        assert hasattr(reflexion, "react_reasoner")
         assert isinstance(reflexion.react_reasoner, ReActReasoner)
 
 

@@ -82,7 +82,7 @@ logger = logging.getLogger(__name__)
 class EventSink(ABC):
     """
     Abstract base class for event sinks.
-    
+
     Event sinks receive events from the EventLogger and write them
     to their destination (file, database, network, etc.).
     """
@@ -91,7 +91,7 @@ class EventSink(ABC):
     async def write(self, event: AgentEvent) -> None:
         """
         Write an event to the sink.
-        
+
         Args:
             event: Event to write
         """
@@ -121,10 +121,10 @@ class EventSink(ABC):
 class JSONLFileSink(EventSink):
     """
     Writes events to a JSONL (JSON Lines) file.
-    
+
     Each event is written as a single JSON line. Supports automatic
     file creation and append mode.
-    
+
     Attributes:
         path: Path to the output file
         buffer_size: Number of events to buffer before flushing
@@ -140,7 +140,7 @@ class JSONLFileSink(EventSink):
     ) -> None:
         """
         Initialize JSONL file sink.
-        
+
         Args:
             path: Path to output file
             buffer_size: Events to buffer before flush (1 = immediate)
@@ -163,7 +163,7 @@ class JSONLFileSink(EventSink):
     async def write(self, event: AgentEvent) -> None:
         """
         Write event to file.
-        
+
         Args:
             event: Event to write
         """
@@ -202,10 +202,10 @@ class JSONLFileSink(EventSink):
 class InMemorySink(EventSink):
     """
     Stores events in memory for testing and debugging.
-    
+
     Events are stored in a list and can be retrieved for inspection.
     Supports filtering by category, session, etc.
-    
+
     Attributes:
         max_events: Maximum events to store (oldest discarded)
     """
@@ -213,7 +213,7 @@ class InMemorySink(EventSink):
     def __init__(self, max_events: int = 10000) -> None:
         """
         Initialize in-memory sink.
-        
+
         Args:
             max_events: Maximum events to store
         """
@@ -224,7 +224,7 @@ class InMemorySink(EventSink):
     async def write(self, event: AgentEvent) -> None:
         """
         Store event in memory.
-        
+
         Args:
             event: Event to store
         """
@@ -232,7 +232,7 @@ class InMemorySink(EventSink):
             self._events.append(event)
             # Trim if over limit
             if len(self._events) > self.max_events:
-                self._events = self._events[-self.max_events:]
+                self._events = self._events[-self.max_events :]
 
     async def flush(self) -> None:
         """No-op for memory sink."""
@@ -261,7 +261,7 @@ class InMemorySink(EventSink):
     ) -> List[AgentEvent]:
         """
         Get filtered events.
-        
+
         Args:
             category: Filter by category
             session_id: Filter by session
@@ -270,7 +270,7 @@ class InMemorySink(EventSink):
             severity: Filter by severity
             since: Events after this time
             until: Events before this time
-            
+
         Returns:
             Filtered list of events
         """
@@ -301,7 +301,7 @@ class InMemorySink(EventSink):
 class CallbackSink(EventSink):
     """
     Forwards events to a callback function.
-    
+
     Useful for integration with custom logging systems or
     real-time event processing.
     """
@@ -314,7 +314,7 @@ class CallbackSink(EventSink):
     ) -> None:
         """
         Initialize callback sink.
-        
+
         Args:
             callback: Synchronous callback function
             async_callback: Async callback (used if provided)
@@ -325,7 +325,7 @@ class CallbackSink(EventSink):
     async def write(self, event: AgentEvent) -> None:
         """
         Forward event to callback.
-        
+
         Args:
             event: Event to forward
         """
@@ -346,7 +346,7 @@ class CallbackSink(EventSink):
 class FilteredSink(EventSink):
     """
     Wraps another sink with filtering capabilities.
-    
+
     Only forwards events that match the filter criteria.
     """
 
@@ -361,7 +361,7 @@ class FilteredSink(EventSink):
     ) -> None:
         """
         Initialize filtered sink.
-        
+
         Args:
             inner_sink: Sink to forward matching events to
             categories: Categories to include (None = all)
@@ -435,26 +435,26 @@ class FilteredSink(EventSink):
 class EventLogger:
     """
     Central event logger for agent observability.
-    
+
     Provides a high-level API for logging agent events with support
     for multiple sinks and automatic context management.
-    
+
     Usage:
         logger = EventLogger(session_id="sess-123")
         logger.add_sink(JSONLFileSink(Path("events.jsonl")))
-        
+
         await logger.log_lifecycle_start(goal="Analyze data")
         await logger.log_cognitive_phase("think", ...)
         await logger.log_lifecycle_end(status="success")
-        
+
         await logger.close()
-    
+
     Context Manager:
         async with EventLogger(session_id="sess-123") as logger:
             logger.add_sink(JSONLFileSink(Path("events.jsonl")))
             await logger.log_lifecycle_start(goal="Analyze data")
             # Events automatically flushed on exit
-    
+
     Attributes:
         session_id: Current session identifier
         execution_id: Current execution identifier
@@ -471,7 +471,7 @@ class EventLogger:
     ) -> None:
         """
         Initialize event logger.
-        
+
         Args:
             session_id: Session identifier
             execution_id: Execution identifier (auto-generated if None)
@@ -507,7 +507,7 @@ class EventLogger:
     def add_sink(self, sink: EventSink) -> None:
         """
         Add an event sink.
-        
+
         Args:
             sink: Sink to add
         """
@@ -516,10 +516,10 @@ class EventLogger:
     def remove_sink(self, sink: EventSink) -> bool:
         """
         Remove an event sink.
-        
+
         Args:
             sink: Sink to remove
-            
+
         Returns:
             True if sink was removed
         """
@@ -532,7 +532,7 @@ class EventLogger:
     def set_iteration(self, iteration: int) -> None:
         """
         Set current iteration number.
-        
+
         Args:
             iteration: Iteration number
         """
@@ -541,7 +541,7 @@ class EventLogger:
     def set_phase(self, phase: Optional[str]) -> None:
         """
         Set current cognitive phase.
-        
+
         Args:
             phase: Phase name
         """
@@ -550,7 +550,7 @@ class EventLogger:
     def set_correlation_id(self, correlation_id: Optional[str]) -> None:
         """
         Set correlation ID for related events.
-        
+
         Args:
             correlation_id: Correlation identifier
         """
@@ -563,13 +563,13 @@ class EventLogger:
     ) -> AsyncIterator[None]:
         """
         Context manager for nested events.
-        
+
         Events logged within this scope will have their parent_event_id
         set to the provided parent event.
-        
+
         Args:
             parent_event: Parent event for scope
-            
+
         Yields:
             None
         """
@@ -587,10 +587,10 @@ class EventLogger:
     async def log(self, event: AgentEvent) -> AgentEvent:
         """
         Log an event to all sinks.
-        
+
         Args:
             event: Event to log
-            
+
         Returns:
             The logged event (with any modifications)
         """
@@ -620,9 +620,7 @@ class EventLogger:
             try:
                 await sink.write(event)
             except Exception as e:
-                self._logger.error(
-                    f"Failed to write to sink {sink.name}: {e}"
-                )
+                self._logger.error(f"Failed to write to sink {sink.name}: {e}")
 
         return event
 
@@ -632,9 +630,7 @@ class EventLogger:
             try:
                 await sink.flush()
             except Exception as e:
-                self._logger.error(
-                    f"Failed to flush sink {sink.name}: {e}"
-                )
+                self._logger.error(f"Failed to flush sink {sink.name}: {e}")
 
     async def close(self) -> None:
         """Close all sinks."""
@@ -643,9 +639,7 @@ class EventLogger:
             try:
                 await sink.close()
             except Exception as e:
-                self._logger.error(
-                    f"Failed to close sink {sink.name}: {e}"
-                )
+                self._logger.error(f"Failed to close sink {sink.name}: {e}")
 
     # =========================================================================
     # CONVENIENCE METHODS - LIFECYCLE
@@ -661,13 +655,13 @@ class EventLogger:
     ) -> LifecycleEvent:
         """
         Log agent start event.
-        
+
         Args:
             goal: Goal being processed
             goal_complexity: Classified complexity
             recommended_strategy: Recommended strategy
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -693,7 +687,7 @@ class EventLogger:
     ) -> LifecycleEvent:
         """
         Log agent completion event.
-        
+
         Args:
             status: Final status (success, failure, cancelled)
             exit_reason: Reason for exit
@@ -701,7 +695,7 @@ class EventLogger:
             total_tokens: Total tokens used
             duration_ms: Total duration
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -732,11 +726,11 @@ class EventLogger:
     ) -> LifecycleEvent:
         """
         Log iteration start.
-        
+
         Args:
             iteration: Iteration number
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -756,12 +750,12 @@ class EventLogger:
     ) -> LifecycleEvent:
         """
         Log iteration completion.
-        
+
         Args:
             iteration: Iteration number
             duration_ms: Iteration duration
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -794,7 +788,7 @@ class EventLogger:
     ) -> CognitiveEvent:
         """
         Log cognitive phase event.
-        
+
         Args:
             phase: Phase name
             event_type: Type of cognitive event
@@ -805,7 +799,7 @@ class EventLogger:
             confidence: Confidence score
             duration_ms: Phase duration
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -847,7 +841,7 @@ class EventLogger:
     ) -> ActivityEvent:
         """
         Log activity execution.
-        
+
         Args:
             activity_name: Name of activity
             activity_input: Input parameters
@@ -857,7 +851,7 @@ class EventLogger:
             duration_ms: Execution duration
             event_type: Event type
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -895,7 +889,7 @@ class EventLogger:
     ) -> ErrorEvent:
         """
         Log an error event.
-        
+
         Args:
             error_type: Type of error
             error_message: Error message
@@ -904,7 +898,7 @@ class EventLogger:
             severity: Error severity
             source_component: Source component
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -937,14 +931,14 @@ class EventLogger:
     ) -> MetricEvent:
         """
         Log a metric event.
-        
+
         Args:
             metric_name: Name of metric
             metric_value: Metric value
             metric_unit: Unit of measurement
             metric_type: Type of metric
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -979,7 +973,7 @@ class EventLogger:
     ) -> HITLEvent:
         """
         Log HITL event.
-        
+
         Args:
             event_type: HITL event type
             request_id: Request ID
@@ -990,7 +984,7 @@ class EventLogger:
             responder_id: Who responded
             feedback: Response feedback
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -1029,7 +1023,7 @@ class EventLogger:
     ) -> SandboxEvent:
         """
         Log sandbox event.
-        
+
         Args:
             event_type: Sandbox event type
             sandbox_type: Type of sandbox
@@ -1039,7 +1033,7 @@ class EventLogger:
             exit_code: Exit code
             duration_ms: Duration
             **kwargs: Additional fields
-            
+
         Returns:
             Created event
         """
@@ -1076,7 +1070,7 @@ class EventLogger:
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get logger statistics.
-        
+
         Returns:
             Statistics dictionary
         """
@@ -1106,14 +1100,14 @@ def create_event_logger(
 ) -> EventLogger:
     """
     Factory function to create an EventLogger with common configurations.
-    
+
     Args:
         session_id: Session identifier
         log_path: Path to log file (creates JSONLFileSink)
         in_memory: Add InMemorySink for testing
         execution_id: Execution identifier
         default_tags: Default tags for all events
-        
+
     Returns:
         Configured EventLogger
     """

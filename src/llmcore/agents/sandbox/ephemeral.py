@@ -43,6 +43,7 @@ class AgentLogEntry:
         level: Log level (DEBUG, INFO, WARNING, ERROR)
         message: Log message content
     """
+
     id: int
     timestamp: datetime
     level: str
@@ -54,7 +55,7 @@ class AgentLogEntry:
             "id": self.id,
             "timestamp": self.timestamp.isoformat(),
             "level": self.level,
-            "message": self.message
+            "message": self.message,
         }
 
 
@@ -69,6 +70,7 @@ class FileRecord:
         size_bytes: File size
         description: Optional description of the file
     """
+
     path: str
     created_at: datetime
     size_bytes: int = 0
@@ -80,7 +82,7 @@ class FileRecord:
             "path": self.path,
             "created_at": self.created_at.isoformat(),
             "size_bytes": self.size_bytes,
-            "description": self.description
+            "description": self.description,
         }
 
 
@@ -113,11 +115,7 @@ class EphemeralResourceManager:
         >>> await manager.record_file("/workspace/output.py", 1024, "Generated code")
     """
 
-    def __init__(
-        self,
-        sandbox: "SandboxProvider",
-        db_path: Optional[str] = None
-    ):
+    def __init__(self, sandbox: "SandboxProvider", db_path: Optional[str] = None):
         """
         Initialize the ephemeral resource manager.
 
@@ -127,8 +125,7 @@ class EphemeralResourceManager:
         """
         self._sandbox = sandbox
         self._db_path = db_path or (
-            sandbox.get_config().ephemeral_db_path
-            if sandbox.get_config() else "/tmp/agent_task.db"
+            sandbox.get_config().ephemeral_db_path if sandbox.get_config() else "/tmp/agent_task.db"
         )
 
     async def init_database(self) -> bool:
@@ -177,12 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_level ON agent_logs(level);
             logger.warning(f"Failed to initialize ephemeral database: {result.stderr}")
             return False
 
-    async def set_state(
-        self,
-        key: str,
-        value: Any,
-        value_type: str = "auto"
-    ) -> bool:
+    async def set_state(self, key: str, value: Any, value_type: str = "auto") -> bool:
         """
         Store a value in the agent state.
 
@@ -219,17 +211,11 @@ INSERT OR REPLACE INTO agent_state (key, value, value_type, updated_at)
 VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
 """
 
-        result = await self._sandbox.execute_shell(
-            f"sqlite3 '{self._db_path}' \"{sql}\""
-        )
+        result = await self._sandbox.execute_shell(f"sqlite3 '{self._db_path}' \"{sql}\"")
 
         return result.success
 
-    async def get_state(
-        self,
-        key: str,
-        default: Any = None
-    ) -> Any:
+    async def get_state(self, key: str, default: Any = None) -> Any:
         """
         Retrieve a value from the agent state.
 
@@ -282,9 +268,7 @@ VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
         key_escaped = key.replace("'", "''")
         sql = f"DELETE FROM agent_state WHERE key = '{key_escaped}';"
 
-        result = await self._sandbox.execute_shell(
-            f"sqlite3 '{self._db_path}' \"{sql}\""
-        )
+        result = await self._sandbox.execute_shell(f"sqlite3 '{self._db_path}' \"{sql}\"")
 
         return result.success
 
@@ -297,9 +281,7 @@ VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
         """
         sql = "SELECT key FROM agent_state ORDER BY key;"
 
-        result = await self._sandbox.execute_shell(
-            f"sqlite3 '{self._db_path}' \"{sql}\""
-        )
+        result = await self._sandbox.execute_shell(f"sqlite3 '{self._db_path}' \"{sql}\"")
 
         if result.success and result.stdout.strip():
             return [k.strip() for k in result.stdout.strip().split("\n") if k.strip()]
@@ -342,11 +324,7 @@ VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
 
         return state
 
-    async def log_event(
-        self,
-        level: str,
-        message: str
-    ) -> bool:
+    async def log_event(self, level: str, message: str) -> bool:
         """
         Log an event to the ephemeral database.
 
@@ -365,17 +343,12 @@ INSERT INTO agent_logs (timestamp, level, message)
 VALUES (datetime('now'), '{level_escaped}', '{message_escaped}');
 """
 
-        result = await self._sandbox.execute_shell(
-            f"sqlite3 '{self._db_path}' \"{sql}\""
-        )
+        result = await self._sandbox.execute_shell(f"sqlite3 '{self._db_path}' \"{sql}\"")
 
         return result.success
 
     async def get_logs(
-        self,
-        level: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
+        self, level: Optional[str] = None, limit: int = 100, offset: int = 0
     ) -> List[AgentLogEntry]:
         """
         Retrieve log entries.
@@ -411,23 +384,20 @@ LIMIT {limit} OFFSET {offset};
                 parts = line.split("|", 3)
                 if len(parts) >= 4:
                     try:
-                        logs.append(AgentLogEntry(
-                            id=int(parts[0]),
-                            timestamp=datetime.fromisoformat(parts[1].replace(" ", "T")),
-                            level=parts[2],
-                            message=parts[3]
-                        ))
+                        logs.append(
+                            AgentLogEntry(
+                                id=int(parts[0]),
+                                timestamp=datetime.fromisoformat(parts[1].replace(" ", "T")),
+                                level=parts[2],
+                                message=parts[3],
+                            )
+                        )
                     except (ValueError, IndexError):
                         continue
 
         return logs
 
-    async def record_file(
-        self,
-        path: str,
-        size_bytes: int = 0,
-        description: str = ""
-    ) -> bool:
+    async def record_file(self, path: str, size_bytes: int = 0, description: str = "") -> bool:
         """
         Record a file created by the agent.
 
@@ -447,9 +417,7 @@ INSERT OR REPLACE INTO agent_files (path, created_at, size_bytes, description)
 VALUES ('{path_escaped}', datetime('now'), {size_bytes}, '{desc_escaped}');
 """
 
-        result = await self._sandbox.execute_shell(
-            f"sqlite3 '{self._db_path}' \"{sql}\""
-        )
+        result = await self._sandbox.execute_shell(f"sqlite3 '{self._db_path}' \"{sql}\"")
 
         return result.success
 
@@ -476,12 +444,14 @@ ORDER BY created_at DESC;
                 parts = line.split("|", 3)
                 if len(parts) >= 4:
                     try:
-                        files.append(FileRecord(
-                            path=parts[0],
-                            created_at=datetime.fromisoformat(parts[1].replace(" ", "T")),
-                            size_bytes=int(parts[2]) if parts[2] else 0,
-                            description=parts[3]
-                        ))
+                        files.append(
+                            FileRecord(
+                                path=parts[0],
+                                created_at=datetime.fromisoformat(parts[1].replace(" ", "T")),
+                                size_bytes=int(parts[2]) if parts[2] else 0,
+                                description=parts[3],
+                            )
+                        )
                     except (ValueError, IndexError):
                         continue
 
@@ -541,5 +511,5 @@ ORDER BY created_at DESC;
         return {
             "state": await self.get_all_state(),
             "logs": [log.to_dict() for log in await self.get_logs(limit=1000)],
-            "files": [f.to_dict() for f in await self.list_recorded_files()]
+            "files": [f.to_dict() for f in await self.list_recorded_files()],
         }

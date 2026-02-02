@@ -26,10 +26,12 @@ class TestCapabilityCheckIntegration:
         provider = MagicMock()
         provider.default_model = "gpt-4o"
         provider.get_name.return_value = "openai"
-        provider.chat_completion = AsyncMock(return_value={
-            "choices": [{"message": {"content": "Final Answer: Hello!"}}],
-            "usage": {"total_tokens": 100},
-        })
+        provider.chat_completion = AsyncMock(
+            return_value={
+                "choices": [{"message": {"content": "Final Answer: Hello!"}}],
+                "usage": {"total_tokens": 100},
+            }
+        )
         provider.extract_response_content = MagicMock(return_value="Final Answer: Hello!")
         manager.get_provider.return_value = provider
         manager.get_default_provider_name.return_value = "openai"
@@ -59,6 +61,7 @@ class TestCapabilityCheckIntegration:
     def agents_config(self):
         """Create an agents config with capability check enabled."""
         from llmcore.config.agents_config import AgentsConfig
+
         config = AgentsConfig()
         config.capability_check.enabled = True
         config.capability_check.strict_mode = True
@@ -157,7 +160,9 @@ class TestCapabilityCheckIntegration:
 
         # Run with non-tool model - should not fail immediately
         # (will fail later in the process, but that's not what we're testing)
-        with patch.object(agent.cognitive_cycle, 'run_until_complete', new_callable=AsyncMock) as mock_run:
+        with patch.object(
+            agent.cognitive_cycle, "run_until_complete", new_callable=AsyncMock
+        ) as mock_run:
             mock_run.return_value = "Task complete"
 
             result = await agent.run(
@@ -196,7 +201,9 @@ class TestCapabilityCheckIntegration:
         )
 
         # Run with non-tool model - should warn but continue
-        with patch.object(agent.cognitive_cycle, 'run_until_complete', new_callable=AsyncMock) as mock_run:
+        with patch.object(
+            agent.cognitive_cycle, "run_until_complete", new_callable=AsyncMock
+        ) as mock_run:
             mock_run.return_value = "Task complete via activity fallback"
 
             result = await agent.run(

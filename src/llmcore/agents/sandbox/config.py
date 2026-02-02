@@ -54,25 +54,19 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG = {
     "mode": "docker",
     "fallback_enabled": True,
-
     # Docker defaults
     "docker": {
         "enabled": True,
         "image": "python:3.11-slim",
-        "image_whitelist": [
-            "python:3.*-slim",
-            "python:3.*-bookworm",
-            "llmcore-sandbox:*"
-        ],
+        "image_whitelist": ["python:3.*-slim", "python:3.*-bookworm", "llmcore-sandbox:*"],
         "full_access_label": "llmcore.sandbox.full_access=true",
         "full_access_name_pattern": "*-full-access",
         "host": None,
         "auto_pull": True,
         "memory_limit": "1g",
         "cpu_limit": 2.0,
-        "timeout_seconds": 600
+        "timeout_seconds": 600,
     },
-
     # VM defaults
     "vm": {
         "enabled": False,
@@ -82,15 +76,10 @@ DEFAULT_CONFIG = {
         "private_key_path": None,
         "full_access_hosts": [],
         "use_ssh_agent": True,
-        "connection_timeout": 30
+        "connection_timeout": 30,
     },
-
     # Volume defaults
-    "volumes": {
-        "share_path": "~/.llmcore/agent_share",
-        "outputs_path": "~/.llmcore/agent_outputs"
-    },
-
+    "volumes": {"share_path": "~/.llmcore/agent_share", "outputs_path": "~/.llmcore/agent_outputs"},
     # Tool access control defaults
     "tools": {
         "allowed": [
@@ -113,16 +102,10 @@ DEFAULT_CONFIG = {
             "semantic_search",
             "episodic_search",
             "finish",
-            "human_approval"
+            "human_approval",
         ],
-        "denied": [
-            "install_system_package",
-            "sudo_execute",
-            "network_request",
-            "raw_socket"
-        ]
+        "denied": ["install_system_package", "sudo_execute", "network_request", "raw_socket"],
     },
-
     # Output tracking defaults
     "output_tracking": {
         "enabled": True,
@@ -130,21 +113,20 @@ DEFAULT_CONFIG = {
         "log_input_preview_length": 200,
         "log_output_preview_length": 500,
         "cleanup_max_age_days": 30,
-        "cleanup_keep_min_runs": 10
-    }
+        "cleanup_keep_min_runs": 10,
+    },
 }
 
 
 @dataclass
 class DockerConfig:
     """Docker sandbox configuration."""
+
     enabled: bool = True
     image: str = "python:3.11-slim"
-    image_whitelist: List[str] = field(default_factory=lambda: [
-        "python:3.*-slim",
-        "python:3.*-bookworm",
-        "llmcore-sandbox:*"
-    ])
+    image_whitelist: List[str] = field(
+        default_factory=lambda: ["python:3.*-slim", "python:3.*-bookworm", "llmcore-sandbox:*"]
+    )
     full_access_label: str = "llmcore.sandbox.full_access=true"
     full_access_name_pattern: Optional[str] = "*-full-access"
     host: Optional[str] = None
@@ -157,6 +139,7 @@ class DockerConfig:
 @dataclass
 class VMConfig:
     """VM sandbox configuration."""
+
     enabled: bool = False
     host: Optional[str] = None
     port: int = 22
@@ -170,6 +153,7 @@ class VMConfig:
 @dataclass
 class VolumeConfig:
     """Volume mount configuration."""
+
     share_path: str = "~/.llmcore/agent_share"
     outputs_path: str = "~/.llmcore/agent_outputs"
 
@@ -177,6 +161,7 @@ class VolumeConfig:
 @dataclass
 class ToolsConfig:
     """Tool access control configuration."""
+
     allowed: List[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["allowed"])
     denied: List[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["denied"])
 
@@ -184,6 +169,7 @@ class ToolsConfig:
 @dataclass
 class OutputTrackingConfig:
     """Output tracking configuration."""
+
     enabled: bool = True
     max_log_entries: int = 10000
     log_input_preview_length: int = 200
@@ -200,6 +186,7 @@ class SandboxSystemConfig:
     This class holds all configuration for the sandbox system,
     including Docker, VM, volume, and tool settings.
     """
+
     mode: str = "docker"
     fallback_enabled: bool = True
     docker: DockerConfig = field(default_factory=DockerConfig)
@@ -223,7 +210,7 @@ class SandboxSystemConfig:
                 "auto_pull": self.docker.auto_pull,
                 "memory_limit": self.docker.memory_limit,
                 "cpu_limit": self.docker.cpu_limit,
-                "timeout_seconds": self.docker.timeout_seconds
+                "timeout_seconds": self.docker.timeout_seconds,
             },
             "vm": {
                 "enabled": self.vm.enabled,
@@ -233,24 +220,21 @@ class SandboxSystemConfig:
                 "private_key_path": self.vm.private_key_path,
                 "full_access_hosts": self.vm.full_access_hosts,
                 "use_ssh_agent": self.vm.use_ssh_agent,
-                "connection_timeout": self.vm.connection_timeout
+                "connection_timeout": self.vm.connection_timeout,
             },
             "volumes": {
                 "share_path": self.volumes.share_path,
-                "outputs_path": self.volumes.outputs_path
+                "outputs_path": self.volumes.outputs_path,
             },
-            "tools": {
-                "allowed": self.tools.allowed,
-                "denied": self.tools.denied
-            },
+            "tools": {"allowed": self.tools.allowed, "denied": self.tools.denied},
             "output_tracking": {
                 "enabled": self.output_tracking.enabled,
                 "max_log_entries": self.output_tracking.max_log_entries,
                 "log_input_preview_length": self.output_tracking.log_input_preview_length,
                 "log_output_preview_length": self.output_tracking.log_output_preview_length,
                 "cleanup_max_age_days": self.output_tracking.cleanup_max_age_days,
-                "cleanup_keep_min_runs": self.output_tracking.cleanup_keep_min_runs
-            }
+                "cleanup_keep_min_runs": self.output_tracking.cleanup_keep_min_runs,
+            },
         }
 
 
@@ -303,7 +287,7 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         # Parse key: LLMCORE_SANDBOX_DOCKER_IMAGE -> ["docker", "image"]
-        parts = key[len(prefix):].lower().split("_")
+        parts = key[len(prefix) :].lower().split("_")
 
         if len(parts) == 1:
             # Top-level setting
@@ -401,8 +385,7 @@ def load_toml_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def load_sandbox_config(
-    config_path: Optional[Path] = None,
-    overrides: Optional[Dict[str, Any]] = None
+    config_path: Optional[Path] = None, overrides: Optional[Dict[str, Any]] = None
 ) -> SandboxSystemConfig:
     """
     Load complete sandbox system configuration.
@@ -446,7 +429,7 @@ def load_sandbox_config(
         auto_pull=config["docker"].get("auto_pull", True),
         memory_limit=config["docker"].get("memory_limit", "1g"),
         cpu_limit=config["docker"].get("cpu_limit", 2.0),
-        timeout_seconds=config["docker"].get("timeout_seconds", 600)
+        timeout_seconds=config["docker"].get("timeout_seconds", 600),
     )
 
     vm_config = VMConfig(
@@ -457,17 +440,16 @@ def load_sandbox_config(
         private_key_path=config["vm"].get("private_key_path"),
         full_access_hosts=config["vm"].get("full_access_hosts", []),
         use_ssh_agent=config["vm"].get("use_ssh_agent", True),
-        connection_timeout=config["vm"].get("connection_timeout", 30)
+        connection_timeout=config["vm"].get("connection_timeout", 30),
     )
 
     volumes_config = VolumeConfig(
         share_path=config["volumes"].get("share_path", "~/.llmcore/agent_share"),
-        outputs_path=config["volumes"].get("outputs_path", "~/.llmcore/agent_outputs")
+        outputs_path=config["volumes"].get("outputs_path", "~/.llmcore/agent_outputs"),
     )
 
     tools_config = ToolsConfig(
-        allowed=config["tools"].get("allowed", []),
-        denied=config["tools"].get("denied", [])
+        allowed=config["tools"].get("allowed", []), denied=config["tools"].get("denied", [])
     )
 
     output_config = OutputTrackingConfig(
@@ -476,7 +458,7 @@ def load_sandbox_config(
         log_input_preview_length=config["output_tracking"].get("log_input_preview_length", 200),
         log_output_preview_length=config["output_tracking"].get("log_output_preview_length", 500),
         cleanup_max_age_days=config["output_tracking"].get("cleanup_max_age_days", 30),
-        cleanup_keep_min_runs=config["output_tracking"].get("cleanup_keep_min_runs", 10)
+        cleanup_keep_min_runs=config["output_tracking"].get("cleanup_keep_min_runs", 10),
     )
 
     return SandboxSystemConfig(
@@ -486,13 +468,11 @@ def load_sandbox_config(
         vm=vm_config,
         volumes=volumes_config,
         tools=tools_config,
-        output_tracking=output_config
+        output_tracking=output_config,
     )
 
 
-def create_registry_config(
-    sandbox_config: SandboxSystemConfig
-) -> "SandboxRegistryConfig":
+def create_registry_config(sandbox_config: SandboxSystemConfig) -> "SandboxRegistryConfig":
     """
     Create a SandboxRegistryConfig from SandboxSystemConfig.
 
@@ -507,16 +487,11 @@ def create_registry_config(
     """
     from .registry import SandboxMode, SandboxRegistryConfig
 
-    mode_map = {
-        "docker": SandboxMode.DOCKER,
-        "vm": SandboxMode.VM,
-        "hybrid": SandboxMode.HYBRID
-    }
+    mode_map = {"docker": SandboxMode.DOCKER, "vm": SandboxMode.VM, "hybrid": SandboxMode.HYBRID}
 
     return SandboxRegistryConfig(
         mode=mode_map.get(sandbox_config.mode, SandboxMode.DOCKER),
         fallback_enabled=sandbox_config.fallback_enabled,
-
         # Docker
         docker_enabled=sandbox_config.docker.enabled,
         docker_image=sandbox_config.docker.image,
@@ -528,7 +503,6 @@ def create_registry_config(
         docker_memory_limit=sandbox_config.docker.memory_limit,
         docker_cpu_limit=sandbox_config.docker.cpu_limit,
         docker_timeout_seconds=sandbox_config.docker.timeout_seconds,
-
         # VM
         vm_enabled=sandbox_config.vm.enabled or sandbox_config.mode == "vm",
         vm_host=sandbox_config.vm.host,
@@ -538,14 +512,12 @@ def create_registry_config(
         vm_full_access_hosts=sandbox_config.vm.full_access_hosts,
         vm_use_ssh_agent=sandbox_config.vm.use_ssh_agent,
         vm_connection_timeout=sandbox_config.vm.connection_timeout,
-
         # Volumes
         share_path=sandbox_config.volumes.share_path,
         outputs_path=sandbox_config.volumes.outputs_path,
-
         # Tools
         allowed_tools=sandbox_config.tools.allowed,
-        denied_tools=sandbox_config.tools.denied
+        denied_tools=sandbox_config.tools.denied,
     )
 
 
@@ -556,7 +528,7 @@ def generate_sample_config() -> str:
     Returns:
         TOML configuration string
     """
-    return '''# LLMCore Sandbox Configuration
+    return """# LLMCore Sandbox Configuration
 # Place this in ~/.llmcore/config.toml or specify via LLMCORE_CONFIG_PATH
 
 [agents.sandbox]
@@ -676,7 +648,7 @@ log_output_preview_length = 500
 # Cleanup settings
 cleanup_max_age_days = 30
 cleanup_keep_min_runs = 10
-'''
+"""
 
 
 def write_sample_config(path: Optional[Path] = None) -> Path:

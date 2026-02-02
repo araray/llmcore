@@ -33,7 +33,7 @@ from llmcore import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -47,22 +47,22 @@ async def main():
     # Sample documents to add
     documents_to_add = [
         {
-            "id": "doc_llmcore_readme", # Optional ID
+            "id": "doc_llmcore_readme",  # Optional ID
             "content": "LLMCore is a Python library for interacting with LLMs. It supports providers like OpenAI, Anthropic, Ollama, and Gemini. Key features include session management, context handling, and Retrieval Augmented Generation (RAG).",
-            "metadata": {"source": "llmcore/readme.md", "topic": "library_description"}
+            "metadata": {"source": "llmcore/readme.md", "topic": "library_description"},
         },
         {
             "content": "RAG allows LLMs to access external knowledge by retrieving relevant documents from a vector store (like ChromaDB or pgvector) and adding them to the prompt context.",
-            "metadata": {"source": "llmcore/spec.md", "topic": "rag_concept"}
+            "metadata": {"source": "llmcore/spec.md", "topic": "rag_concept"},
         },
         {
             "content": "Configuration in LLMCore is managed by the 'confy' library, supporting defaults, TOML files, environment variables, and overrides.",
-            "metadata": {"source": "llmcore/readme.md", "topic": "configuration"}
+            "metadata": {"source": "llmcore/readme.md", "topic": "configuration"},
         },
         {
-             "content": "The primary method for chat is `llm.chat()`, which accepts parameters like `message`, `session_id`, `provider_name`, `model_name`, `stream`, and `enable_rag`.",
-             "metadata": {"source": "llmcore/usage.md", "topic": "api_usage"}
-        }
+            "content": "The primary method for chat is `llm.chat()`, which accepts parameters like `message`, `session_id`, `provider_name`, `model_name`, `stream`, and `enable_rag`.",
+            "metadata": {"source": "llmcore/usage.md", "topic": "api_usage"},
+        },
     ]
 
     try:
@@ -73,16 +73,19 @@ async def main():
             logger.info("LLMCore initialized successfully.")
 
             # --- Step 2: Add documents to the vector store ---
-            logger.info(f"\n--- Adding {len(documents_to_add)} documents to collection '{collection_name}' ---")
+            logger.info(
+                f"\n--- Adding {len(documents_to_add)} documents to collection '{collection_name}' ---"
+            )
             try:
                 added_ids = await llm.add_documents_to_vector_store(
-                    documents=documents_to_add,
-                    collection_name=collection_name
+                    documents=documents_to_add, collection_name=collection_name
                 )
                 logger.info(f"Successfully added documents with IDs: {added_ids}")
             except (VectorStorageError, EmbeddingError, ConfigError) as e:
-                logger.error(f"Failed to add documents: {e}. Ensure vector store and embedding model are configured correctly.")
-                return # Cannot proceed without documents
+                logger.error(
+                    f"Failed to add documents: {e}. Ensure vector store and embedding model are configured correctly."
+                )
+                return  # Cannot proceed without documents
 
             # Give ChromaDB a moment to process embeddings if needed (optional)
             await asyncio.sleep(1)
@@ -93,14 +96,14 @@ async def main():
             try:
                 search_results = await llm.search_vector_store(
                     query=search_query,
-                    k=1, # Get the top 1 result
-                    collection_name=collection_name
+                    k=1,  # Get the top 1 result
+                    collection_name=collection_name,
                 )
                 if search_results:
                     logger.info("Top search result:")
                     doc = search_results[0]
                     logger.info(f"  ID: {doc.id}")
-                    logger.info(f"  Score: {doc.score:.4f}") # Lower score is better in ChromaDB L2
+                    logger.info(f"  Score: {doc.score:.4f}")  # Lower score is better in ChromaDB L2
                     logger.info(f"  Content: '{doc.content[:100]}...'")
                     logger.info(f"  Metadata: {doc.metadata}")
                 else:
@@ -108,23 +111,24 @@ async def main():
             except (VectorStorageError, EmbeddingError, ConfigError) as e:
                 logger.error(f"Direct search failed: {e}")
 
-
             # --- Step 4: Chat with RAG enabled ---
-            chat_query = "Tell me about LLMCore's configuration system based on the provided documents."
+            chat_query = (
+                "Tell me about LLMCore's configuration system based on the provided documents."
+            )
             logger.info("\n--- Sending chat message with RAG enabled ---")
             logger.info(f"User: {chat_query}")
-            print("\nLLM Response (RAG): ", end="", flush=True) # Use print for streaming output
+            print("\nLLM Response (RAG): ", end="", flush=True)  # Use print for streaming output
 
             try:
                 # Call chat with enable_rag=True
                 response_stream = await llm.chat(
                     message=chat_query,
                     enable_rag=True,
-                    rag_collection_name=collection_name, # Specify the collection
-                    rag_retrieval_k=2, # Ask for top 2 relevant docs for context
-                    stream=True, # Stream the response
+                    rag_collection_name=collection_name,  # Specify the collection
+                    rag_retrieval_k=2,  # Ask for top 2 relevant docs for context
+                    stream=True,  # Stream the response
                     # Optional: Provide a system message guiding the LLM
-                    system_message="You are an assistant answering questions based ONLY on the retrieved context documents provided. Do not use prior knowledge."
+                    system_message="You are an assistant answering questions based ONLY on the retrieved context documents provided. Do not use prior knowledge.",
                 )
 
                 # Process the streamed response
@@ -132,16 +136,21 @@ async def main():
                     print(chunk, end="", flush=True)
                 print("\n--- RAG chat stream finished ---")
 
-            except (ProviderError, ContextLengthError, VectorStorageError, EmbeddingError, ConfigError) as e:
-                 print(f"\n--- RAG CHAT ERROR: {e} ---", flush=True)
-                 logger.error(f"Error during RAG chat: {e}")
-
+            except (
+                ProviderError,
+                ContextLengthError,
+                VectorStorageError,
+                EmbeddingError,
+                ConfigError,
+            ) as e:
+                print(f"\n--- RAG CHAT ERROR: {e} ---", flush=True)
+                logger.error(f"Error during RAG chat: {e}")
 
             # --- Step 5: Ask another question using RAG ---
             chat_query_2 = "What is RAG?"
             logger.info("\n--- Sending second chat message with RAG enabled ---")
             logger.info(f"User: {chat_query_2}")
-            print("\nLLM Response 2 (RAG): ", end="", flush=True) # Use print for streaming output
+            print("\nLLM Response 2 (RAG): ", end="", flush=True)  # Use print for streaming output
 
             try:
                 response_stream_2 = await llm.chat(
@@ -149,15 +158,20 @@ async def main():
                     enable_rag=True,
                     rag_collection_name=collection_name,
                     stream=True,
-                    system_message="Answer based ONLY on the retrieved context documents."
+                    system_message="Answer based ONLY on the retrieved context documents.",
                 )
                 async for chunk in response_stream_2:
                     print(chunk, end="", flush=True)
                 print("\n--- RAG chat stream 2 finished ---")
-            except (ProviderError, ContextLengthError, VectorStorageError, EmbeddingError, ConfigError) as e:
-                 print(f"\n--- RAG CHAT ERROR 2: {e} ---", flush=True)
-                 logger.error(f"Error during second RAG chat: {e}")
-
+            except (
+                ProviderError,
+                ContextLengthError,
+                VectorStorageError,
+                EmbeddingError,
+                ConfigError,
+            ) as e:
+                print(f"\n--- RAG CHAT ERROR 2: {e} ---", flush=True)
+                logger.error(f"Error during second RAG chat: {e}")
 
             # --- Step 6: Clean up (optional) ---
             # logger.info(f"\n--- Deleting documents from collection '{collection_name}' ---")
@@ -173,12 +187,12 @@ async def main():
             # except Exception as e:
             #      logger.error(f"Error deleting documents: {e}")
 
-
     except LLMCoreError as e:
         logger.error(f"An LLMCore error occurred: {e}")
     except Exception as e:
         logger.exception(f"An unexpected error occurred: {e}")
     # No finally block needed for llm.close() when using 'async with'
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -16,7 +16,6 @@ References:
     - Technical Spec: Section 5.3.7 (REFLECT Phase)
 """
 
-
 import pytest
 
 from llmcore.agents.cognitive.phases.reflect import (

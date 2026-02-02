@@ -19,7 +19,7 @@ def render_prompt_template(
     template_content: str,
     rag_context_str: str,
     question_str: str,
-    custom_template_values: Optional[Dict[str, str]]
+    custom_template_values: Optional[Dict[str, str]],
 ) -> str:
     """
     Renders the loaded prompt template with the provided context and question.
@@ -61,7 +61,9 @@ def format_rag_docs_for_context(documents: List[ContextDocument]) -> str:
         return ""
 
     # Sort documents by score (lower is better for distance-based metrics like L2)
-    sorted_documents = sorted(documents, key=lambda d: d.score if d.score is not None else float('inf'))
+    sorted_documents = sorted(
+        documents, key=lambda d: d.score if d.score is not None else float("inf")
+    )
 
     context_parts = ["--- Retrieved Relevant Documents ---"]
     for i, doc in enumerate(sorted_documents):
@@ -72,16 +74,16 @@ def format_rag_docs_for_context(documents: List[ContextDocument]) -> str:
         elif doc.metadata and doc.metadata.get("source"):
             source_info_parts.append(f"Source: {doc.metadata.get('source')}")
         else:
-            source_info_parts.append(f"DocID: {doc.id[:12]}") # Fallback to document ID
+            source_info_parts.append(f"DocID: {doc.id[:12]}")  # Fallback to document ID
 
         if doc.metadata and doc.metadata.get("start_line"):
             source_info_parts.append(f"Line: {doc.metadata.get('start_line')}")
 
         score_info = f"(Score: {doc.score:.4f})" if doc.score is not None else ""
-        header = f"Context Document {i+1}: [{', '.join(source_info_parts)}] {score_info}"
+        header = f"Context Document {i + 1}: [{', '.join(source_info_parts)}] {score_info}"
 
         # Clean up content for better presentation in the prompt
-        content_snippet = ' '.join(doc.content.splitlines()).strip()
+        content_snippet = " ".join(doc.content.splitlines()).strip()
 
         context_parts.append(f"\n{header}\n{content_snippet}")
 

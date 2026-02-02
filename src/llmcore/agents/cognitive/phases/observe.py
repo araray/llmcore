@@ -196,8 +196,9 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
     # Strategy 1: Direct value match
     # Extract key values from expected (numbers, specific words)
     import re
-    expected_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', expected_lower)
-    result_values = re.findall(r'\b(\d+|true|false|yes|no|success|fail)\b', result_lower)
+
+    expected_values = re.findall(r"\b(\d+|true|false|yes|no|success|fail)\b", expected_lower)
+    result_values = re.findall(r"\b(\d+|true|false|yes|no|success|fail)\b", result_lower)
 
     # If expected contains specific values, check if they appear in result
     if expected_values:

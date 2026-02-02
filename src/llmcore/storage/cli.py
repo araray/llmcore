@@ -71,6 +71,7 @@ logger = logging.getLogger(__name__)
 # OUTPUT FORMATTING
 # =============================================================================
 
+
 class OutputFormatter:
     """Formats CLI output in various styles."""
 
@@ -84,50 +85,52 @@ class OutputFormatter:
             return text
 
         colors = {
-            'green': '\033[92m',
-            'red': '\033[91m',
-            'yellow': '\033[93m',
-            'blue': '\033[94m',
-            'cyan': '\033[96m',
-            'bold': '\033[1m',
-            'reset': '\033[0m'
+            "green": "\033[92m",
+            "red": "\033[91m",
+            "yellow": "\033[93m",
+            "blue": "\033[94m",
+            "cyan": "\033[96m",
+            "bold": "\033[1m",
+            "reset": "\033[0m",
         }
         return f"{colors.get(color, '')}{text}{colors['reset']}"
 
     def success(self, text: str) -> str:
-        return self._color(f"✓ {text}", 'green')
+        return self._color(f"✓ {text}", "green")
 
     def error(self, text: str) -> str:
-        return self._color(f"✗ {text}", 'red')
+        return self._color(f"✗ {text}", "red")
 
     def warning(self, text: str) -> str:
-        return self._color(f"⚠ {text}", 'yellow')
+        return self._color(f"⚠ {text}", "yellow")
 
     def info(self, text: str) -> str:
-        return self._color(f"ℹ {text}", 'blue')
+        return self._color(f"ℹ {text}", "blue")
 
     def header(self, text: str) -> str:
-        return self._color(text, 'bold')
+        return self._color(text, "bold")
 
     def format_status(self, status: str) -> str:
         """Format health status with color."""
         status_lower = status.lower()
-        if status_lower in ('healthy', 'ok', 'passed'):
-            return self._color(status, 'green')
-        elif status_lower in ('degraded', 'warning'):
-            return self._color(status, 'yellow')
-        elif status_lower in ('unhealthy', 'error', 'failed', 'circuit_open'):
-            return self._color(status, 'red')
+        if status_lower in ("healthy", "ok", "passed"):
+            return self._color(status, "green")
+        elif status_lower in ("degraded", "warning"):
+            return self._color(status, "yellow")
+        elif status_lower in ("unhealthy", "error", "failed", "circuit_open"):
+            return self._color(status, "red")
         else:
-            return self._color(status, 'blue')
+            return self._color(status, "blue")
 
 
 # =============================================================================
 # CLI COMMANDS
 # =============================================================================
 
-def cmd_validate(config_path: Optional[str] = None, strict: bool = False,
-                 formatter: OutputFormatter = None) -> int:
+
+def cmd_validate(
+    config_path: Optional[str] = None, strict: bool = False, formatter: OutputFormatter = None
+) -> int:
     """
     Validate storage configuration.
 
@@ -156,7 +159,7 @@ def cmd_validate(config_path: Optional[str] = None, strict: bool = False,
             "valid": result.valid,
             "errors": [str(e) for e in result.errors],
             "warnings": [str(w) for w in result.warnings],
-            "info": [str(i) for i in result.issues if i.severity == ValidationSeverity.INFO]
+            "info": [str(i) for i in result.issues if i.severity == ValidationSeverity.INFO],
         }
         print(json.dumps(output, indent=2))
     else:
@@ -188,8 +191,11 @@ def cmd_validate(config_path: Optional[str] = None, strict: bool = False,
     return 0 if result.valid else 1
 
 
-def cmd_health(config_path: Optional[str] = None, backend: Optional[str] = None,
-               formatter: OutputFormatter = None) -> int:
+def cmd_health(
+    config_path: Optional[str] = None,
+    backend: Optional[str] = None,
+    formatter: OutputFormatter = None,
+) -> int:
     """
     Check storage health status.
 
@@ -216,7 +222,7 @@ def cmd_health(config_path: Optional[str] = None, backend: Optional[str] = None,
         output = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_healthy": True,
-            "backends": {}
+            "backends": {},
         }
 
         session_cfg = storage_config.get("session", {})
@@ -224,7 +230,7 @@ def cmd_health(config_path: Optional[str] = None, backend: Optional[str] = None,
             output["backends"]["session"] = {
                 "type": session_cfg.get("type"),
                 "status": "configured",
-                "note": "Run with initialized StorageManager for live health checks"
+                "note": "Run with initialized StorageManager for live health checks",
             }
 
         vector_cfg = storage_config.get("vector", {})
@@ -232,7 +238,7 @@ def cmd_health(config_path: Optional[str] = None, backend: Optional[str] = None,
             output["backends"]["vector"] = {
                 "type": vector_cfg.get("type"),
                 "status": "configured",
-                "note": "Run with initialized StorageManager for live health checks"
+                "note": "Run with initialized StorageManager for live health checks",
             }
 
         print(json.dumps(output, indent=2))
@@ -258,13 +264,16 @@ def cmd_health(config_path: Optional[str] = None, backend: Optional[str] = None,
             print(f"Vector Storage: {formatter.warning('not configured')}")
 
         print()
-        print(formatter.info("Note: For live health checks, use from an initialized LLMCore instance"))
+        print(
+            formatter.info("Note: For live health checks, use from an initialized LLMCore instance")
+        )
 
     return 0
 
 
-def cmd_schema(action: str = "status", target_version: Optional[int] = None,
-               formatter: OutputFormatter = None) -> int:
+def cmd_schema(
+    action: str = "status", target_version: Optional[int] = None, formatter: OutputFormatter = None
+) -> int:
     """
     Manage storage schema.
 
@@ -284,14 +293,16 @@ def cmd_schema(action: str = "status", target_version: Optional[int] = None,
                 "current_schema_version": CURRENT_SCHEMA_VERSION,
                 "schema_table_name": SCHEMA_TABLE_NAME,
                 "supported_backends": [b.value for b in SchemaBackend],
-                "migrations_count": len(MIGRATIONS)
+                "migrations_count": len(MIGRATIONS),
             }
             print(json.dumps(output, indent=2))
         else:
             print(formatter.header("Schema Information"))
             print("=" * 45)
             print()
-            print(f"Current Schema Version: {formatter._color(str(CURRENT_SCHEMA_VERSION), 'cyan')}")
+            print(
+                f"Current Schema Version: {formatter._color(str(CURRENT_SCHEMA_VERSION), 'cyan')}"
+            )
             print(f"Schema Table Name: {SCHEMA_TABLE_NAME}")
             print(f"Supported Backends: {', '.join(b.value for b in SchemaBackend)}")
             print(f"Total Migrations: {len(MIGRATIONS)}")
@@ -304,10 +315,10 @@ def cmd_schema(action: str = "status", target_version: Optional[int] = None,
                     {
                         "from_version": m.from_version,
                         "to_version": m.to_version,
-                        "description": m.description
+                        "description": m.description,
                     }
                     for m in MIGRATIONS
-                ]
+                ],
             }
             print(json.dumps(output, indent=2))
         else:
@@ -358,9 +369,9 @@ def cmd_info(config_path: Optional[str] = None, formatter: OutputFormatter = Non
             print(formatter.header("Session Storage:"))
             for key, value in session_cfg.items():
                 # Mask sensitive values
-                if 'password' in key.lower() or 'secret' in key.lower():
-                    value = '***'
-                elif 'url' in key.lower() and '@' in str(value):
+                if "password" in key.lower() or "secret" in key.lower():
+                    value = "***"
+                elif "url" in key.lower() and "@" in str(value):
                     # Mask password in URLs
                     value = _mask_url_password(str(value))
                 print(f"  {key}: {value}")
@@ -373,9 +384,9 @@ def cmd_info(config_path: Optional[str] = None, formatter: OutputFormatter = Non
         if vector_cfg:
             print(formatter.header("Vector Storage:"))
             for key, value in vector_cfg.items():
-                if 'password' in key.lower() or 'secret' in key.lower():
-                    value = '***'
-                elif 'url' in key.lower() and '@' in str(value):
+                if "password" in key.lower() or "secret" in key.lower():
+                    value = "***"
+                elif "url" in key.lower() and "@" in str(value):
                     value = _mask_url_password(str(value))
                 print(f"  {key}: {value}")
         else:
@@ -438,9 +449,9 @@ def cmd_stats(
     if storage_manager is not None:
         try:
             # Try to get session stats
-            if hasattr(storage_manager, 'get_session_count'):
+            if hasattr(storage_manager, "get_session_count"):
                 stats["sessions"]["total"] = storage_manager.get_session_count()
-            if hasattr(storage_manager, 'get_backend_type'):
+            if hasattr(storage_manager, "get_backend_type"):
                 stats["system"]["backend"] = storage_manager.get_backend_type()
         except Exception as e:
             logger.debug(f"Could not get live stats: {e}")
@@ -506,18 +517,20 @@ def cmd_inspect(
     formatter = formatter or OutputFormatter()
 
     if storage_manager is None:
-        print(formatter.warning(
-            "Storage manager not initialized. "
-            "Use this command from an active llmchat session or provide a config."
-        ))
+        print(
+            formatter.warning(
+                "Storage manager not initialized. "
+                "Use this command from an active llmchat session or provide a config."
+            )
+        )
         return 1
 
     try:
         # Try to load session
         session = None
-        if hasattr(storage_manager, 'load_session'):
+        if hasattr(storage_manager, "load_session"):
             session = storage_manager.load_session(session_id)
-        elif hasattr(storage_manager, 'get_session'):
+        elif hasattr(storage_manager, "get_session"):
             session = storage_manager.get_session(session_id)
 
         if session is None:
@@ -526,22 +539,22 @@ def cmd_inspect(
 
         session_data = {
             "id": session_id,
-            "created_at": getattr(session, 'created_at', 'N/A'),
-            "updated_at": getattr(session, 'updated_at', 'N/A'),
-            "user_id": getattr(session, 'user_id', 'N/A'),
-            "message_count": len(getattr(session, 'messages', [])),
-            "metadata": getattr(session, 'metadata', {}),
+            "created_at": getattr(session, "created_at", "N/A"),
+            "updated_at": getattr(session, "updated_at", "N/A"),
+            "user_id": getattr(session, "user_id", "N/A"),
+            "message_count": len(getattr(session, "messages", [])),
+            "metadata": getattr(session, "metadata", {}),
         }
 
         if formatter.json_output:
             # Include messages in JSON output
             session_data["messages"] = [
                 {
-                    "role": getattr(m, 'role', 'unknown'),
-                    "content_length": len(getattr(m, 'content', '')),
-                    "timestamp": str(getattr(m, 'timestamp', 'N/A')),
+                    "role": getattr(m, "role", "unknown"),
+                    "content_length": len(getattr(m, "content", "")),
+                    "timestamp": str(getattr(m, "timestamp", "N/A")),
                 }
-                for m in getattr(session, 'messages', [])
+                for m in getattr(session, "messages", [])
             ]
             print(json.dumps(session_data, indent=2, default=str))
             return 0
@@ -561,19 +574,19 @@ def cmd_inspect(
         print()
 
         # Show last few messages
-        messages = getattr(session, 'messages', [])
+        messages = getattr(session, "messages", [])
         if messages:
             print(formatter.header("Recent Messages (last 5):"))
             for msg in messages[-5:]:
-                role = getattr(msg, 'role', 'unknown')
-                content = getattr(msg, 'content', '')
+                role = getattr(msg, "role", "unknown")
+                content = getattr(msg, "content", "")
                 preview = content[:80] + "..." if len(content) > 80 else content
                 print(f"  [{role}] {preview}")
             print()
 
-        if session_data['metadata']:
+        if session_data["metadata"]:
             print(formatter.header("Custom Metadata:"))
-            for key, value in session_data['metadata'].items():
+            for key, value in session_data["metadata"].items():
                 print(f"  {key}: {value}")
 
         return 0
@@ -663,9 +676,9 @@ def cmd_diagnose(
     }
     if storage_manager is not None:
         try:
-            if hasattr(storage_manager, 'health_check'):
+            if hasattr(storage_manager, "health_check"):
                 health = storage_manager.health_check()
-                if health.get('healthy', False):
+                if health.get("healthy", False):
                     check_result["details"] = "All backends healthy"
                 else:
                     check_result["status"] = "fail"
@@ -694,7 +707,9 @@ def cmd_diagnose(
     has_warnings = len(diagnostics["warnings"]) > 0
 
     if formatter.json_output:
-        diagnostics["overall_status"] = "fail" if has_issues else ("warn" if has_warnings else "pass")
+        diagnostics["overall_status"] = (
+            "fail" if has_issues else ("warn" if has_warnings else "pass")
+        )
         print(json.dumps(diagnostics, indent=2, default=str))
         return 1 if has_issues else 0
 
@@ -783,16 +798,19 @@ def cmd_cleanup(
 
     if storage_manager is None:
         if not dry_run:
-            print(formatter.error(
-                "Storage manager required for cleanup. "
-                "Use --execute from an active session."
-            ))
+            print(
+                formatter.error(
+                    "Storage manager required for cleanup. Use --execute from an active session."
+                )
+            )
             return 1
         else:
-            print(formatter.warning(
-                "Dry run without storage manager. "
-                "Showing cleanup targets based on configuration."
-            ))
+            print(
+                formatter.warning(
+                    "Dry run without storage manager. "
+                    "Showing cleanup targets based on configuration."
+                )
+            )
 
     # Simulate or perform cleanup based on dry_run
     mode_str = "DRY RUN" if dry_run else "EXECUTING"
@@ -834,6 +852,7 @@ def cmd_cleanup(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def _load_config(config_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
@@ -885,7 +904,7 @@ def _load_toml_config(path: str) -> Optional[Dict[str, Any]]:
 
     try:
         with open(path, "rb") as f:
-            if hasattr(tomllib, 'load'):
+            if hasattr(tomllib, "load"):
                 return tomllib.load(f)
             else:
                 # toml package uses text mode
@@ -900,13 +919,15 @@ def _load_toml_config(path: str) -> Optional[Dict[str, Any]]:
 def _mask_url_password(url: str) -> str:
     """Mask password in a URL string."""
     import re
+
     # Match :password@ pattern and replace password with ***
-    return re.sub(r':([^@:]+)@', ':***@', url)
+    return re.sub(r":([^@:]+)@", ":***@", url)
 
 
 # =============================================================================
 # REPL INTEGRATION
 # =============================================================================
+
 
 class StorageCommands:
     """
@@ -1040,10 +1061,12 @@ Phase 4 (PANOPTICON) Commands:
 
         for name, backend_report in report.get("backends", {}).items():
             lines.append(f"{name}:")
-            lines.append(f"  Status: {self.formatter.format_status(backend_report.get('status', 'unknown'))}")
-            if backend_report.get('average_latency_ms'):
+            lines.append(
+                f"  Status: {self.formatter.format_status(backend_report.get('status', 'unknown'))}"
+            )
+            if backend_report.get("average_latency_ms"):
                 lines.append(f"  Avg Latency: {backend_report['average_latency_ms']:.1f}ms")
-            if backend_report.get('uptime_percentage'):
+            if backend_report.get("uptime_percentage"):
                 lines.append(f"  Uptime: {backend_report['uptime_percentage']:.1f}%")
             lines.append("")
 
@@ -1054,45 +1077,25 @@ Phase 4 (PANOPTICON) Commands:
 # MAIN CLI ENTRY POINT
 # =============================================================================
 
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for storage CLI."""
     parser = argparse.ArgumentParser(
-        prog="llmcore-storage",
-        description="LLMCore Storage Management CLI (Phase 4 - PANOPTICON)"
+        prog="llmcore-storage", description="LLMCore Storage Management CLI (Phase 4 - PANOPTICON)"
     )
-    parser.add_argument(
-        "--config", "-c",
-        help="Path to configuration file",
-        default=None
-    )
-    parser.add_argument(
-        "--json",
-        help="Output in JSON format",
-        action="store_true"
-    )
-    parser.add_argument(
-        "--no-color",
-        help="Disable colored output",
-        action="store_true"
-    )
+    parser.add_argument("--config", "-c", help="Path to configuration file", default=None)
+    parser.add_argument("--json", help="Output in JSON format", action="store_true")
+    parser.add_argument("--no-color", help="Disable colored output", action="store_true")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # validate command
     validate_parser = subparsers.add_parser("validate", help="Validate storage configuration")
-    validate_parser.add_argument(
-        "--strict",
-        help="Treat warnings as errors",
-        action="store_true"
-    )
+    validate_parser.add_argument("--strict", help="Treat warnings as errors", action="store_true")
 
     # health command
     health_parser = subparsers.add_parser("health", help="Check storage health")
-    health_parser.add_argument(
-        "--backend", "-b",
-        help="Specific backend to check",
-        default=None
-    )
+    health_parser.add_argument("--backend", "-b", help="Specific backend to check", default=None)
 
     # schema command
     schema_parser = subparsers.add_parser("schema", help="Schema management")
@@ -1101,7 +1104,7 @@ def create_parser() -> argparse.ArgumentParser:
         nargs="?",
         default="status",
         choices=["status", "migrations", "info"],
-        help="Action to perform"
+        help="Action to perform",
     )
 
     # info command
@@ -1114,10 +1117,7 @@ def create_parser() -> argparse.ArgumentParser:
 
     # inspect command
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a specific session")
-    inspect_parser.add_argument(
-        "session_id",
-        help="Session ID to inspect"
-    )
+    inspect_parser.add_argument("session_id", help="Session ID to inspect")
 
     # diagnose command
     subparsers.add_parser("diagnose", help="Run comprehensive storage diagnostics")
@@ -1125,15 +1125,10 @@ def create_parser() -> argparse.ArgumentParser:
     # cleanup command
     cleanup_parser = subparsers.add_parser("cleanup", help="Clean up old/orphaned data")
     cleanup_parser.add_argument(
-        "--execute",
-        help="Actually perform cleanup (default is dry-run)",
-        action="store_true"
+        "--execute", help="Actually perform cleanup (default is dry-run)", action="store_true"
     )
     cleanup_parser.add_argument(
-        "--retention-days",
-        help="Days of data to retain (default: 30)",
-        type=int,
-        default=30
+        "--retention-days", help="Days of data to retain (default: 30)", type=int, default=30
     )
 
     return parser
@@ -1152,57 +1147,40 @@ def main(args: Optional[List[str]] = None) -> int:
     parser = create_parser()
     parsed = parser.parse_args(args)
 
-    formatter = OutputFormatter(
-        use_color=not parsed.no_color,
-        json_output=parsed.json
-    )
+    formatter = OutputFormatter(use_color=not parsed.no_color, json_output=parsed.json)
 
     if parsed.command == "validate":
-        return cmd_validate(
-            config_path=parsed.config,
-            strict=parsed.strict,
-            formatter=formatter
-        )
+        return cmd_validate(config_path=parsed.config, strict=parsed.strict, formatter=formatter)
     elif parsed.command == "health":
-        return cmd_health(
-            config_path=parsed.config,
-            backend=parsed.backend,
-            formatter=formatter
-        )
+        return cmd_health(config_path=parsed.config, backend=parsed.backend, formatter=formatter)
     elif parsed.command == "schema":
-        return cmd_schema(
-            action=parsed.action,
-            formatter=formatter
-        )
+        return cmd_schema(action=parsed.action, formatter=formatter)
     elif parsed.command == "info":
-        return cmd_info(
-            config_path=parsed.config,
-            formatter=formatter
-        )
+        return cmd_info(config_path=parsed.config, formatter=formatter)
     # Phase 4 (PANOPTICON) commands
     elif parsed.command == "stats":
         return cmd_stats(
             storage_manager=None,  # Requires runtime manager
-            formatter=formatter
+            formatter=formatter,
         )
     elif parsed.command == "inspect":
         return cmd_inspect(
             session_id=parsed.session_id,
             storage_manager=None,  # Requires runtime manager
-            formatter=formatter
+            formatter=formatter,
         )
     elif parsed.command == "diagnose":
         return cmd_diagnose(
             storage_manager=None,  # Requires runtime manager
             config_path=parsed.config,
-            formatter=formatter
+            formatter=formatter,
         )
     elif parsed.command == "cleanup":
         return cmd_cleanup(
             storage_manager=None,  # Requires runtime manager
             dry_run=not parsed.execute,
             retention_days=parsed.retention_days,
-            formatter=formatter
+            formatter=formatter,
         )
     else:
         parser.print_help()

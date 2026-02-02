@@ -32,6 +32,7 @@ from llmcore.agents.sandbox.registry import SandboxMode, SandboxRegistryConfig
 # Event Loop Configuration
 # ==============================================================================
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create event loop for async tests."""
@@ -44,10 +45,12 @@ def event_loop():
 # Docker Availability
 # ==============================================================================
 
+
 def is_docker_available() -> bool:
     """Check if Docker is available for testing."""
     try:
         import docker
+
         client = docker.from_env()
         client.ping()
         return True
@@ -56,40 +59,33 @@ def is_docker_available() -> bool:
 
 
 # Skip marker for tests requiring Docker
-requires_docker = pytest.mark.skipif(
-    not is_docker_available(),
-    reason="Docker not available"
-)
+requires_docker = pytest.mark.skipif(not is_docker_available(), reason="Docker not available")
 
 
 def is_paramiko_available() -> bool:
     """Check if Paramiko is available for testing."""
     try:
         import paramiko
+
         return True
     except ImportError:
         return False
 
 
 # Skip marker for tests requiring Paramiko
-requires_paramiko = pytest.mark.skipif(
-    not is_paramiko_available(),
-    reason="Paramiko not installed"
-)
+requires_paramiko = pytest.mark.skipif(not is_paramiko_available(), reason="Paramiko not installed")
 
 
 # ==============================================================================
 # Configuration Fixtures
 # ==============================================================================
 
+
 @pytest.fixture
 def sandbox_config() -> SandboxConfig:
     """Create a default SandboxConfig for testing."""
     return SandboxConfig(
-        timeout_seconds=60,
-        memory_limit="512m",
-        cpu_limit=1.0,
-        network_enabled=False
+        timeout_seconds=60, memory_limit="512m", cpu_limit=1.0, network_enabled=False
     )
 
 
@@ -101,7 +97,7 @@ def full_access_sandbox_config() -> SandboxConfig:
         timeout_seconds=60,
         memory_limit="1g",
         cpu_limit=2.0,
-        network_enabled=True
+        network_enabled=True,
     )
 
 
@@ -118,7 +114,7 @@ def docker_registry_config() -> SandboxRegistryConfig:
         docker_memory_limit="512m",
         vm_enabled=False,
         share_path=tempfile.mkdtemp(prefix="llmcore_share_"),
-        outputs_path=tempfile.mkdtemp(prefix="llmcore_outputs_")
+        outputs_path=tempfile.mkdtemp(prefix="llmcore_outputs_"),
     )
 
 
@@ -135,13 +131,14 @@ def vm_registry_config() -> SandboxRegistryConfig:
         vm_private_key_path=None,
         vm_use_ssh_agent=True,
         share_path=tempfile.mkdtemp(prefix="llmcore_share_"),
-        outputs_path=tempfile.mkdtemp(prefix="llmcore_outputs_")
+        outputs_path=tempfile.mkdtemp(prefix="llmcore_outputs_"),
     )
 
 
 # ==============================================================================
 # Mock Sandbox Provider
 # ==============================================================================
+
 
 class MockSandboxProvider(SandboxProvider):
     """
@@ -169,10 +166,7 @@ class MockSandboxProvider(SandboxProvider):
         }
 
     async def execute_shell(
-        self,
-        command: str,
-        timeout: int = None,
-        working_dir: str = None
+        self, command: str, timeout: int = None, working_dir: str = None
     ) -> ExecutionResult:
         if not self._initialized:
             return ExecutionResult(exit_code=-1, stderr="Not initialized")
@@ -214,10 +208,7 @@ class MockSandboxProvider(SandboxProvider):
         return result
 
     async def execute_python(
-        self,
-        code: str,
-        timeout: int = None,
-        working_dir: str = None
+        self, code: str, timeout: int = None, working_dir: str = None
     ) -> ExecutionResult:
         if not self._initialized:
             return ExecutionResult(exit_code=-1, stderr="Not initialized")
@@ -229,6 +220,7 @@ class MockSandboxProvider(SandboxProvider):
             # Capture basic print statements
             if "print(" in code:
                 import re
+
                 matches = re.findall(r"print\(['\"](.+?)['\"]\)", code)
                 output = "\n".join(matches)
                 result = ExecutionResult(exit_code=0, stdout=output + "\n")
@@ -280,12 +272,14 @@ class MockSandboxProvider(SandboxProvider):
             if file_path.startswith(path):
                 name = file_path.split("/")[-1]
                 is_dir = content is None
-                files.append(FileInfo(
-                    path=file_path,
-                    name=name,
-                    is_directory=is_dir,
-                    size_bytes=len(content) if content else 0
-                ))
+                files.append(
+                    FileInfo(
+                        path=file_path,
+                        name=name,
+                        is_directory=is_dir,
+                        size_bytes=len(content) if content else 0,
+                    )
+                )
         return files
 
     async def file_exists(self, path: str) -> bool:
@@ -328,7 +322,7 @@ class MockSandboxProvider(SandboxProvider):
             "provider": "mock",
             "status": self._status.value,
             "access_level": self._access_level.value,
-            "sandbox_id": self._config.sandbox_id if self._config else None
+            "sandbox_id": self._config.sandbox_id if self._config else None,
         }
 
 
@@ -346,8 +340,7 @@ def mock_full_access_provider() -> MockSandboxProvider:
 
 @pytest.fixture
 async def initialized_mock_provider(
-    mock_sandbox_provider: MockSandboxProvider,
-    sandbox_config: SandboxConfig
+    mock_sandbox_provider: MockSandboxProvider, sandbox_config: SandboxConfig
 ) -> AsyncGenerator[MockSandboxProvider, None]:
     """Create an initialized mock provider."""
     await mock_sandbox_provider.initialize(sandbox_config)
@@ -358,6 +351,7 @@ async def initialized_mock_provider(
 # ==============================================================================
 # Temporary Directory Fixtures
 # ==============================================================================
+
 
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
@@ -385,6 +379,7 @@ def share_dir(temp_dir: Path) -> Path:
 # ==============================================================================
 # Mock Docker Client
 # ==============================================================================
+
 
 @pytest.fixture
 def mock_docker_client():
@@ -414,6 +409,7 @@ def mock_docker_client():
 # ==============================================================================
 # Mock SSH Client (Paramiko)
 # ==============================================================================
+
 
 @pytest.fixture
 def mock_ssh_client():
@@ -445,12 +441,13 @@ def mock_ssh_client():
 # TOML Config Fixture
 # ==============================================================================
 
+
 @pytest.fixture
 def sample_toml_config(temp_dir: Path) -> Path:
     """Create a sample TOML config file for testing."""
     config_path = temp_dir / "config.toml"
 
-    config_content = '''
+    config_content = """
 [agents.sandbox]
 mode = "docker"
 fallback_enabled = true
@@ -472,7 +469,7 @@ outputs_path = "{outputs}"
 [agents.sandbox.tools]
 allowed = ["execute_shell", "execute_python"]
 denied = ["sudo_execute"]
-'''.format(share=str(temp_dir / "share"), outputs=str(temp_dir / "outputs"))
+""".format(share=str(temp_dir / "share"), outputs=str(temp_dir / "outputs"))
 
     config_path.write_text(config_content)
     return config_path

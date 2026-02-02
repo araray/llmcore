@@ -119,9 +119,7 @@ class TestMemoryStoreWorkingMemory:
     """Tests for storing data in working memory."""
 
     @pytest.mark.asyncio
-    async def test_store_in_working_memory(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_store_in_working_memory(self, executor_no_memory_manager, execution_context):
         """Verify store_memory stores data in working memory by default."""
         request = make_memory_store_request(
             key="capital_of_france",
@@ -161,9 +159,7 @@ class TestMemoryStoreWorkingMemory:
         assert "test_key" in execution_context.working_memory
 
     @pytest.mark.asyncio
-    async def test_store_with_metadata(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_store_with_metadata(self, executor_no_memory_manager, execution_context):
         """Verify custom metadata is preserved in stored memory."""
         custom_metadata = {"importance": "high", "category": "geography"}
         request = make_memory_store_request(
@@ -180,11 +176,10 @@ class TestMemoryStoreWorkingMemory:
         assert stored["metadata"]["category"] == "geography"
 
     @pytest.mark.asyncio
-    async def test_store_complex_value(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_store_complex_value(self, executor_no_memory_manager, execution_context):
         """Verify complex values (as JSON strings) can be stored."""
         import json
+
         complex_value = {
             "name": "France",
             "capital": "Paris",
@@ -284,9 +279,7 @@ class TestMemoryStoreLongterm:
         assert "critical_data" in execution_context.working_memory
 
     @pytest.mark.asyncio
-    async def test_invalid_memory_type(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_invalid_memory_type(self, executor_no_memory_manager, execution_context):
         """Verify invalid memory_type is rejected by validation."""
         request = make_memory_store_request(
             key="test",
@@ -310,9 +303,7 @@ class TestMemorySearchWorkingMemory:
     """Tests for searching working memory."""
 
     @pytest.mark.asyncio
-    async def test_search_finds_matching_key(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_search_finds_matching_key(self, executor_no_memory_manager, execution_context):
         """Verify search finds items by key match."""
         # Pre-populate working memory
         execution_context.working_memory["capital_france"] = {
@@ -336,9 +327,7 @@ class TestMemorySearchWorkingMemory:
         assert "Berlin" not in result.output
 
     @pytest.mark.asyncio
-    async def test_search_finds_matching_value(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_search_finds_matching_value(self, executor_no_memory_manager, execution_context):
         """Verify search finds items by value match."""
         execution_context.working_memory["city_info"] = {
             "value": "Paris is the capital of France",
@@ -354,9 +343,7 @@ class TestMemorySearchWorkingMemory:
         assert "city_info" in result.output
 
     @pytest.mark.asyncio
-    async def test_search_no_results(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_search_no_results(self, executor_no_memory_manager, execution_context):
         """Verify search returns appropriate message when nothing found."""
         execution_context.working_memory["unrelated"] = {"value": "xyz", "metadata": {}}
 
@@ -368,9 +355,7 @@ class TestMemorySearchWorkingMemory:
         assert "No memories found" in result.output
 
     @pytest.mark.asyncio
-    async def test_search_respects_max_results(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_search_respects_max_results(self, executor_no_memory_manager, execution_context):
         """Verify search limits results to max_results."""
         # Add many matching items
         for i in range(10):
@@ -500,9 +485,7 @@ class TestMemoryEndToEnd:
     """End-to-end tests for memory store and search together."""
 
     @pytest.mark.asyncio
-    async def test_store_then_search(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_store_then_search(self, executor_no_memory_manager, execution_context):
         """Verify stored data can be searched immediately."""
         # Store data
         store_request = make_memory_store_request(
@@ -520,12 +503,14 @@ class TestMemoryEndToEnd:
         assert "Alice" in result.output
 
     @pytest.mark.asyncio
-    async def test_multiple_stores_and_search(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_multiple_stores_and_search(self, executor_no_memory_manager, execution_context):
         """Verify multiple items can be stored and searched."""
         # Store multiple items
-        for name, city in [("alice_city", "Paris"), ("bob_city", "London"), ("carol_city", "Tokyo")]:
+        for name, city in [
+            ("alice_city", "Paris"),
+            ("bob_city", "London"),
+            ("carol_city", "Tokyo"),
+        ]:
             request = make_memory_store_request(key=name, value=city)
             await executor_no_memory_manager.execute(request, execution_context)
 
@@ -540,9 +525,7 @@ class TestMemoryEndToEnd:
         assert "Tokyo" in result.output
 
     @pytest.mark.asyncio
-    async def test_realistic_agent_scenario(
-        self, executor_no_memory_manager, execution_context
-    ):
+    async def test_realistic_agent_scenario(self, executor_no_memory_manager, execution_context):
         """Simulate realistic agent memory usage."""
         # Agent stores user preference
         await executor_no_memory_manager.execute(

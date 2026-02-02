@@ -150,9 +150,7 @@ class FastPathConfig(BaseModel):
     cache_max_entries: int = Field(
         default=100, ge=10, le=10000, description="Maximum cache entries"
     )
-    cache_ttl_seconds: int = Field(
-        default=3600, ge=60, description="Cache entry TTL in seconds"
-    )
+    cache_ttl_seconds: int = Field(default=3600, ge=60, description="Cache entry TTL in seconds")
 
     # Templates
     templates_enabled: bool = Field(
@@ -204,9 +202,7 @@ class CircuitBreakerConfig(BaseModel):
     max_same_errors: int = Field(
         default=3, ge=1, le=100, description="Trip after N identical errors"
     )
-    max_execution_time_seconds: int = Field(
-        default=300, ge=1, description="Trip after N seconds"
-    )
+    max_execution_time_seconds: int = Field(default=300, ge=1, description="Trip after N seconds")
     max_total_cost: float = Field(
         default=1.0, ge=0.0, description="Trip after spending more than $X"
     )
@@ -249,20 +245,12 @@ class ActivitiesConfig(BaseModel):
     )
 
     # Timeouts
-    default_timeout_seconds: int = Field(
-        default=60, ge=1, description="Default activity timeout"
-    )
-    total_timeout_seconds: int = Field(
-        default=300, ge=1, description="Total session timeout"
-    )
+    default_timeout_seconds: int = Field(default=60, ge=1, description="Default activity timeout")
+    total_timeout_seconds: int = Field(default=300, ge=1, description="Total session timeout")
 
     # Behavior
-    stop_on_error: bool = Field(
-        default=False, description="Stop processing on first error"
-    )
-    parallel_execution: bool = Field(
-        default=False, description="Execute activities in parallel"
-    )
+    stop_on_error: bool = Field(default=False, description="Stop processing on first error")
+    parallel_execution: bool = Field(default=False, description="Execute activities in parallel")
     max_observation_length: int = Field(
         default=4000, ge=100, description="Maximum observation length per activity"
     )
@@ -284,9 +272,7 @@ class CapabilityCheckConfig(BaseModel):
     capabilities (tools, vision, etc.) before execution begins.
     """
 
-    enabled: bool = Field(
-        default=True, description="Enable pre-flight capability checking"
-    )
+    enabled: bool = Field(default=True, description="Enable pre-flight capability checking")
     use_model_cards: bool = Field(
         default=True, description="Consult model card registry for capability info"
     )
@@ -366,12 +352,8 @@ class HITLConfig(BaseModel):
     )
 
     # Audit
-    audit_logging_enabled: bool = Field(
-        default=True, description="Enable audit logging"
-    )
-    audit_log_path: Optional[str] = Field(
-        default=None, description="Path for audit log file"
-    )
+    audit_logging_enabled: bool = Field(default=True, description="Enable audit logging")
+    audit_log_path: Optional[str] = Field(default=None, description="Path for audit log file")
 
 
 # =============================================================================
@@ -441,18 +423,10 @@ class AgentsConfig(BaseModel):
     """
 
     # Global settings
-    max_iterations: int = Field(
-        default=10, ge=1, le=1000, description="Default maximum iterations"
-    )
-    default_timeout: int = Field(
-        default=600, ge=1, description="Default session timeout (seconds)"
-    )
-    default_persona: str = Field(
-        default="assistant", description="Default persona for agents"
-    )
-    memory_enabled: bool = Field(
-        default=True, description="Enable agent memory system"
-    )
+    max_iterations: int = Field(default=10, ge=1, le=1000, description="Default maximum iterations")
+    default_timeout: int = Field(default=600, ge=1, description="Default session timeout (seconds)")
+    default_persona: str = Field(default="assistant", description="Default persona for agents")
+    memory_enabled: bool = Field(default=True, description="Enable agent memory system")
 
     # Component configs
     goals: GoalsConfig = Field(
@@ -470,9 +444,7 @@ class AgentsConfig(BaseModel):
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
     )
-    hitl: HITLConfig = Field(
-        default_factory=HITLConfig, description="HITL system settings"
-    )
+    hitl: HITLConfig = Field(default_factory=HITLConfig, description="HITL system settings")
     routing: RoutingConfig = Field(
         default_factory=RoutingConfig, description="Model routing settings"
     )
@@ -534,9 +506,7 @@ def load_agents_config(
                     import tomli as tomllib
                 except ImportError:
                     tomllib = None
-                    logger.warning(
-                        "No TOML parser available (install tomli for Python <3.11)"
-                    )
+                    logger.warning("No TOML parser available (install tomli for Python <3.11)")
 
             if tomllib:
                 with open(config_path, "rb") as f:

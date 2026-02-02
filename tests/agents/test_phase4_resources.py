@@ -9,7 +9,6 @@ Tests the efficiency and resource management components:
 - Memory Store (Working + Long-term)
 """
 
-
 import pytest
 
 # =============================================================================
@@ -27,8 +26,8 @@ class TestModelRouter:
         router = ModelRouter()
 
         assert router is not None
-        assert hasattr(router, 'select_model')
-        assert hasattr(router, 'list_models')
+        assert hasattr(router, "select_model")
+        assert hasattr(router, "list_models")
 
     def test_list_models(self):
         """Test listing registered models."""
@@ -49,7 +48,7 @@ class TestModelRouter:
 
         assert selection is not None
         # selection is ModelSelection with .model attribute
-        assert hasattr(selection, 'model') or hasattr(selection, 'model_id')
+        assert hasattr(selection, "model") or hasattr(selection, "model_id")
 
     def test_select_model_with_complexity(self):
         """Test model selection with complexity hint."""
@@ -58,8 +57,12 @@ class TestModelRouter:
 
         router = ModelRouter()
 
-        for complexity in [GoalComplexity.TRIVIAL, GoalComplexity.SIMPLE,
-                          GoalComplexity.MODERATE, GoalComplexity.COMPLEX]:
+        for complexity in [
+            GoalComplexity.TRIVIAL,
+            GoalComplexity.SIMPLE,
+            GoalComplexity.MODERATE,
+            GoalComplexity.COMPLEX,
+        ]:
             selection = router.select_model(complexity=complexity)
             assert selection is not None
 
@@ -87,7 +90,9 @@ class TestModelRouter:
 
         if models:
             first_model = models[0]
-            model_id = first_model.model_id if hasattr(first_model, 'model_id') else str(first_model)
+            model_id = (
+                first_model.model_id if hasattr(first_model, "model_id") else str(first_model)
+            )
             info = router.get_model_info(model_id)
             # May return None or info depending on model
 
@@ -129,8 +134,8 @@ class TestSemanticCache:
         cache = SemanticCache()
 
         assert cache is not None
-        assert hasattr(cache, 'get')
-        assert hasattr(cache, 'set')
+        assert hasattr(cache, "get")
+        assert hasattr(cache, "set")
 
     @pytest.mark.asyncio
     async def test_cache_set_and_get(self):
@@ -160,7 +165,7 @@ class TestSemanticCache:
         result = await cache.get("Unknown query never cached before xyz123")
 
         # Should be None or miss
-        assert result is None or (hasattr(result, 'hit') and not result.hit)
+        assert result is None or (hasattr(result, "hit") and not result.hit)
 
     @pytest.mark.asyncio
     async def test_cache_clear(self):
@@ -199,8 +204,8 @@ class TestPlanCache:
         cache = PlanCache()
 
         assert cache is not None
-        assert hasattr(cache, 'store_plan')
-        assert hasattr(cache, 'find_similar_plan')
+        assert hasattr(cache, "store_plan")
+        assert hasattr(cache, "find_similar_plan")
 
     @pytest.mark.asyncio
     async def test_store_plan(self):
@@ -277,8 +282,8 @@ class TestContextManager:
         manager = ContextManager()
 
         assert manager is not None
-        assert hasattr(manager, 'build_context')
-        assert hasattr(manager, 'config')
+        assert hasattr(manager, "build_context")
+        assert hasattr(manager, "config")
 
     def test_build_context(self):
         """Test building context."""
@@ -506,9 +511,9 @@ class TestMemoryManager:
         manager = MemoryManager()
 
         assert manager is not None
-        assert hasattr(manager, 'working')
-        assert hasattr(manager, 'remember')
-        assert hasattr(manager, 'recall')
+        assert hasattr(manager, "working")
+        assert hasattr(manager, "remember")
+        assert hasattr(manager, "recall")
 
     @pytest.mark.asyncio
     async def test_remember_to_long_term(self):

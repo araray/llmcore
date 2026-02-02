@@ -55,7 +55,7 @@ class MemoryManager:
         config: "ConfyConfig",
         provider_manager: ProviderManager,
         storage_manager: StorageManager,
-        embedding_manager: EmbeddingManager
+        embedding_manager: EmbeddingManager,
     ):
         """
         Initializes the MemoryManager.
@@ -80,27 +80,41 @@ class MemoryManager:
 
     def _load_and_parse_cm_config(self) -> Dict[str, Any]:
         """Loads, parses, and validates the context_management section of the config."""
-        cm_config_raw = self._config.get('context_management', {})
+        cm_config_raw = self._config.get("context_management", {})
 
         # Parse priorities
         inclusion_priority = self._parse_priority(
-            cm_config_raw.get('inclusion_priority', "system_history,explicitly_staged,user_items_active,history_chat,final_user_query"),
-            {"system_history", "explicitly_staged", "user_items_active", "history_chat", "final_user_query"}
+            cm_config_raw.get(
+                "inclusion_priority",
+                "system_history,explicitly_staged,user_items_active,history_chat,final_user_query",
+            ),
+            {
+                "system_history",
+                "explicitly_staged",
+                "user_items_active",
+                "history_chat",
+                "final_user_query",
+            },
         )
         truncation_priority = self._parse_priority(
-            cm_config_raw.get('truncation_priority', 'history_chat,user_items_active,rag_in_query,explicitly_staged'),
-            {"history_chat", "rag_in_query", "user_items_active", "explicitly_staged"}
+            cm_config_raw.get(
+                "truncation_priority",
+                "history_chat,user_items_active,rag_in_query,explicitly_staged",
+            ),
+            {"history_chat", "rag_in_query", "user_items_active", "explicitly_staged"},
         )
 
         # Load RAG template
-        default_template = cm_config_raw.get('default_prompt_template', "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:")
-        template_path = cm_config_raw.get('prompt_template_path', "")
+        default_template = cm_config_raw.get(
+            "default_prompt_template", "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
+        )
+        template_path = cm_config_raw.get("prompt_template_path", "")
         template_content = default_template
         if template_path:
             try:
                 resolved_path = Path(os.path.expanduser(template_path))
                 if resolved_path.is_file():
-                    template_content = resolved_path.read_text(encoding='utf-8')
+                    template_content = resolved_path.read_text(encoding="utf-8")
                     logger.info(f"Loaded RAG prompt template from: {resolved_path}")
                 else:
                     logger.warning(f"Template file not found: '{resolved_path}'. Using default.")
@@ -108,18 +122,18 @@ class MemoryManager:
                 logger.warning(f"Failed to read template '{template_path}': {e}. Using default.")
 
         return {
-            "reserved_response_tokens": cm_config_raw.get('reserved_response_tokens', 500),
+            "reserved_response_tokens": cm_config_raw.get("reserved_response_tokens", 500),
             "inclusion_priority_order": inclusion_priority,
             "truncation_priority_order": truncation_priority,
-            "user_retained_messages_count": cm_config_raw.get('user_retained_messages_count', 5),
-            "max_chars_per_user_item": cm_config_raw.get('max_chars_per_user_item', 40000),
-            "default_rag_k": cm_config_raw.get('rag_retrieval_k', 3),
+            "user_retained_messages_count": cm_config_raw.get("user_retained_messages_count", 5),
+            "max_chars_per_user_item": cm_config_raw.get("max_chars_per_user_item", 40000),
+            "default_rag_k": cm_config_raw.get("rag_retrieval_k", 3),
             "prompt_template_content": template_content,
         }
 
     def _parse_priority(self, priority_str: str, valid_items: set) -> List[str]:
         """Helper to parse and validate priority lists from config."""
-        priorities = [p.strip().lower() for p in priority_str.split(',')]
+        priorities = [p.strip().lower() for p in priority_str.split(",")]
         ordered_priorities = [p for p in priorities if p in valid_items]
         if len(ordered_priorities) != len(priorities):
             invalid = set(priorities) - set(ordered_priorities)
@@ -132,12 +146,16 @@ class MemoryManager:
             models_details = await provider.get_models_details()
             for detail in models_details:
                 if detail.id == model:
-                    logger.debug(f"Found precise context length for {model}: {detail.context_length} tokens")
+                    logger.debug(
+                        f"Found precise context length for {model}: {detail.context_length} tokens"
+                    )
                     return detail.context_length
             logger.debug(f"Model {model} not in details, using provider fallback.")
             return provider.get_max_context_length(model)
         except Exception as e:
-            logger.warning(f"Dynamic model introspection failed for {model}: {e}. Using provider fallback.")
+            logger.warning(
+                f"Dynamic model introspection failed for {model}: {e}. Using provider fallback."
+            )
             return provider.get_max_context_length(model)
 
     async def retrieve_relevant_context(self, goal: str) -> List[ContextItem]:
@@ -164,14 +182,23 @@ class MemoryManager:
             if vector_storage:
                 goal_embedding = await self._embedding_manager.generate_embedding(goal)
                 semantic_results = await vector_storage.similarity_search(
-                    query_embedding=goal_embedding, k=self._cm_config['default_rag_k']
+                    query_embedding=goal_embedding, k=self._cm_config["default_rag_k"]
                 )
                 for i, doc in enumerate(semantic_results):
-                    context_items.append(ContextItem(
-                        id=f"semantic_{doc.id}", type=ContextItemType.RAG_SNIPPET,
-                        source_id=doc.id, content=doc.content,
-                        metadata={**doc.metadata, "retrieval_score": doc.score, "retrieval_rank": i + 1, "memory_source": "semantic"}
-                    ))
+                    context_items.append(
+                        ContextItem(
+                            id=f"semantic_{doc.id}",
+                            type=ContextItemType.RAG_SNIPPET,
+                            source_id=doc.id,
+                            content=doc.content,
+                            metadata={
+                                **doc.metadata,
+                                "retrieval_score": doc.score,
+                                "retrieval_rank": i + 1,
+                                "memory_source": "semantic",
+                            },
+                        )
+                    )
                 logger.debug(f"Retrieved {len(semantic_results)} items from semantic memory")
         except Exception as e:
             logger.warning(f"Semantic memory search failed: {e}")
@@ -195,7 +222,7 @@ class MemoryManager:
         rag_k: Optional[int] = None,
         rag_collection: Optional[str] = None,
         rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None
+        prompt_template_values: Optional[Dict[str, str]] = None,
     ) -> ContextPreparationDetails:
         """
         Prepares the context payload by orchestrating RAG and context building.
@@ -217,7 +244,9 @@ class MemoryManager:
 
         max_model_tokens = await self._get_precise_context_length(provider, target_model)
 
-        last_user_message = next((msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None)
+        last_user_message = next(
+            (msg for msg in reversed(session.messages) if msg.role == LLMCoreRole.USER), None
+        )
         if not last_user_message:
             raise ContextError("Cannot prepare context without a user query in the session.")
 
@@ -227,14 +256,19 @@ class MemoryManager:
         if rag_enabled:
             try:
                 vector_storage = self._storage_manager.vector_storage
-                k = rag_k if rag_k is not None else self._cm_config['default_rag_k']
-                query_embedding = await self._embedding_manager.generate_embedding(last_user_message.content)
+                k = rag_k if rag_k is not None else self._cm_config["default_rag_k"]
+                query_embedding = await self._embedding_manager.generate_embedding(
+                    last_user_message.content
+                )
                 rag_documents_used = await vector_storage.similarity_search(
                     query_embedding, k, rag_collection, rag_metadata_filter
                 )
                 rag_context_str = rag_utils.format_rag_docs_for_context(rag_documents_used)
                 final_user_query_content = rag_utils.render_prompt_template(
-                    self._cm_config['prompt_template_content'], rag_context_str, last_user_message.content, prompt_template_values
+                    self._cm_config["prompt_template_content"],
+                    rag_context_str,
+                    last_user_message.content,
+                    prompt_template_values,
                 )
                 logger.info(f"RAG retrieved {len(rag_documents_used)} docs.")
             except Exception as e:
@@ -250,7 +284,7 @@ class MemoryManager:
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
             message_inclusion_map=message_inclusion_map,
-            final_user_query_content=final_user_query_content
+            final_user_query_content=final_user_query_content,
         )
 
         # Augment details with RAG info
@@ -258,5 +292,7 @@ class MemoryManager:
         if rag_enabled:
             context_details.rendered_rag_template_content = final_user_query_content
 
-        logger.info(f"Final context prepared for model '{target_model}': {context_details.final_token_count} tokens.")
+        logger.info(
+            f"Final context prepared for model '{target_model}': {context_details.final_token_count} tokens."
+        )
         return context_details

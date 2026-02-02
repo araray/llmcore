@@ -980,10 +980,8 @@ Output only the implementation code, no explanations or markdown backticks.
                 else:
                     code_lines.append(line)
             elif language in ("javascript", "typescript"):
-                if (
-                    stripped.startswith("import ")
-                    or (stripped.startswith("const ")
-                    and "require" in stripped)
+                if stripped.startswith("import ") or (
+                    stripped.startswith("const ") and "require" in stripped
                 ):
                     imports.append(stripped)
                 else:

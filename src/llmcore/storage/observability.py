@@ -84,111 +84,85 @@ class ObservabilityConfig(BaseModel):
     """
 
     # Master switch
-    enabled: bool = Field(
-        default=True,
-        description="Master switch for all observability features"
-    )
+    enabled: bool = Field(default=True, description="Master switch for all observability features")
 
     # Logging configuration
-    log_queries: bool = Field(
-        default=False,
-        description="Log all queries at DEBUG level (verbose)"
-    )
+    log_queries: bool = Field(default=False, description="Log all queries at DEBUG level (verbose)")
     log_slow_queries: bool = Field(
-        default=True,
-        description="Log queries exceeding threshold at WARNING level"
+        default=True, description="Log queries exceeding threshold at WARNING level"
     )
     slow_query_threshold_seconds: float = Field(
-        default=1.0,
-        gt=0,
-        description="Threshold in seconds for slow query detection"
+        default=1.0, gt=0, description="Threshold in seconds for slow query detection"
     )
     include_query_params: bool = Field(
-        default=False,
-        description="Include query parameters in logs (security risk)"
+        default=False, description="Include query parameters in logs (security risk)"
     )
 
     # Metrics configuration
-    metrics_enabled: bool = Field(
-        default=True,
-        description="Enable metrics collection"
-    )
+    metrics_enabled: bool = Field(default=True, description="Enable metrics collection")
     metrics_backend: Literal["prometheus", "statsd", "memory", "none"] = Field(
-        default="prometheus",
-        description="Metrics backend type"
+        default="prometheus", description="Metrics backend type"
     )
     metrics_prefix: str = Field(
-        default="llmcore_storage",
-        description="Prefix for all metric names"
+        default="llmcore_storage", description="Prefix for all metric names"
     )
     metrics_port: int = Field(
-        default=9090,
-        ge=1024,
-        le=65535,
-        description="Port for Prometheus HTTP endpoint"
+        default=9090, ge=1024, le=65535, description="Port for Prometheus HTTP endpoint"
     )
     metrics_default_labels: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Default labels added to all metrics"
+        default_factory=dict, description="Default labels added to all metrics"
     )
 
     # Event logging configuration
     event_logging_enabled: bool = Field(
-        default=True,
-        description="Enable persistent event logging to database"
+        default=True, description="Enable persistent event logging to database"
     )
     event_retention_days: int = Field(
-        default=30,
-        ge=0,
-        description="Days to retain events (0 = forever)"
+        default=30, ge=0, description="Days to retain events (0 = forever)"
     )
-    event_table_name: str = Field(
-        default="storage_events",
-        description="Name of the events table"
-    )
+    event_table_name: str = Field(default="storage_events", description="Name of the events table")
     event_batch_size: int = Field(
-        default=100,
-        ge=1,
-        le=10000,
-        description="Number of events to batch before flushing"
+        default=100, ge=1, le=10000, description="Number of events to batch before flushing"
     )
     event_flush_interval_seconds: float = Field(
-        default=5.0,
-        gt=0,
-        description="Maximum interval between event flushes"
+        default=5.0, gt=0, description="Maximum interval between event flushes"
     )
 
     # Tracing configuration
-    tracing_enabled: bool = Field(
-        default=False,
-        description="Enable distributed tracing"
-    )
+    tracing_enabled: bool = Field(default=False, description="Enable distributed tracing")
     tracing_backend: Literal["opentelemetry", "none"] = Field(
-        default="none",
-        description="Tracing backend type"
+        default="none", description="Tracing backend type"
     )
     tracing_endpoint: str = Field(
-        default="http://localhost:4317",
-        description="OTLP collector endpoint"
+        default="http://localhost:4317", description="OTLP collector endpoint"
     )
     tracing_service_name: str = Field(
-        default="llmcore-storage",
-        description="Service name for traces"
+        default="llmcore-storage", description="Service name for traces"
     )
     tracing_sample_rate: float = Field(
-        default=1.0,
-        ge=0.0,
-        le=1.0,
-        description="Sampling rate for traces (1.0 = 100%)"
+        default=1.0, ge=0.0, le=1.0, description="Sampling rate for traces (1.0 = 100%)"
     )
 
     # Histogram bucket configuration
     histogram_buckets: List[float] = Field(
         default=[
-            0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5,
-            0.75, 1.0, 2.5, 5.0, 7.5, 10.0
+            0.001,
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.075,
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            1.0,
+            2.5,
+            5.0,
+            7.5,
+            10.0,
         ],
-        description="Default histogram bucket boundaries in seconds"
+        description="Default histogram bucket boundaries in seconds",
     )
 
     @field_validator("slow_query_threshold_seconds")
@@ -210,7 +184,9 @@ class ObservabilityConfig(BaseModel):
         if not v[0].isalpha():
             raise ValueError("metrics_prefix must start with a letter")
         if not all(c.isalnum() or c == "_" for c in v):
-            raise ValueError("metrics_prefix must contain only alphanumeric characters and underscores")
+            raise ValueError(
+                "metrics_prefix must contain only alphanumeric characters and underscores"
+            )
         return v
 
     @field_validator("event_table_name")
@@ -222,7 +198,9 @@ class ObservabilityConfig(BaseModel):
         if not v[0].isalpha():
             raise ValueError("event_table_name must start with a letter")
         if not all(c.isalnum() or c == "_" for c in v):
-            raise ValueError("event_table_name must contain only alphanumeric characters and underscores")
+            raise ValueError(
+                "event_table_name must contain only alphanumeric characters and underscores"
+            )
         return v
 
     @model_validator(mode="after")
@@ -235,10 +213,11 @@ class ObservabilityConfig(BaseModel):
         # Warn about verbose logging in production
         if self.log_queries and self.include_query_params:
             import warnings
+
             warnings.warn(
                 "log_queries=True with include_query_params=True may expose "
                 "sensitive data in logs. Use with caution in production.",
-                UserWarning
+                UserWarning,
             )
 
         return self
@@ -315,7 +294,11 @@ class ObservabilityConfig(BaseModel):
                 # Parse numeric values
                 elif config_key.endswith("_seconds") or config_key.endswith("_rate"):
                     config[config_key] = float(value)
-                elif config_key.endswith("_days") or config_key.endswith("_port") or config_key.endswith("_size"):
+                elif (
+                    config_key.endswith("_days")
+                    or config_key.endswith("_port")
+                    or config_key.endswith("_size")
+                ):
                     config[config_key] = int(value)
                 else:
                     config[config_key] = value

@@ -31,6 +31,7 @@ from llmcore.storage.manager import SESSION_STORAGE_MAP, VECTOR_STORAGE_MAP
 # Fixtures for Both Backends
 # ============================================================================
 
+
 @pytest.fixture
 def sqlite_session_config(tmp_path: Path) -> Dict[str, Any]:
     """SQLite session storage configuration."""
@@ -95,6 +96,7 @@ def postgres_available() -> bool:
         return False
     try:
         import psycopg
+
         return True
     except ImportError:
         return False
@@ -104,36 +106,40 @@ def postgres_available() -> bool:
 # Storage Backend Registration Tests
 # ============================================================================
 
+
 class TestStorageBackendRegistration:
     """Test that both storage backend combinations are properly registered."""
 
     def test_session_storage_backends_registered(self) -> None:
         """Both SQLite and PostgreSQL session backends should be registered."""
-        assert 'sqlite' in SESSION_STORAGE_MAP, "SQLite session backend not registered"
-        assert 'postgres' in SESSION_STORAGE_MAP, "PostgreSQL session backend not registered"
-        assert 'json' in SESSION_STORAGE_MAP, "JSON session backend not registered"
+        assert "sqlite" in SESSION_STORAGE_MAP, "SQLite session backend not registered"
+        assert "postgres" in SESSION_STORAGE_MAP, "PostgreSQL session backend not registered"
+        assert "json" in SESSION_STORAGE_MAP, "JSON session backend not registered"
 
     def test_vector_storage_backends_registered(self) -> None:
         """Both ChromaDB and pgvector backends should be registered."""
-        assert 'chromadb' in VECTOR_STORAGE_MAP, "ChromaDB vector backend not registered"
-        assert 'pgvector' in VECTOR_STORAGE_MAP, "pgvector backend not registered"
+        assert "chromadb" in VECTOR_STORAGE_MAP, "ChromaDB vector backend not registered"
+        assert "pgvector" in VECTOR_STORAGE_MAP, "pgvector backend not registered"
 
     def test_session_storage_classes_are_base_session_subclasses(self) -> None:
         """All session storage classes should inherit from BaseSessionStorage."""
         for name, cls in SESSION_STORAGE_MAP.items():
-            assert issubclass(cls, BaseSessionStorage), \
+            assert issubclass(cls, BaseSessionStorage), (
                 f"{name} storage should inherit from BaseSessionStorage"
+            )
 
     def test_vector_storage_classes_are_base_vector_subclasses(self) -> None:
         """All vector storage classes should inherit from BaseVectorStorage."""
         for name, cls in VECTOR_STORAGE_MAP.items():
-            assert issubclass(cls, BaseVectorStorage), \
+            assert issubclass(cls, BaseVectorStorage), (
                 f"{name} storage should inherit from BaseVectorStorage"
+            )
 
 
 # ============================================================================
 # Session Storage Interface Parity Tests
 # ============================================================================
+
 
 class TestSessionStorageInterfaceParity:
     """Test that SQLite and PostgreSQL session storage have interface parity."""
@@ -141,9 +147,14 @@ class TestSessionStorageInterfaceParity:
     def test_core_methods_present_in_sqlite(self) -> None:
         """SQLite session storage should have all core methods."""
         core_methods = {
-            'initialize', 'close',
-            'get_session', 'list_sessions', 'delete_session', 'save_session',
-            'add_episode', 'get_episodes',
+            "initialize",
+            "close",
+            "get_session",
+            "list_sessions",
+            "delete_session",
+            "save_session",
+            "add_episode",
+            "get_episodes",
         }
         sqlite_methods = set(dir(SqliteSessionStorage))
         missing = core_methods - sqlite_methods
@@ -152,9 +163,14 @@ class TestSessionStorageInterfaceParity:
     def test_core_methods_present_in_postgres(self) -> None:
         """PostgreSQL session storage should have all core methods."""
         core_methods = {
-            'initialize', 'close',
-            'get_session', 'list_sessions', 'delete_session', 'save_session',
-            'add_episode', 'get_episodes',
+            "initialize",
+            "close",
+            "get_session",
+            "list_sessions",
+            "delete_session",
+            "save_session",
+            "add_episode",
+            "get_episodes",
         }
         postgres_methods = set(dir(PostgresSessionStorage))
         missing = core_methods - postgres_methods
@@ -162,14 +178,27 @@ class TestSessionStorageInterfaceParity:
 
     def test_interface_consistency(self) -> None:
         """Both session storages should have consistent core interface."""
-        sqlite_public = {m for m in dir(SqliteSessionStorage)
-                        if not m.startswith('_') and callable(getattr(SqliteSessionStorage, m, None))}
-        postgres_public = {m for m in dir(PostgresSessionStorage)
-                         if not m.startswith('_') and callable(getattr(PostgresSessionStorage, m, None))}
+        sqlite_public = {
+            m
+            for m in dir(SqliteSessionStorage)
+            if not m.startswith("_") and callable(getattr(SqliteSessionStorage, m, None))
+        }
+        postgres_public = {
+            m
+            for m in dir(PostgresSessionStorage)
+            if not m.startswith("_") and callable(getattr(PostgresSessionStorage, m, None))
+        }
 
         # Core methods that must be in both
-        core = {'initialize', 'close', 'get_session', 'list_sessions',
-                'delete_session', 'add_episode', 'get_episodes'}
+        core = {
+            "initialize",
+            "close",
+            "get_session",
+            "list_sessions",
+            "delete_session",
+            "add_episode",
+            "get_episodes",
+        }
 
         assert core.issubset(sqlite_public), "SQLite missing core methods"
         assert core.issubset(postgres_public), "PostgreSQL missing core methods"
@@ -179,14 +208,18 @@ class TestSessionStorageInterfaceParity:
 # Vector Storage Interface Parity Tests
 # ============================================================================
 
+
 class TestVectorStorageInterfaceParity:
     """Test that ChromaDB and pgvector have interface parity."""
 
     def test_core_methods_present_in_chromadb(self) -> None:
         """ChromaDB should have all core vector storage methods."""
         core_methods = {
-            'initialize', 'close',
-            'add_documents', 'similarity_search', 'delete_documents',
+            "initialize",
+            "close",
+            "add_documents",
+            "similarity_search",
+            "delete_documents",
         }
         chromadb_methods = set(dir(ChromaVectorStorage))
         missing = core_methods - chromadb_methods
@@ -195,8 +228,11 @@ class TestVectorStorageInterfaceParity:
     def test_core_methods_present_in_pgvector(self) -> None:
         """pgvector should have all core vector storage methods."""
         core_methods = {
-            'initialize', 'close',
-            'add_documents', 'similarity_search', 'delete_documents',
+            "initialize",
+            "close",
+            "add_documents",
+            "similarity_search",
+            "delete_documents",
         }
         pgvector_methods = set(dir(PgVectorStorage))
         missing = core_methods - pgvector_methods
@@ -204,8 +240,7 @@ class TestVectorStorageInterfaceParity:
 
     def test_interface_consistency(self) -> None:
         """Both vector storages should have consistent core interface."""
-        core = {'initialize', 'close', 'add_documents',
-                'similarity_search', 'delete_documents'}
+        core = {"initialize", "close", "add_documents", "similarity_search", "delete_documents"}
 
         chromadb_public = set(dir(ChromaVectorStorage))
         pgvector_public = set(dir(PgVectorStorage))
@@ -217,6 +252,7 @@ class TestVectorStorageInterfaceParity:
 # ============================================================================
 # SQLite Session Storage Tests
 # ============================================================================
+
 
 class TestSqliteSessionStorage:
     """Test SQLite session storage backend."""
@@ -254,8 +290,8 @@ class TestSqliteSessionStorage:
         await storage.initialize(sqlite_session_config)
 
         try:
-            assert hasattr(storage, 'add_episode')
-            assert hasattr(storage, 'get_episodes')
+            assert hasattr(storage, "add_episode")
+            assert hasattr(storage, "get_episodes")
             assert callable(storage.add_episode)
             assert callable(storage.get_episodes)
         finally:
@@ -266,6 +302,7 @@ class TestSqliteSessionStorage:
 # PostgreSQL Session Storage Tests
 # ============================================================================
 
+
 class TestPostgresSessionStorage:
     """Test PostgreSQL session storage backend."""
 
@@ -275,12 +312,12 @@ class TestPostgresSessionStorage:
 
     def test_has_core_interface(self) -> None:
         """PostgreSQL storage should have core interface methods."""
-        assert hasattr(PostgresSessionStorage, 'initialize')
-        assert hasattr(PostgresSessionStorage, 'close')
-        assert hasattr(PostgresSessionStorage, 'get_session')
-        assert hasattr(PostgresSessionStorage, 'list_sessions')
-        assert hasattr(PostgresSessionStorage, 'add_episode')
-        assert hasattr(PostgresSessionStorage, 'get_episodes')
+        assert hasattr(PostgresSessionStorage, "initialize")
+        assert hasattr(PostgresSessionStorage, "close")
+        assert hasattr(PostgresSessionStorage, "get_session")
+        assert hasattr(PostgresSessionStorage, "list_sessions")
+        assert hasattr(PostgresSessionStorage, "add_episode")
+        assert hasattr(PostgresSessionStorage, "get_episodes")
 
     @pytest.mark.skipif(not postgres_available(), reason="PostgreSQL not configured")
     @pytest.mark.asyncio
@@ -312,6 +349,7 @@ class TestPostgresSessionStorage:
 # ChromaDB Vector Storage Tests
 # ============================================================================
 
+
 class TestChromaVectorStorage:
     """Test ChromaDB vector storage backend."""
 
@@ -321,11 +359,11 @@ class TestChromaVectorStorage:
 
     def test_has_core_interface(self) -> None:
         """ChromaDB storage should have core interface methods."""
-        assert hasattr(ChromaVectorStorage, 'initialize')
-        assert hasattr(ChromaVectorStorage, 'close')
-        assert hasattr(ChromaVectorStorage, 'add_documents')
-        assert hasattr(ChromaVectorStorage, 'similarity_search')
-        assert hasattr(ChromaVectorStorage, 'delete_documents')
+        assert hasattr(ChromaVectorStorage, "initialize")
+        assert hasattr(ChromaVectorStorage, "close")
+        assert hasattr(ChromaVectorStorage, "add_documents")
+        assert hasattr(ChromaVectorStorage, "similarity_search")
+        assert hasattr(ChromaVectorStorage, "delete_documents")
 
     @pytest.mark.asyncio
     async def test_initialization(self, chromadb_config: Dict[str, Any]) -> None:
@@ -369,6 +407,7 @@ class TestChromaVectorStorage:
 # pgvector Storage Tests
 # ============================================================================
 
+
 class TestPgVectorStorage:
     """Test pgvector vector storage backend."""
 
@@ -382,11 +421,11 @@ class TestPgVectorStorage:
 
     def test_has_core_interface(self) -> None:
         """pgvector storage should have core interface methods."""
-        assert hasattr(PgVectorStorage, 'initialize')
-        assert hasattr(PgVectorStorage, 'close')
-        assert hasattr(PgVectorStorage, 'add_documents')
-        assert hasattr(PgVectorStorage, 'similarity_search')
-        assert hasattr(PgVectorStorage, 'delete_documents')
+        assert hasattr(PgVectorStorage, "initialize")
+        assert hasattr(PgVectorStorage, "close")
+        assert hasattr(PgVectorStorage, "add_documents")
+        assert hasattr(PgVectorStorage, "similarity_search")
+        assert hasattr(PgVectorStorage, "delete_documents")
 
     @pytest.mark.skipif(not postgres_available(), reason="PostgreSQL not configured")
     @pytest.mark.asyncio
@@ -418,17 +457,20 @@ class TestPgVectorStorage:
 # Embedding Integration Tests
 # ============================================================================
 
+
 class TestEmbeddingIntegration:
     """Test embedding functionality for RAG."""
 
     def test_embedding_manager_available(self) -> None:
         """EmbeddingManager should be importable."""
         from llmcore.embedding.manager import EmbeddingManager
+
         assert EmbeddingManager is not None
 
     def test_embedding_cache_available(self) -> None:
         """EmbeddingCache should be importable."""
         from llmcore.embedding.cache import EmbeddingCache
+
         assert EmbeddingCache is not None
 
     def test_embedding_cache_initialization(self, tmp_path: Path) -> None:
@@ -441,8 +483,8 @@ class TestEmbeddingIntegration:
         )
 
         assert cache is not None
-        assert hasattr(cache, 'get')
-        assert hasattr(cache, 'set')
+        assert hasattr(cache, "get")
+        assert hasattr(cache, "set")
 
     def test_mock_embedding_determinism(self) -> None:
         """Mock embeddings should be deterministic for same input."""
@@ -469,12 +511,14 @@ class TestEmbeddingIntegration:
 # RAG Pipeline Tests
 # ============================================================================
 
+
 class TestRAGPipeline:
     """Test end-to-end RAG pipeline components."""
 
     def test_context_builder_available(self) -> None:
         """Context builder should be importable."""
         from llmcore.memory.context_builder import build_context_payload
+
         assert build_context_payload is not None
 
     def test_llmcore_supports_external_rag(self) -> None:
@@ -486,7 +530,8 @@ class TestRAGPipeline:
         3. llmcore: Response generation with enable_rag=False
         """
         from llmcore import LLMCore
-        assert hasattr(LLMCore, 'chat')
+
+        assert hasattr(LLMCore, "chat")
 
     @pytest.mark.asyncio
     async def test_rag_flow_simulation(self) -> None:
@@ -508,9 +553,7 @@ class TestRAGPipeline:
         # Build context from chunks (what llmchat would do)
         context_parts = []
         for chunk in sorted(retrieved_chunks, key=lambda x: x["score"], reverse=True):
-            context_parts.append(
-                f"[Source: {chunk['metadata']['source']}]\n{chunk['content']}"
-            )
+            context_parts.append(f"[Source: {chunk['metadata']['source']}]\n{chunk['content']}")
         context = "\n\n".join(context_parts)
 
         assert "Python" in context
@@ -521,6 +564,7 @@ class TestRAGPipeline:
 # ============================================================================
 # Storage Configuration Tests
 # ============================================================================
+
 
 class TestStorageConfiguration:
     """Test storage configuration for both backends."""
@@ -543,7 +587,7 @@ class TestStorageConfiguration:
 
     def test_postgres_config_structure(self) -> None:
         """PostgreSQL config should support standard connection parameters."""
-        expected_params = {'host', 'port', 'database', 'user', 'password'}
+        expected_params = {"host", "port", "database", "user", "password"}
         # Verify PostgresSessionStorage accepts these params
         assert PostgresSessionStorage is not None
 
@@ -555,6 +599,7 @@ class TestStorageConfiguration:
 # ============================================================================
 # Cross-Backend Compatibility Tests
 # ============================================================================
+
 
 class TestCrossBackendCompatibility:
     """Test that data can conceptually flow between backends."""
@@ -609,6 +654,7 @@ class TestCrossBackendCompatibility:
 # Storage Manager Tests
 # ============================================================================
 
+
 class TestStorageManagerIntegration:
     """Test the unified StorageManager with both backends."""
 
@@ -619,24 +665,26 @@ class TestStorageManagerIntegration:
     def test_storage_manager_supports_both_session_backends(self) -> None:
         """StorageManager should work with both SQLite and PostgreSQL."""
         # Verify backend registration
-        assert 'sqlite' in SESSION_STORAGE_MAP
-        assert 'postgres' in SESSION_STORAGE_MAP
+        assert "sqlite" in SESSION_STORAGE_MAP
+        assert "postgres" in SESSION_STORAGE_MAP
 
     def test_storage_manager_supports_both_vector_backends(self) -> None:
         """StorageManager should work with both ChromaDB and pgvector."""
         # Verify backend registration
-        assert 'chromadb' in VECTOR_STORAGE_MAP
-        assert 'pgvector' in VECTOR_STORAGE_MAP
+        assert "chromadb" in VECTOR_STORAGE_MAP
+        assert "pgvector" in VECTOR_STORAGE_MAP
 
 
 # ============================================================================
 # Mock Embedding Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_embeddings() -> List[List[float]]:
     """Provide deterministic mock embeddings for testing."""
     import random
+
     random.seed(42)
     return [[random.uniform(-1, 1) for _ in range(1536)] for _ in range(10)]
 

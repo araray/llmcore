@@ -47,11 +47,13 @@ def configure_tracer(service_name: str = "llmcore") -> None:
         from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
         # Create resource with service information
-        resource = Resource.create({
-            "service.name": service_name,
-            "service.version": "2.0.0-dev",
-            "deployment.environment": os.getenv("DEPLOYMENT_ENV", "development")
-        })
+        resource = Resource.create(
+            {
+                "service.name": service_name,
+                "service.version": "2.0.0-dev",
+                "deployment.environment": os.getenv("DEPLOYMENT_ENV", "development"),
+            }
+        )
 
         # Set up tracer provider
         tracer_provider = TracerProvider(resource=resource)
@@ -129,6 +131,7 @@ def get_tracer(name: str) -> Optional[object]:
     """
     try:
         from opentelemetry import trace
+
         return trace.get_tracer(name)
     except ImportError:
         return None
@@ -149,6 +152,7 @@ def create_span(tracer, name: str, **kwargs):
     if tracer is None:
         # Return a no-op context manager if tracing is not available
         from contextlib import nullcontext
+
         return nullcontext()
 
     try:
@@ -156,6 +160,7 @@ def create_span(tracer, name: str, **kwargs):
     except Exception as e:
         logger.debug(f"Failed to create span '{name}': {e}")
         from contextlib import nullcontext
+
         return nullcontext()
 
 

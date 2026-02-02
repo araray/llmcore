@@ -37,7 +37,7 @@ class SandboxError(Exception):
         self,
         message: str,
         details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None
+        sandbox_id: Optional[str] = None,
     ):
         """
         Initialize the sandbox error.
@@ -68,7 +68,7 @@ class SandboxError(Exception):
             "error_type": self.__class__.__name__,
             "message": self.message,
             "details": self.details,
-            "sandbox_id": self.sandbox_id
+            "sandbox_id": self.sandbox_id,
         }
 
 
@@ -89,6 +89,7 @@ class SandboxInitializationError(SandboxError):
         ...     details={"image": "python:3.11-slim", "reason": "network timeout"}
         ... )
     """
+
     pass
 
 
@@ -118,7 +119,7 @@ class SandboxExecutionError(SandboxError):
         exit_code: Optional[int] = None,
         stdout: Optional[str] = None,
         stderr: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the execution error.
@@ -140,12 +141,14 @@ class SandboxExecutionError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "command": self.command[:200] if self.command else None,
-            "exit_code": self.exit_code,
-            "stdout": self.stdout[:500] if self.stdout else None,
-            "stderr": self.stderr[:500] if self.stderr else None
-        })
+        result.update(
+            {
+                "command": self.command[:200] if self.command else None,
+                "exit_code": self.exit_code,
+                "stdout": self.stdout[:500] if self.stdout else None,
+                "stderr": self.stderr[:500] if self.stderr else None,
+            }
+        )
         return result
 
 
@@ -166,7 +169,7 @@ class SandboxTimeoutError(SandboxError):
         message: str,
         timeout_seconds: Optional[float] = None,
         operation: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the timeout error.
@@ -184,10 +187,7 @@ class SandboxTimeoutError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "timeout_seconds": self.timeout_seconds,
-            "operation": self.operation
-        })
+        result.update({"timeout_seconds": self.timeout_seconds, "operation": self.operation})
         return result
 
 
@@ -213,7 +213,7 @@ class SandboxAccessDenied(SandboxError):
         resource: Optional[str] = None,
         reason: Optional[str] = None,
         policy: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the access denied error.
@@ -233,11 +233,7 @@ class SandboxAccessDenied(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "resource": self.resource,
-            "reason": self.reason,
-            "policy": self.policy
-        })
+        result.update({"resource": self.resource, "reason": self.reason, "policy": self.policy})
         return result
 
 
@@ -263,7 +259,7 @@ class SandboxResourceError(SandboxError):
         resource_type: Optional[str] = None,
         limit: Optional[str] = None,
         actual: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the resource error.
@@ -283,11 +279,9 @@ class SandboxResourceError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "resource_type": self.resource_type,
-            "limit": self.limit,
-            "actual": self.actual
-        })
+        result.update(
+            {"resource_type": self.resource_type, "limit": self.limit, "actual": self.actual}
+        )
         return result
 
 
@@ -315,7 +309,7 @@ class SandboxConnectionError(SandboxError):
         host: Optional[str] = None,
         port: Optional[int] = None,
         connection_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the connection error.
@@ -335,11 +329,9 @@ class SandboxConnectionError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "host": self.host,
-            "port": self.port,
-            "connection_type": self.connection_type
-        })
+        result.update(
+            {"host": self.host, "port": self.port, "connection_type": self.connection_type}
+        )
         return result
 
 
@@ -365,7 +357,7 @@ class SandboxCleanupError(SandboxError):
         message: str,
         resources_leaked: Optional[list] = None,
         partial_cleanup: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the cleanup error.
@@ -383,10 +375,9 @@ class SandboxCleanupError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "resources_leaked": self.resources_leaked,
-            "partial_cleanup": self.partial_cleanup
-        })
+        result.update(
+            {"resources_leaked": self.resources_leaked, "partial_cleanup": self.partial_cleanup}
+        )
         return result
 
 
@@ -419,11 +410,7 @@ class SandboxImageNotFoundError(SandboxError):
     """
 
     def __init__(
-        self,
-        message: str,
-        image: Optional[str] = None,
-        registry: Optional[str] = None,
-        **kwargs
+        self, message: str, image: Optional[str] = None, registry: Optional[str] = None, **kwargs
     ):
         """
         Initialize the image not found error.
@@ -441,8 +428,5 @@ class SandboxImageNotFoundError(SandboxError):
     def to_dict(self) -> Dict[str, Any]:
         """Serialize exception to dictionary."""
         result = super().to_dict()
-        result.update({
-            "image": self.image,
-            "registry": self.registry
-        })
+        result.update({"image": self.image, "registry": self.registry})
         return result

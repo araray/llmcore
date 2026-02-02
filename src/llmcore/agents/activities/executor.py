@@ -440,7 +440,9 @@ class HITLManagerAdapter:
             return HITLDecision(
                 approved=decision.is_approved,
                 reason=decision.reason,
-                modified_params=decision.modified_params if hasattr(decision, 'modified_params') else None,
+                modified_params=decision.modified_params
+                if hasattr(decision, "modified_params")
+                else None,
                 scope_id=decision.scope_id,
             )
 
@@ -891,11 +893,13 @@ class ActivityExecutor:
         # Add standard metadata
         from datetime import datetime, timezone
 
-        metadata.update({
-            "stored_at": datetime.now(timezone.utc).isoformat(),
-            "activity_id": request.request_id,
-            "source": "activity_memory_store",
-        })
+        metadata.update(
+            {
+                "stored_at": datetime.now(timezone.utc).isoformat(),
+                "activity_id": request.request_id,
+                "source": "activity_memory_store",
+            }
+        )
 
         if memory_type == "working":
             # Store in execution context's working memory (always available)
@@ -944,7 +948,9 @@ class ActivityExecutor:
                 return f"[ERROR] Failed to store in long-term memory: {e}. Stored in working memory instead."
 
         else:
-            return f"[ERROR] Unknown memory_type: '{memory_type}'. Valid values: 'working', 'longterm'"
+            return (
+                f"[ERROR] Unknown memory_type: '{memory_type}'. Valid values: 'working', 'longterm'"
+            )
 
     async def _handle_memory_search(
         self, request: ActivityRequest, context: ExecutionContext
@@ -980,12 +986,14 @@ class ActivityExecutor:
                 if query_lower in content_str or any(
                     term in content_str for term in query_lower.split()
                 ):
-                    results.append({
-                        "source": "working",
-                        "key": key,
-                        "value": value,
-                        "metadata": data.get("metadata", {}),
-                    })
+                    results.append(
+                        {
+                            "source": "working",
+                            "key": key,
+                            "value": value,
+                            "metadata": data.get("metadata", {}),
+                        }
+                    )
 
         # Search long-term memory
         if search_longterm and self.memory_manager is not None:
@@ -996,19 +1004,23 @@ class ActivityExecutor:
                     include_working=False,  # We handle working memory separately
                 )
                 for item in recall_result.memories:
-                    results.append({
-                        "source": "longterm",
-                        "content": item.content,
-                        "relevance": item.relevance,
-                        "memory_type": item.memory_type.value,
-                        "metadata": item.metadata,
-                    })
+                    results.append(
+                        {
+                            "source": "longterm",
+                            "content": item.content,
+                            "relevance": item.relevance,
+                            "memory_type": item.memory_type.value,
+                            "metadata": item.metadata,
+                        }
+                    )
             except Exception as e:
                 logger.error(f"Long-term memory search failed: {e}", exc_info=True)
-                results.append({
-                    "source": "error",
-                    "message": f"Long-term memory search failed: {e}",
-                })
+                results.append(
+                    {
+                        "source": "error",
+                        "message": f"Long-term memory search failed: {e}",
+                    }
+                )
 
         # Format results
         if not results:
@@ -1023,7 +1035,7 @@ class ActivityExecutor:
             if item.get("source") == "working":
                 output_lines.append(
                     f"  {i}. [Working] {item['key']}: {str(item['value'])[:100]}..."
-                    if len(str(item['value'])) > 100
+                    if len(str(item["value"])) > 100
                     else f"  {i}. [Working] {item['key']}: {item['value']}"
                 )
             elif item.get("source") == "longterm":

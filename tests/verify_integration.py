@@ -3,7 +3,7 @@
 llmcore Integration Verification Script
 ========================================
 
-This script performs comprehensive checks to verify that llmcore is 
+This script performs comprehensive checks to verify that llmcore is
 properly integrated and usable, with a focus on Darwin Layer 2 components.
 
 Checks Performed:
@@ -85,6 +85,7 @@ LAYER2_IMPORTS = [
 # COLORS
 # =============================================================================
 
+
 class Colors:
     GREEN = "\033[92m"
     RED = "\033[91m"
@@ -118,10 +119,11 @@ def bold(text: str) -> str:
 # CHECK FUNCTIONS
 # =============================================================================
 
+
 def check_import(module_name: str, attribute: str) -> Tuple[bool, Optional[str]]:
     """
     Check if an import works.
-    
+
     Returns:
         Tuple of (success, error_message)
     """
@@ -141,7 +143,7 @@ def check_import(module_name: str, attribute: str) -> Tuple[bool, Optional[str]]
 def check_imports(imports: List[Tuple[str, str]], category: str) -> Tuple[int, int]:
     """
     Check a list of imports.
-    
+
     Returns:
         Tuple of (passed, failed)
     """
@@ -181,18 +183,19 @@ def check_test_collection() -> Tuple[bool, str]:
     """Check if pytest can collect tests."""
     try:
         import subprocess
+
         result = subprocess.run(
             ["python", "-m", "pytest", "tests/agents/", "--collect-only", "-q"],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
 
         if result.returncode == 0:
             # Count tests
-            lines = result.stdout.strip().split('\n')
+            lines = result.stdout.strip().split("\n")
             for line in lines:
-                if 'test' in line.lower() and 'selected' in line.lower():
+                if "test" in line.lower() and "selected" in line.lower():
                     return True, line
             return True, "Tests collected successfully"
         else:
@@ -215,10 +218,7 @@ def check_sandbox_instantiation() -> Tuple[bool, str]:
         assert config.sandbox_id is not None
 
         # Create registry config
-        reg_config = SandboxRegistryConfig(
-            mode=SandboxMode.DOCKER,
-            docker_enabled=True
-        )
+        reg_config = SandboxRegistryConfig(mode=SandboxMode.DOCKER, docker_enabled=True)
         assert reg_config.mode == SandboxMode.DOCKER
 
         return True, "SandboxConfig and SandboxRegistryConfig created successfully"
@@ -246,6 +246,7 @@ def check_layer2_instantiation() -> Tuple[bool, str]:
 # =============================================================================
 # MAIN
 # =============================================================================
+
 
 def main():
     print("=" * 70)
@@ -325,8 +326,12 @@ def main():
     print(bold("Summary"))
     print("=" * 70)
     print(f"  Core imports:    {green(f'{len(CORE_IMPORTS)} passed')}")
-    print(f"  Sandbox imports: {green(str(passed)) if failed == 0 else f'{green(str(passed))} passed, {red(str(failed))} failed'}")
-    print(f"  Layer 2 imports: {green(str(layer2_passed))} found, {yellow(str(layer2_failed))} not found")
+    print(
+        f"  Sandbox imports: {green(str(passed)) if failed == 0 else f'{green(str(passed))} passed, {red(str(failed))} failed'}"
+    )
+    print(
+        f"  Layer 2 imports: {green(str(layer2_passed))} found, {yellow(str(layer2_failed))} not found"
+    )
     print()
 
     if total_failed == 0:

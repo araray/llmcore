@@ -2033,10 +2033,7 @@ class LLMCore:
         """
         return await self.list_vector_collections()
 
-    async def get_rag_collection_info(
-        self,
-        collection_name: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_rag_collection_info(self, collection_name: str) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a RAG collection.
 
@@ -2089,15 +2086,13 @@ class LLMCore:
             return {
                 "name": getattr(result, "name", collection_name),
                 "count": getattr(result, "document_count", getattr(result, "count", 0)),
-                "embedding_dimension": getattr(result, "vector_dimension", getattr(result, "embedding_dimension", None)),
+                "embedding_dimension": getattr(
+                    result, "vector_dimension", getattr(result, "embedding_dimension", None)
+                ),
                 "metadata": getattr(result, "metadata", {}),
             }
 
-    async def delete_rag_collection(
-        self,
-        collection_name: str,
-        force: bool = False
-    ) -> bool:
+    async def delete_rag_collection(self, collection_name: str, force: bool = False) -> bool:
         """
         Delete a RAG collection from the vector store.
 

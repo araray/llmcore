@@ -65,6 +65,7 @@ class Chunk:
         metadata: Dictionary of metadata (source, position, etc.).
         embedding: Optional pre-computed embedding vector.
     """
+
     id: str
     content: str
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -140,23 +141,26 @@ class ChunkingConfig:
         preserve_sentences: Try to preserve sentence boundaries.
         separators: List of separators for recursive splitting.
     """
+
     chunk_size: int = 1000
     chunk_overlap: int = 200
     min_chunk_size: int = 100
     max_chunk_size: int = 2000
     length_function: Callable[[str], int] = len
     preserve_sentences: bool = True
-    separators: List[str] = field(default_factory=lambda: [
-        "\n\n",  # Paragraphs
-        "\n",    # Lines
-        ". ",    # Sentences
-        "! ",    # Exclamations
-        "? ",    # Questions
-        "; ",    # Semicolons
-        ", ",    # Commas
-        " ",     # Words
-        "",      # Characters (last resort)
-    ])
+    separators: List[str] = field(
+        default_factory=lambda: [
+            "\n\n",  # Paragraphs
+            "\n",  # Lines
+            ". ",  # Sentences
+            "! ",  # Exclamations
+            "? ",  # Questions
+            "; ",  # Semicolons
+            ", ",  # Commas
+            " ",  # Words
+            "",  # Characters (last resort)
+        ]
+    )
 
 
 # =============================================================================
@@ -250,8 +254,7 @@ class FixedSizeChunker(ChunkingStrategy):
         """
         if chunk_overlap >= chunk_size:
             raise ValueError(
-                f"chunk_overlap ({chunk_overlap}) must be less than "
-                f"chunk_size ({chunk_size})"
+                f"chunk_overlap ({chunk_overlap}) must be less than chunk_size ({chunk_size})"
             )
 
         self.chunk_size = chunk_size
@@ -296,17 +299,17 @@ class FixedSizeChunker(ChunkingStrategy):
                     "chunk_method": "fixed_size",
                 }
 
-                chunks.append(Chunk.create(
-                    content=chunk_text.strip(),
-                    metadata=chunk_metadata,
-                ))
+                chunks.append(
+                    Chunk.create(
+                        content=chunk_text.strip(),
+                        metadata=chunk_metadata,
+                    )
+                )
                 chunk_index += 1
 
             start += step
 
-        logger.debug(
-            f"FixedSizeChunker: {len(text)} chars -> {len(chunks)} chunks"
-        )
+        logger.debug(f"FixedSizeChunker: {len(text)} chars -> {len(chunks)} chunks")
         return chunks
 
 
@@ -342,14 +345,14 @@ class RecursiveTextChunker(ChunkingStrategy):
 
     DEFAULT_SEPARATORS = [
         "\n\n",  # Paragraphs
-        "\n",    # Lines
-        ". ",    # Sentences
+        "\n",  # Lines
+        ". ",  # Sentences
         "! ",
         "? ",
         "; ",
         ", ",
-        " ",     # Words
-        "",      # Characters (last resort)
+        " ",  # Words
+        "",  # Characters (last resort)
     ]
 
     def __init__(
@@ -372,8 +375,7 @@ class RecursiveTextChunker(ChunkingStrategy):
         """
         if chunk_overlap >= chunk_size:
             raise ValueError(
-                f"chunk_overlap ({chunk_overlap}) must be less than "
-                f"chunk_size ({chunk_size})"
+                f"chunk_overlap ({chunk_overlap}) must be less than chunk_size ({chunk_size})"
             )
 
         self.chunk_size = chunk_size
@@ -408,9 +410,7 @@ class RecursiveTextChunker(ChunkingStrategy):
         # Merge splits into chunks of appropriate size
         chunks = self._merge_splits(splits, metadata)
 
-        logger.debug(
-            f"RecursiveTextChunker: {len(text)} chars -> {len(chunks)} chunks"
-        )
+        logger.debug(f"RecursiveTextChunker: {len(text)} chars -> {len(chunks)} chunks")
         return chunks
 
     def _split_text(
@@ -440,7 +440,7 @@ class RecursiveTextChunker(ChunkingStrategy):
                 break
             if sep in text:
                 separator = sep
-                new_separators = separators[i + 1:]
+                new_separators = separators[i + 1 :]
                 break
 
         # Split on the chosen separator
@@ -569,17 +569,16 @@ class RecursiveTextChunker(ChunkingStrategy):
                         "chunk_start": char_position,
                         "chunk_method": "recursive",
                     }
-                    chunks.append(Chunk.create(
-                        content=chunk_content,
-                        metadata=chunk_metadata,
-                    ))
+                    chunks.append(
+                        Chunk.create(
+                            content=chunk_content,
+                            metadata=chunk_metadata,
+                        )
+                    )
                     chunk_index += 1
 
                 # Handle overlap: keep some texts for next chunk
-                while (
-                    current_texts and
-                    current_length > self.chunk_overlap
-                ):
+                while current_texts and current_length > self.chunk_overlap:
                     removed = current_texts.pop(0)
                     current_length -= self.length_function(removed)
                     char_position += len(removed) + 1  # +1 for space
@@ -601,10 +600,12 @@ class RecursiveTextChunker(ChunkingStrategy):
                     "chunk_start": char_position,
                     "chunk_method": "recursive",
                 }
-                chunks.append(Chunk.create(
-                    content=chunk_content,
-                    metadata=chunk_metadata,
-                ))
+                chunks.append(
+                    Chunk.create(
+                        content=chunk_content,
+                        metadata=chunk_metadata,
+                    )
+                )
 
         return chunks
 
@@ -636,7 +637,7 @@ class SentenceChunker(ChunkingStrategy):
     """
 
     # Regex for sentence splitting
-    SENTENCE_ENDINGS = re.compile(r'(?<=[.!?])\s+')
+    SENTENCE_ENDINGS = re.compile(r"(?<=[.!?])\s+")
 
     def __init__(
         self,
@@ -719,10 +720,9 @@ class SentenceChunker(ChunkingStrategy):
             # Check if adding this sentence exceeds target size
             # or we've hit max sentences
             if (
-                (current_length + sent_length > self.target_chunk_size and
-                 len(current_sentences) >= self.min_sentences) or
-                len(current_sentences) >= self.max_sentences
-            ):
+                current_length + sent_length > self.target_chunk_size
+                and len(current_sentences) >= self.min_sentences
+            ) or len(current_sentences) >= self.max_sentences:
                 # Create chunk
                 chunk_content = " ".join(current_sentences)
                 chunk_metadata = {
@@ -731,21 +731,18 @@ class SentenceChunker(ChunkingStrategy):
                     "sentence_count": len(current_sentences),
                     "chunk_method": "sentence",
                 }
-                chunks.append(Chunk.create(
-                    content=chunk_content,
-                    metadata=chunk_metadata,
-                ))
+                chunks.append(
+                    Chunk.create(
+                        content=chunk_content,
+                        metadata=chunk_metadata,
+                    )
+                )
                 chunk_index += 1
 
                 # Handle overlap
-                overlap_start = max(
-                    0,
-                    len(current_sentences) - self.chunk_overlap_sentences
-                )
+                overlap_start = max(0, len(current_sentences) - self.chunk_overlap_sentences)
                 current_sentences = current_sentences[overlap_start:]
-                current_length = sum(
-                    self.length_function(s) for s in current_sentences
-                )
+                current_length = sum(self.length_function(s) for s in current_sentences)
 
             current_sentences.append(sentence)
             current_length += sent_length
@@ -759,14 +756,14 @@ class SentenceChunker(ChunkingStrategy):
                 "sentence_count": len(current_sentences),
                 "chunk_method": "sentence",
             }
-            chunks.append(Chunk.create(
-                content=chunk_content,
-                metadata=chunk_metadata,
-            ))
+            chunks.append(
+                Chunk.create(
+                    content=chunk_content,
+                    metadata=chunk_metadata,
+                )
+            )
 
-        logger.debug(
-            f"SentenceChunker: {len(sentences)} sentences -> {len(chunks)} chunks"
-        )
+        logger.debug(f"SentenceChunker: {len(sentences)} sentences -> {len(chunks)} chunks")
         return chunks
 
 
@@ -804,9 +801,7 @@ def create_chunker(
     strategy_lower = strategy.lower()
     if strategy_lower not in strategy_map:
         valid = list(strategy_map.keys())
-        raise ValueError(
-            f"Unknown chunking strategy: {strategy}. Valid options: {valid}"
-        )
+        raise ValueError(f"Unknown chunking strategy: {strategy}. Valid options: {valid}")
 
     return strategy_map[strategy_lower](**kwargs)
 

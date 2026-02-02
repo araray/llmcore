@@ -56,11 +56,26 @@ def verify_phase4():
 
     # Required methods to verify
     required_methods = {
-        "save_context_preset": ["_save_context_preset_tenant_mode", "_save_context_preset_legacy_mode"],
-        "get_context_preset": ["_get_context_preset_tenant_mode", "_get_context_preset_legacy_mode"],
-        "list_context_presets": ["_list_context_presets_tenant_mode", "_list_context_presets_legacy_mode"],
-        "delete_context_preset": ["_delete_context_preset_tenant_mode", "_delete_context_preset_legacy_mode"],
-        "rename_context_preset": ["_rename_context_preset_tenant_mode", "_rename_context_preset_legacy_mode"],
+        "save_context_preset": [
+            "_save_context_preset_tenant_mode",
+            "_save_context_preset_legacy_mode",
+        ],
+        "get_context_preset": [
+            "_get_context_preset_tenant_mode",
+            "_get_context_preset_legacy_mode",
+        ],
+        "list_context_presets": [
+            "_list_context_presets_tenant_mode",
+            "_list_context_presets_legacy_mode",
+        ],
+        "delete_context_preset": [
+            "_delete_context_preset_tenant_mode",
+            "_delete_context_preset_legacy_mode",
+        ],
+        "rename_context_preset": [
+            "_rename_context_preset_tenant_mode",
+            "_rename_context_preset_legacy_mode",
+        ],
         "add_episode": ["_add_episode_tenant_mode", "_add_episode_legacy_mode"],
         "get_episodes": ["_get_episodes_tenant_mode", "_get_episodes_legacy_mode"],
     }
@@ -77,10 +92,16 @@ def verify_phase4():
 
             # Check if it's a stub (just 'pass' or 'return None/[]')
             is_stub = len(method.body) == 1 and (
-                isinstance(method.body[0], ast.Pass) or
-                (isinstance(method.body[0], ast.Return) and
-                 isinstance(method.body[0].value, (ast.Constant, ast.List)) and
-                 (method.body[0].value.value in (None, False) if isinstance(method.body[0].value, ast.Constant) else True))
+                isinstance(method.body[0], ast.Pass)
+                or (
+                    isinstance(method.body[0], ast.Return)
+                    and isinstance(method.body[0].value, (ast.Constant, ast.List))
+                    and (
+                        method.body[0].value.value in (None, False)
+                        if isinstance(method.body[0].value, ast.Constant)
+                        else True
+                    )
+                )
             )
 
             if is_stub:

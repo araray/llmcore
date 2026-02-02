@@ -39,6 +39,7 @@ class SandboxMode(Enum):
     VM: Use remote VMs via SSH for sandboxing
     HYBRID: Try Docker first, fall back to VM if unavailable
     """
+
     DOCKER = "docker"
     VM = "vm"
     HYBRID = "hybrid"
@@ -82,6 +83,7 @@ class SandboxRegistryConfig:
         allowed_tools: Tools allowed in restricted sandboxes
         denied_tools: Tools denied in restricted sandboxes
     """
+
     # Mode selection
     mode: SandboxMode = SandboxMode.DOCKER
     fallback_enabled: bool = True
@@ -89,11 +91,9 @@ class SandboxRegistryConfig:
     # Docker configuration
     docker_enabled: bool = True
     docker_image: str = "python:3.11-slim"
-    docker_image_whitelist: List[str] = field(default_factory=lambda: [
-        "python:3.*-slim",
-        "python:3.*-bookworm",
-        "llmcore-sandbox:*"
-    ])
+    docker_image_whitelist: List[str] = field(
+        default_factory=lambda: ["python:3.*-slim", "python:3.*-bookworm", "llmcore-sandbox:*"]
+    )
     docker_full_access_label: str = "llmcore.sandbox.full_access=true"
     docker_full_access_name_pattern: Optional[str] = "*-full-access"
     docker_host: Optional[str] = None
@@ -117,29 +117,33 @@ class SandboxRegistryConfig:
     outputs_path: str = "~/.llmcore/agent_outputs"
 
     # Tool access control (for RESTRICTED sandboxes)
-    allowed_tools: List[str] = field(default_factory=lambda: [
-        "execute_shell",
-        "execute_python",
-        "save_file",
-        "load_file",
-        "replace_in_file",
-        "list_files",
-        "delete_file",
-        "create_directory",
-        "file_exists",
-        "get_sandbox_info",
-        "calculator",
-        "semantic_search",
-        "episodic_search",
-        "finish",
-        "human_approval"
-    ])
-    denied_tools: List[str] = field(default_factory=lambda: [
-        "install_system_package",
-        "sudo_execute",
-        "network_request",
-        "raw_socket"
-    ])
+    allowed_tools: List[str] = field(
+        default_factory=lambda: [
+            "execute_shell",
+            "execute_python",
+            "save_file",
+            "load_file",
+            "replace_in_file",
+            "list_files",
+            "delete_file",
+            "create_directory",
+            "file_exists",
+            "get_sandbox_info",
+            "calculator",
+            "semantic_search",
+            "episodic_search",
+            "finish",
+            "human_approval",
+        ]
+    )
+    denied_tools: List[str] = field(
+        default_factory=lambda: [
+            "install_system_package",
+            "sudo_execute",
+            "network_request",
+            "raw_socket",
+        ]
+    )
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -202,7 +206,7 @@ class SandboxRegistry:
         self,
         sandbox_config: SandboxConfig,
         prefer_mode: Optional[SandboxMode] = None,
-        docker_image: Optional[str] = None
+        docker_image: Optional[str] = None,
     ) -> SandboxProvider:
         """
         Create and initialize a sandbox.
@@ -225,14 +229,12 @@ class SandboxRegistry:
         mode = prefer_mode or self._config.mode
 
         # Setup volume paths
-        sandbox_config.share_mount_host = Path(
-            self._config.share_path
-        ).expanduser().resolve()
+        sandbox_config.share_mount_host = Path(self._config.share_path).expanduser().resolve()
         sandbox_config.share_mount_host.mkdir(parents=True, exist_ok=True)
 
-        sandbox_config.output_mount_host = Path(
-            self._config.outputs_path
-        ).expanduser().resolve() / sandbox_config.sandbox_id
+        sandbox_config.output_mount_host = (
+            Path(self._config.outputs_path).expanduser().resolve() / sandbox_config.sandbox_id
+        )
         sandbox_config.output_mount_host.mkdir(parents=True, exist_ok=True)
 
         # Set default resource limits from config
@@ -250,10 +252,7 @@ class SandboxRegistry:
         if mode in (SandboxMode.DOCKER, SandboxMode.HYBRID):
             if self._config.docker_enabled:
                 try:
-                    provider = await self._create_docker_sandbox(
-                        sandbox_config,
-                        docker_image
-                    )
+                    provider = await self._create_docker_sandbox(sandbox_config, docker_image)
                 except Exception as e:
                     error_msg = f"Docker sandbox creation failed: {e}"
                     logger.warning(error_msg)
@@ -292,9 +291,7 @@ class SandboxRegistry:
         return provider
 
     async def _create_docker_sandbox(
-        self,
-        config: SandboxConfig,
-        image: Optional[str] = None
+        self, config: SandboxConfig, image: Optional[str] = None
     ) -> DockerSandboxProvider:
         """
         Create a Docker sandbox.
@@ -314,16 +311,13 @@ class SandboxRegistry:
             full_access_label=self._config.docker_full_access_label,
             full_access_name_pattern=self._config.docker_full_access_name_pattern,
             docker_host=self._config.docker_host,
-            auto_pull=self._config.docker_auto_pull
+            auto_pull=self._config.docker_auto_pull,
         )
 
         await provider.initialize(config)
         return provider
 
-    async def _create_vm_sandbox(
-        self,
-        config: SandboxConfig
-    ) -> VMSandboxProvider:
+    async def _create_vm_sandbox(self, config: SandboxConfig) -> VMSandboxProvider:
         """
         Create a VM sandbox.
 
@@ -343,17 +337,13 @@ class SandboxRegistry:
             private_key_path=self._config.vm_private_key_path,
             full_access_hosts=self._config.vm_full_access_hosts,
             use_ssh_agent=self._config.vm_use_ssh_agent,
-            connection_timeout=self._config.vm_connection_timeout
+            connection_timeout=self._config.vm_connection_timeout,
         )
 
         await provider.initialize(config)
         return provider
 
-    def is_tool_allowed(
-        self,
-        tool_name: str,
-        access_level: SandboxAccessLevel
-    ) -> bool:
+    def is_tool_allowed(self, tool_name: str, access_level: SandboxAccessLevel) -> bool:
         """
         Check if a tool is allowed for the given access level.
 
@@ -476,10 +466,7 @@ class SandboxRegistry:
             List of sandbox info dictionaries
         """
         return [
-            {
-                "sandbox_id": sandbox_id,
-                **provider.get_info()
-            }
+            {"sandbox_id": sandbox_id, **provider.get_info()}
             for sandbox_id, provider in self._active_sandboxes.items()
         ]
 

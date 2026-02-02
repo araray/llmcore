@@ -10,7 +10,8 @@ import os
 import sys
 
 # Add the src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
 
 async def main():
     print("=" * 55)
@@ -21,16 +22,12 @@ async def main():
         # Test 1: Import LLMCore
         print("🧪 Test 1: Importing LLMCore...")
         from llmcore import LLMCore
+
         print("✅ Successfully imported LLMCore")
 
         # Test 2: Create instance
         print("\n🧪 Test 2: Creating LLMCore instance with JSON storage...")
-        config_overrides = {
-            "storage": {
-                "type": "json",
-                "path": "/tmp/llmcore_test_sessions"
-            }
-        }
+        config_overrides = {"storage": {"type": "json", "path": "/tmp/llmcore_test_sessions"}}
         llmcore = await LLMCore.create(config_overrides=config_overrides)
         print("✅ LLMCore instance created successfully")
 
@@ -56,6 +53,7 @@ async def main():
         # Test 6: Create a test session
         print("\n🧪 Test 6: Creating a test session...")
         from llmcore.models import ChatSession, Role
+
         test_session = ChatSession(id="test-session-123", name="Test Session")
         test_session.add_message("Hello, this is a test", Role.USER)
         test_session.add_message("Hi! I'm responding", Role.ASSISTANT)
@@ -74,7 +72,7 @@ async def main():
         # Test 8: List sessions again (should include our test session)
         print("\n🧪 Test 8: Verifying test session appears in list...")
         sessions_after = await llmcore.list_sessions()
-        test_session_found = any(s.get('id') == 'test-session-123' for s in sessions_after)
+        test_session_found = any(s.get("id") == "test-session-123" for s in sessions_after)
         if test_session_found:
             print("✅ Test session found in list")
         else:
@@ -88,7 +86,7 @@ async def main():
         # Test 10: Verify deletion
         print("\n🧪 Test 10: Verifying session was deleted...")
         sessions_final = await llmcore.list_sessions()
-        test_session_still_exists = any(s.get('id') == 'test-session-123' for s in sessions_final)
+        test_session_still_exists = any(s.get("id") == "test-session-123" for s in sessions_final)
         if not test_session_still_exists:
             print("✅ Test session successfully deleted")
         else:
@@ -98,6 +96,7 @@ async def main():
         print("\n🧪 Test 11: Testing AgentManager availability (optional feature)...")
         try:
             from llmcore.agents import AgentManager, ToolManager
+
             print("✅ AgentManager can be imported")
             print("✅ ToolManager can be imported")
             print("ℹ️  Note: AgentManager is available but not auto-initialized in LLMCore")
@@ -111,10 +110,12 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         print("\n" + "=" * 55)
         print("❌ Some tests failed - please review errors above")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

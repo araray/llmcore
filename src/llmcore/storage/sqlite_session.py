@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import aiosqlite
+
     aiosqlite_available = True
 except ImportError:
     aiosqlite_available = False
@@ -55,6 +56,7 @@ class SqliteSessionStorage(BaseSessionStorage):
     Manages persistence of ChatSession, ContextPreset, and Episode objects in a
     SQLite database, delegating preset and episode logic to helper modules.
     """
+
     _db_path: pathlib.Path
     _conn: Optional["aiosqlite.Connection"] = None
     _sessions_table_name: str
@@ -76,7 +78,9 @@ class SqliteSessionStorage(BaseSessionStorage):
             SessionStorageError: If the database cannot be initialized.
         """
         if not aiosqlite_available:
-            raise ConfigError("aiosqlite library is not installed. Please install `llmcore[sqlite]`.")
+            raise ConfigError(
+                "aiosqlite library is not installed. Please install `llmcore[sqlite]`."
+            )
 
         db_path_str = config.get("path")
         if not db_path_str:
@@ -85,9 +89,15 @@ class SqliteSessionStorage(BaseSessionStorage):
         self._db_path = pathlib.Path(os.path.expanduser(db_path_str))
         self._sessions_table_name = config.get("sessions_table_name", DEFAULT_SESSIONS_TABLE)
         self._messages_table_name = config.get("messages_table_name", DEFAULT_MESSAGES_TABLE)
-        self._session_context_items_table_name = config.get("session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE)
-        self._context_presets_table_name = config.get("context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE)
-        self._context_preset_items_table_name = config.get("context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE)
+        self._session_context_items_table_name = config.get(
+            "session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE
+        )
+        self._context_presets_table_name = config.get(
+            "context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE
+        )
+        self._context_preset_items_table_name = config.get(
+            "context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE
+        )
         self._episodes_table_name = config.get("episodes_table_name", DEFAULT_EPISODES_TABLE)
 
         try:
@@ -118,7 +128,9 @@ class SqliteSessionStorage(BaseSessionStorage):
                 FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
             )
         """)
-        await self._conn.execute(f"CREATE INDEX IF NOT EXISTS idx_messages_session_timestamp ON {self._messages_table_name} (session_id, timestamp);")
+        await self._conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_messages_session_timestamp ON {self._messages_table_name} (session_id, timestamp);"
+        )
 
         # Session ContextItems table
         await self._conn.execute(f"""
@@ -154,33 +166,77 @@ class SqliteSessionStorage(BaseSessionStorage):
                 FOREIGN KEY (session_id) REFERENCES {self._sessions_table_name}(id) ON DELETE CASCADE
             )
         """)
-        await self._conn.execute(f"CREATE INDEX IF NOT EXISTS idx_episodes_session_timestamp ON {self._episodes_table_name} (session_id, timestamp);")
+        await self._conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_episodes_session_timestamp ON {self._episodes_table_name} (session_id, timestamp);"
+        )
 
     # --- Session Management ---
 
     async def save_session(self, session: ChatSession) -> None:
         """Saves or updates a session, its messages, and context items."""
-        if not self._conn: raise SessionStorageError("Database connection not initialized.")
+        if not self._conn:
+            raise SessionStorageError("Database connection not initialized.")
         try:
             await self._conn.execute("BEGIN;")
-            await self._conn.execute(f"""
+            await self._conn.execute(
+                f"""
                 INSERT OR REPLACE INTO {self._sessions_table_name} (id, name, created_at, updated_at, metadata)
                 VALUES (?, ?, ?, ?, ?)
-            """, (session.id, session.name, session.created_at.isoformat(), session.updated_at.isoformat(), json.dumps(session.metadata or {})))
+            """,
+                (
+                    session.id,
+                    session.name,
+                    session.created_at.isoformat(),
+                    session.updated_at.isoformat(),
+                    json.dumps(session.metadata or {}),
+                ),
+            )
 
-            await self._conn.execute(f"DELETE FROM {self._messages_table_name} WHERE session_id = ?", (session.id,))
+            await self._conn.execute(
+                f"DELETE FROM {self._messages_table_name} WHERE session_id = ?", (session.id,)
+            )
             if session.messages:
-                messages_data = [(msg.id, session.id, str(msg.role), msg.content, msg.timestamp.isoformat(),
-                                  msg.tokens, json.dumps(msg.metadata or {})) for msg in session.messages]
-                await self._conn.executemany(f"INSERT INTO {self._messages_table_name} (id, session_id, role, content, timestamp, tokens, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)", messages_data)
+                messages_data = [
+                    (
+                        msg.id,
+                        session.id,
+                        str(msg.role),
+                        msg.content,
+                        msg.timestamp.isoformat(),
+                        msg.tokens,
+                        json.dumps(msg.metadata or {}),
+                    )
+                    for msg in session.messages
+                ]
+                await self._conn.executemany(
+                    f"INSERT INTO {self._messages_table_name} (id, session_id, role, content, timestamp, tokens, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    messages_data,
+                )
 
-            await self._conn.execute(f"DELETE FROM {self._session_context_items_table_name} WHERE session_id = ?", (session.id,))
+            await self._conn.execute(
+                f"DELETE FROM {self._session_context_items_table_name} WHERE session_id = ?",
+                (session.id,),
+            )
             if session.context_items:
-                context_items_data = [(item.id, session.id, str(item.type), item.source_id, item.content, item.tokens,
-                                       json.dumps(item.metadata or {}), item.timestamp.isoformat(),
-                                       1 if item.is_truncated else 0, item.original_tokens)
-                                      for item in session.context_items]
-                await self._conn.executemany(f"INSERT INTO {self._session_context_items_table_name} (id, session_id, item_type, source_id, content, tokens, metadata, timestamp, is_truncated, original_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", context_items_data)
+                context_items_data = [
+                    (
+                        item.id,
+                        session.id,
+                        str(item.type),
+                        item.source_id,
+                        item.content,
+                        item.tokens,
+                        json.dumps(item.metadata or {}),
+                        item.timestamp.isoformat(),
+                        1 if item.is_truncated else 0,
+                        item.original_tokens,
+                    )
+                    for item in session.context_items
+                ]
+                await self._conn.executemany(
+                    f"INSERT INTO {self._session_context_items_table_name} (id, session_id, item_type, source_id, content, tokens, metadata, timestamp, is_truncated, original_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    context_items_data,
+                )
             await self._conn.commit()
         except aiosqlite.Error as e:
             await self._conn.rollback()
@@ -188,34 +244,52 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """Retrieves a complete session from SQLite."""
-        if not self._conn: raise SessionStorageError("Database connection not initialized.")
+        if not self._conn:
+            raise SessionStorageError("Database connection not initialized.")
         try:
-            async with self._conn.execute(f"SELECT * FROM {self._sessions_table_name} WHERE id = ?", (session_id,)) as cursor:
+            async with self._conn.execute(
+                f"SELECT * FROM {self._sessions_table_name} WHERE id = ?", (session_id,)
+            ) as cursor:
                 session_row = await cursor.fetchone()
-            if not session_row: return None
+            if not session_row:
+                return None
 
             session_data = dict(session_row)
-            session_data["metadata"] = json.loads(session_data.get("metadata") or '{}')
-            session_data["created_at"] = datetime.fromisoformat(session_data["created_at"].replace('Z', '+00:00'))
-            session_data["updated_at"] = datetime.fromisoformat(session_data["updated_at"].replace('Z', '+00:00'))
+            session_data["metadata"] = json.loads(session_data.get("metadata") or "{}")
+            session_data["created_at"] = datetime.fromisoformat(
+                session_data["created_at"].replace("Z", "+00:00")
+            )
+            session_data["updated_at"] = datetime.fromisoformat(
+                session_data["updated_at"].replace("Z", "+00:00")
+            )
 
             messages: List[Message] = []
-            async with self._conn.execute(f"SELECT * FROM {self._messages_table_name} WHERE session_id = ? ORDER BY timestamp ASC", (session_id,)) as cursor:
+            async with self._conn.execute(
+                f"SELECT * FROM {self._messages_table_name} WHERE session_id = ? ORDER BY timestamp ASC",
+                (session_id,),
+            ) as cursor:
                 async for row in cursor:
                     msg_dict = dict(row)
-                    msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or '{}')
+                    msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or "{}")
                     msg_dict["role"] = Role(msg_dict["role"])
-                    msg_dict["timestamp"] = datetime.fromisoformat(msg_dict["timestamp"].replace('Z', '+00:00'))
+                    msg_dict["timestamp"] = datetime.fromisoformat(
+                        msg_dict["timestamp"].replace("Z", "+00:00")
+                    )
                     messages.append(Message.model_validate(msg_dict))
             session_data["messages"] = messages
 
             context_items: List[ContextItem] = []
-            async with self._conn.execute(f"SELECT * FROM {self._session_context_items_table_name} WHERE session_id = ? ORDER BY timestamp ASC", (session_id,)) as cursor:
+            async with self._conn.execute(
+                f"SELECT * FROM {self._session_context_items_table_name} WHERE session_id = ? ORDER BY timestamp ASC",
+                (session_id,),
+            ) as cursor:
                 async for row in cursor:
                     item_dict = dict(row)
-                    item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                    item_dict["metadata"] = json.loads(item_dict.get("metadata") or "{}")
                     item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
-                    item_dict["timestamp"] = datetime.fromisoformat(item_dict["timestamp"].replace('Z', '+00:00'))
+                    item_dict["timestamp"] = datetime.fromisoformat(
+                        item_dict["timestamp"].replace("Z", "+00:00")
+                    )
                     item_dict["is_truncated"] = bool(item_dict.get("is_truncated", 0))
                     context_items.append(ContextItem.model_validate(item_dict))
             session_data["context_items"] = context_items
@@ -226,7 +300,8 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """Lists session metadata from SQLite."""
-        if not self._conn: raise SessionStorageError("Database connection not initialized.")
+        if not self._conn:
+            raise SessionStorageError("Database connection not initialized.")
         try:
             async with self._conn.execute(f"""
                 SELECT s.id, s.name, s.created_at, s.updated_at, s.metadata,
@@ -242,9 +317,12 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def delete_session(self, session_id: str) -> bool:
         """Deletes a session and its associated data from SQLite."""
-        if not self._conn: raise SessionStorageError("Database connection not initialized.")
+        if not self._conn:
+            raise SessionStorageError("Database connection not initialized.")
         try:
-            cursor = await self._conn.execute(f"DELETE FROM {self._sessions_table_name} WHERE id = ?", (session_id,))
+            cursor = await self._conn.execute(
+                f"DELETE FROM {self._sessions_table_name} WHERE id = ?", (session_id,)
+            )
             await self._conn.commit()
             return cursor.rowcount > 0
         except aiosqlite.Error as e:
@@ -253,60 +331,80 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def update_session_name(self, session_id: str, new_name: str) -> bool:
         """Updates the name for a specific session in SQLite."""
-        if not self._conn: raise SessionStorageError("Database connection not initialized.")
+        if not self._conn:
+            raise SessionStorageError("Database connection not initialized.")
         try:
             cursor = await self._conn.execute(
                 f"UPDATE {self._sessions_table_name} SET name = ?, updated_at = ? WHERE id = ?",
-                (new_name, datetime.now(timezone.utc).isoformat(), session_id)
+                (new_name, datetime.now(timezone.utc).isoformat(), session_id),
             )
             await self._conn.commit()
             return cursor.rowcount > 0
         except aiosqlite.Error as e:
             await self._conn.rollback()
-            raise SessionStorageError(f"Database error updating session name for '{session_id}': {e}")
+            raise SessionStorageError(
+                f"Database error updating session name for '{session_id}': {e}"
+            )
 
     # --- Context Preset Management (Delegated) ---
 
     async def save_context_preset(self, preset: ContextPreset) -> None:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         await sqlite_preset_helpers.save_context_preset(
-            self._conn, preset, self._context_presets_table_name, self._context_preset_items_table_name
+            self._conn,
+            preset,
+            self._context_presets_table_name,
+            self._context_preset_items_table_name,
         )
 
     async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.get_context_preset(
-            self._conn, preset_name, self._context_presets_table_name, self._context_preset_items_table_name
+            self._conn,
+            preset_name,
+            self._context_presets_table_name,
+            self._context_preset_items_table_name,
         )
 
     async def list_context_presets(self) -> List[Dict[str, Any]]:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.list_context_presets(
             self._conn, self._context_presets_table_name, self._context_preset_items_table_name
         )
 
     async def delete_context_preset(self, preset_name: str) -> bool:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.delete_context_preset(
             self._conn, preset_name, self._context_presets_table_name
         )
 
     async def rename_context_preset(self, old_name: str, new_name: str) -> bool:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.rename_context_preset(
-            self._conn, old_name, new_name, self._context_presets_table_name, self._context_preset_items_table_name
+            self._conn,
+            old_name,
+            new_name,
+            self._context_presets_table_name,
+            self._context_preset_items_table_name,
         )
 
     # --- Episodic Memory Management (Delegated) ---
 
     async def add_episode(self, episode: Episode) -> None:
-        if not self._conn: raise StorageError("Database connection not initialized.")
-        await sqlite_episode_helpers.add_episode(
-            self._conn, episode, self._episodes_table_name
-        )
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
+        await sqlite_episode_helpers.add_episode(self._conn, episode, self._episodes_table_name)
 
-    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
-        if not self._conn: raise StorageError("Database connection not initialized.")
+    async def get_episodes(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Episode]:
+        if not self._conn:
+            raise StorageError("Database connection not initialized.")
         return await sqlite_episode_helpers.get_episodes(
             self._conn, session_id, self._episodes_table_name, limit, offset
         )

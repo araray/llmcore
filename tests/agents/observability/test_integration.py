@@ -27,6 +27,7 @@ import pytest
 # Check if AgentManager is available (conftest creates dummy packages that don't include it)
 try:
     from llmcore.agents import AgentManager
+
     AGENT_MANAGER_AVAILABLE = True
 except ImportError:
     AGENT_MANAGER_AVAILABLE = False
@@ -34,19 +35,19 @@ except ImportError:
 # Check if EnhancedAgentManager is available
 try:
     from llmcore.agents import EnhancedAgentManager
+
     ENHANCED_AGENT_MANAGER_AVAILABLE = True
 except ImportError:
     ENHANCED_AGENT_MANAGER_AVAILABLE = False
 
 # Skip marker for tests that require AgentManager
 requires_agent_manager = pytest.mark.skipif(
-    not AGENT_MANAGER_AVAILABLE,
-    reason="AgentManager not available in isolated test environment"
+    not AGENT_MANAGER_AVAILABLE, reason="AgentManager not available in isolated test environment"
 )
 
 requires_enhanced_agent_manager = pytest.mark.skipif(
     not ENHANCED_AGENT_MANAGER_AVAILABLE,
-    reason="EnhancedAgentManager not available in isolated test environment"
+    reason="EnhancedAgentManager not available in isolated test environment",
 )
 
 
@@ -304,9 +305,7 @@ class TestObservabilityEventLogging:
 
         # Verify events
         events = memory_sink.get_events()
-        lifecycle_events = [
-            e for e in events if e.category == EventCategory.LIFECYCLE
-        ]
+        lifecycle_events = [e for e in events if e.category == EventCategory.LIFECYCLE]
 
         assert len(lifecycle_events) >= 2
         assert lifecycle_events[0].event_type == "agent_started"
@@ -338,9 +337,7 @@ class TestObservabilityEventLogging:
 
         # Verify events
         events = memory_sink.get_events()
-        cognitive_events = [
-            e for e in events if e.category == EventCategory.COGNITIVE
-        ]
+        cognitive_events = [e for e in events if e.category == EventCategory.COGNITIVE]
 
         assert len(cognitive_events) == 3
         phases = [e.phase for e in cognitive_events]
@@ -364,9 +361,7 @@ class TestObservabilityEventLogging:
 
         # Verify events
         events = memory_sink.get_events()
-        activity_events = [
-            e for e in events if e.category == EventCategory.ACTIVITY
-        ]
+        activity_events = [e for e in events if e.category == EventCategory.ACTIVITY]
 
         assert len(activity_events) == 1
         assert activity_events[0].activity_name == "execute_python"
@@ -385,9 +380,7 @@ class TestObservabilityEventLogging:
 
         # Verify events
         events = memory_sink.get_events()
-        error_events = [
-            e for e in events if e.category == EventCategory.ERROR
-        ]
+        error_events = [e for e in events if e.category == EventCategory.ERROR]
 
         assert len(error_events) == 1
         assert error_events[0].error_type == "execution_error"
@@ -404,9 +397,7 @@ class TestObservabilityEventLogging:
 
         # Verify events
         events = memory_sink.get_events()
-        lifecycle_events = [
-            e for e in events if e.category == EventCategory.LIFECYCLE
-        ]
+        lifecycle_events = [e for e in events if e.category == EventCategory.LIFECYCLE]
 
         assert len(lifecycle_events) == 2
         event_types = [e.event_type for e in lifecycle_events]

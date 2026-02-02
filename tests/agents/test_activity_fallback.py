@@ -23,6 +23,7 @@ class TestActivityFallback:
     def agents_config(self):
         """Create an agents config with activities enabled."""
         from llmcore.config.agents_config import AgentsConfig
+
         config = AgentsConfig()
         config.activities.enabled = True
         config.activities.fallback_to_native_tools = True
@@ -40,15 +41,14 @@ class TestActivityFallback:
     def agent_state(self):
         """Create a mock agent state."""
         from llmcore.agents.cognitive.models import EnhancedAgentState
+
         return EnhancedAgentState(
             goal="Test goal",
             session_id="test-session",
         )
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_on_tool_error(
-        self, agents_config, mock_provider, agent_state
-    ):
+    async def test_activity_fallback_on_tool_error(self, agents_config, mock_provider, agent_state):
         """Test that activity fallback activates on tool support error."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -59,13 +59,14 @@ class TestActivityFallback:
         async def mock_chat(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if kwargs.get('tools'):
+            if kwargs.get("tools"):
                 raise Exception("Model gemma3:4b does not support tools")
             # Activity-based response
             return {
-                "choices": [{
-                    "message": {
-                        "content": """I'll search for files using the activity system.
+                "choices": [
+                    {
+                        "message": {
+                            "content": """I'll search for files using the activity system.
 
 <activity_request>
     <activity>file_search</activity>
@@ -75,8 +76,9 @@ class TestActivityFallback:
     </parameters>
     <reasoning>Searching for Python files</reasoning>
 </activity_request>"""
+                        }
                     }
-                }],
+                ],
                 "usage": {"total_tokens": 100},
             }
 
@@ -95,9 +97,7 @@ class TestActivityFallback:
         )
 
         # Include tool definitions to trigger the tools path
-        mock_tool_defs = [
-            {"name": "file_search", "description": "Search files", "parameters": {}}
-        ]
+        mock_tool_defs = [{"name": "file_search", "description": "Search files", "parameters": {}}]
 
         think_input = ThinkInput(
             goal="Search for Python files",
@@ -129,9 +129,7 @@ class TestActivityFallback:
         assert agent_state.get_working_memory("using_activity_fallback")
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_disabled(
-        self, mock_provider, agent_state
-    ):
+    async def test_activity_fallback_disabled(self, mock_provider, agent_state):
         """Test that activity fallback doesn't activate when disabled."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -190,7 +188,7 @@ class TestActivityFallback:
         <r>The answer is 42</r>
     </parameters>
     <reasoning>Task complete</reasoning>
-</activity_request>"""
+</activity_request>""",
         )
 
         act_input = ActInput(

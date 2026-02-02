@@ -76,15 +76,17 @@ def custom_observability_config():
 def mock_config():
     """Create a mock ConfyConfig-like object."""
     config = MagicMock()
-    config.get = MagicMock(side_effect=lambda key, default=None: {
-        "storage.session": {"type": "json", "path": "/tmp/test"},
-        "storage.vector": {"type": "chromadb", "path": "/tmp/test_vector"},
-        "storage.observability": {
-            "enabled": True,
-            "metrics_enabled": True,
-            "event_logging_enabled": True,
-        }
-    }.get(key, default))
+    config.get = MagicMock(
+        side_effect=lambda key, default=None: {
+            "storage.session": {"type": "json", "path": "/tmp/test"},
+            "storage.vector": {"type": "chromadb", "path": "/tmp/test_vector"},
+            "storage.observability": {
+                "enabled": True,
+                "metrics_enabled": True,
+                "event_logging_enabled": True,
+            },
+        }.get(key, default)
+    )
     return config
 
 
@@ -261,6 +263,7 @@ class TestStorageInstrumentation:
             assert ctx.table == "test_table"
             # Simulate some work
             import time
+
             time.sleep(0.01)
 
         # Context should have recorded duration
@@ -292,6 +295,7 @@ class TestStorageInstrumentation:
         with caplog.at_level(logging.WARNING):
             with inst.instrument("slow_op", "postgres", "large_table") as ctx:
                 import time
+
                 time.sleep(0.02)  # 20ms, exceeds threshold
 
         assert ctx.duration_seconds > 0.01
@@ -551,17 +555,18 @@ class TestObservabilityIntegration:
 
         # Create metrics from config
         metrics_cfg = config.get_metrics_config()
-        metrics = MetricsCollector(config=MetricsConfig(
-            enabled=metrics_cfg["enabled"],
-            backend=MetricsBackendType(metrics_cfg["backend"]),
-            prefix=metrics_cfg["prefix"],
-        ))
+        metrics = MetricsCollector(
+            config=MetricsConfig(
+                enabled=metrics_cfg["enabled"],
+                backend=MetricsBackendType(metrics_cfg["backend"]),
+                prefix=metrics_cfg["prefix"],
+            )
+        )
 
         # Create instrumentation from config with metrics collector
         inst_cfg = config.get_instrumentation_config()
         inst = StorageInstrumentation(
-            config=InstrumentationConfig(**inst_cfg),
-            metrics_collector=metrics
+            config=InstrumentationConfig(**inst_cfg), metrics_collector=metrics
         )
 
         # Create event logger from config

@@ -1177,9 +1177,7 @@ class IterationUpdate:
         )
 
     @classmethod
-    def from_streaming_result(
-        cls, result: StreamingIterationResult
-    ) -> "IterationUpdate":
+    def from_streaming_result(cls, result: StreamingIterationResult) -> "IterationUpdate":
         """
         Create an IterationUpdate from a StreamingIterationResult.
 

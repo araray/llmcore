@@ -57,13 +57,14 @@ logger = logging.getLogger(__name__)
 # TYPE VARIABLES
 # =============================================================================
 
-T = TypeVar('T')  # Generic result type
-DocT = TypeVar('DocT')  # Document type for vector operations
+T = TypeVar("T")  # Generic result type
+DocT = TypeVar("DocT")  # Document type for vector operations
 
 
 # =============================================================================
 # STORAGE CONTEXT
 # =============================================================================
+
 
 @dataclass
 class StorageContext:
@@ -97,6 +98,7 @@ class StorageContext:
         # System-level access (no user filtering)
         ctx = StorageContext.system_context()
     """
+
     user_id: Optional[str] = None
     namespace: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -114,7 +116,8 @@ class StorageContext:
         """Sanitize identifier to prevent SQL injection."""
         # Allow only alphanumeric, underscore, and hyphen
         import re
-        sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
+
+        sanitized = re.sub(r"[^a-zA-Z0-9_\-]", "_", name)
         # Ensure it doesn't start with a number
         if sanitized and sanitized[0].isdigit():
             sanitized = f"ns_{sanitized}"
@@ -134,12 +137,7 @@ class StorageContext:
         Returns:
             StorageContext with require_user=False
         """
-        return cls(
-            user_id=None,
-            namespace=None,
-            metadata=metadata or {},
-            require_user=False
-        )
+        return cls(user_id=None, namespace=None, metadata=metadata or {}, require_user=False)
 
     def with_namespace(self, namespace: str) -> "StorageContext":
         """
@@ -156,7 +154,7 @@ class StorageContext:
             namespace=namespace,
             metadata=self.metadata.copy(),
             read_only=self.read_only,
-            require_user=self.require_user
+            require_user=self.require_user,
         )
 
     def get_collection_name(self, base_name: str) -> str:
@@ -190,21 +188,24 @@ class StorageContext:
 # ISOLATION LEVEL
 # =============================================================================
 
+
 class IsolationLevel(str, Enum):
     """
     Data isolation levels for storage operations.
 
     Controls how data is partitioned/filtered based on user identity.
     """
-    NONE = "none"           # No isolation, all data visible
-    USER = "user"           # Filter by user_id
-    NAMESPACE = "namespace" # Filter by namespace prefix
-    FULL = "full"           # Filter by user_id AND namespace
+
+    NONE = "none"  # No isolation, all data visible
+    USER = "user"  # Filter by user_id
+    NAMESPACE = "namespace"  # Filter by namespace prefix
+    FULL = "full"  # Filter by user_id AND namespace
 
 
 # =============================================================================
 # BACKEND CAPABILITIES
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class BackendCapabilities:
@@ -214,6 +215,7 @@ class BackendCapabilities:
     This allows the abstraction layer to adapt behavior based on
     backend capabilities without requiring backend-specific code.
     """
+
     # Vector operations
     supports_vector_search: bool = False
     supports_hybrid_search: bool = False
@@ -307,6 +309,7 @@ CHROMADB_CAPABILITIES = BackendCapabilities(
 # STORAGE BACKEND PROTOCOL
 # =============================================================================
 
+
 @runtime_checkable
 class StorageBackendProtocol(Protocol):
     """
@@ -337,8 +340,10 @@ class StorageBackendProtocol(Protocol):
 # QUERY BUILDER
 # =============================================================================
 
+
 class QueryOperator(str, Enum):
     """SQL comparison operators."""
+
     EQ = "="
     NE = "!="
     LT = "<"
@@ -356,6 +361,7 @@ class QueryOperator(str, Enum):
 @dataclass
 class QueryCondition:
     """A single query condition."""
+
     column: str
     operator: QueryOperator
     value: Any
@@ -414,11 +420,7 @@ class QueryBuilder:
         sql, params = query.build_sqlite()
     """
 
-    def __init__(
-        self,
-        table: str,
-        allowed_columns: Optional[List[str]] = None
-    ):
+    def __init__(self, table: str, allowed_columns: Optional[List[str]] = None):
         """
         Initialize query builder for a table.
 
@@ -440,39 +442,31 @@ class QueryBuilder:
     def _validate_identifier(name: str) -> str:
         """Validate and sanitize SQL identifier."""
         import re
+
         # Allow alphanumeric, underscore, and common JSON operators
-        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name.split('->')[0].split('.')[0]):
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name.split("->")[0].split(".")[0]):
             raise ValueError(f"Invalid SQL identifier: {name}")
         return name
 
     def _validate_column(self, column: str) -> str:
         """Validate column name against allowlist if configured."""
-        base_column = column.split('->')[0].split('.')[0]
+        base_column = column.split("->")[0].split(".")[0]
         if self._allowed_columns and base_column not in self._allowed_columns:
             raise ValueError(f"Column '{base_column}' not in allowed columns")
         return column
 
     def select(self, *columns: str) -> "QueryBuilder":
         """Add columns to SELECT clause."""
-        self._select_columns.extend(
-            self._validate_column(c) for c in columns
-        )
+        self._select_columns.extend(self._validate_column(c) for c in columns)
         return self
 
-    def where(
-        self,
-        column: str,
-        operator: Union[str, QueryOperator],
-        value: Any
-    ) -> "QueryBuilder":
+    def where(self, column: str, operator: Union[str, QueryOperator], value: Any) -> "QueryBuilder":
         """Add a WHERE condition."""
         if isinstance(operator, str):
             operator = QueryOperator(operator)
-        self._conditions.append(QueryCondition(
-            column=self._validate_column(column),
-            operator=operator,
-            value=value
-        ))
+        self._conditions.append(
+            QueryCondition(column=self._validate_column(column), operator=operator, value=value)
+        )
         return self
 
     def where_eq(self, column: str, value: Any) -> "QueryBuilder":
@@ -569,10 +563,7 @@ class QueryBuilder:
 
         # ORDER BY
         if self._order_by:
-            order_parts = [
-                f"{col} {'DESC' if desc else 'ASC'}"
-                for col, desc in self._order_by
-            ]
+            order_parts = [f"{col} {'DESC' if desc else 'ASC'}" for col, desc in self._order_by]
             parts.append("ORDER BY " + ", ".join(order_parts))
 
         # LIMIT/OFFSET
@@ -622,10 +613,7 @@ class QueryBuilder:
 
         # ORDER BY
         if self._order_by:
-            order_parts = [
-                f"{col} {'DESC' if desc else 'ASC'}"
-                for col, desc in self._order_by
-            ]
+            order_parts = [f"{col} {'DESC' if desc else 'ASC'}" for col, desc in self._order_by]
             parts.append("ORDER BY " + ", ".join(order_parts))
 
         # LIMIT/OFFSET
@@ -671,10 +659,7 @@ class QueryBuilder:
 
         # ORDER BY
         if self._order_by:
-            order_parts = [
-                f"{col} {'DESC' if desc else 'ASC'}"
-                for col, desc in self._order_by
-            ]
+            order_parts = [f"{col} {'DESC' if desc else 'ASC'}" for col, desc in self._order_by]
             parts.append("ORDER BY " + ", ".join(order_parts))
 
         # LIMIT/OFFSET
@@ -693,6 +678,7 @@ class QueryBuilder:
 # =============================================================================
 # VECTOR SEARCH CONFIG
 # =============================================================================
+
 
 @dataclass
 class HNSWConfig:
@@ -720,6 +706,7 @@ class HNSWConfig:
         # Fast, lower recall (for high-throughput applications)
         config = HNSWConfig(m=8, ef_construction=64, ef_search=20)
     """
+
     m: int = 16
     ef_construction: int = 64
     ef_search: int = 40
@@ -729,7 +716,9 @@ class HNSWConfig:
         if not (2 <= self.m <= 100):
             raise ValueError(f"m must be between 2 and 100, got {self.m}")
         if not (4 <= self.ef_construction <= 1000):
-            raise ValueError(f"ef_construction must be between 4 and 1000, got {self.ef_construction}")
+            raise ValueError(
+                f"ef_construction must be between 4 and 1000, got {self.ef_construction}"
+            )
         if not (1 <= self.ef_search <= 1000):
             raise ValueError(f"ef_search must be between 1 and 1000, got {self.ef_search}")
 
@@ -757,6 +746,7 @@ class VectorSearchConfig:
         use_hybrid: Enable hybrid search (vector + full-text)
         hybrid_weight: Weight for vector similarity in hybrid mode (0-1)
     """
+
     k: int = 10
     distance_metric: str = "cosine"
     filter_metadata: Optional[Dict[str, Any]] = None
@@ -780,9 +770,9 @@ class VectorSearchConfig:
     def get_distance_operator(self) -> str:
         """Get pgvector distance operator for the configured metric."""
         operators = {
-            "cosine": "<=>",      # Cosine distance
-            "euclidean": "<->",   # L2 distance
-            "inner_product": "<#>"  # Negative inner product
+            "cosine": "<=>",  # Cosine distance
+            "euclidean": "<->",  # L2 distance
+            "inner_product": "<#>",  # Negative inner product
         }
         return operators[self.distance_metric]
 
@@ -790,6 +780,7 @@ class VectorSearchConfig:
 # =============================================================================
 # BATCH OPERATION CONFIG
 # =============================================================================
+
 
 @dataclass
 class BatchConfig:
@@ -803,6 +794,7 @@ class BatchConfig:
         max_retries: Maximum retries per item
         on_error: Error handling strategy ("raise", "skip", "collect")
     """
+
     chunk_size: int = 100
     max_concurrent: int = 4
     retry_failed: bool = True
@@ -830,6 +822,7 @@ class BatchResult(Generic[T]):
         total: Total number of items processed
         duration_ms: Total operation duration
     """
+
     successful: List[T]
     failed: List[Tuple[Any, str]]  # (item, error_message)
     total: int
@@ -855,6 +848,7 @@ class BatchResult(Generic[T]):
 # CONNECTION POOL CONFIG
 # =============================================================================
 
+
 @dataclass
 class PoolConfig:
     """
@@ -869,6 +863,7 @@ class PoolConfig:
         statement_cache_size: Number of prepared statements to cache
         health_check_interval: Seconds between pool health checks
     """
+
     min_size: int = 2
     max_size: int = 10
     max_idle_seconds: float = 300.0
@@ -912,6 +907,7 @@ class PoolConfig:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+
 def chunk_list(items: List[T], chunk_size: int) -> List[List[T]]:
     """
     Split a list into chunks of specified size.
@@ -923,7 +919,7 @@ def chunk_list(items: List[T], chunk_size: int) -> List[List[T]]:
     Returns:
         List of chunks
     """
-    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 async def execute_with_retry(
@@ -931,7 +927,7 @@ async def execute_with_retry(
     max_retries: int = 3,
     base_delay: float = 0.1,
     max_delay: float = 5.0,
-    retryable_exceptions: Tuple[type, ...] = (Exception,)
+    retryable_exceptions: Tuple[type, ...] = (Exception,),
 ) -> T:
     """
     Execute an async operation with exponential backoff retry.
@@ -961,8 +957,8 @@ async def execute_with_retry(
             last_exception = e
             if attempt < max_retries:
                 # Exponential backoff with jitter
-                delay = min(base_delay * (2 ** attempt), max_delay)
-                delay *= (0.5 + random.random())  # Add jitter
+                delay = min(base_delay * (2**attempt), max_delay)
+                delay *= 0.5 + random.random()  # Add jitter
                 logger.warning(
                     f"Operation failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
                     f"Retrying in {delay:.2f}s..."

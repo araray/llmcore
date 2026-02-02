@@ -24,14 +24,16 @@ import uuid  # For unique session ID
 from llmcore import ConfigError, LLMCore, LLMCoreError, ProviderError, SessionNotFoundError
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def main():
     """Runs the streaming chat example."""
     llm = None
-    session_id = f"streaming_example_{uuid.uuid4()}" # Use a session to demonstrate saving after stream
+    session_id = (
+        f"streaming_example_{uuid.uuid4()}"  # Use a session to demonstrate saving after stream
+    )
     logger.info(f"Using session ID for streaming example: {session_id}")
 
     try:
@@ -42,10 +44,12 @@ async def main():
             logger.info("LLMCore initialized successfully.")
 
             # --- Streaming Chat Interaction ---
-            prompt = "Tell me a short, imaginative story about a clock that could travel through time."
+            prompt = (
+                "Tell me a short, imaginative story about a clock that could travel through time."
+            )
             logger.info(f"\n--- Sending prompt (Session: {session_id}, Streaming) ---")
             logger.info(f"User: {prompt}")
-            print("\nLLM (Streaming): ", end="", flush=True) # Use print for direct console output
+            print("\nLLM (Streaming): ", end="", flush=True)  # Use print for direct console output
 
             # Call chat with stream=True
             # This returns an asynchronous generator
@@ -53,7 +57,7 @@ async def main():
                 message=prompt,
                 session_id=session_id,
                 stream=True,
-                save_session=True # Instruct LLMCore to save the session after the stream
+                save_session=True,  # Instruct LLMCore to save the session after the stream
             )
 
             # 2. Process the stream
@@ -64,12 +68,12 @@ async def main():
                     print(chunk, end="", flush=True)
                     full_response_content += chunk
             except ProviderError as e:
-                 # Handle potential errors during the stream itself
-                 print(f"\n--- STREAM ERROR: {e} ---", flush=True)
-                 logger.error(f"Provider error during streaming: {e}")
+                # Handle potential errors during the stream itself
+                print(f"\n--- STREAM ERROR: {e} ---", flush=True)
+                logger.error(f"Provider error during streaming: {e}")
             except Exception as e:
-                 print(f"\n--- UNEXPECTED STREAM ERROR: {e} ---", flush=True)
-                 logger.exception("Unexpected error during stream processing.")
+                print(f"\n--- UNEXPECTED STREAM ERROR: {e} ---", flush=True)
+                logger.exception("Unexpected error during stream processing.")
 
             print("\n--- Stream finished ---")
 
@@ -78,32 +82,36 @@ async def main():
             logger.info(f"\n--- Verifying session '{session_id}' content after stream ---")
             saved_session = await llm.get_session(session_id)
             if saved_session:
-                 logger.info(f"Session '{saved_session.name}' found with {len(saved_session.messages)} messages.")
-                 if len(saved_session.messages) >= 2: # Should have user and assistant message
-                      logger.info(f"  User message: '{saved_session.messages[0].content[:50]}...'")
-                      logger.info(f"  Assistant message (full): '{saved_session.messages[-1].content[:80]}...'")
-                      # Check if the saved content matches the streamed content
-                      if saved_session.messages[-1].content == full_response_content:
-                           logger.info("  Saved assistant content matches streamed content.")
-                      else:
-                           logger.warning("  Mismatch between saved and streamed content!")
-                 else:
-                      logger.warning("  Session found, but expected messages are missing.")
+                logger.info(
+                    f"Session '{saved_session.name}' found with {len(saved_session.messages)} messages."
+                )
+                if len(saved_session.messages) >= 2:  # Should have user and assistant message
+                    logger.info(f"  User message: '{saved_session.messages[0].content[:50]}...'")
+                    logger.info(
+                        f"  Assistant message (full): '{saved_session.messages[-1].content[:80]}...'"
+                    )
+                    # Check if the saved content matches the streamed content
+                    if saved_session.messages[-1].content == full_response_content:
+                        logger.info("  Saved assistant content matches streamed content.")
+                    else:
+                        logger.warning("  Mismatch between saved and streamed content!")
+                else:
+                    logger.warning("  Session found, but expected messages are missing.")
             else:
-                 logger.warning(f"Could not retrieve session '{session_id}' after streaming chat.")
-
+                logger.warning(f"Could not retrieve session '{session_id}' after streaming chat.")
 
     except SessionNotFoundError as e:
-         logger.error(f"Session error: {e}")
+        logger.error(f"Session error: {e}")
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
     except ProviderError as e:
-         logger.error(f"Provider error (potentially during setup or non-stream phase): {e}")
+        logger.error(f"Provider error (potentially during setup or non-stream phase): {e}")
     except LLMCoreError as e:
         logger.error(f"An LLMCore error occurred: {e}")
     except Exception as e:
         logger.exception(f"An unexpected error occurred: {e}")
     # No finally block needed for llm.close() when using 'async with'
+
 
 if __name__ == "__main__":
     asyncio.run(main())

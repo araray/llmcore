@@ -79,12 +79,7 @@ class TestRiskFactor:
 
     def test_risk_factor_creation(self):
         """Should create risk factor with all fields."""
-        factor = RiskFactor(
-            name="tool_risk",
-            level="high",
-            weight=1.0,
-            reason="High risk tool"
-        )
+        factor = RiskFactor(name="tool_risk", level="high", weight=1.0, reason="High risk tool")
         assert factor.name == "tool_risk"
         assert factor.level == "high"
         assert factor.weight == 1.0
@@ -172,9 +167,7 @@ class TestActivityInfo:
     def test_activity_info_creation(self):
         """Should create activity info."""
         info = ActivityInfo(
-            activity_type="bash_exec",
-            parameters={"command": "ls"},
-            reason="List files"
+            activity_type="bash_exec", parameters={"command": "ls"}, reason="List files"
         )
         assert info.activity_type == "bash_exec"
         assert info.parameters["command"] == "ls"
@@ -190,7 +183,7 @@ class TestActivityInfo:
         info = ActivityInfo(
             activity_type="file_write",
             parameters={"path": "/tmp/test.txt", "content": "hello"},
-            reason="Write test file"
+            reason="Write test file",
         )
         data = info.model_dump()
         assert data["activity_type"] == "file_write"
@@ -210,10 +203,7 @@ class TestHITLRequest:
         activity = ActivityInfo(activity_type="test", parameters={})
         risk = RiskAssessment(overall_level="medium")
         request = HITLRequest(
-            activity=activity,
-            risk_assessment=risk,
-            session_id="sess-123",
-            user_id="user-456"
+            activity=activity, risk_assessment=risk, session_id="sess-123", user_id="user-456"
         )
         assert request.request_id  # Auto-generated
         assert request.activity.activity_type == "test"
@@ -252,7 +242,7 @@ class TestHITLRequest:
             risk_assessment=risk,
             context_summary="Test context",
             session_id="sess-1",
-            user_id="user-1"
+            user_id="user-1",
         )
         original.set_expiration(300)
 
@@ -275,10 +265,7 @@ class TestHITLResponse:
     def test_response_creation(self):
         """Should create response."""
         response = HITLResponse(
-            request_id="req-123",
-            approved=True,
-            responder_id="user-456",
-            feedback="Looks good"
+            request_id="req-123", approved=True, responder_id="user-456", feedback="Looks good"
         )
         assert response.request_id == "req-123"
         assert response.approved
@@ -287,27 +274,19 @@ class TestHITLResponse:
     def test_response_with_modifications(self):
         """Should handle modified parameters."""
         response = HITLResponse(
-            request_id="req-123",
-            approved=True,
-            modified_parameters={"path": "/workspace/safe.txt"}
+            request_id="req-123", approved=True, modified_parameters={"path": "/workspace/safe.txt"}
         )
         assert response.modified_parameters["path"] == "/workspace/safe.txt"
 
     def test_response_with_scope_grant(self):
         """Should handle scope grants."""
-        response = HITLResponse(
-            request_id="req-123",
-            approved=True,
-            scope_grant=ApprovalScope.TOOL
-        )
+        response = HITLResponse(request_id="req-123", approved=True, scope_grant=ApprovalScope.TOOL)
         assert response.scope_grant == ApprovalScope.TOOL
 
     def test_response_serialization(self):
         """Should serialize with enums."""
         response = HITLResponse(
-            request_id="req-123",
-            approved=True,
-            scope_grant=ApprovalScope.SESSION
+            request_id="req-123", approved=True, scope_grant=ApprovalScope.SESSION
         )
         data = response.to_dict()
         assert data["scope_grant"] == "session"
@@ -323,19 +302,13 @@ class TestHITLDecision:
 
     def test_decision_approved(self):
         """Should correctly identify approved status."""
-        decision = HITLDecision(
-            status=ApprovalStatus.APPROVED,
-            reason="User approved"
-        )
+        decision = HITLDecision(status=ApprovalStatus.APPROVED, reason="User approved")
         assert decision.is_approved
         assert decision.status == ApprovalStatus.APPROVED
 
     def test_decision_auto_approved(self):
         """Auto-approved should be considered approved."""
-        decision = HITLDecision(
-            status=ApprovalStatus.AUTO_APPROVED,
-            reason="Low risk"
-        )
+        decision = HITLDecision(status=ApprovalStatus.AUTO_APPROVED, reason="Low risk")
         assert decision.is_approved
 
     def test_decision_modified_approved(self):
@@ -343,25 +316,19 @@ class TestHITLDecision:
         decision = HITLDecision(
             status=ApprovalStatus.MODIFIED,
             reason="Changed parameters",
-            modified_parameters={"path": "/safe/path"}
+            modified_parameters={"path": "/safe/path"},
         )
         assert decision.is_approved
         assert decision.modified_parameters["path"] == "/safe/path"
 
     def test_decision_rejected(self):
         """Rejected should not be approved."""
-        decision = HITLDecision(
-            status=ApprovalStatus.REJECTED,
-            reason="Too risky"
-        )
+        decision = HITLDecision(status=ApprovalStatus.REJECTED, reason="Too risky")
         assert not decision.is_approved
 
     def test_decision_timeout(self):
         """Timeout should not be approved."""
-        decision = HITLDecision(
-            status=ApprovalStatus.TIMEOUT,
-            reason="No response"
-        )
+        decision = HITLDecision(status=ApprovalStatus.TIMEOUT, reason="No response")
         assert not decision.is_approved
 
 
@@ -379,7 +346,7 @@ class TestScopeModels:
             tool_name="bash_exec",
             max_risk_level=RiskLevel.MEDIUM,
             conditions={"path_pattern": "/workspace/*"},
-            granted_by="user-1"
+            granted_by="user-1",
         )
         assert scope.tool_name == "bash_exec"
         assert scope.max_risk_level == RiskLevel.MEDIUM
@@ -396,11 +363,7 @@ class TestScopeModels:
     def test_session_scope_serialization(self):
         """Should serialize session scope."""
         tool = ToolScope(tool_name="test", max_risk_level=RiskLevel.LOW)
-        scope = SessionScope(
-            session_id="sess-123",
-            approved_tools=[tool],
-            session_approval=False
-        )
+        scope = SessionScope(session_id="sess-123", approved_tools=[tool], session_approval=False)
         data = scope.model_dump()
         assert data["session_id"] == "sess-123"
         assert len(data["approved_tools"]) == 1
@@ -408,10 +371,7 @@ class TestScopeModels:
 
     def test_persistent_scope_creation(self):
         """Should create persistent scope."""
-        scope = PersistentScope(
-            user_id="user-123",
-            approved_tools=[]
-        )
+        scope = PersistentScope(user_id="user-123", approved_tools=[])
         assert scope.user_id == "user-123"
         assert scope.approved_tools == []
 
@@ -438,7 +398,7 @@ class TestHITLConfig:
             enabled=False,
             global_risk_threshold="high",
             default_timeout_seconds=600,
-            timeout_policy=TimeoutPolicy.APPROVE
+            timeout_policy=TimeoutPolicy.APPROVE,
         )
         assert not config.enabled
         assert config.global_risk_threshold == "high"
@@ -447,9 +407,7 @@ class TestHITLConfig:
 
     def test_config_safe_tools(self):
         """Should configure safe tools."""
-        config = HITLConfig(
-            safe_tools=["respond", "think", "final_answer"]
-        )
+        config = HITLConfig(safe_tools=["respond", "think", "final_answer"])
         assert "respond" in config.safe_tools
         assert "think" in config.safe_tools
 
@@ -460,7 +418,7 @@ class TestHITLConfig:
                 "low": TimeoutPolicy.APPROVE,
                 "medium": TimeoutPolicy.REJECT,
                 "high": TimeoutPolicy.REJECT,
-                "critical": TimeoutPolicy.REJECT
+                "critical": TimeoutPolicy.REJECT,
             }
         )
         assert config.timeout_policies_by_risk["low"] == TimeoutPolicy.APPROVE
@@ -488,21 +446,14 @@ class TestEdgeCases:
     def test_none_values(self):
         """Should handle None values gracefully."""
         response = HITLResponse(
-            request_id="test",
-            approved=True,
-            modified_parameters=None,
-            scope_grant=None
+            request_id="test", approved=True, modified_parameters=None, scope_grant=None
         )
         assert response.modified_parameters is None
         assert response.scope_grant is None
 
     def test_serialization_with_none(self):
         """Should serialize None values correctly."""
-        response = HITLResponse(
-            request_id="test",
-            approved=False,
-            feedback=None
-        )
+        response = HITLResponse(request_id="test", approved=False, feedback=None)
         data = response.to_dict()
         assert data["request_id"] == "test"
 

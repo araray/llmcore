@@ -10,7 +10,6 @@ Tests cover:
     - Access mode determination
 """
 
-
 from llmcore.agents.sandbox.images import (
     RUNTIME_IMAGE_MAP,
     TASK_CAPABILITY_MAP,
@@ -110,9 +109,7 @@ class TestCapabilitySelection:
 
     def test_select_for_python_capability(self, default_selector: ImageSelector):
         """Test selecting image by Python capability."""
-        result = default_selector.select_for_capabilities(
-            {ImageCapability.PYTHON}
-        )
+        result = default_selector.select_for_capabilities({ImageCapability.PYTHON})
         assert result.manifest is not None
         assert ImageCapability.PYTHON in result.manifest.capabilities
 
@@ -128,9 +125,7 @@ class TestCapabilitySelection:
 
     def test_select_for_research_capabilities(self, default_selector: ImageSelector):
         """Test selecting image by research capabilities."""
-        result = default_selector.select_for_capabilities(
-            {ImageCapability.RESEARCH}
-        )
+        result = default_selector.select_for_capabilities({ImageCapability.RESEARCH})
         assert result.manifest is not None
         assert ImageCapability.RESEARCH in result.manifest.capabilities
 
@@ -145,19 +140,13 @@ class TestTaskWithRuntime:
 
     def test_task_with_runtime_prefers_task(self, default_selector: ImageSelector):
         """Test that task mapping takes precedence."""
-        result = default_selector.select_for_task(
-            task_type="research",
-            runtime="nodejs"
-        )
+        result = default_selector.select_for_task(task_type="research", runtime="nodejs")
         # Research task mapping should win
         assert result.image == "llmcore-sandbox-research:1.0.0"
 
     def test_unknown_task_with_runtime(self, default_selector: ImageSelector):
         """Test unknown task falls back to runtime."""
-        result = default_selector.select_for_task(
-            task_type="unknown_task",
-            runtime="python"
-        )
+        result = default_selector.select_for_task(task_type="unknown_task", runtime="python")
         # Should use Python runtime mapping
         assert result.image == "llmcore-sandbox-python:1.0.0"
 
@@ -182,9 +171,7 @@ class TestCustomConfiguration:
 
     def test_custom_default_image(self):
         """Test custom default image."""
-        config = SelectionConfig(
-            default_image="my-custom-default:2.0.0"
-        )
+        config = SelectionConfig(default_image="my-custom-default:2.0.0")
         registry = ImageRegistry()
         selector = ImageSelector(registry, config)
 

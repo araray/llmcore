@@ -9,7 +9,6 @@ Tests:
 - Scope revocation
 """
 
-
 import pytest
 
 from llmcore.agents.hitl import (
@@ -27,10 +26,7 @@ from llmcore.agents.hitl import (
 @pytest.fixture
 def scope_manager():
     """Create default scope manager."""
-    return ApprovalScopeManager(
-        session_id="test-session",
-        user_id="test-user"
-    )
+    return ApprovalScopeManager(session_id="test-session", user_id="test-user")
 
 
 @pytest.fixture
@@ -39,13 +35,9 @@ def config_manager():
     config = HITLConfig(
         safe_tools=["respond", "think_aloud"],
         low_risk_tools=["file_read"],
-        high_risk_tools=["bash_exec"]
+        high_risk_tools=["bash_exec"],
     )
-    return ApprovalScopeManager(
-        session_id="test-session",
-        user_id="test-user",
-        config=config
-    )
+    return ApprovalScopeManager(session_id="test-session", user_id="test-user", config=config)
 
 
 # =============================================================================
@@ -59,9 +51,7 @@ class TestSessionScope:
     def test_grant_session_approval(self, scope_manager):
         """Should grant session approval for tool."""
         scope_id = scope_manager.grant_session_approval(
-            "bash_exec",
-            max_risk_level=RiskLevel.HIGH,
-            granted_by="test-user"
+            "bash_exec", max_risk_level=RiskLevel.HIGH, granted_by="test-user"
         )
         assert scope_id
         # Check scope was granted by verifying it approves
@@ -73,15 +63,13 @@ class TestSessionScope:
         scope_id = scope_manager.grant_session_approval(
             "file_write",
             conditions={"path_pattern": "/workspace/*"},
-            max_risk_level=RiskLevel.MEDIUM
+            max_risk_level=RiskLevel.MEDIUM,
         )
         assert scope_id
 
         # Should approve matching conditions
         result = scope_manager.check_scope(
-            "file_write",
-            {"path": "/workspace/test.txt"},
-            RiskLevel.MEDIUM
+            "file_write", {"path": "/workspace/test.txt"}, RiskLevel.MEDIUM
         )
         assert result is True
 
@@ -116,10 +104,7 @@ class TestSessionScope:
 
     def test_session_scope_respects_risk_level(self, scope_manager):
         """Should respect max risk level."""
-        scope_manager.grant_session_approval(
-            "bash_exec",
-            max_risk_level=RiskLevel.MEDIUM
-        )
+        scope_manager.grant_session_approval("bash_exec", max_risk_level=RiskLevel.MEDIUM)
 
         # Should approve at or below max risk
         result = scope_manager.check_scope("bash_exec", {}, RiskLevel.LOW)
@@ -218,31 +203,19 @@ class TestScopeConditionMatcher:
         """Should require all conditions to match."""
         matcher = ScopeConditionMatcher()
 
-        conditions = {
-            "path_pattern": "/workspace/*",
-            "action": "read"
-        }
+        conditions = {"path_pattern": "/workspace/*", "action": "read"}
 
         # Both match
-        assert matcher.matches({
-            "path": "/workspace/test.txt",
-            "action": "read"
-        }, conditions)
+        assert matcher.matches({"path": "/workspace/test.txt", "action": "read"}, conditions)
 
     def test_multiple_conditions_partial_match(self):
         """Should fail if any condition doesn't match."""
         matcher = ScopeConditionMatcher()
 
-        conditions = {
-            "path_pattern": "/workspace/*",
-            "action": "read"
-        }
+        conditions = {"path_pattern": "/workspace/*", "action": "read"}
 
         # Only one matches
-        assert not matcher.matches({
-            "path": "/workspace/test.txt",
-            "action": "write"
-        }, conditions)
+        assert not matcher.matches({"path": "/workspace/test.txt", "action": "write"}, conditions)
 
 
 # =============================================================================

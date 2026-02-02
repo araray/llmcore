@@ -50,9 +50,11 @@ from llmcore.storage import (
 # Benchmark Utilities
 # ============================================================================
 
+
 @dataclass
 class BenchmarkResult:
     """Result of a benchmark run."""
+
     name: str
     iterations: int
     mean_ms: float
@@ -145,6 +147,7 @@ def postgres_available() -> bool:
         return False
     try:
         import psycopg
+
         return True
     except ImportError:
         return False
@@ -153,6 +156,7 @@ def postgres_available() -> bool:
 # ============================================================================
 # Embedding Cache Benchmarks
 # ============================================================================
+
 
 class TestEmbeddingCacheBenchmarks:
     """Test embedding cache performance."""
@@ -235,6 +239,7 @@ class TestEmbeddingCacheBenchmarks:
 # SQLite Session Storage Benchmarks
 # ============================================================================
 
+
 class TestSqliteStorageBenchmarks:
     """Benchmark SQLite session storage."""
 
@@ -264,6 +269,7 @@ class TestSqliteStorageBenchmarks:
 # ============================================================================
 # ChromaDB Vector Storage Benchmarks
 # ============================================================================
+
 
 class TestChromaDBStorageBenchmarks:
     """Benchmark ChromaDB vector storage."""
@@ -296,10 +302,12 @@ class TestChromaDBStorageBenchmarks:
     async def test_chromadb_collection_list_latency(self, tmp_path: Path) -> None:
         """ChromaDB collection listing should be fast."""
         storage = ChromaVectorStorage()
-        await storage.initialize({
-            "path": str(tmp_path / "chromadb"),
-            "default_collection": "bench",
-        })
+        await storage.initialize(
+            {
+                "path": str(tmp_path / "chromadb"),
+                "default_collection": "bench",
+            }
+        )
 
         try:
             timings_ms: List[float] = []
@@ -323,6 +331,7 @@ class TestChromaDBStorageBenchmarks:
 # PostgreSQL Storage Benchmarks (when available)
 # ============================================================================
 
+
 class TestPostgresStorageBenchmarks:
     """Benchmark PostgreSQL session storage."""
 
@@ -340,9 +349,7 @@ class TestPostgresStorageBenchmarks:
 
     @pytest.mark.skipif(not postgres_available(), reason="PostgreSQL not configured")
     @pytest.mark.asyncio
-    async def test_postgres_session_list_latency(
-        self, postgres_config: Dict[str, Any]
-    ) -> None:
+    async def test_postgres_session_list_latency(self, postgres_config: Dict[str, Any]) -> None:
         """PostgreSQL session listing should be fast."""
         storage = PostgresSessionStorage()
         await storage.initialize(postgres_config)
@@ -367,6 +374,7 @@ class TestPostgresStorageBenchmarks:
 # ============================================================================
 # Observability Overhead Benchmarks
 # ============================================================================
+
 
 class TestObservabilityOverheadBenchmarks:
     """Test observability system overhead.
@@ -407,6 +415,7 @@ class TestObservabilityOverheadBenchmarks:
         logger = create_observability_logger(log_path=log_path, buffer_enabled=True)
 
         try:
+
             def log_event():
                 logger.log_event(
                     category="llm",
@@ -431,6 +440,7 @@ class TestObservabilityOverheadBenchmarks:
         tracker = CostTracker(db_path=db_path)
 
         try:
+
             def record_cost():
                 tracker.record(
                     provider="openai",
@@ -452,6 +462,7 @@ class TestObservabilityOverheadBenchmarks:
 # ============================================================================
 # Memory Usage Benchmarks
 # ============================================================================
+
 
 class TestMemoryBenchmarks:
     """Test memory usage during operations."""
@@ -487,6 +498,7 @@ class TestMemoryBenchmarks:
 # Incremental Indexing Benchmarks
 # ============================================================================
 
+
 class TestIncrementalIndexingBenchmarks:
     """Test incremental indexing performance.
 
@@ -513,9 +525,9 @@ class TestIncrementalIndexingBenchmarks:
             hash_bytes = hashlib.sha256(content.encode()).digest()
         incr_time = time.perf_counter() - incr_start
 
-        speedup = full_time / incr_time if incr_time > 0 else float('inf')
+        speedup = full_time / incr_time if incr_time > 0 else float("inf")
 
-        print(f"\nFull: {full_time*1000:.2f}ms, Incremental: {incr_time*1000:.4f}ms")
+        print(f"\nFull: {full_time * 1000:.2f}ms, Incremental: {incr_time * 1000:.4f}ms")
         print(f"Speedup: {speedup:.1f}x")
 
         # Incremental should be significantly faster (at least 10x for 1% change)
@@ -525,6 +537,7 @@ class TestIncrementalIndexingBenchmarks:
 # ============================================================================
 # Summary Report
 # ============================================================================
+
 
 class TestBenchmarkSummary:
     """Generate benchmark summary report."""

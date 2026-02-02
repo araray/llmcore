@@ -471,9 +471,7 @@ class TestFeedbackManagerAggregation:
 
     def test_aggregation_nonexistent_item(self, feedback_manager):
         """Test aggregation for item with no feedback."""
-        agg = feedback_manager.get_aggregated_feedback(
-            "nonexistent", "myproject"
-        )
+        agg = feedback_manager.get_aggregated_feedback("nonexistent", "myproject")
 
         assert agg is None
 
@@ -817,10 +815,7 @@ class TestFeedbackManagerThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=record_feedbacks, args=(i,))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=record_feedbacks, args=(i,)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -856,9 +851,7 @@ class TestFeedbackManagerThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=read_adjustments) for _ in range(5)
-        ]
+        threads = [threading.Thread(target=read_adjustments) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -967,12 +960,8 @@ class TestFeedbackManagerEdgeCases:
             relevance_score=0.0,
         )
 
-        perfect_agg = feedback_manager.get_aggregated_feedback(
-            "perfect", "myproject"
-        )
-        terrible_agg = feedback_manager.get_aggregated_feedback(
-            "terrible", "myproject"
-        )
+        perfect_agg = feedback_manager.get_aggregated_feedback("perfect", "myproject")
+        terrible_agg = feedback_manager.get_aggregated_feedback("terrible", "myproject")
 
         assert perfect_agg.recent_score == 10.0
         assert terrible_agg.recent_score == 0.0
@@ -1037,12 +1026,14 @@ class TestFeedbackManagerIntegration:
         for result in retrieval_results:
             adj = adjustments.get(result["item_id"], 0.0)
             final_score = result["similarity"] + adj * 0.2
-            reranked.append({
-                "item_id": result["item_id"],
-                "original": result["similarity"],
-                "adjustment": adj,
-                "final": final_score,
-            })
+            reranked.append(
+                {
+                    "item_id": result["item_id"],
+                    "original": result["similarity"],
+                    "adjustment": adj,
+                    "final": final_score,
+                }
+            )
 
         # Sort by final score
         reranked.sort(key=lambda x: x["final"], reverse=True)
@@ -1070,8 +1061,6 @@ class TestFeedbackManagerIntegration:
 
         # Check that system captured improvement trend
         for i in range(10):
-            agg = feedback_manager.get_aggregated_feedback(
-                f"chunk_{i}", "myproject"
-            )
+            agg = feedback_manager.get_aggregated_feedback(f"chunk_{i}", "myproject")
             if agg.total_feedback_count >= 10:
                 assert agg.trend == "improving"

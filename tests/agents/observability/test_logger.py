@@ -446,7 +446,7 @@ class TestCallbackSink:
     @pytest.mark.asyncio
     async def test_async_callback_supported(self, sample_lifecycle_event):
         """Test that callbacks work with the CallbackSink.
-        
+
         Note: Current implementation calls callback synchronously (doesn't await).
         Async callbacks would create unawaited coroutines. Use sync callbacks.
         """
@@ -781,22 +781,26 @@ class TestEventLogger:
         assert event_logger.error_count == 0
 
         # Log a normal event
-        await event_logger.log(LifecycleEvent(
-            session_id=session_id,
-            execution_id=execution_id,
-            event_type=LifecycleEventType.AGENT_STARTED,
-        ))
+        await event_logger.log(
+            LifecycleEvent(
+                session_id=session_id,
+                execution_id=execution_id,
+                event_type=LifecycleEventType.AGENT_STARTED,
+            )
+        )
 
         assert event_logger.error_count == 0
 
         # Log an error event
-        await event_logger.log(ErrorEvent(
-            session_id=session_id,
-            execution_id=execution_id,
-            event_type=ErrorEventType.EXCEPTION,
-            error_type="Test",
-            error_message="Test",
-        ))
+        await event_logger.log(
+            ErrorEvent(
+                session_id=session_id,
+                execution_id=execution_id,
+                event_type=ErrorEventType.EXCEPTION,
+                error_type="Test",
+                error_message="Test",
+            )
+        )
 
         assert event_logger.error_count == 1
 
@@ -822,10 +826,12 @@ class TestEventLogger:
             execution_id=execution_id,
         ) as logger:
             logger.add_sink(in_memory_sink)
-            await logger.log(LifecycleEvent(
-                session_id=session_id,
-                event_type=LifecycleEventType.AGENT_STARTED,
-            ))
+            await logger.log(
+                LifecycleEvent(
+                    session_id=session_id,
+                    event_type=LifecycleEventType.AGENT_STARTED,
+                )
+            )
             # Check events were written (before context exit which calls close)
             event_logged = len(in_memory_sink.events) == 1
 
@@ -1051,16 +1057,20 @@ class TestEventScope:
         await event_logger.log(parent_event)
 
         async with event_logger.event_scope(parent_event):
-            child_event = await event_logger.log(LifecycleEvent(
-                session_id=session_id,
-                execution_id=execution_id,
-                event_type=LifecycleEventType.ITERATION_COMPLETED,
-            ))
+            child_event = await event_logger.log(
+                LifecycleEvent(
+                    session_id=session_id,
+                    execution_id=execution_id,
+                    event_type=LifecycleEventType.ITERATION_COMPLETED,
+                )
+            )
 
             assert child_event.parent_event_id == parent_event.event_id
 
     @pytest.mark.asyncio
-    async def test_event_scope_restores_state(self, event_logger, in_memory_sink, session_id, execution_id):
+    async def test_event_scope_restores_state(
+        self, event_logger, in_memory_sink, session_id, execution_id
+    ):
         """Test that event scope restores previous state."""
         outer_parent = LifecycleEvent(
             session_id=session_id,
@@ -1081,11 +1091,13 @@ class TestEventScope:
             assert inner_parent.parent_event_id == outer_parent.event_id
 
         # After scope, parent should be None again
-        final_event = await event_logger.log(LifecycleEvent(
-            session_id=session_id,
-            execution_id=execution_id,
-            event_type=LifecycleEventType.AGENT_COMPLETED,
-        ))
+        final_event = await event_logger.log(
+            LifecycleEvent(
+                session_id=session_id,
+                execution_id=execution_id,
+                event_type=LifecycleEventType.AGENT_COMPLETED,
+            )
+        )
 
         assert final_event.parent_event_id is None
 

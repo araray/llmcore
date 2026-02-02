@@ -40,21 +40,13 @@ class FailureLearningPostgresConfig(BaseModel):
     """PostgreSQL-specific configuration for failure learning."""
 
     min_pool_size: int = Field(
-        default=2,
-        ge=1,
-        le=50,
-        description="Minimum number of connections in pool"
+        default=2, ge=1, le=50, description="Minimum number of connections in pool"
     )
     max_pool_size: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Maximum number of connections in pool"
+        default=10, ge=1, le=100, description="Maximum number of connections in pool"
     )
     table_prefix: str = Field(
-        default="",
-        max_length=50,
-        description="Prefix for table names (useful for multi-tenant)"
+        default="", max_length=50, description="Prefix for table names (useful for multi-tenant)"
     )
 
 
@@ -79,44 +71,38 @@ class FailureLearningConfig(BaseModel):
         ... )
     """
 
-    enabled: bool = Field(
-        default=True,
-        description="Enable failure learning system"
-    )
+    enabled: bool = Field(default=True, description="Enable failure learning system")
     backend: Literal["sqlite", "postgres"] = Field(
-        default="sqlite",
-        description="Storage backend: 'sqlite' for dev, 'postgres' for production"
+        default="sqlite", description="Storage backend: 'sqlite' for dev, 'postgres' for production"
     )
     db_path: str = Field(
         default="~/.local/share/llmcore/failures.db",
-        description="SQLite database path (used when backend='sqlite')"
+        description="SQLite database path (used when backend='sqlite')",
     )
     db_url: str = Field(
-        default="",
-        description="PostgreSQL connection URL (used when backend='postgres')"
+        default="", description="PostgreSQL connection URL (used when backend='postgres')"
     )
     max_failures_to_retrieve: int = Field(
         default=5,
         ge=1,
         le=100,
-        description="Maximum number of similar failures to retrieve before planning"
+        description="Maximum number of similar failures to retrieve before planning",
     )
     postgres: FailureLearningPostgresConfig = Field(
-        default_factory=FailureLearningPostgresConfig,
-        description="PostgreSQL-specific settings"
+        default_factory=FailureLearningPostgresConfig, description="PostgreSQL-specific settings"
     )
 
-    @field_validator('db_url')
+    @field_validator("db_url")
     @classmethod
     def validate_postgres_url(cls, v: str, info) -> str:
         """Validate PostgreSQL URL is provided when backend is postgres."""
-        backend = info.data.get('backend')
-        if backend == 'postgres' and not v:
+        backend = info.data.get("backend")
+        if backend == "postgres" and not v:
             # Don't raise error - allow env var to provide it
             pass
         return v
 
-    @field_validator('db_path')
+    @field_validator("db_path")
     @classmethod
     def expand_db_path(cls, v: str) -> str:
         """Expand user home directory in path."""
@@ -142,25 +128,15 @@ class TDDConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=False,
-        description="Enable TDD workflow (will be true after Phase 6.2)"
+        default=False, description="Enable TDD workflow (will be true after Phase 6.2)"
     )
     default_framework: Literal["pytest", "unittest", "jest"] = Field(
-        default="pytest",
-        description="Default test framework to use"
+        default="pytest", description="Default test framework to use"
     )
     min_tests: int = Field(
-        default=5,
-        ge=1,
-        le=100,
-        description="Minimum number of tests to generate"
+        default=5, ge=1, le=100, description="Minimum number of tests to generate"
     )
-    max_iterations: int = Field(
-        default=3,
-        ge=1,
-        le=10,
-        description="Maximum TDD iteration cycles"
-    )
+    max_iterations: int = Field(default=3, ge=1, le=10, description="Maximum TDD iteration cycles")
 
 
 # =============================================================================
@@ -172,35 +148,24 @@ class ArbiterScoringConfig(BaseModel):
     """Scoring criteria weights for multi-attempt arbiter."""
 
     correctness: float = Field(
-        default=0.5,
-        ge=0.0,
-        le=1.0,
-        description="Weight for correctness criteria"
+        default=0.5, ge=0.0, le=1.0, description="Weight for correctness criteria"
     )
     completeness: float = Field(
-        default=0.3,
-        ge=0.0,
-        le=1.0,
-        description="Weight for completeness criteria"
+        default=0.3, ge=0.0, le=1.0, description="Weight for completeness criteria"
     )
     style: float = Field(
-        default=0.2,
-        ge=0.0,
-        le=1.0,
-        description="Weight for style/quality criteria"
+        default=0.2, ge=0.0, le=1.0, description="Weight for style/quality criteria"
     )
 
-    @field_validator('style')
+    @field_validator("style")
     @classmethod
     def weights_sum_to_one(cls, v: float, info) -> float:
         """Validate that all weights sum to 1.0."""
-        correctness = info.data.get('correctness', 0.5)
-        completeness = info.data.get('completeness', 0.3)
+        correctness = info.data.get("correctness", 0.5)
+        completeness = info.data.get("completeness", 0.3)
         total = correctness + completeness + v
         if not (0.99 <= total <= 1.01):  # Allow small floating point error
-            raise ValueError(
-                f"Scoring weights must sum to 1.0, got {total:.3f}"
-            )
+            raise ValueError(f"Scoring weights must sum to 1.0, got {total:.3f}")
         return v
 
 
@@ -220,46 +185,38 @@ class ArbiterConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=False,
-        description="Enable multi-attempt generation (will be true after Phase 6.3)"
+        default=False, description="Enable multi-attempt generation (will be true after Phase 6.3)"
     )
     num_candidates: int = Field(
-        default=3,
-        ge=2,
-        le=10,
-        description="Number of candidates to generate"
+        default=3, ge=2, le=10, description="Number of candidates to generate"
     )
     temperatures: List[float] = Field(
         default=[0.3, 0.7, 1.0],
         min_length=1,
         max_length=10,
-        description="Temperature values for candidate generation"
+        description="Temperature values for candidate generation",
     )
     use_llm_arbiter: bool = Field(
-        default=True,
-        description="Use LLM-based arbiter for selection vs simple heuristics"
+        default=True, description="Use LLM-based arbiter for selection vs simple heuristics"
     )
     scoring: ArbiterScoringConfig = Field(
-        default_factory=ArbiterScoringConfig,
-        description="Scoring criteria weights"
+        default_factory=ArbiterScoringConfig, description="Scoring criteria weights"
     )
 
-    @field_validator('temperatures')
+    @field_validator("temperatures")
     @classmethod
     def validate_temperatures(cls, v: List[float]) -> List[float]:
         """Validate temperature values are in valid range."""
         for temp in v:
             if not 0.0 <= temp <= 2.0:
-                raise ValueError(
-                    f"Temperature {temp} outside valid range [0.0, 2.0]"
-                )
+                raise ValueError(f"Temperature {temp} outside valid range [0.0, 2.0]")
         return v
 
-    @field_validator('num_candidates')
+    @field_validator("num_candidates")
     @classmethod
     def validate_candidate_count(cls, v: int, info) -> int:
         """Validate num_candidates matches temperatures list length."""
-        temps = info.data.get('temperatures', [])
+        temps = info.data.get("temperatures", [])
         if temps and len(temps) != v:
             raise ValueError(
                 f"num_candidates ({v}) must match temperatures list length ({len(temps)})"
@@ -298,21 +255,17 @@ class DarwinConfig(BaseModel):
         ... )
     """
 
-    enabled: bool = Field(
-        default=True,
-        description="Master switch for all Darwin enhancements"
-    )
+    enabled: bool = Field(default=True, description="Master switch for all Darwin enhancements")
     failure_learning: FailureLearningConfig = Field(
         default_factory=FailureLearningConfig,
-        description="Failure learning system settings (Phase 6.1)"
+        description="Failure learning system settings (Phase 6.1)",
     )
     tdd: TDDConfig = Field(
-        default_factory=TDDConfig,
-        description="TDD support settings (Phase 6.2 - planned)"
+        default_factory=TDDConfig, description="TDD support settings (Phase 6.2 - planned)"
     )
     arbiter: ArbiterConfig = Field(
         default_factory=ArbiterConfig,
-        description="Multi-attempt arbiter settings (Phase 6.3 - planned)"
+        description="Multi-attempt arbiter settings (Phase 6.3 - planned)",
     )
 
 
@@ -347,7 +300,7 @@ def load_darwin_config_from_env() -> DarwinConfig:
             continue
 
         # Remove prefix and split into path
-        path = key[len(prefix):].lower().split("__")
+        path = key[len(prefix) :].lower().split("__")
 
         # Build nested dict
         current = config_dict

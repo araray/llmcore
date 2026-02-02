@@ -77,7 +77,7 @@ SESSION_STORAGE_MAP: Dict[str, Type[BaseSessionStorage]] = {
 VECTOR_STORAGE_MAP: Dict[str, Type[BaseVectorStorage]] = {
     "chromadb": ChromaVectorStorage,
     "pgvector": EnhancedPgVectorStorage,  # Use enhanced version with full collection management
-    "pgvector_legacy": PgVectorStorage,   # Legacy version for backwards compatibility
+    "pgvector_legacy": PgVectorStorage,  # Legacy version for backwards compatibility
 }
 # --- End Mappings ---
 
@@ -105,6 +105,7 @@ class StorageManager:
     created on-demand per-request. This provides a simple, single-tenant API suitable
     for library usage.
     """
+
     _config: ConfyConfig
     _session_storage_type: Optional[str] = None
     _vector_storage_type: Optional[str] = None
@@ -132,7 +133,7 @@ class StorageManager:
         health_config: Optional[HealthConfig] = None,
         observability_config: Optional[ObservabilityConfig] = None,
         validate_config: bool = True,
-        strict_validation: bool = False
+        strict_validation: bool = False,
     ):
         """
         Initializes the StorageManager.
@@ -179,16 +180,16 @@ class StorageManager:
         config_dict = {}
         try:
             # Try to get the raw config dict
-            if hasattr(self._config, 'to_dict'):
+            if hasattr(self._config, "to_dict"):
                 config_dict = self._config.to_dict()
-            elif hasattr(self._config, '_data'):
+            elif hasattr(self._config, "_data"):
                 config_dict = dict(self._config._data)
             else:
                 # Fallback: reconstruct from known keys
                 config_dict = {
                     "storage": {
                         "session": self._config.get("storage.session", {}),
-                        "vector": self._config.get("storage.vector", {})
+                        "vector": self._config.get("storage.vector", {}),
                     }
                 }
         except Exception as e:
@@ -201,7 +202,9 @@ class StorageManager:
         if not self._validation_result.valid:
             error_msg = self._validation_result.format_report()
             logger.error(f"Storage configuration validation failed:\n{error_msg}")
-            raise ConfigError(f"Invalid storage configuration. {len(self._validation_result.errors)} error(s) found.")
+            raise ConfigError(
+                f"Invalid storage configuration. {len(self._validation_result.errors)} error(s) found."
+            )
 
         # Log warnings even if validation passed
         if self._validation_result.warnings:
@@ -276,7 +279,7 @@ class StorageManager:
         self,
         enable_health_monitoring: bool = True,
         run_initial_health_check: bool = True,
-        enable_observability: bool = True
+        enable_observability: bool = True,
     ) -> None:
         """
         Parses storage configuration and creates storage backend instances.
@@ -340,13 +343,17 @@ class StorageManager:
         session_storage_type = session_storage_config.get("type")
 
         if not session_storage_type:
-            logger.warning("No session storage type configured ('storage.session.type'). Session persistence disabled.")
+            logger.warning(
+                "No session storage type configured ('storage.session.type'). Session persistence disabled."
+            )
             self._session_storage_type = None
             return
 
         if session_storage_type.lower() not in SESSION_STORAGE_MAP:
-            raise ConfigError(f"Unsupported session storage type configured: '{session_storage_type}'. "
-                              f"Available types: {list(SESSION_STORAGE_MAP.keys())}")
+            raise ConfigError(
+                f"Unsupported session storage type configured: '{session_storage_type}'. "
+                f"Available types: {list(SESSION_STORAGE_MAP.keys())}"
+            )
 
         self._session_storage_type = session_storage_type.lower()
         self._session_storage_config = session_storage_config
@@ -363,13 +370,17 @@ class StorageManager:
         vector_storage_type = vector_storage_config.get("type")
 
         if not vector_storage_type:
-            logger.warning("No vector storage type configured ('storage.vector.type'). RAG functionality will be unavailable.")
+            logger.warning(
+                "No vector storage type configured ('storage.vector.type'). RAG functionality will be unavailable."
+            )
             self._vector_storage_type = None
             return
 
         if vector_storage_type.lower() not in VECTOR_STORAGE_MAP:
-            raise ConfigError(f"Unsupported vector storage type configured: '{vector_storage_type}'. "
-                              f"Available types: {list(VECTOR_STORAGE_MAP.keys())}.")
+            raise ConfigError(
+                f"Unsupported vector storage type configured: '{vector_storage_type}'. "
+                f"Available types: {list(VECTOR_STORAGE_MAP.keys())}."
+            )
 
         self._vector_storage_type = vector_storage_type.lower()
         self._vector_storage_config = vector_storage_config
@@ -406,13 +417,15 @@ class StorageManager:
                     histogram_buckets=tuple(metrics_cfg.get("histogram_buckets", ())),
                 )
                 self._metrics_collector = MetricsCollector(config=metrics_config)
-                logger.debug(f"Metrics collector initialized (backend: {obs_config.metrics_backend})")
+                logger.debug(
+                    f"Metrics collector initialized (backend: {obs_config.metrics_backend})"
+                )
 
             # Initialize instrumentation with metrics collector
             inst_config = InstrumentationConfig(**obs_config.get_instrumentation_config())
             self._instrumentation = StorageInstrumentation(
                 config=inst_config,
-                metrics_collector=self._metrics_collector  # May be None if metrics disabled
+                metrics_collector=self._metrics_collector,  # May be None if metrics disabled
             )
             logger.debug("Storage instrumentation initialized")
 
@@ -440,9 +453,11 @@ class StorageManager:
             return
 
         # Try to get pool from session storage
-        if (self._session_storage_instance is not None and
-            hasattr(self._session_storage_instance, '_pool') and
-            self._session_storage_instance._pool is not None):
+        if (
+            self._session_storage_instance is not None
+            and hasattr(self._session_storage_instance, "_pool")
+            and self._session_storage_instance._pool is not None
+        ):
             try:
                 await self._event_logger.set_pool(self._session_storage_instance._pool)
                 logger.debug("Event logger connected to session storage pool")
@@ -484,13 +499,13 @@ class StorageManager:
                 f"Session storage backend '{self._session_storage_type}' instantiated and initialized.",
                 extra={
                     "backend_type": self._session_storage_type,
-                    "backend_class": session_storage_cls.__name__
-                }
+                    "backend_class": session_storage_cls.__name__,
+                },
             )
         except Exception as e:
             logger.error(
                 f"Failed to instantiate session storage backend '{self._session_storage_type}': {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise StorageError(f"Session storage instantiation failed: {e}")
 
@@ -505,18 +520,32 @@ class StorageManager:
         try:
             if self._session_storage_type == "postgres":
                 # Get the connection pool from the storage instance
-                if hasattr(self._session_storage_instance, '_pool') and self._session_storage_instance._pool:
-                    check_fn = await create_postgres_health_check(self._session_storage_instance._pool)
+                if (
+                    hasattr(self._session_storage_instance, "_pool")
+                    and self._session_storage_instance._pool
+                ):
+                    check_fn = await create_postgres_health_check(
+                        self._session_storage_instance._pool
+                    )
                 else:
-                    logger.warning("Postgres session storage has no pool; health monitoring unavailable")
+                    logger.warning(
+                        "Postgres session storage has no pool; health monitoring unavailable"
+                    )
                     return
 
             elif self._session_storage_type == "sqlite":
                 # Get the connection from the storage instance
-                if hasattr(self._session_storage_instance, '_conn') and self._session_storage_instance._conn:
-                    check_fn = await create_sqlite_health_check(self._session_storage_instance._conn)
+                if (
+                    hasattr(self._session_storage_instance, "_conn")
+                    and self._session_storage_instance._conn
+                ):
+                    check_fn = await create_sqlite_health_check(
+                        self._session_storage_instance._conn
+                    )
                 else:
-                    logger.warning("SQLite session storage has no connection; health monitoring unavailable")
+                    logger.warning(
+                        "SQLite session storage has no connection; health monitoring unavailable"
+                    )
                     return
 
             elif self._session_storage_type == "json":
@@ -525,14 +554,16 @@ class StorageManager:
                 return
 
             else:
-                logger.warning(f"No health check available for session storage type: {self._session_storage_type}")
+                logger.warning(
+                    f"No health check available for session storage type: {self._session_storage_type}"
+                )
                 return
 
             monitor = StorageHealthMonitor(
                 backend_name=backend_name,
                 backend_type="session",
                 check_fn=check_fn,
-                config=self._health_config
+                config=self._health_config,
             )
             self._health_manager.register_monitor(monitor)
             logger.debug(f"Health monitor registered for {backend_name}")
@@ -569,13 +600,13 @@ class StorageManager:
                 f"Vector storage backend '{self._vector_storage_type}' instantiated and initialized.",
                 extra={
                     "backend_type": self._vector_storage_type,
-                    "backend_class": vector_storage_cls.__name__
-                }
+                    "backend_class": vector_storage_cls.__name__,
+                },
             )
         except Exception as e:
             logger.error(
                 f"Failed to instantiate vector storage backend '{self._vector_storage_type}': {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise StorageError(f"Vector storage instantiation failed: {e}")
 
@@ -589,29 +620,41 @@ class StorageManager:
         try:
             if self._vector_storage_type == "pgvector":
                 # Get the connection pool from the storage instance
-                if hasattr(self._vector_storage_instance, '_pool') and self._vector_storage_instance._pool:
-                    check_fn = await create_postgres_health_check(self._vector_storage_instance._pool)
+                if (
+                    hasattr(self._vector_storage_instance, "_pool")
+                    and self._vector_storage_instance._pool
+                ):
+                    check_fn = await create_postgres_health_check(
+                        self._vector_storage_instance._pool
+                    )
                 else:
                     logger.warning("PgVector storage has no pool; health monitoring unavailable")
                     return
 
             elif self._vector_storage_type == "chromadb":
                 # Get the ChromaDB client
-                if hasattr(self._vector_storage_instance, '_client') and self._vector_storage_instance._client:
-                    check_fn = await create_chromadb_health_check(self._vector_storage_instance._client)
+                if (
+                    hasattr(self._vector_storage_instance, "_client")
+                    and self._vector_storage_instance._client
+                ):
+                    check_fn = await create_chromadb_health_check(
+                        self._vector_storage_instance._client
+                    )
                 else:
                     logger.warning("ChromaDB storage has no client; health monitoring unavailable")
                     return
 
             else:
-                logger.warning(f"No health check available for vector storage type: {self._vector_storage_type}")
+                logger.warning(
+                    f"No health check available for vector storage type: {self._vector_storage_type}"
+                )
                 return
 
             monitor = StorageHealthMonitor(
                 backend_name=backend_name,
                 backend_type="vector",
                 check_fn=check_fn,
-                config=self._health_config
+                config=self._health_config,
             )
             self._health_manager.register_monitor(monitor)
             logger.debug(f"Health monitor registered for {backend_name}")
@@ -656,9 +699,13 @@ class StorageManager:
         """
         if self._session_storage_instance is None:
             if self._session_storage_type is None:
-                raise StorageError("Session storage is not configured ('storage.session.type' missing).")
+                raise StorageError(
+                    "Session storage is not configured ('storage.session.type' missing)."
+                )
             else:
-                raise StorageError("Session storage not initialized. Call initialize_storages() first.")
+                raise StorageError(
+                    "Session storage not initialized. Call initialize_storages() first."
+                )
 
         return self._session_storage_instance
 
@@ -678,9 +725,13 @@ class StorageManager:
         """
         if self._vector_storage_instance is None:
             if self._vector_storage_type is None:
-                raise StorageError("Vector storage is not configured ('storage.vector.type' missing). RAG is unavailable.")
+                raise StorageError(
+                    "Vector storage is not configured ('storage.vector.type' missing). RAG is unavailable."
+                )
             else:
-                raise StorageError("Vector storage not initialized. Call initialize_storages() first.")
+                raise StorageError(
+                    "Vector storage not initialized. Call initialize_storages() first."
+                )
 
         return self._vector_storage_instance
 
@@ -700,9 +751,13 @@ class StorageManager:
             StorageError: If session storage is not configured or if the operation fails.
         """
         await self.session_storage.add_episode(episode)
-        logger.debug(f"Episode '{episode.episode_id}' added to session '{episode.session_id}' via StorageManager.")
+        logger.debug(
+            f"Episode '{episode.episode_id}' added to session '{episode.session_id}' via StorageManager."
+        )
 
-    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+    async def get_episodes(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Episode]:
         """
         Retrieves episodes for a given session through the session storage backend.
 
@@ -721,7 +776,9 @@ class StorageManager:
             StorageError: If session storage is not configured or if the operation fails.
         """
         episodes = await self.session_storage.get_episodes(session_id, limit, offset)
-        logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}' via StorageManager.")
+        logger.debug(
+            f"Retrieved {len(episodes)} episodes for session '{session_id}' via StorageManager."
+        )
         return episodes
 
     async def get_episode_count(self, session_id: str) -> int:
@@ -746,7 +803,9 @@ class StorageManager:
         offset = 0
 
         while True:
-            batch = await self.session_storage.get_episodes(session_id, limit=batch_size, offset=offset)
+            batch = await self.session_storage.get_episodes(
+                session_id, limit=batch_size, offset=offset
+            )
             batch_count = len(batch)
             total_count += batch_count
 
@@ -775,10 +834,17 @@ class StorageManager:
         try:
             return await self.vector_storage.list_collection_names()
         except NotImplementedError:
-            logger.error(f"Vector storage backend {type(self.vector_storage).__name__} does not implement list_collection_names.")
-            raise StorageError(f"Listing collections not supported by {type(self.vector_storage).__name__}.")
+            logger.error(
+                f"Vector storage backend {type(self.vector_storage).__name__} does not implement list_collection_names."
+            )
+            raise StorageError(
+                f"Listing collections not supported by {type(self.vector_storage).__name__}."
+            )
         except Exception as e:
-            logger.error(f"Error listing vector collections via {type(self.vector_storage).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"Error listing vector collections via {type(self.vector_storage).__name__}: {e}",
+                exc_info=True,
+            )
             raise StorageError(f"Failed to list vector collections: {e}")
 
     async def close_storages(self) -> None:
@@ -921,13 +987,17 @@ class StorageManager:
             "session_storage": {
                 "configured": self._session_storage_type is not None,
                 "type": self._session_storage_type,
-                "healthy": self.is_healthy(f"session_{self._session_storage_type}") if self._session_storage_type else None
+                "healthy": self.is_healthy(f"session_{self._session_storage_type}")
+                if self._session_storage_type
+                else None,
             },
             "vector_storage": {
                 "configured": self._vector_storage_type is not None,
                 "type": self._vector_storage_type,
-                "healthy": self.is_healthy(f"vector_{self._vector_storage_type}") if self._vector_storage_type else None
-            }
+                "healthy": self.is_healthy(f"vector_{self._vector_storage_type}")
+                if self._vector_storage_type
+                else None,
+            },
         }
 
     # =========================================================================
@@ -955,24 +1025,38 @@ class StorageManager:
             "initialized": self._initialized,
             "session_storage": {
                 "type": self._session_storage_type,
-                "config_keys": list(self._session_storage_config.keys()) if self._session_storage_config else [],
-                "instance_class": type(self._session_storage_instance).__name__ if self._session_storage_instance else None
+                "config_keys": list(self._session_storage_config.keys())
+                if self._session_storage_config
+                else [],
+                "instance_class": type(self._session_storage_instance).__name__
+                if self._session_storage_instance
+                else None,
             },
             "vector_storage": {
                 "type": self._vector_storage_type,
-                "config_keys": list(self._vector_storage_config.keys()) if self._vector_storage_config else [],
-                "instance_class": type(self._vector_storage_instance).__name__ if self._vector_storage_instance else None
+                "config_keys": list(self._vector_storage_config.keys())
+                if self._vector_storage_config
+                else [],
+                "instance_class": type(self._vector_storage_instance).__name__
+                if self._vector_storage_instance
+                else None,
             },
             "health_monitoring": {
                 "enabled": self._health_config.enabled,
                 "check_interval_seconds": self._health_config.check_interval_seconds,
-                "registered_monitors": list(self._health_manager._monitors.keys()) if self._health_manager else []
+                "registered_monitors": list(self._health_manager._monitors.keys())
+                if self._health_manager
+                else [],
             },
             "validation": {
                 "performed": self._validation_result is not None,
                 "valid": self._validation_result.valid if self._validation_result else None,
-                "error_count": len(self._validation_result.errors) if self._validation_result else 0,
-                "warning_count": len(self._validation_result.warnings) if self._validation_result else 0
+                "error_count": len(self._validation_result.errors)
+                if self._validation_result
+                else 0,
+                "warning_count": len(self._validation_result.warnings)
+                if self._validation_result
+                else 0,
             },
             # Phase 4: Observability status
             "observability": {
@@ -981,12 +1065,12 @@ class StorageManager:
                     "active": self._instrumentation is not None,
                     "slow_query_threshold_seconds": self._observability_config.slow_query_threshold_seconds,
                     "log_queries": self._observability_config.log_queries,
-                    "statistics": instrumentation_stats
+                    "statistics": instrumentation_stats,
                 },
                 "metrics": {
                     "enabled": self._observability_config.metrics_enabled,
                     "backend": self._observability_config.metrics_backend,
-                    "collector_active": self._metrics_collector is not None
+                    "collector_active": self._metrics_collector is not None,
                 },
                 "event_logging": {
                     "enabled": self._observability_config.event_logging_enabled,
@@ -995,15 +1079,15 @@ class StorageManager:
                     "logger_active": self._event_logger is not None,
                     "pool_connected": (
                         self._event_logger.pool is not None
-                        if self._event_logger and hasattr(self._event_logger, 'pool')
+                        if self._event_logger and hasattr(self._event_logger, "pool")
                         else False
-                    )
+                    ),
                 },
                 "tracing": {
                     "enabled": self._observability_config.tracing_enabled,
-                    "backend": self._observability_config.tracing_backend
-                }
-            }
+                    "backend": self._observability_config.tracing_backend,
+                },
+            },
         }
 
     def get_observability_statistics(self) -> Dict[str, Any]:
@@ -1020,7 +1104,7 @@ class StorageManager:
             "enabled": self._observability_config.enabled,
             "instrumentation": None,
             "metrics": None,
-            "event_logger": None
+            "event_logger": None,
         }
 
         if self._instrumentation:
@@ -1035,8 +1119,11 @@ class StorageManager:
         if self._event_logger:
             try:
                 stats["event_logger"] = {
-                    "pool_connected": hasattr(self._event_logger, 'pool') and self._event_logger.pool is not None,
-                    "queue_size": getattr(self._event_logger, '_queue_size', 0) if hasattr(self._event_logger, '_queue_size') else 0
+                    "pool_connected": hasattr(self._event_logger, "pool")
+                    and self._event_logger.pool is not None,
+                    "queue_size": getattr(self._event_logger, "_queue_size", 0)
+                    if hasattr(self._event_logger, "_queue_size")
+                    else 0,
                 }
             except Exception:
                 stats["event_logger"] = {"error": "Could not retrieve event logger statistics"}

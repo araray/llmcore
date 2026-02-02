@@ -43,6 +43,7 @@ SCHEMA_TABLE_NAME = "_llmcore_schema"
 
 class SchemaBackend(str, Enum):
     """Supported database backends for schema management."""
+
     POSTGRES = "postgres"
     SQLITE = "sqlite"
 
@@ -50,6 +51,7 @@ class SchemaBackend(str, Enum):
 @dataclass
 class SchemaVersion:
     """Represents a schema version record."""
+
     version: int
     applied_at: datetime
     description: str
@@ -59,11 +61,12 @@ class SchemaVersion:
 @dataclass
 class SchemaMigration:
     """Defines a schema migration step."""
+
     from_version: int
     to_version: int
     description: str
     sql_postgres: str  # PostgreSQL-specific DDL
-    sql_sqlite: str    # SQLite-specific DDL (may be no-op for PG-only features)
+    sql_sqlite: str  # SQLite-specific DDL (may be no-op for PG-only features)
 
 
 # =============================================================================
@@ -233,9 +236,8 @@ MIGRATIONS: List[SchemaMigration] = [
                 ON episodes (session_id, timestamp);
             CREATE INDEX IF NOT EXISTS idx_episodes_event_type
                 ON episodes (event_type);
-        """
+        """,
     ),
-
     # v1 -> v2: Add user_id column if missing (for existing deployments)
     SchemaMigration(
         from_version=1,
@@ -259,9 +261,8 @@ MIGRATIONS: List[SchemaMigration] = [
             -- SQLite doesn't support ADD COLUMN IF NOT EXISTS directly
             -- This is handled programmatically in the schema manager
             SELECT 1;
-        """
+        """,
     ),
-
     # v2 -> v3: Add vector storage tables
     SchemaMigration(
         from_version=2,
@@ -334,9 +335,8 @@ MIGRATIONS: List[SchemaMigration] = [
                 PRIMARY KEY (id, collection_name),
                 FOREIGN KEY (collection_name) REFERENCES vector_collections(name) ON DELETE CASCADE
             );
-        """
+        """,
     ),
-
     # v3 -> v4: Add text search indexes and health monitoring
     SchemaMigration(
         from_version=3,
@@ -409,7 +409,7 @@ MIGRATIONS: List[SchemaMigration] = [
             );
             CREATE INDEX IF NOT EXISTS idx_health_log_timestamp
                 ON _llmcore_health_log (timestamp);
-        """
+        """,
     ),
 ]
 
@@ -417,6 +417,7 @@ MIGRATIONS: List[SchemaMigration] = [
 # =============================================================================
 # SCHEMA MANAGER PROTOCOL
 # =============================================================================
+
 
 class SchemaManagerProtocol(Protocol):
     """Protocol defining the schema manager interface."""
@@ -437,6 +438,7 @@ class SchemaManagerProtocol(Protocol):
 # =============================================================================
 # BASE SCHEMA MANAGER
 # =============================================================================
+
 
 class BaseSchemaManager(ABC):
     """
@@ -462,7 +464,9 @@ class BaseSchemaManager(ABC):
         pass
 
     @abstractmethod
-    async def _execute_query(self, sql: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
+    async def _execute_query(
+        self, sql: str, params: Optional[Tuple] = None
+    ) -> List[Dict[str, Any]]:
         """Execute a query and return results as list of dicts."""
         pass
 
@@ -534,14 +538,16 @@ class BaseSchemaManager(ABC):
         for row in result:
             applied_at = row["applied_at"]
             if isinstance(applied_at, str):
-                applied_at = datetime.fromisoformat(applied_at.replace('Z', '+00:00'))
+                applied_at = datetime.fromisoformat(applied_at.replace("Z", "+00:00"))
 
-            versions.append(SchemaVersion(
-                version=int(row["version"]),
-                applied_at=applied_at,
-                description=row["description"],
-                checksum=row.get("checksum")
-            ))
+            versions.append(
+                SchemaVersion(
+                    version=int(row["version"]),
+                    applied_at=applied_at,
+                    description=row["description"],
+                    checksum=row.get("checksum"),
+                )
+            )
 
         return versions
 
@@ -590,18 +596,29 @@ class BaseSchemaManager(ABC):
             current_version = await self.get_current_version()
 
             if current_version >= target_version:
-                logger.info(f"Schema already at version {current_version} (target: {target_version})")
+                logger.info(
+                    f"Schema already at version {current_version} (target: {target_version})"
+                )
                 return current_version
 
             logger.info(f"Migrating schema from v{current_version} to v{target_version}...")
 
             # Apply migrations in sequence
             for migration in MIGRATIONS:
-                if migration.from_version >= current_version and migration.to_version <= target_version:
+                if (
+                    migration.from_version >= current_version
+                    and migration.to_version <= target_version
+                ):
                     if current_version < migration.to_version:
-                        logger.info(f"Applying migration: v{migration.from_version} -> v{migration.to_version}: {migration.description}")
+                        logger.info(
+                            f"Applying migration: v{migration.from_version} -> v{migration.to_version}: {migration.description}"
+                        )
 
-                        sql = migration.sql_postgres if self.backend == SchemaBackend.POSTGRES else migration.sql_sqlite
+                        sql = (
+                            migration.sql_postgres
+                            if self.backend == SchemaBackend.POSTGRES
+                            else migration.sql_sqlite
+                        )
 
                         try:
                             await self._execute_ddl(sql)
@@ -623,6 +640,7 @@ class BaseSchemaManager(ABC):
 # =============================================================================
 # POSTGRES SCHEMA MANAGER
 # =============================================================================
+
 
 class PostgresSchemaManager(BaseSchemaManager):
     """
@@ -652,7 +670,9 @@ class PostgresSchemaManager(BaseSchemaManager):
             async with conn.transaction():
                 await conn.execute(sql)
 
-    async def _execute_query(self, sql: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
+    async def _execute_query(
+        self, sql: str, params: Optional[Tuple] = None
+    ) -> List[Dict[str, Any]]:
         """Execute query and return results."""
         try:
             from psycopg.rows import dict_row
@@ -671,9 +691,7 @@ class PostgresSchemaManager(BaseSchemaManager):
         try:
             # Get a dedicated connection for the lock
             self._lock_conn = await self._pool.getconn()
-            result = await self._lock_conn.execute(
-                f"SELECT pg_try_advisory_lock({self.LOCK_ID})"
-            )
+            result = await self._lock_conn.execute(f"SELECT pg_try_advisory_lock({self.LOCK_ID})")
             row = await result.fetchone()
             return bool(row and row[0])
         except Exception as e:
@@ -684,9 +702,7 @@ class PostgresSchemaManager(BaseSchemaManager):
         """Release PostgreSQL advisory lock."""
         if self._lock_conn:
             try:
-                await self._lock_conn.execute(
-                    f"SELECT pg_advisory_unlock({self.LOCK_ID})"
-                )
+                await self._lock_conn.execute(f"SELECT pg_advisory_unlock({self.LOCK_ID})")
             except Exception as e:
                 logger.warning(f"Failed to release advisory lock: {e}")
             finally:
@@ -697,6 +713,7 @@ class PostgresSchemaManager(BaseSchemaManager):
 # =============================================================================
 # SQLITE SCHEMA MANAGER
 # =============================================================================
+
 
 class SqliteSchemaManager(BaseSchemaManager):
     """
@@ -718,12 +735,14 @@ class SqliteSchemaManager(BaseSchemaManager):
     async def _execute_ddl(self, sql: str) -> None:
         """Execute DDL against SQLite."""
         # Split multiple statements and execute each
-        statements = [s.strip() for s in sql.split(';') if s.strip()]
+        statements = [s.strip() for s in sql.split(";") if s.strip()]
         for stmt in statements:
             await self._conn.execute(stmt)
         await self._conn.commit()
 
-    async def _execute_query(self, sql: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
+    async def _execute_query(
+        self, sql: str, params: Optional[Tuple] = None
+    ) -> List[Dict[str, Any]]:
         """Execute query and return results."""
         if params:
             cursor = await self._conn.execute(sql, params)
@@ -750,6 +769,7 @@ class SqliteSchemaManager(BaseSchemaManager):
 # =============================================================================
 # FACTORY FUNCTION
 # =============================================================================
+
 
 def create_schema_manager(backend: SchemaBackend, connection: Any) -> BaseSchemaManager:
     """

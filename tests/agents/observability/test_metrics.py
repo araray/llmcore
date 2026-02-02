@@ -42,9 +42,7 @@ class TestMetricType:
 
     def test_all_metric_types_exist(self):
         """Verify all expected metric types are defined."""
-        expected = {
-            "COUNTER", "GAUGE", "HISTOGRAM", "SUMMARY"
-        }
+        expected = {"COUNTER", "GAUGE", "HISTOGRAM", "SUMMARY"}
         actual = {t.name for t in MetricType}
         assert actual == expected
 
@@ -60,9 +58,7 @@ class TestExecutionStatus:
 
     def test_all_statuses_exist(self):
         """Verify all expected statuses are defined."""
-        expected = {
-            "RUNNING", "SUCCESS", "FAILURE", "TIMEOUT", "CANCELLED"
-        }
+        expected = {"RUNNING", "SUCCESS", "FAILURE", "TIMEOUT", "CANCELLED"}
         actual = {s.name for s in ExecutionStatus}
         assert actual == expected
 
@@ -469,7 +465,7 @@ class TestExecutionMetricsProperties:
         metrics.record_activity("act2", True, 100.0)
         metrics.record_activity("act3", False, 100.0)
 
-        assert metrics.activity_success_rate == pytest.approx(2/3)
+        assert metrics.activity_success_rate == pytest.approx(2 / 3)
 
     def test_cache_hit_rate(self):
         """Test cache_hit_rate property."""
@@ -478,7 +474,7 @@ class TestExecutionMetricsProperties:
         metrics.record_cache_hit()
         metrics.record_cache_miss()
 
-        assert metrics.cache_hit_rate == pytest.approx(2/3)
+        assert metrics.cache_hit_rate == pytest.approx(2 / 3)
 
     def test_avg_iteration_duration_ms(self):
         """Test avg_iteration_duration_ms property."""

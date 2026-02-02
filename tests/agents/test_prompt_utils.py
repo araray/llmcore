@@ -40,9 +40,21 @@ def sample_agent_state():
 def sample_tools():
     """Create sample tool definitions."""
     return [
-        Tool(name="search", description="Search for information", parameters={"type": "object", "properties": {}}),
-        Tool(name="calculator", description="Perform calculations", parameters={"type": "object", "properties": {}}),
-        Tool(name="finish", description="Complete the task", parameters={"type": "object", "properties": {}}),
+        Tool(
+            name="search",
+            description="Search for information",
+            parameters={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="calculator",
+            description="Perform calculations",
+            parameters={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="finish",
+            description="Complete the task",
+            parameters={"type": "object", "properties": {}},
+        ),
     ]
 
 
@@ -89,11 +101,9 @@ class TestParseReflectionResponse:
 
     def test_parse_valid_json(self):
         """Test parsing valid JSON response."""
-        response = json.dumps({
-            "evaluation": "Good progress",
-            "plan_step_completed": True,
-            "updated_plan": None
-        })
+        response = json.dumps(
+            {"evaluation": "Good progress", "plan_step_completed": True, "updated_plan": None}
+        )
         result = parse_reflection_response(response)
         assert result is not None
         assert result["evaluation"] == "Good progress"
@@ -130,14 +140,18 @@ class TestExtractToolCallFromResponse:
     def test_extract_from_openai_format(self):
         """Test extracting from OpenAI function call format."""
         response = {
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "id": "call_123",
-                        "function": {"name": "search", "arguments": '{"query": "test"}'}
-                    }]
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "id": "call_123",
+                                "function": {"name": "search", "arguments": '{"query": "test"}'},
+                            }
+                        ]
+                    }
                 }
-            }]
+            ]
         }
         tool_call = _extract_tool_call_from_response(response)
         assert tool_call is not None

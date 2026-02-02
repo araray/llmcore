@@ -155,7 +155,9 @@ class TestPersonaModels:
         # Note: The actual implementation may not use the word "concise" explicitly
         assert len(prompt_addition) > 0  # Should have some content
         # Either concise, brief, or short responses for low verbosity
-        assert any(word in prompt_addition.lower() for word in ["concise", "brief", "reasoning", "explain"])
+        assert any(
+            word in prompt_addition.lower() for word in ["concise", "brief", "reasoning", "explain"]
+        )
         assert "reasoning" in prompt_addition.lower()
 
         # Should include custom instructions

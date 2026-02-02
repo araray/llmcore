@@ -9,7 +9,7 @@ The module exports:
     - create_span: Context manager for creating trace spans
     - add_span_attributes: Add attributes to current span
     - record_span_exception: Record an exception in current span
-    
+
 Fix: P0 Issue #5 - Missing llmcore.agents.tracing module
 Resolves: ModuleNotFoundError in cycle.py:157
 Tests Fixed: TestCognitiveCycle::test_cognitive_cycle_single_iteration
@@ -24,24 +24,22 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def create_span(
-    name: str,
-    attributes: Optional[Dict[str, Any]] = None,
-    kind: str = "internal"
+    name: str, attributes: Optional[Dict[str, Any]] = None, kind: str = "internal"
 ) -> Generator[None, None, None]:
     """
     Create a trace span for observability.
-    
+
     This is a no-op stub that can be replaced with actual tracing
     implementation (e.g., OpenTelemetry) when needed.
-    
+
     Args:
         name: Name of the span (e.g., "cognitive_cycle", "think_phase")
         attributes: Optional dict of span attributes
         kind: Span kind ("internal", "server", "client", etc.)
-        
+
     Yields:
         A span context (currently None for stub implementation)
-        
+
     Example:
         with create_span("think_phase", {"iteration": 1}) as span:
             # ... do work ...
@@ -60,12 +58,12 @@ def create_span(
 def add_span_attributes(attributes: Dict[str, Any]) -> None:
     """
     Add attributes to the current span.
-    
+
     This is a no-op stub that logs attributes for debugging.
-    
+
     Args:
         attributes: Dictionary of attribute key-value pairs
-        
+
     Example:
         add_span_attributes({
             "phase": "THINK",
@@ -77,18 +75,17 @@ def add_span_attributes(attributes: Dict[str, Any]) -> None:
 
 
 def record_span_exception(
-    exception: BaseException,
-    attributes: Optional[Dict[str, Any]] = None
+    exception: BaseException, attributes: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Record an exception in the current span.
-    
+
     This is a no-op stub that logs the exception for debugging.
-    
+
     Args:
         exception: The exception to record
         attributes: Optional additional attributes
-        
+
     Example:
         try:
             # ... do work ...

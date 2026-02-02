@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         from psycopg.rows import dict_row
         from psycopg.types.json import Jsonb
         from psycopg_pool import AsyncConnectionPool
+
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -56,6 +57,7 @@ else:
         from psycopg.rows import dict_row
         from psycopg.types.json import Jsonb
         from psycopg_pool import AsyncConnectionPool
+
         psycopg_available = True
     except ImportError:
         psycopg = None
@@ -84,6 +86,7 @@ class PostgresSessionStorage(BaseSessionStorage):
     REFACTORED FOR MULTI-TENANCY: Now supports accepting pre-configured, tenant-aware
     database sessions rather than managing its own connections.
     """
+
     _pool: Optional["AsyncConnectionPool"] = None
     _tenant_session: Optional[AsyncSession] = None  # NEW: Tenant-scoped session
     _sessions_table: str
@@ -102,18 +105,26 @@ class PostgresSessionStorage(BaseSessionStorage):
         2. Tenant mode: Uses pre-configured sessions from the tenant dependency
         """
         if not psycopg_available:
-            raise ConfigError("psycopg library not installed. Please install `psycopg[binary]` or `llmcore[postgres]`.")
+            raise ConfigError(
+                "psycopg library not installed. Please install `psycopg[binary]` or `llmcore[postgres]`."
+            )
 
         # Set table names (these will be within tenant schemas)
         self._sessions_table = config.get("sessions_table_name", DEFAULT_SESSIONS_TABLE)
         self._messages_table = config.get("messages_table_name", DEFAULT_MESSAGES_TABLE)
-        self._session_context_items_table = config.get("session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE)
-        self._context_presets_table = config.get("context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE)
-        self._context_preset_items_table = config.get("context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE)
+        self._session_context_items_table = config.get(
+            "session_context_items_table_name", DEFAULT_SESSION_CONTEXT_ITEMS_TABLE
+        )
+        self._context_presets_table = config.get(
+            "context_presets_table_name", DEFAULT_CONTEXT_PRESETS_TABLE
+        )
+        self._context_preset_items_table = config.get(
+            "context_preset_items_table_name", DEFAULT_CONTEXT_PRESET_ITEMS_TABLE
+        )
         self._episodes_table = config.get("episodes_table_name", DEFAULT_EPISODES_TABLE)
 
         # If a tenant session is already configured, we're in tenant mode
-        if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+        if hasattr(self, "_tenant_session") and self._tenant_session is not None:
             logger.debug("PostgreSQL session storage initialized in tenant-scoped mode")
             return
 
@@ -126,8 +137,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         max_pool_size = config.get("max_pool_size", 10)
 
         try:
-            logger.debug(f"Initializing PostgreSQL connection pool for session storage (min: {min_pool_size}, max: {max_pool_size})...")
-            self._pool = AsyncConnectionPool(conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size)
+            logger.debug(
+                f"Initializing PostgreSQL connection pool for session storage (min: {min_pool_size}, max: {max_pool_size})..."
+            )
+            self._pool = AsyncConnectionPool(
+                conninfo=db_url, min_size=min_pool_size, max_size=max_pool_size
+            )
 
             async with self._pool.connection() as conn:
                 async with conn.cursor() as cur:
@@ -148,7 +163,9 @@ class PostgresSessionStorage(BaseSessionStorage):
             self._pool = None
             raise SessionStorageError(f"Could not initialize PostgreSQL storage: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error during PostgreSQL storage initialization: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error during PostgreSQL storage initialization: {e}", exc_info=True
+            )
             if self._pool:
                 await self._pool.close()
             self._pool = None
@@ -161,12 +178,14 @@ class PostgresSessionStorage(BaseSessionStorage):
         Returns:
             Database connection or session for executing queries
         """
-        if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+        if hasattr(self, "_tenant_session") and self._tenant_session is not None:
             return self._tenant_session
         elif self._pool is not None:
             return self._pool.connection()
         else:
-            raise SessionStorageError("No database connection available (neither tenant session nor pool)")
+            raise SessionStorageError(
+                "No database connection available (neither tenant session nor pool)"
+            )
 
     async def _ensure_tables_exist(self) -> None:
         """
@@ -296,10 +315,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         if not Jsonb:
             raise SessionStorageError("psycopg Jsonb adapter not available.")
 
-        logger.debug(f"Saving session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items to PostgreSQL...")
+        logger.debug(
+            f"Saving session '{session.id}' with {len(session.messages)} messages and {len(session.context_items)} context items to PostgreSQL..."
+        )
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 # Tenant mode: Use SQLAlchemy session
                 await self._save_session_tenant_mode(session)
             else:
@@ -325,29 +346,34 @@ class PostgresSessionStorage(BaseSessionStorage):
                 "name": session.name,
                 "created_at": session.created_at,
                 "updated_at": session.updated_at,
-                "metadata": json.dumps(session.metadata or {})
-            }
+                "metadata": json.dumps(session.metadata or {}),
+            },
         )
 
         # Delete existing messages and context items
         await self._tenant_session.execute(
             text(f"DELETE FROM {self._messages_table} WHERE session_id = :session_id"),
-            {"session_id": session.id}
+            {"session_id": session.id},
         )
         await self._tenant_session.execute(
             text(f"DELETE FROM {self._session_context_items_table} WHERE session_id = :session_id"),
-            {"session_id": session.id}
+            {"session_id": session.id},
         )
 
         # Insert messages
         if session.messages:
             messages_data = [
                 {
-                    "id": msg.id, "session_id": session.id, "role": str(msg.role),
-                    "content": msg.content, "timestamp": msg.timestamp,
-                    "tool_call_id": msg.tool_call_id, "tokens": msg.tokens,
-                    "metadata": json.dumps(msg.metadata or {})
-                } for msg in session.messages
+                    "id": msg.id,
+                    "session_id": session.id,
+                    "role": str(msg.role),
+                    "content": msg.content,
+                    "timestamp": msg.timestamp,
+                    "tool_call_id": msg.tool_call_id,
+                    "tokens": msg.tokens,
+                    "metadata": json.dumps(msg.metadata or {}),
+                }
+                for msg in session.messages
             ]
             # SQLAlchemy 2.0 style executemany
             await self._tenant_session.execute(
@@ -356,19 +382,25 @@ class PostgresSessionStorage(BaseSessionStorage):
                     (id, session_id, role, content, timestamp, tool_call_id, tokens, metadata)
                     VALUES (:id, :session_id, :role, :content, :timestamp, :tool_call_id, :tokens, :metadata)
                 """),
-                messages_data
+                messages_data,
             )
-
 
         # Insert context items
         if session.context_items:
             context_items_data = [
                 {
-                    "id": item.id, "session_id": session.id, "item_type": str(item.type),
-                    "source_id": item.source_id, "content": item.content, "tokens": item.tokens,
-                    "original_tokens": item.original_tokens, "is_truncated": item.is_truncated,
-                    "metadata": json.dumps(item.metadata or {}), "timestamp": item.timestamp
-                } for item in session.context_items
+                    "id": item.id,
+                    "session_id": session.id,
+                    "item_type": str(item.type),
+                    "source_id": item.source_id,
+                    "content": item.content,
+                    "tokens": item.tokens,
+                    "original_tokens": item.original_tokens,
+                    "is_truncated": item.is_truncated,
+                    "metadata": json.dumps(item.metadata or {}),
+                    "timestamp": item.timestamp,
+                }
+                for item in session.context_items
             ]
             await self._tenant_session.execute(
                 text(f"""
@@ -376,7 +408,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                     (id, session_id, item_type, source_id, content, tokens, original_tokens, is_truncated, metadata, timestamp)
                     VALUES (:id, :session_id, :item_type, :source_id, :content, :tokens, :original_tokens, :is_truncated, :metadata, :timestamp)
                 """),
-                context_items_data
+                context_items_data,
             )
 
         await self._tenant_session.commit()
@@ -386,28 +418,70 @@ class PostgresSessionStorage(BaseSessionStorage):
         """Save session using legacy psycopg pool mode."""
         async with self._pool.connection() as conn:
             async with conn.transaction():
-                await conn.execute(f"""
+                await conn.execute(
+                    f"""
                     INSERT INTO {self._sessions_table} (id, name, created_at, updated_at, metadata)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         name = EXCLUDED.name, updated_at = EXCLUDED.updated_at, metadata = EXCLUDED.metadata
-                """, (session.id, session.name, session.created_at, session.updated_at, Jsonb(session.metadata or {})))
+                """,
+                    (
+                        session.id,
+                        session.name,
+                        session.created_at,
+                        session.updated_at,
+                        Jsonb(session.metadata or {}),
+                    ),
+                )
 
-                await conn.execute(f"DELETE FROM {self._messages_table} WHERE session_id = %s", (session.id,))
+                await conn.execute(
+                    f"DELETE FROM {self._messages_table} WHERE session_id = %s", (session.id,)
+                )
                 if session.messages:
-                    messages_data = [(msg.id, session.id, str(msg.role), msg.content, msg.timestamp,
-                                      msg.tool_call_id, msg.tokens, Jsonb(msg.metadata or {})) for msg in session.messages]
+                    messages_data = [
+                        (
+                            msg.id,
+                            session.id,
+                            str(msg.role),
+                            msg.content,
+                            msg.timestamp,
+                            msg.tool_call_id,
+                            msg.tokens,
+                            Jsonb(msg.metadata or {}),
+                        )
+                        for msg in session.messages
+                    ]
                     async with conn.cursor() as cur:
-                        await cur.executemany(f"INSERT INTO {self._messages_table} (id, session_id, role, content, timestamp, tool_call_id, tokens, metadata) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", messages_data)
+                        await cur.executemany(
+                            f"INSERT INTO {self._messages_table} (id, session_id, role, content, timestamp, tool_call_id, tokens, metadata) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                            messages_data,
+                        )
 
-                await conn.execute(f"DELETE FROM {self._session_context_items_table} WHERE session_id = %s", (session.id,))
+                await conn.execute(
+                    f"DELETE FROM {self._session_context_items_table} WHERE session_id = %s",
+                    (session.id,),
+                )
                 if session.context_items:
-                    context_items_data = [(item.id, session.id, str(item.type), item.source_id, item.content,
-                                           item.tokens, item.original_tokens, item.is_truncated,
-                                           Jsonb(item.metadata or {}), item.timestamp)
-                                          for item in session.context_items]
+                    context_items_data = [
+                        (
+                            item.id,
+                            session.id,
+                            str(item.type),
+                            item.source_id,
+                            item.content,
+                            item.tokens,
+                            item.original_tokens,
+                            item.is_truncated,
+                            Jsonb(item.metadata or {}),
+                            item.timestamp,
+                        )
+                        for item in session.context_items
+                    ]
                     async with conn.cursor() as cur:
-                        await cur.executemany(f"INSERT INTO {self._session_context_items_table} (id, session_id, item_type, source_id, content, tokens, original_tokens, is_truncated, metadata, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", context_items_data)
+                        await cur.executemany(
+                            f"INSERT INTO {self._session_context_items_table} (id, session_id, item_type, source_id, content, tokens, original_tokens, is_truncated, metadata, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            context_items_data,
+                        )
 
         logger.info(f"Session '{session.id}' saved successfully to PostgreSQL (legacy mode).")
 
@@ -420,7 +494,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Loading session '{session_id}' from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._get_session_tenant_mode(session_id)
             else:
                 return await self._get_session_legacy_mode(session_id)
@@ -434,7 +508,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         # Get session data
         result = await self._tenant_session.execute(
             text(f"SELECT * FROM {self._sessions_table} WHERE id = :session_id"),
-            {"session_id": session_id}
+            {"session_id": session_id},
         )
         session_row = result.fetchone()
 
@@ -443,48 +517,74 @@ class PostgresSessionStorage(BaseSessionStorage):
             return None
 
         session_data = dict(session_row._mapping)
-        session_data["metadata"] = json.loads(session_data.get("metadata") or '{}')
-        session_data["created_at"] = session_data["created_at"].replace(tzinfo=timezone.utc) if session_data.get("created_at") else datetime.now(timezone.utc)
-        session_data["updated_at"] = session_data["updated_at"].replace(tzinfo=timezone.utc) if session_data.get("updated_at") else datetime.now(timezone.utc)
+        session_data["metadata"] = json.loads(session_data.get("metadata") or "{}")
+        session_data["created_at"] = (
+            session_data["created_at"].replace(tzinfo=timezone.utc)
+            if session_data.get("created_at")
+            else datetime.now(timezone.utc)
+        )
+        session_data["updated_at"] = (
+            session_data["updated_at"].replace(tzinfo=timezone.utc)
+            if session_data.get("updated_at")
+            else datetime.now(timezone.utc)
+        )
 
         # Get messages
         messages: List[Message] = []
         result = await self._tenant_session.execute(
-            text(f"SELECT * FROM {self._messages_table} WHERE session_id = :session_id ORDER BY timestamp ASC"),
-            {"session_id": session_id}
+            text(
+                f"SELECT * FROM {self._messages_table} WHERE session_id = :session_id ORDER BY timestamp ASC"
+            ),
+            {"session_id": session_id},
         )
         for msg_row in result.fetchall():
             try:
                 msg_dict = dict(msg_row._mapping)
-                msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or '{}')
+                msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or "{}")
                 msg_dict["role"] = Role(msg_dict["role"])
-                msg_dict["timestamp"] = msg_dict["timestamp"].replace(tzinfo=timezone.utc) if msg_dict.get("timestamp") else datetime.now(timezone.utc)
+                msg_dict["timestamp"] = (
+                    msg_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    if msg_dict.get("timestamp")
+                    else datetime.now(timezone.utc)
+                )
                 messages.append(Message.model_validate(msg_dict))
             except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping invalid message {msg_row.id} in session {session_id}: {e}")
+                logger.warning(
+                    f"Skipping invalid message {msg_row.id} in session {session_id}: {e}"
+                )
 
         # Get context items
         context_items: List[ContextItem] = []
         result = await self._tenant_session.execute(
-            text(f"SELECT * FROM {self._session_context_items_table} WHERE session_id = :session_id ORDER BY timestamp ASC"),
-            {"session_id": session_id}
+            text(
+                f"SELECT * FROM {self._session_context_items_table} WHERE session_id = :session_id ORDER BY timestamp ASC"
+            ),
+            {"session_id": session_id},
         )
         for item_row in result.fetchall():
             try:
                 item_dict = dict(item_row._mapping)
-                item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                item_dict["metadata"] = json.loads(item_dict.get("metadata") or "{}")
                 item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
-                item_dict["timestamp"] = item_dict["timestamp"].replace(tzinfo=timezone.utc) if item_dict.get("timestamp") else datetime.now(timezone.utc)
+                item_dict["timestamp"] = (
+                    item_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    if item_dict.get("timestamp")
+                    else datetime.now(timezone.utc)
+                )
                 item_dict["is_truncated"] = bool(item_dict.get("is_truncated", False))
                 context_items.append(ContextItem.model_validate(item_dict))
             except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping invalid context item {item_row.id} in session {session_id}: {e}")
+                logger.warning(
+                    f"Skipping invalid context item {item_row.id} in session {session_id}: {e}"
+                )
 
         session_data["messages"] = messages
         session_data["context_items"] = context_items
 
         chat_session = ChatSession.model_validate(session_data)
-        logger.info(f"Session '{session_id}' loaded from PostgreSQL ({len(messages)} msgs, {len(context_items)} ctx items).")
+        logger.info(
+            f"Session '{session_id}' loaded from PostgreSQL ({len(messages)} msgs, {len(context_items)} ctx items)."
+        )
         return chat_session
 
     async def _get_session_legacy_mode(self, session_id: str) -> Optional[ChatSession]:
@@ -495,7 +595,9 @@ class PostgresSessionStorage(BaseSessionStorage):
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
             async with conn.cursor() as cur:
-                await cur.execute(f"SELECT * FROM {self._sessions_table} WHERE id = %s", (session_id,))
+                await cur.execute(
+                    f"SELECT * FROM {self._sessions_table} WHERE id = %s", (session_id,)
+                )
                 session_row = await cur.fetchone()
                 if not session_row:
                     logger.debug(f"Session '{session_id}' not found.")
@@ -503,38 +605,66 @@ class PostgresSessionStorage(BaseSessionStorage):
 
                 session_data = dict(session_row)
                 session_data["metadata"] = session_data.get("metadata") or {}
-                session_data["created_at"] = session_data["created_at"].replace(tzinfo=timezone.utc) if session_data.get("created_at") else datetime.now(timezone.utc)
-                session_data["updated_at"] = session_data["updated_at"].replace(tzinfo=timezone.utc) if session_data.get("updated_at") else datetime.now(timezone.utc)
+                session_data["created_at"] = (
+                    session_data["created_at"].replace(tzinfo=timezone.utc)
+                    if session_data.get("created_at")
+                    else datetime.now(timezone.utc)
+                )
+                session_data["updated_at"] = (
+                    session_data["updated_at"].replace(tzinfo=timezone.utc)
+                    if session_data.get("updated_at")
+                    else datetime.now(timezone.utc)
+                )
 
                 messages: List[Message] = []
-                await cur.execute(f"SELECT * FROM {self._messages_table} WHERE session_id = %s ORDER BY timestamp ASC", (session_id,))
+                await cur.execute(
+                    f"SELECT * FROM {self._messages_table} WHERE session_id = %s ORDER BY timestamp ASC",
+                    (session_id,),
+                )
                 async for msg_row_data in cur:
                     msg_dict = dict(msg_row_data)
                     try:
                         msg_dict["metadata"] = msg_dict.get("metadata") or {}
                         msg_dict["role"] = Role(msg_dict["role"])
-                        msg_dict["timestamp"] = msg_dict["timestamp"].replace(tzinfo=timezone.utc) if msg_dict.get("timestamp") else datetime.now(timezone.utc)
+                        msg_dict["timestamp"] = (
+                            msg_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            if msg_dict.get("timestamp")
+                            else datetime.now(timezone.utc)
+                        )
                         messages.append(Message.model_validate(msg_dict))
                     except (ValueError, TypeError) as e:
-                        logger.warning(f"Skipping invalid message {msg_dict.get('id')} in session {session_id}: {e}")
+                        logger.warning(
+                            f"Skipping invalid message {msg_dict.get('id')} in session {session_id}: {e}"
+                        )
                 session_data["messages"] = messages
 
                 context_items: List[ContextItem] = []
-                await cur.execute(f"SELECT * FROM {self._session_context_items_table} WHERE session_id = %s ORDER BY timestamp ASC", (session_id,))
+                await cur.execute(
+                    f"SELECT * FROM {self._session_context_items_table} WHERE session_id = %s ORDER BY timestamp ASC",
+                    (session_id,),
+                )
                 async for item_row_data in cur:
                     item_dict = dict(item_row_data)
                     try:
                         item_dict["metadata"] = item_dict.get("metadata") or {}
                         item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
-                        item_dict["timestamp"] = item_dict["timestamp"].replace(tzinfo=timezone.utc) if item_dict.get("timestamp") else datetime.now(timezone.utc)
+                        item_dict["timestamp"] = (
+                            item_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            if item_dict.get("timestamp")
+                            else datetime.now(timezone.utc)
+                        )
                         item_dict["is_truncated"] = bool(item_dict.get("is_truncated", False))
                         context_items.append(ContextItem.model_validate(item_dict))
                     except (ValueError, TypeError) as e:
-                        logger.warning(f"Skipping invalid session_context_item {item_dict.get('id')} in session {session_id}: {e}")
+                        logger.warning(
+                            f"Skipping invalid session_context_item {item_dict.get('id')} in session {session_id}: {e}"
+                        )
                 session_data["context_items"] = context_items
 
         chat_session = ChatSession.model_validate(session_data)
-        logger.info(f"Session '{session_id}' loaded from PostgreSQL ({len(messages)} msgs, {len(context_items)} ctx items).")
+        logger.info(
+            f"Session '{session_id}' loaded from PostgreSQL ({len(messages)} msgs, {len(context_items)} ctx items)."
+        )
         return chat_session
 
     async def list_sessions(self) -> List[Dict[str, Any]]:
@@ -542,7 +672,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug("Listing session metadata from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._list_sessions_tenant_mode()
             else:
                 return await self._list_sessions_legacy_mode()
@@ -566,7 +696,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
         for row in result.fetchall():
             data = dict(row._mapping)
-            data["metadata"] = json.loads(data.get("metadata") or '{}')
+            data["metadata"] = json.loads(data.get("metadata") or "{}")
             session_metadata_list.append(data)
 
         logger.info(f"Found {len(session_metadata_list)} sessions in PostgreSQL.")
@@ -601,7 +731,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Deleting session '{session_id}' from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._delete_session_tenant_mode(session_id)
             else:
                 return await self._delete_session_legacy_mode(session_id)
@@ -614,7 +744,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         """Delete session using tenant-scoped SQLAlchemy session."""
         result = await self._tenant_session.execute(
             text(f"DELETE FROM {self._sessions_table} WHERE id = :session_id"),
-            {"session_id": session_id}
+            {"session_id": session_id},
         )
         await self._tenant_session.commit()
 
@@ -630,7 +760,9 @@ class PostgresSessionStorage(BaseSessionStorage):
         async with self._pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
-                    await cur.execute(f"DELETE FROM {self._sessions_table} WHERE id = %s", (session_id,))
+                    await cur.execute(
+                        f"DELETE FROM {self._sessions_table} WHERE id = %s", (session_id,)
+                    )
                     deleted_count = cur.rowcount
 
         if deleted_count > 0:
@@ -645,7 +777,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Updating name for session '{session_id}' to '{new_name}' in PostgreSQL.")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._update_session_name_tenant_mode(session_id, new_name)
             else:
                 return await self._update_session_name_legacy_mode(session_id, new_name)
@@ -659,8 +791,10 @@ class PostgresSessionStorage(BaseSessionStorage):
         new_updated_at = datetime.now(timezone.utc)
 
         result = await self._tenant_session.execute(
-            text(f"UPDATE {self._sessions_table} SET name = :name, updated_at = :updated_at WHERE id = :session_id"),
-            {"name": new_name, "updated_at": new_updated_at, "session_id": session_id}
+            text(
+                f"UPDATE {self._sessions_table} SET name = :name, updated_at = :updated_at WHERE id = :session_id"
+            ),
+            {"name": new_name, "updated_at": new_updated_at, "session_id": session_id},
         )
         await self._tenant_session.commit()
 
@@ -680,7 +814,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                 async with conn.cursor() as cur:
                     await cur.execute(
                         f"UPDATE {self._sessions_table} SET name = %s, updated_at = %s WHERE id = %s",
-                        (new_name, new_updated_at, session_id)
+                        (new_name, new_updated_at, session_id),
                     )
                     updated_count = cur.rowcount
 
@@ -699,10 +833,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         If a preset with the same name already exists, it will be updated.
         Items are stored in a separate table with foreign key to the preset.
         """
-        logger.debug(f"Saving context preset '{preset.name}' with {len(preset.items)} items to PostgreSQL...")
+        logger.debug(
+            f"Saving context preset '{preset.name}' with {len(preset.items)} items to PostgreSQL..."
+        )
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 await self._save_context_preset_tenant_mode(preset)
             else:
                 if not Jsonb:
@@ -730,14 +866,16 @@ class PostgresSessionStorage(BaseSessionStorage):
                 "description": preset.description,
                 "created_at": preset.created_at,
                 "updated_at": preset.updated_at,
-                "metadata": json.dumps(preset.metadata or {})
-            }
+                "metadata": json.dumps(preset.metadata or {}),
+            },
         )
 
         # Delete existing items and re-insert
         await self._tenant_session.execute(
-            text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
-            {"preset_name": preset.name}
+            text(
+                f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"
+            ),
+            {"preset_name": preset.name},
         )
 
         if preset.items:
@@ -748,8 +886,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                     "type": str(item.type),
                     "content": item.content,
                     "source_identifier": item.source_identifier,
-                    "metadata": json.dumps(item.metadata or {})
-                } for item in preset.items
+                    "metadata": json.dumps(item.metadata or {}),
+                }
+                for item in preset.items
             ]
             await self._tenant_session.execute(
                 text(f"""
@@ -757,46 +896,68 @@ class PostgresSessionStorage(BaseSessionStorage):
                     (item_id, preset_name, type, content, source_identifier, metadata)
                     VALUES (:item_id, :preset_name, :type, :content, :source_identifier, :metadata)
                 """),
-                items_data
+                items_data,
             )
 
         await self._tenant_session.commit()
-        logger.info(f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (tenant mode).")
+        logger.info(
+            f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (tenant mode)."
+        )
 
     async def _save_context_preset_legacy_mode(self, preset: ContextPreset) -> None:
         """Save context preset using legacy psycopg pool mode."""
         async with self._pool.connection() as conn:
             async with conn.transaction():
                 # Upsert the preset
-                await conn.execute(f"""
+                await conn.execute(
+                    f"""
                     INSERT INTO {self._context_presets_table} (name, description, created_at, updated_at, metadata)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (name) DO UPDATE SET
                         description = EXCLUDED.description,
                         updated_at = EXCLUDED.updated_at,
                         metadata = EXCLUDED.metadata
-                """, (preset.name, preset.description, preset.created_at, preset.updated_at, Jsonb(preset.metadata or {})))
+                """,
+                    (
+                        preset.name,
+                        preset.description,
+                        preset.created_at,
+                        preset.updated_at,
+                        Jsonb(preset.metadata or {}),
+                    ),
+                )
 
                 # Delete existing items and re-insert
                 await conn.execute(
                     f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
-                    (preset.name,)
+                    (preset.name,),
                 )
 
                 if preset.items:
                     items_data = [
-                        (item.item_id, preset.name, str(item.type), item.content,
-                         item.source_identifier, Jsonb(item.metadata or {}))
+                        (
+                            item.item_id,
+                            preset.name,
+                            str(item.type),
+                            item.content,
+                            item.source_identifier,
+                            Jsonb(item.metadata or {}),
+                        )
                         for item in preset.items
                     ]
                     async with conn.cursor() as cur:
-                        await cur.executemany(f"""
+                        await cur.executemany(
+                            f"""
                             INSERT INTO {self._context_preset_items_table}
                             (item_id, preset_name, type, content, source_identifier, metadata)
                             VALUES (%s, %s, %s, %s, %s, %s)
-                        """, items_data)
+                        """,
+                            items_data,
+                        )
 
-        logger.info(f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (legacy mode).")
+        logger.info(
+            f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (legacy mode)."
+        )
 
     async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
         """
@@ -811,7 +972,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Loading context preset '{preset_name}' from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._get_context_preset_tenant_mode(preset_name)
             else:
                 return await self._get_context_preset_legacy_mode(preset_name)
@@ -825,7 +986,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         # Get preset data
         result = await self._tenant_session.execute(
             text(f"SELECT * FROM {self._context_presets_table} WHERE name = :preset_name"),
-            {"preset_name": preset_name}
+            {"preset_name": preset_name},
         )
         preset_row = result.fetchone()
 
@@ -834,24 +995,36 @@ class PostgresSessionStorage(BaseSessionStorage):
             return None
 
         preset_data = dict(preset_row._mapping)
-        preset_data["metadata"] = json.loads(preset_data.get("metadata") or '{}')
-        preset_data["created_at"] = preset_data["created_at"].replace(tzinfo=timezone.utc) if preset_data.get("created_at") else datetime.now(timezone.utc)
-        preset_data["updated_at"] = preset_data["updated_at"].replace(tzinfo=timezone.utc) if preset_data.get("updated_at") else datetime.now(timezone.utc)
+        preset_data["metadata"] = json.loads(preset_data.get("metadata") or "{}")
+        preset_data["created_at"] = (
+            preset_data["created_at"].replace(tzinfo=timezone.utc)
+            if preset_data.get("created_at")
+            else datetime.now(timezone.utc)
+        )
+        preset_data["updated_at"] = (
+            preset_data["updated_at"].replace(tzinfo=timezone.utc)
+            if preset_data.get("updated_at")
+            else datetime.now(timezone.utc)
+        )
 
         # Get preset items
         items: List[ContextPresetItem] = []
         result = await self._tenant_session.execute(
-            text(f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
-            {"preset_name": preset_name}
+            text(
+                f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"
+            ),
+            {"preset_name": preset_name},
         )
         for item_row in result.fetchall():
             try:
                 item_dict = dict(item_row._mapping)
-                item_dict["metadata"] = json.loads(item_dict.get("metadata") or '{}')
+                item_dict["metadata"] = json.loads(item_dict.get("metadata") or "{}")
                 item_dict["type"] = ContextItemType(item_dict.pop("type"))
                 items.append(ContextPresetItem.model_validate(item_dict))
             except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping invalid preset item {item_row.item_id} for preset {preset_name}: {e}")
+                logger.warning(
+                    f"Skipping invalid preset item {item_row.item_id} for preset {preset_name}: {e}"
+                )
 
         preset_data["items"] = items
         context_preset = ContextPreset.model_validate(preset_data)
@@ -867,8 +1040,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             conn.row_factory = dict_row
             async with conn.cursor() as cur:
                 await cur.execute(
-                    f"SELECT * FROM {self._context_presets_table} WHERE name = %s",
-                    (preset_name,)
+                    f"SELECT * FROM {self._context_presets_table} WHERE name = %s", (preset_name,)
                 )
                 preset_row = await cur.fetchone()
                 if not preset_row:
@@ -877,13 +1049,21 @@ class PostgresSessionStorage(BaseSessionStorage):
 
                 preset_data = dict(preset_row)
                 preset_data["metadata"] = preset_data.get("metadata") or {}
-                preset_data["created_at"] = preset_data["created_at"].replace(tzinfo=timezone.utc) if preset_data.get("created_at") else datetime.now(timezone.utc)
-                preset_data["updated_at"] = preset_data["updated_at"].replace(tzinfo=timezone.utc) if preset_data.get("updated_at") else datetime.now(timezone.utc)
+                preset_data["created_at"] = (
+                    preset_data["created_at"].replace(tzinfo=timezone.utc)
+                    if preset_data.get("created_at")
+                    else datetime.now(timezone.utc)
+                )
+                preset_data["updated_at"] = (
+                    preset_data["updated_at"].replace(tzinfo=timezone.utc)
+                    if preset_data.get("updated_at")
+                    else datetime.now(timezone.utc)
+                )
 
                 items: List[ContextPresetItem] = []
                 await cur.execute(
                     f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = %s",
-                    (preset_name,)
+                    (preset_name,),
                 )
                 async for item_row_data in cur:
                     item_dict = dict(item_row_data)
@@ -892,7 +1072,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                         item_dict["type"] = ContextItemType(item_dict.pop("type"))
                         items.append(ContextPresetItem.model_validate(item_dict))
                     except (ValueError, TypeError) as e:
-                        logger.warning(f"Skipping invalid preset item {item_dict.get('item_id')} for preset {preset_name}: {e}")
+                        logger.warning(
+                            f"Skipping invalid preset item {item_dict.get('item_id')} for preset {preset_name}: {e}"
+                        )
 
                 preset_data["items"] = items
 
@@ -910,7 +1092,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug("Listing context presets from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._list_context_presets_tenant_mode()
             else:
                 return await self._list_context_presets_legacy_mode()
@@ -933,7 +1115,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
         for row in result.fetchall():
             data = dict(row._mapping)
-            data["metadata"] = json.loads(data.get("metadata") or '{}')
+            data["metadata"] = json.loads(data.get("metadata") or "{}")
             preset_metadata_list.append(data)
 
         logger.info(f"Found {len(preset_metadata_list)} context presets in PostgreSQL.")
@@ -975,7 +1157,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Deleting context preset '{preset_name}' from PostgreSQL...")
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._delete_context_preset_tenant_mode(preset_name)
             else:
                 return await self._delete_context_preset_legacy_mode(preset_name)
@@ -988,13 +1170,15 @@ class PostgresSessionStorage(BaseSessionStorage):
         """Delete context preset using tenant-scoped SQLAlchemy session."""
         # Items should be deleted via ON DELETE CASCADE, but delete explicitly for safety
         await self._tenant_session.execute(
-            text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"),
-            {"preset_name": preset_name}
+            text(
+                f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"
+            ),
+            {"preset_name": preset_name},
         )
 
         result = await self._tenant_session.execute(
             text(f"DELETE FROM {self._context_presets_table} WHERE name = :preset_name"),
-            {"preset_name": preset_name}
+            {"preset_name": preset_name},
         )
         await self._tenant_session.commit()
 
@@ -1013,11 +1197,10 @@ class PostgresSessionStorage(BaseSessionStorage):
                 async with conn.cursor() as cur:
                     await cur.execute(
                         f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
-                        (preset_name,)
+                        (preset_name,),
                     )
                     await cur.execute(
-                        f"DELETE FROM {self._context_presets_table} WHERE name = %s",
-                        (preset_name,)
+                        f"DELETE FROM {self._context_presets_table} WHERE name = %s", (preset_name,)
                     )
                     deleted_count = cur.rowcount
 
@@ -1056,7 +1239,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._rename_context_preset_tenant_mode(old_name, new_name)
             else:
                 return await self._rename_context_preset_legacy_mode(old_name, new_name)
@@ -1064,7 +1247,9 @@ class PostgresSessionStorage(BaseSessionStorage):
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Error renaming context preset '{old_name}' to '{new_name}': {e}", exc_info=True)
+            logger.error(
+                f"Error renaming context preset '{old_name}' to '{new_name}': {e}", exc_info=True
+            )
             raise SessionStorageError(f"Failed to rename context preset: {e}")
 
     async def _rename_context_preset_tenant_mode(self, old_name: str, new_name: str) -> bool:
@@ -1072,7 +1257,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         # Check if new_name already exists
         result = await self._tenant_session.execute(
             text(f"SELECT 1 FROM {self._context_presets_table} WHERE name = :new_name"),
-            {"new_name": new_name}
+            {"new_name": new_name},
         )
         if result.fetchone():
             logger.warning(f"Cannot rename preset: new name '{new_name}' already exists.")
@@ -1091,18 +1276,18 @@ class PostgresSessionStorage(BaseSessionStorage):
             items=old_preset.items,
             created_at=old_preset.created_at,
             updated_at=datetime.now(timezone.utc),
-            metadata=old_preset.metadata
+            metadata=old_preset.metadata,
         )
 
         # Save new and delete old within a transaction
         await self._save_context_preset_tenant_mode(renamed_preset)
         await self._tenant_session.execute(
             text(f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = :old_name"),
-            {"old_name": old_name}
+            {"old_name": old_name},
         )
         await self._tenant_session.execute(
             text(f"DELETE FROM {self._context_presets_table} WHERE name = :old_name"),
-            {"old_name": old_name}
+            {"old_name": old_name},
         )
         await self._tenant_session.commit()
 
@@ -1120,8 +1305,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             # Check if new_name already exists
             async with conn.cursor() as cur:
                 await cur.execute(
-                    f"SELECT 1 FROM {self._context_presets_table} WHERE name = %s",
-                    (new_name,)
+                    f"SELECT 1 FROM {self._context_presets_table} WHERE name = %s", (new_name,)
                 )
                 if await cur.fetchone():
                     logger.warning(f"Cannot rename preset: new name '{new_name}' already exists.")
@@ -1140,41 +1324,57 @@ class PostgresSessionStorage(BaseSessionStorage):
                 items=old_preset.items,
                 created_at=old_preset.created_at,
                 updated_at=datetime.now(timezone.utc),
-                metadata=old_preset.metadata
+                metadata=old_preset.metadata,
             )
 
             # Transaction: save new, delete old
             async with conn.transaction():
                 # Insert renamed preset
-                await conn.execute(f"""
+                await conn.execute(
+                    f"""
                     INSERT INTO {self._context_presets_table} (name, description, created_at, updated_at, metadata)
                     VALUES (%s, %s, %s, %s, %s)
-                """, (renamed_preset.name, renamed_preset.description, renamed_preset.created_at,
-                      renamed_preset.updated_at, Jsonb(renamed_preset.metadata or {})))
+                """,
+                    (
+                        renamed_preset.name,
+                        renamed_preset.description,
+                        renamed_preset.created_at,
+                        renamed_preset.updated_at,
+                        Jsonb(renamed_preset.metadata or {}),
+                    ),
+                )
 
                 # Insert items for renamed preset
                 if renamed_preset.items:
                     items_data = [
-                        (item.item_id, renamed_preset.name, str(item.type), item.content,
-                         item.source_identifier, Jsonb(item.metadata or {}))
+                        (
+                            item.item_id,
+                            renamed_preset.name,
+                            str(item.type),
+                            item.content,
+                            item.source_identifier,
+                            Jsonb(item.metadata or {}),
+                        )
                         for item in renamed_preset.items
                     ]
                     async with conn.cursor() as cur:
-                        await cur.executemany(f"""
+                        await cur.executemany(
+                            f"""
                             INSERT INTO {self._context_preset_items_table}
                             (item_id, preset_name, type, content, source_identifier, metadata)
                             VALUES (%s, %s, %s, %s, %s, %s)
-                        """, items_data)
+                        """,
+                            items_data,
+                        )
 
                 # Delete old preset and items
                 async with conn.cursor() as cur:
                     await cur.execute(
                         f"DELETE FROM {self._context_preset_items_table} WHERE preset_name = %s",
-                        (old_name,)
+                        (old_name,),
                     )
                     await cur.execute(
-                        f"DELETE FROM {self._context_presets_table} WHERE name = %s",
-                        (old_name,)
+                        f"DELETE FROM {self._context_presets_table} WHERE name = %s", (old_name,)
                     )
 
         logger.info(f"Context preset '{old_name}' successfully renamed to '{new_name}'.")
@@ -1188,10 +1388,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         Args:
             episode: The Episode object to add.
         """
-        logger.debug(f"Adding episode '{episode.episode_id}' for session '{episode.session_id}' to PostgreSQL...")
+        logger.debug(
+            f"Adding episode '{episode.episode_id}' for session '{episode.session_id}' to PostgreSQL..."
+        )
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 await self._add_episode_tenant_mode(episode)
             else:
                 await self._add_episode_legacy_mode(episode)
@@ -1212,8 +1414,8 @@ class PostgresSessionStorage(BaseSessionStorage):
                 "session_id": episode.session_id,
                 "timestamp": episode.timestamp,
                 "event_type": str(episode.event_type),
-                "data": json.dumps(episode.data or {})
-            }
+                "data": json.dumps(episode.data or {}),
+            },
         )
         await self._tenant_session.commit()
         logger.debug(f"Episode '{episode.episode_id}' saved to PostgreSQL (tenant mode).")
@@ -1224,15 +1426,25 @@ class PostgresSessionStorage(BaseSessionStorage):
             raise SessionStorageError("psycopg Jsonb adapter not available.")
 
         async with self._pool.connection() as conn:
-            await conn.execute(f"""
+            await conn.execute(
+                f"""
                 INSERT INTO {self._episodes_table} (episode_id, session_id, timestamp, event_type, data)
                 VALUES (%s, %s, %s, %s, %s)
-            """, (episode.episode_id, episode.session_id, episode.timestamp,
-                  str(episode.event_type), Jsonb(episode.data or {})))
+            """,
+                (
+                    episode.episode_id,
+                    episode.session_id,
+                    episode.timestamp,
+                    str(episode.event_type),
+                    Jsonb(episode.data or {}),
+                ),
+            )
 
         logger.debug(f"Episode '{episode.episode_id}' saved to PostgreSQL (legacy mode).")
 
-    async def get_episodes(self, session_id: str, limit: int = 100, offset: int = 0) -> List[Episode]:
+    async def get_episodes(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Episode]:
         """
         Retrieve a list of episodes for a given session, ordered by timestamp.
 
@@ -1244,19 +1456,27 @@ class PostgresSessionStorage(BaseSessionStorage):
         Returns:
             A list of Episode objects ordered by timestamp (most recent first).
         """
-        logger.debug(f"Retrieving episodes for session '{session_id}' (limit={limit}, offset={offset})...")
+        logger.debug(
+            f"Retrieving episodes for session '{session_id}' (limit={limit}, offset={offset})..."
+        )
 
         try:
-            if hasattr(self, '_tenant_session') and self._tenant_session is not None:
+            if hasattr(self, "_tenant_session") and self._tenant_session is not None:
                 return await self._get_episodes_tenant_mode(session_id, limit, offset)
             else:
                 return await self._get_episodes_legacy_mode(session_id, limit, offset)
 
         except Exception as e:
-            logger.error(f"Error retrieving episodes for session '{session_id}': {e}", exc_info=True)
-            raise SessionStorageError(f"Failed to retrieve episodes for session '{session_id}': {e}")
+            logger.error(
+                f"Error retrieving episodes for session '{session_id}': {e}", exc_info=True
+            )
+            raise SessionStorageError(
+                f"Failed to retrieve episodes for session '{session_id}': {e}"
+            )
 
-    async def _get_episodes_tenant_mode(self, session_id: str, limit: int, offset: int) -> List[Episode]:
+    async def _get_episodes_tenant_mode(
+        self, session_id: str, limit: int, offset: int
+    ) -> List[Episode]:
         """Get episodes using tenant-scoped SQLAlchemy session."""
         episodes: List[Episode] = []
 
@@ -1268,15 +1488,19 @@ class PostgresSessionStorage(BaseSessionStorage):
                 ORDER BY timestamp DESC
                 LIMIT :limit OFFSET :offset
             """),
-            {"session_id": session_id, "limit": limit, "offset": offset}
+            {"session_id": session_id, "limit": limit, "offset": offset},
         )
 
         for row in result.fetchall():
             try:
                 row_dict = dict(row._mapping)
-                row_dict["data"] = json.loads(row_dict.get("data") or '{}')
+                row_dict["data"] = json.loads(row_dict.get("data") or "{}")
                 row_dict["event_type"] = EpisodeType(row_dict["event_type"])
-                row_dict["timestamp"] = row_dict["timestamp"].replace(tzinfo=timezone.utc) if row_dict.get("timestamp") else datetime.now(timezone.utc)
+                row_dict["timestamp"] = (
+                    row_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    if row_dict.get("timestamp")
+                    else datetime.now(timezone.utc)
+                )
                 episodes.append(Episode.model_validate(row_dict))
             except (ValueError, TypeError) as e:
                 logger.warning(f"Skipping invalid episode for session {session_id}: {e}")
@@ -1284,7 +1508,9 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.debug(f"Retrieved {len(episodes)} episodes for session '{session_id}'.")
         return episodes
 
-    async def _get_episodes_legacy_mode(self, session_id: str, limit: int, offset: int) -> List[Episode]:
+    async def _get_episodes_legacy_mode(
+        self, session_id: str, limit: int, offset: int
+    ) -> List[Episode]:
         """Get episodes using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
@@ -1294,20 +1520,27 @@ class PostgresSessionStorage(BaseSessionStorage):
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
             async with conn.cursor() as cur:
-                await cur.execute(f"""
+                await cur.execute(
+                    f"""
                     SELECT episode_id, session_id, timestamp, event_type, data
                     FROM {self._episodes_table}
                     WHERE session_id = %s
                     ORDER BY timestamp DESC
                     LIMIT %s OFFSET %s
-                """, (session_id, limit, offset))
+                """,
+                    (session_id, limit, offset),
+                )
 
                 async for row in cur:
                     try:
                         row_dict = dict(row)
                         row_dict["data"] = row_dict.get("data") or {}
                         row_dict["event_type"] = EpisodeType(row_dict["event_type"])
-                        row_dict["timestamp"] = row_dict["timestamp"].replace(tzinfo=timezone.utc) if row_dict.get("timestamp") else datetime.now(timezone.utc)
+                        row_dict["timestamp"] = (
+                            row_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            if row_dict.get("timestamp")
+                            else datetime.now(timezone.utc)
+                        )
                         episodes.append(Episode.model_validate(row_dict))
                     except (ValueError, TypeError) as e:
                         logger.warning(f"Skipping invalid episode for session {session_id}: {e}")

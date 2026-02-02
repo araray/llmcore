@@ -64,8 +64,15 @@ class TestEventCategory:
     def test_all_categories_exist(self):
         """Verify all expected categories are defined."""
         expected = {
-            "LIFECYCLE", "COGNITIVE", "ACTIVITY", "MEMORY",
-            "HITL", "ERROR", "METRIC", "SANDBOX", "RAG"
+            "LIFECYCLE",
+            "COGNITIVE",
+            "ACTIVITY",
+            "MEMORY",
+            "HITL",
+            "ERROR",
+            "METRIC",
+            "SANDBOX",
+            "RAG",
         }
         actual = {cat.name for cat in EventCategory}
         assert actual == expected
@@ -108,9 +115,14 @@ class TestLifecycleEventType:
     def test_all_lifecycle_types_exist(self):
         """Verify all lifecycle event types."""
         expected = {
-            "AGENT_STARTED", "AGENT_COMPLETED", "AGENT_FAILED",
-            "AGENT_CANCELLED", "ITERATION_STARTED", "ITERATION_COMPLETED",
-            "GOAL_CLASSIFIED", "FAST_PATH_TRIGGERED"
+            "AGENT_STARTED",
+            "AGENT_COMPLETED",
+            "AGENT_FAILED",
+            "AGENT_CANCELLED",
+            "ITERATION_STARTED",
+            "ITERATION_COMPLETED",
+            "GOAL_CLASSIFIED",
+            "FAST_PATH_TRIGGERED",
         }
         actual = {t.name for t in LifecycleEventType}
         assert actual == expected
@@ -122,8 +134,12 @@ class TestCognitiveEventType:
     def test_all_cognitive_types_exist(self):
         """Verify all cognitive event types."""
         expected = {
-            "PHASE_STARTED", "PHASE_COMPLETED", "PHASE_FAILED",
-            "PHASE_SKIPPED", "DECISION_MADE", "REASONING_STEP"
+            "PHASE_STARTED",
+            "PHASE_COMPLETED",
+            "PHASE_FAILED",
+            "PHASE_SKIPPED",
+            "DECISION_MADE",
+            "REASONING_STEP",
         }
         actual = {t.name for t in CognitiveEventType}
         assert actual == expected
@@ -135,8 +151,12 @@ class TestActivityEventType:
     def test_all_activity_types_exist(self):
         """Verify all activity event types."""
         expected = {
-            "ACTIVITY_STARTED", "ACTIVITY_COMPLETED", "ACTIVITY_FAILED",
-            "ACTIVITY_TIMEOUT", "ACTIVITY_RETRIED", "ACTIVITY_CANCELLED"
+            "ACTIVITY_STARTED",
+            "ACTIVITY_COMPLETED",
+            "ACTIVITY_FAILED",
+            "ACTIVITY_TIMEOUT",
+            "ACTIVITY_RETRIED",
+            "ACTIVITY_CANCELLED",
         }
         actual = {t.name for t in ActivityEventType}
         assert actual == expected
@@ -148,9 +168,13 @@ class TestHITLEventType:
     def test_all_hitl_types_exist(self):
         """Verify all HITL event types."""
         expected = {
-            "APPROVAL_REQUESTED", "APPROVAL_GRANTED", "APPROVAL_DENIED",
-            "APPROVAL_TIMEOUT", "APPROVAL_MODIFIED", "SCOPE_GRANTED",
-            "SCOPE_REVOKED"
+            "APPROVAL_REQUESTED",
+            "APPROVAL_GRANTED",
+            "APPROVAL_DENIED",
+            "APPROVAL_TIMEOUT",
+            "APPROVAL_MODIFIED",
+            "SCOPE_GRANTED",
+            "SCOPE_REVOKED",
         }
         actual = {t.name for t in HITLEventType}
         assert actual == expected
@@ -162,9 +186,14 @@ class TestErrorEventType:
     def test_all_error_types_exist(self):
         """Verify all error event types."""
         expected = {
-            "EXCEPTION", "VALIDATION_ERROR", "TIMEOUT_ERROR",
-            "RATE_LIMIT_ERROR", "API_ERROR", "SANDBOX_ERROR",
-            "RECOVERY_ATTEMPTED", "RECOVERY_FAILED"
+            "EXCEPTION",
+            "VALIDATION_ERROR",
+            "TIMEOUT_ERROR",
+            "RATE_LIMIT_ERROR",
+            "API_ERROR",
+            "SANDBOX_ERROR",
+            "RECOVERY_ATTEMPTED",
+            "RECOVERY_FAILED",
         }
         actual = {t.name for t in ErrorEventType}
         assert actual == expected
@@ -175,10 +204,7 @@ class TestMetricEventType:
 
     def test_all_metric_types_exist(self):
         """Verify all metric event types."""
-        expected = {
-            "LATENCY", "TOKEN_USAGE", "COST", "THROUGHPUT",
-            "CACHE_HIT", "CACHE_MISS"
-        }
+        expected = {"LATENCY", "TOKEN_USAGE", "COST", "THROUGHPUT", "CACHE_HIT", "CACHE_MISS"}
         actual = {t.name for t in MetricEventType}
         assert actual == expected
 
@@ -189,8 +215,11 @@ class TestMemoryEventType:
     def test_all_memory_types_exist(self):
         """Verify all memory event types."""
         expected = {
-            "MEMORY_READ", "MEMORY_WRITE", "MEMORY_UPDATE",
-            "MEMORY_DELETE", "MEMORY_SEARCH"
+            "MEMORY_READ",
+            "MEMORY_WRITE",
+            "MEMORY_UPDATE",
+            "MEMORY_DELETE",
+            "MEMORY_SEARCH",
         }
         actual = {t.name for t in MemoryEventType}
         assert actual == expected
@@ -202,8 +231,12 @@ class TestSandboxEventType:
     def test_all_sandbox_types_exist(self):
         """Verify all sandbox event types."""
         expected = {
-            "SANDBOX_CREATED", "SANDBOX_STARTED", "SANDBOX_STOPPED",
-            "SANDBOX_DESTROYED", "CODE_EXECUTED", "FILE_OPERATION"
+            "SANDBOX_CREATED",
+            "SANDBOX_STARTED",
+            "SANDBOX_STOPPED",
+            "SANDBOX_DESTROYED",
+            "CODE_EXECUTED",
+            "FILE_OPERATION",
         }
         actual = {t.name for t in SandboxEventType}
         assert actual == expected
@@ -214,10 +247,7 @@ class TestRAGEventType:
 
     def test_all_rag_types_exist(self):
         """Verify all RAG event types."""
-        expected = {
-            "QUERY_STARTED", "QUERY_COMPLETED",
-            "DOCUMENTS_RETRIEVED", "CONTEXT_ASSEMBLED"
-        }
+        expected = {"QUERY_STARTED", "QUERY_COMPLETED", "DOCUMENTS_RETRIEVED", "CONTEXT_ASSEMBLED"}
         actual = {t.name for t in RAGEventType}
         assert actual == expected
 
@@ -399,11 +429,17 @@ class TestAgentEvent:
         """Test that helper methods can be chained."""
         start_time = datetime.now(timezone.utc) - timedelta(milliseconds=100)
 
-        event = AgentEvent(
-            session_id=session_id,
-            category=EventCategory.LIFECYCLE,
-            event_type="test",
-        ).with_parent("parent-1").with_correlation(correlation_id).with_duration(start_time).add_tag("chained")
+        event = (
+            AgentEvent(
+                session_id=session_id,
+                category=EventCategory.LIFECYCLE,
+                event_type="test",
+            )
+            .with_parent("parent-1")
+            .with_correlation(correlation_id)
+            .with_duration(start_time)
+            .add_tag("chained")
+        )
 
         assert event.parent_event_id == "parent-1"
         assert event.correlation_id == correlation_id
@@ -1136,11 +1172,7 @@ class TestSerializationEdgeCases:
             category=EventCategory.LIFECYCLE,
             event_type="test",
             data={
-                "level1": {
-                    "level2": {
-                        "level3": "value"
-                    }
-                },
+                "level1": {"level2": {"level3": "value"}},
                 "list": [1, 2, {"nested": True}],
             },
         )
@@ -1155,12 +1187,12 @@ class TestSerializationEdgeCases:
             session_id=session_id,
             category=EventCategory.LIFECYCLE,
             event_type="test",
-            data={"message": "Hello\n\"World\"\t\\path"},
+            data={"message": 'Hello\n"World"\t\\path'},
         )
 
         json_str = event.to_json()
         parsed = json.loads(json_str)
-        assert parsed["data"]["message"] == "Hello\n\"World\"\t\\path"
+        assert parsed["data"]["message"] == 'Hello\n"World"\t\\path'
 
     def test_unicode_characters(self, session_id):
         """Unicode characters should serialize correctly."""

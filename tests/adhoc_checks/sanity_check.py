@@ -28,6 +28,7 @@ def main():
             EnhancedAgentManager,
             SingleAgentMode,
         )
+
         print("   ✅ Core imports OK")
     except ImportError as e:
         errors.append(f"Core imports failed: {e}")
@@ -41,6 +42,7 @@ def main():
             CognitivePhase,
             EnhancedAgentState,
         )
+
         # Verify 8 phases
         phases = list(CognitivePhase)
         assert len(phases) == 8, f"Expected 8 phases, got {len(phases)}"
@@ -55,6 +57,7 @@ def main():
         from llmcore.agents import (
             PersonaManager,
         )
+
         manager = PersonaManager()
         personas = manager.list_personas()
         print(f"   ✅ Persona system OK ({len(personas)} built-in personas)")
@@ -68,6 +71,7 @@ def main():
         from llmcore.agents import (
             PromptRegistry,
         )
+
         registry = PromptRegistry()
         print("   ✅ Prompt library OK")
     except Exception as e:
@@ -78,6 +82,7 @@ def main():
     print("5. Testing memory integration imports...")
     try:
         from llmcore.agents import CognitiveMemoryIntegrator
+
         print("   ✅ Memory integration OK")
     except ImportError as e:
         errors.append(f"Memory integration failed: {e}")
@@ -88,6 +93,7 @@ def main():
     try:
         from llmcore.agents import EnhancedAgentManager
         from llmcore.agents.manager import AgentManager
+
         assert issubclass(EnhancedAgentManager, AgentManager)
         print("   ✅ Backward compatibility OK (EnhancedAgentManager extends AgentManager)")
     except Exception as e:

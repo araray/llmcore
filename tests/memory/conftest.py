@@ -26,15 +26,16 @@ from llmcore.storage.manager import StorageManager
 # CONFIG FIXTURES
 # ============================================================================
 
+
 @pytest.fixture
 def mock_context_management_config() -> Dict[str, Any]:
     """Provides a valid context management configuration."""
     return {
-        'inclusion_priority': 'system_history,explicitly_staged,user_items_active,history_chat,final_user_query',
-        'truncation_priority': 'history_chat,user_items_active,rag_in_query,explicitly_staged',
-        'reserved_response_tokens': 500,
-        'default_prompt_template': 'Context:\n{context}\n\nQuestion: {question}\n\nAnswer:',
-        'prompt_template_path': '',
+        "inclusion_priority": "system_history,explicitly_staged,user_items_active,history_chat,final_user_query",
+        "truncation_priority": "history_chat,user_items_active,rag_in_query,explicitly_staged",
+        "reserved_response_tokens": 500,
+        "default_prompt_template": "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:",
+        "prompt_template_path": "",
     }
 
 
@@ -42,13 +43,13 @@ def mock_context_management_config() -> Dict[str, Any]:
 def mock_full_config(mock_context_management_config: Dict[str, Any]) -> Dict[str, Any]:
     """Provides a complete LLMCore configuration."""
     return {
-        'context_management': mock_context_management_config,
-        'embedding': {
-            'model': 'openai',
-            'cache_embeddings': True,
+        "context_management": mock_context_management_config,
+        "embedding": {
+            "model": "openai",
+            "cache_embeddings": True,
         },
-        'providers': {
-            'default': 'openai',
+        "providers": {
+            "default": "openai",
         },
     }
 
@@ -56,6 +57,7 @@ def mock_full_config(mock_context_management_config: Dict[str, Any]) -> Dict[str
 # ============================================================================
 # MOCK MANAGERS
 # ============================================================================
+
 
 @pytest.fixture
 def mock_provider_manager() -> MagicMock:
@@ -84,6 +86,7 @@ def mock_embedding_manager() -> MagicMock:
 # MOCK PROVIDER (FOR TOKEN COUNTING)
 # ============================================================================
 
+
 @pytest.fixture
 def mock_provider():
     """Provides a mocked BaseProvider with token counting capabilities."""
@@ -108,6 +111,7 @@ def mock_provider():
 # ============================================================================
 # MOCK CHAT SESSIONS
 # ============================================================================
+
 
 @pytest.fixture
 def empty_session() -> ChatSession:
@@ -209,6 +213,7 @@ def session_with_context_items() -> ChatSession:
 # MOCK CONTEXT DOCUMENTS
 # ============================================================================
 
+
 @pytest.fixture
 def simple_context_document() -> ContextDocument:
     """Provides a simple ContextDocument."""
@@ -269,6 +274,7 @@ def context_documents_with_metadata() -> List[ContextDocument]:
 # MOCK MESSAGES
 # ============================================================================
 
+
 @pytest.fixture
 def mock_user_message() -> Message:
     """Provides a mock user message."""
@@ -302,6 +308,7 @@ def mock_system_message() -> Message:
 # ============================================================================
 # CONTEXT ITEM FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def mock_context_item_rag() -> ContextItem:
@@ -347,9 +354,11 @@ def mock_context_items_collection() -> List[ContextItem]:
 # HELPERS
 # ============================================================================
 
+
 @pytest.fixture
 def make_message():
     """Factory for creating custom messages."""
+
     def _make_message(
         role: Role = Role.USER,
         content: str = "Test message",
@@ -358,12 +367,14 @@ def make_message():
         if tokens is None:
             tokens = max(1, len(content) // 4)
         return Message(role=role, content=content, tokens=tokens)
+
     return _make_message
 
 
 @pytest.fixture
 def make_context_document():
     """Factory for creating custom context documents."""
+
     def _make_document(
         content: str = "Test content",
         metadata: Optional[Dict[str, Any]] = None,
@@ -371,4 +382,5 @@ def make_context_document():
         if metadata is None:
             metadata = {"source": "test"}
         return ContextDocument(content=content, metadata=metadata)
+
     return _make_document

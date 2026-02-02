@@ -35,16 +35,19 @@ logger = logging.getLogger(__name__)
 # VALIDATION TYPES
 # =============================================================================
 
+
 class ValidationSeverity(str, Enum):
     """Severity levels for validation issues."""
-    ERROR = "error"      # Configuration is invalid, cannot proceed
+
+    ERROR = "error"  # Configuration is invalid, cannot proceed
     WARNING = "warning"  # Configuration may cause issues
-    INFO = "info"        # Informational notice
+    INFO = "info"  # Informational notice
 
 
 @dataclass
 class ValidationIssue:
     """Represents a single validation issue."""
+
     severity: ValidationSeverity
     field: str
     message: str
@@ -60,6 +63,7 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Result of configuration validation."""
+
     valid: bool
     issues: List[ValidationIssue] = field(default_factory=list)
     resolved_config: Dict[str, Any] = field(default_factory=dict)
@@ -112,6 +116,7 @@ class ValidationResult:
 # VALIDATION FUNCTIONS
 # =============================================================================
 
+
 def _resolve_env_vars(value: Any) -> Any:
     """
     Resolve environment variable references in a value.
@@ -123,7 +128,7 @@ def _resolve_env_vars(value: Any) -> Any:
     """
     if isinstance(value, str):
         # Match ${VAR_NAME} or ${VAR_NAME:-default}
-        pattern = r'\$\{([^}:]+)(?::-([^}]*))?\}'
+        pattern = r"\$\{([^}:]+)(?::-([^}]*))?\}"
 
         def replacer(match):
             var_name = match.group(1)
@@ -133,11 +138,11 @@ def _resolve_env_vars(value: Any) -> Any:
         resolved = re.sub(pattern, replacer, value)
 
         # Also handle $VAR_NAME at start
-        if resolved.startswith('$') and not resolved.startswith('${'):
+        if resolved.startswith("$") and not resolved.startswith("${"):
             var_name = resolved[1:].split()[0]  # Get first word
             env_value = os.environ.get(var_name)
             if env_value:
-                resolved = env_value + resolved[1 + len(var_name):]
+                resolved = env_value + resolved[1 + len(var_name) :]
 
         return resolved
 
@@ -164,7 +169,7 @@ def _validate_postgres_url(url: str) -> Tuple[bool, Optional[str]]:
         parsed = urlparse(url)
 
         # Check scheme
-        valid_schemes = ['postgresql', 'postgres', 'postgresql+psycopg', 'postgresql+asyncpg']
+        valid_schemes = ["postgresql", "postgres", "postgresql+psycopg", "postgresql+asyncpg"]
         if parsed.scheme not in valid_schemes:
             return False, f"Invalid scheme '{parsed.scheme}'. Expected one of: {valid_schemes}"
 
@@ -173,10 +178,10 @@ def _validate_postgres_url(url: str) -> Tuple[bool, Optional[str]]:
             return False, "Missing hostname in connection URL"
 
         # Check for common mistakes
-        if '@' in (parsed.username or '') or '@' in (parsed.password or ''):
+        if "@" in (parsed.username or "") or "@" in (parsed.password or ""):
             return False, "Username/password contains '@' - ensure it's URL-encoded"
 
-        if parsed.password and parsed.password == 'password':
+        if parsed.password and parsed.password == "password":
             # Just a warning, not an error
             return True, None
 
@@ -186,7 +191,9 @@ def _validate_postgres_url(url: str) -> Tuple[bool, Optional[str]]:
         return False, f"Invalid URL format: {e}"
 
 
-def _validate_path(path: str, must_exist: bool = False, must_be_writable: bool = True) -> Tuple[bool, Optional[str]]:
+def _validate_path(
+    path: str, must_exist: bool = False, must_be_writable: bool = True
+) -> Tuple[bool, Optional[str]]:
     """
     Validate a filesystem path.
 
@@ -218,6 +225,7 @@ def _validate_path(path: str, must_exist: bool = False, must_be_writable: bool =
 # MAIN VALIDATOR CLASS
 # =============================================================================
 
+
 class StorageConfigValidator:
     """
     Validates storage configuration for LLMCore.
@@ -232,8 +240,8 @@ class StorageConfigValidator:
     """
 
     # Valid backend types
-    VALID_SESSION_TYPES = {'json', 'sqlite', 'postgres'}
-    VALID_VECTOR_TYPES = {'chromadb', 'pgvector'}
+    VALID_SESSION_TYPES = {"json", "sqlite", "postgres"}
+    VALID_VECTOR_TYPES = {"chromadb", "pgvector"}
 
     def __init__(self, strict: bool = False):
         """
@@ -263,12 +271,14 @@ class StorageConfigValidator:
         storage_config = resolved.get("storage", {})
 
         if not storage_config:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.WARNING,
-                field="storage",
-                message="No storage configuration found",
-                suggestion="Add [storage.session] and [storage.vector] sections to your config"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.WARNING,
+                    field="storage",
+                    message="No storage configuration found",
+                    suggestion="Add [storage.session] and [storage.vector] sections to your config",
+                )
+            )
             result.resolved_config = resolved
             return result
 
@@ -299,27 +309,31 @@ class StorageConfigValidator:
         session_type = config.get("type", "").lower()
 
         if not session_type:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.INFO,
-                field="storage.session.type",
-                message="No session storage type specified",
-                suggestion="Set storage.session.type to 'sqlite', 'json', or 'postgres'"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.INFO,
+                    field="storage.session.type",
+                    message="No session storage type specified",
+                    suggestion="Set storage.session.type to 'sqlite', 'json', or 'postgres'",
+                )
+            )
             return
 
         if session_type not in self.VALID_SESSION_TYPES:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.session.type",
-                message=f"Invalid session storage type: '{session_type}'",
-                suggestion=f"Valid types: {', '.join(sorted(self.VALID_SESSION_TYPES))}"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.session.type",
+                    message=f"Invalid session storage type: '{session_type}'",
+                    suggestion=f"Valid types: {', '.join(sorted(self.VALID_SESSION_TYPES))}",
+                )
+            )
             return
 
         # Type-specific validation
-        if session_type == 'postgres':
+        if session_type == "postgres":
             self._validate_postgres_session(config, result)
-        elif session_type in ('sqlite', 'json'):
+        elif session_type in ("sqlite", "json"):
             self._validate_file_session(config, session_type, result)
 
     def _validate_postgres_session(self, config: Dict[str, Any], result: ValidationResult) -> None:
@@ -330,29 +344,35 @@ class StorageConfigValidator:
         if not db_url:
             db_url = os.environ.get("LLMCORE_STORAGE_SESSION_DB_URL", "")
             if db_url:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.INFO,
-                    field="storage.session.db_url",
-                    message="Using db_url from LLMCORE_STORAGE_SESSION_DB_URL environment variable"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.INFO,
+                        field="storage.session.db_url",
+                        message="Using db_url from LLMCORE_STORAGE_SESSION_DB_URL environment variable",
+                    )
+                )
 
         if not db_url:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.session.db_url",
-                message="PostgreSQL session storage requires db_url",
-                suggestion="Set storage.session.db_url or LLMCORE_STORAGE_SESSION_DB_URL env var"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.session.db_url",
+                    message="PostgreSQL session storage requires db_url",
+                    suggestion="Set storage.session.db_url or LLMCORE_STORAGE_SESSION_DB_URL env var",
+                )
+            )
             return
 
         is_valid, error = _validate_postgres_url(db_url)
         if not is_valid:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.session.db_url",
-                message=f"Invalid PostgreSQL URL: {error}",
-                suggestion="Format: postgresql://user:password@host:port/database"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.session.db_url",
+                    message=f"Invalid PostgreSQL URL: {error}",
+                    suggestion="Format: postgresql://user:password@host:port/database",
+                )
+            )
 
         # Validate pool settings if present
         min_pool = config.get("min_pool_size")
@@ -360,59 +380,69 @@ class StorageConfigValidator:
 
         if min_pool is not None and max_pool is not None:
             if min_pool > max_pool:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="storage.session.min_pool_size",
-                    message=f"min_pool_size ({min_pool}) > max_pool_size ({max_pool})"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        field="storage.session.min_pool_size",
+                        message=f"min_pool_size ({min_pool}) > max_pool_size ({max_pool})",
+                    )
+                )
 
-    def _validate_file_session(self, config: Dict[str, Any], session_type: str, result: ValidationResult) -> None:
+    def _validate_file_session(
+        self, config: Dict[str, Any], session_type: str, result: ValidationResult
+    ) -> None:
         """Validate file-based session storage config (SQLite/JSON)."""
         path = config.get("path", "")
 
         if not path:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.session.path",
-                message=f"{session_type.upper()} session storage requires path",
-                suggestion="Set storage.session.path to a file path (e.g., ~/.llmcore/sessions.db)"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.session.path",
+                    message=f"{session_type.upper()} session storage requires path",
+                    suggestion="Set storage.session.path to a file path (e.g., ~/.llmcore/sessions.db)",
+                )
+            )
             return
 
         is_valid, error = _validate_path(path, must_exist=False, must_be_writable=True)
         if not is_valid:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.session.path",
-                message=error
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR, field="storage.session.path", message=error
+                )
+            )
 
     def _validate_vector_storage(self, config: Dict[str, Any], result: ValidationResult) -> None:
         """Validate vector storage configuration."""
         vector_type = config.get("type", "").lower()
 
         if not vector_type:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.INFO,
-                field="storage.vector.type",
-                message="No vector storage type specified (RAG will be unavailable)",
-                suggestion="Set storage.vector.type to 'chromadb' or 'pgvector'"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.INFO,
+                    field="storage.vector.type",
+                    message="No vector storage type specified (RAG will be unavailable)",
+                    suggestion="Set storage.vector.type to 'chromadb' or 'pgvector'",
+                )
+            )
             return
 
         if vector_type not in self.VALID_VECTOR_TYPES:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.vector.type",
-                message=f"Invalid vector storage type: '{vector_type}'",
-                suggestion=f"Valid types: {', '.join(sorted(self.VALID_VECTOR_TYPES))}"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.vector.type",
+                    message=f"Invalid vector storage type: '{vector_type}'",
+                    suggestion=f"Valid types: {', '.join(sorted(self.VALID_VECTOR_TYPES))}",
+                )
+            )
             return
 
         # Type-specific validation
-        if vector_type == 'pgvector':
+        if vector_type == "pgvector":
             self._validate_pgvector(config, result)
-        elif vector_type == 'chromadb':
+        elif vector_type == "chromadb":
             self._validate_chromadb(config, result)
 
     def _validate_pgvector(self, config: Dict[str, Any], result: ValidationResult) -> None:
@@ -423,100 +453,117 @@ class StorageConfigValidator:
         if not db_url:
             db_url = os.environ.get("LLMCORE_STORAGE_VECTOR_DB_URL", "")
             if db_url:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.INFO,
-                    field="storage.vector.db_url",
-                    message="Using db_url from LLMCORE_STORAGE_VECTOR_DB_URL environment variable"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.INFO,
+                        field="storage.vector.db_url",
+                        message="Using db_url from LLMCORE_STORAGE_VECTOR_DB_URL environment variable",
+                    )
+                )
 
         if not db_url:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.vector.db_url",
-                message="pgvector storage requires db_url",
-                suggestion="Set storage.vector.db_url or LLMCORE_STORAGE_VECTOR_DB_URL env var"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.vector.db_url",
+                    message="pgvector storage requires db_url",
+                    suggestion="Set storage.vector.db_url or LLMCORE_STORAGE_VECTOR_DB_URL env var",
+                )
+            )
             return
 
         is_valid, error = _validate_postgres_url(db_url)
         if not is_valid:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.vector.db_url",
-                message=f"Invalid PostgreSQL URL: {error}"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    field="storage.vector.db_url",
+                    message=f"Invalid PostgreSQL URL: {error}",
+                )
+            )
 
         # Validate dimension if specified
         dimension = config.get("default_vector_dimension")
         if dimension is not None:
             if not isinstance(dimension, int) or dimension <= 0:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="storage.vector.default_vector_dimension",
-                    message=f"Invalid vector dimension: {dimension}",
-                    suggestion="Must be a positive integer (common values: 384, 768, 1536)"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        field="storage.vector.default_vector_dimension",
+                        message=f"Invalid vector dimension: {dimension}",
+                        suggestion="Must be a positive integer (common values: 384, 768, 1536)",
+                    )
+                )
             elif dimension > 4096:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.WARNING,
-                    field="storage.vector.default_vector_dimension",
-                    message=f"Very high vector dimension ({dimension}) may impact performance"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.WARNING,
+                        field="storage.vector.default_vector_dimension",
+                        message=f"Very high vector dimension ({dimension}) may impact performance",
+                    )
+                )
 
     def _validate_chromadb(self, config: Dict[str, Any], result: ValidationResult) -> None:
         """Validate ChromaDB configuration."""
         path = config.get("path", "")
 
         if not path:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.WARNING,
-                field="storage.vector.path",
-                message="No path specified for ChromaDB; using in-memory storage",
-                suggestion="Set storage.vector.path for persistent storage"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.WARNING,
+                    field="storage.vector.path",
+                    message="No path specified for ChromaDB; using in-memory storage",
+                    suggestion="Set storage.vector.path for persistent storage",
+                )
+            )
             return
 
         is_valid, error = _validate_path(path, must_exist=False, must_be_writable=True)
         if not is_valid:
-            result.add_issue(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="storage.vector.path",
-                message=error
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR, field="storage.vector.path", message=error
+                )
+            )
 
     def _validate_cross_backend_consistency(
         self,
         session_config: Dict[str, Any],
         vector_config: Dict[str, Any],
-        result: ValidationResult
+        result: ValidationResult,
     ) -> None:
         """Validate consistency between session and vector storage configs."""
         session_type = session_config.get("type", "").lower()
         vector_type = vector_config.get("type", "").lower()
 
         # Check if both are PostgreSQL with same URL (recommended)
-        if session_type == 'postgres' and vector_type == 'pgvector':
+        if session_type == "postgres" and vector_type == "pgvector":
             session_url = session_config.get("db_url", "")
             vector_url = vector_config.get("db_url", "")
 
             if session_url and vector_url and session_url != vector_url:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.INFO,
-                    field="storage",
-                    message="Session and vector storage using different PostgreSQL databases",
-                    suggestion="Consider using the same database for simpler management"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.INFO,
+                        field="storage",
+                        message="Session and vector storage using different PostgreSQL databases",
+                        suggestion="Consider using the same database for simpler management",
+                    )
+                )
             elif session_url == vector_url:
-                result.add_issue(ValidationIssue(
-                    severity=ValidationSeverity.INFO,
-                    field="storage",
-                    message="Session and vector storage sharing same PostgreSQL database (recommended)"
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        severity=ValidationSeverity.INFO,
+                        field="storage",
+                        message="Session and vector storage sharing same PostgreSQL database (recommended)",
+                    )
+                )
 
 
 # =============================================================================
 # CONVENIENCE FUNCTION
 # =============================================================================
+
 
 def validate_storage_config(config: Dict[str, Any], strict: bool = False) -> ValidationResult:
     """

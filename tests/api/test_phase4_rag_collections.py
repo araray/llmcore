@@ -92,18 +92,14 @@ class MockLLMCoreAPI:
             return []
         return await vector_storage.list_collection_names()
 
-    async def get_rag_collection_info(
-        self, collection_name: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_rag_collection_info(self, collection_name: str) -> Optional[Dict[str, Any]]:
         """Get detailed information about a RAG collection."""
         vector_storage = await self._storage_manager.get_vector_storage()
         if not vector_storage:
             return None
         return await vector_storage.get_collection_info(collection_name)
 
-    async def delete_rag_collection(
-        self, collection_name: str, force: bool = False
-    ) -> bool:
+    async def delete_rag_collection(self, collection_name: str, force: bool = False) -> bool:
         """Delete a RAG collection."""
         vector_storage = await self._storage_manager.get_vector_storage()
         if not vector_storage:

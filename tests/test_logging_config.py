@@ -126,7 +126,7 @@ class TestConfigureLogging:
         config = {
             "file_directory": str(temp_log_dir),
             "console_enabled": False,
-            "components": {"test_component": "ERROR"}
+            "components": {"test_component": "ERROR"},
         }
         configure_logging(config=config)
         component_logger = logging.getLogger("test_component")

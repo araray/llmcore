@@ -63,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 class MetricsBackendType(str, Enum):
     """Supported metrics backends."""
+
     PROMETHEUS = "prometheus"
     STATSD = "statsd"
     MEMORY = "memory"  # In-memory for testing
@@ -85,6 +86,7 @@ class MetricsConfig:
         histogram_buckets: Default bucket boundaries for histograms.
         flush_interval_seconds: Interval for flushing metrics to backend.
     """
+
     enabled: bool = True
     backend: MetricsBackendType = MetricsBackendType.MEMORY
     prefix: str = "llmcore_storage"
@@ -93,8 +95,22 @@ class MetricsConfig:
     statsd_host: str = "localhost"
     statsd_port: int = 8125
     histogram_buckets: Tuple[float, ...] = (
-        0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5,
-        0.75, 1.0, 2.5, 5.0, 7.5, 10.0, float("inf")
+        0.001,
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+        2.5,
+        5.0,
+        7.5,
+        10.0,
+        float("inf"),
     )
     flush_interval_seconds: float = 10.0
 
@@ -110,6 +126,7 @@ DEFAULT_METRICS_CONFIG = MetricsConfig()
 @dataclass
 class MetricValue:
     """Base class for metric values."""
+
     name: str
     labels: Dict[str, str]
     timestamp: float = field(default_factory=time.time)
@@ -118,18 +135,21 @@ class MetricValue:
 @dataclass
 class CounterValue(MetricValue):
     """Counter metric value (monotonically increasing)."""
+
     value: float = 0.0
 
 
 @dataclass
 class GaugeValue(MetricValue):
     """Gauge metric value (can go up and down)."""
+
     value: float = 0.0
 
 
 @dataclass
 class HistogramValue(MetricValue):
     """Histogram metric value with buckets."""
+
     buckets: Dict[float, int] = field(default_factory=dict)
     sum: float = 0.0
     count: int = 0
@@ -284,14 +304,8 @@ class InMemoryMetricsBackend(MetricsBackend):
         """Get all metrics for export."""
         with self._lock:
             return {
-                "counters": {
-                    name: dict(values)
-                    for name, values in self._counters.items()
-                },
-                "gauges": {
-                    name: dict(values)
-                    for name, values in self._gauges.items()
-                },
+                "counters": {name: dict(values) for name, values in self._counters.items()},
+                "gauges": {name: dict(values) for name, values in self._gauges.items()},
                 "histograms": {
                     name: {
                         key: {
@@ -324,9 +338,7 @@ class InMemoryMetricsBackend(MetricsBackend):
             return self._gauges[full_name].get(key, 0.0)
 
     def get_histogram_stats(
-        self,
-        name: str,
-        labels: Optional[Dict[str, str]] = None
+        self, name: str, labels: Optional[Dict[str, str]] = None
     ) -> Optional[Dict[str, Any]]:
         """Get histogram statistics."""
         full_name = self._full_name(name)
@@ -375,12 +387,12 @@ class PrometheusMetricsBackend(MetricsBackend):
         # Try to import prometheus_client
         try:
             import prometheus_client
+
             self._prometheus = prometheus_client
             self._available = True
         except ImportError:
             logger.warning(
-                "prometheus_client not installed. "
-                "Install with: pip install prometheus-client"
+                "prometheus_client not installed. Install with: pip install prometheus-client"
             )
             self._prometheus = None
             self._available = False
@@ -596,7 +608,7 @@ class MetricsCollector:
                 "backend": self.config.backend.value,
                 "enabled": self.config.enabled,
                 "prefix": self.config.prefix,
-            }
+            },
         )
 
     def _create_backend(self) -> MetricsBackend:
@@ -611,9 +623,7 @@ class MetricsCollector:
         elif self.config.backend == MetricsBackendType.NONE:
             return NullMetricsBackend()
         else:
-            logger.warning(
-                f"Unknown metrics backend: {self.config.backend}, using memory"
-            )
+            logger.warning(f"Unknown metrics backend: {self.config.backend}, using memory")
             return InMemoryMetricsBackend(self.config)
 
     @property

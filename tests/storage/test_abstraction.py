@@ -66,6 +66,7 @@ except ImportError:
 # STORAGE CONTEXT TESTS
 # =============================================================================
 
+
 class TestStorageContext:
     """Tests for StorageContext."""
 
@@ -161,6 +162,7 @@ class TestStorageContext:
 # ISOLATION LEVEL TESTS
 # =============================================================================
 
+
 class TestIsolationLevel:
     """Tests for IsolationLevel enum."""
 
@@ -175,6 +177,7 @@ class TestIsolationLevel:
 # =============================================================================
 # BACKEND CAPABILITIES TESTS
 # =============================================================================
+
 
 class TestBackendCapabilities:
     """Tests for BackendCapabilities."""
@@ -219,6 +222,7 @@ class TestBackendCapabilities:
 # QUERY BUILDER TESTS
 # =============================================================================
 
+
 class TestQueryBuilder:
     """Tests for QueryBuilder."""
 
@@ -237,25 +241,21 @@ class TestQueryBuilder:
 
     def test_where_eq(self):
         """Test WHERE equality condition."""
-        query = (QueryBuilder("sessions")
-            .where_eq("user_id", "user_123"))
+        query = QueryBuilder("sessions").where_eq("user_id", "user_123")
         sql, params = query.build_postgres()
         assert "WHERE user_id = $1" in sql
         assert params == ["user_123"]
 
     def test_where_multiple_conditions(self):
         """Test multiple WHERE conditions."""
-        query = (QueryBuilder("sessions")
-            .where_eq("user_id", "user_123")
-            .where_eq("name", "test"))
+        query = QueryBuilder("sessions").where_eq("user_id", "user_123").where_eq("name", "test")
         sql, params = query.build_postgres()
         assert "WHERE user_id = $1 AND name = $2" in sql
         assert params == ["user_123", "test"]
 
     def test_where_in(self):
         """Test WHERE IN condition."""
-        query = (QueryBuilder("sessions")
-            .where_in("id", ["a", "b", "c"]))
+        query = QueryBuilder("sessions").where_in("id", ["a", "b", "c"])
         sql, params = query.build_postgres()
         assert "IN" in sql
         assert "a" in params
@@ -277,16 +277,13 @@ class TestQueryBuilder:
 
     def test_order_by(self):
         """Test ORDER BY clause."""
-        query = (QueryBuilder("sessions")
-            .order_by("created_at", descending=True))
+        query = QueryBuilder("sessions").order_by("created_at", descending=True)
         sql, _ = query.build_postgres()
         assert "ORDER BY created_at DESC" in sql
 
     def test_order_by_multiple(self):
         """Test multiple ORDER BY columns."""
-        query = (QueryBuilder("sessions")
-            .order_by("user_id")
-            .order_by("created_at", descending=True))
+        query = QueryBuilder("sessions").order_by("user_id").order_by("created_at", descending=True)
         sql, _ = query.build_postgres()
         assert "ORDER BY user_id ASC, created_at DESC" in sql
 
@@ -316,10 +313,9 @@ class TestQueryBuilder:
 
     def test_sqlite_query(self):
         """Test SQLite query generation."""
-        query = (QueryBuilder("sessions")
-            .select("id", "name")
-            .where_eq("user_id", "user_123")
-            .limit(5))
+        query = (
+            QueryBuilder("sessions").select("id", "name").where_eq("user_id", "user_123").limit(5)
+        )
         sql, params = query.build_sqlite()
         assert "SELECT id, name FROM sessions" in sql
         assert "WHERE user_id = ?" in sql
@@ -328,9 +324,7 @@ class TestQueryBuilder:
 
     def test_named_query(self):
         """Test named parameter query generation."""
-        query = (QueryBuilder("sessions")
-            .where_eq("user_id", "user_123")
-            .where_eq("name", "test"))
+        query = QueryBuilder("sessions").where_eq("user_id", "user_123").where_eq("name", "test")
         sql, params = query.build_named()
         assert ":user_id" in sql or ":user_id_0" in sql
         assert "user_123" in params.values()
@@ -373,22 +367,14 @@ class TestQueryCondition:
 
     def test_eq_condition_postgres(self):
         """Test equality condition for PostgreSQL."""
-        cond = QueryCondition(
-            column="user_id",
-            operator=QueryOperator.EQ,
-            value="user_123"
-        )
+        cond = QueryCondition(column="user_id", operator=QueryOperator.EQ, value="user_123")
         sql, value = cond.to_sql_postgres(1)
         assert sql == "user_id = $1"
         assert value == "user_123"
 
     def test_is_null_condition(self):
         """Test IS NULL condition."""
-        cond = QueryCondition(
-            column="deleted_at",
-            operator=QueryOperator.IS_NULL,
-            value=None
-        )
+        cond = QueryCondition(column="deleted_at", operator=QueryOperator.IS_NULL, value=None)
         sql, value = cond.to_sql_postgres(1)
         assert sql == "deleted_at IS NULL"
         assert value is None
@@ -397,6 +383,7 @@ class TestQueryCondition:
 # =============================================================================
 # HNSW CONFIG TESTS
 # =============================================================================
+
 
 class TestHNSWConfig:
     """Tests for HNSWConfig."""
@@ -455,6 +442,7 @@ class TestHNSWConfig:
 # VECTOR SEARCH CONFIG TESTS
 # =============================================================================
 
+
 class TestVectorSearchConfig:
     """Tests for VectorSearchConfig."""
 
@@ -469,10 +457,7 @@ class TestVectorSearchConfig:
     def test_custom_config(self):
         """Test custom search configuration."""
         config = VectorSearchConfig(
-            k=20,
-            distance_metric="euclidean",
-            filter_metadata={"type": "article"},
-            min_score=0.5
+            k=20, distance_metric="euclidean", filter_metadata={"type": "article"}, min_score=0.5
         )
         assert config.k == 20
         assert config.distance_metric == "euclidean"
@@ -510,6 +495,7 @@ class TestVectorSearchConfig:
 # BATCH CONFIG TESTS
 # =============================================================================
 
+
 class TestBatchConfig:
     """Tests for BatchConfig."""
 
@@ -524,12 +510,7 @@ class TestBatchConfig:
 
     def test_custom_config(self):
         """Test custom batch configuration."""
-        config = BatchConfig(
-            chunk_size=50,
-            max_concurrent=8,
-            retry_failed=False,
-            on_error="skip"
-        )
+        config = BatchConfig(chunk_size=50, max_concurrent=8, retry_failed=False, on_error="skip")
         assert config.chunk_size == 50
         assert config.max_concurrent == 8
         assert config.retry_failed is False
@@ -560,7 +541,7 @@ class TestBatchResult:
             successful=["a", "b", "c"],
             failed=[("d", "error1"), ("e", "error2")],
             total=5,
-            duration_ms=100.0
+            duration_ms=100.0,
         )
         assert result.success_count == 3
         assert result.failure_count == 2
@@ -568,12 +549,7 @@ class TestBatchResult:
 
     def test_empty_batch_result(self):
         """Test empty BatchResult."""
-        result = BatchResult(
-            successful=[],
-            failed=[],
-            total=0,
-            duration_ms=0
-        )
+        result = BatchResult(successful=[], failed=[], total=0, duration_ms=0)
         assert result.success_count == 0
         assert result.failure_count == 0
         assert result.success_rate == 0.0  # 0/0 = 0
@@ -582,6 +558,7 @@ class TestBatchResult:
 # =============================================================================
 # POOL CONFIG TESTS
 # =============================================================================
+
 
 class TestPoolConfig:
     """Tests for PoolConfig."""
@@ -596,11 +573,7 @@ class TestPoolConfig:
 
     def test_custom_config(self):
         """Test custom pool configuration."""
-        config = PoolConfig(
-            min_size=5,
-            max_size=20,
-            statement_cache_size=200
-        )
+        config = PoolConfig(min_size=5, max_size=20, statement_cache_size=200)
         assert config.min_size == 5
         assert config.max_size == 20
         assert config.statement_cache_size == 200
@@ -636,6 +609,7 @@ class TestPoolConfig:
 # =============================================================================
 # UTILITY FUNCTION TESTS
 # =============================================================================
+
 
 class TestChunkList:
     """Tests for chunk_list utility."""
@@ -699,10 +673,7 @@ class TestExecuteWithRetry:
             return "success"
 
         result = await execute_with_retry(
-            operation,
-            max_retries=3,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
+            operation, max_retries=3, base_delay=0.01, retryable_exceptions=(ValueError,)
         )
         assert result == "success"
         assert call_count == 3
@@ -718,10 +689,7 @@ class TestExecuteWithRetry:
 
         with pytest.raises(ValueError, match="Persistent error"):
             await execute_with_retry(
-                operation,
-                max_retries=2,
-                base_delay=0.01,
-                retryable_exceptions=(ValueError,)
+                operation, max_retries=2, base_delay=0.01, retryable_exceptions=(ValueError,)
             )
         assert call_count == 3  # Initial + 2 retries
 
@@ -738,7 +706,7 @@ class TestExecuteWithRetry:
             await execute_with_retry(
                 operation,
                 max_retries=3,
-                retryable_exceptions=(ValueError,)  # TypeError not included
+                retryable_exceptions=(ValueError,),  # TypeError not included
             )
         assert call_count == 1  # No retries
 
@@ -747,6 +715,7 @@ class TestExecuteWithRetry:
 # INTEGRATION TESTS
 # =============================================================================
 
+
 class TestAbstractionIntegration:
     """Integration tests combining multiple abstraction components."""
 
@@ -754,12 +723,14 @@ class TestAbstractionIntegration:
         """Test StorageContext with QueryBuilder."""
         ctx = StorageContext(user_id="user_123", namespace="project_a")
 
-        query = (QueryBuilder("vectors")
+        query = (
+            QueryBuilder("vectors")
             .select("id", "content", "embedding")
             .where_eq("collection_name", ctx.get_collection_name("documents"))
             .where_user(ctx)
             .order_by("created_at", descending=True)
-            .limit(10))
+            .limit(10)
+        )
 
         sql, params = query.build_postgres()
 
@@ -774,11 +745,7 @@ class TestAbstractionIntegration:
         """Test VectorSearchConfig with HNSWConfig."""
         hnsw = HNSWConfig(m=32, ef_construction=200, ef_search=100)
         search = VectorSearchConfig(
-            k=20,
-            distance_metric="cosine",
-            hnsw_config=hnsw,
-            use_hybrid=True,
-            hybrid_weight=0.6
+            k=20, distance_metric="cosine", hnsw_config=hnsw, use_hybrid=True, hybrid_weight=0.6
         )
 
         assert search.hnsw_config.m == 32

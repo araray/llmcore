@@ -31,6 +31,7 @@ from llmcore.agents.sandbox.registry import SandboxMode
 # DEFAULT CONFIG TESTS
 # =============================================================================
 
+
 class TestDefaultConfig:
     """Tests for default configuration."""
 
@@ -60,6 +61,7 @@ class TestDefaultConfig:
 # DATACLASS TESTS
 # =============================================================================
 
+
 class TestDockerConfig:
     """Tests for DockerConfig dataclass."""
 
@@ -75,11 +77,7 @@ class TestDockerConfig:
 
     def test_custom_values(self):
         """Test custom values."""
-        config = DockerConfig(
-            image="python:3.12-bookworm",
-            memory_limit="2g",
-            cpu_limit=4.0
-        )
+        config = DockerConfig(image="python:3.12-bookworm", memory_limit="2g", cpu_limit=4.0)
 
         assert config.image == "python:3.12-bookworm"
         assert config.memory_limit == "2g"
@@ -100,12 +98,7 @@ class TestVMConfig:
 
     def test_custom_values(self):
         """Test custom values."""
-        config = VMConfig(
-            enabled=True,
-            host="192.168.1.100",
-            port=2222,
-            username="llmcore"
-        )
+        config = VMConfig(enabled=True, host="192.168.1.100", port=2222, username="llmcore")
 
         assert config.enabled is True
         assert config.host == "192.168.1.100"
@@ -170,6 +163,7 @@ class TestSandboxSystemConfig:
 # DEEP MERGE TESTS
 # =============================================================================
 
+
 class TestDeepMerge:
     """Tests for deep merge utility."""
 
@@ -208,6 +202,7 @@ class TestDeepMerge:
 # CONFIGURATION LOADING TESTS
 # =============================================================================
 
+
 class TestLoadSandboxConfig:
     """Tests for configuration loading."""
 
@@ -220,12 +215,7 @@ class TestLoadSandboxConfig:
 
     def test_load_with_overrides(self):
         """Test loading with overrides."""
-        overrides = {
-            "mode": "hybrid",
-            "docker": {
-                "image": "python:3.12"
-            }
-        }
+        overrides = {"mode": "hybrid", "docker": {"image": "python:3.12"}}
 
         config = load_sandbox_config(overrides=overrides)
 
@@ -245,7 +235,7 @@ image = "custom:latest"
 enabled = true
 host = "192.168.1.50"
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             f.flush()
 
@@ -261,10 +251,13 @@ host = "192.168.1.50"
 
     def test_load_from_env_vars(self):
         """Test loading from environment variables."""
-        with patch.dict(os.environ, {
-            'LLMCORE_SANDBOX_MODE': 'hybrid',
-            'LLMCORE_SANDBOX_DOCKER_IMAGE': 'python:3.12-alpine'
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "LLMCORE_SANDBOX_MODE": "hybrid",
+                "LLMCORE_SANDBOX_DOCKER_IMAGE": "python:3.12-alpine",
+            },
+        ):
             config = load_sandbox_config()
 
             # Note: Actual env var loading depends on implementation
@@ -275,6 +268,7 @@ host = "192.168.1.50"
 # =============================================================================
 # REGISTRY CONFIG CONVERSION TESTS
 # =============================================================================
+
 
 class TestCreateRegistryConfig:
     """Tests for registry config conversion."""
@@ -308,11 +302,7 @@ class TestCreateRegistryConfig:
     def test_convert_docker_settings(self):
         """Test converting Docker settings."""
         sandbox_config = SandboxSystemConfig(
-            docker=DockerConfig(
-                image="python:3.12",
-                memory_limit="2g",
-                cpu_limit=4.0
-            )
+            docker=DockerConfig(image="python:3.12", memory_limit="2g", cpu_limit=4.0)
         )
 
         registry_config = create_registry_config(sandbox_config)
@@ -324,12 +314,7 @@ class TestCreateRegistryConfig:
     def test_convert_vm_settings(self):
         """Test converting VM settings."""
         sandbox_config = SandboxSystemConfig(
-            vm=VMConfig(
-                enabled=True,
-                host="192.168.1.100",
-                port=2222,
-                username="llmcore"
-            )
+            vm=VMConfig(enabled=True, host="192.168.1.100", port=2222, username="llmcore")
         )
 
         registry_config = create_registry_config(sandbox_config)
@@ -342,10 +327,7 @@ class TestCreateRegistryConfig:
     def test_convert_tool_settings(self):
         """Test converting tool settings."""
         sandbox_config = SandboxSystemConfig(
-            tools=ToolsConfig(
-                allowed=["tool1", "tool2"],
-                denied=["bad_tool"]
-            )
+            tools=ToolsConfig(allowed=["tool1", "tool2"], denied=["bad_tool"])
         )
 
         registry_config = create_registry_config(sandbox_config)
@@ -357,6 +339,7 @@ class TestCreateRegistryConfig:
 # =============================================================================
 # SAMPLE CONFIG GENERATION TESTS
 # =============================================================================
+
 
 class TestSampleConfigGeneration:
     """Tests for sample config generation."""
@@ -396,6 +379,7 @@ class TestSampleConfigGeneration:
 # =============================================================================
 # EDGE CASE TESTS
 # =============================================================================
+
 
 class TestEdgeCases:
     """Tests for edge cases."""

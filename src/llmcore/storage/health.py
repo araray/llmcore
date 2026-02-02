@@ -52,25 +52,29 @@ logger = logging.getLogger(__name__)
 # HEALTH STATUS TYPES
 # =============================================================================
 
+
 class HealthStatus(str, Enum):
     """Health status of a storage backend."""
-    HEALTHY = "healthy"          # All checks passing
-    DEGRADED = "degraded"        # Some checks failing, but operational
-    UNHEALTHY = "unhealthy"      # Critical checks failing
-    UNKNOWN = "unknown"          # No health data yet
+
+    HEALTHY = "healthy"  # All checks passing
+    DEGRADED = "degraded"  # Some checks failing, but operational
+    UNHEALTHY = "unhealthy"  # Critical checks failing
+    UNKNOWN = "unknown"  # No health data yet
     CIRCUIT_OPEN = "circuit_open"  # Circuit breaker is open
 
 
 class CircuitState(str, Enum):
     """Circuit breaker state machine states."""
-    CLOSED = "closed"      # Normal operation, requests allowed
-    OPEN = "open"          # Failure threshold exceeded, requests blocked
+
+    CLOSED = "closed"  # Normal operation, requests allowed
+    OPEN = "open"  # Failure threshold exceeded, requests blocked
     HALF_OPEN = "half_open"  # Testing if backend recovered
 
 
 @dataclass
 class HealthCheckResult:
     """Result of a single health check execution."""
+
     status: HealthStatus
     latency_ms: float
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -84,13 +88,14 @@ class HealthCheckResult:
             "latency_ms": round(self.latency_ms, 2),
             "timestamp": self.timestamp.isoformat(),
             "error_message": self.error_message,
-            "details": self.details
+            "details": self.details,
         }
 
 
 @dataclass
 class StorageHealthReport:
     """Comprehensive health report for a storage backend."""
+
     backend_name: str
     backend_type: str  # "session" or "vector"
     status: HealthStatus
@@ -117,14 +122,19 @@ class StorageHealthReport:
             "total_failures": self.total_failures,
             "uptime_percentage": round(self.uptime_percentage, 2),
             "average_latency_ms": round(self.average_latency_ms, 2),
-            "last_successful_check": self.last_successful_check.isoformat() if self.last_successful_check else None,
-            "last_failed_check": self.last_failed_check.isoformat() if self.last_failed_check else None,
+            "last_successful_check": self.last_successful_check.isoformat()
+            if self.last_successful_check
+            else None,
+            "last_failed_check": self.last_failed_check.isoformat()
+            if self.last_failed_check
+            else None,
         }
 
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
+
 
 @dataclass
 class HealthConfig:
@@ -158,6 +168,7 @@ DEFAULT_HEALTH_CONFIG = HealthConfig()
 # =============================================================================
 # CIRCUIT BREAKER
 # =============================================================================
+
 
 class CircuitBreaker:
     """
@@ -256,7 +267,9 @@ class CircuitBreaker:
             self._last_failure_time = time.monotonic()
 
             if self._state == CircuitState.HALF_OPEN:
-                logger.warning("Circuit breaker transitioning to OPEN state (half-open test failed)")
+                logger.warning(
+                    "Circuit breaker transitioning to OPEN state (half-open test failed)"
+                )
                 self._state = CircuitState.OPEN
                 self._half_open_requests = 0
 
@@ -300,7 +313,7 @@ class StorageHealthMonitor:
         backend_name: str,
         backend_type: str,
         check_fn: HealthCheckFn,
-        config: Optional[HealthConfig] = None
+        config: Optional[HealthConfig] = None,
     ):
         """
         Initialize health monitor.
@@ -346,8 +359,8 @@ class StorageHealthMonitor:
 
         latest = self._check_history[-1]
         return (
-            latest.status in (HealthStatus.HEALTHY, HealthStatus.DEGRADED) and
-            not self._circuit_breaker.is_open
+            latest.status in (HealthStatus.HEALTHY, HealthStatus.DEGRADED)
+            and not self._circuit_breaker.is_open
         )
 
     @property
@@ -378,8 +391,7 @@ class StorageHealthMonitor:
         try:
             # Execute the health check with timeout
             result = await asyncio.wait_for(
-                self._check_fn(),
-                timeout=self.config.check_timeout_seconds
+                self._check_fn(), timeout=self.config.check_timeout_seconds
             )
 
             # Record success
@@ -402,7 +414,7 @@ class StorageHealthMonitor:
             result = HealthCheckResult(
                 status=HealthStatus.UNHEALTHY,
                 latency_ms=latency_ms,
-                error_message=f"Health check timed out after {self.config.check_timeout_seconds}s"
+                error_message=f"Health check timed out after {self.config.check_timeout_seconds}s",
             )
             await self._circuit_breaker.record_failure()
             self._last_failed_check = result.timestamp
@@ -411,19 +423,14 @@ class StorageHealthMonitor:
         except Exception as e:
             latency_ms = (time.perf_counter() - start_time) * 1000
             result = HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=latency_ms,
-                error_message=str(e)
+                status=HealthStatus.UNHEALTHY, latency_ms=latency_ms, error_message=str(e)
             )
             await self._circuit_breaker.record_failure()
             self._last_failed_check = result.timestamp
             self._total_failures += 1
 
             if self.config.log_health_checks:
-                logger.error(
-                    f"Health check failed for {self.backend_name}: {e}",
-                    exc_info=True
-                )
+                logger.error(f"Health check failed for {self.backend_name}: {e}", exc_info=True)
 
         # Update statistics
         self._total_checks += 1
@@ -440,7 +447,7 @@ class StorageHealthMonitor:
             logger.log(
                 level,
                 f"Health check {self.backend_name}: status={result.status.value}, "
-                f"latency={result.latency_ms:.0f}ms"
+                f"latency={result.latency_ms:.0f}ms",
             )
 
         return result
@@ -500,10 +507,14 @@ class StorageHealthMonitor:
 
         # Calculate uptime percentage
         successful_checks = self._total_checks - self._total_failures
-        uptime_pct = (successful_checks / self._total_checks * 100) if self._total_checks > 0 else 100.0
+        uptime_pct = (
+            (successful_checks / self._total_checks * 100) if self._total_checks > 0 else 100.0
+        )
 
         # Calculate average latency
-        avg_latency = (self._total_latency_ms / self._total_checks) if self._total_checks > 0 else 0.0
+        avg_latency = (
+            (self._total_latency_ms / self._total_checks) if self._total_checks > 0 else 0.0
+        )
 
         return StorageHealthReport(
             backend_name=self.backend_name,
@@ -525,6 +536,7 @@ class StorageHealthMonitor:
 # HEALTH CHECK FUNCTIONS
 # =============================================================================
 
+
 async def create_postgres_health_check(pool: Any) -> HealthCheckFn:
     """
     Create a health check function for PostgreSQL.
@@ -535,6 +547,7 @@ async def create_postgres_health_check(pool: Any) -> HealthCheckFn:
     Returns:
         Async function that performs health check.
     """
+
     async def check() -> HealthCheckResult:
         start = time.perf_counter()
         try:
@@ -548,20 +561,21 @@ async def create_postgres_health_check(pool: Any) -> HealthCheckFn:
                     return HealthCheckResult(
                         status=HealthStatus.HEALTHY,
                         latency_ms=latency_ms,
-                        details={"query": "SELECT 1", "pool_size": pool.get_stats().get("pool_size", "unknown")}
+                        details={
+                            "query": "SELECT 1",
+                            "pool_size": pool.get_stats().get("pool_size", "unknown"),
+                        },
                     )
                 else:
                     return HealthCheckResult(
                         status=HealthStatus.UNHEALTHY,
                         latency_ms=latency_ms,
-                        error_message="Health check query returned unexpected result"
+                        error_message="Health check query returned unexpected result",
                     )
         except Exception as e:
             latency_ms = (time.perf_counter() - start) * 1000
             return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=latency_ms,
-                error_message=str(e)
+                status=HealthStatus.UNHEALTHY, latency_ms=latency_ms, error_message=str(e)
             )
 
     return check
@@ -577,6 +591,7 @@ async def create_sqlite_health_check(conn: Any) -> HealthCheckFn:
     Returns:
         Async function that performs health check.
     """
+
     async def check() -> HealthCheckResult:
         start = time.perf_counter()
         try:
@@ -589,20 +604,18 @@ async def create_sqlite_health_check(conn: Any) -> HealthCheckFn:
                 return HealthCheckResult(
                     status=HealthStatus.HEALTHY,
                     latency_ms=latency_ms,
-                    details={"query": "SELECT 1"}
+                    details={"query": "SELECT 1"},
                 )
             else:
                 return HealthCheckResult(
                     status=HealthStatus.UNHEALTHY,
                     latency_ms=latency_ms,
-                    error_message="Health check query returned unexpected result"
+                    error_message="Health check query returned unexpected result",
                 )
         except Exception as e:
             latency_ms = (time.perf_counter() - start) * 1000
             return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=latency_ms,
-                error_message=str(e)
+                status=HealthStatus.UNHEALTHY, latency_ms=latency_ms, error_message=str(e)
             )
 
     return check
@@ -618,6 +631,7 @@ async def create_chromadb_health_check(client: Any) -> HealthCheckFn:
     Returns:
         Async function that performs health check.
     """
+
     async def check() -> HealthCheckResult:
         start = time.perf_counter()
         try:
@@ -629,14 +643,12 @@ async def create_chromadb_health_check(client: Any) -> HealthCheckFn:
             return HealthCheckResult(
                 status=HealthStatus.HEALTHY,
                 latency_ms=latency_ms,
-                details={"collection_count": len(collections)}
+                details={"collection_count": len(collections)},
             )
         except Exception as e:
             latency_ms = (time.perf_counter() - start) * 1000
             return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=latency_ms,
-                error_message=str(e)
+                status=HealthStatus.UNHEALTHY, latency_ms=latency_ms, error_message=str(e)
             )
 
     return check
@@ -645,6 +657,7 @@ async def create_chromadb_health_check(client: Any) -> HealthCheckFn:
 # =============================================================================
 # COMPOSITE HEALTH MANAGER
 # =============================================================================
+
 
 class StorageHealthManager:
     """
@@ -734,9 +747,8 @@ class StorageHealthManager:
         return {
             "overall_healthy": self.is_healthy(),
             "backends": {
-                name: monitor.get_report().to_dict()
-                for name, monitor in self._monitors.items()
-            }
+                name: monitor.get_report().to_dict() for name, monitor in self._monitors.items()
+            },
         }
 
     async def run_health_check(self, backend_name: str) -> Optional[HealthCheckResult]:

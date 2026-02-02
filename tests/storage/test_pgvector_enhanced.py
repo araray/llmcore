@@ -40,6 +40,7 @@ try:
         StorageContext,
         VectorSearchConfig,
     )
+
     ABSTRACTION_AVAILABLE = True
 except ImportError:
     # Fallback: add storage module to path for direct imports
@@ -54,6 +55,7 @@ except ImportError:
             StorageContext,
             VectorSearchConfig,
         )
+
         ABSTRACTION_AVAILABLE = True
     except ImportError:
         ABSTRACTION_AVAILABLE = False
@@ -68,6 +70,7 @@ try:
         EnhancedPgVectorStorage,
         HybridSearchResult,
     )
+
     PGVECTOR_ENHANCED_AVAILABLE = True
 except ImportError:
     # Try direct import if llmcore not installed
@@ -82,6 +85,7 @@ except ImportError:
             EnhancedPgVectorStorage,
             HybridSearchResult,
         )
+
         PGVECTOR_ENHANCED_AVAILABLE = True
     except ImportError as e2:
         # Module not available - tests will skip
@@ -93,6 +97,7 @@ except ImportError:
 
         # Print import error for debugging
         import warnings
+
         warnings.warn(f"pgvector_enhanced not available: {e2}")
 
 
@@ -100,9 +105,11 @@ except ImportError:
 # MOCK MODELS (in case llmcore.models not available)
 # =============================================================================
 
+
 @dataclass
 class MockContextDocument:
     """Mock ContextDocument for testing."""
+
     id: str
     content: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -120,6 +127,7 @@ except ImportError:
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def mock_pool():
@@ -142,12 +150,14 @@ def sample_documents():
     random.seed(42)
     docs = []
     for i in range(5):
-        docs.append(ContextDocument(
-            id=f"doc_{i}",
-            content=f"This is test document number {i} with content about topic{i}.",
-            metadata={"source": "test", "index": i, "category": f"cat_{i % 2}"},
-            embedding=[random.random() for _ in range(384)],
-        ))
+        docs.append(
+            ContextDocument(
+                id=f"doc_{i}",
+                content=f"This is test document number {i} with content about topic{i}.",
+                metadata={"source": "test", "index": i, "category": f"cat_{i % 2}"},
+                embedding=[random.random() for _ in range(384)],
+            )
+        )
     return docs
 
 
@@ -170,7 +180,7 @@ def system_context():
 # Skip all unit tests if pgvector_enhanced module not available
 pytestmark_pgvector = pytest.mark.skipif(
     not PGVECTOR_ENHANCED_AVAILABLE,
-    reason="pgvector_enhanced module not available (missing dependencies)"
+    reason="pgvector_enhanced module not available (missing dependencies)",
 )
 
 
@@ -285,6 +295,7 @@ class TestStorageContextIntegration:
 # MOCK-BASED TESTS (Simulate database behavior)
 # =============================================================================
 
+
 @pytestmark_pgvector
 @pytest.mark.asyncio
 class TestInitializationMocked:
@@ -297,9 +308,9 @@ class TestInitializationMocked:
         # Use the module path where EnhancedPgVectorStorage was imported from
         module_path = EnhancedPgVectorStorage.__module__
 
-        with patch.dict('sys.modules', {'psycopg': None}):
+        with patch.dict("sys.modules", {"psycopg": None}):
             # Force psycopg_available to False
-            with patch(f'{module_path}.psycopg_available', False):
+            with patch(f"{module_path}.psycopg_available", False):
                 with pytest.raises(Exception):  # ConfigError
                     await storage.initialize({"db_url": "postgresql://localhost/test"})
 
@@ -311,8 +322,8 @@ class TestInitializationMocked:
         module_path = EnhancedPgVectorStorage.__module__
 
         # Mock psycopg as available
-        with patch(f'{module_path}.psycopg_available', True):
-            with patch(f'{module_path}.pgvector_available', True):
+        with patch(f"{module_path}.psycopg_available", True):
+            with patch(f"{module_path}.pgvector_available", True):
                 with pytest.raises(Exception):  # ConfigError
                     await storage.initialize({})  # No db_url
 
@@ -407,6 +418,7 @@ def _get_pg_config() -> Dict[str, Any]:
         "database": os.environ.get("LLMCORE_TEST_PG_DATABASE", "llmcore_test"),
     }
 
+
 def _get_pg_url() -> str:
     """Build PostgreSQL connection URL from environment variables."""
     config = _get_pg_config()
@@ -415,18 +427,24 @@ def _get_pg_url() -> str:
         f"@{config['host']}:{config['port']}/{config['database']}"
     )
 
+
 def _should_skip_pg_tests() -> bool:
     """Check if PostgreSQL tests should be skipped."""
     skip = os.environ.get("LLMCORE_SKIP_PG_TESTS", "").lower()
     return skip in ("1", "true", "yes", "on")
+
 
 # Try to import from conftest, fallback to local functions
 try:
     from conftest import get_pg_url, requires_pgvector, requires_postgres, should_skip_pg_tests
 except ImportError:
     # Define fallbacks if conftest not loaded
-    requires_postgres = pytest.mark.skipif(_should_skip_pg_tests(), reason="PostgreSQL tests disabled")
-    requires_pgvector = pytest.mark.skipif(_should_skip_pg_tests(), reason="pgvector tests disabled")
+    requires_postgres = pytest.mark.skipif(
+        _should_skip_pg_tests(), reason="PostgreSQL tests disabled"
+    )
+    requires_pgvector = pytest.mark.skipif(
+        _should_skip_pg_tests(), reason="pgvector tests disabled"
+    )
     get_pg_url = _get_pg_url
     should_skip_pg_tests = _should_skip_pg_tests
 
@@ -536,7 +554,9 @@ class TestPgVectorIntegration:
     async def test_get_document(self, storage, sample_documents, user_context):
         """Test getting a single document."""
         await storage.create_collection(name="get_test", dimension=384)
-        await storage.add_documents(sample_documents[:1], collection_name="get_test", context=user_context)
+        await storage.add_documents(
+            sample_documents[:1], collection_name="get_test", context=user_context
+        )
 
         doc = await storage.get_document(
             sample_documents[0].id,
@@ -551,7 +571,9 @@ class TestPgVectorIntegration:
     async def test_delete_documents(self, storage, sample_documents, user_context):
         """Test deleting documents."""
         await storage.create_collection(name="delete_test", dimension=384)
-        await storage.add_documents(sample_documents, collection_name="delete_test", context=user_context)
+        await storage.add_documents(
+            sample_documents, collection_name="delete_test", context=user_context
+        )
 
         # Delete first two documents
         deleted = await storage.delete_documents(
@@ -569,7 +591,9 @@ class TestPgVectorIntegration:
     async def test_similarity_search(self, storage, sample_documents, user_context):
         """Test similarity search."""
         await storage.create_collection(name="search_test", dimension=384)
-        await storage.add_documents(sample_documents, collection_name="search_test", context=user_context)
+        await storage.add_documents(
+            sample_documents, collection_name="search_test", context=user_context
+        )
 
         # Search using first document's embedding
         results = await storage.similarity_search(
@@ -588,7 +612,9 @@ class TestPgVectorIntegration:
     async def test_similarity_search_with_filter(self, storage, sample_documents, user_context):
         """Test similarity search with metadata filter."""
         await storage.create_collection(name="filter_test", dimension=384)
-        await storage.add_documents(sample_documents, collection_name="filter_test", context=user_context)
+        await storage.add_documents(
+            sample_documents, collection_name="filter_test", context=user_context
+        )
 
         # Search with category filter
         config = VectorSearchConfig(
@@ -630,11 +656,15 @@ class TestPgVectorIntegration:
 
         # Add documents as user_1
         ctx1 = StorageContext(user_id="user_1")
-        await storage.add_documents(sample_documents[:2], collection_name="isolation_test", context=ctx1)
+        await storage.add_documents(
+            sample_documents[:2], collection_name="isolation_test", context=ctx1
+        )
 
         # Add documents as user_2
         ctx2 = StorageContext(user_id="user_2")
-        await storage.add_documents(sample_documents[2:], collection_name="isolation_test", context=ctx2)
+        await storage.add_documents(
+            sample_documents[2:], collection_name="isolation_test", context=ctx2
+        )
 
         # Search as user_1 - should only see their documents
         results = await storage.similarity_search(
@@ -652,7 +682,9 @@ class TestPgVectorIntegration:
     async def test_hybrid_search(self, storage, sample_documents, user_context):
         """Test hybrid search combining vector and text."""
         await storage.create_collection(name="hybrid_test", dimension=384)
-        await storage.add_documents(sample_documents, collection_name="hybrid_test", context=user_context)
+        await storage.add_documents(
+            sample_documents, collection_name="hybrid_test", context=user_context
+        )
 
         results = await storage.hybrid_search(
             query_text="test document topic0",
@@ -670,7 +702,9 @@ class TestPgVectorIntegration:
     async def test_collection_info_with_count(self, storage, sample_documents, user_context):
         """Test collection info includes document count."""
         await storage.create_collection(name="info_test", dimension=384)
-        await storage.add_documents(sample_documents, collection_name="info_test", context=user_context)
+        await storage.add_documents(
+            sample_documents, collection_name="info_test", context=user_context
+        )
 
         info = await storage.get_collection_info("info_test", context=user_context)
 
@@ -698,7 +732,9 @@ class TestPgVectorIntegration:
         await storage.create_collection(name="upsert_test", dimension=384)
 
         # Add original document
-        await storage.add_documents(sample_documents[:1], collection_name="upsert_test", context=user_context)
+        await storage.add_documents(
+            sample_documents[:1], collection_name="upsert_test", context=user_context
+        )
 
         # Update with same ID but different content
         updated_doc = ContextDocument(
@@ -707,7 +743,9 @@ class TestPgVectorIntegration:
             metadata={"updated": True},
             embedding=sample_documents[0].embedding,
         )
-        await storage.add_documents([updated_doc], collection_name="upsert_test", context=user_context)
+        await storage.add_documents(
+            [updated_doc], collection_name="upsert_test", context=user_context
+        )
 
         # Verify update
         doc = await storage.get_document(sample_documents[0].id, collection_name="upsert_test")
@@ -719,6 +757,7 @@ class TestPgVectorIntegration:
 # =============================================================================
 # PERFORMANCE TESTS
 # =============================================================================
+
 
 @pytestmark_pgvector
 @pytest.mark.requires_postgres
@@ -784,6 +823,7 @@ class TestPgVectorPerformance:
 # =============================================================================
 # EDGE CASE TESTS
 # =============================================================================
+
 
 @pytestmark_pgvector
 class TestEdgeCases:

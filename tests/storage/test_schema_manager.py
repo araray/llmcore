@@ -37,6 +37,7 @@ from schema_manager import (
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def mock_postgres_pool():
     """Create a mock PostgreSQL connection pool."""
@@ -46,20 +47,23 @@ def mock_postgres_pool():
 
     mock_conn = AsyncMock()
     mock_conn.execute = AsyncMock()
-    mock_conn.cursor = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_cursor),
-        __aexit__=AsyncMock(return_value=None)
-    ))
-    mock_conn.transaction = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=None),
-        __aexit__=AsyncMock(return_value=None)
-    ))
+    mock_conn.cursor = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_cursor), __aexit__=AsyncMock(return_value=None)
+        )
+    )
+    mock_conn.transaction = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=None)
+        )
+    )
 
     mock_pool = AsyncMock()
-    mock_pool.connection = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_conn),
-        __aexit__=AsyncMock(return_value=None)
-    ))
+    mock_pool.connection = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)
+        )
+    )
     mock_pool.getconn = AsyncMock(return_value=mock_conn)
     mock_pool.putconn = AsyncMock()
 
@@ -76,7 +80,7 @@ def mock_sqlite_conn():
     # Mock fetchall to return empty list by default
     mock_cursor = AsyncMock()
     mock_cursor.fetchall = AsyncMock(return_value=[])
-    mock_cursor.description = [('version',), ('applied_at',), ('description',), ('checksum',)]
+    mock_cursor.description = [("version",), ("applied_at",), ("description",), ("checksum",)]
 
     mock_conn.execute = AsyncMock(return_value=mock_cursor)
 
@@ -87,6 +91,7 @@ def mock_sqlite_conn():
 # UNIT TESTS - SCHEMA VERSION
 # =============================================================================
 
+
 class TestSchemaVersion:
     """Tests for SchemaVersion dataclass."""
 
@@ -94,10 +99,7 @@ class TestSchemaVersion:
         """Test creating a SchemaVersion instance."""
         now = datetime.now(timezone.utc)
         version = SchemaVersion(
-            version=1,
-            applied_at=now,
-            description="Initial schema",
-            checksum="abc123"
+            version=1, applied_at=now, description="Initial schema", checksum="abc123"
         )
 
         assert version.version == 1
@@ -108,9 +110,7 @@ class TestSchemaVersion:
     def test_schema_version_without_checksum(self):
         """Test SchemaVersion with default None checksum."""
         version = SchemaVersion(
-            version=2,
-            applied_at=datetime.now(timezone.utc),
-            description="Add indexes"
+            version=2, applied_at=datetime.now(timezone.utc), description="Add indexes"
         )
 
         assert version.checksum is None
@@ -126,7 +126,7 @@ class TestSchemaMigration:
             to_version=1,
             description="Create base tables",
             sql_postgres="CREATE TABLE sessions ...",
-            sql_sqlite="CREATE TABLE sessions ..."
+            sql_sqlite="CREATE TABLE sessions ...",
         )
 
         assert migration.from_version == 0
@@ -138,8 +138,9 @@ class TestSchemaMigration:
         """Test that defined migrations are sequential."""
         for i, migration in enumerate(MIGRATIONS):
             # Each migration should go to the next version
-            assert migration.to_version == migration.from_version + 1, \
+            assert migration.to_version == migration.from_version + 1, (
                 f"Migration {i} is not sequential: {migration.from_version} -> {migration.to_version}"
+            )
 
     def test_migrations_cover_all_versions(self):
         """Test that migrations cover from 0 to CURRENT_SCHEMA_VERSION."""
@@ -148,13 +149,15 @@ class TestSchemaMigration:
             covered_versions.add(migration.to_version)
 
         expected_versions = set(range(1, CURRENT_SCHEMA_VERSION + 1))
-        assert covered_versions == expected_versions, \
+        assert covered_versions == expected_versions, (
             f"Missing migrations for versions: {expected_versions - covered_versions}"
+        )
 
 
 # =============================================================================
 # UNIT TESTS - SCHEMA BACKEND ENUM
 # =============================================================================
+
 
 class TestSchemaBackend:
     """Tests for SchemaBackend enum."""
@@ -173,6 +176,7 @@ class TestSchemaBackend:
 # =============================================================================
 # UNIT TESTS - FACTORY FUNCTION
 # =============================================================================
+
 
 class TestCreateSchemaManager:
     """Tests for create_schema_manager factory function."""
@@ -201,6 +205,7 @@ class TestCreateSchemaManager:
 # UNIT TESTS - POSTGRES SCHEMA MANAGER
 # =============================================================================
 
+
 class TestPostgresSchemaManager:
     """Tests for PostgreSQL schema manager."""
 
@@ -210,10 +215,10 @@ class TestPostgresSchemaManager:
         manager = PostgresSchemaManager(mock_postgres_pool)
 
         # Mock empty result
-        with patch.object(manager, '_execute_query', new_callable=AsyncMock) as mock_query:
+        with patch.object(manager, "_execute_query", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = [{"version": None}]
 
-            with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                 version = await manager.get_current_version()
 
         assert version == 0
@@ -223,10 +228,10 @@ class TestPostgresSchemaManager:
         """Test getting version when migrations have been applied."""
         manager = PostgresSchemaManager(mock_postgres_pool)
 
-        with patch.object(manager, '_execute_query', new_callable=AsyncMock) as mock_query:
+        with patch.object(manager, "_execute_query", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = [{"version": 3}]
 
-            with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                 version = await manager.get_current_version()
 
         assert version == 3
@@ -236,12 +241,12 @@ class TestPostgresSchemaManager:
         """Test ensure_schema when already at target version."""
         manager = PostgresSchemaManager(mock_postgres_pool)
 
-        with patch.object(manager, 'get_current_version', new_callable=AsyncMock) as mock_version:
+        with patch.object(manager, "get_current_version", new_callable=AsyncMock) as mock_version:
             mock_version.return_value = CURRENT_SCHEMA_VERSION
 
-            with patch.object(manager, '_acquire_lock', new_callable=AsyncMock, return_value=True):
-                with patch.object(manager, '_release_lock', new_callable=AsyncMock):
-                    with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_acquire_lock", new_callable=AsyncMock, return_value=True):
+                with patch.object(manager, "_release_lock", new_callable=AsyncMock):
+                    with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                         result = await manager.ensure_schema()
 
         assert result == CURRENT_SCHEMA_VERSION
@@ -283,6 +288,7 @@ class TestPostgresSchemaManager:
 # UNIT TESTS - SQLITE SCHEMA MANAGER
 # =============================================================================
 
+
 class TestSqliteSchemaManager:
     """Tests for SQLite schema manager."""
 
@@ -291,10 +297,10 @@ class TestSqliteSchemaManager:
         """Test getting version when schema table is empty."""
         manager = SqliteSchemaManager(mock_sqlite_conn)
 
-        with patch.object(manager, '_execute_query', new_callable=AsyncMock) as mock_query:
+        with patch.object(manager, "_execute_query", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = [{"version": None}]
 
-            with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                 version = await manager.get_current_version()
 
         assert version == 0
@@ -334,6 +340,7 @@ class TestSqliteSchemaManager:
 # UNIT TESTS - VERSION HISTORY
 # =============================================================================
 
+
 class TestVersionHistory:
     """Tests for version history retrieval."""
 
@@ -342,10 +349,10 @@ class TestVersionHistory:
         """Test getting history when no versions applied."""
         manager = PostgresSchemaManager(mock_postgres_pool)
 
-        with patch.object(manager, '_execute_query', new_callable=AsyncMock) as mock_query:
+        with patch.object(manager, "_execute_query", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = []
 
-            with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                 history = await manager.get_version_history()
 
         assert history == []
@@ -356,13 +363,13 @@ class TestVersionHistory:
         manager = PostgresSchemaManager(mock_postgres_pool)
 
         now = datetime.now(timezone.utc)
-        with patch.object(manager, '_execute_query', new_callable=AsyncMock) as mock_query:
+        with patch.object(manager, "_execute_query", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = [
                 {"version": 1, "applied_at": now, "description": "Initial", "checksum": None},
-                {"version": 2, "applied_at": now, "description": "Add indexes", "checksum": "abc"}
+                {"version": 2, "applied_at": now, "description": "Add indexes", "checksum": "abc"},
             ]
 
-            with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+            with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                 history = await manager.get_version_history()
 
         assert len(history) == 2
@@ -374,6 +381,7 @@ class TestVersionHistory:
 # =============================================================================
 # INTEGRATION TESTS (with mocked database)
 # =============================================================================
+
 
 class TestSchemaManagerIntegration:
     """Integration tests for schema manager workflow."""
@@ -392,13 +400,22 @@ class TestSchemaManagerIntegration:
         async def mock_record_version(version, description):
             applied_versions.append(version)
 
-        with patch.object(manager, '_execute_ddl', side_effect=mock_execute_ddl):
-            with patch.object(manager, '_record_version', side_effect=mock_record_version):
-                with patch.object(manager, '_acquire_lock', new_callable=AsyncMock, return_value=True):
-                    with patch.object(manager, '_release_lock', new_callable=AsyncMock):
-                        with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
-                            with patch.object(manager, 'get_current_version', new_callable=AsyncMock, return_value=0):
-                                result = await manager.ensure_schema(target_version=CURRENT_SCHEMA_VERSION)
+        with patch.object(manager, "_execute_ddl", side_effect=mock_execute_ddl):
+            with patch.object(manager, "_record_version", side_effect=mock_record_version):
+                with patch.object(
+                    manager, "_acquire_lock", new_callable=AsyncMock, return_value=True
+                ):
+                    with patch.object(manager, "_release_lock", new_callable=AsyncMock):
+                        with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
+                            with patch.object(
+                                manager,
+                                "get_current_version",
+                                new_callable=AsyncMock,
+                                return_value=0,
+                            ):
+                                result = await manager.ensure_schema(
+                                    target_version=CURRENT_SCHEMA_VERSION
+                                )
 
         # Should have applied all migrations
         assert len(applied_versions) == CURRENT_SCHEMA_VERSION
@@ -414,14 +431,23 @@ class TestSchemaManagerIntegration:
         async def mock_record_version(version, description):
             applied_versions.append(version)
 
-        with patch.object(manager, '_execute_ddl', new_callable=AsyncMock):
-            with patch.object(manager, '_record_version', side_effect=mock_record_version):
-                with patch.object(manager, '_acquire_lock', new_callable=AsyncMock, return_value=True):
-                    with patch.object(manager, '_release_lock', new_callable=AsyncMock):
-                        with patch.object(manager, '_ensure_schema_table', new_callable=AsyncMock):
+        with patch.object(manager, "_execute_ddl", new_callable=AsyncMock):
+            with patch.object(manager, "_record_version", side_effect=mock_record_version):
+                with patch.object(
+                    manager, "_acquire_lock", new_callable=AsyncMock, return_value=True
+                ):
+                    with patch.object(manager, "_release_lock", new_callable=AsyncMock):
+                        with patch.object(manager, "_ensure_schema_table", new_callable=AsyncMock):
                             # Start from version 2
-                            with patch.object(manager, 'get_current_version', new_callable=AsyncMock, return_value=2):
-                                result = await manager.ensure_schema(target_version=CURRENT_SCHEMA_VERSION)
+                            with patch.object(
+                                manager,
+                                "get_current_version",
+                                new_callable=AsyncMock,
+                                return_value=2,
+                            ):
+                                result = await manager.ensure_schema(
+                                    target_version=CURRENT_SCHEMA_VERSION
+                                )
 
         # Should only apply migrations from v2 to current
         expected_versions = list(range(3, CURRENT_SCHEMA_VERSION + 1))
@@ -431,6 +457,7 @@ class TestSchemaManagerIntegration:
 # =============================================================================
 # CONSTANTS TESTS
 # =============================================================================
+
 
 class TestSchemaConstants:
     """Tests for schema-related constants."""

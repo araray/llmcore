@@ -24,6 +24,7 @@ from llmcore.agents.sandbox.output_tracker import ExecutionLog, OutputTracker, R
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for testing."""
@@ -39,7 +40,7 @@ def output_tracker(temp_dir):
         base_path=temp_dir,
         max_log_entries=1000,
         log_input_preview_length=100,
-        log_output_preview_length=200
+        log_output_preview_length=200,
     )
 
 
@@ -57,6 +58,7 @@ def mock_sandbox():
 # =============================================================================
 # INITIALIZATION TESTS
 # =============================================================================
+
 
 class TestOutputTrackerInit:
     """Tests for OutputTracker initialization."""
@@ -79,6 +81,7 @@ class TestOutputTrackerInit:
 # RUN MANAGEMENT TESTS
 # =============================================================================
 
+
 class TestRunManagement:
     """Tests for run management."""
 
@@ -90,7 +93,7 @@ class TestRunManagement:
             sandbox_type="docker",
             access_level="restricted",
             task_description="Test task",
-            metadata={"custom": "value"}
+            metadata={"custom": "value"},
         )
 
         assert run_id == "sandbox-abc123"
@@ -111,7 +114,7 @@ class TestRunManagement:
             sandbox_type="vm",
             access_level="full",
             task_description="Integration test",
-            metadata={"env": "production"}
+            metadata={"env": "production"},
         )
 
         metadata = await output_tracker.get_run_metadata(run_id)
@@ -134,6 +137,7 @@ class TestRunManagement:
 # EXECUTION LOGGING TESTS
 # =============================================================================
 
+
 class TestExecutionLogging:
     """Tests for execution logging."""
 
@@ -143,17 +147,14 @@ class TestExecutionLogging:
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
         result = ExecutionResult(
-            exit_code=0,
-            stdout="Hello, World!",
-            stderr="",
-            execution_time_seconds=0.5
+            exit_code=0, stdout="Hello, World!", stderr="", execution_time_seconds=0.5
         )
 
         await output_tracker.log_execution(
             run_id=run_id,
             tool_name="execute_shell",
             input_data="echo 'Hello, World!'",
-            result=result
+            result=result,
         )
 
         # Verify log was added
@@ -170,17 +171,10 @@ class TestExecutionLogging:
         long_input = "x" * 500
         long_output = "y" * 500
 
-        result = ExecutionResult(
-            exit_code=0,
-            stdout=long_output,
-            stderr=""
-        )
+        result = ExecutionResult(exit_code=0, stdout=long_output, stderr="")
 
         await output_tracker.log_execution(
-            run_id=run_id,
-            tool_name="test",
-            input_data=long_input,
-            result=result
+            run_id=run_id, tool_name="test", input_data=long_input, result=result
         )
 
         logs = await output_tracker.get_execution_logs(run_id)
@@ -206,6 +200,7 @@ class TestExecutionLogging:
 # FILE TRACKING TESTS
 # =============================================================================
 
+
 class TestFileTracking:
     """Tests for file tracking."""
 
@@ -218,7 +213,7 @@ class TestFileTracking:
             run_id=run_id,
             file_path="/workspace/output.py",
             size_bytes=1024,
-            description="Generated code"
+            description="Generated code",
         )
 
         files = await output_tracker.get_tracked_files(run_id)
@@ -243,6 +238,7 @@ class TestFileTracking:
 # STATE PERSISTENCE TESTS
 # =============================================================================
 
+
 class TestStatePersistence:
     """Tests for state persistence."""
 
@@ -251,11 +247,7 @@ class TestStatePersistence:
         """Test saving final state."""
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
-        state = {
-            "iteration": 5,
-            "plan": ["step1", "step2", "step3"],
-            "completed": True
-        }
+        state = {"iteration": 5, "plan": ["step1", "step2", "step3"], "completed": True}
 
         await output_tracker.save_final_state(run_id, state)
 
@@ -274,6 +266,7 @@ class TestStatePersistence:
 # RUN FINALIZATION TESTS
 # =============================================================================
 
+
 class TestRunFinalization:
     """Tests for run finalization."""
 
@@ -282,10 +275,7 @@ class TestRunFinalization:
         """Test finalizing a successful run."""
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
-        await output_tracker.finalize_run(
-            run_id=run_id,
-            success=True
-        )
+        await output_tracker.finalize_run(run_id=run_id, success=True)
 
         metadata = await output_tracker.get_run_metadata(run_id)
         assert metadata["status"] == "completed"
@@ -298,9 +288,7 @@ class TestRunFinalization:
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
         await output_tracker.finalize_run(
-            run_id=run_id,
-            success=False,
-            error_message="Task failed due to timeout"
+            run_id=run_id, success=False, error_message="Task failed due to timeout"
         )
 
         metadata = await output_tracker.get_run_metadata(run_id)
@@ -314,20 +302,15 @@ class TestRunFinalization:
         run_id = await output_tracker.create_run(sandbox_id="test-run")
 
         # Mock ephemeral manager
-        with patch('llmcore.agents.sandbox.ephemeral.EphemeralResourceManager') as MockEphemeral:
+        with patch("llmcore.agents.sandbox.ephemeral.EphemeralResourceManager") as MockEphemeral:
             mock_ephemeral = MagicMock()
-            mock_ephemeral.export_state = AsyncMock(return_value={
-                "state": {"key": "value"},
-                "logs": [],
-                "files": []
-            })
+            mock_ephemeral.export_state = AsyncMock(
+                return_value={"state": {"key": "value"}, "logs": [], "files": []}
+            )
             MockEphemeral.return_value = mock_ephemeral
 
             await output_tracker.finalize_run(
-                run_id=run_id,
-                sandbox=mock_sandbox,
-                success=True,
-                preserve_state=True
+                run_id=run_id, sandbox=mock_sandbox, success=True, preserve_state=True
             )
 
         # Verify state was preserved
@@ -338,6 +321,7 @@ class TestRunFinalization:
 # =============================================================================
 # RUN LISTING TESTS
 # =============================================================================
+
 
 class TestRunListing:
     """Tests for run listing."""
@@ -383,6 +367,7 @@ class TestRunListing:
 # RUN DELETION TESTS
 # =============================================================================
 
+
 class TestRunDeletion:
     """Tests for run deletion."""
 
@@ -408,6 +393,7 @@ class TestRunDeletion:
 # CLEANUP TESTS
 # =============================================================================
 
+
 class TestCleanup:
     """Tests for old run cleanup."""
 
@@ -421,7 +407,7 @@ class TestCleanup:
         # Should keep at least keep_min_runs
         deleted = await output_tracker.cleanup_old_runs(
             max_age_days=0,  # All runs are "old"
-            keep_min_runs=5
+            keep_min_runs=5,
         )
 
         remaining = await output_tracker.list_runs()
@@ -434,10 +420,7 @@ class TestCleanup:
             await output_tracker.create_run(sandbox_id=f"run-{i}")
 
         # All runs are recent, none should be deleted
-        deleted = await output_tracker.cleanup_old_runs(
-            max_age_days=30,
-            keep_min_runs=3
-        )
+        deleted = await output_tracker.cleanup_old_runs(max_age_days=30, keep_min_runs=3)
 
         remaining = await output_tracker.list_runs()
         assert len(remaining) == 5
@@ -446,6 +429,7 @@ class TestCleanup:
 # =============================================================================
 # OUTPUT PATH TESTS
 # =============================================================================
+
 
 class TestOutputPaths:
     """Tests for output path handling."""
@@ -473,6 +457,7 @@ class TestOutputPaths:
 # DATA CLASS TESTS
 # =============================================================================
 
+
 class TestDataClasses:
     """Tests for data classes."""
 
@@ -485,7 +470,7 @@ class TestDataClasses:
             exit_code=0,
             execution_time=0.5,
             success=True,
-            output_preview="test"
+            output_preview="test",
         )
 
         d = log.to_dict()
@@ -501,7 +486,7 @@ class TestDataClasses:
             created_at=datetime(2024, 1, 15, 10, 30, 0),
             sandbox_type="docker",
             access_level="restricted",
-            task_description="Test task"
+            task_description="Test task",
         )
 
         d = metadata.to_dict()

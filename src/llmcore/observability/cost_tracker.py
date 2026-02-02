@@ -214,9 +214,7 @@ def get_price_per_million_tokens(
         if model_lower.startswith(known_model):
             return pricing.get(token_type, 0.0)
 
-    logger.warning(
-        f"Unknown model '{model}' for provider '{provider}', assuming free"
-    )
+    logger.warning(f"Unknown model '{model}' for provider '{provider}', assuming free")
     return 0.0
 
 
@@ -320,9 +318,7 @@ class CostTrackingConfig(BaseModel):
         default="~/.llmcore/costs.db",
         description="Path to SQLite cost tracking database",
     )
-    retention_days: int = Field(
-        default=90, ge=0, description="Days to retain records (0=forever)"
-    )
+    retention_days: int = Field(default=90, ge=0, description="Days to retain records (0=forever)")
     log_to_console: bool = Field(default=False, description="Log usage to console")
     track_latency: bool = Field(default=True, description="Track request latency")
 
@@ -497,17 +493,12 @@ class CostTracker:
             )
 
         # Calculate cost
-        input_price = get_price_per_million_tokens(
-            provider, model, "input", model_card_pricing
-        )
-        output_price = get_price_per_million_tokens(
-            provider, model, "output", model_card_pricing
-        )
+        input_price = get_price_per_million_tokens(provider, model, "input", model_card_pricing)
+        output_price = get_price_per_million_tokens(provider, model, "output", model_card_pricing)
 
-        estimated_cost = (
-            (input_tokens / 1_000_000) * input_price +
-            (output_tokens / 1_000_000) * output_price
-        )
+        estimated_cost = (input_tokens / 1_000_000) * input_price + (
+            output_tokens / 1_000_000
+        ) * output_price
 
         record = UsageRecord(
             provider=provider,
@@ -910,20 +901,22 @@ class CostTracker:
 
             records = []
             for row in cursor:
-                records.append({
-                    "id": row["id"],
-                    "timestamp": datetime.fromtimestamp(row["timestamp"]).isoformat(),
-                    "provider": row["provider"],
-                    "model": row["model"],
-                    "operation": row["operation"],
-                    "input_tokens": row["input_tokens"],
-                    "output_tokens": row["output_tokens"],
-                    "total_tokens": row["total_tokens"],
-                    "estimated_cost_usd": row["estimated_cost_usd"],
-                    "latency_ms": row["latency_ms"],
-                    "session_id": row["session_id"],
-                    "user_id": row["user_id"],
-                })
+                records.append(
+                    {
+                        "id": row["id"],
+                        "timestamp": datetime.fromtimestamp(row["timestamp"]).isoformat(),
+                        "provider": row["provider"],
+                        "model": row["model"],
+                        "operation": row["operation"],
+                        "input_tokens": row["input_tokens"],
+                        "output_tokens": row["output_tokens"],
+                        "total_tokens": row["total_tokens"],
+                        "estimated_cost_usd": row["estimated_cost_usd"],
+                        "latency_ms": row["latency_ms"],
+                        "session_id": row["session_id"],
+                        "user_id": row["user_id"],
+                    }
+                )
 
         output_path = Path(filepath).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)

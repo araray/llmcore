@@ -66,7 +66,11 @@ TASK_CAPABILITY_MAP: Dict[str, Set[ImageCapability]] = {
     "markdown": {ImageCapability.SHELL, ImageCapability.PANDOC},
     # Testing tasks
     "testing": {ImageCapability.PYTHON, ImageCapability.TESTING},
-    "integration_testing": {ImageCapability.PYTHON, ImageCapability.TESTING, ImageCapability.NETWORK},
+    "integration_testing": {
+        ImageCapability.PYTHON,
+        ImageCapability.TESTING,
+        ImageCapability.NETWORK,
+    },
     "code_review": {ImageCapability.PYTHON, ImageCapability.CODE_ANALYSIS},
     # Shell tasks
     "shell": {ImageCapability.SHELL},

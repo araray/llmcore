@@ -39,9 +39,7 @@ class MockChromaClient:
     def __init__(self):
         self._collections: Dict[str, MockChromaCollection] = {}
 
-    def add_collection(
-        self, name: str, count: int = 0, metadata: Optional[Dict] = None
-    ):
+    def add_collection(self, name: str, count: int = 0, metadata: Optional[Dict] = None):
         """Add a mock collection."""
         self._collections[name] = MockChromaCollection(name, count, metadata)
 
@@ -323,9 +321,7 @@ class TestDeleteCollection:
     @pytest.mark.asyncio
     async def test_delete_with_force_nonexistent(self, storage_with_collections):
         """Test deleting non-existent with force still returns False."""
-        result = await storage_with_collections.delete_collection(
-            "nonexistent", force=True
-        )
+        result = await storage_with_collections.delete_collection("nonexistent", force=True)
 
         assert result is False
 

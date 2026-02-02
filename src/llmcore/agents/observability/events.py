@@ -75,7 +75,7 @@ logger = logging.getLogger(__name__)
 class EventCategory(str, Enum):
     """
     Categories of observable events.
-    
+
     Each category groups related events for filtering and analysis:
     - LIFECYCLE: Agent initialization, execution, termination
     - COGNITIVE: All cognitive processing phases
@@ -102,7 +102,7 @@ class EventCategory(str, Enum):
 class EventSeverity(str, Enum):
     """
     Event severity levels following standard logging conventions.
-    
+
     DEBUG: Detailed diagnostic information
     INFO: Normal operational events
     WARNING: Unexpected but recoverable situations
@@ -241,10 +241,10 @@ def _utc_now() -> datetime:
 class AgentEvent(BaseModel):
     """
     Base class for all agent events.
-    
+
     Provides common fields for event tracking, correlation, and analysis.
     All specialized event types inherit from this base class.
-    
+
     Attributes:
         event_id: Unique identifier for this event (auto-generated)
         timestamp: When the event occurred (auto-generated, UTC)
@@ -274,81 +274,46 @@ class AgentEvent(BaseModel):
                 "event_type": "agent_started",
                 "severity": "info",
             }
-        }
+        },
     )
 
     # Identity
-    event_id: str = Field(
-        default_factory=_generate_event_id,
-        description="Unique event identifier"
-    )
-    timestamp: datetime = Field(
-        default_factory=_utc_now,
-        description="Event timestamp (UTC)"
-    )
+    event_id: str = Field(default_factory=_generate_event_id, description="Unique event identifier")
+    timestamp: datetime = Field(default_factory=_utc_now, description="Event timestamp (UTC)")
 
     # Context
     session_id: str = Field(..., description="Agent session ID")
-    execution_id: Optional[str] = Field(
-        None,
-        description="Specific execution/run ID"
-    )
+    execution_id: Optional[str] = Field(None, description="Specific execution/run ID")
 
     # Classification
     category: EventCategory = Field(..., description="Event category")
     event_type: str = Field(..., description="Specific event type")
-    severity: EventSeverity = Field(
-        default=EventSeverity.INFO,
-        description="Event severity"
-    )
+    severity: EventSeverity = Field(default=EventSeverity.INFO, description="Event severity")
 
     # State
-    phase: Optional[str] = Field(
-        None,
-        description="Current cognitive phase"
-    )
-    iteration: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Current iteration number"
-    )
+    phase: Optional[str] = Field(None, description="Current cognitive phase")
+    iteration: Optional[int] = Field(None, ge=0, description="Current iteration number")
 
     # Payload
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Event-specific data payload"
-    )
+    data: Dict[str, Any] = Field(default_factory=dict, description="Event-specific data payload")
 
     # Timing
-    duration_ms: Optional[float] = Field(
-        None,
-        ge=0,
-        description="Duration in milliseconds"
-    )
+    duration_ms: Optional[float] = Field(None, ge=0, description="Duration in milliseconds")
 
     # Relationships
-    parent_event_id: Optional[str] = Field(
-        None,
-        description="Parent event ID for nesting"
-    )
-    correlation_id: Optional[str] = Field(
-        None,
-        description="Correlation ID for related events"
-    )
+    parent_event_id: Optional[str] = Field(None, description="Parent event ID for nesting")
+    correlation_id: Optional[str] = Field(None, description="Correlation ID for related events")
 
     # Metadata
-    tags: List[str] = Field(
-        default_factory=list,
-        description="Tags for filtering"
-    )
+    tags: List[str] = Field(default_factory=list, description="Tags for filtering")
 
     def with_duration(self, start_time: datetime) -> "AgentEvent":
         """
         Set duration based on start time.
-        
+
         Args:
             start_time: When the operation started
-            
+
         Returns:
             Self with duration_ms set
         """
@@ -359,10 +324,10 @@ class AgentEvent(BaseModel):
     def with_parent(self, parent_id: str) -> "AgentEvent":
         """
         Set parent event ID.
-        
+
         Args:
             parent_id: Parent event identifier
-            
+
         Returns:
             Self with parent_event_id set
         """
@@ -372,10 +337,10 @@ class AgentEvent(BaseModel):
     def with_correlation(self, correlation_id: str) -> "AgentEvent":
         """
         Set correlation ID.
-        
+
         Args:
             correlation_id: Correlation identifier
-            
+
         Returns:
             Self with correlation_id set
         """
@@ -385,10 +350,10 @@ class AgentEvent(BaseModel):
     def add_tag(self, tag: str) -> "AgentEvent":
         """
         Add a tag to the event.
-        
+
         Args:
             tag: Tag to add
-            
+
         Returns:
             Self with tag added
         """
@@ -399,7 +364,7 @@ class AgentEvent(BaseModel):
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert event to dictionary for serialization.
-        
+
         Returns:
             Dictionary representation of the event
         """
@@ -408,7 +373,7 @@ class AgentEvent(BaseModel):
     def to_json(self) -> str:
         """
         Convert event to JSON string.
-        
+
         Returns:
             JSON string representation
         """
@@ -423,10 +388,10 @@ class AgentEvent(BaseModel):
 class LifecycleEvent(AgentEvent):
     """
     Agent lifecycle events (start, stop, complete, fail).
-    
+
     Tracks the overall lifecycle of an agent execution including
     initialization, goal processing, and termination.
-    
+
     Attributes:
         goal: The goal being processed
         final_status: Final execution status (for completion events)
@@ -437,44 +402,29 @@ class LifecycleEvent(AgentEvent):
         recommended_strategy: Recommended execution strategy
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.LIFECYCLE,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.LIFECYCLE, frozen=True)
 
     # Lifecycle-specific fields
     goal: Optional[str] = Field(None, description="Goal being processed")
     final_status: Optional[str] = Field(None, description="Final status")
-    total_iterations: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Total iterations"
-    )
-    total_tokens: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Total tokens used"
-    )
+    total_iterations: Optional[int] = Field(None, ge=0, description="Total iterations")
+    total_tokens: Optional[int] = Field(None, ge=0, description="Total tokens used")
     exit_reason: Optional[str] = Field(None, description="Exit reason")
 
     # Complexity classification
     goal_complexity: Optional[str] = Field(
-        None,
-        description="Classified goal complexity (trivial, simple, complex)"
+        None, description="Classified goal complexity (trivial, simple, complex)"
     )
-    recommended_strategy: Optional[str] = Field(
-        None,
-        description="Recommended execution strategy"
-    )
+    recommended_strategy: Optional[str] = Field(None, description="Recommended execution strategy")
 
 
 class CognitiveEvent(AgentEvent):
     """
     Cognitive phase events (perceive, think, plan, act, reflect, etc.).
-    
+
     Tracks each cognitive processing phase in the agent's reasoning cycle.
     Captures inputs, outputs, and reasoning for each phase.
-    
+
     Attributes:
         input_summary: Summary of phase input
         output_summary: Summary of phase output
@@ -486,58 +436,30 @@ class CognitiveEvent(AgentEvent):
         decisions: Decisions made in this phase
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.COGNITIVE,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.COGNITIVE, frozen=True)
 
     # Cognitive-specific fields
-    input_summary: Optional[str] = Field(
-        None,
-        description="Summary of input to phase"
-    )
-    output_summary: Optional[str] = Field(
-        None,
-        description="Summary of phase output"
-    )
-    tokens_used: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Tokens used in phase"
-    )
-    reasoning: Optional[str] = Field(
-        None,
-        description="Reasoning or thought process"
-    )
-    confidence: Optional[float] = Field(
-        None,
-        ge=0,
-        le=1,
-        description="Confidence score (0-1)"
-    )
+    input_summary: Optional[str] = Field(None, description="Summary of input to phase")
+    output_summary: Optional[str] = Field(None, description="Summary of phase output")
+    tokens_used: Optional[int] = Field(None, ge=0, description="Tokens used in phase")
+    reasoning: Optional[str] = Field(None, description="Reasoning or thought process")
+    confidence: Optional[float] = Field(None, ge=0, le=1, description="Confidence score (0-1)")
 
     # Phase metadata
     phase_name: Optional[str] = Field(None, description="Specific phase name")
-    phase_order: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Order in cognitive cycle"
-    )
+    phase_order: Optional[int] = Field(None, ge=0, description="Order in cognitive cycle")
 
     # Decisions made
-    decisions: List[str] = Field(
-        default_factory=list,
-        description="Decisions made in this phase"
-    )
+    decisions: List[str] = Field(default_factory=list, description="Decisions made in this phase")
 
 
 class ActivityEvent(AgentEvent):
     """
     Activity/tool execution events.
-    
+
     Tracks tool and activity invocations including their inputs,
     outputs, and execution status.
-    
+
     Attributes:
         activity_name: Name of the activity/tool
         activity_type: Type/category of activity
@@ -550,30 +472,17 @@ class ActivityEvent(AgentEvent):
         container_id: Container ID if applicable
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.ACTIVITY,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.ACTIVITY, frozen=True)
 
     # Activity identification
     activity_name: str = Field(..., description="Activity/tool name")
-    activity_type: Optional[str] = Field(
-        None,
-        description="Activity type/category"
-    )
+    activity_type: Optional[str] = Field(None, description="Activity type/category")
 
     # Execution details
-    activity_input: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Input parameters"
-    )
-    activity_output: Optional[Any] = Field(
-        None,
-        description="Output result"
-    )
+    activity_input: Dict[str, Any] = Field(default_factory=dict, description="Input parameters")
+    activity_output: Optional[Any] = Field(None, description="Output result")
     activity_output_truncated: bool = Field(
-        default=False,
-        description="Whether output was truncated"
+        default=False, description="Whether output was truncated"
     )
 
     # Status
@@ -586,19 +495,16 @@ class ActivityEvent(AgentEvent):
     max_retries: Optional[int] = Field(None, ge=0, description="Max retries")
 
     # Sandbox context
-    sandbox_type: Optional[str] = Field(
-        None,
-        description="Sandbox type (docker, vm, etc.)"
-    )
+    sandbox_type: Optional[str] = Field(None, description="Sandbox type (docker, vm, etc.)")
     container_id: Optional[str] = Field(None, description="Container ID")
 
 
 class MemoryEvent(AgentEvent):
     """
     Memory operation events.
-    
+
     Tracks reads, writes, and updates to the agent's memory systems.
-    
+
     Attributes:
         operation: Memory operation type
         memory_type: Type of memory
@@ -607,43 +513,27 @@ class MemoryEvent(AgentEvent):
         items_affected: Number of items affected
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.MEMORY,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.MEMORY, frozen=True)
 
     # Operation details
-    operation: str = Field(
-        ...,
-        description="Operation type (read, write, update, delete)"
-    )
-    memory_type: str = Field(
-        ...,
-        description="Memory type (working, episodic, semantic, etc.)"
-    )
+    operation: str = Field(..., description="Operation type (read, write, update, delete)")
+    memory_type: str = Field(..., description="Memory type (working, episodic, semantic, etc.)")
 
     # Content
     key: Optional[str] = Field(None, description="Memory key")
-    value_summary: Optional[str] = Field(
-        None,
-        description="Summary of value"
-    )
+    value_summary: Optional[str] = Field(None, description="Summary of value")
 
     # Metrics
-    items_affected: int = Field(
-        default=1,
-        ge=0,
-        description="Number of items affected"
-    )
+    items_affected: int = Field(default=1, ge=0, description="Number of items affected")
 
 
 class HITLEvent(AgentEvent):
     """
     Human-in-the-loop events.
-    
+
     Tracks all HITL approval workflow events including requests,
     responses, and scope management.
-    
+
     Attributes:
         request_id: HITL request identifier
         action_type: Type of action requiring approval
@@ -655,61 +545,36 @@ class HITLEvent(AgentEvent):
         scope_granted: Approval scope if granted
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.HITL,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.HITL, frozen=True)
 
     # Request identification
     request_id: str = Field(..., description="HITL request ID")
     action_type: str = Field(..., description="Action requiring approval")
 
     # Risk assessment
-    risk_level: str = Field(
-        ...,
-        description="Risk level (safe, low, medium, high, critical)"
-    )
-    risk_factors: List[str] = Field(
-        default_factory=list,
-        description="Contributing risk factors"
-    )
+    risk_level: str = Field(..., description="Risk level (safe, low, medium, high, critical)")
+    risk_factors: List[str] = Field(default_factory=list, description="Contributing risk factors")
 
     # Response
-    approval_status: str = Field(
-        ...,
-        description="Approval status"
-    )
-    timeout_occurred: bool = Field(
-        default=False,
-        description="Whether approval timed out"
-    )
-    timeout_seconds: Optional[float] = Field(
-        None,
-        ge=0,
-        description="Timeout duration"
-    )
+    approval_status: str = Field(..., description="Approval status")
+    timeout_occurred: bool = Field(default=False, description="Whether approval timed out")
+    timeout_seconds: Optional[float] = Field(None, ge=0, description="Timeout duration")
 
     # Human response
     responder_id: Optional[str] = Field(None, description="Responder ID")
     feedback: Optional[str] = Field(None, description="Human feedback")
 
     # Scope
-    scope_granted: Optional[str] = Field(
-        None,
-        description="Approval scope granted"
-    )
-    scope_expiration: Optional[datetime] = Field(
-        None,
-        description="When scope expires"
-    )
+    scope_granted: Optional[str] = Field(None, description="Approval scope granted")
+    scope_expiration: Optional[datetime] = Field(None, description="When scope expires")
 
 
 class ErrorEvent(AgentEvent):
     """
     Error and exception events.
-    
+
     Tracks all errors, exceptions, and failure conditions.
-    
+
     Attributes:
         error_type: Type/class of error
         error_message: Error message
@@ -720,14 +585,8 @@ class ErrorEvent(AgentEvent):
         source_component: Component where error occurred
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.ERROR,
-        frozen=True
-    )
-    severity: EventSeverity = Field(
-        default=EventSeverity.ERROR,
-        description="Error severity"
-    )
+    category: EventCategory = Field(default=EventCategory.ERROR, frozen=True)
+    severity: EventSeverity = Field(default=EventSeverity.ERROR, description="Error severity")
 
     # Error details
     error_type: str = Field(..., description="Error type/class")
@@ -736,37 +595,27 @@ class ErrorEvent(AgentEvent):
 
     # Debug info
     stack_trace: Optional[str] = Field(None, description="Stack trace")
-    source_component: Optional[str] = Field(
-        None,
-        description="Source component"
-    )
+    source_component: Optional[str] = Field(None, description="Source component")
     source_file: Optional[str] = Field(None, description="Source file")
     source_line: Optional[int] = Field(None, ge=0, description="Source line")
 
     # Recovery
     recoverable: bool = Field(default=True, description="Is recoverable")
-    recovery_action: Optional[str] = Field(
-        None,
-        description="Recovery action taken"
-    )
-    recovery_successful: Optional[bool] = Field(
-        None,
-        description="Whether recovery succeeded"
-    )
+    recovery_action: Optional[str] = Field(None, description="Recovery action taken")
+    recovery_successful: Optional[bool] = Field(None, description="Whether recovery succeeded")
 
     # Context
     context_snapshot: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Context at time of error"
+        default_factory=dict, description="Context at time of error"
     )
 
 
 class MetricEvent(AgentEvent):
     """
     Performance and metric events.
-    
+
     Tracks performance measurements, resource usage, and operational metrics.
-    
+
     Attributes:
         metric_name: Name of the metric
         metric_value: Metric value (numeric)
@@ -775,16 +624,12 @@ class MetricEvent(AgentEvent):
         aggregation: Aggregation type
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.METRIC,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.METRIC, frozen=True)
 
     # Metric identification
     metric_name: str = Field(..., description="Metric name")
     metric_type: Optional[str] = Field(
-        None,
-        description="Metric type (counter, gauge, histogram, etc.)"
+        None, description="Metric type (counter, gauge, histogram, etc.)"
     )
 
     # Value
@@ -793,8 +638,7 @@ class MetricEvent(AgentEvent):
 
     # Aggregation
     aggregation: Optional[str] = Field(
-        None,
-        description="Aggregation type (sum, avg, max, min, etc.)"
+        None, description="Aggregation type (sum, avg, max, min, etc.)"
     )
 
     # Additional values for distributions
@@ -804,19 +648,15 @@ class MetricEvent(AgentEvent):
     p50_value: Optional[float] = Field(None, description="50th percentile")
     p95_value: Optional[float] = Field(None, description="95th percentile")
     p99_value: Optional[float] = Field(None, description="99th percentile")
-    sample_count: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Number of samples"
-    )
+    sample_count: Optional[int] = Field(None, ge=0, description="Number of samples")
 
 
 class SandboxEvent(AgentEvent):
     """
     Sandbox (Docker/VM) events.
-    
+
     Tracks sandbox lifecycle and operations for code execution environments.
-    
+
     Attributes:
         sandbox_type: Type of sandbox (docker, vm, etc.)
         sandbox_id: Sandbox identifier
@@ -825,30 +665,18 @@ class SandboxEvent(AgentEvent):
         exit_code: Process exit code
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.SANDBOX,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.SANDBOX, frozen=True)
 
     # Sandbox identification
-    sandbox_type: str = Field(
-        ...,
-        description="Sandbox type (docker, vm, ephemeral)"
-    )
+    sandbox_type: str = Field(..., description="Sandbox type (docker, vm, ephemeral)")
     sandbox_id: Optional[str] = Field(None, description="Sandbox ID")
 
     # Configuration
     image: Optional[str] = Field(None, description="Image used")
-    access_mode: Optional[str] = Field(
-        None,
-        description="Access mode (restricted, full)"
-    )
+    access_mode: Optional[str] = Field(None, description="Access mode (restricted, full)")
 
     # Operation
-    operation: str = Field(
-        ...,
-        description="Operation (create, start, execute, stop, destroy)"
-    )
+    operation: str = Field(..., description="Operation (create, start, execute, stop, destroy)")
 
     # Execution results
     exit_code: Optional[int] = Field(None, description="Exit code")
@@ -856,24 +684,16 @@ class SandboxEvent(AgentEvent):
     stderr_length: Optional[int] = Field(None, ge=0, description="Stderr bytes")
 
     # Resource usage
-    memory_used_mb: Optional[float] = Field(
-        None,
-        ge=0,
-        description="Memory used (MB)"
-    )
-    cpu_time_ms: Optional[float] = Field(
-        None,
-        ge=0,
-        description="CPU time (ms)"
-    )
+    memory_used_mb: Optional[float] = Field(None, ge=0, description="Memory used (MB)")
+    cpu_time_ms: Optional[float] = Field(None, ge=0, description="CPU time (ms)")
 
 
 class RAGEvent(AgentEvent):
     """
     RAG (Retrieval-Augmented Generation) events.
-    
+
     Tracks retrieval operations and their results.
-    
+
     Attributes:
         query: Search query
         query_type: Query type
@@ -883,51 +703,27 @@ class RAGEvent(AgentEvent):
         documents_used: IDs of documents used
     """
 
-    category: EventCategory = Field(
-        default=EventCategory.RAG,
-        frozen=True
-    )
+    category: EventCategory = Field(default=EventCategory.RAG, frozen=True)
 
     # Query
     query: str = Field(..., description="Search query")
-    query_type: Optional[str] = Field(
-        None,
-        description="Query type (semantic, keyword, hybrid)"
-    )
+    query_type: Optional[str] = Field(None, description="Query type (semantic, keyword, hybrid)")
 
     # Source
-    source: str = Field(
-        ...,
-        description="RAG source (vector_store, documents, etc.)"
-    )
+    source: str = Field(..., description="RAG source (vector_store, documents, etc.)")
     source_id: Optional[str] = Field(None, description="Specific source ID")
 
     # Results
     num_results: int = Field(default=0, ge=0, description="Results count")
-    results_truncated: bool = Field(
-        default=False,
-        description="Whether results were truncated"
-    )
+    results_truncated: bool = Field(default=False, description="Whether results were truncated")
 
     # Scores
-    top_score: Optional[float] = Field(
-        None,
-        description="Highest similarity score"
-    )
-    avg_score: Optional[float] = Field(
-        None,
-        description="Average similarity score"
-    )
-    threshold_score: Optional[float] = Field(
-        None,
-        description="Score threshold used"
-    )
+    top_score: Optional[float] = Field(None, description="Highest similarity score")
+    avg_score: Optional[float] = Field(None, description="Average similarity score")
+    threshold_score: Optional[float] = Field(None, description="Score threshold used")
 
     # Documents
-    documents_used: List[str] = Field(
-        default_factory=list,
-        description="Document IDs used"
-    )
+    documents_used: List[str] = Field(default_factory=list, description="Document IDs used")
 
 
 # =============================================================================
@@ -946,7 +742,7 @@ def create_lifecycle_event(
 ) -> LifecycleEvent:
     """
     Factory function to create lifecycle events.
-    
+
     Args:
         session_id: Agent session ID
         event_type: Specific lifecycle event type
@@ -954,7 +750,7 @@ def create_lifecycle_event(
         goal: Goal being processed
         severity: Event severity
         **kwargs: Additional event fields
-        
+
     Returns:
         LifecycleEvent instance
     """
@@ -984,7 +780,7 @@ def create_cognitive_event(
 ) -> CognitiveEvent:
     """
     Factory function to create cognitive phase events.
-    
+
     Args:
         session_id: Agent session ID
         event_type: Specific cognitive event type
@@ -994,7 +790,7 @@ def create_cognitive_event(
         input_summary: Input summary
         output_summary: Output summary
         **kwargs: Additional event fields
-        
+
     Returns:
         CognitiveEvent instance
     """
@@ -1026,7 +822,7 @@ def create_activity_event(
 ) -> ActivityEvent:
     """
     Factory function to create activity events.
-    
+
     Args:
         session_id: Agent session ID
         event_type: Specific activity event type
@@ -1035,7 +831,7 @@ def create_activity_event(
         activity_input: Activity input parameters
         success: Whether activity succeeded
         **kwargs: Additional event fields
-        
+
     Returns:
         ActivityEvent instance
     """
@@ -1067,7 +863,7 @@ def create_error_event(
 ) -> ErrorEvent:
     """
     Factory function to create error events.
-    
+
     Args:
         session_id: Agent session ID
         error_type: Type/class of error
@@ -1078,7 +874,7 @@ def create_error_event(
         stack_trace: Stack trace
         recoverable: Whether error is recoverable
         **kwargs: Additional event fields
-        
+
     Returns:
         ErrorEvent instance
     """
@@ -1110,7 +906,7 @@ def create_metric_event(
 ) -> MetricEvent:
     """
     Factory function to create metric events.
-    
+
     Args:
         session_id: Agent session ID
         metric_name: Name of the metric
@@ -1119,7 +915,7 @@ def create_metric_event(
         event_type: Metric event type
         metric_unit: Unit of measurement
         **kwargs: Additional event fields
-        
+
     Returns:
         MetricEvent instance
     """
@@ -1150,7 +946,7 @@ def create_hitl_event(
 ) -> HITLEvent:
     """
     Factory function to create HITL events.
-    
+
     Args:
         session_id: Agent session ID
         event_type: Specific HITL event type
@@ -1160,7 +956,7 @@ def create_hitl_event(
         approval_status: Approval status
         execution_id: Execution ID
         **kwargs: Additional event fields
-        
+
     Returns:
         HITLEvent instance
     """
@@ -1192,7 +988,7 @@ def create_sandbox_event(
 ) -> SandboxEvent:
     """
     Factory function to create sandbox events.
-    
+
     Args:
         session_id: Agent session ID
         event_type: Specific sandbox event type
@@ -1202,7 +998,7 @@ def create_sandbox_event(
         sandbox_id: Sandbox ID
         image: Image used
         **kwargs: Additional event fields
-        
+
     Returns:
         SandboxEvent instance
     """

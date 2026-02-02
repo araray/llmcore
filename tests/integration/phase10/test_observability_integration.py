@@ -42,6 +42,7 @@ from llmcore.observability.metrics import (
 # Metrics Tests
 # ============================================================================
 
+
 class TestMetricsBasics:
     """Test basic metrics functionality."""
 
@@ -193,6 +194,7 @@ class TestLLMMetricsCollector:
 # Event Logging Tests
 # ============================================================================
 
+
 class TestObservabilityLogger:
     """Test event logging functionality."""
 
@@ -291,6 +293,7 @@ class TestEventBuffer:
 # ============================================================================
 # Cost Tracking Tests
 # ============================================================================
+
 
 class TestCostTracker:
     """Test cost tracking functionality."""
@@ -411,6 +414,7 @@ class TestCostAnalyzer:
 # Execution Replay Tests
 # ============================================================================
 
+
 class TestExecutionReplay:
     """Test execution trace and replay functionality."""
 
@@ -433,6 +437,7 @@ class TestExecutionReplay:
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestObservabilityIntegration:
     """Test observability components working together."""
@@ -513,6 +518,7 @@ class TestObservabilityIntegration:
 # ============================================================================
 # Performance Tests
 # ============================================================================
+
 
 class TestObservabilityPerformance:
     """Test observability system performance."""

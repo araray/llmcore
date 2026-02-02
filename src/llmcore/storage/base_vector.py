@@ -41,9 +41,7 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def add_documents(
-        self,
-        documents: List[ContextDocument],
-        collection_name: Optional[str] = None
+        self, documents: List[ContextDocument], collection_name: Optional[str] = None
     ) -> List[str]:
         """
         Add or update multiple documents in the specified collection.
@@ -75,7 +73,7 @@ class BaseVectorStorage(abc.ABC):
         query_embedding: List[float],
         k: int,
         collection_name: Optional[str] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None
+        filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[ContextDocument]:
         """
         Perform a similarity search for documents based on a query embedding.
@@ -106,9 +104,7 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def delete_documents(
-        self,
-        document_ids: List[str],
-        collection_name: Optional[str] = None
+        self, document_ids: List[str], collection_name: Optional[str] = None
     ) -> bool:
         """
         Delete documents from the specified collection by their IDs.
@@ -144,8 +140,7 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def get_collection_metadata(
-        self,
-        collection_name: Optional[str] = None
+        self, collection_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Retrieve the metadata associated with a specific collection.
