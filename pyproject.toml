@@ -131,11 +131,6 @@ Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 [project.scripts]
 llmcore-storage = "llmcore.storage.cli:main"
 
-markers = [
-    "requires_postgres: Tests that require PostgreSQL database",
-    "requires_pgvector: Tests that require pgvector extension",
-]
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -210,6 +205,8 @@ markers = [
     "docker: marks tests that require Docker",
     "vm: marks tests that require VM/SSH access",
     "asyncio: mark test as an asyncio test",
+    "requires_postgres: Tests that require PostgreSQL database",
+    "requires_pgvector: Tests that require pgvector extension",
 ]
 
 # --- Coverage Configuration ---
