@@ -17,9 +17,9 @@ class TestRenderPromptTemplate:
         template = "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
         context = "Machine learning is a subset of AI."
         question = "What is machine learning?"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "Machine learning is a subset of AI." in result
         assert "What is machine learning?" in result
         assert "{context}" not in result
@@ -31,9 +31,9 @@ class TestRenderPromptTemplate:
         context = "Python is a programming language."
         question = "Tell me about Python?"
         custom_values = {"instructions": "Be concise"}
-        
+
         result = rag_utils.render_prompt_template(template, context, question, custom_values)
-        
+
         assert "Python is a programming language." in result
         assert "Tell me about Python?" in result
         assert "Be concise" in result
@@ -44,9 +44,9 @@ class TestRenderPromptTemplate:
         template = "Context: {context}\nQuestion: {question}"
         context = ""
         question = "What is AI?"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "Context: \nQuestion: What is AI?" in result
 
     def test_render_prompt_template_empty_question(self):
@@ -54,9 +54,9 @@ class TestRenderPromptTemplate:
         template = "Context: {context}\nQuestion: {question}"
         context = "AI helps with automation."
         question = ""
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "Context: AI helps with automation.\nQuestion: " in result
 
     def test_render_prompt_template_empty_both(self):
@@ -64,9 +64,9 @@ class TestRenderPromptTemplate:
         template = "Context: {context}\nQuestion: {question}"
         context = ""
         question = ""
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert result == "Context: \nQuestion: "
 
     def test_render_prompt_template_no_placeholders(self):
@@ -74,9 +74,9 @@ class TestRenderPromptTemplate:
         template = "This is a static template with no variables."
         context = "Some context"
         question = "Some question"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         # Template should be returned unchanged
         assert result == template
 
@@ -93,9 +93,9 @@ User Question:
 Assistant Response:"""
         context = "Relevant background information here."
         question = "What is your expertise?"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "System: You are a helpful assistant." in result
         assert "Relevant background information here." in result
         assert "What is your expertise?" in result
@@ -106,9 +106,9 @@ Assistant Response:"""
         template = "Context: {context}\n\nQ&A: {question}"
         context = "Data & ML (machine learning)"
         question = "What's the difference?"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "Data & ML (machine learning)" in result
         assert "What's the difference?" in result
 
@@ -117,9 +117,9 @@ Assistant Response:"""
         template = "Context:\n{context}\n\nQuestion:\n{question}"
         context = "Line 1\nLine 2\nLine 3"
         question = "Part 1\nPart 2"
-        
+
         result = rag_utils.render_prompt_template(template, context, question, None)
-        
+
         assert "Line 1\nLine 2\nLine 3" in result
         assert "Part 1\nPart 2" in result
 
@@ -129,9 +129,9 @@ Assistant Response:"""
         context = "Some context"
         question = "Some question"
         custom_values = {"system": "You are helpful"}
-        
+
         result = rag_utils.render_prompt_template(template, context, question, custom_values)
-        
+
         assert "You are helpful" in result
         assert "{system}" not in result
 
@@ -142,9 +142,9 @@ class TestFormatRagDocsForContext:
     def test_format_rag_docs_empty_list(self):
         """Test formatting empty document list."""
         documents = []
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         # Should return empty string
         assert result == ""
 
@@ -158,9 +158,9 @@ class TestFormatRagDocsForContext:
                 score=0.95,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert isinstance(result, str)
         assert "Machine learning is a field of AI." in result
         assert "Retrieved Relevant Documents" in result
@@ -181,9 +181,9 @@ class TestFormatRagDocsForContext:
                 score=0.87,
             ),
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert "Machine learning basics." in result
         assert "Deep learning advanced." in result
         assert "Context Document 1:" in result
@@ -202,9 +202,9 @@ class TestFormatRagDocsForContext:
                 score=0.93,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert "Supervised learning requires labels." in result
         assert len(result) > len("Supervised learning requires labels.")
 
@@ -230,14 +230,14 @@ class TestFormatRagDocsForContext:
                 score=0.80,  # Medium distance
             ),
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         # Lower score (better match) should appear first
         pos_high = result.find("High relevance")
         pos_med = result.find("Medium relevance")
         pos_low = result.find("Low relevance")
-        
+
         assert pos_high < pos_med < pos_low
 
     def test_format_rag_docs_with_multiline_content(self):
@@ -250,9 +250,9 @@ class TestFormatRagDocsForContext:
                 score=0.90,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         # Content should be joined into single line
         assert "Line 1 Line 2 Line 3 Line 4" in result or "Line 1" in result
 
@@ -266,9 +266,9 @@ class TestFormatRagDocsForContext:
                 score=0.92,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert "docs/guide.md" in result or "File:" in result
 
     def test_format_rag_docs_with_line_numbers(self):
@@ -281,9 +281,9 @@ class TestFormatRagDocsForContext:
                 score=0.88,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert "123" in result or "Line:" in result
 
     def test_format_rag_docs_none_score(self):
@@ -296,9 +296,9 @@ class TestFormatRagDocsForContext:
                 score=None,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert isinstance(result, str)
         assert "Content without score" in result
 
@@ -312,9 +312,9 @@ class TestFormatRagDocsForContext:
                 score=0.91,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert "AI & ML" in result
         assert "中文" in result or "support" in result
 
@@ -332,9 +332,9 @@ class TestRagUtilsEdgeCases:
                 score=0.85,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert isinstance(result, str)
         assert len(result) > 0
         assert "doc1" in result  # Should fall back to document ID
@@ -350,9 +350,9 @@ class TestRagUtilsEdgeCases:
                 score=0.80,
             )
         ]
-        
+
         result = rag_utils.format_rag_docs_for_context(documents)
-        
+
         assert len(result) > 0
         assert "This is a long document." in result
 
@@ -362,9 +362,9 @@ class TestRagUtilsEdgeCases:
         context = "ignored"
         question = "also ignored"
         custom_values = {"task": "Analyze", "instructions": "Be brief"}
-        
+
         result = rag_utils.render_prompt_template(template, context, question, custom_values)
-        
+
         assert "Analyze" in result
         assert "Be brief" in result
         assert "{task}" not in result
