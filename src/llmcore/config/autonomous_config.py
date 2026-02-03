@@ -68,11 +68,11 @@ class GoalsAutonomousConfig(BaseModel):
         default=True,
         description="Enable persistent goal storage across sessions",
     )
-    goals_db: str = Field(
-        default="~/.local/share/llmcore/goals.db",
+    storage_path: str = Field(
+        default="~/.local/share/llmcore/goals.json",
         description=(
-            "Path to goals database file. Supports SQLite. "
-            "Environment variable expansion is applied."
+            "Path to goals storage file (JSON). "
+            "Tilde and environment variable expansion is applied."
         ),
     )
 
@@ -112,10 +112,10 @@ class GoalsAutonomousConfig(BaseModel):
         description="Maximum cooldown cap for exponential backoff",
     )
 
-    @field_validator("goals_db")
+    @field_validator("storage_path")
     @classmethod
-    def expand_goals_db_path(cls, v: str) -> str:
-        """Expand ~ and environment variables in goals_db path."""
+    def expand_storage_path(cls, v: str) -> str:
+        """Expand ~ and environment variables in storage_path."""
         return os.path.expanduser(os.path.expandvars(v))
 
 

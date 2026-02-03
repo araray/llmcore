@@ -718,3 +718,184 @@ class TestGoalManager:
         assert summary["total_goals"] == 1
         assert "status_counts" in summary
         assert summary["status_counts"]["ACTIVE"] == 1
+
+
+# =============================================================================
+# GoalManager.from_config Tests
+# =============================================================================
+
+
+class TestGoalManagerFromConfig:
+    """Tests for GoalManager.from_config() factory method."""
+
+    @pytest.mark.asyncio
+    async def test_from_config_creates_manager(self, goals_config):
+        """Test that from_config creates a working GoalManager."""
+        manager = GoalManager.from_config(goals_config)
+        await manager.initialize()
+
+        goals = await manager.get_all_goals()
+        assert goals == []
+
+    @pytest.mark.asyncio
+    async def test_from_config_uses_storage_path(self, tmp_path):
+        """Test that from_config creates GoalStore at configured path."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        custom_path = str(tmp_path / "custom" / "goals.json")
+        config = GoalsAutonomousConfig(storage_path=custom_path)
+        manager = GoalManager.from_config(config)
+        await manager.initialize()
+
+        # Create and persist a goal
+        goal = await manager.set_primary_goal(
+            "test persistence", auto_decompose=False
+        )
+
+        # Verify file was written at the configured path
+        assert Path(custom_path).exists()
+
+        # Verify goal survives round-trip
+        manager2 = GoalManager.from_config(config)
+        await manager2.initialize()
+        loaded = await manager2.get_all_goals()
+        assert len(loaded) == 1
+        assert loaded[0].id == goal.id
+
+    @pytest.mark.asyncio
+    async def test_from_config_wires_auto_decompose(self, tmp_goals_path):
+        """Test that auto_decompose config is respected."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path, auto_decompose=False
+        )
+        manager = GoalManager.from_config(config)
+        await manager.initialize()
+
+        assert manager._default_auto_decompose is False
+
+    @pytest.mark.asyncio
+    async def test_from_config_wires_max_attempts(self, tmp_goals_path):
+        """Test that max_attempts config flows into created goals."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path,
+            max_attempts_per_goal=5,
+            auto_decompose=False,
+        )
+        manager = GoalManager.from_config(config)
+        await manager.initialize()
+
+        goal = await manager.set_primary_goal("test max attempts")
+        assert goal.max_attempts == 5
+
+    @pytest.mark.asyncio
+    async def test_from_config_wires_cooldown(self, tmp_goals_path):
+        """Test that base_cooldown config flows into failure handling."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path,
+            base_cooldown_seconds=120.0,
+            auto_decompose=False,
+        )
+        manager = GoalManager.from_config(config)
+        await manager.initialize()
+
+        assert manager._base_cooldown == 120.0
+
+    @pytest.mark.asyncio
+    async def test_from_config_wires_sub_goal_limits(self, tmp_goals_path):
+        """Test that sub-goal limits are wired from config."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path,
+            max_sub_goals=3,
+            max_goal_depth=2,
+        )
+        manager = GoalManager.from_config(config)
+
+        assert manager._max_sub_goals == 3
+        assert manager._max_goal_depth == 2
+
+    @pytest.mark.asyncio
+    async def test_from_config_with_custom_storage(self, tmp_goals_path):
+        """Test that storage override is respected."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(storage_path=tmp_goals_path)
+
+        custom_store = GoalStore(tmp_goals_path)
+        manager = GoalManager.from_config(config, storage=custom_store)
+
+        assert manager.storage is custom_store
+
+    @pytest.mark.asyncio
+    async def test_from_config_with_llm_provider(self, goals_config):
+        """Test that llm_provider and model are passed through."""
+        from unittest.mock import MagicMock
+
+        mock_llm = MagicMock()
+        manager = GoalManager.from_config(
+            goals_config,
+            llm_provider=mock_llm,
+            decomposition_model="gpt-4",
+        )
+
+        assert manager.llm_provider is mock_llm
+        assert manager.decomposition_model == "gpt-4"
+
+    @pytest.mark.asyncio
+    async def test_auto_decompose_explicit_overrides_config(
+        self, tmp_goals_path
+    ):
+        """Test that explicit auto_decompose=True overrides config False."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+        from unittest.mock import AsyncMock, MagicMock
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path, auto_decompose=False
+        )
+        mock_llm = MagicMock()
+
+        manager = GoalManager.from_config(
+            config, llm_provider=mock_llm
+        )
+        await manager.initialize()
+
+        # Mock the internal decomposition to avoid provider import
+        manager._decompose_goal = AsyncMock(return_value=[])
+
+        # Config says no auto-decompose, but explicit True overrides
+        await manager.set_primary_goal(
+            "test override", auto_decompose=True
+        )
+
+        # Decomposition should have been attempted because explicit True won
+        manager._decompose_goal.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_auto_decompose_none_uses_config(self, tmp_goals_path):
+        """Test that omitting auto_decompose uses config default."""
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+        from unittest.mock import AsyncMock, MagicMock
+
+        config = GoalsAutonomousConfig(
+            storage_path=tmp_goals_path, auto_decompose=False
+        )
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock()
+
+        manager = GoalManager.from_config(
+            config, llm_provider=mock_llm
+        )
+        await manager.initialize()
+
+        # Don't pass auto_decompose — should use config (False)
+        await manager.set_primary_goal("test config default")
+
+        # LLM should NOT have been called because config says False
+        mock_llm.complete.assert_not_called()

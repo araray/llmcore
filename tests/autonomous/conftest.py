@@ -96,3 +96,11 @@ def resource_monitor(resource_constraints):
         constraints=resource_constraints,
         check_interval=timedelta(seconds=1),
     )
+
+
+@pytest.fixture
+def goals_config(tmp_goals_path):
+    """Create a GoalsAutonomousConfig pointing at a temp file."""
+    from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+    return GoalsAutonomousConfig(storage_path=tmp_goals_path)

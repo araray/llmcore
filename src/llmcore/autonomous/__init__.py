@@ -23,9 +23,10 @@ Example:
         EscalationManager, EscalationLevel, EscalationReason,
         ResourceMonitor, ResourceConstraints,
     )
+    from llmcore.config.autonomous_config import GoalsAutonomousConfig
 
     # Set up autonomous operation
-    goals = GoalManager(GoalStore("~/.llmcore/goals.json"))
+    goals = GoalManager.from_config(GoalsAutonomousConfig())
     heartbeat = HeartbeatManager()
     escalation = EscalationManager()
     resources = ResourceMonitor()

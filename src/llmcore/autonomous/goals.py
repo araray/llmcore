@@ -11,8 +11,15 @@ Provides persistent, hierarchical goal management with:
 
 Example:
     from llmcore.autonomous.goals import GoalManager, GoalStore
+    from llmcore.config.autonomous_config import GoalsAutonomousConfig
 
-    store = GoalStore("~/.llmcore/goals.json")
+    # Option A: From configuration (recommended)
+    config = GoalsAutonomousConfig(storage_path="~/my-goals.json")
+    goals = GoalManager.from_config(config)
+    await goals.initialize()
+
+    # Option B: Manual construction (useful for tests / DI)
+    store = GoalStore("~/.local/share/llmcore/goals.json")
     goals = GoalManager(store)
     await goals.initialize()
 
@@ -509,11 +516,11 @@ class GoalStore:
         path: Path to the goals JSON file.
 
     Example:
-        >>> store = GoalStore("~/.llmcore/goals.json")
+        >>> store = GoalStore("~/.local/share/llmcore/goals.json")
         >>> goals = await store.load_goals()
     """
 
-    def __init__(self, path: str = "~/.llmcore/goals.json") -> None:
+    def __init__(self, path: str = "~/.local/share/llmcore/goals.json") -> None:
         self._path = Path(os.path.expanduser(path))
 
     async def load_goals(self) -> List[Goal]:
@@ -593,6 +600,14 @@ class GoalManager:
         decomposition_model: Specific model to use for decomposition.
 
     Example:
+        # From configuration (recommended):
+        from llmcore.config.autonomous_config import GoalsAutonomousConfig
+
+        config = GoalsAutonomousConfig(storage_path="~/goals.json")
+        manager = GoalManager.from_config(config, llm_provider=my_llm)
+        await manager.initialize()
+
+        # Manual construction (useful for tests / DI):
         store = GoalStore()
         manager = GoalManager(store)
         await manager.initialize()
@@ -629,6 +644,65 @@ class GoalManager:
         self._lock = asyncio.Lock()
         self._initialized = False
 
+        # Config-driven defaults (overridden by from_config)
+        self._default_auto_decompose: bool = True
+        self._max_sub_goals: int = 10
+        self._max_goal_depth: int = 4
+        self._default_max_attempts: int = 10
+        self._base_cooldown: float = 60.0
+        self._max_cooldown: float = 3600.0
+
+    # ----- factory ------------------------------------------------------------
+
+    @classmethod
+    def from_config(
+        cls,
+        config: Any,
+        llm_provider: Optional[Any] = None,
+        decomposition_model: Optional[str] = None,
+        storage: Optional[GoalStorageProtocol] = None,
+    ) -> "GoalManager":
+        """
+        Create a GoalManager from a GoalsAutonomousConfig.
+
+        This is the recommended way to create a GoalManager in production.
+        The storage backend and operational parameters are automatically
+        configured from the config object.
+
+        Args:
+            config: A GoalsAutonomousConfig instance.
+            llm_provider: Optional LLM provider for goal decomposition.
+            decomposition_model: Specific model to use for decomposition.
+            storage: Optional storage override (default: GoalStore from config).
+
+        Returns:
+            A fully configured GoalManager.
+
+        Example:
+            >>> from llmcore.config.autonomous_config import GoalsAutonomousConfig
+            >>> config = GoalsAutonomousConfig(storage_path="~/goals.json")
+            >>> manager = GoalManager.from_config(config)
+            >>> await manager.initialize()
+        """
+        if storage is None:
+            storage = GoalStore(path=config.storage_path)
+
+        manager = cls(
+            storage=storage,
+            llm_provider=llm_provider,
+            decomposition_model=decomposition_model,
+        )
+
+        # Wire config-driven defaults
+        manager._default_auto_decompose = config.auto_decompose
+        manager._max_sub_goals = config.max_sub_goals
+        manager._max_goal_depth = config.max_goal_depth
+        manager._default_max_attempts = config.max_attempts_per_goal
+        manager._base_cooldown = config.base_cooldown_seconds
+        manager._max_cooldown = config.max_cooldown_seconds
+
+        return manager
+
     # ----- lifecycle ----------------------------------------------------------
 
     async def initialize(self) -> None:
@@ -654,7 +728,7 @@ class GoalManager:
         priority: GoalPriority = GoalPriority.HIGH,
         success_criteria: Optional[List[SuccessCriterion]] = None,
         deadline: Optional[datetime] = None,
-        auto_decompose: bool = True,
+        auto_decompose: Optional[bool] = None,
         tags: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> Goal:
@@ -670,12 +744,19 @@ class GoalManager:
             success_criteria: Measurable success conditions.
             deadline: Optional deadline for completion.
             auto_decompose: Whether to auto-decompose into sub-goals.
+                Defaults to the value from config (True if no config).
             tags: Categorization tags.
             context: Arbitrary metadata.
 
         Returns:
             The created Goal.
         """
+        should_decompose = (
+            auto_decompose
+            if auto_decompose is not None
+            else self._default_auto_decompose
+        )
+
         goal = Goal.create(
             description=description,
             priority=priority,
@@ -686,6 +767,7 @@ class GoalManager:
         )
         goal.status = GoalStatus.ACTIVE
         goal.started_at = datetime.utcnow()
+        goal.max_attempts = self._default_max_attempts
 
         async with self._lock:
             self._goals[goal.id] = goal
@@ -694,7 +776,7 @@ class GoalManager:
         logger.info("Set primary goal: %s (id=%s)", description, goal.id)
 
         # Auto-decompose if LLM available
-        if auto_decompose and self.llm_provider:
+        if should_decompose and self.llm_provider:
             try:
                 sub_goals = await self._decompose_goal(goal)
                 for sg in sub_goals:
@@ -925,7 +1007,7 @@ class GoalManager:
                     "Goal %s blocked after %d attempts", goal_id, goal.attempts
                 )
             else:
-                goal.apply_cooldown()
+                goal.apply_cooldown(base_seconds=int(self._base_cooldown))
                 logger.info(
                     "Goal %s attempt %d failed: %s", goal_id, goal.attempts, reason
                 )
