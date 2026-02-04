@@ -15,10 +15,9 @@ Covers:
     - Include/exclude source filtering
 """
 
-import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -33,7 +32,6 @@ from llmcore.context.synthesis import (
     _elapsed_ms,
     _make_default_counter,
 )
-
 
 # =============================================================================
 # ContextChunk Tests

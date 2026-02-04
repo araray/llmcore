@@ -21,7 +21,7 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from ..synthesis import ContextChunk
 

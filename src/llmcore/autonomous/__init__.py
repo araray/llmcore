@@ -39,16 +39,6 @@ Example:
 """
 
 # Goal Management (Phase 1)
-from .goals import (
-    Goal,
-    GoalManager,
-    GoalPriority,
-    GoalStatus,
-    GoalStorageProtocol,
-    GoalStore,
-    SuccessCriterion,
-)
-
 # Escalation Framework (Phase 1)
 from .escalation import (
     Escalation,
@@ -59,6 +49,15 @@ from .escalation import (
     callback_handler,
     file_handler,
     webhook_handler,
+)
+from .goals import (
+    Goal,
+    GoalManager,
+    GoalPriority,
+    GoalStatus,
+    GoalStorageProtocol,
+    GoalStore,
+    SuccessCriterion,
 )
 
 # Heartbeat System (Phase 2)

@@ -17,9 +17,9 @@ from .semantic import SemanticContextSource
 from .skills import SkillContextSource
 
 __all__ = [
+    "EpisodicContextSource",
     "GoalContextSource",
     "RecentContextSource",
     "SemanticContextSource",
-    "EpisodicContextSource",
     "SkillContextSource",
 ]
