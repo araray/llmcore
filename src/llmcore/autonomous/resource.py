@@ -35,12 +35,12 @@ Example:
     monitor.record_usage(tokens=1500, cost_usd=0.002)
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta
-from enum import Enum
 import asyncio
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -290,10 +290,7 @@ class ResourceMonitor:
 
         self._running = True
         self._loop_task = asyncio.create_task(self._monitor_loop())
-        logger.info(
-            f"Resource monitor started "
-            f"(interval: {self.check_interval.total_seconds()}s)"
-        )
+        logger.info(f"Resource monitor started (interval: {self.check_interval.total_seconds()}s)")
 
     async def stop(self) -> None:
         """Stop resource monitoring."""
@@ -352,9 +349,7 @@ class ResourceMonitor:
         try:
             import psutil
         except ImportError:
-            logger.warning(
-                "psutil not installed, resource monitoring limited"
-            )
+            logger.warning("psutil not installed, resource monitoring limited")
             return ResourceUsage(
                 tokens_this_hour=self._hourly_tokens,
                 tokens_today=self._daily_tokens,
@@ -428,9 +423,7 @@ class ResourceMonitor:
             if not temps:
                 # Try Raspberry Pi thermal zone
                 try:
-                    with open(
-                        "/sys/class/thermal/thermal_zone0/temp", "r"
-                    ) as f:
+                    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                         return float(f.read().strip()) / 1000.0
                 except Exception:
                     pass
@@ -444,7 +437,7 @@ class ResourceMonitor:
                 "acpitz",
                 "k10temp",
             ]:
-                if name in temps and temps[name]:
+                if temps.get(name):
                     return temps[name][0].current
 
             # Fallback: first available
@@ -457,9 +450,7 @@ class ResourceMonitor:
 
         return None
 
-    def _check_violations(
-        self, usage: ResourceUsage
-    ) -> List[ConstraintViolation]:
+    def _check_violations(self, usage: ResourceUsage) -> List[ConstraintViolation]:
         """Check for constraint violations."""
         violations: List[ConstraintViolation] = []
         c = self.constraints
@@ -598,21 +589,15 @@ class ResourceMonitor:
             "api_usage": {
                 "tokens_this_hour": self._status.usage.tokens_this_hour,
                 "tokens_today": self._status.usage.tokens_today,
-                "cost_this_hour_usd": (
-                    self._status.usage.cost_this_hour_usd
-                ),
+                "cost_this_hour_usd": (self._status.usage.cost_this_hour_usd),
                 "cost_today_usd": self._status.usage.cost_today_usd,
-                "requests_this_hour": (
-                    self._status.usage.requests_this_hour
-                ),
+                "requests_this_hour": (self._status.usage.requests_this_hour),
             },
             "limits": {
                 "max_cpu_percent": self.constraints.max_cpu_percent,
                 "max_memory_percent": self.constraints.max_memory_percent,
                 "max_temperature_c": self.constraints.max_temperature_c,
-                "max_hourly_cost_usd": (
-                    self.constraints.max_hourly_cost_usd
-                ),
+                "max_hourly_cost_usd": (self.constraints.max_hourly_cost_usd),
                 "max_daily_cost_usd": self.constraints.max_daily_cost_usd,
             },
         }

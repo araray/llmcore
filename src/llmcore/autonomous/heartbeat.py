@@ -40,11 +40,11 @@ Example:
     await heartbeat.stop()
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional
-from datetime import datetime, timedelta
 import asyncio
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -163,12 +163,8 @@ class HeartbeatTask:
             "name": self.name,
             "interval_seconds": self.interval.total_seconds(),
             "enabled": self.enabled,
-            "last_run": (
-                self.last_run.isoformat() if self.last_run else None
-            ),
-            "next_run": (
-                self.next_run.isoformat() if self.next_run else None
-            ),
+            "last_run": (self.last_run.isoformat() if self.last_run else None),
+            "next_run": (self.next_run.isoformat() if self.next_run else None),
             "run_count": self.run_count,
             "error_count": self.error_count,
             "consecutive_errors": self.consecutive_errors,
@@ -241,12 +237,8 @@ class HeartbeatManager:
 
         # Callbacks
         self._on_heartbeat: List[Callable[[], Awaitable[None]]] = []
-        self._on_error: List[
-            Callable[[str, Exception], Awaitable[None]]
-        ] = []
-        self._on_task_complete: List[
-            Callable[[str, Any], Awaitable[None]]
-        ] = []
+        self._on_error: List[Callable[[str, Exception], Awaitable[None]]] = []
+        self._on_task_complete: List[Callable[[str, Any], Awaitable[None]]] = []
 
     def register(self, task: HeartbeatTask) -> None:
         """
@@ -257,8 +249,7 @@ class HeartbeatManager:
         """
         self._tasks[task.name] = task
         logger.info(
-            f"Registered heartbeat task: {task.name} "
-            f"(every {task.interval.total_seconds()}s)"
+            f"Registered heartbeat task: {task.name} (every {task.interval.total_seconds()}s)"
         )
 
     def unregister(self, name: str) -> None:
@@ -348,10 +339,7 @@ class HeartbeatManager:
 
         self._running = True
         self._loop_task = asyncio.create_task(self._heartbeat_loop())
-        logger.info(
-            f"Heartbeat started "
-            f"(interval: {self.base_interval.total_seconds()}s)"
-        )
+        logger.info(f"Heartbeat started (interval: {self.base_interval.total_seconds()}s)")
 
     async def stop(self) -> None:
         """
@@ -420,9 +408,7 @@ class HeartbeatManager:
                 await self.tick()
 
                 # Wait for next tick
-                await asyncio.sleep(
-                    self.base_interval.total_seconds()
-                )
+                await asyncio.sleep(self.base_interval.total_seconds())
 
             except asyncio.CancelledError:
                 break
@@ -430,9 +416,7 @@ class HeartbeatManager:
                 logger.error(f"Heartbeat loop error: {e}")
                 await asyncio.sleep(5)  # Brief pause on error
 
-    async def _run_task(
-        self, task: HeartbeatTask, now: datetime
-    ) -> None:
+    async def _run_task(self, task: HeartbeatTask, now: datetime) -> None:
         """
         Run a single task with error handling.
 
@@ -506,20 +490,13 @@ class HeartbeatManager:
             "paused": self._paused,
             "base_interval_seconds": self.base_interval.total_seconds(),
             "task_count": len(self._tasks),
-            "tasks": {
-                name: task.to_dict()
-                for name, task in self._tasks.items()
-            },
+            "tasks": {name: task.to_dict() for name, task in self._tasks.items()},
         }
 
     def get_due_tasks(self) -> List[str]:
         """Get names of tasks that are due to run."""
         now = datetime.utcnow()
-        return [
-            name
-            for name, task in self._tasks.items()
-            if task.should_run(now)
-        ]
+        return [name for name, task in self._tasks.items() if task.should_run(now)]
 
 
 # =============================================================================

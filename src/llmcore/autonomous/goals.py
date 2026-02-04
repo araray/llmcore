@@ -55,8 +55,6 @@ from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    Awaitable,
-    Callable,
     Dict,
     List,
     Optional,
@@ -447,14 +445,10 @@ class Goal:
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "attempts": self.attempts,
             "max_attempts": self.max_attempts,
-            "last_attempt_at": (
-                self.last_attempt_at.isoformat() if self.last_attempt_at else None
-            ),
+            "last_attempt_at": (self.last_attempt_at.isoformat() if self.last_attempt_at else None),
             "failure_reasons": self.failure_reasons,
             "learned_strategies": self.learned_strategies,
-            "cooldown_until": (
-                self.cooldown_until.isoformat() if self.cooldown_until else None
-            ),
+            "cooldown_until": (self.cooldown_until.isoformat() if self.cooldown_until else None),
             "cooldown_multiplier": self.cooldown_multiplier,
             "tags": self.tags,
             "context": self.context,
@@ -471,8 +465,7 @@ class Goal:
             parent_id=data.get("parent_id"),
             sub_goal_ids=data.get("sub_goal_ids", []),
             success_criteria=[
-                SuccessCriterion.from_dict(c)
-                for c in data.get("success_criteria", [])
+                SuccessCriterion.from_dict(c) for c in data.get("success_criteria", [])
             ],
             progress=data.get("progress", 0.0),
             created_at=_parse_datetime(data.get("created_at")) or datetime.utcnow(),
@@ -752,9 +745,7 @@ class GoalManager:
             The created Goal.
         """
         should_decompose = (
-            auto_decompose
-            if auto_decompose is not None
-            else self._default_auto_decompose
+            auto_decompose if auto_decompose is not None else self._default_auto_decompose
         )
 
         goal = Goal.create(
@@ -897,9 +888,7 @@ class GoalManager:
             Next actionable goal, or None if none available.
         """
         async with self._lock:
-            actionable = [
-                g for g in self._goals.values() if g.is_actionable() and g.is_leaf()
-            ]
+            actionable = [g for g in self._goals.values() if g.is_actionable() and g.is_leaf()]
             if not actionable:
                 return None
 
@@ -955,9 +944,7 @@ class GoalManager:
             goal.reset_cooldown()
 
             if notes:
-                goal.learned_strategies.append(
-                    f"{datetime.utcnow().isoformat()}: {notes}"
-                )
+                goal.learned_strategies.append(f"{datetime.utcnow().isoformat()}: {notes}")
 
             goal.update_progress()
             await self.storage.save_goal(goal)
@@ -992,9 +979,7 @@ class GoalManager:
                 logger.warning("Goal not found: %s", goal_id)
                 return
 
-            goal.failure_reasons.append(
-                f"{datetime.utcnow().isoformat()}: {reason}"
-            )
+            goal.failure_reasons.append(f"{datetime.utcnow().isoformat()}: {reason}")
             goal.last_attempt_at = datetime.utcnow()
             goal.attempts += 1
 
@@ -1003,14 +988,10 @@ class GoalManager:
                 logger.warning("Goal %s failed (terminal): %s", goal_id, reason)
             elif goal.attempts >= goal.max_attempts:
                 goal.status = GoalStatus.BLOCKED
-                logger.warning(
-                    "Goal %s blocked after %d attempts", goal_id, goal.attempts
-                )
+                logger.warning("Goal %s blocked after %d attempts", goal_id, goal.attempts)
             else:
                 goal.apply_cooldown(base_seconds=int(self._base_cooldown))
-                logger.info(
-                    "Goal %s attempt %d failed: %s", goal_id, goal.attempts, reason
-                )
+                logger.info("Goal %s attempt %d failed: %s", goal_id, goal.attempts, reason)
 
             await self.storage.save_goal(goal)
 
@@ -1037,9 +1018,7 @@ class GoalManager:
                 if criterion.metric_name == metric_name:
                     old_value = criterion.current_value
                     criterion.current_value = value
-                    logger.debug(
-                        "Metric %s updated: %s -> %s", metric_name, old_value, value
-                    )
+                    logger.debug("Metric %s updated: %s -> %s", metric_name, old_value, value)
                     break
 
             goal.update_progress()
@@ -1070,8 +1049,7 @@ class GoalManager:
             parent.progress = total_progress / child_count
 
             all_completed = all(
-                self._goals.get(cid)
-                and self._goals[cid].status == GoalStatus.COMPLETED
+                self._goals.get(cid) and self._goals[cid].status == GoalStatus.COMPLETED
                 for cid in parent.sub_goal_ids
             )
 
@@ -1153,9 +1131,7 @@ class GoalManager:
         """
         status_counts = {}
         for status in GoalStatus:
-            status_counts[status.name] = sum(
-                1 for g in self._goals.values() if g.status == status
-            )
+            status_counts[status.name] = sum(1 for g in self._goals.values() if g.status == status)
 
         primary_goals = [g for g in self._goals.values() if g.parent_id is None]
 

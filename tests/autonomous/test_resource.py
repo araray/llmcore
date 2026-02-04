@@ -27,7 +27,6 @@ from llmcore.autonomous.resource import (
     ResourceUsage,
 )
 
-
 # =============================================================================
 # ResourceConstraints Tests
 # =============================================================================
@@ -224,10 +223,12 @@ class TestResourceStatus:
 
     def test_cannot_proceed_mixed(self):
         """Mix of soft + hard violations → cannot proceed."""
-        s = self._make_status([
-            ConstraintViolation.CPU_HIGH,
-            ConstraintViolation.COST_DAILY_EXCEEDED,
-        ])
+        s = self._make_status(
+            [
+                ConstraintViolation.CPU_HIGH,
+                ConstraintViolation.COST_DAILY_EXCEEDED,
+            ]
+        )
         assert s.can_proceed is False
 
     # ── should_throttle ──────────────────────────────────────────
@@ -538,13 +539,9 @@ class TestResourceMonitor:
     @pytest.mark.asyncio
     async def test_wait_for_resources_immediate(self, resource_monitor):
         """wait_for_resources returns True immediately if resources OK."""
-        resource_monitor._get_usage = AsyncMock(
-            return_value=ResourceUsage(disk_free_gb=50.0)
-        )
+        resource_monitor._get_usage = AsyncMock(return_value=ResourceUsage(disk_free_gb=50.0))
 
-        result = await resource_monitor.wait_for_resources(
-            timeout=5, check_interval=0.1
-        )
+        result = await resource_monitor.wait_for_resources(timeout=5, check_interval=0.1)
         assert result is True
 
     @pytest.mark.asyncio
@@ -558,9 +555,7 @@ class TestResourceMonitor:
             )
         )
 
-        result = await resource_monitor.wait_for_resources(
-            timeout=0.3, check_interval=0.1
-        )
+        result = await resource_monitor.wait_for_resources(timeout=0.3, check_interval=0.1)
         assert result is False
 
     @pytest.mark.asyncio
@@ -586,9 +581,7 @@ class TestResourceMonitor:
 
         resource_monitor._get_usage = improving_usage
 
-        result = await resource_monitor.wait_for_resources(
-            timeout=5, check_interval=0.1
-        )
+        result = await resource_monitor.wait_for_resources(timeout=5, check_interval=0.1)
         assert result is True
 
     # ── get_status ───────────────────────────────────────────────
@@ -670,12 +663,13 @@ class TestResourceMonitor:
         mock_disk = MagicMock()
         mock_disk.free = 200 * 1024**3  # 200 GB
 
-        with patch("psutil.cpu_percent", return_value=35.0), \
-             patch("psutil.virtual_memory", return_value=mock_mem), \
-             patch("psutil.disk_usage", return_value=mock_disk), \
-             patch("psutil.sensors_temperatures", return_value={}), \
-             patch("psutil.sensors_battery", return_value=None):
-
+        with (
+            patch("psutil.cpu_percent", return_value=35.0),
+            patch("psutil.virtual_memory", return_value=mock_mem),
+            patch("psutil.disk_usage", return_value=mock_disk),
+            patch("psutil.sensors_temperatures", return_value={}),
+            patch("psutil.sensors_battery", return_value=None),
+        ):
             usage = await resource_monitor._get_usage()
 
         assert usage.cpu_percent == 35.0
@@ -694,7 +688,7 @@ class TestResourceMonitor:
             original_get = monitor._get_usage
 
             async def no_psutil_get():
-                import importlib
+
                 # Simulate ImportError
                 try:
                     raise ImportError("no psutil")
@@ -721,9 +715,12 @@ class TestResourceMonitor:
         mock_temp = MagicMock()
         mock_temp.current = 62.5
 
-        with patch("psutil.sensors_temperatures", return_value={
-            "coretemp": [mock_temp],
-        }):
+        with patch(
+            "psutil.sensors_temperatures",
+            return_value={
+                "coretemp": [mock_temp],
+            },
+        ):
             temp = await resource_monitor._get_temperature()
 
         assert temp == 62.5

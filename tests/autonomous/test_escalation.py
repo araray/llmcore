@@ -15,10 +15,8 @@ Covers:
 import asyncio
 import json
 import sys
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -27,12 +25,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from llmcore.autonomous.escalation import (
     Escalation,
     EscalationLevel,
-    EscalationManager,
     EscalationReason,
     callback_handler,
     file_handler,
 )
-
 
 # =============================================================================
 # Escalation Data Model Tests
@@ -296,14 +292,10 @@ class TestEscalationManager:
         critical = escalation_manager.get_by_level(EscalationLevel.CRITICAL)
         assert len(critical) == 1
 
-        action_plus = escalation_manager.get_by_level(
-            EscalationLevel.ACTION
-        )
+        action_plus = escalation_manager.get_by_level(EscalationLevel.ACTION)
         assert len(action_plus) == 1  # CRITICAL >= ACTION
 
-        advisory_plus = escalation_manager.get_by_level(
-            EscalationLevel.ADVISORY
-        )
+        advisory_plus = escalation_manager.get_by_level(EscalationLevel.ADVISORY)
         assert len(advisory_plus) == 2  # Both
 
     @pytest.mark.asyncio

@@ -41,14 +41,14 @@ Example:
     )
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional
-from datetime import datetime, timedelta
-from enum import Enum
 import asyncio
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -192,17 +192,9 @@ class Escalation:
             "goal_id": self.goal_id,
             "task_id": self.task_id,
             "created_at": self.created_at.isoformat(),
-            "acknowledged_at": (
-                self.acknowledged_at.isoformat()
-                if self.acknowledged_at
-                else None
-            ),
-            "resolved_at": (
-                self.resolved_at.isoformat() if self.resolved_at else None
-            ),
-            "expires_at": (
-                self.expires_at.isoformat() if self.expires_at else None
-            ),
+            "acknowledged_at": (self.acknowledged_at.isoformat() if self.acknowledged_at else None),
+            "resolved_at": (self.resolved_at.isoformat() if self.resolved_at else None),
+            "expires_at": (self.expires_at.isoformat() if self.expires_at else None),
             "human_response": self.human_response,
             "auto_resolved": self.auto_resolved,
         }
@@ -235,9 +227,7 @@ class Escalation:
             details=data.get("details", {}),
             goal_id=data.get("goal_id"),
             task_id=data.get("task_id"),
-            created_at=(
-                parse_datetime(data.get("created_at")) or datetime.utcnow()
-            ),
+            created_at=(parse_datetime(data.get("created_at")) or datetime.utcnow()),
             acknowledged_at=parse_datetime(data.get("acknowledged_at")),
             resolved_at=parse_datetime(data.get("resolved_at")),
             expires_at=parse_datetime(data.get("expires_at")),
@@ -323,10 +313,7 @@ class EscalationManager:
 
     def _compute_hash(self, escalation: Escalation) -> str:
         """Compute hash for deduplication."""
-        content = (
-            f"{escalation.reason.value}:{escalation.title}:"
-            f"{escalation.message}"
-        )
+        content = f"{escalation.reason.value}:{escalation.title}:{escalation.message}"
         return hashlib.md5(content.encode()).hexdigest()[:12]
 
     def _is_duplicate(self, escalation: Escalation) -> bool:
@@ -410,9 +397,7 @@ class EscalationManager:
         )
 
         if expires_in_seconds:
-            escalation.expires_at = datetime.utcnow() + timedelta(
-                seconds=expires_in_seconds
-            )
+            escalation.expires_at = datetime.utcnow() + timedelta(seconds=expires_in_seconds)
 
         # Check for duplicate
         if self._is_duplicate(escalation):
@@ -454,13 +439,8 @@ class EscalationManager:
                 logger.error(f"Escalation handler error: {e}")
 
         # Wait for response if requested (and level warrants it)
-        if (
-            wait_for_response
-            and level.value >= EscalationLevel.ACTION.value
-        ):
-            return await self._wait_for_response(
-                escalation.id, timeout_seconds
-            )
+        if wait_for_response and level.value >= EscalationLevel.ACTION.value:
+            return await self._wait_for_response(escalation.id, timeout_seconds)
 
         return None
 
@@ -478,9 +458,7 @@ class EscalationManager:
             escalation = self._escalations.get(escalation_id)
             return escalation.human_response if escalation else None
         except asyncio.TimeoutError:
-            logger.warning(
-                f"Escalation {escalation_id} timed out waiting for response"
-            )
+            logger.warning(f"Escalation {escalation_id} timed out waiting for response")
             return None
         finally:
             self._response_waiters.pop(escalation_id, None)
@@ -576,11 +554,7 @@ class EscalationManager:
 
     def get_by_level(self, level: EscalationLevel) -> List[Escalation]:
         """Get escalations at or above a specific level."""
-        return [
-            e
-            for e in self._escalations.values()
-            if e.level.value >= level.value
-        ]
+        return [e for e in self._escalations.values() if e.level.value >= level.value]
 
     def clear_resolved(self, older_than_hours: int = 24) -> int:
         """
@@ -594,9 +568,7 @@ class EscalationManager:
         """
         cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
         to_remove = [
-            eid
-            for eid, e in self._escalations.items()
-            if e.resolved_at and e.resolved_at < cutoff
+            eid for eid, e in self._escalations.items() if e.resolved_at and e.resolved_at < cutoff
         ]
 
         for eid in to_remove:
@@ -609,9 +581,7 @@ class EscalationManager:
         pending = self.get_pending()
         by_level: Dict[str, int] = {}
         for level in EscalationLevel:
-            by_level[level.name] = sum(
-                1 for e in pending if e.level == level
-            )
+            by_level[level.name] = sum(1 for e in pending if e.level == level)
 
         return {
             "total_escalations": len(self._escalations),
@@ -664,10 +634,7 @@ async def webhook_handler(
                 ) as resp:
                     success = resp.status < 400
                     if not success:
-                        logger.warning(
-                            f"Webhook returned {resp.status}: "
-                            f"{await resp.text()}"
-                        )
+                        logger.warning(f"Webhook returned {resp.status}: {await resp.text()}")
                     return success
         except ImportError:
             logger.error(

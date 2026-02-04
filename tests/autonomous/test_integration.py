@@ -20,21 +20,17 @@ References:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from llmcore.autonomous import (
-    ConstraintViolation,
-    Escalation,
     EscalationLevel,
     EscalationManager,
     EscalationReason,
-    Goal,
     GoalManager,
     GoalPriority,
     GoalStatus,
@@ -176,13 +172,16 @@ class TestAutonomousLifecycle:
         # --- Phase 3: Simulate work with resource monitoring ---
 
         # Mock healthy system state
-        with patch("psutil.cpu_percent", return_value=45.0), \
-             patch("psutil.virtual_memory") as mock_mem, \
-             patch("psutil.disk_usage") as mock_disk, \
-             patch("psutil.sensors_temperatures", return_value={}):
-
+        with (
+            patch("psutil.cpu_percent", return_value=45.0),
+            patch("psutil.virtual_memory") as mock_mem,
+            patch("psutil.disk_usage") as mock_disk,
+            patch("psutil.sensors_temperatures", return_value={}),
+        ):
             mock_mem.return_value = MagicMock(
-                percent=50.0, used=4 * 1024**3, available=4 * 1024**3,
+                percent=50.0,
+                used=4 * 1024**3,
+                available=4 * 1024**3,
             )
             mock_disk.return_value = MagicMock(free=10 * 1024**3)  # 10 GB free
 
@@ -300,12 +299,16 @@ class TestAutonomousLifecycle:
 
         async def monitor_resources():
             """Heartbeat-driven resource check."""
-            with patch("psutil.cpu_percent", return_value=30.0), \
-                 patch("psutil.virtual_memory") as mm, \
-                 patch("psutil.disk_usage") as md, \
-                 patch("psutil.sensors_temperatures", return_value={}):
+            with (
+                patch("psutil.cpu_percent", return_value=30.0),
+                patch("psutil.virtual_memory") as mm,
+                patch("psutil.disk_usage") as md,
+                patch("psutil.sensors_temperatures", return_value={}),
+            ):
                 mm.return_value = MagicMock(
-                    percent=40.0, used=3 * 1024**3, available=5 * 1024**3,
+                    percent=40.0,
+                    used=3 * 1024**3,
+                    available=5 * 1024**3,
                 )
                 md.return_value = MagicMock(free=20 * 1024**3)
                 status = await resource_monitor._check_resources()
@@ -350,14 +353,18 @@ class TestAutonomousLifecycle:
         )
 
         # Simulate over-heated CPU (hard limit)
-        with patch("psutil.cpu_percent", return_value=95.0), \
-             patch("psutil.virtual_memory") as mm, \
-             patch("psutil.disk_usage") as md, \
-             patch("psutil.sensors_temperatures", return_value={
-                 "coretemp": [MagicMock(current=82.0)]
-             }):
+        with (
+            patch("psutil.cpu_percent", return_value=95.0),
+            patch("psutil.virtual_memory") as mm,
+            patch("psutil.disk_usage") as md,
+            patch(
+                "psutil.sensors_temperatures", return_value={"coretemp": [MagicMock(current=82.0)]}
+            ),
+        ):
             mm.return_value = MagicMock(
-                percent=90.0, used=7 * 1024**3, available=1 * 1024**3,
+                percent=90.0,
+                used=7 * 1024**3,
+                available=1 * 1024**3,
             )
             md.return_value = MagicMock(free=0.5 * 1024**3)  # 500 MB
 

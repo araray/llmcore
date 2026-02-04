@@ -13,7 +13,7 @@ Coverage target: >90%
 
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,7 +22,6 @@ from llmcore.autonomous.heartbeat import (
     HeartbeatTask,
     heartbeat_task,
 )
-
 
 # =============================================================================
 # HeartbeatTask Unit Tests
