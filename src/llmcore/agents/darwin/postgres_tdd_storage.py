@@ -163,10 +163,10 @@ class SqliteTDDStorage(BaseTDDStorage):
 
     def __init__(self):
         """Initialize SQLite TDD storage."""
-        self._db_path: Optional[pathlib.Path] = None
-        self._conn: Optional["aiosqlite.Connection"] = None
+        self._db_path: pathlib.Path | None = None
+        self._conn: aiosqlite.Connection | None = None
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the SQLite database and create schema.
 
@@ -294,7 +294,7 @@ class SqliteTDDStorage(BaseTDDStorage):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save test suite: {e}")
 
-    async def get_test_suite(self, suite_id: str) -> Optional[TestSuite]:
+    async def get_test_suite(self, suite_id: str) -> TestSuite | None:
         """
         Retrieve a specific test suite by ID.
 
@@ -326,7 +326,7 @@ class SqliteTDDStorage(BaseTDDStorage):
 
         return self._row_to_suite(row, specifications)
 
-    async def get_test_suites_for_task(self, task_id: str) -> List[TestSuite]:
+    async def get_test_suites_for_task(self, task_id: str) -> list[TestSuite]:
         """
         Retrieve all test suites for a task.
 
@@ -414,7 +414,7 @@ class SqliteTDDStorage(BaseTDDStorage):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save generated test: {e}")
 
-    async def get_generated_tests(self, suite_id: str) -> List[GeneratedTest]:
+    async def get_generated_tests(self, suite_id: str) -> list[GeneratedTest]:
         """
         Retrieve all generated tests for a suite.
 
@@ -502,7 +502,7 @@ class SqliteTDDStorage(BaseTDDStorage):
         self,
         suite_id: str,
         limit: int = 10,
-    ) -> List[TDDCycleResult]:
+    ) -> list[TDDCycleResult]:
         """
         Retrieve cycle results for a suite.
 
@@ -579,7 +579,7 @@ class SqliteTDDStorage(BaseTDDStorage):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save session: {e}")
 
-    async def get_session(self, session_id: str) -> Optional[TDDSession]:
+    async def get_session(self, session_id: str) -> TDDSession | None:
         """
         Retrieve a specific session by ID.
 
@@ -600,7 +600,7 @@ class SqliteTDDStorage(BaseTDDStorage):
 
         return self._row_to_session(row)
 
-    async def get_sessions_for_task(self, task_id: str) -> List[TDDSession]:
+    async def get_sessions_for_task(self, task_id: str) -> list[TDDSession]:
         """
         Retrieve all sessions for a task.
 
@@ -621,7 +621,7 @@ class SqliteTDDStorage(BaseTDDStorage):
 
         return [self._row_to_session(r) for r in rows]
 
-    async def get_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get TDD statistics for analytics.
 
@@ -720,7 +720,7 @@ class SqliteTDDStorage(BaseTDDStorage):
     def _row_to_suite(
         self,
         row,
-        specifications: List[TestSpecification],
+        specifications: list[TestSpecification],
     ) -> TestSuite:
         """Convert database row to TestSuite."""
         return TestSuite(

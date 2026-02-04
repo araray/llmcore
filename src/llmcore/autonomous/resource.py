@@ -40,7 +40,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class ResourceConstraints:
     # Hardware constraints
     max_cpu_percent: float = 80.0
     max_memory_percent: float = 80.0
-    max_temperature_c: Optional[float] = 75.0
+    max_temperature_c: float | None = 75.0
 
     # API cost constraints
     max_hourly_cost_usd: float = 1.0
@@ -92,7 +93,7 @@ class ResourceConstraints:
     min_request_interval_ms: int = 100
 
     # Power constraints
-    min_battery_percent: Optional[float] = None
+    min_battery_percent: float | None = None
 
     # Disk constraints
     min_disk_free_gb: float = 1.0
@@ -113,7 +114,7 @@ class ResourceUsage:
     memory_percent: float = 0.0
     memory_used_mb: float = 0.0
     memory_available_mb: float = 0.0
-    temperature_c: Optional[float] = None
+    temperature_c: float | None = None
     disk_free_gb: float = 0.0
 
     # API usage (current period)
@@ -124,10 +125,10 @@ class ResourceUsage:
     requests_this_hour: int = 0
 
     # Battery
-    battery_percent: Optional[float] = None
-    battery_plugged: Optional[bool] = None
+    battery_percent: float | None = None
+    battery_plugged: bool | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "timestamp": self.timestamp.isoformat(),
@@ -171,7 +172,7 @@ class ResourceStatus:
     """
 
     usage: ResourceUsage
-    violations: List[ConstraintViolation] = field(default_factory=list)
+    violations: list[ConstraintViolation] = field(default_factory=list)
 
     @property
     def is_constrained(self) -> bool:
@@ -253,7 +254,7 @@ class ResourceMonitor:
 
     def __init__(
         self,
-        constraints: Optional[ResourceConstraints] = None,
+        constraints: ResourceConstraints | None = None,
         check_interval: timedelta = timedelta(seconds=30),
     ):
         """
@@ -266,9 +267,9 @@ class ResourceMonitor:
         self.constraints = constraints or ResourceConstraints()
         self.check_interval = check_interval
 
-        self._status: Optional[ResourceStatus] = None
+        self._status: ResourceStatus | None = None
         self._running = False
-        self._loop_task: Optional[asyncio.Task] = None
+        self._loop_task: asyncio.Task | None = None
 
         # Usage tracking (reset periodically)
         self._hourly_tokens = 0
@@ -281,7 +282,7 @@ class ResourceMonitor:
         self._last_day = datetime.utcnow().date()
 
         # Callbacks
-        self._on_violation: List[Callable] = []
+        self._on_violation: list[Callable] = []
 
     async def start(self) -> None:
         """Start resource monitoring."""
@@ -414,7 +415,7 @@ class ResourceMonitor:
             battery_plugged=battery_plugged,
         )
 
-    async def _get_temperature(self) -> Optional[float]:
+    async def _get_temperature(self) -> float | None:
         """Get CPU temperature (platform-specific)."""
         try:
             import psutil
@@ -423,7 +424,7 @@ class ResourceMonitor:
             if not temps:
                 # Try Raspberry Pi thermal zone
                 try:
-                    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                    with open("/sys/class/thermal/thermal_zone0/temp") as f:
                         return float(f.read().strip()) / 1000.0
                 except Exception:
                     pass
@@ -450,9 +451,9 @@ class ResourceMonitor:
 
         return None
 
-    def _check_violations(self, usage: ResourceUsage) -> List[ConstraintViolation]:
+    def _check_violations(self, usage: ResourceUsage) -> list[ConstraintViolation]:
         """Check for constraint violations."""
-        violations: List[ConstraintViolation] = []
+        violations: list[ConstraintViolation] = []
         c = self.constraints
 
         # CPU
@@ -570,7 +571,7 @@ class ResourceMonitor:
 
         return False
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current resource status as dictionary."""
         if self._status is None:
             return {"status": "not_started"}
@@ -603,6 +604,6 @@ class ResourceMonitor:
         }
 
     @property
-    def current_usage(self) -> Optional[ResourceUsage]:
+    def current_usage(self) -> ResourceUsage | None:
         """Get current resource usage snapshot."""
         return self._status.usage if self._status else None

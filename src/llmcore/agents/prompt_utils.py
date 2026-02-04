@@ -83,7 +83,7 @@ RESPONSE FORMAT (must be valid JSON):
     return reflection_template
 
 
-def parse_plan_from_response(response_content: str) -> List[str]:
+def parse_plan_from_response(response_content: str) -> list[str]:
     """Parse a numbered plan from the LLM response."""
     try:
         plan_steps = []
@@ -109,7 +109,7 @@ def parse_plan_from_response(response_content: str) -> List[str]:
         return []
 
 
-def parse_reflection_response(response_content: str) -> Optional[Dict[str, Any]]:
+def parse_reflection_response(response_content: str) -> dict[str, Any] | None:
     """Parse the JSON reflection response from the LLM."""
     try:
         json_match = re.search(r"\{.*\}", response_content, re.DOTALL)
@@ -133,7 +133,7 @@ def parse_reflection_response(response_content: str) -> Optional[Dict[str, Any]]
 
 
 def build_enhanced_agent_prompt(
-    agent_state: AgentState, context_items: List[Any], tool_definitions: List[Tool]
+    agent_state: AgentState, context_items: list[Any], tool_definitions: list[Tool]
 ) -> str:
     """
     Build the comprehensive prompt for the agent's reasoning step with plan context.
@@ -216,8 +216,8 @@ Please provide your Thought about the current step and then make a tool call to 
 
 
 def parse_agent_response(
-    content: str, full_response: Dict[str, Any], available_tools: List[str]
-) -> Tuple[Optional[str], Optional[ToolCall]]:
+    content: str, full_response: dict[str, Any], available_tools: list[str]
+) -> tuple[str | None, ToolCall | None]:
     """
     Parse the agent's response to extract thought and tool call.
 
@@ -248,7 +248,7 @@ def parse_agent_response(
         return None, None
 
 
-def _extract_thought(content: str) -> Optional[str]:
+def _extract_thought(content: str) -> str | None:
     """Extract the thought section from agent response."""
     thought_match = re.search(
         r"Thought:\s*(.*?)(?=\n\n|\n[A-Z]|$)", content, re.DOTALL | re.IGNORECASE
@@ -269,7 +269,7 @@ def _extract_thought(content: str) -> Optional[str]:
     return None
 
 
-def _extract_tool_call_from_response(response: Dict[str, Any]) -> Optional[ToolCall]:
+def _extract_tool_call_from_response(response: dict[str, Any]) -> ToolCall | None:
     """Extract tool call from structured LLM response (function calling)."""
     try:
         message = response.get("choices", [{}])[0].get("message", {})
@@ -287,7 +287,7 @@ def _extract_tool_call_from_response(response: Dict[str, Any]) -> Optional[ToolC
     return None
 
 
-def _extract_tool_call_from_content(content: str, available_tools: List[str]) -> Optional[ToolCall]:
+def _extract_tool_call_from_content(content: str, available_tools: list[str]) -> ToolCall | None:
     """Extract tool call from text content when no structured calling is available."""
     try:
         json_match = re.search(r'\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*\}', content, re.DOTALL)

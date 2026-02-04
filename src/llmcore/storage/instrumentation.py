@@ -44,19 +44,17 @@ import logging
 import time
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from functools import wraps
 from typing import (
     Any,
-    AsyncIterator,
-    Callable,
     Dict,
-    Iterator,
     List,
     Optional,
     TypeVar,
 )
+from collections.abc import AsyncIterator, Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -157,12 +155,12 @@ class InstrumentationContext:
     backend: str
     table: str
     start_time: float = field(default_factory=time.perf_counter)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     success: bool = True
-    error: Optional[Exception] = None
-    rows_affected: Optional[int] = None
-    rows_returned: Optional[int] = None
-    _end_time: Optional[float] = field(default=None, repr=False)
+    error: Exception | None = None
+    rows_affected: int | None = None
+    rows_returned: int | None = None
+    _end_time: float | None = field(default=None, repr=False)
 
     @property
     def duration_seconds(self) -> float:
@@ -193,7 +191,7 @@ class InstrumentationContext:
         """Set the number of rows returned by the operation."""
         self.rows_returned = count
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert context to dictionary for logging/metrics."""
         result = {
             "operation": self.operation,
@@ -201,7 +199,7 @@ class InstrumentationContext:
             "table": self.table,
             "duration_ms": round(self.duration_ms, 3),
             "success": self.success,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         if self.metadata:
@@ -237,11 +235,11 @@ class OperationRecord:
     duration_ms: float
     success: bool
     timestamp: datetime
-    error_type: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error_type: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_context(cls, ctx: InstrumentationContext) -> "OperationRecord":
+    def from_context(cls, ctx: InstrumentationContext) -> OperationRecord:
         """Create a record from an instrumentation context."""
         return cls(
             operation=ctx.operation,
@@ -249,7 +247,7 @@ class OperationRecord:
             table=ctx.table,
             duration_ms=ctx.duration_ms,
             success=ctx.success,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             error_type=type(ctx.error).__name__ if ctx.error else None,
             metadata=ctx.metadata.copy(),
         )
@@ -285,10 +283,10 @@ class StorageInstrumentation:
 
     def __init__(
         self,
-        config: Optional[InstrumentationConfig] = None,
-        metrics_collector: Optional[Any] = None,  # MetricsCollector
-        event_logger: Optional[Any] = None,  # EventLogger
-        tracer: Optional[Any] = None,  # Tracer from OpenTelemetry
+        config: InstrumentationConfig | None = None,
+        metrics_collector: Any | None = None,  # MetricsCollector
+        event_logger: Any | None = None,  # EventLogger
+        tracer: Any | None = None,  # Tracer from OpenTelemetry
     ):
         """
         Initialize storage instrumentation.
@@ -305,7 +303,7 @@ class StorageInstrumentation:
         self._tracer = tracer
 
         # Operation history for debugging/analysis (bounded buffer)
-        self._history: List[OperationRecord] = []
+        self._history: list[OperationRecord] = []
         self._history_max_size = 1000
         self._history_lock = asyncio.Lock()
 
@@ -346,7 +344,7 @@ class StorageInstrumentation:
         """Get count of slow queries detected."""
         return self._slow_query_count
 
-    def get_recent_operations(self, count: int = 100) -> List[OperationRecord]:
+    def get_recent_operations(self, count: int = 100) -> list[OperationRecord]:
         """
         Get recent operations from history.
 
@@ -359,8 +357,8 @@ class StorageInstrumentation:
         return list(reversed(self._history[-count:]))
 
     def get_slow_queries(
-        self, threshold_ms: Optional[float] = None, count: int = 100
-    ) -> List[OperationRecord]:
+        self, threshold_ms: float | None = None, count: int = 100
+    ) -> list[OperationRecord]:
         """
         Get recent slow queries.
 
@@ -375,7 +373,7 @@ class StorageInstrumentation:
         slow_queries = [r for r in self._history if r.duration_ms > threshold]
         return list(reversed(slow_queries[-count:]))
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get instrumentation statistics.
 

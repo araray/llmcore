@@ -38,10 +38,10 @@ async def plan_phase(
     agent_state: EnhancedAgentState,
     plan_input: PlanInput,
     provider_manager: "ProviderManager",
-    prompt_registry: Optional[Any] = None,  # PromptRegistry
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    prompt_registry: Any | None = None,  # PromptRegistry
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> PlanOutput:
     """
     Execute the PLAN phase of the cognitive cycle.
@@ -177,7 +177,7 @@ async def plan_phase(
 # =============================================================================
 
 
-def _generate_planning_prompt(plan_input: PlanInput, prompt_registry: Optional[Any]) -> str:
+def _generate_planning_prompt(plan_input: PlanInput, prompt_registry: Any | None) -> str:
     """
     Generate the planning prompt using prompt library or fallback.
 

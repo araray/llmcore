@@ -190,7 +190,7 @@ class ArbiterConfig(BaseModel):
     num_candidates: int = Field(
         default=3, ge=2, le=10, description="Number of candidates to generate"
     )
-    temperatures: List[float] = Field(
+    temperatures: list[float] = Field(
         default=[0.3, 0.7, 1.0],
         min_length=1,
         max_length=10,
@@ -205,7 +205,7 @@ class ArbiterConfig(BaseModel):
 
     @field_validator("temperatures")
     @classmethod
-    def validate_temperatures(cls, v: List[float]) -> List[float]:
+    def validate_temperatures(cls, v: list[float]) -> list[float]:
         """Validate temperature values are in valid range."""
         for temp in v:
             if not 0.0 <= temp <= 2.0:

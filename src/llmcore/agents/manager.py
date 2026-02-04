@@ -77,7 +77,7 @@ class AgentManager:
         provider_manager: ProviderManager,
         memory_manager: MemoryManager,
         storage_manager: StorageManager,
-        observability: Optional[ObservabilityComponents] = None,
+        observability: ObservabilityComponents | None = None,
     ):
         """
         Initialize the AgentManager with required dependencies.
@@ -95,7 +95,7 @@ class AgentManager:
         self._tool_manager = ToolManager(memory_manager, storage_manager)
 
         # NEW: Sandbox integration (optional, initialized separately)
-        self._sandbox_integration: Optional[SandboxIntegration] = None
+        self._sandbox_integration: SandboxIntegration | None = None
         self._sandbox_enabled: bool = False
 
         # NEW (Phase 8): Observability integration
@@ -116,7 +116,7 @@ class AgentManager:
     # SANDBOX INTEGRATION METHODS
     # =========================================================================
 
-    async def initialize_sandbox(self, config: Optional[Dict[str, Any]] = None) -> None:
+    async def initialize_sandbox(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize sandbox support for agent execution.
 
@@ -183,7 +183,7 @@ class AgentManager:
         return self._sandbox_enabled
 
     @property
-    def sandbox_integration(self) -> Optional[SandboxIntegration]:
+    def sandbox_integration(self) -> SandboxIntegration | None:
         """Get the sandbox integration instance."""
         return self._sandbox_integration
 
@@ -194,13 +194,13 @@ class AgentManager:
     async def run_agent_loop(
         self,
         task: AgentTask,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         max_iterations: int = 10,
-        session_id: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None,
-        use_sandbox: Optional[bool] = None,
+        session_id: str | None = None,
+        db_session: AsyncSession | None = None,
+        enabled_toolkits: list[str] | None = None,
+        use_sandbox: bool | None = None,
     ) -> str:
         """
         Orchestrates the Plan -> (Think -> Act -> Observe -> Reflect) loop.
@@ -253,7 +253,7 @@ class AgentManager:
                 enabled_toolkits=enabled_toolkits,
             )
 
-    def _should_use_sandbox(self, use_sandbox: Optional[bool]) -> bool:
+    def _should_use_sandbox(self, use_sandbox: bool | None) -> bool:
         """
         Determine if sandbox should be used for this run.
 
@@ -281,12 +281,12 @@ class AgentManager:
     async def _run_agent_loop_sandboxed(
         self,
         task: AgentTask,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         max_iterations: int = 10,
-        session_id: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None,
+        session_id: str | None = None,
+        db_session: AsyncSession | None = None,
+        enabled_toolkits: list[str] | None = None,
     ) -> str:
         """
         Run the agent loop with sandbox isolation.
@@ -315,12 +315,12 @@ class AgentManager:
     async def _run_agent_loop_direct(
         self,
         task: AgentTask,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         max_iterations: int = 10,
-        session_id: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None,
+        session_id: str | None = None,
+        db_session: AsyncSession | None = None,
+        enabled_toolkits: list[str] | None = None,
     ) -> str:
         """
         Run the agent loop without sandbox (original behavior).
@@ -344,13 +344,13 @@ class AgentManager:
     async def _run_cognitive_loop(
         self,
         task: AgentTask,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         max_iterations: int = 10,
-        session_id: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None,
-        enabled_toolkits: Optional[List[str]] = None,
-        sandbox_context: Optional[Any] = None,
+        session_id: str | None = None,
+        db_session: AsyncSession | None = None,
+        enabled_toolkits: list[str] | None = None,
+        sandbox_context: Any | None = None,
     ) -> str:
         """
         Execute the core cognitive loop (Plan -> Think -> Act -> Observe -> Reflect).
@@ -630,11 +630,11 @@ class AgentManager:
     # UTILITY METHODS
     # =========================================================================
 
-    def get_available_tools(self) -> List[str]:
+    def get_available_tools(self) -> list[str]:
         """Get list of available tool names."""
         return self._tool_manager.get_tool_names()
 
-    def get_tool_definitions(self) -> List[Any]:
+    def get_tool_definitions(self) -> list[Any]:
         """Get tool definitions for LLM function calling."""
         return self._tool_manager.get_tool_definitions()
 
@@ -654,12 +654,12 @@ class AgentManager:
         logger.info("AgentManager cleanup completed")
 
     @property
-    def observability(self) -> Optional[ObservabilityComponents]:
+    def observability(self) -> ObservabilityComponents | None:
         """Get the observability components (Phase 8)."""
         return self._observability
 
     @property
-    def event_logger(self) -> Optional[Any]:
+    def event_logger(self) -> Any | None:
         """Get the event logger if observability is enabled (Phase 8)."""
         if self._observability and self._observability.enabled:
             return self._observability.logger
@@ -721,11 +721,11 @@ class EnhancedAgentManager(AgentManager):
         provider_manager: ProviderManager,
         memory_manager: MemoryManager,
         storage_manager: StorageManager,
-        prompt_registry: Optional[Any] = None,
-        tracer: Optional[Any] = None,
+        prompt_registry: Any | None = None,
+        tracer: Any | None = None,
         default_mode: AgentMode = AgentMode.SINGLE,
-        observability: Optional[ObservabilityComponents] = None,
-        agents_config: Optional[Any] = None,  # G3: AgentsConfig for capability/activity settings
+        observability: ObservabilityComponents | None = None,
+        agents_config: Any | None = None,  # G3: AgentsConfig for capability/activity settings
     ):
         """
         Initialize the enhanced agent manager.
@@ -796,9 +796,9 @@ class EnhancedAgentManager(AgentManager):
     async def run(
         self,
         goal: str,
-        mode: Optional[AgentMode] = None,
-        persona: Optional[Any] = None,
-        context: Optional[str] = None,
+        mode: AgentMode | None = None,
+        persona: Any | None = None,
+        context: str | None = None,
         max_iterations: int = 10,
         **kwargs,
     ) -> Any:
@@ -906,13 +906,13 @@ class EnhancedAgentManager(AgentManager):
             persona_id=name.lower().replace(" ", "_"), name=name, description=description, **kwargs
         )
 
-    def list_personas(self) -> List[Any]:
+    def list_personas(self) -> list[Any]:
         """List all available personas (Darwin Layer 2)."""
         if self.persona_manager is None:
             return []
         return self.persona_manager.list_personas()
 
-    def get_persona(self, persona_id: str) -> Optional[Any]:
+    def get_persona(self, persona_id: str) -> Any | None:
         """Get a persona by ID (Darwin Layer 2)."""
         if self.persona_manager is None:
             return None
@@ -947,7 +947,7 @@ class EnhancedAgentManager(AgentManager):
         self.default_mode = mode
         logger.info(f"Default mode set to: {mode.value}")
 
-    def get_capabilities(self) -> Dict[str, Any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """
         Get information about available capabilities.
 

@@ -15,7 +15,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from ..synthesis import ContextChunk
@@ -46,13 +46,13 @@ class RecentContextSource:
             max_turns: Maximum number of turns to retain in the window.
         """
         self.max_turns = max_turns
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
     def add_turn(
         self,
         role: str,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Add a conversational turn to the history.
@@ -66,7 +66,7 @@ class RecentContextSource:
             {
                 "role": role,
                 "content": content,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": metadata or {},
             }
         )
@@ -86,7 +86,7 @@ class RecentContextSource:
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 5000,
     ) -> ContextChunk:
         """

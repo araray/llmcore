@@ -34,7 +34,7 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -138,10 +138,10 @@ class SqliteHITLStore(HITLStateStore):
 
     def __init__(self):
         """Initialize SQLite HITL store."""
-        self._db_path: Optional[pathlib.Path] = None
-        self._conn: Optional["aiosqlite.Connection"] = None
+        self._db_path: pathlib.Path | None = None
+        self._conn: aiosqlite.Connection | None = None
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the SQLite database and create schema.
 
@@ -243,7 +243,7 @@ class SqliteHITLStore(HITLStateStore):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save HITL request: {e}")
 
-    async def get_request(self, request_id: str) -> Optional[HITLRequest]:
+    async def get_request(self, request_id: str) -> HITLRequest | None:
         """
         Retrieve a request by ID.
 
@@ -271,7 +271,7 @@ class SqliteHITLStore(HITLStateStore):
         self,
         request_id: str,
         status: ApprovalStatus,
-        response: Optional[HITLResponse] = None,
+        response: HITLResponse | None = None,
     ) -> bool:
         """
         Update request status.
@@ -307,8 +307,8 @@ class SqliteHITLStore(HITLStateStore):
 
     async def get_pending_requests(
         self,
-        session_id: Optional[str] = None,
-    ) -> List[HITLRequest]:
+        session_id: str | None = None,
+    ) -> list[HITLRequest]:
         """
         Get all pending requests.
 
@@ -416,7 +416,7 @@ class SqliteHITLStore(HITLStateStore):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save HITL response: {e}")
 
-    async def get_response(self, request_id: str) -> Optional[HITLResponse]:
+    async def get_response(self, request_id: str) -> HITLResponse | None:
         """
         Get response for a request.
 
@@ -476,7 +476,7 @@ class SqliteHITLStore(HITLStateStore):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save session scope: {e}")
 
-    async def get_session_scope(self, session_id: str) -> Optional[SessionScope]:
+    async def get_session_scope(self, session_id: str) -> SessionScope | None:
         """
         Get session scope.
 
@@ -533,7 +533,7 @@ class SqliteHITLStore(HITLStateStore):
             await self._conn.rollback()
             raise RuntimeError(f"Failed to save persistent scope: {e}")
 
-    async def get_persistent_scope(self, user_id: str) -> Optional[PersistentScope]:
+    async def get_persistent_scope(self, user_id: str) -> PersistentScope | None:
         """
         Get persistent scope.
 
@@ -572,7 +572,7 @@ class SqliteHITLStore(HITLStateStore):
             raise RuntimeError("Storage not initialized")
 
         try:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
 
             # Mark expired requests as TIMEOUT
             cursor = await self._conn.execute(
@@ -615,7 +615,7 @@ class SqliteHITLStore(HITLStateStore):
     # PRIVATE HELPERS
     # =========================================================================
 
-    def _risk_factor_to_dict(self, factor: RiskFactor) -> Dict[str, Any]:
+    def _risk_factor_to_dict(self, factor: RiskFactor) -> dict[str, Any]:
         """Convert RiskFactor to dictionary."""
         return {
             "name": factor.name,
@@ -624,7 +624,7 @@ class SqliteHITLStore(HITLStateStore):
             "weight": factor.weight,
         }
 
-    def _tool_scope_to_dict(self, scope: ToolScope) -> Dict[str, Any]:
+    def _tool_scope_to_dict(self, scope: ToolScope) -> dict[str, Any]:
         """Convert ToolScope to dictionary."""
         return {
             "tool_name": scope.tool_name,
@@ -648,7 +648,7 @@ class SqliteHITLStore(HITLStateStore):
                 return default
         return default
 
-    def _row_to_request(self, row: "aiosqlite.Row") -> HITLRequest:
+    def _row_to_request(self, row: aiosqlite.Row) -> HITLRequest:
         """Convert database row to HITLRequest."""
         factors_data = self._parse_json_field(row["risk_factors"], [])
         factors = [
@@ -684,7 +684,7 @@ class SqliteHITLStore(HITLStateStore):
             priority=row["priority"] or 0,
         )
 
-    def _row_to_response(self, row: "aiosqlite.Row") -> HITLResponse:
+    def _row_to_response(self, row: aiosqlite.Row) -> HITLResponse:
         """Convert database row to HITLResponse."""
         status = ApprovalStatus(row["status"]) if row["status"] else None
 
@@ -700,7 +700,7 @@ class SqliteHITLStore(HITLStateStore):
             scope_grant=self._parse_json_field(row["scope_grant"]),
         )
 
-    def _row_to_session_scope(self, row: "aiosqlite.Row") -> SessionScope:
+    def _row_to_session_scope(self, row: aiosqlite.Row) -> SessionScope:
         """Convert database row to SessionScope."""
         tools_data = self._parse_json_field(row["approved_tools"], [])
         approved_tools = [
@@ -726,7 +726,7 @@ class SqliteHITLStore(HITLStateStore):
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
-    def _row_to_persistent_scope(self, row: "aiosqlite.Row") -> PersistentScope:
+    def _row_to_persistent_scope(self, row: aiosqlite.Row) -> PersistentScope:
         """Convert database row to PersistentScope."""
         tools_data = self._parse_json_field(row["approved_tools"], [])
         approved_tools = [

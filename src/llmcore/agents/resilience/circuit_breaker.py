@@ -99,7 +99,7 @@ class ErrorRecord:
     error_message: str  # Original error message
     iteration: int  # Iteration when error occurred
     timestamp: datetime  # When error occurred
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -117,7 +117,7 @@ if PYDANTIC_AVAILABLE:
         """Result of a circuit breaker check."""
 
         tripped: bool = False
-        reason: Optional[TripReason] = None
+        reason: TripReason | None = None
         message: str = ""
 
         # Current state info
@@ -138,7 +138,7 @@ else:
         """Result of a circuit breaker check (dataclass version)."""
 
         tripped: bool = False
-        reason: Optional[TripReason] = None
+        reason: TripReason | None = None
         message: str = ""
 
         current_iteration: int = 0
@@ -209,7 +209,7 @@ class AgentCircuitBreaker:
         max_total_cost: float = 1.0,
         progress_stall_threshold: int = 5,
         progress_stall_tolerance: float = 0.01,
-        config: Optional[CircuitBreakerConfig] = None,
+        config: CircuitBreakerConfig | None = None,
     ):
         # Use config if provided, otherwise use individual params
         if config:
@@ -226,23 +226,23 @@ class AgentCircuitBreaker:
 
         # State tracking
         self._state: CircuitState = CircuitState.RESET
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
         self._total_cost: float = 0.0
 
         # Error tracking
-        self._errors: List[ErrorRecord] = []
+        self._errors: list[ErrorRecord] = []
         self._error_counts: Counter = Counter()  # error_hash -> count
 
         # Progress tracking
-        self._progress_history: List[ProgressRecord] = []
-        self._last_significant_progress: Optional[ProgressRecord] = None
+        self._progress_history: list[ProgressRecord] = []
+        self._last_significant_progress: ProgressRecord | None = None
 
         # Trip info
-        self._trip_reason: Optional[TripReason] = None
+        self._trip_reason: TripReason | None = None
         self._trip_message: str = ""
 
     @classmethod
-    def from_config(cls, config: CircuitBreakerConfig) -> "AgentCircuitBreaker":
+    def from_config(cls, config: CircuitBreakerConfig) -> AgentCircuitBreaker:
         """Create circuit breaker from configuration object."""
         return cls(config=config)
 
@@ -282,10 +282,10 @@ class AgentCircuitBreaker:
         self,
         iteration: int,
         progress: float = 0.0,
-        error: Optional[str] = None,
+        error: str | None = None,
         cost: float = 0.0,
-        context: Optional[Dict[str, Any]] = None,
-        step_completed: Optional[bool] = None,
+        context: dict[str, Any] | None = None,
+        step_completed: bool | None = None,
     ) -> CircuitBreakerResult:
         """
         Check if the circuit breaker should trip.
@@ -360,7 +360,7 @@ class AgentCircuitBreaker:
             message=reason,
         )
 
-    def _record_error(self, error: str, iteration: int, context: Dict[str, Any]) -> None:
+    def _record_error(self, error: str, iteration: int, context: dict[str, Any]) -> None:
         """Record an error occurrence."""
 
         # Hash error for comparison (normalize whitespace)
@@ -383,7 +383,7 @@ class AgentCircuitBreaker:
         )
 
     def _check_limits(
-        self, iteration: int, progress: float, step_completed: Optional[bool] = None
+        self, iteration: int, progress: float, step_completed: bool | None = None
     ) -> CircuitBreakerResult:
         """Check all circuit breaker limits."""
 
@@ -454,7 +454,7 @@ class AgentCircuitBreaker:
         )
 
     def _check_progress_stall(
-        self, current_progress: float, step_completed: Optional[bool] = None
+        self, current_progress: float, step_completed: bool | None = None
     ) -> int:
         """
         Check how many iterations have passed without significant progress.
@@ -501,7 +501,7 @@ class AgentCircuitBreaker:
     def _make_result(
         self,
         tripped: bool,
-        reason: Optional[TripReason] = None,
+        reason: TripReason | None = None,
         message: str = "",
         suggested_action: str = "",
         should_retry: bool = False,
@@ -556,7 +556,7 @@ class AgentCircuitBreaker:
         return (datetime.now() - self._start_time).total_seconds()
 
     @property
-    def error_summary(self) -> Dict[str, int]:
+    def error_summary(self) -> dict[str, int]:
         """Get summary of errors by count."""
         summary = {}
         for error_hash, count in self._error_counts.most_common():
@@ -568,7 +568,7 @@ class AgentCircuitBreaker:
             summary[sample] = count
         return summary
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get full status as dictionary."""
         return {
             "state": self._state.value,

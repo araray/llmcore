@@ -147,7 +147,7 @@ class EventsConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable event logging")
     log_path: str = Field(default="~/.llmcore/events.jsonl", description="Path to event log file")
     min_severity: Severity = Field(default=Severity.INFO, description="Minimum severity to log")
-    categories: List[str] = Field(
+    categories: list[str] = Field(
         default_factory=list, description="Categories to log (empty = all)"
     )
     rotation: EventRotationConfig = Field(
@@ -190,18 +190,18 @@ class MetricsConfig(BaseModel):
     """
 
     enabled: bool = Field(default=True, description="Enable metrics collection")
-    collect: List[str] = Field(
+    collect: list[str] = Field(
         default_factory=list, description="Specific metrics to collect (empty = all)"
     )
     track_cost: bool = Field(default=True, description="Track API costs")
     track_tokens: bool = Field(default=True, description="Track token usage")
-    latency_percentiles: List[int] = Field(
+    latency_percentiles: list[int] = Field(
         default_factory=lambda: [50, 90, 95, 99], description="Latency percentiles to track"
     )
 
     @field_validator("latency_percentiles")
     @classmethod
-    def validate_percentiles(cls, v: List[int]) -> List[int]:
+    def validate_percentiles(cls, v: list[int]) -> list[int]:
         for p in v:
             if not 0 <= p <= 100:
                 raise ValueError(f"Percentile {p} must be between 0 and 100")
@@ -329,7 +329,7 @@ class ObservabilityConfig(BaseModel):
         """Check if token tracking is enabled."""
         return self.is_metrics_enabled() and self.metrics.track_tokens
 
-    def get_latency_percentiles(self) -> List[int]:
+    def get_latency_percentiles(self) -> list[int]:
         """Get latency percentiles to track."""
         if not self.is_metrics_enabled():
             return []
@@ -342,7 +342,7 @@ class ObservabilityConfig(BaseModel):
 
 
 def load_observability_config(
-    config_dict: Optional[Dict[str, Any]] = None,
+    config_dict: dict[str, Any] | None = None,
     section_path: str = "agents.observability",
 ) -> ObservabilityConfig:
     """
@@ -398,7 +398,7 @@ def get_default_config() -> ObservabilityConfig:
 # =============================================================================
 
 
-def to_legacy_config(config: ObservabilityConfig) -> Dict[str, Any]:
+def to_legacy_config(config: ObservabilityConfig) -> dict[str, Any]:
     """
     Convert ObservabilityConfig to legacy flat dict format.
 

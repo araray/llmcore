@@ -28,7 +28,8 @@ References:
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from collections.abc import AsyncIterator, Callable
 
 from .cognitive import (
     CognitiveCycle,
@@ -129,7 +130,7 @@ class SingleAgentMode:
         storage_manager: "StorageManager",
         tool_manager: "ToolManager",
         prompt_registry: Optional["PromptRegistry"] = None,
-        tracer: Optional[Any] = None,
+        tracer: Any | None = None,
         agents_config: Optional["AgentsConfig"] = None,
     ):
         """
@@ -199,22 +200,22 @@ class SingleAgentMode:
         logger.info("SingleAgentMode initialized with G3 components")
 
         # Sandbox registry reference (set when sandbox is created)
-        self._sandbox_registry: Optional["SandboxRegistry"] = None
+        self._sandbox_registry: SandboxRegistry | None = None
 
     async def run(
         self,
         goal: str,
-        persona: Optional[str | AgentPersona] = None,
-        context: Optional[str] = None,
+        persona: str | AgentPersona | None = None,
+        context: str | None = None,
         max_iterations: int = 10,
         use_sandbox: bool = False,
-        sandbox_type: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
-        session_id: Optional[str] = None,
+        sandbox_type: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        session_id: str | None = None,
         skip_validation: bool = False,
         skip_goal_classification: bool = False,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> "AgentResult":
         """
         Run an autonomous agent to complete a goal.
@@ -267,7 +268,7 @@ class SingleAgentMode:
             # =================================================================
             # G3 Phase 1: Goal Classification
             # =================================================================
-            classification: Optional[GoalClassification] = None
+            classification: GoalClassification | None = None
             effective_max_iterations = max_iterations
 
             if not skip_goal_classification and self._agents_config.goals.classifier_enabled:
@@ -496,11 +497,11 @@ class SingleAgentMode:
         self,
         goal: str,
         classification: GoalClassification,
-        context: Optional[str],
+        context: str | None,
         session_id: str,
-        persona: Optional[str | AgentPersona],
+        persona: str | AgentPersona | None,
         start_time: datetime,
-        span: Optional[Any],
+        span: Any | None,
     ) -> "AgentResult":
         """
         Execute fast-path for trivial goals.
@@ -633,17 +634,17 @@ class SingleAgentMode:
     async def run_streaming(
         self,
         goal: str,
-        persona: Optional[str | AgentPersona] = None,
-        context: Optional[str] = None,
+        persona: str | AgentPersona | None = None,
+        context: str | None = None,
         max_iterations: int = 10,
         use_sandbox: bool = False,
-        sandbox_type: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
-        session_id: Optional[str] = None,
+        sandbox_type: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        session_id: str | None = None,
         skip_validation: bool = False,
         skip_goal_classification: bool = False,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> AsyncIterator["IterationUpdate"]:
         """
         Run agent with real-time streaming updates.
@@ -690,7 +691,7 @@ class SingleAgentMode:
             # =================================================================
             # G3 Phase 1: Goal Classification
             # =================================================================
-            classification: Optional[GoalClassification] = None
+            classification: GoalClassification | None = None
             effective_max_iterations = max_iterations
 
             if not skip_goal_classification and self._agents_config.goals.classifier_enabled:
@@ -862,7 +863,7 @@ class SingleAgentMode:
             persona_id=persona_id, name=name, description=description, **kwargs
         )
 
-    def list_personas(self) -> List[AgentPersona]:
+    def list_personas(self) -> list[AgentPersona]:
         """
         List all available personas.
 
@@ -871,7 +872,7 @@ class SingleAgentMode:
         """
         return self.persona_manager.list_personas()
 
-    def _resolve_persona(self, persona: Optional[str | AgentPersona]) -> Optional[AgentPersona]:
+    def _resolve_persona(self, persona: str | AgentPersona | None) -> AgentPersona | None:
         """Resolve persona from ID or object."""
         if persona is None:
             # Use default assistant persona
@@ -896,7 +897,7 @@ class SingleAgentMode:
         # Could apply other persona-specific configs here
         # (e.g., max iterations, risk tolerance)
 
-    async def _setup_sandbox(self, sandbox_type: Optional[str]) -> Optional["SandboxProvider"]:
+    async def _setup_sandbox(self, sandbox_type: str | None) -> Optional["SandboxProvider"]:
         """
         Setup sandbox for execution.
 
@@ -1044,10 +1045,10 @@ class AgentResult:
         total_tokens: int,
         total_time_seconds: float,
         session_id: str,
-        persona_used: Optional[str] = None,
-        agent_state: Optional[EnhancedAgentState] = None,
-        error: Optional[str] = None,
-        classification: Optional[GoalClassification] = None,
+        persona_used: str | None = None,
+        agent_state: EnhancedAgentState | None = None,
+        error: str | None = None,
+        classification: GoalClassification | None = None,
         fast_path: bool = False,
     ):
         self.goal = goal
@@ -1071,7 +1072,7 @@ class AgentResult:
             f"({self.iteration_count} iterations, {self.total_tokens:,} tokens)"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         result = {
             "goal": self.goal,
@@ -1142,16 +1143,16 @@ class IterationUpdate:
         *,
         max_iterations: int = 10,
         is_final: bool = False,
-        phase: Optional[str] = None,
-        action: Optional[str] = None,
-        action_args: Optional[str] = None,
-        observation: Optional[str] = None,
+        phase: str | None = None,
+        action: str | None = None,
+        action_args: str | None = None,
+        observation: str | None = None,
         step_completed: bool = False,
-        plan_step: Optional[str] = None,
-        error: Optional[str] = None,
+        plan_step: str | None = None,
+        error: str | None = None,
         tokens_used: int = 0,
         duration_ms: float = 0.0,
-        stop_reason: Optional[str] = None,
+        stop_reason: str | None = None,
     ):
         self.iteration = iteration
         self.max_iterations = max_iterations

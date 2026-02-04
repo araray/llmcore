@@ -315,7 +315,7 @@ class HITLConfig(BaseModel):
     timeout_policy: TimeoutPolicy = Field(
         default=TimeoutPolicy.REJECT, description="Default timeout handling policy"
     )
-    timeout_policies_by_risk: Dict[str, TimeoutPolicy] = Field(
+    timeout_policies_by_risk: dict[str, TimeoutPolicy] = Field(
         default_factory=lambda: {
             "low": TimeoutPolicy.APPROVE,
             "medium": TimeoutPolicy.REJECT,
@@ -326,19 +326,19 @@ class HITLConfig(BaseModel):
     )
 
     # Tool classifications
-    safe_tools: List[str] = Field(
+    safe_tools: list[str] = Field(
         default_factory=lambda: ["final_answer", "respond_to_user", "think_aloud"],
         description="Tools that never require approval",
     )
-    low_risk_tools: List[str] = Field(
+    low_risk_tools: list[str] = Field(
         default_factory=lambda: ["file_read", "file_search", "list_directory"],
         description="Low risk tools",
     )
-    high_risk_tools: List[str] = Field(
+    high_risk_tools: list[str] = Field(
         default_factory=lambda: ["bash_exec", "python_exec", "file_delete"],
         description="High risk tools",
     )
-    critical_tools: List[str] = Field(
+    critical_tools: list[str] = Field(
         default_factory=lambda: ["execute_sudo", "drop_database"],
         description="Critical risk tools (always require approval)",
     )
@@ -353,7 +353,7 @@ class HITLConfig(BaseModel):
 
     # Audit
     audit_logging_enabled: bool = Field(default=True, description="Enable audit logging")
-    audit_log_path: Optional[str] = Field(default=None, description="Path for audit log file")
+    audit_log_path: str | None = Field(default=None, description="Path for audit log file")
 
 
 # =============================================================================
@@ -364,15 +364,15 @@ class HITLConfig(BaseModel):
 class RoutingTiersConfig(BaseModel):
     """Model tiers for routing."""
 
-    fast: List[str] = Field(
+    fast: list[str] = Field(
         default_factory=lambda: ["gpt-4o-mini", "claude-3-haiku", "gemma3:1b"],
         description="Fast/cheap models",
     )
-    balanced: List[str] = Field(
+    balanced: list[str] = Field(
         default_factory=lambda: ["gpt-4o", "claude-3-5-sonnet", "llama3.3:70b"],
         description="Balanced models",
     )
-    capable: List[str] = Field(
+    capable: list[str] = Field(
         default_factory=lambda: ["gpt-4-turbo", "claude-3-opus"],
         description="Most capable models",
     )
@@ -460,9 +460,9 @@ class AgentsConfig(BaseModel):
 
 
 def load_agents_config(
-    config_path: Optional[Path] = None,
-    config_dict: Optional[Dict[str, Any]] = None,
-    overrides: Optional[Dict[str, Any]] = None,
+    config_path: Path | None = None,
+    config_dict: dict[str, Any] | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> AgentsConfig:
     """
     Load agent configuration from TOML file or dictionary.
@@ -492,7 +492,7 @@ def load_agents_config(
         False
     """
     # Start with empty dict (Pydantic will fill defaults)
-    merged_config: Dict[str, Any] = {}
+    merged_config: dict[str, Any] = {}
 
     # Load from TOML file
     if config_path is not None:
@@ -540,7 +540,7 @@ def load_agents_config(
         return AgentsConfig()
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge two dictionaries, with override taking precedence.
 
@@ -560,7 +560,7 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return result
 
 
-def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     """
     Apply environment variable overrides.
 

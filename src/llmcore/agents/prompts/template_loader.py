@@ -96,7 +96,7 @@ class TemplateLoader:
             with open(filepath, "rb") as f:
                 data = tomllib.load(f)
         else:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 data = toml.load(f)
 
         count = 0

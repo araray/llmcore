@@ -119,10 +119,10 @@ class CognitiveMemoryIntegrator:
     async def retrieve_context(
         self,
         goal: str,
-        current_step: Optional[str] = None,
-        session_id: Optional[str] = None,
+        current_step: str | None = None,
+        session_id: str | None = None,
         max_items: int = 5,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Retrieve relevant context for the current cognitive state.
 
@@ -278,7 +278,7 @@ class CognitiveMemoryIntegrator:
 
     async def _retrieve_episodic_context(
         self, query: str, session_id: str, limit: int
-    ) -> List[str]:
+    ) -> list[str]:
         """Retrieve episodic context from past iterations."""
         # Get recent episodes from this session
         try:
@@ -292,7 +292,7 @@ class CognitiveMemoryIntegrator:
             return []
 
     def _create_consolidated_memory(
-        self, goal: str, insights: List[str], success: bool, iterations: int
+        self, goal: str, insights: list[str], success: bool, iterations: int
     ) -> str:
         """Create consolidated memory from session insights."""
         status = "successfully" if success else "unsuccessfully"

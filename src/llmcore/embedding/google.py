@@ -55,12 +55,12 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
 
     _client: Any = None  # Client type varies - use Any to avoid import-time errors
     _model_name: str
-    _api_key: Optional[str] = None
+    _api_key: str | None = None
     # --- Updated Type Hint for _task_type ---
     _task_type: str = "RETRIEVAL_DOCUMENT"  # Default task type, now using str
     # --- End Update ---
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initializes the GoogleAIEmbedding model using google-genai.
 
@@ -136,7 +136,7 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
             self._client = None  # Ensure it's None on failure
             raise ConfigError(f"Google Gen AI client initialization for embeddings failed: {e}")
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate a vector embedding for a single text string using Google AI API (google-genai).
 
@@ -200,7 +200,7 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
             )
             raise EmbeddingError(model_name=self._model_name, message=f"Unexpected error: {e}")
 
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
         Generate vector embeddings for a batch of text strings using Google AI API (google-genai).
 
@@ -261,12 +261,12 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
                     f"Successfully generated batch of {len(embeddings_data)} Google AI embeddings."
                 )
                 # Need to reconstruct the full list including placeholders for skipped empty strings
-                final_embeddings: List[Optional[List[float]]] = [None] * len(texts)
+                final_embeddings: list[list[float] | None] = [None] * len(texts)
                 for i, original_index in enumerate(indices_with_content):
                     final_embeddings[original_index] = embeddings_data[i]
 
                 # Fill None placeholders with zero vectors (or handle differently if needed)
-                output_embeddings: List[List[float]] = []
+                output_embeddings: list[list[float]] = []
                 # Get dimension from the first valid embedding
                 dimension = len(embeddings_data[0]) if embeddings_data else 0
                 for emb in final_embeddings:

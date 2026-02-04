@@ -41,7 +41,8 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from collections.abc import Callable
 
 from .registry import ActivityRegistry, ExecutionContext, get_default_registry
 from .schema import (
@@ -51,6 +52,7 @@ from .schema import (
     ActivityStatus,
     RiskLevel,
 )
+from datetime import UTC
 
 if TYPE_CHECKING:
     from ..memory.memory_store import MemoryManager
@@ -69,9 +71,9 @@ class ValidationResult:
     """Result of activity request validation."""
 
     valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    activity: Optional[ActivityDefinition] = None
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    activity: ActivityDefinition | None = None
 
 
 class ActivityValidator:
@@ -85,7 +87,7 @@ class ActivityValidator:
     - Parameter values are within constraints
     """
 
-    def __init__(self, registry: Optional[ActivityRegistry] = None):
+    def __init__(self, registry: ActivityRegistry | None = None):
         """
         Initialize the validator.
 
@@ -104,8 +106,8 @@ class ActivityValidator:
         Returns:
             ValidationResult with status and any errors
         """
-        errors: List[str] = []
-        warnings: List[str] = []
+        errors: list[str] = []
+        warnings: list[str] = []
 
         # Check activity exists
         registered = self.registry.get(request.activity)
@@ -169,7 +171,7 @@ class ActivityValidator:
             activity=definition,
         )
 
-    def _check_type(self, name: str, value: Any, expected_type: str) -> Optional[str]:
+    def _check_type(self, name: str, value: Any, expected_type: str) -> str | None:
         """Check if value matches expected type."""
         type_map = {
             "string": str,
@@ -196,9 +198,9 @@ class HITLDecision:
     """Decision from HITL approval process."""
 
     approved: bool
-    reason: Optional[str] = None
-    modified_params: Optional[Dict[str, Any]] = None
-    scope_id: Optional[str] = None  # Approval scope if granted
+    reason: str | None = None
+    modified_params: dict[str, Any] | None = None
+    scope_id: str | None = None  # Approval scope if granted
 
 
 class HITLApprover:
@@ -214,7 +216,7 @@ class HITLApprover:
     def __init__(
         self,
         risk_threshold: RiskLevel = RiskLevel.MEDIUM,
-        auto_approve_callback: Optional[Callable[[ActivityRequest], bool]] = None,
+        auto_approve_callback: Callable[[ActivityRequest], bool] | None = None,
     ):
         """
         Initialize HITL approver.
@@ -225,7 +227,7 @@ class HITLApprover:
         """
         self.risk_threshold = risk_threshold
         self.auto_approve_callback = auto_approve_callback
-        self._approval_scopes: Dict[str, RiskLevel] = {}
+        self._approval_scopes: dict[str, RiskLevel] = {}
 
     def requires_approval(self, request: ActivityRequest, definition: ActivityDefinition) -> bool:
         """
@@ -254,7 +256,7 @@ class HITLApprover:
         self,
         request: ActivityRequest,
         definition: ActivityDefinition,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> HITLDecision:
         """
         Get approval for an activity.
@@ -357,7 +359,7 @@ class HITLManagerAdapter:
         """
         self._manager = hitl_manager
         self.risk_threshold = risk_threshold
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
     def _get_event_loop(self) -> asyncio.AbstractEventLoop:
         """Get or create event loop for async operations."""
@@ -406,7 +408,7 @@ class HITLManagerAdapter:
         self,
         request: ActivityRequest,
         definition: ActivityDefinition,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> HITLDecision:
         """
         Get approval for an activity using HITLManager.
@@ -474,9 +476,9 @@ class HITLManagerAdapter:
 def create_hitl_approver(
     use_advanced: bool = False,
     risk_threshold: RiskLevel = RiskLevel.MEDIUM,
-    hitl_config: Optional[Any] = None,  # HITLConfig
+    hitl_config: Any | None = None,  # HITLConfig
     **kwargs,
-) -> "HITLApprover | HITLManagerAdapter":
+) -> HITLApprover | HITLManagerAdapter:
     """
     Factory function to create appropriate HITL approver.
 
@@ -535,11 +537,11 @@ class ActivityExecutor:
 
     def __init__(
         self,
-        registry: Optional[ActivityRegistry] = None,
-        validator: Optional[ActivityValidator] = None,
-        hitl_approver: Optional[HITLApprover] = None,
-        sandbox: Optional["SandboxProvider"] = None,
-        memory_manager: Optional["MemoryManager"] = None,
+        registry: ActivityRegistry | None = None,
+        validator: ActivityValidator | None = None,
+        hitl_approver: HITLApprover | None = None,
+        sandbox: SandboxProvider | None = None,
+        memory_manager: MemoryManager | None = None,
         default_timeout: int = 60,
     ):
         """
@@ -561,7 +563,7 @@ class ActivityExecutor:
         self.default_timeout = default_timeout
 
         # Execution handlers by activity name
-        self._handlers: Dict[str, Callable] = {}
+        self._handlers: dict[str, Callable] = {}
         self._register_builtin_handlers()
 
     def _register_builtin_handlers(self) -> None:
@@ -586,8 +588,8 @@ class ActivityExecutor:
     async def execute(
         self,
         request: ActivityRequest,
-        context: Optional[ExecutionContext] = None,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        context: ExecutionContext | None = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> ActivityResult:
         """
         Execute an activity request.
@@ -668,7 +670,7 @@ class ActivityExecutor:
                 target=request.target,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ActivityResult(
                 activity=request.activity,
                 status=ActivityStatus.TIMEOUT,
@@ -711,7 +713,7 @@ class ActivityExecutor:
         max_bytes = request.parameters.get("max_bytes")
 
         try:
-            with open(path, "r", encoding=encoding) as f:
+            with open(path, encoding=encoding) as f:
                 if max_bytes:
                     content = f.read(max_bytes)
                 else:
@@ -895,7 +897,7 @@ class ActivityExecutor:
 
         metadata.update(
             {
-                "stored_at": datetime.now(timezone.utc).isoformat(),
+                "stored_at": datetime.now(UTC).isoformat(),
                 "activity_id": request.request_id,
                 "source": "activity_memory_store",
             }

@@ -19,7 +19,7 @@ def render_prompt_template(
     template_content: str,
     rag_context_str: str,
     question_str: str,
-    custom_template_values: Optional[Dict[str, str]],
+    custom_template_values: dict[str, str] | None,
 ) -> str:
     """
     Renders the loaded prompt template with the provided context and question.
@@ -43,7 +43,7 @@ def render_prompt_template(
     return rendered_prompt
 
 
-def format_rag_docs_for_context(documents: List[ContextDocument]) -> str:
+def format_rag_docs_for_context(documents: list[ContextDocument]) -> str:
     """
     Formats a list of retrieved RAG documents into a single string for the prompt.
 

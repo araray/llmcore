@@ -53,7 +53,7 @@ class GoalContextSource:
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 2000,
     ) -> ContextChunk:
         """

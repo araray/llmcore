@@ -140,11 +140,11 @@ class DecisionMakingPreferences(BaseModel):
         default=10, ge=1, le=50, description="Maximum iterations before requiring human input"
     )
 
-    prefer_tools: List[str] = Field(
+    prefer_tools: list[str] = Field(
         default_factory=list, description="Preferred tools to use when available"
     )
 
-    avoid_tools: List[str] = Field(
+    avoid_tools: list[str] = Field(
         default_factory=list, description="Tools to avoid unless necessary"
     )
 
@@ -152,20 +152,20 @@ class DecisionMakingPreferences(BaseModel):
 class PromptModifications(BaseModel):
     """Custom prompt modifications for this persona."""
 
-    system_prompt_prefix: Optional[str] = Field(
+    system_prompt_prefix: str | None = Field(
         default=None, description="Prefix to add to system prompts"
     )
 
-    system_prompt_suffix: Optional[str] = Field(
+    system_prompt_suffix: str | None = Field(
         default=None, description="Suffix to add to system prompts"
     )
 
-    phase_prompts: Dict[str, str] = Field(
+    phase_prompts: dict[str, str] = Field(
         default_factory=dict,
         description="Phase-specific prompt overrides (phase_name -> prompt_template_id)",
     )
 
-    custom_instructions: Optional[str] = Field(
+    custom_instructions: str | None = Field(
         default=None, description="Custom instructions to include in all prompts"
     )
 
@@ -200,7 +200,7 @@ class AgentPersona(BaseModel):
     description: str = Field(..., description="Persona description")
 
     # Personality
-    traits: List[PersonaTrait] = Field(default_factory=list, description="Personality traits")
+    traits: list[PersonaTrait] = Field(default_factory=list, description="Personality traits")
 
     # Communication
     communication: CommunicationPreferences = Field(
@@ -222,7 +222,7 @@ class AgentPersona(BaseModel):
         default_factory=datetime.utcnow, description="When persona was created"
     )
 
-    updated_at: Optional[datetime] = Field(
+    updated_at: datetime | None = Field(
         default=None, description="When persona was last updated"
     )
 

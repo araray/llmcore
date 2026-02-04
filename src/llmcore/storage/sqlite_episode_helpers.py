@@ -9,7 +9,7 @@ functions are designed to be called by the main SqliteSessionStorage class.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 try:
@@ -69,7 +69,7 @@ async def get_episodes(
     episodes_table: str,
     limit: int = 100,
     offset: int = 0,
-) -> List[Episode]:
+) -> list[Episode]:
     """
     Retrieves a list of episodes for a given session, ordered by timestamp.
 
@@ -86,7 +86,7 @@ async def get_episodes(
     Raises:
         StorageError: If an error occurs during database query or data validation.
     """
-    episodes: List[Episode] = []
+    episodes: list[Episode] = []
     try:
         async with conn.execute(
             f"""
@@ -106,7 +106,7 @@ async def get_episodes(
                     episode_dict["timestamp"] = (
                         datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                         if ts_str
-                        else datetime.now(timezone.utc)
+                        else datetime.now(UTC)
                     )
                     episodes.append(Episode.model_validate(episode_dict))
                 except (json.JSONDecodeError, ValueError, TypeError) as e:

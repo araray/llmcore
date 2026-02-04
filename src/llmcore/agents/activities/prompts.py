@@ -93,9 +93,9 @@ Remember: Format your activity requests exactly as shown above.
 def generate_activity_prompt(
     goal: str,
     current_step: str,
-    history: Optional[str] = None,
-    context: Optional[str] = None,
-    available_activities: Optional[List[str]] = None,
+    history: str | None = None,
+    context: str | None = None,
+    available_activities: list[str] | None = None,
 ) -> str:
     """
     Generate a prompt for activity-based execution.

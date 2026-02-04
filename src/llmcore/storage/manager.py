@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Type
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any]  # type: ignore
+    ConfyConfig = dict[str, Any]  # type: ignore
 
 from ..exceptions import ConfigError, StorageError
 from ..models import Episode
@@ -68,13 +68,13 @@ from .sqlite_session import SqliteSessionStorage
 logger = logging.getLogger(__name__)
 
 # --- Mappings from config type string to class ---
-SESSION_STORAGE_MAP: Dict[str, Type[BaseSessionStorage]] = {
+SESSION_STORAGE_MAP: dict[str, type[BaseSessionStorage]] = {
     "json": JsonSessionStorage,
     "sqlite": SqliteSessionStorage,
     "postgres": PostgresSessionStorage,
 }
 
-VECTOR_STORAGE_MAP: Dict[str, Type[BaseVectorStorage]] = {
+VECTOR_STORAGE_MAP: dict[str, type[BaseVectorStorage]] = {
     "chromadb": ChromaVectorStorage,
     "pgvector": EnhancedPgVectorStorage,  # Use enhanced version with full collection management
     "pgvector_legacy": PgVectorStorage,  # Legacy version for backwards compatibility
@@ -107,31 +107,31 @@ class StorageManager:
     """
 
     _config: ConfyConfig
-    _session_storage_type: Optional[str] = None
-    _vector_storage_type: Optional[str] = None
-    _session_storage_config: Dict[str, Any] = {}
-    _vector_storage_config: Dict[str, Any] = {}
+    _session_storage_type: str | None = None
+    _vector_storage_type: str | None = None
+    _session_storage_config: dict[str, Any] = {}
+    _vector_storage_config: dict[str, Any] = {}
 
     # Storage instances
-    _session_storage_instance: Optional[BaseSessionStorage] = None
-    _vector_storage_instance: Optional[BaseVectorStorage] = None
+    _session_storage_instance: BaseSessionStorage | None = None
+    _vector_storage_instance: BaseVectorStorage | None = None
 
     # Phase 1: Health monitoring
-    _health_manager: Optional[StorageHealthManager] = None
+    _health_manager: StorageHealthManager | None = None
     _health_config: HealthConfig
-    _validation_result: Optional[ValidationResult] = None
+    _validation_result: ValidationResult | None = None
 
     # Phase 4: Observability (PANOPTICON)
     _observability_config: ObservabilityConfig
-    _instrumentation: Optional[StorageInstrumentation] = None
-    _metrics_collector: Optional[MetricsCollector] = None
-    _event_logger: Optional[EventLogger] = None
+    _instrumentation: StorageInstrumentation | None = None
+    _metrics_collector: MetricsCollector | None = None
+    _event_logger: EventLogger | None = None
 
     def __init__(
         self,
         config: ConfyConfig,
-        health_config: Optional[HealthConfig] = None,
-        observability_config: Optional[ObservabilityConfig] = None,
+        health_config: HealthConfig | None = None,
+        observability_config: ObservabilityConfig | None = None,
         validate_config: bool = True,
         strict_validation: bool = False,
     ):
@@ -246,7 +246,7 @@ class StorageManager:
         return DEFAULT_OBSERVABILITY_CONFIG
 
     @property
-    def validation_result(self) -> Optional[ValidationResult]:
+    def validation_result(self) -> ValidationResult | None:
         """Get the configuration validation result."""
         return self._validation_result
 
@@ -256,17 +256,17 @@ class StorageManager:
         return self._observability_config
 
     @property
-    def instrumentation(self) -> Optional[StorageInstrumentation]:
+    def instrumentation(self) -> StorageInstrumentation | None:
         """Get the storage instrumentation instance (if initialized)."""
         return self._instrumentation
 
     @property
-    def metrics_collector(self) -> Optional[MetricsCollector]:
+    def metrics_collector(self) -> MetricsCollector | None:
         """Get the metrics collector instance (if initialized)."""
         return self._metrics_collector
 
     @property
-    def event_logger(self) -> Optional[EventLogger]:
+    def event_logger(self) -> EventLogger | None:
         """Get the event logger instance (if initialized)."""
         return self._event_logger
 
@@ -757,7 +757,7 @@ class StorageManager:
 
     async def get_episodes(
         self, session_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """
         Retrieves episodes for a given session through the session storage backend.
 
@@ -817,7 +817,7 @@ class StorageManager:
         logger.debug(f"Total episode count for session '{session_id}': {total_count}")
         return total_count
 
-    async def list_vector_collection_names(self) -> List[str]:
+    async def list_vector_collection_names(self) -> list[str]:
         """
         Lists the names of all available collections in the configured vector store.
 
@@ -924,7 +924,7 @@ class StorageManager:
     # HEALTH API (Phase 1 - PRIMORDIUM)
     # =========================================================================
 
-    def is_healthy(self, backend_name: Optional[str] = None) -> bool:
+    def is_healthy(self, backend_name: str | None = None) -> bool:
         """
         Check if storage backend(s) are healthy.
 
@@ -940,7 +940,7 @@ class StorageManager:
         """
         return self._health_manager.is_healthy(backend_name)
 
-    def get_health_report(self, backend_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_health_report(self, backend_name: str | None = None) -> dict[str, Any]:
         """
         Get detailed health report for storage backend(s).
 
@@ -959,7 +959,7 @@ class StorageManager:
         """
         return self._health_manager.get_report(backend_name)
 
-    async def run_health_check(self, backend_name: str) -> Optional[Dict[str, Any]]:
+    async def run_health_check(self, backend_name: str) -> dict[str, Any] | None:
         """
         Manually trigger a health check for a specific backend.
 
@@ -975,7 +975,7 @@ class StorageManager:
         return result.to_dict() if result else None
 
     @property
-    def health_status(self) -> Dict[str, Any]:
+    def health_status(self) -> dict[str, Any]:
         """
         Quick access to overall health status.
 
@@ -1004,7 +1004,7 @@ class StorageManager:
     # DIAGNOSTICS (Phase 1 - PRIMORDIUM / Phase 4 - PANOPTICON)
     # =========================================================================
 
-    def get_storage_info(self) -> Dict[str, Any]:
+    def get_storage_info(self) -> dict[str, Any]:
         """
         Get information about configured storage backends.
 
@@ -1090,7 +1090,7 @@ class StorageManager:
             },
         }
 
-    def get_observability_statistics(self) -> Dict[str, Any]:
+    def get_observability_statistics(self) -> dict[str, Any]:
         """
         Get detailed observability statistics.
 
@@ -1100,7 +1100,7 @@ class StorageManager:
         Returns:
             Dictionary with detailed observability statistics.
         """
-        stats: Dict[str, Any] = {
+        stats: dict[str, Any] = {
             "enabled": self._observability_config.enabled,
             "instrumentation": None,
             "metrics": None,

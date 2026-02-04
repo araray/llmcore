@@ -51,7 +51,7 @@ class ImageRegistryError(Exception):
 class ImageNotFoundError(ImageRegistryError):
     """Requested image not found in registry."""
 
-    def __init__(self, image: str, available: Optional[List[str]] = None):
+    def __init__(self, image: str, available: list[str] | None = None):
         self.image = image
         self.available = available or []
         msg = f"Image not found: {image}"
@@ -86,7 +86,7 @@ class ImageRegistry:
 
     def __init__(
         self,
-        image_patterns: Optional[List[str]] = None,
+        image_patterns: list[str] | None = None,
         auto_refresh: bool = False,
         include_builtins: bool = True,
     ):
@@ -98,12 +98,12 @@ class ImageRegistry:
             auto_refresh: Whether to refresh automatically on operations
             include_builtins: Whether to include builtin manifests
         """
-        self._images: Dict[str, ImageMetadata] = {}
-        self._docker_client: Optional[Any] = None
+        self._images: dict[str, ImageMetadata] = {}
+        self._docker_client: Any | None = None
         self._image_patterns = image_patterns or ["llmcore-sandbox-*"]
         self._auto_refresh = auto_refresh
         self._include_builtins = include_builtins
-        self._last_refresh: Optional[datetime] = None
+        self._last_refresh: datetime | None = None
 
         # Initialize builtin images
         if include_builtins:
@@ -206,7 +206,7 @@ class ImageRegistry:
         self,
         docker_image: Any,
         tag: str,
-    ) -> Optional[ImageMetadata]:
+    ) -> ImageMetadata | None:
         """
         Process a Docker image into ImageMetadata.
 
@@ -306,10 +306,10 @@ class ImageRegistry:
 
     def list_images(
         self,
-        tier: Optional[ImageTier] = None,
-        capabilities: Optional[Set[ImageCapability]] = None,
+        tier: ImageTier | None = None,
+        capabilities: set[ImageCapability] | None = None,
         available_only: bool = False,
-    ) -> List[ImageMetadata]:
+    ) -> list[ImageMetadata]:
         """
         List images with optional filtering.
 
@@ -344,14 +344,14 @@ class ImageRegistry:
 
         return result
 
-    def list_by_tier(self) -> Dict[ImageTier, List[ImageMetadata]]:
+    def list_by_tier(self) -> dict[ImageTier, list[ImageMetadata]]:
         """
         List images grouped by tier.
 
         Returns:
             Dictionary mapping tiers to image lists
         """
-        result: Dict[ImageTier, List[ImageMetadata]] = {
+        result: dict[ImageTier, list[ImageMetadata]] = {
             ImageTier.BASE: [],
             ImageTier.SPECIALIZED: [],
             ImageTier.TASK: [],
@@ -366,7 +366,7 @@ class ImageRegistry:
         self,
         capability: ImageCapability,
         prefer_local: bool = True,
-    ) -> Optional[ImageMetadata]:
+    ) -> ImageMetadata | None:
         """
         Find an image with a specific capability.
 
@@ -474,11 +474,11 @@ class ImageRegistry:
         return len(self._images)
 
     @property
-    def last_refresh(self) -> Optional[datetime]:
+    def last_refresh(self) -> datetime | None:
         """Get the timestamp of the last refresh."""
         return self._last_refresh
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Export registry state as dictionary.
 

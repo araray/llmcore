@@ -94,10 +94,10 @@ class PromptSnippet(BaseModel):
     category: PromptCategory = Field(
         default=PromptCategory.SNIPPET, description="Category for organization"
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None, description="Human-readable description of the snippet's purpose"
     )
-    tags: List[str] = Field(default_factory=list, description="Tags for filtering and discovery")
+    tags: list[str] = Field(default_factory=list, description="Tags for filtering and discovery")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -106,7 +106,7 @@ class PromptSnippet(BaseModel):
         """SHA-256 hash of the content for change detection."""
         return hashlib.sha256(self.content.encode()).hexdigest()[:16]
 
-    def model_dump(self, **kwargs) -> Dict[str, Any]:
+    def model_dump(self, **kwargs) -> dict[str, Any]:
         """Override to include content_hash in serialization."""
         data = super().model_dump(**kwargs)
         data["content_hash"] = self.content_hash
@@ -146,12 +146,12 @@ class PromptVariable(BaseModel):
         pattern=r"^[a-z][a-z0-9_]*$",
         description="Variable name (matches {{name}} in template)",
     )
-    description: Optional[str] = Field(default=None, description="What this variable represents")
+    description: str | None = Field(default=None, description="What this variable represents")
     required: bool = Field(default=True, description="Whether this variable must be provided")
-    default_value: Optional[str] = Field(
+    default_value: str | None = Field(
         default=None, description="Default value if not provided (only if not required)"
     )
-    example: Optional[str] = Field(default=None, description="Example value for documentation")
+    example: str | None = Field(default=None, description="Example value for documentation")
 
     @model_validator(mode="after")
     def validate_default(self) -> "PromptVariable":
@@ -203,26 +203,26 @@ class PromptMetrics(BaseModel):
     failed_uses: int = Field(default=0, ge=0)
 
     # Performance metrics
-    avg_iterations_to_success: Optional[float] = Field(
+    avg_iterations_to_success: float | None = Field(
         default=None, description="Average cognitive loop iterations when successful"
     )
-    avg_tokens_used: Optional[float] = Field(
+    avg_tokens_used: float | None = Field(
         default=None, description="Average token consumption per use"
     )
-    avg_latency_ms: Optional[float] = Field(
+    avg_latency_ms: float | None = Field(
         default=None, description="Average end-to-end latency in milliseconds"
     )
 
     # Quality metrics (0.0 to 1.0)
-    success_rate: Optional[float] = Field(
+    success_rate: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Ratio of successful uses"
     )
-    avg_quality_score: Optional[float] = Field(
+    avg_quality_score: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Average quality rating"
     )
 
     # Timestamps
-    last_used_at: Optional[datetime] = Field(default=None, description="Timestamp of last use")
+    last_used_at: datetime | None = Field(default=None, description="Timestamp of last use")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -245,10 +245,10 @@ class PromptMetrics(BaseModel):
     def record_use(
         self,
         success: bool,
-        iterations: Optional[int] = None,
-        tokens: Optional[int] = None,
-        latency_ms: Optional[float] = None,
-        quality_score: Optional[float] = None,
+        iterations: int | None = None,
+        tokens: int | None = None,
+        latency_ms: float | None = None,
+        quality_score: float | None = None,
     ) -> None:
         """
         Record a single use of this prompt version.
@@ -346,16 +346,16 @@ class PromptVersion(BaseModel):
     template_id: str = Field(..., description="Parent template ID")
     version_number: int = Field(..., ge=1, description="Sequential version number")
     content: str = Field(..., min_length=1, description="The actual prompt template content")
-    variables: List[PromptVariable] = Field(
+    variables: list[PromptVariable] = Field(
         default_factory=list, description="Variable definitions for this template"
     )
     status: VersionStatus = Field(default=VersionStatus.DRAFT, description="Current status")
-    change_description: Optional[str] = Field(
+    change_description: str | None = Field(
         default=None, description="What changed in this version"
     )
-    created_by: Optional[str] = Field(default=None, description="Who created this version")
+    created_by: str | None = Field(default=None, description="Who created this version")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    activated_at: Optional[datetime] = Field(
+    activated_at: datetime | None = Field(
         default=None, description="When this version became active"
     )
 
@@ -365,12 +365,12 @@ class PromptVersion(BaseModel):
         return hashlib.sha256(self.content.encode()).hexdigest()[:16]
 
     @property
-    def variable_names(self) -> Set[str]:
+    def variable_names(self) -> set[str]:
         """Set of all variable names defined in this version."""
         return {var.name for var in self.variables}
 
     @property
-    def required_variable_names(self) -> Set[str]:
+    def required_variable_names(self) -> set[str]:
         """Set of required variable names."""
         return {var.name for var in self.variables if var.required}
 
@@ -388,7 +388,7 @@ class PromptVersion(BaseModel):
         """Mark this version as deprecated."""
         self.status = VersionStatus.DEPRECATED
 
-    def model_dump(self, **kwargs) -> Dict[str, Any]:
+    def model_dump(self, **kwargs) -> dict[str, Any]:
         """Override to include computed properties."""
         data = super().model_dump(**kwargs)
         data["content_hash"] = self.content_hash
@@ -435,12 +435,12 @@ class PromptTemplate(BaseModel):
     )
     name: str = Field(..., min_length=1, description="Human-readable name")
     category: PromptCategory = Field(..., description="Prompt category")
-    description: Optional[str] = Field(default=None, description="Template purpose and usage")
-    tags: List[str] = Field(default_factory=list, description="Tags for discovery")
-    active_version_id: Optional[str] = Field(
+    description: str | None = Field(default=None, description="Template purpose and usage")
+    tags: list[str] = Field(default_factory=list, description="Tags for discovery")
+    active_version_id: str | None = Field(
         default=None, description="Currently active version ID"
     )
-    versions: List[PromptVersion] = Field(
+    versions: list[PromptVersion] = Field(
         default_factory=list, description="All versions of this template"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -452,7 +452,7 @@ class PromptTemplate(BaseModel):
         return len(self.versions)
 
     @property
-    def active_version(self) -> Optional[PromptVersion]:
+    def active_version(self) -> PromptVersion | None:
         """Get the currently active version."""
         if not self.active_version_id:
             return None
@@ -462,7 +462,7 @@ class PromptTemplate(BaseModel):
         return None
 
     @property
-    def latest_version(self) -> Optional[PromptVersion]:
+    def latest_version(self) -> PromptVersion | None:
         """Get the latest version (highest version_number)."""
         if not self.versions:
             return None
@@ -523,21 +523,21 @@ class PromptTemplate(BaseModel):
         self.active_version_id = version_id
         self.updated_at = datetime.utcnow()
 
-    def get_version(self, version_id: str) -> Optional[PromptVersion]:
+    def get_version(self, version_id: str) -> PromptVersion | None:
         """Get a specific version by ID."""
         for version in self.versions:
             if version.id == version_id:
                 return version
         return None
 
-    def get_version_by_number(self, version_number: int) -> Optional[PromptVersion]:
+    def get_version_by_number(self, version_number: int) -> PromptVersion | None:
         """Get a specific version by version number."""
         for version in self.versions:
             if version.version_number == version_number:
                 return version
         return None
 
-    def model_dump(self, **kwargs) -> Dict[str, Any]:
+    def model_dump(self, **kwargs) -> dict[str, Any]:
         """Override to include computed properties."""
         data = super().model_dump(**kwargs)
         data["version_count"] = self.version_count

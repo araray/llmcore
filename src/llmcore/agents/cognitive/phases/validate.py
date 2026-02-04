@@ -57,10 +57,10 @@ async def validate_phase(
     agent_state: EnhancedAgentState,
     validate_input: ValidateInput,
     provider_manager: "ProviderManager",
-    prompt_registry: Optional[Any] = None,  # PromptRegistry
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    prompt_registry: Any | None = None,  # PromptRegistry
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> ValidateOutput:
     """
     Execute the VALIDATE phase of the cognitive cycle.
@@ -224,7 +224,7 @@ async def validate_phase(
 # =============================================================================
 
 
-def _check_dangerous_patterns(tool_call: Any) -> Optional[str]:
+def _check_dangerous_patterns(tool_call: Any) -> str | None:
     """
     Check if the tool call contains dangerous patterns.
 
@@ -245,7 +245,7 @@ def _check_dangerous_patterns(tool_call: Any) -> Optional[str]:
 
 
 def _generate_validation_prompt(
-    validate_input: ValidateInput, prompt_registry: Optional[Any]
+    validate_input: ValidateInput, prompt_registry: Any | None
 ) -> str:
     """
     Generate the validation prompt using prompt library or fallback.

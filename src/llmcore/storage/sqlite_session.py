@@ -16,7 +16,7 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -66,7 +66,7 @@ class SqliteSessionStorage(BaseSessionStorage):
     _context_preset_items_table_name: str
     _episodes_table_name: str
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the SQLite database and create all necessary tables.
 
@@ -242,7 +242,7 @@ class SqliteSessionStorage(BaseSessionStorage):
             await self._conn.rollback()
             raise SessionStorageError(f"Database error saving session '{session.id}': {e}")
 
-    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+    async def get_session(self, session_id: str) -> ChatSession | None:
         """Retrieves a complete session from SQLite."""
         if not self._conn:
             raise SessionStorageError("Database connection not initialized.")
@@ -263,7 +263,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                 session_data["updated_at"].replace("Z", "+00:00")
             )
 
-            messages: List[Message] = []
+            messages: list[Message] = []
             async with self._conn.execute(
                 f"SELECT * FROM {self._messages_table_name} WHERE session_id = ? ORDER BY timestamp ASC",
                 (session_id,),
@@ -278,7 +278,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                     messages.append(Message.model_validate(msg_dict))
             session_data["messages"] = messages
 
-            context_items: List[ContextItem] = []
+            context_items: list[ContextItem] = []
             async with self._conn.execute(
                 f"SELECT * FROM {self._session_context_items_table_name} WHERE session_id = ? ORDER BY timestamp ASC",
                 (session_id,),
@@ -298,7 +298,7 @@ class SqliteSessionStorage(BaseSessionStorage):
         except aiosqlite.Error as e:
             raise SessionStorageError(f"Database error retrieving session '{session_id}': {e}")
 
-    async def list_sessions(self) -> List[Dict[str, Any]]:
+    async def list_sessions(self) -> list[dict[str, Any]]:
         """Lists session metadata from SQLite."""
         if not self._conn:
             raise SessionStorageError("Database connection not initialized.")
@@ -336,7 +336,7 @@ class SqliteSessionStorage(BaseSessionStorage):
         try:
             cursor = await self._conn.execute(
                 f"UPDATE {self._sessions_table_name} SET name = ?, updated_at = ? WHERE id = ?",
-                (new_name, datetime.now(timezone.utc).isoformat(), session_id),
+                (new_name, datetime.now(UTC).isoformat(), session_id),
             )
             await self._conn.commit()
             return cursor.rowcount > 0
@@ -358,7 +358,7 @@ class SqliteSessionStorage(BaseSessionStorage):
             self._context_preset_items_table_name,
         )
 
-    async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
+    async def get_context_preset(self, preset_name: str) -> ContextPreset | None:
         if not self._conn:
             raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.get_context_preset(
@@ -368,7 +368,7 @@ class SqliteSessionStorage(BaseSessionStorage):
             self._context_preset_items_table_name,
         )
 
-    async def list_context_presets(self) -> List[Dict[str, Any]]:
+    async def list_context_presets(self) -> list[dict[str, Any]]:
         if not self._conn:
             raise StorageError("Database connection not initialized.")
         return await sqlite_preset_helpers.list_context_presets(
@@ -402,7 +402,7 @@ class SqliteSessionStorage(BaseSessionStorage):
 
     async def get_episodes(
         self, session_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         if not self._conn:
             raise StorageError("Database connection not initialized.")
         return await sqlite_episode_helpers.get_episodes(

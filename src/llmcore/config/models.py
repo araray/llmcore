@@ -52,11 +52,11 @@ class SemantiscanMetadataStoreConfig(BaseModel):
 
     enable: bool = Field(False, description="Enable the external metadata store")
     type: str = Field("sqlite", description="Type of external store (sqlite or postgresql)")
-    path: Optional[str] = Field(
+    path: str | None = Field(
         "~/.local/share/semantiscan/metadata.db",
         description="Path to the SQLite database file (required if type is sqlite)",
     )
-    connection_string: Optional[str] = Field(
+    connection_string: str | None = Field(
         "", description="Connection string for PostgreSQL (required if type is postgresql)"
     )
     table_name: str = Field(
@@ -95,21 +95,21 @@ class SemantiscanEmbeddingModelConfig(BaseModel):
     )
     model_name: str = Field(..., description="Name of the specific model to use")
     device: str = Field("cpu", description="Device for local models (cpu, cuda, mps)")
-    api_key_env: Optional[str] = Field(
+    api_key_env: str | None = Field(
         "", description="Environment variable name holding the API key"
     )
     max_request_tokens: int = Field(8000, description="Max tokens per API request batch")
-    base_url: Optional[str] = Field("", description="Base URL for API (Ollama, custom endpoints)")
-    tokenizer_name: Optional[str] = Field(
+    base_url: str | None = Field("", description="Base URL for API (Ollama, custom endpoints)")
+    tokenizer_name: str | None = Field(
         "", description="Specific tokenizer name for token estimation"
     )
     uses_doc_query_prefixes: bool = Field(
         False, description="Whether model requires different prefixes for documents vs queries"
     )
-    query_prefix: Optional[str] = Field(
+    query_prefix: str | None = Field(
         "", description="Prefix for queries if uses_doc_query_prefixes is true"
     )
-    document_prefix: Optional[str] = Field(
+    document_prefix: str | None = Field(
         "", description="Prefix for documents if uses_doc_query_prefixes is true"
     )
 
@@ -126,7 +126,7 @@ class SemantiscanEmbeddingsConfig(BaseModel):
         "sentence_transformer_local",
         description="Key of the default embedding model configuration to use",
     )
-    models: Dict[str, SemantiscanEmbeddingModelConfig] = Field(
+    models: dict[str, SemantiscanEmbeddingModelConfig] = Field(
         default_factory=dict, description="Dictionary of available embedding model configurations"
     )
 
@@ -147,20 +147,20 @@ class SemantiscanEmbeddingsConfig(BaseModel):
 class SemantiscanChunkingStrategyConfig(BaseModel):
     """Configuration for a single chunking strategy."""
 
-    extensions: List[str] = Field(
+    extensions: list[str] = Field(
         default_factory=list, description="File extensions this strategy applies to"
     )
-    grammar: Optional[str] = Field("", description="Name of the ANTLR grammar (for ANTLR strategy)")
-    entry_points: List[str] = Field(
+    grammar: str | None = Field("", description="Name of the ANTLR grammar (for ANTLR strategy)")
+    entry_points: list[str] = Field(
         default_factory=list, description="ANTLR rule names to treat as chunk boundaries"
     )
-    parser: Optional[str] = Field(
+    parser: str | None = Field(
         "", description="Name of the format-specific parser (for format strategy)"
     )
-    method: Optional[str] = Field(
+    method: str | None = Field(
         "", description="Name of the agnostic chunking method (for agnostic strategy)"
     )
-    strategy_sequence: List[Dict[str, Any]] = Field(
+    strategy_sequence: list[dict[str, Any]] = Field(
         default_factory=list, description="Sequence of strategies to try"
     )
     hybrid_content: bool = Field(False, description="Combine related elements in ANTLR chunks")
@@ -208,7 +208,7 @@ class SemantiscanChunkingConfig(BaseModel):
     default_strategy: str = Field(
         "RecursiveSplitter", description="Default agnostic method if no specific rule matches"
     )
-    strategies: Dict[str, SemantiscanChunkingStrategyConfig] = Field(
+    strategies: dict[str, SemantiscanChunkingStrategyConfig] = Field(
         default_factory=dict, description="Mapping of strategy names to their configurations"
     )
     parameters: SemantiscanChunkingParameters = Field(
@@ -226,7 +226,7 @@ class SemantiscanIngestionGitConfig(BaseModel):
         "snapshot",
         description="Ingestion mode: snapshot, historical, historical_delta, or incremental",
     )
-    historical_start_ref: Optional[str] = Field(
+    historical_start_ref: str | None = Field(
         "", description="Starting Git reference for historical modes"
     )
     enable_commit_analysis: bool = Field(
@@ -235,13 +235,13 @@ class SemantiscanIngestionGitConfig(BaseModel):
     enable_commit_llm_analysis: bool = Field(
         False, description="Use LLM to analyze/summarize commit messages"
     )
-    commit_llm_provider_key: Optional[str] = Field(
+    commit_llm_provider_key: str | None = Field(
         "", description="LLM provider key for commit analysis"
     )
-    commit_llm_prompt_template: Optional[str] = Field(
+    commit_llm_prompt_template: str | None = Field(
         "", description="Custom prompt template for commit analysis"
     )
-    commit_message_filter_regex: List[str] = Field(
+    commit_message_filter_regex: list[str] = Field(
         default_factory=list, description="Regex patterns to filter out certain commit messages"
     )
 
@@ -275,17 +275,17 @@ class SemantiscanLLMProviderConfig(BaseModel):
 
     provider: str = Field(..., description="LLM provider (ollama, openai, anthropic, etc.)")
     model_name: str = Field(..., description="Name of the specific LLM model")
-    base_url: Optional[str] = Field("", description="Base URL for API")
-    api_key_env: Optional[str] = Field(
+    base_url: str | None = Field("", description="Base URL for API")
+    api_key_env: str | None = Field(
         "", description="Environment variable name holding the API key"
     )
-    tokenizer_name: Optional[str] = Field(
+    tokenizer_name: str | None = Field(
         "", description="Specific tokenizer name for context estimation"
     )
     context_buffer: int = Field(
         200, ge=0, description="Safety buffer (in tokens) below the LLM's context window limit"
     )
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Parameters passed directly to the LLM API"
     )
 
@@ -299,21 +299,21 @@ class SemantiscanLLMConfig(BaseModel):
     """
 
     default_provider: str = Field("ollama_llama3", description="Key referencing llmcore's provider")
-    prompt_template_path: Optional[str] = Field(
+    prompt_template_path: str | None = Field(
         "", description="Optional: Custom prompt template file path"
     )
     enable_query_rewriting: bool = Field(False, description="Enable LLM-based query expansion")
-    query_rewrite_provider_key: Optional[str] = Field(
+    query_rewrite_provider_key: str | None = Field(
         "", description="LLM provider for query rewriting"
     )
     show_sources_in_text: bool = Field(
         True, description="Include source references in text responses"
     )
-    tokenizer_name: Optional[str] = Field(
+    tokenizer_name: str | None = Field(
         "", description="Optional: Specific tokenizer for LLM context estimation"
     )
     context_buffer: int = Field(200, ge=0, description="Reserved tokens for prompt formatting")
-    providers: Dict[str, SemantiscanLLMProviderConfig] = Field(
+    providers: dict[str, SemantiscanLLMProviderConfig] = Field(
         default_factory=dict, description="Dictionary of available LLM provider configurations"
     )
 
@@ -344,7 +344,7 @@ class SemantiscanDiscoveryConfig(BaseModel):
     """
 
     use_gitignore: bool = Field(True, description="Respect .gitignore rules during file scanning")
-    excluded_dirs: List[str] = Field(
+    excluded_dirs: list[str] = Field(
         default_factory=lambda: [
             "__pycache__",
             "node_modules",
@@ -363,7 +363,7 @@ class SemantiscanDiscoveryConfig(BaseModel):
         ],
         description="Directories to always skip (even if not in .gitignore)",
     )
-    excluded_files: List[str] = Field(
+    excluded_files: list[str] = Field(
         default_factory=lambda: [".DS_Store", "Thumbs.db", "*.pyc", "*.pyo", "*.pyd"],
         description="Files to always skip",
     )
@@ -491,7 +491,7 @@ class ModelCardsConfig(BaseModel):
 # ==============================================================================
 
 
-def validate_semantiscan_config(config_dict: Dict[str, Any]) -> SemantiscanConfig:
+def validate_semantiscan_config(config_dict: dict[str, Any]) -> SemantiscanConfig:
     """
     Validate a semantiscan configuration dictionary.
 
@@ -513,7 +513,7 @@ def validate_semantiscan_config(config_dict: Dict[str, Any]) -> SemantiscanConfi
     return SemantiscanConfig(**config_dict)
 
 
-def semantiscan_config_to_dict(config: SemantiscanConfig) -> Dict[str, Any]:
+def semantiscan_config_to_dict(config: SemantiscanConfig) -> dict[str, Any]:
     """
     Convert a SemantiscanConfig instance to a dictionary.
 

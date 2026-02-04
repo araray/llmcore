@@ -58,7 +58,7 @@ class HITLStateStore(ABC):
         ...
 
     @abstractmethod
-    async def get_request(self, request_id: str) -> Optional[HITLRequest]:
+    async def get_request(self, request_id: str) -> HITLRequest | None:
         """Get request by ID."""
         ...
 
@@ -67,7 +67,7 @@ class HITLStateStore(ABC):
         self,
         request_id: str,
         status: ApprovalStatus,
-        response: Optional[HITLResponse] = None,
+        response: HITLResponse | None = None,
     ) -> bool:
         """Update request status."""
         ...
@@ -75,8 +75,8 @@ class HITLStateStore(ABC):
     @abstractmethod
     async def get_pending_requests(
         self,
-        session_id: Optional[str] = None,
-    ) -> List[HITLRequest]:
+        session_id: str | None = None,
+    ) -> list[HITLRequest]:
         """Get all pending requests, optionally filtered by session."""
         ...
 
@@ -91,7 +91,7 @@ class HITLStateStore(ABC):
         ...
 
     @abstractmethod
-    async def get_response(self, request_id: str) -> Optional[HITLResponse]:
+    async def get_response(self, request_id: str) -> HITLResponse | None:
         """Get response for a request."""
         ...
 
@@ -101,7 +101,7 @@ class HITLStateStore(ABC):
         ...
 
     @abstractmethod
-    async def get_session_scope(self, session_id: str) -> Optional[SessionScope]:
+    async def get_session_scope(self, session_id: str) -> SessionScope | None:
         """Get session scope."""
         ...
 
@@ -111,7 +111,7 @@ class HITLStateStore(ABC):
         ...
 
     @abstractmethod
-    async def get_persistent_scope(self, user_id: str) -> Optional[PersistentScope]:
+    async def get_persistent_scope(self, user_id: str) -> PersistentScope | None:
         """Get persistent scope."""
         ...
 
@@ -139,10 +139,10 @@ class InMemoryHITLStore(HITLStateStore):
     """
 
     def __init__(self):
-        self._requests: Dict[str, HITLRequest] = {}
-        self._responses: Dict[str, HITLResponse] = {}
-        self._session_scopes: Dict[str, SessionScope] = {}
-        self._persistent_scopes: Dict[str, PersistentScope] = {}
+        self._requests: dict[str, HITLRequest] = {}
+        self._responses: dict[str, HITLResponse] = {}
+        self._session_scopes: dict[str, SessionScope] = {}
+        self._persistent_scopes: dict[str, PersistentScope] = {}
         self._lock = asyncio.Lock()
 
     async def save_request(self, request: HITLRequest) -> None:
@@ -150,7 +150,7 @@ class InMemoryHITLStore(HITLStateStore):
             self._requests[request.request_id] = request
             logger.debug(f"Saved request {request.request_id} to memory")
 
-    async def get_request(self, request_id: str) -> Optional[HITLRequest]:
+    async def get_request(self, request_id: str) -> HITLRequest | None:
         async with self._lock:
             return self._requests.get(request_id)
 
@@ -158,7 +158,7 @@ class InMemoryHITLStore(HITLStateStore):
         self,
         request_id: str,
         status: ApprovalStatus,
-        response: Optional[HITLResponse] = None,
+        response: HITLResponse | None = None,
     ) -> bool:
         async with self._lock:
             if request_id not in self._requests:
@@ -173,8 +173,8 @@ class InMemoryHITLStore(HITLStateStore):
 
     async def get_pending_requests(
         self,
-        session_id: Optional[str] = None,
-    ) -> List[HITLRequest]:
+        session_id: str | None = None,
+    ) -> list[HITLRequest]:
         async with self._lock:
             pending = [r for r in self._requests.values() if r.status == ApprovalStatus.PENDING]
 
@@ -195,7 +195,7 @@ class InMemoryHITLStore(HITLStateStore):
         async with self._lock:
             self._responses[response.request_id] = response
 
-    async def get_response(self, request_id: str) -> Optional[HITLResponse]:
+    async def get_response(self, request_id: str) -> HITLResponse | None:
         async with self._lock:
             return self._responses.get(request_id)
 
@@ -203,7 +203,7 @@ class InMemoryHITLStore(HITLStateStore):
         async with self._lock:
             self._session_scopes[scope.session_id] = scope
 
-    async def get_session_scope(self, session_id: str) -> Optional[SessionScope]:
+    async def get_session_scope(self, session_id: str) -> SessionScope | None:
         async with self._lock:
             return self._session_scopes.get(session_id)
 
@@ -211,7 +211,7 @@ class InMemoryHITLStore(HITLStateStore):
         async with self._lock:
             self._persistent_scopes[scope.user_id] = scope
 
-    async def get_persistent_scope(self, user_id: str) -> Optional[PersistentScope]:
+    async def get_persistent_scope(self, user_id: str) -> PersistentScope | None:
         async with self._lock:
             return self._persistent_scopes.get(user_id)
 
@@ -274,10 +274,10 @@ class FileHITLStore(HITLStateStore):
         self.storage_path = Path(storage_path)
         self.auto_save = auto_save
 
-        self._requests: Dict[str, HITLRequest] = {}
-        self._responses: Dict[str, HITLResponse] = {}
-        self._session_scopes: Dict[str, SessionScope] = {}
-        self._persistent_scopes: Dict[str, PersistentScope] = {}
+        self._requests: dict[str, HITLRequest] = {}
+        self._responses: dict[str, HITLResponse] = {}
+        self._session_scopes: dict[str, SessionScope] = {}
+        self._persistent_scopes: dict[str, PersistentScope] = {}
         self._lock = asyncio.Lock()
         self._loaded = False
 
@@ -379,7 +379,7 @@ class FileHITLStore(HITLStateStore):
             await self._save_requests()
             logger.debug(f"Saved request {request.request_id}")
 
-    async def get_request(self, request_id: str) -> Optional[HITLRequest]:
+    async def get_request(self, request_id: str) -> HITLRequest | None:
         await self._ensure_loaded()
         async with self._lock:
             return self._requests.get(request_id)
@@ -388,7 +388,7 @@ class FileHITLStore(HITLStateStore):
         self,
         request_id: str,
         status: ApprovalStatus,
-        response: Optional[HITLResponse] = None,
+        response: HITLResponse | None = None,
     ) -> bool:
         await self._ensure_loaded()
         async with self._lock:
@@ -406,8 +406,8 @@ class FileHITLStore(HITLStateStore):
 
     async def get_pending_requests(
         self,
-        session_id: Optional[str] = None,
-    ) -> List[HITLRequest]:
+        session_id: str | None = None,
+    ) -> list[HITLRequest]:
         await self._ensure_loaded()
         async with self._lock:
             pending = [r for r in self._requests.values() if r.status == ApprovalStatus.PENDING]
@@ -434,7 +434,7 @@ class FileHITLStore(HITLStateStore):
             self._responses[response.request_id] = response
             await self._save_responses()
 
-    async def get_response(self, request_id: str) -> Optional[HITLResponse]:
+    async def get_response(self, request_id: str) -> HITLResponse | None:
         await self._ensure_loaded()
         async with self._lock:
             return self._responses.get(request_id)
@@ -452,7 +452,7 @@ class FileHITLStore(HITLStateStore):
                 except Exception as e:
                     logger.warning(f"Failed to save session scope: {e}")
 
-    async def get_session_scope(self, session_id: str) -> Optional[SessionScope]:
+    async def get_session_scope(self, session_id: str) -> SessionScope | None:
         await self._ensure_loaded()
         async with self._lock:
             if session_id in self._session_scopes:
@@ -483,7 +483,7 @@ class FileHITLStore(HITLStateStore):
                 except Exception as e:
                     logger.warning(f"Failed to save persistent scope: {e}")
 
-    async def get_persistent_scope(self, user_id: str) -> Optional[PersistentScope]:
+    async def get_persistent_scope(self, user_id: str) -> PersistentScope | None:
         await self._ensure_loaded()
         async with self._lock:
             if user_id in self._persistent_scopes:

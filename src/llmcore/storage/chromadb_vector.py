@@ -21,10 +21,10 @@ _ChromaClient_class = None
 chromadb_available = False
 
 # Base error types, default to generic Exception. These will be updated if specific imports succeed.
-ChromaError: Type[Exception] = Exception
-AuthorizationError: Type[Exception] = Exception
-IDAlreadyExistsError: Type[Exception] = Exception
-CollectionNotFoundError: Type[Exception] = Exception  # Primary target for robust fallback
+ChromaError: type[Exception] = Exception
+AuthorizationError: type[Exception] = Exception
+IDAlreadyExistsError: type[Exception] = Exception
+CollectionNotFoundError: type[Exception] = Exception  # Primary target for robust fallback
 
 try:
     import chromadb as _chromadb_module_imported
@@ -126,12 +126,12 @@ class ChromaVectorStorage(BaseVectorStorage):
     client is primarily synchronous.
     """
 
-    _client: Optional[Any] = None  # Use Any for client type due to conditional import
-    _storage_path: Optional[str] = None
+    _client: Any | None = None  # Use Any for client type due to conditional import
+    _storage_path: str | None = None
     _default_collection_name: str = "llmcore_default_rag"
-    _collection_cache: Dict[str, Any] = {}  # Use Any for collection type
+    _collection_cache: dict[str, Any] = {}  # Use Any for collection type
 
-    def _sync_initialize(self, config: Dict[str, Any]) -> None:
+    def _sync_initialize(self, config: dict[str, Any]) -> None:
         """Synchronous initialization logic for ChromaDB client."""
         if not chromadb_available or not _chromadb_module or not _ChromaClient_class:
             raise ImportError(
@@ -170,7 +170,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Could not initialize ChromaDB client: {e}")
 
     def _sync_get_collection(
-        self, collection_name: Optional[str]
+        self, collection_name: str | None
     ) -> Any:  # Return Any for collection
         """
         Synchronously gets or creates a ChromaDB collection.
@@ -203,16 +203,16 @@ class ChromaVectorStorage(BaseVectorStorage):
             )
 
     def _sync_add_documents(
-        self, documents: List[ContextDocument], collection_name: Optional[str]
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str | None
+    ) -> list[str]:
         """Synchronous logic to add documents."""
         collection = self._sync_get_collection(collection_name)
         target_collection_name = collection.name
 
-        doc_ids: List[str] = []
-        embeddings: List[List[float]] = []
-        metadatas: List[Dict[str, Any]] = []
-        contents: List[str] = []
+        doc_ids: list[str] = []
+        embeddings: list[list[float]] = []
+        metadatas: list[dict[str, Any]] = []
+        contents: list[str] = []
 
         for doc in documents:
             if not doc.id:
@@ -260,11 +260,11 @@ class ChromaVectorStorage(BaseVectorStorage):
 
     def _sync_similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        collection_name: Optional[str],
-        filter_metadata: Optional[Dict[str, Any]],
-    ) -> List[ContextDocument]:
+        collection_name: str | None,
+        filter_metadata: dict[str, Any] | None,
+    ) -> list[ContextDocument]:
         """Synchronous logic for similarity search."""
         collection = self._sync_get_collection(collection_name)
         target_collection_name = collection.name
@@ -283,7 +283,7 @@ class ChromaVectorStorage(BaseVectorStorage):
                 f"ChromaDB query returned {len(results.get('ids', [[]])[0])} results from collection '{target_collection_name}'."
             )
 
-            context_docs: List[ContextDocument] = []
+            context_docs: list[ContextDocument] = []
             ids_list = results.get("ids")
             if not ids_list or not ids_list[0]:  # Results are list of lists
                 return []
@@ -340,7 +340,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"ChromaDB similarity_search failed: {e}")
 
     def _sync_delete_documents(
-        self, document_ids: List[str], collection_name: Optional[str]
+        self, document_ids: list[str], collection_name: str | None
     ) -> bool:
         """Synchronous logic to delete documents."""
         if not document_ids:
@@ -361,7 +361,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             )
             raise VectorStorageError(f"ChromaDB delete_documents failed: {e}")
 
-    def _sync_list_collection_names(self) -> List[str]:
+    def _sync_list_collection_names(self) -> list[str]:
         """Synchronous logic to list collection names."""
         if not self._client:
             raise VectorStorageError("ChromaDB client is not initialized.")
@@ -373,8 +373,8 @@ class ChromaVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"ChromaDB list_collections failed: {e}")
 
     def _sync_get_collection_metadata(
-        self, collection_name: Optional[str]
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None
+    ) -> dict[str, Any] | None:
         """Synchronous logic to get collection metadata."""
         try:
             collection = self._sync_get_collection(collection_name)  # This handles default name
@@ -393,7 +393,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             )
             raise VectorStorageError(f"ChromaDB get_collection_metadata failed: {e}")
 
-    def _sync_get_collection_info(self, collection_name: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _sync_get_collection_info(self, collection_name: str | None) -> dict[str, Any] | None:
         """
         Synchronous logic to get detailed collection information.
 
@@ -504,54 +504,54 @@ class ChromaVectorStorage(BaseVectorStorage):
                 self._collection_cache.clear()
         logger.info("ChromaDB vector storage resources cleared/dereferenced.")
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """Initializes the ChromaDB client asynchronously by running sync init in a thread."""
         await asyncio.to_thread(self._sync_initialize, config)
 
     async def add_documents(
-        self, documents: List[ContextDocument], collection_name: Optional[str] = None
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str | None = None
+    ) -> list[str]:
         """Adds documents to ChromaDB asynchronously."""
         return await asyncio.to_thread(self._sync_add_documents, documents, collection_name)
 
     async def similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        collection_name: Optional[str] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[ContextDocument]:
+        collection_name: str | None = None,
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[ContextDocument]:
         """Performs similarity search in ChromaDB asynchronously."""
         return await asyncio.to_thread(
             self._sync_similarity_search, query_embedding, k, collection_name, filter_metadata
         )
 
     async def delete_documents(
-        self, document_ids: List[str], collection_name: Optional[str] = None
+        self, document_ids: list[str], collection_name: str | None = None
     ) -> bool:
         """Deletes documents from ChromaDB asynchronously."""
         return await asyncio.to_thread(self._sync_delete_documents, document_ids, collection_name)
 
-    async def list_collection_names(self) -> List[str]:
+    async def list_collection_names(self) -> list[str]:
         """Lists collection names from ChromaDB asynchronously."""
         return await asyncio.to_thread(self._sync_list_collection_names)
 
     async def get_collection_metadata(
-        self, collection_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Retrieves the metadata associated with a specific ChromaDB collection asynchronously.
         """
         return await asyncio.to_thread(self._sync_get_collection_metadata, collection_name)
 
     # Alias for API compatibility (api.py uses list_collections)
-    async def list_collections(self) -> List[str]:
+    async def list_collections(self) -> list[str]:
         """Alias for list_collection_names for API compatibility."""
         return await self.list_collection_names()
 
     async def get_collection_info(
-        self, collection_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get detailed information about a collection.
 

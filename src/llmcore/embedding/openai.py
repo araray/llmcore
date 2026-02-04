@@ -38,13 +38,13 @@ class OpenAIEmbedding(BaseEmbeddingModel):
     or `[providers.openai]` as a fallback for the key.
     """
 
-    _client: Optional[AsyncOpenAI] = None
+    _client: AsyncOpenAI | None = None
     _model_name: str
-    _api_key: Optional[str] = None
-    _base_url: Optional[str] = None
+    _api_key: str | None = None
+    _base_url: str | None = None
     _timeout: float = 60.0  # Default timeout
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initializes the OpenAIEmbedding model.
 
@@ -122,7 +122,7 @@ class OpenAIEmbedding(BaseEmbeddingModel):
             self._client = None  # Ensure client is None on failure
             raise ConfigError(f"OpenAI client initialization for embeddings failed: {e}")
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate a vector embedding for a single text string using OpenAI API.
 
@@ -180,7 +180,7 @@ class OpenAIEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name,
                 message=f"OpenAI API Error ({e.status_code}): {e.message}",
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Request to OpenAI embeddings API timed out (model: {self._model_name}).")
             raise EmbeddingError(model_name=self._model_name, message="Request timed out.")
         except Exception as e:
@@ -190,7 +190,7 @@ class OpenAIEmbedding(BaseEmbeddingModel):
             )
             raise EmbeddingError(model_name=self._model_name, message=f"Unexpected error: {e}")
 
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
         Generate vector embeddings for a batch of text strings using OpenAI API.
 
@@ -246,7 +246,7 @@ class OpenAIEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name,
                 message=f"OpenAI API Error ({e.status_code}): {e.message}",
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(
                 f"Request to OpenAI embeddings API timed out during batch (model: {self._model_name})."
             )

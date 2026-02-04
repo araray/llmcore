@@ -13,7 +13,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
 
 # Use the official anthropic library
 try:
@@ -28,8 +29,8 @@ except ImportError:
     anthropic = None  # type: ignore
     AsyncAnthropic = None  # type: ignore
     AnthropicError = Exception  # type: ignore
-    MessageParam = Dict[str, Any]  # type: ignore
-    TextBlockParam = Dict[str, Any]  # type: ignore
+    MessageParam = dict[str, Any]  # type: ignore
+    TextBlockParam = dict[str, Any]  # type: ignore
     MessageStreamEvent = Any  # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
@@ -57,11 +58,11 @@ class AnthropicProvider(BaseProvider):
     Handles List[Message] context type and standardized tool-calling.
     """
 
-    _client: Optional[AsyncAnthropic] = None
+    _client: AsyncAnthropic | None = None
     _sync_client_for_counting: Any = None  # Type varies - use Any to avoid import errors
-    _api_key_env_var: Optional[str] = None
+    _api_key_env_var: str | None = None
 
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the AnthropicProvider.
 
@@ -111,7 +112,7 @@ class AnthropicProvider(BaseProvider):
         """Returns the provider name: 'anthropic'."""
         return "anthropic"
 
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """
         Returns a list of `ModelDetails` for known Anthropic models.
 
@@ -137,7 +138,7 @@ class AnthropicProvider(BaseProvider):
             details_list.append(details)
         return details_list
 
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported inference parameters for Anthropic models."""
         return {
             "max_tokens": {"type": "integer", "minimum": 1},
@@ -147,7 +148,7 @@ class AnthropicProvider(BaseProvider):
             "stop_sequences": {"type": "array", "items": {"type": "string"}},
         }
 
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
+    def get_max_context_length(self, model: str | None = None) -> int:
         """Returns the maximum context length (tokens) for the given Anthropic model."""
         model_name = model or self.default_model
         limit = DEFAULT_ANTHROPIC_TOKEN_LIMITS.get(model_name)
@@ -159,13 +160,13 @@ class AnthropicProvider(BaseProvider):
         return limit
 
     def _convert_llmcore_msgs_to_anthropic(
-        self, messages: List[Message]
-    ) -> tuple[Optional[str], List[MessageParam]]:
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[MessageParam]]:
         """
         Converts a list of LLMCore `Message` objects to the format expected by the Anthropic API.
         """
-        anthropic_messages: List[MessageParam] = []
-        system_prompt: Optional[str] = None
+        anthropic_messages: list[MessageParam] = []
+        system_prompt: str | None = None
 
         processed_messages = list(messages)
         if processed_messages and processed_messages[0].role == LLMCoreRole.SYSTEM:
@@ -209,12 +210,12 @@ class AnthropicProvider(BaseProvider):
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Sends a chat completion request to the Anthropic API with standardized tool support.
         """
@@ -342,7 +343,7 @@ class AnthropicProvider(BaseProvider):
             logger.error(f"Unexpected error during Anthropic chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens using the synchronous Anthropic client wrapped in a thread."""
         if not self._sync_client_for_counting:
             logger.warning("Anthropic sync client not available. Approximating token count.")
@@ -356,7 +357,7 @@ class AnthropicProvider(BaseProvider):
             return (len(text) + 3) // 4
 
     async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
+        self, messages: list[Message], model: str | None = None
     ) -> int:
         """Approximates token count for a list of messages for Anthropic models."""
         # Anthropic's token counting is complex. A simple sum is a rough approximation.
@@ -380,7 +381,7 @@ class AnthropicProvider(BaseProvider):
 
         return await self.count_tokens(prompt_str, model)
 
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract text content from Anthropic non-streaming response.
 
@@ -403,7 +404,7 @@ class AnthropicProvider(BaseProvider):
             logger.warning(f"Failed to extract content from Anthropic response: {e}")
             return ""
 
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract text delta from Anthropic streaming chunk.
 

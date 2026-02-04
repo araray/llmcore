@@ -24,7 +24,7 @@ class BaseSessionStorage(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the storage backend with given configuration.
 
@@ -52,7 +52,7 @@ class BaseSessionStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+    async def get_session(self, session_id: str) -> ChatSession | None:
         """
         Retrieve a specific chat session by its unique ID.
 
@@ -65,7 +65,7 @@ class BaseSessionStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def list_sessions(self) -> List[Dict[str, Any]]:
+    async def list_sessions(self) -> list[dict[str, Any]]:
         """
         List available persistent chat sessions, returning metadata only.
 
@@ -123,7 +123,7 @@ class BaseSessionStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
+    async def get_context_preset(self, preset_name: str) -> ContextPreset | None:
         """
         Retrieve a specific context preset by its unique name.
 
@@ -136,7 +136,7 @@ class BaseSessionStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def list_context_presets(self) -> List[Dict[str, Any]]:
+    async def list_context_presets(self) -> list[dict[str, Any]]:
         """
         List available context presets, returning metadata only.
 
@@ -197,7 +197,7 @@ class BaseSessionStorage(abc.ABC):
     @abc.abstractmethod
     async def get_episodes(
         self, session_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """
         Retrieves a list of episodes for a given session, ordered by timestamp.
 

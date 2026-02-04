@@ -185,7 +185,7 @@ class WebhookConfig(BaseModel):
             "Webhook URL. Supports ${ENV_VAR} substitution. Example: '${ESCALATION_WEBHOOK_URL}'"
         ),
     )
-    headers: Dict[str, str] = Field(
+    headers: dict[str, str] = Field(
         default_factory=dict,
         description="Additional HTTP headers for the webhook request",
     )
@@ -393,7 +393,7 @@ class SkillsConfig(BaseModel):
         - UNIFIED_ECOSYSTEM_SPECIFICATION.md §13 (Skill Loading System)
     """
 
-    skill_directories: List[str] = Field(
+    skill_directories: list[str] = Field(
         default=["~/.local/share/llmcore/skills"],
         description=(
             "Directories to scan for skill markdown files. "
@@ -543,8 +543,8 @@ class AutonomousConfig(BaseModel):
 
 
 def load_autonomous_config(
-    config_dict: Optional[Dict[str, Any]] = None,
-    config_path: Optional[Path] = None,
+    config_dict: dict[str, Any] | None = None,
+    config_path: Path | None = None,
 ) -> AutonomousConfig:
     """
     Load autonomous configuration from a dictionary or TOML file.
@@ -574,7 +574,7 @@ def load_autonomous_config(
         >>> config.resources.max_cpu_percent
         60.0
     """
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
 
     if config_path is not None:
         import tomllib

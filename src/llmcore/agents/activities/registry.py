@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from collections.abc import Callable
 
 from .schema import (
     ActivityCategory,
@@ -61,11 +62,11 @@ class ExecutionContext:
 
     working_dir: str = "/tmp"
     sandbox_available: bool = False
-    sandbox_id: Optional[str] = None
+    sandbox_id: str | None = None
     timeout_seconds: int = 60
-    environment: Dict[str, str] = field(default_factory=dict)
-    session_id: Optional[str] = None
-    working_memory: Dict[str, Any] = field(default_factory=dict)  # In-context memory for activities
+    environment: dict[str, str] = field(default_factory=dict)
+    session_id: str | None = None
+    working_memory: dict[str, Any] = field(default_factory=dict)  # In-context memory for activities
 
 
 # =============================================================================
@@ -82,7 +83,7 @@ class RegisteredActivity:
     """
 
     definition: ActivityDefinition
-    handler: Optional[ActivityHandler] = None
+    handler: ActivityHandler | None = None
     source: str = "builtin"  # builtin, user, plugin
     enabled: bool = True
 
@@ -131,11 +132,11 @@ class ActivityRegistry:
         Args:
             auto_register_builtins: If True, automatically register built-in activities
         """
-        self._activities: Dict[str, RegisteredActivity] = {}
-        self._categories: Dict[ActivityCategory, Set[str]] = {
+        self._activities: dict[str, RegisteredActivity] = {}
+        self._categories: dict[ActivityCategory, set[str]] = {
             cat: set() for cat in ActivityCategory
         }
-        self._tags: Dict[str, Set[str]] = {}
+        self._tags: dict[str, set[str]] = {}
 
         if auto_register_builtins:
             self.register_builtins()
@@ -143,7 +144,7 @@ class ActivityRegistry:
     def register(
         self,
         definition: ActivityDefinition,
-        handler: Optional[ActivityHandler] = None,
+        handler: ActivityHandler | None = None,
         source: str = "user",
         enabled: bool = True,
         overwrite: bool = False,
@@ -209,7 +210,7 @@ class ActivityRegistry:
         logger.debug(f"Unregistered activity: {name}")
         return True
 
-    def get(self, name: str) -> Optional[RegisteredActivity]:
+    def get(self, name: str) -> RegisteredActivity | None:
         """
         Get a registered activity by name.
 
@@ -221,7 +222,7 @@ class ActivityRegistry:
         """
         return self._activities.get(name)
 
-    def get_definition(self, name: str) -> Optional[ActivityDefinition]:
+    def get_definition(self, name: str) -> ActivityDefinition | None:
         """
         Get activity definition by name.
 
@@ -262,7 +263,7 @@ class ActivityRegistry:
 
     def filter_by_category(
         self, category: ActivityCategory, enabled_only: bool = True
-    ) -> List[RegisteredActivity]:
+    ) -> list[RegisteredActivity]:
         """
         Filter activities by category.
 
@@ -281,7 +282,7 @@ class ActivityRegistry:
 
         return activities
 
-    def filter_by_tag(self, tag: str, enabled_only: bool = True) -> List[RegisteredActivity]:
+    def filter_by_tag(self, tag: str, enabled_only: bool = True) -> list[RegisteredActivity]:
         """
         Filter activities by tag.
 
@@ -302,7 +303,7 @@ class ActivityRegistry:
 
     def filter_by_risk_level(
         self, max_risk: RiskLevel, enabled_only: bool = True
-    ) -> List[RegisteredActivity]:
+    ) -> list[RegisteredActivity]:
         """
         Filter activities by maximum risk level.
 
@@ -332,7 +333,7 @@ class ActivityRegistry:
 
         return activities
 
-    def list_all(self, enabled_only: bool = True) -> List[RegisteredActivity]:
+    def list_all(self, enabled_only: bool = True) -> list[RegisteredActivity]:
         """
         List all registered activities.
 
@@ -347,7 +348,7 @@ class ActivityRegistry:
             activities = [a for a in activities if a.enabled]
         return activities
 
-    def list_names(self, enabled_only: bool = True) -> List[str]:
+    def list_names(self, enabled_only: bool = True) -> list[str]:
         """
         List all activity names.
 
@@ -363,8 +364,8 @@ class ActivityRegistry:
 
     def format_for_prompt(
         self,
-        categories: Optional[List[ActivityCategory]] = None,
-        max_risk: Optional[RiskLevel] = None,
+        categories: list[ActivityCategory] | None = None,
+        max_risk: RiskLevel | None = None,
         include_examples: bool = False,
         enabled_only: bool = True,
     ) -> str:
@@ -393,7 +394,7 @@ class ActivityRegistry:
         lines.append("```\n")
 
         # Group by category
-        by_category: Dict[ActivityCategory, List[RegisteredActivity]] = {}
+        by_category: dict[ActivityCategory, list[RegisteredActivity]] = {}
 
         for activity in self.list_all(enabled_only=enabled_only):
             if categories and activity.category not in categories:
@@ -468,7 +469,7 @@ class ActivityRegistry:
 # =============================================================================
 
 
-def get_builtin_activities() -> List[ActivityDefinition]:
+def get_builtin_activities() -> list[ActivityDefinition]:
     """
     Get all built-in activity definitions.
 
@@ -907,7 +908,7 @@ def get_builtin_activities() -> List[ActivityDefinition]:
 # =============================================================================
 
 # Default global registry instance
-_default_registry: Optional[ActivityRegistry] = None
+_default_registry: ActivityRegistry | None = None
 
 
 def get_default_registry() -> ActivityRegistry:

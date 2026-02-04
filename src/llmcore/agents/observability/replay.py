@@ -41,7 +41,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
+from collections.abc import Iterator
 
 from pydantic import BaseModel
 
@@ -89,10 +90,10 @@ class ReplayStep:
     event_id: str
     category: EventCategory
     event_type: str
-    phase: Optional[str]
-    iteration: Optional[int]
+    phase: str | None
+    iteration: int | None
     summary: str
-    duration_ms: Optional[float]
+    duration_ms: float | None
     event: AgentEvent
 
 
@@ -115,9 +116,9 @@ class ExecutionInfo:
     execution_id: str
     session_id: str
     start_time: datetime
-    end_time: Optional[datetime] = None
-    goal: Optional[str] = None
-    status: Optional[str] = None
+    end_time: datetime | None = None
+    goal: str | None = None
+    status: str | None = None
     event_count: int = 0
     error_count: int = 0
 
@@ -145,15 +146,15 @@ class ReplayResult:
     execution_id: str
     session_id: str
     start_time: datetime
-    end_time: Optional[datetime]
-    goal: Optional[str]
-    status: Optional[str]
+    end_time: datetime | None
+    goal: str | None
+    status: str | None
     total_events: int
-    timeline: List[ReplayStep]
-    phases: List[str] = field(default_factory=list)
-    activities: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    summary: Dict[str, Any] = field(default_factory=dict)
+    timeline: list[ReplayStep]
+    phases: list[str] = field(default_factory=list)
+    activities: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -161,7 +162,7 @@ class ReplayResult:
 # =============================================================================
 
 # Map category to event class for deserialization
-EVENT_CLASS_MAP: Dict[str, Type[AgentEvent]] = {
+EVENT_CLASS_MAP: dict[str, type[AgentEvent]] = {
     "lifecycle": LifecycleEvent,
     "cognitive": CognitiveEvent,
     "activity": ActivityEvent,
@@ -174,7 +175,7 @@ EVENT_CLASS_MAP: Dict[str, Type[AgentEvent]] = {
 }
 
 
-def parse_event(data: Dict[str, Any]) -> AgentEvent:
+def parse_event(data: dict[str, Any]) -> AgentEvent:
     """
     Parse event data into appropriate event class.
 
@@ -227,17 +228,17 @@ class ExecutionReplay:
         errors = replay.get_events(category=EventCategory.ERROR)
     """
 
-    def __init__(self, events: Optional[List[AgentEvent]] = None) -> None:
+    def __init__(self, events: list[AgentEvent] | None = None) -> None:
         """
         Initialize replay with events.
 
         Args:
             events: List of events to replay
         """
-        self._events: List[AgentEvent] = events or []
-        self._by_session: Dict[str, List[AgentEvent]] = {}
-        self._by_execution: Dict[str, List[AgentEvent]] = {}
-        self._execution_info: Dict[str, ExecutionInfo] = {}
+        self._events: list[AgentEvent] = events or []
+        self._by_session: dict[str, list[AgentEvent]] = {}
+        self._by_execution: dict[str, list[AgentEvent]] = {}
+        self._execution_info: dict[str, ExecutionInfo] = {}
 
         if self._events:
             self._index_events()
@@ -245,10 +246,10 @@ class ExecutionReplay:
     @classmethod
     def from_file(
         cls,
-        path: Union[str, Path],
+        path: str | Path,
         *,
-        max_events: Optional[int] = None,
-    ) -> "ExecutionReplay":
+        max_events: int | None = None,
+    ) -> ExecutionReplay:
         """
         Load replay from JSONL file.
 
@@ -260,13 +261,13 @@ class ExecutionReplay:
             ExecutionReplay instance
         """
         path = Path(path)
-        events: List[AgentEvent] = []
+        events: list[AgentEvent] = []
 
         if not path.exists():
             logger.warning(f"Event log not found: {path}")
             return cls(events)
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for i, line in enumerate(f):
                 if max_events and i >= max_events:
                     break
@@ -288,7 +289,7 @@ class ExecutionReplay:
         return cls(events)
 
     @classmethod
-    def from_events(cls, events: List[AgentEvent]) -> "ExecutionReplay":
+    def from_events(cls, events: list[AgentEvent]) -> ExecutionReplay:
         """
         Create replay from list of events.
 
@@ -361,11 +362,11 @@ class ExecutionReplay:
     def list_executions(
         self,
         *,
-        session_id: Optional[str] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
+        session_id: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
         limit: int = 100,
-    ) -> List[ExecutionInfo]:
+    ) -> list[ExecutionInfo]:
         """
         List available executions.
 
@@ -378,7 +379,7 @@ class ExecutionReplay:
         Returns:
             List of execution info
         """
-        results: List[ExecutionInfo] = []
+        results: list[ExecutionInfo] = []
 
         for info in sorted(
             self._execution_info.values(),
@@ -401,7 +402,7 @@ class ExecutionReplay:
 
         return results
 
-    def list_sessions(self) -> List[str]:
+    def list_sessions(self) -> list[str]:
         """
         List all session IDs.
 
@@ -438,13 +439,13 @@ class ExecutionReplay:
         events = sorted(events, key=lambda e: e.timestamp)
 
         # Build timeline
-        timeline: List[ReplayStep] = []
-        phases: Set[str] = set()
-        activities: Set[str] = set()
-        errors: List[str] = []
+        timeline: list[ReplayStep] = []
+        phases: set[str] = set()
+        activities: set[str] = set()
+        errors: list[str] = []
 
-        goal: Optional[str] = None
-        status: Optional[str] = None
+        goal: str | None = None
+        status: str | None = None
         session_id = events[0].session_id
         start_time = events[0].timestamp
         end_time = events[-1].timestamp
@@ -557,11 +558,11 @@ class ExecutionReplay:
 
     def _build_execution_summary(
         self,
-        events: List[AgentEvent],
-    ) -> Dict[str, Any]:
+        events: list[AgentEvent],
+    ) -> dict[str, Any]:
         """Build execution summary from events."""
         # Count by category
-        category_counts: Dict[str, int] = {}
+        category_counts: dict[str, int] = {}
         for event in events:
             # Handle both enum and string categories
             cat = event.category.value if hasattr(event.category, "value") else str(event.category)
@@ -574,13 +575,13 @@ class ExecutionReplay:
                 iterations.add(event.iteration)
 
         # Collect durations
-        durations: List[float] = []
+        durations: list[float] = []
         for event in events:
             if event.duration_ms is not None:
                 durations.append(event.duration_ms)
 
         # Collect activities
-        activity_results: Dict[str, Dict[str, int]] = {}
+        activity_results: dict[str, dict[str, int]] = {}
         for event in events:
             if isinstance(event, ActivityEvent):
                 name = event.activity_name
@@ -605,18 +606,18 @@ class ExecutionReplay:
     def get_events(
         self,
         *,
-        session_id: Optional[str] = None,
-        execution_id: Optional[str] = None,
-        category: Optional[EventCategory] = None,
-        event_type: Optional[str] = None,
-        severity: Optional[EventSeverity] = None,
-        phase: Optional[str] = None,
-        iteration: Optional[int] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
-        has_duration: Optional[bool] = None,
-        limit: Optional[int] = None,
-    ) -> List[AgentEvent]:
+        session_id: str | None = None,
+        execution_id: str | None = None,
+        category: EventCategory | None = None,
+        event_type: str | None = None,
+        severity: EventSeverity | None = None,
+        phase: str | None = None,
+        iteration: int | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        has_duration: bool | None = None,
+        limit: int | None = None,
+    ) -> list[AgentEvent]:
         """
         Get filtered events.
 
@@ -645,7 +646,7 @@ class ExecutionReplay:
             events = self._events
 
         # Apply filters
-        result: List[AgentEvent] = []
+        result: list[AgentEvent] = []
 
         for event in events:
             if limit and len(result) >= limit:
@@ -684,9 +685,9 @@ class ExecutionReplay:
     def get_errors(
         self,
         *,
-        execution_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-    ) -> List[ErrorEvent]:
+        execution_id: str | None = None,
+        session_id: str | None = None,
+    ) -> list[ErrorEvent]:
         """
         Get all error events.
 
@@ -707,11 +708,11 @@ class ExecutionReplay:
     def get_activities(
         self,
         *,
-        execution_id: Optional[str] = None,
-        activity_name: Optional[str] = None,
+        execution_id: str | None = None,
+        activity_name: str | None = None,
         success_only: bool = False,
         failed_only: bool = False,
-    ) -> List[ActivityEvent]:
+    ) -> list[ActivityEvent]:
         """
         Get activity events.
 
@@ -729,7 +730,7 @@ class ExecutionReplay:
             category=EventCategory.ACTIVITY,
         )
 
-        result: List[ActivityEvent] = []
+        result: list[ActivityEvent] = []
         for event in events:
             if not isinstance(event, ActivityEvent):
                 continue
@@ -754,7 +755,7 @@ class ExecutionReplay:
     def iter_events(
         self,
         *,
-        execution_id: Optional[str] = None,
+        execution_id: str | None = None,
     ) -> Iterator[AgentEvent]:
         """
         Iterate over events in chronological order.
@@ -805,10 +806,10 @@ class ReplayStepModel(BaseModel):
     event_id: str
     category: str
     event_type: str
-    phase: Optional[str]
-    iteration: Optional[int]
+    phase: str | None
+    iteration: int | None
     summary: str
-    duration_ms: Optional[float]
+    duration_ms: float | None
 
 
 class ReplayResultModel(BaseModel):
@@ -817,15 +818,15 @@ class ReplayResultModel(BaseModel):
     execution_id: str
     session_id: str
     start_time: datetime
-    end_time: Optional[datetime]
-    goal: Optional[str]
-    status: Optional[str]
+    end_time: datetime | None
+    goal: str | None
+    status: str | None
     total_events: int
-    timeline: List[ReplayStepModel]
-    phases: List[str]
-    activities: List[str]
-    errors: List[str]
-    summary: Dict[str, Any]
+    timeline: list[ReplayStepModel]
+    phases: list[str]
+    activities: list[str]
+    errors: list[str]
+    summary: dict[str, Any]
 
 
 class ExecutionInfoModel(BaseModel):
@@ -834,9 +835,9 @@ class ExecutionInfoModel(BaseModel):
     execution_id: str
     session_id: str
     start_time: datetime
-    end_time: Optional[datetime]
-    goal: Optional[str]
-    status: Optional[str]
+    end_time: datetime | None
+    goal: str | None
+    status: str | None
     event_count: int
     error_count: int
 

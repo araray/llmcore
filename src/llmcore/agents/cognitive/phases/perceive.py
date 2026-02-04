@@ -40,7 +40,7 @@ async def perceive_phase(
     perceive_input: PerceiveInput,
     memory_manager: "MemoryManager",
     sandbox: Optional["SandboxProvider"] = None,
-    tracer: Optional[Any] = None,
+    tracer: Any | None = None,
 ) -> PerceiveOutput:
     """
     Execute the PERCEIVE phase of the cognitive cycle.
@@ -129,8 +129,8 @@ async def perceive_phase(
 
 
 async def _retrieve_context(
-    goal: str, context_query: Optional[str], memory_manager: "MemoryManager", force_refresh: bool
-) -> List[str]:
+    goal: str, context_query: str | None, memory_manager: "MemoryManager", force_refresh: bool
+) -> list[str]:
     """
     Retrieve relevant context from memory systems.
 
@@ -174,7 +174,7 @@ async def _retrieve_context(
 
 async def _capture_environmental_state(
     agent_state: EnhancedAgentState, sandbox: Optional["SandboxProvider"]
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Capture current environmental state.
 

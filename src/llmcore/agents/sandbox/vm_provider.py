@@ -89,8 +89,8 @@ class VMSandboxProvider(SandboxProvider):
         host: str,
         port: int = 22,
         username: str = "agent",
-        private_key_path: Optional[str] = None,
-        full_access_hosts: Optional[List[str]] = None,
+        private_key_path: str | None = None,
+        full_access_hosts: list[str] | None = None,
         use_ssh_agent: bool = True,
         connection_timeout: int = 30,
     ):
@@ -119,10 +119,10 @@ class VMSandboxProvider(SandboxProvider):
         self._connection_timeout = connection_timeout
 
         # Runtime state
-        self._client: Optional[Any] = None  # paramiko.SSHClient
-        self._sftp: Optional[Any] = None  # paramiko.SFTPClient
-        self._config: Optional[SandboxConfig] = None
-        self._access_level: Optional[SandboxAccessLevel] = None
+        self._client: Any | None = None  # paramiko.SSHClient
+        self._sftp: Any | None = None  # paramiko.SFTPClient
+        self._config: SandboxConfig | None = None
+        self._access_level: SandboxAccessLevel | None = None
         self._status: SandboxStatus = SandboxStatus.CREATED
         self._workspace: str = ""
 
@@ -151,7 +151,7 @@ class VMSandboxProvider(SandboxProvider):
         logger.info(f"VM '{self._host}' will run in RESTRICTED mode")
         return SandboxAccessLevel.RESTRICTED
 
-    def _load_private_key(self) -> Optional[Any]:
+    def _load_private_key(self) -> Any | None:
         """
         Load the private key for authentication.
 
@@ -377,7 +377,7 @@ mkdir -p {self._workspace}/share
             )
 
     async def execute_shell(
-        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, command: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute a shell command on the VM.
@@ -459,7 +459,7 @@ mkdir -p {self._workspace}/share
                 timed_out=False,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if self._status == SandboxStatus.EXECUTING:
                 self._status = SandboxStatus.READY
 
@@ -487,7 +487,7 @@ mkdir -p {self._workspace}/share
             )
 
     async def execute_python(
-        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, code: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute Python code on the VM.
@@ -558,7 +558,7 @@ mkdir -p {self._workspace}/share
         with self._sftp.open(path, mode) as f:
             f.write(content)
 
-    async def read_file(self, path: str) -> Optional[str]:
+    async def read_file(self, path: str) -> str | None:
         """
         Read content from a file on the VM.
 
@@ -624,7 +624,7 @@ mkdir -p {self._workspace}/share
         with self._sftp.open(path, "wb") as f:
             f.write(content)
 
-    async def read_file_binary(self, path: str) -> Optional[bytes]:
+    async def read_file_binary(self, path: str) -> bytes | None:
         """
         Read binary content from a file on the VM.
 
@@ -655,7 +655,7 @@ mkdir -p {self._workspace}/share
         with self._sftp.open(path, "rb") as f:
             return f.read()
 
-    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> list[FileInfo]:
         """
         List files in a directory on the VM.
 
@@ -857,11 +857,11 @@ mkdir -p {self._workspace}/share
         """Get the current status of the sandbox."""
         return self._status
 
-    def get_config(self) -> Optional[SandboxConfig]:
+    def get_config(self) -> SandboxConfig | None:
         """Get the configuration used for this sandbox."""
         return self._config
 
-    def get_info(self) -> Dict[str, Any]:
+    def get_info(self) -> dict[str, Any]:
         """
         Get detailed information about the VM sandbox.
 

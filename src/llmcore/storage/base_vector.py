@@ -25,7 +25,7 @@ class BaseVectorStorage(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the vector storage backend with given configuration.
 
@@ -41,8 +41,8 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def add_documents(
-        self, documents: List[ContextDocument], collection_name: Optional[str] = None
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str | None = None
+    ) -> list[str]:
         """
         Add or update multiple documents in the specified collection.
 
@@ -70,11 +70,11 @@ class BaseVectorStorage(abc.ABC):
     @abc.abstractmethod
     async def similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        collection_name: Optional[str] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[ContextDocument]:
+        collection_name: str | None = None,
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[ContextDocument]:
         """
         Perform a similarity search for documents based on a query embedding.
 
@@ -104,7 +104,7 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def delete_documents(
-        self, document_ids: List[str], collection_name: Optional[str] = None
+        self, document_ids: list[str], collection_name: str | None = None
     ) -> bool:
         """
         Delete documents from the specified collection by their IDs.
@@ -126,7 +126,7 @@ class BaseVectorStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def list_collection_names(self) -> List[str]:
+    async def list_collection_names(self) -> list[str]:
         """
         List the names of all available collections in the vector store.
 
@@ -140,8 +140,8 @@ class BaseVectorStorage(abc.ABC):
 
     @abc.abstractmethod
     async def get_collection_metadata(
-        self, collection_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Retrieve the metadata associated with a specific collection.
 

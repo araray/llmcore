@@ -21,7 +21,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -129,7 +129,7 @@ class OutputFormatter:
 
 
 def cmd_validate(
-    config_path: Optional[str] = None, strict: bool = False, formatter: OutputFormatter = None
+    config_path: str | None = None, strict: bool = False, formatter: OutputFormatter = None
 ) -> int:
     """
     Validate storage configuration.
@@ -192,8 +192,8 @@ def cmd_validate(
 
 
 def cmd_health(
-    config_path: Optional[str] = None,
-    backend: Optional[str] = None,
+    config_path: str | None = None,
+    backend: str | None = None,
     formatter: OutputFormatter = None,
 ) -> int:
     """
@@ -220,7 +220,7 @@ def cmd_health(
 
     if formatter.json_output:
         output = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "overall_healthy": True,
             "backends": {},
         }
@@ -272,7 +272,7 @@ def cmd_health(
 
 
 def cmd_schema(
-    action: str = "status", target_version: Optional[int] = None, formatter: OutputFormatter = None
+    action: str = "status", target_version: int | None = None, formatter: OutputFormatter = None
 ) -> int:
     """
     Manage storage schema.
@@ -337,7 +337,7 @@ def cmd_schema(
     return 0
 
 
-def cmd_info(config_path: Optional[str] = None, formatter: OutputFormatter = None) -> int:
+def cmd_info(config_path: str | None = None, formatter: OutputFormatter = None) -> int:
     """
     Display storage configuration information.
 
@@ -401,8 +401,8 @@ def cmd_info(config_path: Optional[str] = None, formatter: OutputFormatter = Non
 
 
 def cmd_stats(
-    storage_manager: Optional[Any] = None,
-    formatter: Optional[OutputFormatter] = None,
+    storage_manager: Any | None = None,
+    formatter: OutputFormatter | None = None,
 ) -> int:
     """
     Display storage statistics and metrics.
@@ -496,8 +496,8 @@ def cmd_stats(
 
 def cmd_inspect(
     session_id: str,
-    storage_manager: Optional[Any] = None,
-    formatter: Optional[OutputFormatter] = None,
+    storage_manager: Any | None = None,
+    formatter: OutputFormatter | None = None,
 ) -> int:
     """
     Inspect a specific session.
@@ -598,9 +598,9 @@ def cmd_inspect(
 
 
 def cmd_diagnose(
-    storage_manager: Optional[Any] = None,
-    config_path: Optional[str] = None,
-    formatter: Optional[OutputFormatter] = None,
+    storage_manager: Any | None = None,
+    config_path: str | None = None,
+    formatter: OutputFormatter | None = None,
 ) -> int:
     """
     Run comprehensive storage diagnostics.
@@ -622,7 +622,7 @@ def cmd_diagnose(
     formatter = formatter or OutputFormatter()
 
     diagnostics = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "checks": [],
         "issues": [],
         "warnings": [],
@@ -759,10 +759,10 @@ def cmd_diagnose(
 
 
 def cmd_cleanup(
-    storage_manager: Optional[Any] = None,
+    storage_manager: Any | None = None,
     dry_run: bool = True,
     retention_days: int = 30,
-    formatter: Optional[OutputFormatter] = None,
+    formatter: OutputFormatter | None = None,
 ) -> int:
     """
     Clean up old or orphaned data.
@@ -854,7 +854,7 @@ def cmd_cleanup(
 # =============================================================================
 
 
-def _load_config(config_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _load_config(config_path: str | None = None) -> dict[str, Any] | None:
     """
     Load configuration from file.
 
@@ -891,7 +891,7 @@ def _load_config(config_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     return {}
 
 
-def _load_toml_config(path: str) -> Optional[Dict[str, Any]]:
+def _load_toml_config(path: str) -> dict[str, Any] | None:
     """Load a TOML configuration file."""
     try:
         import tomllib
@@ -909,7 +909,7 @@ def _load_toml_config(path: str) -> Optional[Dict[str, Any]]:
             else:
                 # toml package uses text mode
                 f.close()
-                with open(path, "r") as f2:
+                with open(path) as f2:
                     return tomllib.load(f2)
     except Exception as e:
         logger.error(f"Failed to load config from {path}: {e}")
@@ -943,7 +943,7 @@ class StorageCommands:
         /storage info
     """
 
-    def __init__(self, storage_manager: Optional[Any] = None):
+    def __init__(self, storage_manager: Any | None = None):
         """
         Initialize storage commands.
 
@@ -953,7 +953,7 @@ class StorageCommands:
         self.storage_manager = storage_manager
         self.formatter = OutputFormatter()
 
-    def health(self, backend: Optional[str] = None) -> str:
+    def health(self, backend: str | None = None) -> str:
         """Check storage health status."""
         if self.storage_manager is not None:
             # Use live health data from manager
@@ -962,7 +962,7 @@ class StorageCommands:
         else:
             return "Storage manager not initialized. Run /storage health after initialization."
 
-    def validate(self, config_path: Optional[str] = None, strict: bool = False) -> str:
+    def validate(self, config_path: str | None = None, strict: bool = False) -> str:
         """Validate storage configuration."""
         import io
         from contextlib import redirect_stdout
@@ -982,7 +982,7 @@ class StorageCommands:
             cmd_schema(action, formatter=self.formatter)
         return f.getvalue()
 
-    def info(self, config_path: Optional[str] = None) -> str:
+    def info(self, config_path: str | None = None) -> str:
         """Show storage configuration info."""
         import io
         from contextlib import redirect_stdout
@@ -1030,7 +1030,7 @@ Phase 4 (PANOPTICON) Commands:
             cmd_inspect(session_id, self.storage_manager, self.formatter)
         return f.getvalue()
 
-    def diagnose(self, config_path: Optional[str] = None) -> str:
+    def diagnose(self, config_path: str | None = None) -> str:
         """Run comprehensive diagnostics."""
         import io
         from contextlib import redirect_stdout
@@ -1050,7 +1050,7 @@ Phase 4 (PANOPTICON) Commands:
             cmd_cleanup(self.storage_manager, not execute, retention_days, self.formatter)
         return f.getvalue()
 
-    def _format_health_report(self, report: Dict[str, Any]) -> str:
+    def _format_health_report(self, report: dict[str, Any]) -> str:
         """Format health report for REPL output."""
         lines = ["Storage Health Report", "=" * 40, ""]
 
@@ -1134,7 +1134,7 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(args: Optional[List[str]] = None) -> int:
+def main(args: list[str] | None = None) -> int:
     """
     Main entry point for storage CLI.
 

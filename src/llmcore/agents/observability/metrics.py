@@ -44,7 +44,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from statistics import mean, stdev
 from typing import Any, Dict, List, Optional, Union
@@ -90,7 +90,7 @@ class IterationMetrics:
 
     iteration: int
     duration_ms: float
-    phase_durations: Dict[str, float] = field(default_factory=dict)
+    phase_durations: dict[str, float] = field(default_factory=dict)
     tokens_used: int = 0
     activities_executed: int = 0
     errors_occurred: int = 0
@@ -106,7 +106,7 @@ class LLMCallMetrics:
     duration_ms: float
     cost: float
     cache_hit: bool = False
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -117,7 +117,7 @@ class ActivityMetrics:
     success: bool
     duration_ms: float
     retry_count: int = 0
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -130,7 +130,7 @@ class HITLMetrics:
     approved: bool
     wait_time_ms: float
     timeout_occurred: bool = False
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # =============================================================================
@@ -157,8 +157,8 @@ class ExecutionMetrics:
     def __init__(
         self,
         execution_id: str,
-        session_id: Optional[str] = None,
-        goal: Optional[str] = None,
+        session_id: str | None = None,
+        goal: str | None = None,
     ) -> None:
         """
         Initialize execution metrics.
@@ -173,27 +173,27 @@ class ExecutionMetrics:
         self.goal = goal
 
         # Timing
-        self.start_time = datetime.now(timezone.utc)
-        self.end_time: Optional[datetime] = None
+        self.start_time = datetime.now(UTC)
+        self.end_time: datetime | None = None
         self._start_monotonic = time.monotonic()
 
         # Status
         self.status = ExecutionStatus.RUNNING
-        self.exit_reason: Optional[str] = None
+        self.exit_reason: str | None = None
 
         # Iterations
-        self._iterations: List[IterationMetrics] = []
+        self._iterations: list[IterationMetrics] = []
         self._current_iteration: int = 0
-        self._iteration_start: Optional[float] = None
+        self._iteration_start: float | None = None
 
         # LLM calls
-        self._llm_calls: List[LLMCallMetrics] = []
+        self._llm_calls: list[LLMCallMetrics] = []
 
         # Activities
-        self._activities: List[ActivityMetrics] = []
+        self._activities: list[ActivityMetrics] = []
 
         # HITL
-        self._hitl_interactions: List[HITLMetrics] = []
+        self._hitl_interactions: list[HITLMetrics] = []
 
         # Aggregates
         self._total_tokens_input: int = 0
@@ -220,7 +220,7 @@ class ExecutionMetrics:
 
     def end_iteration(
         self,
-        phase_durations: Optional[Dict[str, float]] = None,
+        phase_durations: dict[str, float] | None = None,
         tokens_used: int = 0,
         activities_executed: int = 0,
         errors_occurred: int = 0,
@@ -260,7 +260,7 @@ class ExecutionMetrics:
         self,
         duration_ms: float,
         *,
-        phase_durations: Optional[Dict[str, float]] = None,
+        phase_durations: dict[str, float] | None = None,
         tokens_used: int = 0,
         activities_executed: int = 0,
         errors_occurred: int = 0,
@@ -443,7 +443,7 @@ class ExecutionMetrics:
     def complete(
         self,
         success: bool,
-        exit_reason: Optional[str] = None,
+        exit_reason: str | None = None,
     ) -> None:
         """
         Mark execution as complete.
@@ -452,7 +452,7 @@ class ExecutionMetrics:
             success: Whether execution succeeded
             exit_reason: Reason for completion
         """
-        self.end_time = datetime.now(timezone.utc)
+        self.end_time = datetime.now(UTC)
         self.status = ExecutionStatus.SUCCESS if success else ExecutionStatus.FAILURE
         self.exit_reason = exit_reason
 
@@ -463,7 +463,7 @@ class ExecutionMetrics:
         Args:
             reason: Timeout reason
         """
-        self.end_time = datetime.now(timezone.utc)
+        self.end_time = datetime.now(UTC)
         self.status = ExecutionStatus.TIMEOUT
         self.exit_reason = reason
 
@@ -474,7 +474,7 @@ class ExecutionMetrics:
         Args:
             reason: Cancellation reason
         """
-        self.end_time = datetime.now(timezone.utc)
+        self.end_time = datetime.now(UTC)
         self.status = ExecutionStatus.CANCELLED
         self.exit_reason = reason
 
@@ -544,7 +544,7 @@ class ExecutionMetrics:
     # SUMMARY
     # =========================================================================
 
-    def to_summary(self) -> Dict[str, Any]:
+    def to_summary(self) -> dict[str, Any]:
         """
         Get comprehensive execution summary.
 
@@ -552,9 +552,9 @@ class ExecutionMetrics:
             Summary dictionary
         """
         # Activity breakdown
-        activity_counts: Dict[str, int] = defaultdict(int)
-        activity_successes: Dict[str, int] = defaultdict(int)
-        activity_durations: Dict[str, List[float]] = defaultdict(list)
+        activity_counts: dict[str, int] = defaultdict(int)
+        activity_successes: dict[str, int] = defaultdict(int)
+        activity_durations: dict[str, list[float]] = defaultdict(list)
 
         for act in self._activities:
             activity_counts[act.activity_name] += 1
@@ -576,9 +576,9 @@ class ExecutionMetrics:
         }
 
         # Model breakdown
-        model_calls: Dict[str, int] = defaultdict(int)
-        model_tokens: Dict[str, int] = defaultdict(int)
-        model_costs: Dict[str, float] = defaultdict(float)
+        model_calls: dict[str, int] = defaultdict(int)
+        model_tokens: dict[str, int] = defaultdict(int)
+        model_costs: dict[str, float] = defaultdict(float)
 
         for call in self._llm_calls:
             model_calls[call.model] += 1
@@ -681,16 +681,16 @@ class MetricsCollector:
             max_history: Maximum executions to track
         """
         self.max_history = max_history
-        self._executions: Dict[str, ExecutionMetrics] = {}
-        self._execution_order: List[str] = []  # For FIFO eviction
-        self._active_executions: Dict[str, ExecutionMetrics] = {}
+        self._executions: dict[str, ExecutionMetrics] = {}
+        self._execution_order: list[str] = []  # For FIFO eviction
+        self._active_executions: dict[str, ExecutionMetrics] = {}
 
     def start_execution(
         self,
         execution_id: str,
         *,
-        session_id: Optional[str] = None,
-        goal: Optional[str] = None,
+        session_id: str | None = None,
+        goal: str | None = None,
     ) -> ExecutionMetrics:
         """
         Start tracking a new execution.
@@ -717,8 +717,8 @@ class MetricsCollector:
         self,
         execution_id: str,
         success: bool,
-        exit_reason: Optional[str] = None,
-    ) -> Optional[ExecutionMetrics]:
+        exit_reason: str | None = None,
+    ) -> ExecutionMetrics | None:
         """
         End execution tracking and store metrics.
 
@@ -756,7 +756,7 @@ class MetricsCollector:
     def get_execution(
         self,
         execution_id: str,
-    ) -> Optional[ExecutionMetrics]:
+    ) -> ExecutionMetrics | None:
         """
         Get metrics for a specific execution.
 
@@ -774,10 +774,10 @@ class MetricsCollector:
     def list_executions(
         self,
         *,
-        status: Optional[ExecutionStatus] = None,
-        since: Optional[datetime] = None,
+        status: ExecutionStatus | None = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List execution IDs.
 
@@ -812,9 +812,9 @@ class MetricsCollector:
     def get_summary(
         self,
         *,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         include_active: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get aggregated summary statistics.
 
@@ -826,7 +826,7 @@ class MetricsCollector:
             Summary statistics dictionary
         """
         # Collect relevant executions
-        executions: List[ExecutionMetrics] = []
+        executions: list[ExecutionMetrics] = []
 
         for metrics in self._executions.values():
             if since is not None and metrics.start_time < since:
@@ -880,8 +880,8 @@ class MetricsCollector:
 
     def _compute_percentiles(
         self,
-        values: List[float],
-    ) -> Dict[str, float]:
+        values: list[float],
+    ) -> dict[str, float]:
         """Compute percentile statistics."""
         if not values:
             return {}
@@ -908,7 +908,7 @@ class MetricsCollector:
 
         return result
 
-    def _empty_summary(self) -> Dict[str, Any]:
+    def _empty_summary(self) -> dict[str, Any]:
         """Return empty summary structure."""
         return {
             "total_executions": 0,
@@ -950,13 +950,13 @@ class MetricsSummary(BaseModel):
     completed_executions: int = Field(description="Completed executions")
     success_rate: float = Field(description="Success rate (0-1)")
 
-    status_breakdown: Dict[str, int] = Field(description="Count by status")
+    status_breakdown: dict[str, int] = Field(description="Count by status")
 
-    latency: Dict[str, float] = Field(default_factory=dict, description="Latency percentiles")
+    latency: dict[str, float] = Field(default_factory=dict, description="Latency percentiles")
 
-    iterations: Dict[str, Union[int, float]] = Field(description="Iteration statistics")
-    tokens: Dict[str, Union[int, float]] = Field(description="Token statistics")
-    cost: Dict[str, float] = Field(description="Cost statistics")
+    iterations: dict[str, int | float] = Field(description="Iteration statistics")
+    tokens: dict[str, int | float] = Field(description="Token statistics")
+    cost: dict[str, float] = Field(description="Cost statistics")
 
     activity_success_rate: float = Field(description="Activity success rate")
     cache_hit_rate: float = Field(description="Cache hit rate")
@@ -967,19 +967,19 @@ class ExecutionSummary(BaseModel):
 
     execution_id: str
     session_id: str
-    goal: Optional[str]
+    goal: str | None
     status: str
-    exit_reason: Optional[str]
+    exit_reason: str | None
 
-    timing: Dict[str, Any]
-    iterations: Dict[str, Any]
-    tokens: Dict[str, Any]
-    cost: Dict[str, Any]
-    activities: Dict[str, Any]
-    llm_calls: Dict[str, Any]
-    cache: Dict[str, Any]
-    hitl: Dict[str, Any]
-    errors: Dict[str, Any]
+    timing: dict[str, Any]
+    iterations: dict[str, Any]
+    tokens: dict[str, Any]
+    cost: dict[str, Any]
+    activities: dict[str, Any]
+    llm_calls: dict[str, Any]
+    cache: dict[str, Any]
+    hitl: dict[str, Any]
+    errors: dict[str, Any]
 
 
 # =============================================================================

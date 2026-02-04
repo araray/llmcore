@@ -88,12 +88,12 @@ class ReflectionInsight:
     priority: InsightPriority = InsightPriority.MEDIUM
     source_iteration: int = 0
     actionable: bool = True
-    action_guidance: Optional[str] = None
-    avoid_patterns: List[str] = field(default_factory=list)
-    prefer_patterns: List[str] = field(default_factory=list)
+    action_guidance: str | None = None
+    avoid_patterns: list[str] = field(default_factory=list)
+    prefer_patterns: list[str] = field(default_factory=list)
     timestamp: float = field(default_factory=time.time)
     applied_count: int = 0
-    effective: Optional[bool] = None  # True if behavior changed after applying
+    effective: bool | None = None  # True if behavior changed after applying
 
     def to_guidance(self) -> str:
         """Convert insight to actionable guidance."""
@@ -115,11 +115,11 @@ class ReflectionInsight:
 class GuidanceSet:
     """Collection of guidance for a phase."""
 
-    constraints: List[str] = field(default_factory=list)  # Hard constraints
-    recommendations: List[str] = field(default_factory=list)  # Soft recommendations
-    avoid: Set[str] = field(default_factory=set)  # Patterns to avoid
-    prefer: Set[str] = field(default_factory=set)  # Patterns to prefer
-    context: List[str] = field(default_factory=list)  # Additional context
+    constraints: list[str] = field(default_factory=list)  # Hard constraints
+    recommendations: list[str] = field(default_factory=list)  # Soft recommendations
+    avoid: set[str] = field(default_factory=set)  # Patterns to avoid
+    prefer: set[str] = field(default_factory=set)  # Patterns to prefer
+    context: list[str] = field(default_factory=list)  # Additional context
 
     def format(self, max_items: int = 5) -> str:
         """Format guidance for injection into prompts."""
@@ -223,7 +223,7 @@ class InsightExtractor:
         self,
         reflection_text: str,
         iteration: int = 0,
-    ) -> List[ReflectionInsight]:
+    ) -> list[ReflectionInsight]:
         """Extract insights from reflection text."""
         insights = []
 
@@ -239,7 +239,7 @@ class InsightExtractor:
         # Deduplicate and prioritize
         return self._deduplicate(insights)
 
-    def _split_sentences(self, text: str) -> List[str]:
+    def _split_sentences(self, text: str) -> list[str]:
         """Split text into sentences."""
         import re
 
@@ -287,7 +287,7 @@ class InsightExtractor:
             prefer_patterns=prefer_patterns,
         )
 
-    def _extract_action_guidance(self, sentence: str) -> Optional[str]:
+    def _extract_action_guidance(self, sentence: str) -> str | None:
         """Extract actionable guidance from sentence."""
         import re
 
@@ -305,7 +305,7 @@ class InsightExtractor:
 
         return None
 
-    def _extract_avoid_patterns(self, sentence: str) -> List[str]:
+    def _extract_avoid_patterns(self, sentence: str) -> list[str]:
         """Extract patterns to avoid."""
         import re
 
@@ -329,7 +329,7 @@ class InsightExtractor:
 
         return patterns
 
-    def _extract_prefer_patterns(self, sentence: str) -> List[str]:
+    def _extract_prefer_patterns(self, sentence: str) -> list[str]:
         """Extract patterns to prefer."""
         import re
 
@@ -353,13 +353,13 @@ class InsightExtractor:
 
         return patterns
 
-    def _deduplicate(self, insights: List[ReflectionInsight]) -> List[ReflectionInsight]:
+    def _deduplicate(self, insights: list[ReflectionInsight]) -> list[ReflectionInsight]:
         """Deduplicate and merge similar insights."""
         if not insights:
             return []
 
         # Group by type
-        by_type: Dict[InsightType, List[ReflectionInsight]] = {}
+        by_type: dict[InsightType, list[ReflectionInsight]] = {}
         for insight in insights:
             by_type.setdefault(insight.insight_type, []).append(insight)
 
@@ -420,7 +420,7 @@ class ReflectionBridge:
         self.insight_ttl_iterations = insight_ttl_iterations
         self.auto_extract = auto_extract
 
-        self._insights: List[ReflectionInsight] = []
+        self._insights: list[ReflectionInsight] = []
         self._extractor = InsightExtractor()
         self._current_iteration = 0
 
@@ -428,7 +428,7 @@ class ReflectionBridge:
         self,
         reflection_text: str,
         iteration: int,
-    ) -> List[ReflectionInsight]:
+    ) -> list[ReflectionInsight]:
         """
         Process a REFLECT phase output and extract insights.
 
@@ -523,7 +523,7 @@ class ReflectionBridge:
 
     def get_guidance(
         self,
-        insight_types: Optional[List[InsightType]] = None,
+        insight_types: list[InsightType] | None = None,
         max_items: int = 10,
     ) -> GuidanceSet:
         """
@@ -614,7 +614,7 @@ class ReflectionBridge:
         if not effective:
             logger.debug(f"Insight marked as ineffective: {insight.content[:50]}")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get statistics about accumulated insights."""
         if not self._insights:
             return {
@@ -652,7 +652,7 @@ class ReflectionBridge:
         self._current_iteration = 0
 
     @property
-    def insights(self) -> List[ReflectionInsight]:
+    def insights(self) -> list[ReflectionInsight]:
         """Get all current insights."""
         return self._insights.copy()
 

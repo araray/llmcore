@@ -37,8 +37,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
     Any,
-    Callable,
-    Coroutine,
     Dict,
     Generic,
     List,
@@ -49,6 +47,7 @@ from typing import (
     Union,
     runtime_checkable,
 )
+from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +98,9 @@ class StorageContext:
         ctx = StorageContext.system_context()
     """
 
-    user_id: Optional[str] = None
-    namespace: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    user_id: str | None = None
+    namespace: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     read_only: bool = False
     require_user: bool = True
 
@@ -124,7 +123,7 @@ class StorageContext:
         return sanitized[:64]  # Limit length
 
     @classmethod
-    def system_context(cls, metadata: Optional[Dict[str, Any]] = None) -> "StorageContext":
+    def system_context(cls, metadata: dict[str, Any] | None = None) -> "StorageContext":
         """
         Create a system-level context without user isolation.
 
@@ -319,7 +318,7 @@ class StorageBackendProtocol(Protocol):
     this protocol for basic lifecycle and health operations.
     """
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """Initialize the backend with configuration."""
         ...
 
@@ -365,9 +364,9 @@ class QueryCondition:
     column: str
     operator: QueryOperator
     value: Any
-    parameter_name: Optional[str] = None
+    parameter_name: str | None = None
 
-    def to_sql_postgres(self, param_index: int) -> Tuple[str, Optional[Any]]:
+    def to_sql_postgres(self, param_index: int) -> tuple[str, Any | None]:
         """Generate PostgreSQL condition with $n placeholder."""
         if self.operator in (QueryOperator.IS_NULL, QueryOperator.IS_NOT_NULL):
             return f"{self.column} {self.operator.value}", None
@@ -376,7 +375,7 @@ class QueryCondition:
         else:
             return f"{self.column} {self.operator.value} ${param_index}", self.value
 
-    def to_sql_sqlite(self, param_index: int) -> Tuple[str, Optional[Any]]:
+    def to_sql_sqlite(self, param_index: int) -> tuple[str, Any | None]:
         """Generate SQLite condition with ? placeholder."""
         if self.operator in (QueryOperator.IS_NULL, QueryOperator.IS_NOT_NULL):
             return f"{self.column} {self.operator.value}", None
@@ -387,7 +386,7 @@ class QueryCondition:
         else:
             return f"{self.column} {self.operator.value} ?", self.value
 
-    def to_sql_named(self) -> Tuple[str, str, Any]:
+    def to_sql_named(self) -> tuple[str, str, Any]:
         """Generate SQL with named placeholder (:name)."""
         param_name = self.parameter_name or self.column.replace(".", "_")
         if self.operator in (QueryOperator.IS_NULL, QueryOperator.IS_NOT_NULL):
@@ -420,7 +419,7 @@ class QueryBuilder:
         sql, params = query.build_sqlite()
     """
 
-    def __init__(self, table: str, allowed_columns: Optional[List[str]] = None):
+    def __init__(self, table: str, allowed_columns: list[str] | None = None):
         """
         Initialize query builder for a table.
 
@@ -431,11 +430,11 @@ class QueryBuilder:
         """
         self._table = self._validate_identifier(table)
         self._allowed_columns = set(allowed_columns) if allowed_columns else None
-        self._select_columns: List[str] = []
-        self._conditions: List[QueryCondition] = []
-        self._order_by: List[Tuple[str, bool]] = []  # (column, descending)
-        self._limit: Optional[int] = None
-        self._offset: Optional[int] = None
+        self._select_columns: list[str] = []
+        self._conditions: list[QueryCondition] = []
+        self._order_by: list[tuple[str, bool]] = []  # (column, descending)
+        self._limit: int | None = None
+        self._offset: int | None = None
         self._for_update: bool = False
 
     @staticmethod
@@ -460,7 +459,7 @@ class QueryBuilder:
         self._select_columns.extend(self._validate_column(c) for c in columns)
         return self
 
-    def where(self, column: str, operator: Union[str, QueryOperator], value: Any) -> "QueryBuilder":
+    def where(self, column: str, operator: str | QueryOperator, value: Any) -> "QueryBuilder":
         """Add a WHERE condition."""
         if isinstance(operator, str):
             operator = QueryOperator(operator)
@@ -473,7 +472,7 @@ class QueryBuilder:
         """Add equality condition."""
         return self.where(column, QueryOperator.EQ, value)
 
-    def where_in(self, column: str, values: List[Any]) -> "QueryBuilder":
+    def where_in(self, column: str, values: list[Any]) -> "QueryBuilder":
         """Add IN condition."""
         return self.where(column, QueryOperator.IN, values)
 
@@ -522,7 +521,7 @@ class QueryBuilder:
         self._for_update = True
         return self
 
-    def build_postgres(self) -> Tuple[str, List[Any]]:
+    def build_postgres(self) -> tuple[str, list[Any]]:
         """
         Build PostgreSQL query with $n placeholders.
 
@@ -540,7 +539,7 @@ class QueryBuilder:
         parts.append(f"FROM {self._table}")
 
         # WHERE clause
-        params: List[Any] = []
+        params: list[Any] = []
         if self._conditions:
             conditions = []
             param_idx = 1
@@ -578,7 +577,7 @@ class QueryBuilder:
 
         return " ".join(parts), params
 
-    def build_sqlite(self) -> Tuple[str, List[Any]]:
+    def build_sqlite(self) -> tuple[str, list[Any]]:
         """
         Build SQLite query with ? placeholders.
 
@@ -596,7 +595,7 @@ class QueryBuilder:
         parts.append(f"FROM {self._table}")
 
         # WHERE clause
-        params: List[Any] = []
+        params: list[Any] = []
         if self._conditions:
             conditions = []
             param_idx = 1
@@ -624,7 +623,7 @@ class QueryBuilder:
 
         return " ".join(parts), params
 
-    def build_named(self) -> Tuple[str, Dict[str, Any]]:
+    def build_named(self) -> tuple[str, dict[str, Any]]:
         """
         Build query with named :param placeholders.
 
@@ -644,7 +643,7 @@ class QueryBuilder:
         parts.append(f"FROM {self._table}")
 
         # WHERE clause
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if self._conditions:
             conditions = []
             for i, cond in enumerate(self._conditions):
@@ -749,10 +748,10 @@ class VectorSearchConfig:
 
     k: int = 10
     distance_metric: str = "cosine"
-    filter_metadata: Optional[Dict[str, Any]] = None
-    min_score: Optional[float] = None
+    filter_metadata: dict[str, Any] | None = None
+    min_score: float | None = None
     include_embeddings: bool = False
-    hnsw_config: Optional[HNSWConfig] = None
+    hnsw_config: HNSWConfig | None = None
     use_hybrid: bool = False
     hybrid_weight: float = 0.7  # Vector weight in hybrid mode
 
@@ -823,8 +822,8 @@ class BatchResult(Generic[T]):
         duration_ms: Total operation duration
     """
 
-    successful: List[T]
-    failed: List[Tuple[Any, str]]  # (item, error_message)
+    successful: list[T]
+    failed: list[tuple[Any, str]]  # (item, error_message)
     total: int
     duration_ms: float
 
@@ -908,7 +907,7 @@ class PoolConfig:
 # =============================================================================
 
 
-def chunk_list(items: List[T], chunk_size: int) -> List[List[T]]:
+def chunk_list(items: list[T], chunk_size: int) -> list[list[T]]:
     """
     Split a list into chunks of specified size.
 
@@ -927,7 +926,7 @@ async def execute_with_retry(
     max_retries: int = 3,
     base_delay: float = 0.1,
     max_delay: float = 5.0,
-    retryable_exceptions: Tuple[type, ...] = (Exception,),
+    retryable_exceptions: tuple[type, ...] = (Exception,),
 ) -> T:
     """
     Execute an async operation with exponential backoff retry.
@@ -948,7 +947,7 @@ async def execute_with_retry(
     import asyncio
     import random
 
-    last_exception: Optional[Exception] = None
+    last_exception: Exception | None = None
 
     for attempt in range(max_retries + 1):
         try:

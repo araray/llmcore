@@ -66,12 +66,11 @@ import threading
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Deque,
     Dict,
     List,
@@ -79,6 +78,7 @@ from typing import (
     Set,
     Union,
 )
+from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
@@ -143,28 +143,28 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
     @classmethod
-    def from_string(cls, value: str) -> "Severity":
+    def from_string(cls, value: str) -> Severity:
         """Parse severity from string (case-insensitive)."""
         try:
             return cls(value.lower())
         except ValueError:
             return cls.INFO
 
-    def __ge__(self, other: "Severity") -> bool:
+    def __ge__(self, other: Severity) -> bool:
         """Compare severity levels."""
         levels = list(Severity)
         return levels.index(self) >= levels.index(other)
 
-    def __gt__(self, other: "Severity") -> bool:
+    def __gt__(self, other: Severity) -> bool:
         """Compare severity levels."""
         levels = list(Severity)
         return levels.index(self) > levels.index(other)
 
-    def __le__(self, other: "Severity") -> bool:
+    def __le__(self, other: Severity) -> bool:
         """Compare severity levels."""
         return not self.__gt__(other)
 
-    def __lt__(self, other: "Severity") -> bool:
+    def __lt__(self, other: Severity) -> bool:
         """Compare severity levels."""
         return not self.__ge__(other)
 
@@ -194,29 +194,29 @@ class Event(BaseModel):
 
     # Core fields
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
     category: EventCategory
     event_type: str = Field(..., description="Specific event type within category")
     severity: Severity = Field(default=Severity.INFO)
 
     # Context fields (optional)
-    execution_id: Optional[str] = Field(
+    execution_id: str | None = Field(
         default=None, description="ID of the execution/session this event belongs to"
     )
-    iteration: Optional[int] = Field(
+    iteration: int | None = Field(
         default=None, description="Iteration number for iterative processes"
     )
-    session_id: Optional[str] = Field(default=None, description="User session ID")
-    user_id: Optional[str] = Field(default=None, description="User identifier")
+    session_id: str | None = Field(default=None, description="User session ID")
+    user_id: str | None = Field(default=None, description="User identifier")
 
     # Event data
-    data: Dict[str, Any] = Field(default_factory=dict, description="Event-specific data payload")
+    data: dict[str, Any] = Field(default_factory=dict, description="Event-specific data payload")
 
     # Metadata
-    source: Optional[str] = Field(
+    source: str | None = Field(
         default=None, description="Source module/component that emitted the event"
     )
-    tags: List[str] = Field(default_factory=list, description="Tags for filtering and organization")
+    tags: list[str] = Field(default_factory=list, description="Tags for filtering and organization")
 
     class Config:
         """Pydantic configuration."""
@@ -231,11 +231,11 @@ class Event(BaseModel):
         return self.model_dump_json()
 
     @classmethod
-    def from_jsonl(cls, line: str) -> "Event":
+    def from_jsonl(cls, line: str) -> Event:
         """Parse from JSONL line."""
         return cls.model_validate_json(line)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return self.model_dump(mode="json")
 
@@ -275,7 +275,7 @@ class ObservabilityConfig(BaseModel):
     events_enabled: bool = Field(default=True, description="Enable event logging")
     log_path: str = Field(default="~/.llmcore/events.jsonl", description="Path to event log file")
     min_severity: str = Field(default="info", description="Minimum severity to log")
-    categories: List[str] = Field(
+    categories: list[str] = Field(
         default_factory=list, description="Categories to log (empty = all)"
     )
 
@@ -311,7 +311,7 @@ class EventBuffer:
     def __init__(
         self,
         max_size: int = DEFAULT_BUFFER_SIZE,
-        flush_callback: Optional[Callable[[List[Event]], None]] = None,
+        flush_callback: Callable[[list[Event]], None] | None = None,
     ):
         """
         Initialize the event buffer.
@@ -320,7 +320,7 @@ class EventBuffer:
             max_size: Maximum events to buffer before auto-flush
             flush_callback: Called when buffer is flushed with events
         """
-        self._buffer: Deque[Event] = deque(maxlen=max_size)
+        self._buffer: deque[Event] = deque(maxlen=max_size)
         self._max_size = max_size
         self._flush_callback = flush_callback
         self._lock = threading.RLock()
@@ -347,7 +347,7 @@ class EventBuffer:
             self._total_events += 1
             return True
 
-    def flush(self) -> List[Event]:
+    def flush(self) -> list[Event]:
         """
         Flush all events from the buffer.
 
@@ -357,7 +357,7 @@ class EventBuffer:
         with self._lock:
             return self._flush()
 
-    def _flush(self) -> List[Event]:
+    def _flush(self) -> list[Event]:
         """Internal flush (must hold lock)."""
         events = list(self._buffer)
         self._buffer.clear()
@@ -377,7 +377,7 @@ class EventBuffer:
             return len(self._buffer)
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get buffer statistics."""
         with self._lock:
             return {
@@ -408,8 +408,8 @@ class EventFileWriter:
 
     def __init__(
         self,
-        log_path: Union[str, Path],
-        rotation_config: Optional[EventRotationConfig] = None,
+        log_path: str | Path,
+        rotation_config: EventRotationConfig | None = None,
     ):
         """
         Initialize the file writer.
@@ -421,7 +421,7 @@ class EventFileWriter:
         self._log_path = Path(log_path).expanduser().resolve()
         self._rotation = rotation_config or EventRotationConfig()
         self._lock = threading.Lock()
-        self._current_date = datetime.now(tz=timezone.utc).date()
+        self._current_date = datetime.now(tz=UTC).date()
         self._bytes_written = 0
 
         # Ensure directory exists
@@ -431,7 +431,7 @@ class EventFileWriter:
         if self._log_path.exists():
             self._bytes_written = self._log_path.stat().st_size
 
-    def write(self, events: List[Event]) -> int:
+    def write(self, events: list[Event]) -> int:
         """
         Write events to the log file.
 
@@ -477,7 +477,7 @@ class EventFileWriter:
 
         # Check daily rotation
         if self._rotation.strategy in (RotationStrategy.DAILY, RotationStrategy.BOTH):
-            current_date = datetime.now(tz=timezone.utc).date()
+            current_date = datetime.now(tz=UTC).date()
             if current_date != self._current_date:
                 should_rotate = True
                 self._current_date = current_date
@@ -492,7 +492,7 @@ class EventFileWriter:
 
         try:
             # Generate rotated filename with timestamp
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
             rotated_name = f"{self._log_path.stem}_{timestamp}{self._log_path.suffix}"
             rotated_path = self._log_path.parent / rotated_name
 
@@ -575,7 +575,7 @@ class ObservabilityLogger:
     Thread-safe for concurrent logging from multiple threads.
     """
 
-    def __init__(self, config: Optional[ObservabilityConfig] = None):
+    def __init__(self, config: ObservabilityConfig | None = None):
         """
         Initialize the observability logger.
 
@@ -584,14 +584,14 @@ class ObservabilityLogger:
         """
         self._config = config or ObservabilityConfig()
         self._lock = threading.RLock()
-        self._callbacks: List[Callable[[Event], None]] = []
+        self._callbacks: list[Callable[[Event], None]] = []
         self._enabled = self._config.enabled and self._config.events_enabled
 
         # Initialize min severity
         self._min_severity = Severity.from_string(self._config.min_severity)
 
         # Initialize categories filter
-        self._categories: Optional[Set[EventCategory]] = None
+        self._categories: set[EventCategory] | None = None
         if self._config.categories:
             self._categories = {
                 EventCategory(c)
@@ -600,7 +600,7 @@ class ObservabilityLogger:
             }
 
         # Initialize file writer
-        self._writer: Optional[EventFileWriter] = None
+        self._writer: EventFileWriter | None = None
         if self._enabled:
             self._writer = EventFileWriter(
                 log_path=self._config.log_path,
@@ -608,7 +608,7 @@ class ObservabilityLogger:
             )
 
         # Initialize buffer
-        self._buffer: Optional[EventBuffer] = None
+        self._buffer: EventBuffer | None = None
         if self._enabled and self._config.buffer.enabled:
             self._buffer = EventBuffer(
                 max_size=self._config.buffer.size,
@@ -622,17 +622,17 @@ class ObservabilityLogger:
 
     def log_event(
         self,
-        category: Union[EventCategory, str],
+        category: EventCategory | str,
         event_type: str,
-        data: Optional[Dict[str, Any]] = None,
-        severity: Union[Severity, str] = Severity.INFO,
-        execution_id: Optional[str] = None,
-        iteration: Optional[int] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        source: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-    ) -> Optional[Event]:
+        data: dict[str, Any] | None = None,
+        severity: Severity | str = Severity.INFO,
+        execution_id: str | None = None,
+        iteration: int | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        source: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Event | None:
         """
         Log a structured event.
 
@@ -732,7 +732,7 @@ class ObservabilityLogger:
         elif self._writer:
             self._writer.write([event])
 
-    def _write_events(self, events: List[Event]) -> None:
+    def _write_events(self, events: list[Event]) -> None:
         """Write events to file (callback for buffer)."""
         if self._writer:
             self._writer.write(events)
@@ -776,13 +776,13 @@ class ObservabilityLogger:
         """Disable logging."""
         self._enabled = False
 
-    def set_min_severity(self, severity: Union[Severity, str]) -> None:
+    def set_min_severity(self, severity: Severity | str) -> None:
         """Update minimum severity level."""
         if isinstance(severity, str):
             severity = Severity.from_string(severity)
         self._min_severity = severity
 
-    def set_categories(self, categories: Optional[List[EventCategory]]) -> None:
+    def set_categories(self, categories: list[EventCategory] | None) -> None:
         """Update categories filter."""
         if categories:
             self._categories = set(categories)
@@ -790,7 +790,7 @@ class ObservabilityLogger:
             self._categories = None
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get logger statistics."""
         buffer_stats = self._buffer.stats if self._buffer else {}
         return {
@@ -826,10 +826,10 @@ class ExecutionTrace:
     """
 
     execution_id: str
-    events: List[Event] = field(default_factory=list)
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    events: list[Event] = field(default_factory=list)
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_event(self, event: Event) -> None:
         """Add an event to the trace."""
@@ -842,21 +842,21 @@ class ExecutionTrace:
             self.end_time = event.timestamp
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Get execution duration in seconds."""
         if self.start_time and self.end_time:
             return (self.end_time - self.start_time).total_seconds()
         return None
 
-    def filter_by_category(self, category: EventCategory) -> List[Event]:
+    def filter_by_category(self, category: EventCategory) -> list[Event]:
         """Get events of a specific category."""
         return [e for e in self.events if e.category == category]
 
-    def filter_by_type(self, event_type: str) -> List[Event]:
+    def filter_by_type(self, event_type: str) -> list[Event]:
         """Get events of a specific type."""
         return [e for e in self.events if e.event_type == event_type]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "execution_id": self.execution_id,
@@ -881,7 +881,7 @@ class ExecutionReplayer:
     with callbacks for visualization.
     """
 
-    def __init__(self, log_path: Union[str, Path]):
+    def __init__(self, log_path: str | Path):
         """
         Initialize the replayer.
 
@@ -889,11 +889,11 @@ class ExecutionReplayer:
             log_path: Path to the event log file
         """
         self._log_path = Path(log_path).expanduser().resolve()
-        self._execution_cache: Dict[str, ExecutionTrace] = {}
+        self._execution_cache: dict[str, ExecutionTrace] = {}
         self._cache_enabled = True
         self._max_cache_size = 50
 
-    def load_execution(self, execution_id: str) -> Optional[ExecutionTrace]:
+    def load_execution(self, execution_id: str) -> ExecutionTrace | None:
         """
         Load all events for an execution.
 
@@ -916,7 +916,7 @@ class ExecutionReplayer:
                 with gzip.open(self._log_path, "rt", encoding="utf-8") as f:
                     self._scan_file(f, execution_id, trace)
             else:
-                with open(self._log_path, "r", encoding="utf-8") as f:
+                with open(self._log_path, encoding="utf-8") as f:
                     self._scan_file(f, execution_id, trace)
         except FileNotFoundError:
             logger.warning(f"Log file not found: {self._log_path}")
@@ -959,8 +959,8 @@ class ExecutionReplayer:
     def list_executions(
         self,
         limit: int = 100,
-        category: Optional[EventCategory] = None,
-    ) -> List[str]:
+        category: EventCategory | None = None,
+    ) -> list[str]:
         """
         List execution IDs from the log file.
 
@@ -981,7 +981,7 @@ class ExecutionReplayer:
                             break
                         self._extract_execution_id(line, execution_ids, category)
             else:
-                with open(self._log_path, "r", encoding="utf-8") as f:
+                with open(self._log_path, encoding="utf-8") as f:
                     for line in f:
                         if len(execution_ids) >= limit:
                             break
@@ -996,8 +996,8 @@ class ExecutionReplayer:
     def _extract_execution_id(
         self,
         line: str,
-        execution_ids: Set[str],
-        category: Optional[EventCategory],
+        execution_ids: set[str],
+        category: EventCategory | None,
     ) -> None:
         """Extract execution ID from a log line."""
         line = line.strip()
@@ -1015,11 +1015,11 @@ class ExecutionReplayer:
     def replay_step_by_step(
         self,
         trace: ExecutionTrace,
-        on_phase_start: Optional[Callable[[Event], None]] = None,
-        on_phase_end: Optional[Callable[[Event], None]] = None,
-        on_tool_call: Optional[Callable[[Event], None]] = None,
-        on_error: Optional[Callable[[Event], None]] = None,
-        on_event: Optional[Callable[[Event], None]] = None,
+        on_phase_start: Callable[[Event], None] | None = None,
+        on_phase_end: Callable[[Event], None] | None = None,
+        on_tool_call: Callable[[Event], None] | None = None,
+        on_error: Callable[[Event], None] | None = None,
+        on_event: Callable[[Event], None] | None = None,
     ) -> None:
         """
         Replay execution with callbacks.
@@ -1064,9 +1064,9 @@ class ExecutionReplayer:
 
 
 def create_observability_logger(
-    log_path: Optional[str] = None,
+    log_path: str | None = None,
     min_severity: str = "info",
-    categories: Optional[List[str]] = None,
+    categories: list[str] | None = None,
     rotation_strategy: str = "size",
     max_size_mb: int = 100,
     buffer_enabled: bool = True,
@@ -1107,12 +1107,12 @@ def create_observability_logger(
 
 
 def load_events_from_file(
-    log_path: Union[str, Path],
-    execution_id: Optional[str] = None,
-    category: Optional[EventCategory] = None,
-    min_severity: Optional[Severity] = None,
-    limit: Optional[int] = None,
-) -> List[Event]:
+    log_path: str | Path,
+    execution_id: str | None = None,
+    category: EventCategory | None = None,
+    min_severity: Severity | None = None,
+    limit: int | None = None,
+) -> list[Event]:
     """
     Load events from a log file with optional filtering.
 
@@ -1133,7 +1133,7 @@ def load_events_from_file(
         if log_path.suffix == ".gz":
             opener = gzip.open(log_path, "rt", encoding="utf-8")
         else:
-            opener = open(log_path, "r", encoding="utf-8")
+            opener = open(log_path, encoding="utf-8")
 
         with opener as f:
             for line in f:

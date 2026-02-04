@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     try:
         from confy.loader import Config as ConfyConfig
     except ImportError:
-        ConfyConfig = Dict[str, Any]
+        ConfyConfig = dict[str, Any]
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class MemoryManager:
         logger.debug(f"Inclusion priority: {self._cm_config['inclusion_priority_order']}")
         logger.debug(f"Truncation priority: {self._cm_config['truncation_priority_order']}")
 
-    def _load_and_parse_cm_config(self) -> Dict[str, Any]:
+    def _load_and_parse_cm_config(self) -> dict[str, Any]:
         """Loads, parses, and validates the context_management section of the config."""
         cm_config_raw = self._config.get("context_management", {})
 
@@ -131,7 +131,7 @@ class MemoryManager:
             "prompt_template_content": template_content,
         }
 
-    def _parse_priority(self, priority_str: str, valid_items: set) -> List[str]:
+    def _parse_priority(self, priority_str: str, valid_items: set) -> list[str]:
         """Helper to parse and validate priority lists from config."""
         priorities = [p.strip().lower() for p in priority_str.split(",")]
         ordered_priorities = [p for p in priorities if p in valid_items]
@@ -158,7 +158,7 @@ class MemoryManager:
             )
             return provider.get_max_context_length(model)
 
-    async def retrieve_relevant_context(self, goal: str) -> List[ContextItem]:
+    async def retrieve_relevant_context(self, goal: str) -> list[ContextItem]:
         """
         Primary method for retrieving relevant context from all memory tiers.
 
@@ -174,7 +174,7 @@ class MemoryManager:
             all memory sources, ranked and filtered for relevance.
         """
         logger.debug(f"Retrieving relevant context for goal: '{goal[:100]}...'")
-        context_items: List[ContextItem] = []
+        context_items: list[ContextItem] = []
 
         # Query Semantic Memory (vector store)
         try:
@@ -214,15 +214,15 @@ class MemoryManager:
         self,
         session: ChatSession,
         provider_name: str,
-        model_name: Optional[str] = None,
-        active_context_item_ids: Optional[List[str]] = None,
-        explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
-        message_inclusion_map: Optional[Dict[str, bool]] = None,
+        model_name: str | None = None,
+        active_context_item_ids: list[str] | None = None,
+        explicitly_staged_items: list[Message | ContextItem] | None = None,
+        message_inclusion_map: dict[str, bool] | None = None,
         rag_enabled: bool = False,
-        rag_k: Optional[int] = None,
-        rag_collection: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None,
+        rag_k: int | None = None,
+        rag_collection: str | None = None,
+        rag_metadata_filter: dict[str, Any] | None = None,
+        prompt_template_values: dict[str, str] | None = None,
     ) -> ContextPreparationDetails:
         """
         Prepares the context payload by orchestrating RAG and context building.
@@ -251,7 +251,7 @@ class MemoryManager:
             raise ContextError("Cannot prepare context without a user query in the session.")
 
         final_user_query_content = last_user_message.content
-        rag_documents_used: Optional[List[ContextDocument]] = None
+        rag_documents_used: list[ContextDocument] | None = None
 
         if rag_enabled:
             try:

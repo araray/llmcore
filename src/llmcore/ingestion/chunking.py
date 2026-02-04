@@ -37,11 +37,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     Optional,
 )
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -68,16 +68,16 @@ class Chunk:
 
     id: str
     content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    embedding: Optional[List[float]] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    embedding: list[float] | None = None
 
     @classmethod
     def create(
         cls,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        chunk_id: Optional[str] = None,
-    ) -> "Chunk":
+        metadata: dict[str, Any] | None = None,
+        chunk_id: str | None = None,
+    ) -> Chunk:
         """
         Factory method to create a chunk with auto-generated ID.
 
@@ -101,7 +101,7 @@ class Chunk:
             metadata=metadata or {},
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert chunk to dictionary representation."""
         result = {
             "id": self.id,
@@ -113,7 +113,7 @@ class Chunk:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Chunk":
+    def from_dict(cls, data: dict[str, Any]) -> Chunk:
         """Create chunk from dictionary representation."""
         return cls(
             id=data["id"],
@@ -148,7 +148,7 @@ class ChunkingConfig:
     max_chunk_size: int = 2000
     length_function: Callable[[str], int] = len
     preserve_sentences: bool = True
-    separators: List[str] = field(
+    separators: list[str] = field(
         default_factory=lambda: [
             "\n\n",  # Paragraphs
             "\n",  # Lines
@@ -180,8 +180,8 @@ class ChunkingStrategy(ABC):
     def chunk(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[Chunk]:
+        metadata: dict[str, Any] | None = None,
+    ) -> list[Chunk]:
         """
         Split text into chunks.
 
@@ -196,8 +196,8 @@ class ChunkingStrategy(ABC):
 
     def chunk_documents(
         self,
-        documents: List[Dict[str, Any]],
-    ) -> List[Chunk]:
+        documents: list[dict[str, Any]],
+    ) -> list[Chunk]:
         """
         Chunk multiple documents.
 
@@ -264,8 +264,8 @@ class FixedSizeChunker(ChunkingStrategy):
     def chunk(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[Chunk]:
+        metadata: dict[str, Any] | None = None,
+    ) -> list[Chunk]:
         """
         Split text into fixed-size chunks.
 
@@ -359,7 +359,7 @@ class RecursiveTextChunker(ChunkingStrategy):
         self,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        separators: Optional[List[str]] = None,
+        separators: list[str] | None = None,
         length_function: Callable[[str], int] = len,
         strip_whitespace: bool = True,
     ):
@@ -387,8 +387,8 @@ class RecursiveTextChunker(ChunkingStrategy):
     def chunk(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[Chunk]:
+        metadata: dict[str, Any] | None = None,
+    ) -> list[Chunk]:
         """
         Recursively split text into chunks.
 
@@ -416,8 +416,8 @@ class RecursiveTextChunker(ChunkingStrategy):
     def _split_text(
         self,
         text: str,
-        separators: List[str],
-    ) -> List[str]:
+        separators: list[str],
+    ) -> list[str]:
         """
         Recursively split text using hierarchical separators.
 
@@ -481,9 +481,9 @@ class RecursiveTextChunker(ChunkingStrategy):
 
     def _merge_small_splits(
         self,
-        splits: List[str],
+        splits: list[str],
         separator: str,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Merge small splits that fit within chunk_size.
 
@@ -526,9 +526,9 @@ class RecursiveTextChunker(ChunkingStrategy):
 
     def _merge_splits(
         self,
-        splits: List[str],
-        metadata: Dict[str, Any],
-    ) -> List[Chunk]:
+        splits: list[str],
+        metadata: dict[str, Any],
+    ) -> list[Chunk]:
         """
         Merge splits into final chunks with overlap.
 
@@ -663,7 +663,7 @@ class SentenceChunker(ChunkingStrategy):
         self.max_sentences = max_sentences
         self.length_function = length_function
 
-    def _split_sentences(self, text: str) -> List[str]:
+    def _split_sentences(self, text: str) -> list[str]:
         """
         Split text into sentences.
 
@@ -688,8 +688,8 @@ class SentenceChunker(ChunkingStrategy):
     def chunk(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[Chunk]:
+        metadata: dict[str, Any] | None = None,
+    ) -> list[Chunk]:
         """
         Split text into sentence-based chunks.
 
@@ -811,8 +811,8 @@ def chunk_text(
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
     strategy: str = "recursive",
-    metadata: Optional[Dict[str, Any]] = None,
-) -> List[Chunk]:
+    metadata: dict[str, Any] | None = None,
+) -> list[Chunk]:
     """
     Convenience function to chunk text with default settings.
 

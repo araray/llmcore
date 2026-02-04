@@ -128,9 +128,9 @@ class PromptRegistry:
 
     def __init__(self):
         """Initialize an empty prompt registry."""
-        self._templates: Dict[str, PromptTemplate] = {}
-        self._snippets: Dict[str, PromptSnippet] = {}
-        self._metrics: Dict[str, PromptMetrics] = {}
+        self._templates: dict[str, PromptTemplate] = {}
+        self._snippets: dict[str, PromptSnippet] = {}
+        self._metrics: dict[str, PromptMetrics] = {}
         self._composer = PromptComposer()
 
     # =========================================================================
@@ -158,10 +158,10 @@ class PromptRegistry:
         template_id: str,
         name: str,
         category: PromptCategory,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        initial_content: Optional[str] = None,
-        variables: Optional[List[PromptVariable]] = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        initial_content: str | None = None,
+        variables: list[PromptVariable] | None = None,
     ) -> PromptTemplate:
         """
         Create and register a new template with an initial version.
@@ -225,8 +225,8 @@ class PromptRegistry:
         return self._templates[template_id]
 
     def list_templates(
-        self, category: Optional[PromptCategory] = None, tags: Optional[List[str]] = None
-    ) -> List[PromptTemplate]:
+        self, category: PromptCategory | None = None, tags: list[str] | None = None
+    ) -> list[PromptTemplate]:
         """
         List templates, optionally filtered by category and/or tags.
 
@@ -277,8 +277,8 @@ class PromptRegistry:
         self,
         template_id: str,
         content: str,
-        variables: Optional[List[PromptVariable]] = None,
-        change_description: Optional[str] = None,
+        variables: list[PromptVariable] | None = None,
+        change_description: str | None = None,
         auto_activate: bool = False,
     ) -> PromptVersion:
         """
@@ -398,7 +398,7 @@ class PromptRegistry:
             raise SnippetNotFoundError(f"Snippet not found: {key}")
         return self._snippets[key]
 
-    def list_snippets(self, category: Optional[PromptCategory] = None) -> List[PromptSnippet]:
+    def list_snippets(self, category: PromptCategory | None = None) -> list[PromptSnippet]:
         """
         List snippets, optionally filtered by category.
 
@@ -439,8 +439,8 @@ class PromptRegistry:
     def render(
         self,
         template_id: str,
-        variables: Optional[Dict[str, str]] = None,
-        version_id: Optional[str] = None,
+        variables: dict[str, str] | None = None,
+        version_id: str | None = None,
         validate: bool = True,
     ) -> str:
         """
@@ -510,10 +510,10 @@ class PromptRegistry:
         self,
         version_id: str,
         success: bool,
-        iterations: Optional[int] = None,
-        tokens: Optional[int] = None,
-        latency_ms: Optional[float] = None,
-        quality_score: Optional[float] = None,
+        iterations: int | None = None,
+        tokens: int | None = None,
+        latency_ms: float | None = None,
+        quality_score: float | None = None,
     ) -> None:
         """
         Record usage metrics for a version.
@@ -569,7 +569,7 @@ class PromptRegistry:
         Returns:
             Loaded registry
         """
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             data = toml.load(f)
 
         registry = cls()

@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -144,10 +144,10 @@ class PostgresHITLStore(HITLStateStore):
 
     def __init__(self):
         """Initialize PostgreSQL HITL store."""
-        self._pool: Optional["AsyncConnectionPool"] = None
+        self._pool: AsyncConnectionPool | None = None
         self._table_prefix: str = ""
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the PostgreSQL connection pool and create schema.
 
@@ -306,7 +306,7 @@ class PostgresHITLStore(HITLStateStore):
         except Exception as e:
             raise RuntimeError(f"Failed to save HITL request: {e}")
 
-    async def get_request(self, request_id: str) -> Optional[HITLRequest]:
+    async def get_request(self, request_id: str) -> HITLRequest | None:
         """
         Retrieve a request by ID.
 
@@ -338,7 +338,7 @@ class PostgresHITLStore(HITLStateStore):
         self,
         request_id: str,
         status: ApprovalStatus,
-        response: Optional[HITLResponse] = None,
+        response: HITLResponse | None = None,
     ) -> bool:
         """
         Update request status.
@@ -377,8 +377,8 @@ class PostgresHITLStore(HITLStateStore):
 
     async def get_pending_requests(
         self,
-        session_id: Optional[str] = None,
-    ) -> List[HITLRequest]:
+        session_id: str | None = None,
+    ) -> list[HITLRequest]:
         """
         Get all pending requests.
 
@@ -509,7 +509,7 @@ class PostgresHITLStore(HITLStateStore):
             ),
         )
 
-    async def get_response(self, request_id: str) -> Optional[HITLResponse]:
+    async def get_response(self, request_id: str) -> HITLResponse | None:
         """
         Get response for a request.
 
@@ -581,7 +581,7 @@ class PostgresHITLStore(HITLStateStore):
         except Exception as e:
             raise RuntimeError(f"Failed to save session scope: {e}")
 
-    async def get_session_scope(self, session_id: str) -> Optional[SessionScope]:
+    async def get_session_scope(self, session_id: str) -> SessionScope | None:
         """
         Get session scope.
 
@@ -648,7 +648,7 @@ class PostgresHITLStore(HITLStateStore):
         except Exception as e:
             raise RuntimeError(f"Failed to save persistent scope: {e}")
 
-    async def get_persistent_scope(self, user_id: str) -> Optional[PersistentScope]:
+    async def get_persistent_scope(self, user_id: str) -> PersistentScope | None:
         """
         Get persistent scope.
 
@@ -693,7 +693,7 @@ class PostgresHITLStore(HITLStateStore):
         table_name = self._get_table_name("hitl_requests")
 
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             async with self._pool.connection() as conn:
                 async with conn.cursor() as cur:
@@ -741,7 +741,7 @@ class PostgresHITLStore(HITLStateStore):
     # PRIVATE HELPERS
     # =========================================================================
 
-    def _risk_factor_to_dict(self, factor: RiskFactor) -> Dict[str, Any]:
+    def _risk_factor_to_dict(self, factor: RiskFactor) -> dict[str, Any]:
         """Convert RiskFactor to dictionary."""
         return {
             "name": factor.name,
@@ -750,7 +750,7 @@ class PostgresHITLStore(HITLStateStore):
             "weight": factor.weight,
         }
 
-    def _tool_scope_to_dict(self, scope: ToolScope) -> Dict[str, Any]:
+    def _tool_scope_to_dict(self, scope: ToolScope) -> dict[str, Any]:
         """Convert ToolScope to dictionary."""
         return {
             "tool_name": scope.tool_name,
@@ -774,7 +774,7 @@ class PostgresHITLStore(HITLStateStore):
                 return default
         return default
 
-    def _row_to_request(self, row: Dict[str, Any]) -> HITLRequest:
+    def _row_to_request(self, row: dict[str, Any]) -> HITLRequest:
         """Convert database row to HITLRequest."""
         factors_data = self._parse_json_field(row.get("risk_factors"), [])
         factors = [
@@ -819,7 +819,7 @@ class PostgresHITLStore(HITLStateStore):
             priority=row.get("priority") or 0,
         )
 
-    def _row_to_response(self, row: Dict[str, Any]) -> HITLResponse:
+    def _row_to_response(self, row: dict[str, Any]) -> HITLResponse:
         """Convert database row to HITLResponse."""
         status = ApprovalStatus(row["status"]) if row.get("status") else None
 
@@ -839,7 +839,7 @@ class PostgresHITLStore(HITLStateStore):
             scope_grant=self._parse_json_field(row.get("scope_grant")),
         )
 
-    def _row_to_session_scope(self, row: Dict[str, Any]) -> SessionScope:
+    def _row_to_session_scope(self, row: dict[str, Any]) -> SessionScope:
         """Convert database row to SessionScope."""
         tools_data = self._parse_json_field(row.get("approved_tools"), [])
         approved_tools = [
@@ -873,7 +873,7 @@ class PostgresHITLStore(HITLStateStore):
             created_at=created_at,
         )
 
-    def _row_to_persistent_scope(self, row: Dict[str, Any]) -> PersistentScope:
+    def _row_to_persistent_scope(self, row: dict[str, Any]) -> PersistentScope:
         """Convert database row to PersistentScope."""
         tools_data = self._parse_json_field(row.get("approved_tools"), [])
         approved_tools = [

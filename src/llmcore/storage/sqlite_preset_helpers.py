@@ -10,7 +10,7 @@ its database connection.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -82,7 +82,7 @@ async def save_context_preset(
 
 async def get_context_preset(
     conn: "aiosqlite.Connection", preset_name: str, presets_table: str, preset_items_table: str
-) -> Optional[ContextPreset]:
+) -> ContextPreset | None:
     """Retrieves a specific context preset and its items by name from SQLite."""
     try:
         async with conn.execute(
@@ -102,7 +102,7 @@ async def get_context_preset(
             preset_data["updated_at"].replace("Z", "+00:00")
         )
 
-        items: List[ContextPresetItem] = []
+        items: list[ContextPresetItem] = []
         async with conn.execute(
             f"SELECT * FROM {preset_items_table} WHERE preset_name = ?", (preset_name,)
         ) as cursor:
@@ -126,9 +126,9 @@ async def get_context_preset(
 
 async def list_context_presets(
     conn: "aiosqlite.Connection", presets_table: str, preset_items_table: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Lists context preset metadata from SQLite, including item counts."""
-    preset_metadata_list: List[Dict[str, Any]] = []
+    preset_metadata_list: list[dict[str, Any]] = []
     try:
         async with conn.execute(f"""
             SELECT p.name, p.description, p.created_at, p.updated_at, p.metadata,
@@ -203,7 +203,7 @@ async def rename_context_preset(
             description=old_preset.description,
             items=old_preset.items,
             created_at=old_preset.created_at,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
             metadata=old_preset.metadata,
         )
 

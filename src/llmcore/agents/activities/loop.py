@@ -23,7 +23,8 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, List, Optional
+from collections.abc import Callable
 
 from .executor import ActivityExecutor
 from .parser import ActivityRequestParser, ParseResult
@@ -96,11 +97,11 @@ class ActivityLoop:
 
     def __init__(
         self,
-        registry: Optional[ActivityRegistry] = None,
-        executor: Optional[ActivityExecutor] = None,
-        parser: Optional[ActivityRequestParser] = None,
-        config: Optional[ActivityLoopConfig] = None,
-        sandbox: Optional["SandboxProvider"] = None,
+        registry: ActivityRegistry | None = None,
+        executor: ActivityExecutor | None = None,
+        parser: ActivityRequestParser | None = None,
+        config: ActivityLoopConfig | None = None,
+        sandbox: SandboxProvider | None = None,
     ):
         """
         Initialize the activity loop.
@@ -120,7 +121,7 @@ class ActivityLoop:
 
         # Session tracking
         self._total_executed: int = 0
-        self._session_start: Optional[float] = None
+        self._session_start: float | None = None
 
     def start_session(self) -> None:
         """Start a new activity session."""
@@ -136,8 +137,8 @@ class ActivityLoop:
     async def process_output(
         self,
         llm_output: str,
-        context: Optional[ExecutionContext] = None,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        context: ExecutionContext | None = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> ActivityLoopResult:
         """
         Process LLM output through the activity system.
@@ -212,12 +213,12 @@ class ActivityLoop:
 
     async def _execute_sequential(
         self,
-        requests: List[ActivityRequest],
+        requests: list[ActivityRequest],
         context: ExecutionContext,
-        approval_callback: Optional[Callable[[str], bool]],
-    ) -> List[ActivityExecution]:
+        approval_callback: Callable[[str], bool] | None,
+    ) -> list[ActivityExecution]:
         """Execute activities sequentially."""
-        executions: List[ActivityExecution] = []
+        executions: list[ActivityExecution] = []
 
         for request in requests:
             execution = ActivityExecution(request=request)
@@ -244,10 +245,10 @@ class ActivityLoop:
 
     async def _execute_parallel(
         self,
-        requests: List[ActivityRequest],
+        requests: list[ActivityRequest],
         context: ExecutionContext,
-        approval_callback: Optional[Callable[[str], bool]],
-    ) -> List[ActivityExecution]:
+        approval_callback: Callable[[str], bool] | None,
+    ) -> list[ActivityExecution]:
         """Execute activities in parallel."""
 
         async def execute_one(request: ActivityRequest) -> ActivityExecution:
@@ -289,7 +290,7 @@ class ActivityLoop:
         # Default: continue if there's reasoning text
         return len(remaining.strip()) > 0
 
-    def _determine_continuation(self, executions: List[ActivityExecution]) -> bool:
+    def _determine_continuation(self, executions: list[ActivityExecution]) -> bool:
         """Determine if loop should continue after executions."""
         if not executions:
             return True
@@ -305,12 +306,12 @@ class ActivityLoop:
         all_failed = all(e.result and e.result.status == ActivityStatus.FAILED for e in executions)
         return not all_failed
 
-    def _format_observation(self, executions: List[ActivityExecution]) -> str:
+    def _format_observation(self, executions: list[ActivityExecution]) -> str:
         """Format execution results as observation text."""
         if not executions:
             return "No activities executed."
 
-        observations: List[str] = []
+        observations: list[str] = []
 
         for execution in executions:
             if execution.result is None:
@@ -362,7 +363,7 @@ class ActivityLoop:
 
 async def process_llm_output(
     llm_output: str,
-    context: Optional[ExecutionContext] = None,
+    context: ExecutionContext | None = None,
     **kwargs,
 ) -> ActivityLoopResult:
     """

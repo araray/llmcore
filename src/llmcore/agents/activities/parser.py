@@ -54,10 +54,10 @@ class ParseResult:
     Contains extracted requests, remaining text, and any errors encountered.
     """
 
-    requests: List[ActivityRequest] = field(default_factory=list)
+    requests: list[ActivityRequest] = field(default_factory=list)
     remaining_text: str = ""
-    errors: List[str] = field(default_factory=list)
-    raw_xml_blocks: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    raw_xml_blocks: list[str] = field(default_factory=list)
 
     @property
     def has_requests(self) -> bool:
@@ -224,7 +224,7 @@ class ActivityRequestParser:
 
         return result
 
-    def _parse_block(self, xml_content: str) -> Tuple[Optional[ActivityRequest], Optional[str]]:
+    def _parse_block(self, xml_content: str) -> tuple[ActivityRequest | None, str | None]:
         """
         Parse a single activity_request block.
 
@@ -274,7 +274,7 @@ class ActivityRequestParser:
             raise ValueError("Empty activity name")
 
         # Extract parameters
-        parameters: Dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         params_elem = root.find("parameters")
         if params_elem is not None:
             for param in params_elem:
@@ -290,7 +290,7 @@ class ActivityRequestParser:
             target = self._parse_target(target_str)
 
         # Extract reason
-        reason: Optional[str] = None
+        reason: str | None = None
         reason_elem = root.find("reason")
         if reason_elem is not None and reason_elem.text:
             reason = reason_elem.text.strip()
@@ -364,7 +364,7 @@ class ActivityRequestParser:
             raise ValueError("Empty activity name")
 
         # Extract parameters
-        parameters: Dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         params_match = self.PARAMETERS_PATTERN.search(xml_content)
         if params_match:
             params_content = params_match.group(1)
@@ -395,7 +395,7 @@ class ActivityRequestParser:
             target = self._parse_target(target_match.group(1).strip())
 
         # Extract reason
-        reason: Optional[str] = None
+        reason: str | None = None
         reason_match = self.REASON_PATTERN.search(xml_content)
         if reason_match:
             reason = reason_match.group(1).strip()
@@ -468,7 +468,7 @@ class ActivityRequestParser:
 
         return False
 
-    def extract_final_answer(self, text: str) -> Optional[str]:
+    def extract_final_answer(self, text: str) -> str | None:
         """
         Extract final answer content if present.
 

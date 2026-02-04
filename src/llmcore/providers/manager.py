@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Type
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any]  # type: ignore
+    ConfyConfig = dict[str, Any]  # type: ignore
 
 
 from ..exceptions import ConfigError
@@ -32,7 +32,7 @@ from .openai_provider import OpenAIProvider
 logger = logging.getLogger(__name__)
 
 # --- Mapping from config provider name string to class ---
-PROVIDER_MAP: Dict[str, Type[BaseProvider]] = {
+PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "ollama": OllamaProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
@@ -53,10 +53,10 @@ class ProviderManager:
     control from LLMCore.create(), while maintaining backward compatibility.
     """
 
-    _providers: Dict[str, BaseProvider]
+    _providers: dict[str, BaseProvider]
     _config: ConfyConfig
     _default_provider_name: str
-    _log_raw_payloads_override: Optional[bool]
+    _log_raw_payloads_override: bool | None
     _initialized: bool
 
     def __init__(self, config: ConfyConfig, log_raw_payloads: bool = False):
@@ -193,7 +193,7 @@ class ProviderManager:
         if not self._providers:
             logger.warning("No provider instances were successfully loaded.")
 
-    def get_provider(self, name: Optional[str] = None) -> BaseProvider:
+    def get_provider(self, name: str | None = None) -> BaseProvider:
         """
         Gets a provider instance by its configured name, or the default provider.
 
@@ -221,7 +221,7 @@ class ProviderManager:
         """Gets the instance of the configured default provider."""
         return self.get_provider(self._default_provider_name)
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """Lists the names of all successfully loaded provider instances."""
         return list(self._providers.keys())
 

@@ -51,15 +51,16 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from datetime import datetime, timezone, UTC
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 def _utc_now() -> datetime:
     """Get current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 if TYPE_CHECKING:
@@ -93,8 +94,8 @@ class Candidate(BaseModel):
     content: str
     temperature: float
     prompt_variant: str
-    generation_time_ms: Optional[float] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    generation_time_ms: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utc_now)
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
@@ -141,10 +142,10 @@ class CandidateScore(BaseModel):
     """
 
     candidate_id: str
-    criteria_scores: Dict[str, float]  # criterion name -> score
+    criteria_scores: dict[str, float]  # criterion name -> score
     weighted_total: float
-    arbiter_feedback: Optional[str] = None
-    evaluation_time_ms: Optional[float] = None
+    arbiter_feedback: str | None = None
+    evaluation_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
@@ -170,24 +171,24 @@ class ArbiterDecision(BaseModel):
 
     selected_id: str
     selected_content: str
-    all_scores: List[CandidateScore]
-    all_candidates: List[Candidate] = Field(default_factory=list)
+    all_scores: list[CandidateScore]
+    all_candidates: list[Candidate] = Field(default_factory=list)
     reasoning: str
     confidence: float = Field(ge=0.0, le=1.0)
-    selection_time_ms: Optional[float] = None
-    total_time_ms: Optional[float] = None
+    selection_time_ms: float | None = None
+    total_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
-    def get_candidate_by_id(self, candidate_id: str) -> Optional[Candidate]:
+    def get_candidate_by_id(self, candidate_id: str) -> Candidate | None:
         """Get a candidate by ID."""
         for candidate in self.all_candidates:
             if candidate.id == candidate_id:
                 return candidate
         return None
 
-    def get_score_by_id(self, candidate_id: str) -> Optional[CandidateScore]:
+    def get_score_by_id(self, candidate_id: str) -> CandidateScore | None:
         """Get a score by candidate ID."""
         for score in self.all_scores:
             if score.candidate_id == candidate_id:
@@ -214,8 +215,8 @@ class ArbiterConfig(BaseModel):
     """
 
     num_candidates: int = Field(default=3, ge=1, le=10)
-    temperatures: List[float] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
-    criteria: List[EvaluationCriteria] = Field(
+    temperatures: list[float] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
+    criteria: list[EvaluationCriteria] = Field(
         default_factory=lambda: [
             EvaluationCriteria(
                 name="correctness",
@@ -251,7 +252,7 @@ class ArbiterConfig(BaseModel):
         """Get sum of all criterion weights."""
         return sum(c.weight for c in self.criteria)
 
-    def get_criterion(self, name: str) -> Optional[EvaluationCriteria]:
+    def get_criterion(self, name: str) -> EvaluationCriteria | None:
         """Get a criterion by name."""
         for c in self.criteria:
             if c.name == name:
@@ -368,8 +369,8 @@ class MultiAttemptArbiter:
 
     def __init__(
         self,
-        llm_client: Optional[Callable] = None,
-        config: Optional[ArbiterConfig] = None,
+        llm_client: Callable | None = None,
+        config: ArbiterConfig | None = None,
     ):
         """
         Initialize the multi-attempt arbiter.
@@ -392,7 +393,7 @@ class MultiAttemptArbiter:
         self,
         task: str,
         context: str = "",
-        prompt_variants: Optional[List[str]] = None,
+        prompt_variants: list[str] | None = None,
     ) -> ArbiterDecision:
         """
         Generate multiple candidates and select the best.
@@ -452,8 +453,8 @@ class MultiAttemptArbiter:
         self,
         task: str,
         context: str = "",
-        prompt_variants: Optional[List[str]] = None,
-    ) -> List[Candidate]:
+        prompt_variants: list[str] | None = None,
+    ) -> list[Candidate]:
         """
         Generate multiple candidates without evaluation.
 
@@ -496,8 +497,8 @@ class MultiAttemptArbiter:
 
     async def select_best(
         self,
-        candidates: List[Candidate],
-        scores: List[CandidateScore],
+        candidates: list[Candidate],
+        scores: list[CandidateScore],
         task: str,
     ) -> ArbiterDecision:
         """
@@ -526,8 +527,8 @@ class MultiAttemptArbiter:
         self,
         task: str,
         context: str,
-        prompt_variants: Optional[List[str]],
-    ) -> List[Candidate]:
+        prompt_variants: list[str] | None,
+    ) -> list[Candidate]:
         """Generate N candidates with different temperatures."""
         variants = prompt_variants or self.DEFAULT_VARIANTS
 
@@ -604,7 +605,7 @@ class MultiAttemptArbiter:
                 created_at=start_time,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(
                 f"Generation timeout for candidate {index} "
                 f"(>{self.config.timeout_per_generation_s}s)"
@@ -612,9 +613,9 @@ class MultiAttemptArbiter:
 
     async def _evaluate_candidates(
         self,
-        candidates: List[Candidate],
+        candidates: list[Candidate],
         task: str,
-    ) -> List[CandidateScore]:
+    ) -> list[CandidateScore]:
         """Evaluate all candidates."""
         if self.config.parallel_evaluation:
             tasks = [self._evaluate_single(c, task) for c in candidates]
@@ -709,7 +710,7 @@ class MultiAttemptArbiter:
                 created_at=start_time,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 f"Evaluation timeout for {candidate.id} (>{self.config.timeout_per_evaluation_s}s)"
             )
@@ -730,8 +731,8 @@ class MultiAttemptArbiter:
 
     async def _select_best(
         self,
-        candidates: List[Candidate],
-        scores: List[CandidateScore],
+        candidates: list[Candidate],
+        scores: list[CandidateScore],
         task: str,
     ) -> ArbiterDecision:
         """Select the best candidate."""
@@ -818,8 +819,8 @@ class MultiAttemptArbiter:
 
     def _fallback_select(
         self,
-        candidates: List[Candidate],
-        scores: List[CandidateScore],
+        candidates: list[Candidate],
+        scores: list[CandidateScore],
     ) -> Candidate:
         """Fallback selection: choose candidate with highest weighted score."""
         if not scores:
@@ -867,7 +868,7 @@ class MultiAttemptArbiter:
 
         return content
 
-    def _parse_json(self, content: str) -> Dict[str, Any]:
+    def _parse_json(self, content: str) -> dict[str, Any]:
         """Parse JSON from content, handling markdown fences."""
         content = content.strip()
 

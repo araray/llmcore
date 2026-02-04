@@ -37,7 +37,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
@@ -58,9 +58,9 @@ class ContextSource(Protocol):
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 10_000,
-    ) -> "ContextChunk":
+    ) -> ContextChunk:
         """
         Retrieve context relevant to the current task.
 
@@ -118,7 +118,7 @@ class ContextChunk:
     priority: int = 50
     relevance: float = 1.0
     recency: float = 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def score(self) -> float:
@@ -152,8 +152,8 @@ class SynthesizedContext:
     content: str
     total_tokens: int
     max_tokens: int
-    sources_included: List[str]
-    sources_truncated: List[str] = field(default_factory=list)
+    sources_included: list[str]
+    sources_truncated: list[str] = field(default_factory=list)
     compression_applied: bool = False
     synthesis_time_ms: float = 0.0
 
@@ -243,7 +243,7 @@ class ContextSynthesizer:
         self,
         max_tokens: int = 100_000,
         compression_threshold: float = 0.75,
-        token_counter: Optional[TokenCounter] = None,
+        token_counter: TokenCounter | None = None,
     ) -> None:
         """
         Initialize the synthesizer.
@@ -261,7 +261,7 @@ class ContextSynthesizer:
             token_counter if token_counter is not None else _make_default_counter()
         )
         # name → (source, priority)
-        self._sources: Dict[str, Tuple[ContextSource, int]] = {}
+        self._sources: dict[str, tuple[ContextSource, int]] = {}
 
     # ------------------------------------------------------------------
     # Source management
@@ -293,7 +293,7 @@ class ContextSynthesizer:
         """
         self._sources.pop(name, None)
 
-    def list_sources(self) -> Dict[str, int]:
+    def list_sources(self) -> dict[str, int]:
         """
         Return registered source names and their priorities.
 
@@ -308,10 +308,10 @@ class ContextSynthesizer:
 
     async def synthesize(
         self,
-        current_task: Optional[Any] = None,
-        model: Optional[str] = None,
-        include_sources: Optional[List[str]] = None,
-        exclude_sources: Optional[List[str]] = None,
+        current_task: Any | None = None,
+        model: str | None = None,
+        include_sources: list[str] | None = None,
+        exclude_sources: list[str] | None = None,
     ) -> SynthesizedContext:
         """
         Synthesize context from all registered sources.
@@ -327,7 +327,7 @@ class ContextSynthesizer:
             ``SynthesizedContext`` ready for use as a system prompt
             or context injection.
         """
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         # Determine which sources to query
         source_names = set(self._sources.keys())
@@ -355,7 +355,7 @@ class ContextSynthesizer:
         results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         # Filter out errors and empty chunks
-        valid_chunks: List[ContextChunk] = []
+        valid_chunks: list[ContextChunk] = []
         for result in results:
             if isinstance(result, BaseException):
                 logger.warning("Context source failed: %s", result)
@@ -404,8 +404,8 @@ class ContextSynthesizer:
         name: str,
         source: ContextSource,
         priority: int,
-        task: Optional[Any],
-    ) -> Optional[ContextChunk]:
+        task: Any | None,
+    ) -> ContextChunk | None:
         """Fetch context from a single source, applying base priority."""
         try:
             # Allocate per-source budget proportional to priority
@@ -426,8 +426,8 @@ class ContextSynthesizer:
 
     def _fit_to_budget(
         self,
-        chunks: List[ContextChunk],
-    ) -> Tuple[List[ContextChunk], List[str]]:
+        chunks: list[ContextChunk],
+    ) -> tuple[list[ContextChunk], list[str]]:
         """
         Select and optionally truncate chunks to fit the token budget.
 
@@ -437,8 +437,8 @@ class ContextSynthesizer:
         Returns:
             Tuple of (selected chunks, names of truncated sources).
         """
-        selected: List[ContextChunk] = []
-        truncated: List[str] = []
+        selected: list[ContextChunk] = []
+        truncated: list[str] = []
         remaining = self.max_tokens
 
         for chunk in chunks:
@@ -463,7 +463,7 @@ class ContextSynthesizer:
         self,
         chunk: ContextChunk,
         max_tokens: int,
-    ) -> Optional[ContextChunk]:
+    ) -> ContextChunk | None:
         """
         Truncate a chunk to fit within ``max_tokens``.
 
@@ -502,9 +502,9 @@ class ContextSynthesizer:
             metadata={**chunk.metadata, "truncated": True},
         )
 
-    def _assemble_content(self, chunks: List[ContextChunk]) -> str:
+    def _assemble_content(self, chunks: list[ContextChunk]) -> str:
         """Assemble selected chunks into the final context string."""
-        sections: List[str] = []
+        sections: list[str] = []
         for chunk in chunks:
             text = chunk.content.strip()
             if text:
@@ -514,7 +514,7 @@ class ContextSynthesizer:
     async def _compress(
         self,
         content: str,
-        task: Optional[Any],
+        task: Any | None,
     ) -> str:
         """
         Compress context to fit within the token budget.
@@ -542,4 +542,4 @@ class ContextSynthesizer:
 
 def _elapsed_ms(start: datetime) -> float:
     """Milliseconds elapsed since ``start``."""
-    return (datetime.now(timezone.utc) - start).total_seconds() * 1000.0
+    return (datetime.now(UTC) - start).total_seconds() * 1000.0

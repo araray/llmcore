@@ -69,7 +69,7 @@ class PersonaManager:
 
     def __init__(self):
         """Initialize the persona manager."""
-        self.personas: Dict[str, AgentPersona] = {}
+        self.personas: dict[str, AgentPersona] = {}
         self._load_builtin_personas()
 
     def _load_builtin_personas(self) -> None:
@@ -255,7 +255,7 @@ class PersonaManager:
     # PERSONA MANAGEMENT
     # =========================================================================
 
-    def get_persona(self, persona_id: str) -> Optional[AgentPersona]:
+    def get_persona(self, persona_id: str) -> AgentPersona | None:
         """
         Get a persona by ID.
 
@@ -267,7 +267,7 @@ class PersonaManager:
         """
         return self.personas.get(persona_id)
 
-    def list_personas(self, builtin_only: bool = False) -> List[AgentPersona]:
+    def list_personas(self, builtin_only: bool = False) -> list[AgentPersona]:
         """
         List all available personas.
 
@@ -289,11 +289,11 @@ class PersonaManager:
         persona_id: str,
         name: str,
         description: str,
-        traits: Optional[List[PersonalityTrait]] = None,
-        communication_style: Optional[CommunicationStyle] = None,
-        risk_tolerance: Optional[RiskTolerance] = None,
-        planning_depth: Optional[PlanningDepth] = None,
-        custom_instructions: Optional[str] = None,
+        traits: list[PersonalityTrait] | None = None,
+        communication_style: CommunicationStyle | None = None,
+        risk_tolerance: RiskTolerance | None = None,
+        planning_depth: PlanningDepth | None = None,
+        custom_instructions: str | None = None,
     ) -> AgentPersona:
         """
         Create a custom persona.
@@ -380,7 +380,7 @@ class PersonaManager:
     # =========================================================================
 
     def apply_persona_to_prompt(
-        self, base_prompt: str, persona: AgentPersona, phase: Optional[str] = None
+        self, base_prompt: str, persona: AgentPersona, phase: str | None = None
     ) -> str:
         """
         Apply persona modifications to a prompt.
@@ -410,7 +410,7 @@ class PersonaManager:
 
         return modified
 
-    def get_persona_config(self, persona: AgentPersona) -> Dict[str, Any]:
+    def get_persona_config(self, persona: AgentPersona) -> dict[str, Any]:
         """
         Get configuration dictionary for a persona.
 

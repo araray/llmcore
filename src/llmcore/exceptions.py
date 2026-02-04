@@ -115,7 +115,7 @@ class StorageUnavailableError(StorageError):
         self,
         backend_name: str = "unknown",
         message: str = "Storage backend is unavailable.",
-        retry_after_seconds: Optional[int] = None,
+        retry_after_seconds: int | None = None,
     ):
         self.backend_name = backend_name
         self.retry_after_seconds = retry_after_seconds
@@ -135,7 +135,7 @@ class StorageHealthError(StorageError):
         backend_name: str = "unknown",
         check_type: str = "connectivity",
         message: str = "Storage health check failed.",
-        latency_ms: Optional[float] = None,
+        latency_ms: float | None = None,
     ):
         self.backend_name = backend_name
         self.check_type = check_type
@@ -160,8 +160,8 @@ class SchemaError(StorageError):
     def __init__(
         self,
         message: str = "Schema operation failed.",
-        current_version: Optional[int] = None,
-        target_version: Optional[int] = None,
+        current_version: int | None = None,
+        target_version: int | None = None,
     ):
         self.current_version = current_version
         self.target_version = target_version
@@ -239,8 +239,8 @@ class SandboxError(LLMCoreError):
     def __init__(
         self,
         message: str = "Sandbox error.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
     ):
         self.message = message
         self.details = details or {}
@@ -256,7 +256,7 @@ class SandboxError(LLMCoreError):
 
         super().__init__(formatted)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize exception to dictionary for logging/API responses."""
         return {
             "error_type": self.__class__.__name__,
@@ -281,9 +281,9 @@ class SandboxInitializationError(SandboxError):
     def __init__(
         self,
         message: str = "Failed to initialize sandbox.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        provider: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        provider: str | None = None,
     ):
         self.provider = provider
         if provider and "provider" not in (details or {}):
@@ -303,10 +303,10 @@ class SandboxExecutionError(SandboxError):
     def __init__(
         self,
         message: str = "Execution failed in sandbox.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        exit_code: Optional[int] = None,
-        stderr: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        exit_code: int | None = None,
+        stderr: str | None = None,
     ):
         self.exit_code = exit_code
         self.stderr = stderr
@@ -329,10 +329,10 @@ class SandboxTimeoutError(SandboxError):
     def __init__(
         self,
         message: str = "Sandbox operation timed out.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
-        operation: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        timeout_seconds: int | None = None,
+        operation: str | None = None,
     ):
         self.timeout_seconds = timeout_seconds
         self.operation = operation
@@ -358,11 +358,11 @@ class SandboxAccessDenied(SandboxError):
     def __init__(
         self,
         message: str = "Access denied by sandbox security policy.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        required_level: Optional[str] = None,
-        current_level: Optional[str] = None,
-        denied_operation: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        required_level: str | None = None,
+        current_level: str | None = None,
+        denied_operation: str | None = None,
     ):
         self.required_level = required_level
         self.current_level = current_level
@@ -391,11 +391,11 @@ class SandboxResourceError(SandboxError):
     def __init__(
         self,
         message: str = "Sandbox resource limit exceeded.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        resource_type: Optional[str] = None,
-        limit: Optional[str] = None,
-        actual: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        resource_type: str | None = None,
+        limit: str | None = None,
+        actual: str | None = None,
     ):
         self.resource_type = resource_type
         self.limit = limit
@@ -423,10 +423,10 @@ class SandboxConnectionError(SandboxError):
     def __init__(
         self,
         message: str = "Failed to connect to sandbox backend.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
+        host: str | None = None,
+        port: int | None = None,
     ):
         self.host = host
         self.port = port
@@ -449,8 +449,8 @@ class SandboxCleanupError(SandboxError):
     def __init__(
         self,
         message: str = "Failed to cleanup sandbox resources.",
-        details: Optional[Dict[str, Any]] = None,
-        sandbox_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        sandbox_id: str | None = None,
         partial_cleanup: bool = False,
     ):
         self.partial_cleanup = partial_cleanup

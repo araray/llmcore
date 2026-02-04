@@ -64,16 +64,16 @@ from bisect import insort
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import (
     Any,
     Dict,
-    Generator,
     List,
     Optional,
     Tuple,
 )
+from collections.abc import Generator
 
 import psutil
 from pydantic import BaseModel, Field
@@ -130,11 +130,11 @@ class MetricUnit(str, Enum):
 class MetricLabels(BaseModel):
     """Labels for metric dimensions."""
 
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    operation: Optional[str] = None
-    status: Optional[str] = None
-    error_type: Optional[str] = None
+    provider: str | None = None
+    model: str | None = None
+    operation: str | None = None
+    status: str | None = None
+    error_type: str | None = None
 
     def to_key(self) -> str:
         """Convert to a hashable key string."""
@@ -159,34 +159,34 @@ class MetricSnapshot(BaseModel):
     type: MetricType
     unit: MetricUnit = MetricUnit.COUNT
     description: str = ""
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     value: float = 0.0
-    labels: Dict[str, str] = Field(default_factory=dict)
+    labels: dict[str, str] = Field(default_factory=dict)
 
     # For histograms
     count: int = 0
     sum: float = 0.0
-    min: Optional[float] = None
-    max: Optional[float] = None
-    mean: Optional[float] = None
-    percentiles: Dict[int, float] = Field(default_factory=dict)
+    min: float | None = None
+    max: float | None = None
+    mean: float | None = None
+    percentiles: dict[int, float] = Field(default_factory=dict)
 
 
 class MetricsSummary(BaseModel):
     """Summary of all collected metrics."""
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    metrics: List[MetricSnapshot] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    metrics: list[MetricSnapshot] = Field(default_factory=list)
 
     # Convenience aggregates
     total_requests: int = 0
     total_tokens: int = 0
     total_errors: int = 0
     error_rate: float = 0.0
-    avg_latency_ms: Optional[float] = None
-    p95_latency_ms: Optional[float] = None
-    throughput_rps: Optional[float] = None
-    token_throughput: Optional[float] = None
+    avg_latency_ms: float | None = None
+    p95_latency_ms: float | None = None
+    throughput_rps: float | None = None
+    token_throughput: float | None = None
 
 
 # =============================================================================
@@ -216,13 +216,13 @@ class Counter:
         self.name = name
         self.description = description
         self.unit = unit
-        self._values: Dict[str, float] = defaultdict(float)
+        self._values: dict[str, float] = defaultdict(float)
         self._lock = threading.Lock()
 
     def inc(
         self,
         value: float = 1.0,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Increment the counter.
 
@@ -234,7 +234,7 @@ class Counter:
         with self._lock:
             self._values[key] += value
 
-    def get(self, labels: Optional[MetricLabels] = None) -> float:
+    def get(self, labels: MetricLabels | None = None) -> float:
         """Get current counter value.
 
         Args:
@@ -246,7 +246,7 @@ class Counter:
         key = labels.to_key() if labels else "__default__"
         return self._values.get(key, 0.0)
 
-    def get_all(self) -> Dict[str, float]:
+    def get_all(self) -> dict[str, float]:
         """Get all counter values by label."""
         with self._lock:
             return dict(self._values)
@@ -261,7 +261,7 @@ class Counter:
         with self._lock:
             self._values.clear()
 
-    def snapshot(self, labels: Optional[MetricLabels] = None) -> MetricSnapshot:
+    def snapshot(self, labels: MetricLabels | None = None) -> MetricSnapshot:
         """Get a snapshot of this metric."""
         return MetricSnapshot(
             name=self.name,
@@ -294,13 +294,13 @@ class Gauge:
         self.name = name
         self.description = description
         self.unit = unit
-        self._values: Dict[str, float] = defaultdict(float)
+        self._values: dict[str, float] = defaultdict(float)
         self._lock = threading.Lock()
 
     def set(
         self,
         value: float,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Set the gauge value.
 
@@ -315,7 +315,7 @@ class Gauge:
     def inc(
         self,
         value: float = 1.0,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Increment the gauge."""
         key = labels.to_key() if labels else "__default__"
@@ -325,24 +325,24 @@ class Gauge:
     def dec(
         self,
         value: float = 1.0,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Decrement the gauge."""
         key = labels.to_key() if labels else "__default__"
         with self._lock:
             self._values[key] -= value
 
-    def get(self, labels: Optional[MetricLabels] = None) -> float:
+    def get(self, labels: MetricLabels | None = None) -> float:
         """Get current gauge value."""
         key = labels.to_key() if labels else "__default__"
         return self._values.get(key, 0.0)
 
-    def get_all(self) -> Dict[str, float]:
+    def get_all(self) -> dict[str, float]:
         """Get all gauge values by label."""
         with self._lock:
             return dict(self._values)
 
-    def snapshot(self, labels: Optional[MetricLabels] = None) -> MetricSnapshot:
+    def snapshot(self, labels: MetricLabels | None = None) -> MetricSnapshot:
         """Get a snapshot of this metric."""
         return MetricSnapshot(
             name=self.name,
@@ -353,14 +353,14 @@ class Gauge:
             labels=labels.model_dump(exclude_none=True) if labels else {},
         )
 
-    def value(self, labels: Optional[MetricLabels] = None) -> float:
+    def value(self, labels: MetricLabels | None = None) -> float:
         """Alias for get() - get current gauge value."""
         return self.get(labels)
 
     @contextmanager
     def track_inprogress(
         self,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> Generator[None, None, None]:
         """
         Context manager to track in-progress operations.
@@ -383,11 +383,11 @@ class Gauge:
 class HistogramBucket:
     """Internal storage for histogram samples."""
 
-    samples: List[float] = field(default_factory=list)
+    samples: list[float] = field(default_factory=list)
     count: int = 0
     sum: float = 0.0
-    min_val: Optional[float] = None
-    max_val: Optional[float] = None
+    min_val: float | None = None
+    max_val: float | None = None
 
     def add(self, value: float, max_samples: int = MAX_HISTOGRAM_SAMPLES) -> None:
         """Add a sample to this bucket."""
@@ -431,7 +431,7 @@ class Histogram:
         name: str,
         description: str = "",
         unit: MetricUnit = MetricUnit.MILLISECONDS,
-        percentiles: Optional[List[int]] = None,
+        percentiles: list[int] | None = None,
         max_samples: int = MAX_HISTOGRAM_SAMPLES,
     ):
         self.name = name
@@ -439,13 +439,13 @@ class Histogram:
         self.unit = unit
         self.percentiles_to_track = percentiles or DEFAULT_PERCENTILES
         self.max_samples = max_samples
-        self._buckets: Dict[str, HistogramBucket] = defaultdict(HistogramBucket)
+        self._buckets: dict[str, HistogramBucket] = defaultdict(HistogramBucket)
         self._lock = threading.Lock()
 
     def observe(
         self,
         value: float,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Record an observation.
 
@@ -457,7 +457,7 @@ class Histogram:
         with self._lock:
             self._buckets[key].add(value, self.max_samples)
 
-    def count(self, labels: Optional[MetricLabels] = None) -> int:
+    def count(self, labels: MetricLabels | None = None) -> int:
         """Get observation count.
 
         Args:
@@ -472,13 +472,13 @@ class Histogram:
         with self._lock:
             return sum(bucket.count for bucket in self._buckets.values())
 
-    def sum(self, labels: Optional[MetricLabels] = None) -> float:
+    def sum(self, labels: MetricLabels | None = None) -> float:
         """Get sum of all observations."""
         key = labels.to_key() if labels else "__default__"
         bucket = self._buckets.get(key)
         return bucket.sum if bucket else 0.0
 
-    def mean(self, labels: Optional[MetricLabels] = None) -> Optional[float]:
+    def mean(self, labels: MetricLabels | None = None) -> float | None:
         """Get arithmetic mean."""
         key = labels.to_key() if labels else "__default__"
         bucket = self._buckets.get(key)
@@ -486,13 +486,13 @@ class Histogram:
             return bucket.sum / bucket.count
         return None
 
-    def min(self, labels: Optional[MetricLabels] = None) -> Optional[float]:
+    def min(self, labels: MetricLabels | None = None) -> float | None:
         """Get minimum value."""
         key = labels.to_key() if labels else "__default__"
         bucket = self._buckets.get(key)
         return bucket.min_val if bucket else None
 
-    def max(self, labels: Optional[MetricLabels] = None) -> Optional[float]:
+    def max(self, labels: MetricLabels | None = None) -> float | None:
         """Get maximum value."""
         key = labels.to_key() if labels else "__default__"
         bucket = self._buckets.get(key)
@@ -501,8 +501,8 @@ class Histogram:
     def percentile(
         self,
         p: int,
-        labels: Optional[MetricLabels] = None,
-    ) -> Optional[float]:
+        labels: MetricLabels | None = None,
+    ) -> float | None:
         """Get a specific percentile.
 
         Args:
@@ -524,8 +524,8 @@ class Histogram:
 
     def percentiles(
         self,
-        labels: Optional[MetricLabels] = None,
-    ) -> Dict[int, float]:
+        labels: MetricLabels | None = None,
+    ) -> dict[int, float]:
         """Get all tracked percentiles.
 
         Args:
@@ -546,7 +546,7 @@ class Histogram:
         with self._lock:
             self._buckets.clear()
 
-    def snapshot(self, labels: Optional[MetricLabels] = None) -> MetricSnapshot:
+    def snapshot(self, labels: MetricLabels | None = None) -> MetricSnapshot:
         """Get a snapshot of this metric."""
         key = labels.to_key() if labels else "__default__"
         bucket = self._buckets.get(key)
@@ -595,13 +595,13 @@ class RateCounter:
         self.description = description
         self.unit = unit
         self.window_seconds = window_seconds
-        self._events: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
+        self._events: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._lock = threading.Lock()
 
     def inc(
         self,
         value: float = 1.0,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
     ) -> None:
         """Record an event.
 
@@ -618,7 +618,7 @@ class RateCounter:
             cutoff = now - self.window_seconds
             self._events[key] = [(t, v) for t, v in self._events[key] if t >= cutoff]
 
-    def rate(self, labels: Optional[MetricLabels] = None) -> float:
+    def rate(self, labels: MetricLabels | None = None) -> float:
         """Get current rate (events per second).
 
         Args:
@@ -646,7 +646,7 @@ class RateCounter:
 
             return total_value / time_span
 
-    def count(self, labels: Optional[MetricLabels] = None) -> float:
+    def count(self, labels: MetricLabels | None = None) -> float:
         """Get total count in current window."""
         key = labels.to_key() if labels else "__default__"
         now = time.time()
@@ -656,7 +656,7 @@ class RateCounter:
             events = self._events.get(key, [])
             return sum(v for t, v in events if t >= cutoff)
 
-    def total(self, labels: Optional[MetricLabels] = None) -> float:
+    def total(self, labels: MetricLabels | None = None) -> float:
         """Get total value of all events (regardless of window).
 
         Args:
@@ -671,7 +671,7 @@ class RateCounter:
             events = self._events.get(key, [])
             return sum(v for _, v in events)
 
-    def snapshot(self, labels: Optional[MetricLabels] = None) -> MetricSnapshot:
+    def snapshot(self, labels: MetricLabels | None = None) -> MetricSnapshot:
         """Get a snapshot of this metric."""
         return MetricSnapshot(
             name=self.name,
@@ -705,7 +705,7 @@ class Timer:
     def __init__(
         self,
         histogram: Histogram,
-        labels: Optional[MetricLabels] = None,
+        labels: MetricLabels | None = None,
         unit_multiplier: float = 1000.0,  # Convert seconds to milliseconds
     ):
         """
@@ -719,10 +719,10 @@ class Timer:
         self.histogram = histogram
         self.labels = labels
         self.unit_multiplier = unit_multiplier
-        self._start_time: Optional[float] = None
-        self._elapsed: Optional[float] = None
+        self._start_time: float | None = None
+        self._elapsed: float | None = None
 
-    def start(self) -> "Timer":
+    def start(self) -> Timer:
         """Start the timer manually."""
         self._start_time = time.perf_counter()
         self._elapsed = None
@@ -774,7 +774,7 @@ class Timer:
         """
         return self.elapsed() / 1000.0
 
-    def __enter__(self) -> "Timer":
+    def __enter__(self) -> Timer:
         self._start_time = time.perf_counter()
         return self
 
@@ -788,7 +788,7 @@ class Timer:
 @contextmanager
 def timer(
     histogram: Histogram,
-    labels: Optional[MetricLabels] = None,
+    labels: MetricLabels | None = None,
     unit_multiplier: float = 1000.0,
 ) -> Generator[None, None, None]:
     """
@@ -824,18 +824,18 @@ class MetricsRegistry:
         >>> latency = registry.histogram("latency_ms", "Request latency")
     """
 
-    _default_instance: Optional["MetricsRegistry"] = None
+    _default_instance: MetricsRegistry | None = None
     _lock = threading.Lock()
 
     def __init__(self):
-        self._counters: Dict[str, Counter] = {}
-        self._gauges: Dict[str, Gauge] = {}
-        self._histograms: Dict[str, Histogram] = {}
-        self._rate_counters: Dict[str, RateCounter] = {}
+        self._counters: dict[str, Counter] = {}
+        self._gauges: dict[str, Gauge] = {}
+        self._histograms: dict[str, Histogram] = {}
+        self._rate_counters: dict[str, RateCounter] = {}
         self._registry_lock = threading.Lock()
 
     @classmethod
-    def get_default(cls) -> "MetricsRegistry":
+    def get_default(cls) -> MetricsRegistry:
         """Get the default singleton registry."""
         if cls._default_instance is None:
             with cls._lock:
@@ -889,7 +889,7 @@ class MetricsRegistry:
         name: str,
         description: str = "",
         unit: MetricUnit = MetricUnit.MILLISECONDS,
-        percentiles: Optional[List[int]] = None,
+        percentiles: list[int] | None = None,
     ) -> Histogram:
         """Get or create a histogram."""
         with self._registry_lock:
@@ -910,7 +910,7 @@ class MetricsRegistry:
                 self._rate_counters[name] = RateCounter(name, description, unit, window_seconds)
             return self._rate_counters[name]
 
-    def get_all_snapshots(self) -> List[MetricSnapshot]:
+    def get_all_snapshots(self) -> list[MetricSnapshot]:
         """Get snapshots of all metrics."""
         snapshots = []
 
@@ -926,14 +926,14 @@ class MetricsRegistry:
 
         return snapshots
 
-    def get_all_metrics(self) -> Dict[str, Any]:
+    def get_all_metrics(self) -> dict[str, Any]:
         """Get all registered metrics as a dictionary.
 
         Returns:
             Dictionary with metric names as keys and metric objects as values.
         """
         with self._registry_lock:
-            metrics: Dict[str, Any] = {}
+            metrics: dict[str, Any] = {}
             metrics.update(self._counters)
             metrics.update(self._gauges)
             metrics.update(self._histograms)
@@ -968,7 +968,7 @@ def record_llm_call(
     latency_ms: float,
     success: bool = True,
     operation: str = "chat",
-    error_type: Optional[str] = None,
+    error_type: str | None = None,
 ) -> None:
     """
     Record metrics for an LLM API call.
@@ -1133,7 +1133,7 @@ class LLMMetricsCollector:
         ... )
     """
 
-    def __init__(self, registry: Optional[MetricsRegistry] = None):
+    def __init__(self, registry: MetricsRegistry | None = None):
         """
         Initialize the collector.
 
@@ -1214,7 +1214,7 @@ class LLMMetricsCollector:
         labels = MetricLabels(provider=provider, model=model, operation=error_type)
         self._errors.inc(labels=labels)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get current statistics.
 
@@ -1244,7 +1244,7 @@ class SystemMetricsCollector:
         >>> stats = collector.get_stats()
     """
 
-    def __init__(self, registry: Optional[MetricsRegistry] = None):
+    def __init__(self, registry: MetricsRegistry | None = None):
         """
         Initialize the system metrics collector.
 
@@ -1280,7 +1280,7 @@ class SystemMetricsCollector:
         self._memory_usage.set(mem.used)
         self._memory_percent.set(mem.percent)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get current system statistics.
 

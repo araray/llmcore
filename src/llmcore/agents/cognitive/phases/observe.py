@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 async def observe_phase(
-    agent_state: EnhancedAgentState, observe_input: ObserveInput, tracer: Optional[Any] = None
+    agent_state: EnhancedAgentState, observe_input: ObserveInput, tracer: Any | None = None
 ) -> ObserveOutput:
     """
     Execute the OBSERVE phase of the cognitive cycle.
@@ -136,7 +136,7 @@ async def observe_phase(
 # =============================================================================
 
 
-def _analyze_result(action: "ToolCall", result: "ToolResult", expected: Optional[str]) -> str:
+def _analyze_result(action: "ToolCall", result: "ToolResult", expected: str | None) -> str:
     """
     Analyze the tool result and create a structured observation.
 
@@ -233,7 +233,7 @@ def _check_expectation(result: "ToolResult", expected: str) -> bool:
 
 
 def _extract_insights(
-    action: "ToolCall", result: "ToolResult", matches_expectation: Optional[bool]
+    action: "ToolCall", result: "ToolResult", matches_expectation: bool | None
 ) -> list:
     """
     Extract key insights from the action and result.
@@ -275,7 +275,7 @@ def _extract_insights(
     return insights
 
 
-def _needs_follow_up(result: "ToolResult", matches_expectation: Optional[bool]) -> bool:
+def _needs_follow_up(result: "ToolResult", matches_expectation: bool | None) -> bool:
     """
     Determine if follow-up action is needed.
 

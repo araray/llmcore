@@ -44,13 +44,13 @@ from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Dict,
     List,
     Optional,
     Set,
     Tuple,
 )
+from collections.abc import Callable
 
 try:
     from pydantic import BaseModel, Field
@@ -102,7 +102,7 @@ class ModelInfo:
     id: str
     tier: ModelTier
     provider: str
-    capabilities: Set[ModelCapability]
+    capabilities: set[ModelCapability]
     context_window: int
     cost_per_1k_input: float
     cost_per_1k_output: float
@@ -125,7 +125,7 @@ class ModelInfo:
 class TierConfig:
     """Configuration for a model tier."""
 
-    models: List[str]  # Model IDs in preference order
+    models: list[str]  # Model IDs in preference order
     cost_multiplier: float
     description: str
 
@@ -136,7 +136,7 @@ class TierConfig:
 
 
 # Default model configurations
-DEFAULT_MODELS: Dict[str, ModelInfo] = {
+DEFAULT_MODELS: dict[str, ModelInfo] = {
     # OpenAI - Fast Tier
     "gpt-4o-mini": ModelInfo(
         id="gpt-4o-mini",
@@ -381,10 +381,10 @@ class ModelSelection:
     tier: ModelTier
     provider: str
     reason: str
-    alternatives: List[str] = field(default_factory=list)
+    alternatives: list[str] = field(default_factory=list)
     estimated_cost_multiplier: float = 1.0
-    capabilities_matched: Set[ModelCapability] = field(default_factory=set)
-    capabilities_missing: Set[ModelCapability] = field(default_factory=set)
+    capabilities_matched: set[ModelCapability] = field(default_factory=set)
+    capabilities_missing: set[ModelCapability] = field(default_factory=set)
 
 
 @dataclass
@@ -393,10 +393,10 @@ class RoutingContext:
 
     estimated_input_tokens: int = 0
     estimated_output_tokens: int = 0
-    required_capabilities: Set[ModelCapability] = field(default_factory=set)
-    preferred_providers: List[str] = field(default_factory=list)
-    excluded_models: Set[str] = field(default_factory=set)
-    max_cost_per_request: Optional[float] = None
+    required_capabilities: set[ModelCapability] = field(default_factory=set)
+    preferred_providers: list[str] = field(default_factory=list)
+    excluded_models: set[str] = field(default_factory=set)
+    max_cost_per_request: float | None = None
     prefer_local: bool = False
 
 
@@ -423,7 +423,7 @@ class ModelRouter:
 
     def __init__(
         self,
-        models: Optional[Dict[str, ModelInfo]] = None,
+        models: dict[str, ModelInfo] | None = None,
         default_provider: str = "anthropic",
         cost_optimization: bool = True,
     ):
@@ -432,14 +432,14 @@ class ModelRouter:
         self.cost_optimization = cost_optimization
 
         # Build indices
-        self._by_tier: Dict[ModelTier, List[str]] = {}
-        self._by_provider: Dict[str, List[str]] = {}
-        self._by_capability: Dict[ModelCapability, List[str]] = {}
+        self._by_tier: dict[ModelTier, list[str]] = {}
+        self._by_provider: dict[str, list[str]] = {}
+        self._by_capability: dict[ModelCapability, list[str]] = {}
         self._rebuild_indices()
 
         # Track rate limits and availability
-        self._rate_limit_tracker: Dict[str, Tuple[int, float]] = {}  # model -> (count, reset_time)
-        self._availability: Dict[str, bool] = {}
+        self._rate_limit_tracker: dict[str, tuple[int, float]] = {}  # model -> (count, reset_time)
+        self._availability: dict[str, bool] = {}
 
     def _rebuild_indices(self) -> None:
         """Rebuild lookup indices."""
@@ -459,9 +459,9 @@ class ModelRouter:
 
     def select_model(
         self,
-        classification: Optional["GoalClassification"] = None,
-        context: Optional[RoutingContext] = None,
-        complexity: Optional["GoalComplexity"] = None,
+        classification: GoalClassification | None = None,
+        context: RoutingContext | None = None,
+        complexity: GoalComplexity | None = None,
     ) -> ModelSelection:
         """
         Select optimal model for a task.
@@ -537,7 +537,7 @@ class ModelRouter:
             capabilities_missing=caps_missing,
         )
 
-    def _complexity_to_tier(self, complexity: "GoalComplexity") -> ModelTier:
+    def _complexity_to_tier(self, complexity: GoalComplexity) -> ModelTier:
         """Map goal complexity to minimum model tier."""
         # Import here to avoid circular imports
         try:
@@ -558,7 +558,7 @@ class ModelRouter:
         self,
         min_tier: ModelTier,
         context: RoutingContext,
-    ) -> List[str]:
+    ) -> list[str]:
         """Get candidate models for minimum tier."""
         tier_order = [ModelTier.FAST, ModelTier.BALANCED, ModelTier.CAPABLE]
         min_index = tier_order.index(min_tier)
@@ -585,9 +585,9 @@ class ModelRouter:
 
     def _filter_by_capabilities(
         self,
-        candidates: List[str],
-        required: Set[ModelCapability],
-    ) -> List[str]:
+        candidates: list[str],
+        required: set[ModelCapability],
+    ) -> list[str]:
         """Filter models by required capabilities."""
         result = []
         for model_id in candidates:
@@ -598,10 +598,10 @@ class ModelRouter:
 
     def _filter_by_cost(
         self,
-        candidates: List[str],
+        candidates: list[str],
         context: RoutingContext,
         max_cost: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """Filter models by estimated cost."""
         result = []
         for model_id in candidates:
@@ -630,7 +630,7 @@ class ModelRouter:
 
     def _rank_and_select(
         self,
-        candidates: List[str],
+        candidates: list[str],
         context: RoutingContext,
     ) -> str:
         """Rank candidates and select best."""
@@ -641,7 +641,7 @@ class ModelRouter:
             return candidates[0]
 
         # Score each candidate
-        scores: List[Tuple[float, str]] = []
+        scores: list[tuple[float, str]] = []
 
         for model_id in candidates:
             info = self._models[model_id]
@@ -743,16 +743,16 @@ class ModelRouter:
         else:
             self._rate_limit_tracker[model_id] = (count + 1, reset_time)
 
-    def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
         """Get info for a model."""
         return self._models.get(model_id)
 
     def list_models(
         self,
-        tier: Optional[ModelTier] = None,
-        provider: Optional[str] = None,
-        capability: Optional[ModelCapability] = None,
-    ) -> List[str]:
+        tier: ModelTier | None = None,
+        provider: str | None = None,
+        capability: ModelCapability | None = None,
+    ) -> list[str]:
         """List models with optional filters."""
         models = list(self._models.keys())
 
@@ -767,7 +767,7 @@ class ModelRouter:
 
         return models
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get router statistics."""
         return {
             "total_models": len(self._models),
@@ -817,7 +817,7 @@ class ModelFallbackChain:
         self,
         execute_fn: Callable[[str], Any],
         selection: ModelSelection,
-    ) -> Tuple[Any, str]:
+    ) -> tuple[Any, str]:
         """
         Execute with fallback to alternatives on failure.
 
@@ -867,7 +867,7 @@ class ModelFallbackChain:
         self._stats["all_failed"] += 1
         raise RuntimeError(f"All models failed: {models_to_try}")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get fallback chain statistics."""
         total = self._stats["total_requests"]
         return {
@@ -891,9 +891,9 @@ def get_default_router() -> ModelRouter:
 
 
 def select_model_for_complexity(
-    complexity: "GoalComplexity",
-    required_capabilities: Optional[List[str]] = None,
-    preferred_provider: Optional[str] = None,
+    complexity: GoalComplexity,
+    required_capabilities: list[str] | None = None,
+    preferred_provider: str | None = None,
 ) -> ModelSelection:
     """
     Convenience function for quick model selection.

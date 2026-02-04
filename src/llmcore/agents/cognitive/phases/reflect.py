@@ -39,10 +39,10 @@ async def reflect_phase(
     agent_state: EnhancedAgentState,
     reflect_input: ReflectInput,
     provider_manager: "ProviderManager",
-    prompt_registry: Optional[Any] = None,  # PromptRegistry
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    prompt_registry: Any | None = None,  # PromptRegistry
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> ReflectOutput:
     """
     Execute the REFLECT phase of the cognitive cycle.
@@ -187,7 +187,7 @@ async def reflect_phase(
 # =============================================================================
 
 
-def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: Optional[Any]) -> str:
+def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: Any | None) -> str:
     """
     Generate the reflection prompt using prompt library or fallback.
 

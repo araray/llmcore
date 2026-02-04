@@ -32,11 +32,11 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
     Models are loaded based on configuration.
     """
 
-    _model: Optional[SentenceTransformer] = None
-    _model_name_or_path: Optional[str] = None
-    _device: Optional[str] = None  # e.g., 'cpu', 'cuda', 'mps'
+    _model: SentenceTransformer | None = None
+    _model_name_or_path: str | None = None
+    _device: str | None = None  # e.g., 'cpu', 'cuda', 'mps'
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initializes the SentenceTransformerEmbedding model loader.
 
@@ -107,13 +107,13 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
             )
 
     def _load_model_sync(
-        self, model_name_or_path: str, device: Optional[str]
+        self, model_name_or_path: str, device: str | None
     ) -> SentenceTransformer:
         """Synchronous helper function to load the model."""
         # This function will run in a separate thread via asyncio.to_thread
         return SentenceTransformer(model_name_or_path, device=device)
 
-    def _encode_sync(self, texts: List[str]) -> List[List[float]]:
+    def _encode_sync(self, texts: list[str]) -> list[list[float]]:
         """Synchronous helper function for encoding."""
         if not self._model:
             # This should ideally not happen if initialize was called successfully
@@ -131,7 +131,7 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name_or_path, message=f"Encoding failed: {e}"
             )
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate a vector embedding for a single text string asynchronously.
 
@@ -177,7 +177,7 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name_or_path, message=f"Embedding generation failed: {e}"
             )
 
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
         Generate vector embeddings for a batch of text strings asynchronously.
 

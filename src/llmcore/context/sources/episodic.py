@@ -18,7 +18,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from ..synthesis import ContextChunk
@@ -54,14 +54,14 @@ class EpisodicContextSource:
             max_episodes: Maximum number of episodes to retain.
         """
         self.max_episodes = max_episodes
-        self._episodes: List[Dict[str, Any]] = []
+        self._episodes: list[dict[str, Any]] = []
 
     def add_episode(
         self,
         summary: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         significance: float = 0.5,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Record an episode.
@@ -77,7 +77,7 @@ class EpisodicContextSource:
                 "summary": summary,
                 "tags": tags or [],
                 "significance": significance,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": metadata or {},
             }
         )
@@ -97,7 +97,7 @@ class EpisodicContextSource:
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 3000,
     ) -> ContextChunk:
         """
@@ -152,8 +152,8 @@ class EpisodicContextSource:
 
     def _rank_episodes(
         self,
-        task: Optional[Any],
-    ) -> List[Dict[str, Any]]:
+        task: Any | None,
+    ) -> list[dict[str, Any]]:
         """
         Rank episodes by relevance to the current task.
 
@@ -164,7 +164,7 @@ class EpisodicContextSource:
             desc = getattr(task, "description", str(task))
             task_words = set(desc.lower().split())
 
-        scored: List[tuple] = []
+        scored: list[tuple] = []
         for episode in self._episodes:
             score = episode["significance"]
 

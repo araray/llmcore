@@ -17,7 +17,7 @@ Requires `psycopg` for asynchronous PostgreSQL interaction.
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import text
@@ -88,7 +88,7 @@ class PostgresSessionStorage(BaseSessionStorage):
     """
 
     _pool: Optional["AsyncConnectionPool"] = None
-    _tenant_session: Optional[AsyncSession] = None  # NEW: Tenant-scoped session
+    _tenant_session: AsyncSession | None = None  # NEW: Tenant-scoped session
     _sessions_table: str
     _messages_table: str
     _session_context_items_table: str
@@ -96,7 +96,7 @@ class PostgresSessionStorage(BaseSessionStorage):
     _context_preset_items_table: str
     _episodes_table: str
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the PostgreSQL session storage asynchronously.
 
@@ -485,7 +485,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
         logger.info(f"Session '{session.id}' saved successfully to PostgreSQL (legacy mode).")
 
-    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+    async def get_session(self, session_id: str) -> ChatSession | None:
         """
         Retrieves a session with messages and session_context_items from PostgreSQL.
 
@@ -503,7 +503,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.error(f"Error retrieving session '{session_id}': {e}", exc_info=True)
             raise SessionStorageError(f"Failed to retrieve session '{session_id}': {e}")
 
-    async def _get_session_tenant_mode(self, session_id: str) -> Optional[ChatSession]:
+    async def _get_session_tenant_mode(self, session_id: str) -> ChatSession | None:
         """Get session using tenant-scoped SQLAlchemy session."""
         # Get session data
         result = await self._tenant_session.execute(
@@ -519,18 +519,18 @@ class PostgresSessionStorage(BaseSessionStorage):
         session_data = dict(session_row._mapping)
         session_data["metadata"] = json.loads(session_data.get("metadata") or "{}")
         session_data["created_at"] = (
-            session_data["created_at"].replace(tzinfo=timezone.utc)
+            session_data["created_at"].replace(tzinfo=UTC)
             if session_data.get("created_at")
-            else datetime.now(timezone.utc)
+            else datetime.now(UTC)
         )
         session_data["updated_at"] = (
-            session_data["updated_at"].replace(tzinfo=timezone.utc)
+            session_data["updated_at"].replace(tzinfo=UTC)
             if session_data.get("updated_at")
-            else datetime.now(timezone.utc)
+            else datetime.now(UTC)
         )
 
         # Get messages
-        messages: List[Message] = []
+        messages: list[Message] = []
         result = await self._tenant_session.execute(
             text(
                 f"SELECT * FROM {self._messages_table} WHERE session_id = :session_id ORDER BY timestamp ASC"
@@ -543,9 +543,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                 msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or "{}")
                 msg_dict["role"] = Role(msg_dict["role"])
                 msg_dict["timestamp"] = (
-                    msg_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    msg_dict["timestamp"].replace(tzinfo=UTC)
                     if msg_dict.get("timestamp")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 messages.append(Message.model_validate(msg_dict))
             except (ValueError, TypeError) as e:
@@ -554,7 +554,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                 )
 
         # Get context items
-        context_items: List[ContextItem] = []
+        context_items: list[ContextItem] = []
         result = await self._tenant_session.execute(
             text(
                 f"SELECT * FROM {self._session_context_items_table} WHERE session_id = :session_id ORDER BY timestamp ASC"
@@ -567,9 +567,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                 item_dict["metadata"] = json.loads(item_dict.get("metadata") or "{}")
                 item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
                 item_dict["timestamp"] = (
-                    item_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    item_dict["timestamp"].replace(tzinfo=UTC)
                     if item_dict.get("timestamp")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 item_dict["is_truncated"] = bool(item_dict.get("is_truncated", False))
                 context_items.append(ContextItem.model_validate(item_dict))
@@ -587,7 +587,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         )
         return chat_session
 
-    async def _get_session_legacy_mode(self, session_id: str) -> Optional[ChatSession]:
+    async def _get_session_legacy_mode(self, session_id: str) -> ChatSession | None:
         """Get session using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
@@ -606,17 +606,17 @@ class PostgresSessionStorage(BaseSessionStorage):
                 session_data = dict(session_row)
                 session_data["metadata"] = session_data.get("metadata") or {}
                 session_data["created_at"] = (
-                    session_data["created_at"].replace(tzinfo=timezone.utc)
+                    session_data["created_at"].replace(tzinfo=UTC)
                     if session_data.get("created_at")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 session_data["updated_at"] = (
-                    session_data["updated_at"].replace(tzinfo=timezone.utc)
+                    session_data["updated_at"].replace(tzinfo=UTC)
                     if session_data.get("updated_at")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
 
-                messages: List[Message] = []
+                messages: list[Message] = []
                 await cur.execute(
                     f"SELECT * FROM {self._messages_table} WHERE session_id = %s ORDER BY timestamp ASC",
                     (session_id,),
@@ -627,9 +627,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                         msg_dict["metadata"] = msg_dict.get("metadata") or {}
                         msg_dict["role"] = Role(msg_dict["role"])
                         msg_dict["timestamp"] = (
-                            msg_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            msg_dict["timestamp"].replace(tzinfo=UTC)
                             if msg_dict.get("timestamp")
-                            else datetime.now(timezone.utc)
+                            else datetime.now(UTC)
                         )
                         messages.append(Message.model_validate(msg_dict))
                     except (ValueError, TypeError) as e:
@@ -638,7 +638,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                         )
                 session_data["messages"] = messages
 
-                context_items: List[ContextItem] = []
+                context_items: list[ContextItem] = []
                 await cur.execute(
                     f"SELECT * FROM {self._session_context_items_table} WHERE session_id = %s ORDER BY timestamp ASC",
                     (session_id,),
@@ -649,9 +649,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                         item_dict["metadata"] = item_dict.get("metadata") or {}
                         item_dict["type"] = ContextItemType(item_dict.pop("item_type"))
                         item_dict["timestamp"] = (
-                            item_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            item_dict["timestamp"].replace(tzinfo=UTC)
                             if item_dict.get("timestamp")
-                            else datetime.now(timezone.utc)
+                            else datetime.now(UTC)
                         )
                         item_dict["is_truncated"] = bool(item_dict.get("is_truncated", False))
                         context_items.append(ContextItem.model_validate(item_dict))
@@ -667,7 +667,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         )
         return chat_session
 
-    async def list_sessions(self) -> List[Dict[str, Any]]:
+    async def list_sessions(self) -> list[dict[str, Any]]:
         """Lists session metadata from PostgreSQL, including message and context item counts."""
         logger.debug("Listing session metadata from PostgreSQL...")
 
@@ -681,9 +681,9 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.error(f"Error listing sessions: {e}", exc_info=True)
             raise SessionStorageError(f"Failed to list sessions: {e}")
 
-    async def _list_sessions_tenant_mode(self) -> List[Dict[str, Any]]:
+    async def _list_sessions_tenant_mode(self) -> list[dict[str, Any]]:
         """List sessions using tenant-scoped SQLAlchemy session."""
-        session_metadata_list: List[Dict[str, Any]] = []
+        session_metadata_list: list[dict[str, Any]] = []
 
         result = await self._tenant_session.execute(
             text(f"""
@@ -702,12 +702,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.info(f"Found {len(session_metadata_list)} sessions in PostgreSQL.")
         return session_metadata_list
 
-    async def _list_sessions_legacy_mode(self) -> List[Dict[str, Any]]:
+    async def _list_sessions_legacy_mode(self) -> list[dict[str, Any]]:
         """List sessions using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
 
-        session_metadata_list: List[Dict[str, Any]] = []
+        session_metadata_list: list[dict[str, Any]] = []
 
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
@@ -788,7 +788,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
     async def _update_session_name_tenant_mode(self, session_id: str, new_name: str) -> bool:
         """Update session name using tenant-scoped SQLAlchemy session."""
-        new_updated_at = datetime.now(timezone.utc)
+        new_updated_at = datetime.now(UTC)
 
         result = await self._tenant_session.execute(
             text(
@@ -807,7 +807,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
     async def _update_session_name_legacy_mode(self, session_id: str, new_name: str) -> bool:
         """Update session name using legacy psycopg pool mode."""
-        new_updated_at = datetime.now(timezone.utc)
+        new_updated_at = datetime.now(UTC)
 
         async with self._pool.connection() as conn:
             async with conn.transaction():
@@ -959,7 +959,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             f"Context preset '{preset.name}' with {len(preset.items)} items saved to PostgreSQL (legacy mode)."
         )
 
-    async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
+    async def get_context_preset(self, preset_name: str) -> ContextPreset | None:
         """
         Retrieve a specific context preset by its unique name.
 
@@ -981,7 +981,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.error(f"Error retrieving context preset '{preset_name}': {e}", exc_info=True)
             raise SessionStorageError(f"Failed to retrieve context preset '{preset_name}': {e}")
 
-    async def _get_context_preset_tenant_mode(self, preset_name: str) -> Optional[ContextPreset]:
+    async def _get_context_preset_tenant_mode(self, preset_name: str) -> ContextPreset | None:
         """Get context preset using tenant-scoped SQLAlchemy session."""
         # Get preset data
         result = await self._tenant_session.execute(
@@ -997,18 +997,18 @@ class PostgresSessionStorage(BaseSessionStorage):
         preset_data = dict(preset_row._mapping)
         preset_data["metadata"] = json.loads(preset_data.get("metadata") or "{}")
         preset_data["created_at"] = (
-            preset_data["created_at"].replace(tzinfo=timezone.utc)
+            preset_data["created_at"].replace(tzinfo=UTC)
             if preset_data.get("created_at")
-            else datetime.now(timezone.utc)
+            else datetime.now(UTC)
         )
         preset_data["updated_at"] = (
-            preset_data["updated_at"].replace(tzinfo=timezone.utc)
+            preset_data["updated_at"].replace(tzinfo=UTC)
             if preset_data.get("updated_at")
-            else datetime.now(timezone.utc)
+            else datetime.now(UTC)
         )
 
         # Get preset items
-        items: List[ContextPresetItem] = []
+        items: list[ContextPresetItem] = []
         result = await self._tenant_session.execute(
             text(
                 f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = :preset_name"
@@ -1031,7 +1031,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.info(f"Context preset '{preset_name}' loaded from PostgreSQL ({len(items)} items).")
         return context_preset
 
-    async def _get_context_preset_legacy_mode(self, preset_name: str) -> Optional[ContextPreset]:
+    async def _get_context_preset_legacy_mode(self, preset_name: str) -> ContextPreset | None:
         """Get context preset using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
@@ -1050,17 +1050,17 @@ class PostgresSessionStorage(BaseSessionStorage):
                 preset_data = dict(preset_row)
                 preset_data["metadata"] = preset_data.get("metadata") or {}
                 preset_data["created_at"] = (
-                    preset_data["created_at"].replace(tzinfo=timezone.utc)
+                    preset_data["created_at"].replace(tzinfo=UTC)
                     if preset_data.get("created_at")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 preset_data["updated_at"] = (
-                    preset_data["updated_at"].replace(tzinfo=timezone.utc)
+                    preset_data["updated_at"].replace(tzinfo=UTC)
                     if preset_data.get("updated_at")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
 
-                items: List[ContextPresetItem] = []
+                items: list[ContextPresetItem] = []
                 await cur.execute(
                     f"SELECT * FROM {self._context_preset_items_table} WHERE preset_name = %s",
                     (preset_name,),
@@ -1082,7 +1082,7 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.info(f"Context preset '{preset_name}' loaded from PostgreSQL ({len(items)} items).")
         return context_preset
 
-    async def list_context_presets(self) -> List[Dict[str, Any]]:
+    async def list_context_presets(self) -> list[dict[str, Any]]:
         """
         List available context presets, returning metadata only.
 
@@ -1101,9 +1101,9 @@ class PostgresSessionStorage(BaseSessionStorage):
             logger.error(f"Error listing context presets: {e}", exc_info=True)
             raise SessionStorageError(f"Failed to list context presets: {e}")
 
-    async def _list_context_presets_tenant_mode(self) -> List[Dict[str, Any]]:
+    async def _list_context_presets_tenant_mode(self) -> list[dict[str, Any]]:
         """List context presets using tenant-scoped SQLAlchemy session."""
-        preset_metadata_list: List[Dict[str, Any]] = []
+        preset_metadata_list: list[dict[str, Any]] = []
 
         result = await self._tenant_session.execute(
             text(f"""
@@ -1121,12 +1121,12 @@ class PostgresSessionStorage(BaseSessionStorage):
         logger.info(f"Found {len(preset_metadata_list)} context presets in PostgreSQL.")
         return preset_metadata_list
 
-    async def _list_context_presets_legacy_mode(self) -> List[Dict[str, Any]]:
+    async def _list_context_presets_legacy_mode(self) -> list[dict[str, Any]]:
         """List context presets using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
 
-        preset_metadata_list: List[Dict[str, Any]] = []
+        preset_metadata_list: list[dict[str, Any]] = []
 
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
@@ -1275,7 +1275,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             description=old_preset.description,
             items=old_preset.items,
             created_at=old_preset.created_at,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
             metadata=old_preset.metadata,
         )
 
@@ -1323,7 +1323,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                 description=old_preset.description,
                 items=old_preset.items,
                 created_at=old_preset.created_at,
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
                 metadata=old_preset.metadata,
             )
 
@@ -1444,7 +1444,7 @@ class PostgresSessionStorage(BaseSessionStorage):
 
     async def get_episodes(
         self, session_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """
         Retrieve a list of episodes for a given session, ordered by timestamp.
 
@@ -1476,9 +1476,9 @@ class PostgresSessionStorage(BaseSessionStorage):
 
     async def _get_episodes_tenant_mode(
         self, session_id: str, limit: int, offset: int
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """Get episodes using tenant-scoped SQLAlchemy session."""
-        episodes: List[Episode] = []
+        episodes: list[Episode] = []
 
         result = await self._tenant_session.execute(
             text(f"""
@@ -1497,9 +1497,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                 row_dict["data"] = json.loads(row_dict.get("data") or "{}")
                 row_dict["event_type"] = EpisodeType(row_dict["event_type"])
                 row_dict["timestamp"] = (
-                    row_dict["timestamp"].replace(tzinfo=timezone.utc)
+                    row_dict["timestamp"].replace(tzinfo=UTC)
                     if row_dict.get("timestamp")
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 episodes.append(Episode.model_validate(row_dict))
             except (ValueError, TypeError) as e:
@@ -1510,12 +1510,12 @@ class PostgresSessionStorage(BaseSessionStorage):
 
     async def _get_episodes_legacy_mode(
         self, session_id: str, limit: int, offset: int
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """Get episodes using legacy psycopg pool mode."""
         if not dict_row:
             raise SessionStorageError("psycopg dict_row factory not available.")
 
-        episodes: List[Episode] = []
+        episodes: list[Episode] = []
 
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
@@ -1537,9 +1537,9 @@ class PostgresSessionStorage(BaseSessionStorage):
                         row_dict["data"] = row_dict.get("data") or {}
                         row_dict["event_type"] = EpisodeType(row_dict["event_type"])
                         row_dict["timestamp"] = (
-                            row_dict["timestamp"].replace(tzinfo=timezone.utc)
+                            row_dict["timestamp"].replace(tzinfo=UTC)
                             if row_dict.get("timestamp")
-                            else datetime.now(timezone.utc)
+                            else datetime.now(UTC)
                         )
                         episodes.append(Episode.model_validate(row_dict))
                     except (ValueError, TypeError) as e:

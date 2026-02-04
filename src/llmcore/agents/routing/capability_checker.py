@@ -94,8 +94,8 @@ class CompatibilityResult:
 
     compatible: bool
     model: str
-    issues: List[CapabilityIssue] = field(default_factory=list)
-    model_capabilities: Set[Capability] = field(default_factory=set)
+    issues: list[CapabilityIssue] = field(default_factory=list)
+    model_capabilities: set[Capability] = field(default_factory=set)
 
     @property
     def has_errors(self) -> bool:
@@ -106,7 +106,7 @@ class CompatibilityResult:
         return any(i.severity == IssueSeverity.WARNING for i in self.issues)
 
     @property
-    def suggestions(self) -> List[str]:
+    def suggestions(self) -> list[str]:
         return [i.suggestion for i in self.issues if i.suggestion]
 
     def __str__(self) -> str:
@@ -123,7 +123,7 @@ class ModelInfo:
 
     name: str
     provider: str
-    capabilities: Set[Capability]
+    capabilities: set[Capability]
     context_window: int
     max_output_tokens: int
     cost_per_1k_input: float = 0.0
@@ -147,7 +147,7 @@ class ModelInfo:
 # =============================================================================
 
 # This is a simplified registry - in production, integrate with llmcore model cards
-DEFAULT_MODEL_INFO: Dict[str, ModelInfo] = {
+DEFAULT_MODEL_INFO: dict[str, ModelInfo] = {
     # OpenAI
     "gpt-4-turbo": ModelInfo(
         name="gpt-4-turbo",
@@ -357,10 +357,10 @@ class CapabilityChecker:
         model_registry: Optional custom model registry (dict of name -> ModelInfo)
     """
 
-    def __init__(self, model_registry: Optional[Dict[str, ModelInfo]] = None):
+    def __init__(self, model_registry: dict[str, ModelInfo] | None = None):
         self.model_registry = model_registry or DEFAULT_MODEL_INFO
 
-    def get_model_info(self, model: str) -> Optional[ModelInfo]:
+    def get_model_info(self, model: str) -> ModelInfo | None:
         """
         Get model info, handling variations in model names.
 
@@ -401,7 +401,7 @@ class CapabilityChecker:
         requires_streaming: bool = False,
         requires_json_mode: bool = False,
         min_context_window: int = 4096,
-        estimated_tokens: Optional[int] = None,
+        estimated_tokens: int | None = None,
     ) -> CompatibilityResult:
         """
         Check if model is compatible with requirements.
@@ -418,7 +418,7 @@ class CapabilityChecker:
         Returns:
             CompatibilityResult with compatibility status and any issues
         """
-        issues: List[CapabilityIssue] = []
+        issues: list[CapabilityIssue] = []
 
         # Get model info
         model_info = self.get_model_info(model)
@@ -577,10 +577,10 @@ class CapabilityChecker:
 
     def suggest_alternative_models(
         self,
-        required_capabilities: Set[Capability],
-        exclude_providers: Optional[Set[str]] = None,
+        required_capabilities: set[Capability],
+        exclude_providers: set[str] | None = None,
         max_suggestions: int = 3,
-    ) -> List[ModelInfo]:
+    ) -> list[ModelInfo]:
         """
         Suggest alternative models that meet requirements.
 
@@ -633,7 +633,7 @@ def check_model_for_agent(
     return checker.check_compatibility(model=model, requires_tools=use_tools)
 
 
-def get_model_capabilities(model: str) -> Optional[Set[Capability]]:
+def get_model_capabilities(model: str) -> set[Capability] | None:
     """Get capabilities of a model."""
     checker = CapabilityChecker()
     info = checker.get_model_info(model)

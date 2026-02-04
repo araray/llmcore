@@ -109,7 +109,7 @@ class ObservabilityConfig(BaseModel):
     metrics_port: int = Field(
         default=9090, ge=1024, le=65535, description="Port for Prometheus HTTP endpoint"
     )
-    metrics_default_labels: Dict[str, str] = Field(
+    metrics_default_labels: dict[str, str] = Field(
         default_factory=dict, description="Default labels added to all metrics"
     )
 
@@ -144,7 +144,7 @@ class ObservabilityConfig(BaseModel):
     )
 
     # Histogram bucket configuration
-    histogram_buckets: List[float] = Field(
+    histogram_buckets: list[float] = Field(
         default=[
             0.001,
             0.005,
@@ -204,7 +204,7 @@ class ObservabilityConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_configuration(self) -> "ObservabilityConfig":
+    def validate_configuration(self) -> ObservabilityConfig:
         """Validate overall configuration consistency."""
         # If master switch is off, disable all features
         if not self.enabled:
@@ -223,7 +223,7 @@ class ObservabilityConfig(BaseModel):
         return self
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any]) -> "ObservabilityConfig":
+    def from_dict(cls, config: dict[str, Any]) -> ObservabilityConfig:
         """
         Create configuration from dictionary.
 
@@ -244,7 +244,7 @@ class ObservabilityConfig(BaseModel):
         return cls(**config)
 
     @classmethod
-    def from_environment(cls, prefix: str = "LLMCORE_STORAGE_") -> "ObservabilityConfig":
+    def from_environment(cls, prefix: str = "LLMCORE_STORAGE_") -> ObservabilityConfig:
         """
         Create configuration from environment variables.
 
@@ -305,11 +305,11 @@ class ObservabilityConfig(BaseModel):
 
         return cls(**config)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
         return self.model_dump()
 
-    def get_instrumentation_config(self) -> Dict[str, Any]:
+    def get_instrumentation_config(self) -> dict[str, Any]:
         """
         Get configuration for StorageInstrumentation.
 
@@ -328,7 +328,7 @@ class ObservabilityConfig(BaseModel):
             "sample_rate": self.tracing_sample_rate if self.tracing_enabled else 1.0,
         }
 
-    def get_metrics_config(self) -> Dict[str, Any]:
+    def get_metrics_config(self) -> dict[str, Any]:
         """
         Get configuration for MetricsCollector.
 
@@ -344,7 +344,7 @@ class ObservabilityConfig(BaseModel):
             "histogram_buckets": tuple(self.histogram_buckets),
         }
 
-    def get_event_logger_config(self) -> Dict[str, Any]:
+    def get_event_logger_config(self) -> dict[str, Any]:
         """
         Get configuration for EventLogger.
 

@@ -49,8 +49,8 @@ class ScopeConditionMatcher:
 
     def matches(
         self,
-        parameters: Dict[str, Any],
-        conditions: Dict[str, Any],
+        parameters: dict[str, Any],
+        conditions: dict[str, Any],
     ) -> bool:
         """
         Check if parameters match all conditions.
@@ -137,9 +137,9 @@ class ApprovalScopeManager:
 
     def __init__(
         self,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        config: Optional[HITLConfig] = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        config: HITLConfig | None = None,
     ):
         """
         Initialize scope manager.
@@ -163,15 +163,15 @@ class ApprovalScopeManager:
         self._matcher = ScopeConditionMatcher()
 
         # Scope event callbacks
-        self._on_scope_granted: List[callable] = []
-        self._on_scope_revoked: List[callable] = []
+        self._on_scope_granted: list[callable] = []
+        self._on_scope_revoked: list[callable] = []
 
     def check_scope(
         self,
         activity_type: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         risk_level: RiskLevel = RiskLevel.MEDIUM,
-    ) -> Optional[bool]:
+    ) -> bool | None:
         """
         Check if activity is pre-approved within scope.
 
@@ -236,7 +236,7 @@ class ApprovalScopeManager:
     def grant_session_approval(
         self,
         tool_name: str,
-        conditions: Optional[Dict[str, Any]] = None,
+        conditions: dict[str, Any] | None = None,
         max_risk_level: RiskLevel = RiskLevel.MEDIUM,
         granted_by: str = "",
     ) -> str:
@@ -317,7 +317,7 @@ class ApprovalScopeManager:
 
     def grant_full_session_approval(
         self,
-        expires_in_seconds: Optional[int] = None,
+        expires_in_seconds: int | None = None,
     ) -> str:
         """
         Grant full session approval for all activities.
@@ -345,7 +345,7 @@ class ApprovalScopeManager:
     def grant_persistent_approval(
         self,
         tool_name: str,
-        conditions: Optional[Dict[str, Any]] = None,
+        conditions: dict[str, Any] | None = None,
         max_risk_level: RiskLevel = RiskLevel.LOW,
         granted_by: str = "",
     ) -> str:
@@ -460,7 +460,7 @@ class ApprovalScopeManager:
     def _matches_approval_pattern(
         self,
         activity_type: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         pattern: str,
     ) -> bool:
         """Check if activity matches an approval pattern string."""
@@ -517,7 +517,7 @@ class ApprovalScopeManager:
         """Register callback for scope revocations."""
         self._on_scope_revoked.append(callback)
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get scope statistics."""
         return {
             "session": {

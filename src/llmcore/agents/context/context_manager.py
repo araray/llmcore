@@ -143,7 +143,7 @@ class ContextComponent:
     content_type: ContentType
     priority: Priority
     tokens: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     compressible: bool = True
     source: str = ""
 
@@ -159,10 +159,10 @@ class Message:
 
     role: str
     content: str
-    name: Optional[str] = None
-    tool_call_id: Optional[str] = None
+    name: str | None = None
+    tool_call_id: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API calls."""
         d = {"role": self.role, "content": self.content}
         if self.name:
@@ -176,13 +176,13 @@ class Message:
 class BuiltContext:
     """Result of building context."""
 
-    messages: List[Dict[str, Any]]
+    messages: list[dict[str, Any]]
     total_tokens: int
     budget_remaining: int
-    included_components: List[str]
-    excluded_components: List[str]
+    included_components: list[str]
+    excluded_components: list[str]
     compression_applied: bool
-    warnings: List[str]
+    warnings: list[str]
 
     def get_message_count(self) -> int:
         """Get number of messages."""
@@ -381,9 +381,9 @@ class ConversationSummarizer:
 
     def summarize_messages(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         preserve_last_n: int = 4,
-    ) -> Tuple[List[Dict[str, Any]], str]:
+    ) -> tuple[list[dict[str, Any]], str]:
         """
         Summarize older messages while preserving recent ones.
 
@@ -404,7 +404,7 @@ class ConversationSummarizer:
 
         return to_preserve, summary
 
-    def _create_summary(self, messages: List[Dict[str, Any]]) -> str:
+    def _create_summary(self, messages: list[dict[str, Any]]) -> str:
         """Create summary of messages."""
         topics = []
         actions = []
@@ -485,8 +485,8 @@ class ContextManager:
 
     def __init__(
         self,
-        config: Optional[ContextManagerConfig] = None,
-        token_counter: Optional[TokenCounter] = None,
+        config: ContextManagerConfig | None = None,
+        token_counter: TokenCounter | None = None,
     ):
         self.config = config or ContextManagerConfig()
         self.token_counter = token_counter or SimpleTokenCounter()
@@ -512,12 +512,12 @@ class ContextManager:
         self,
         system_prompt: str,
         goal: str,
-        history: Optional[List[Dict[str, Any]]] = None,
-        observations: Optional[List[str]] = None,
-        reflections: Optional[List[str]] = None,
-        rag_context: Optional[List[str]] = None,
-        tool_results: Optional[List[Dict[str, Any]]] = None,
-        additional_context: Optional[Dict[str, str]] = None,
+        history: list[dict[str, Any]] | None = None,
+        observations: list[str] | None = None,
+        reflections: list[str] | None = None,
+        rag_context: list[str] | None = None,
+        tool_results: list[dict[str, Any]] | None = None,
+        additional_context: dict[str, str] | None = None,
     ) -> BuiltContext:
         """
         Build optimized context from components.
@@ -536,11 +536,11 @@ class ContextManager:
             BuiltContext ready for LLM call
         """
         budget = self.config.max_tokens - self.config.reserve_for_output
-        warnings: List[str] = []
+        warnings: list[str] = []
         compression_applied = False
 
         # Create components
-        components: List[ContextComponent] = []
+        components: list[ContextComponent] = []
 
         # System prompt (required)
         components.append(
@@ -676,8 +676,8 @@ class ContextManager:
 
     def _process_history(
         self,
-        history: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict[str, Any]], str]:
+        history: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], str]:
         """Process conversation history with optional summarization."""
         if not self.config.auto_summarize_history:
             return history, ""
@@ -694,9 +694,9 @@ class ContextManager:
 
     def _select_components(
         self,
-        components: List[ContextComponent],
+        components: list[ContextComponent],
         budget: int,
-    ) -> Tuple[List[ContextComponent], List[ContextComponent]]:
+    ) -> tuple[list[ContextComponent], list[ContextComponent]]:
         """Select components within budget based on priority."""
         # Sort by priority (descending)
         sorted_components = sorted(
@@ -727,9 +727,9 @@ class ContextManager:
 
     def _compress_components(
         self,
-        components: List[ContextComponent],
+        components: list[ContextComponent],
         budget: int,
-    ) -> List[ContextComponent]:
+    ) -> list[ContextComponent]:
         """Compress compressible components to fit budget."""
         total_tokens = sum(c.tokens for c in components)
         if total_tokens <= budget:
@@ -752,8 +752,8 @@ class ContextManager:
 
     def _build_messages(
         self,
-        components: List[ContextComponent],
-    ) -> List[Dict[str, Any]]:
+        components: list[ContextComponent],
+    ) -> list[dict[str, Any]]:
         """Build message list from components."""
         messages = []
 
@@ -819,7 +819,7 @@ def create_context_manager(
 
 
 def estimate_conversation_tokens(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     chars_per_token: float = 4.0,
 ) -> int:
     """Estimate total tokens in a conversation."""

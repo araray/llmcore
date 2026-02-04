@@ -16,7 +16,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -105,11 +105,11 @@ class RiskAssessment(BaseModel):
     overall_level: str = Field(
         ..., description="Overall risk level (none/low/medium/high/critical)"
     )
-    factors: List[RiskFactor] = Field(default_factory=list, description="Contributing risk factors")
+    factors: list[RiskFactor] = Field(default_factory=list, description="Contributing risk factors")
     requires_approval: bool = Field(False, description="Whether approval is required")
     reason: str = Field("", description="Human-readable reason")
     confidence: float = Field(1.0, description="Confidence in assessment (0-1)")
-    dangerous_patterns: List[str] = Field(
+    dangerous_patterns: list[str] = Field(
         default_factory=list, description="Dangerous patterns detected"
     )
 
@@ -128,8 +128,8 @@ class ActivityInfo(BaseModel):
     """Minimal activity information for HITL request."""
 
     activity_type: str = Field(..., description="Activity type name")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Activity parameters")
-    reason: Optional[str] = Field(None, description="Reasoning for this activity")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Activity parameters")
+    reason: str | None = Field(None, description="Reasoning for this activity")
 
 
 class HITLRequest(BaseModel):
@@ -140,15 +140,15 @@ class HITLRequest(BaseModel):
     risk_assessment: RiskAssessment = Field(..., description="Risk assessment")
     context_summary: str = Field("", description="Brief context for decision-making")
     created_at: datetime = Field(default_factory=datetime.now, description="Request creation time")
-    expires_at: Optional[datetime] = Field(None, description="Request expiration time")
+    expires_at: datetime | None = Field(None, description="Request expiration time")
     status: ApprovalStatus = Field(ApprovalStatus.PENDING, description="Current status")
-    session_id: Optional[str] = Field(None, description="Session this request belongs to")
-    user_id: Optional[str] = Field(None, description="User who will approve")
+    session_id: str | None = Field(None, description="Session this request belongs to")
+    user_id: str | None = Field(None, description="User who will approve")
     priority: int = Field(0, description="Priority (higher = more urgent)")
 
     def set_expiration(self, timeout_seconds: int) -> None:
         """Set expiration based on timeout."""
-        self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
+        self.expires_at = datetime.now(UTC) + timedelta(seconds=timeout_seconds)
 
     @property
     def is_expired(self) -> bool:
@@ -156,10 +156,10 @@ class HITLRequest(BaseModel):
         if self.expires_at is None:
             return False
         # Handle both timezone-aware and naive datetimes
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = self.expires_at
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+            expires = expires.replace(tzinfo=UTC)
         return now > expires
 
     @property
@@ -168,14 +168,14 @@ class HITLRequest(BaseModel):
         if self.expires_at is None:
             return -1
         # Handle both timezone-aware and naive datetimes
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = self.expires_at
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+            expires = expires.replace(tzinfo=UTC)
         delta = expires - now
         return max(0, int(delta.total_seconds()))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "request_id": self.request_id,
@@ -204,7 +204,7 @@ class HITLRequest(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "HITLRequest":
+    def from_dict(cls, data: dict[str, Any]) -> HITLRequest:
         """Create from dictionary."""
         activity_data = data.get("activity", {})
         risk_data = data.get("risk_assessment", {})
@@ -251,20 +251,20 @@ class HITLResponse(BaseModel):
     request_id: str = Field(..., description="Request this responds to")
     # Support both 'approved' (bool) and 'status' (enum) for flexibility
     approved: bool = Field(True, description="Whether approved (legacy)")
-    status: Optional[ApprovalStatus] = Field(None, description="Detailed status")
-    modified_parameters: Optional[Dict[str, Any]] = Field(
+    status: ApprovalStatus | None = Field(None, description="Detailed status")
+    modified_parameters: dict[str, Any] | None = Field(
         None, description="Modified parameters if approved with changes"
     )
     # Alias for modified_parameters
-    modified_params: Optional[Dict[str, Any]] = Field(
+    modified_params: dict[str, Any] | None = Field(
         None, description="Modified parameters (alias)"
     )
-    feedback: Optional[str] = Field(None, description="Human feedback/reason")
+    feedback: str | None = Field(None, description="Human feedback/reason")
     responded_at: datetime = Field(default_factory=datetime.now, description="Response time")
     response_time_ms: int = Field(0, description="Response time in milliseconds")
     responder_id: str = Field("", description="Who responded")
     # Accept both ApprovalScope enum (legacy) and ScopeGrant object (new)
-    scope_grant: Optional[Any] = Field(None, description="Scope to grant for similar actions")
+    scope_grant: Any | None = Field(None, description="Scope to grant for similar actions")
 
     def __init__(self, **data):
         """Initialize with flexible parameter handling."""
@@ -283,7 +283,7 @@ class HITLResponse(BaseModel):
                 )
         super().__init__(**data)
 
-    def get_scope_grant_as_model(self) -> Optional["ScopeGrant"]:
+    def get_scope_grant_as_model(self) -> ScopeGrant | None:
         """Get scope_grant as ScopeGrant model, converting from enum if needed."""
         if self.scope_grant is None:
             return None
@@ -298,7 +298,7 @@ class HITLResponse(BaseModel):
             )
         return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {
             "request_id": self.request_id,
@@ -326,12 +326,12 @@ class HITLDecision(BaseModel):
 
     status: ApprovalStatus = Field(..., description="Decision status")
     reason: str = Field("", description="Reason for decision")
-    modified_parameters: Optional[Dict[str, Any]] = Field(
+    modified_parameters: dict[str, Any] | None = Field(
         None, description="Modified parameters if applicable"
     )
-    request: Optional[HITLRequest] = Field(None, description="Original request")
-    response: Optional[HITLResponse] = Field(None, description="Human response")
-    scope_id: Optional[str] = Field(None, description="Approval scope if used")
+    request: HITLRequest | None = Field(None, description="Original request")
+    response: HITLResponse | None = Field(None, description="Human response")
+    scope_id: str | None = Field(None, description="Approval scope if used")
 
     @property
     def is_approved(self) -> bool:
@@ -353,7 +353,7 @@ class ToolScope(BaseModel):
 
     tool_name: str = Field(..., description="Tool/activity name")
     approved: bool = Field(True, description="Whether approved")
-    conditions: Optional[Dict[str, Any]] = Field(
+    conditions: dict[str, Any] | None = Field(
         None, description="Conditions for approval (e.g., path_pattern)"
     )
     granted_at: datetime = Field(default_factory=datetime.now, description="When scope was granted")
@@ -365,15 +365,15 @@ class SessionScope(BaseModel):
     """Approvals valid for current session only."""
 
     session_id: str = Field(..., description="Session ID")
-    approved_tools: List[ToolScope] = Field(default_factory=list, description="Tools with scope")
-    approved_patterns: List[str] = Field(
+    approved_tools: list[ToolScope] = Field(default_factory=list, description="Tools with scope")
+    approved_patterns: list[str] = Field(
         default_factory=list, description="Approved patterns (e.g., 'read any file in /workspace')"
     )
     session_approval: bool = Field(False, description="Full session approval granted")
-    expires_at: Optional[datetime] = Field(None, description="Session scope expiration")
+    expires_at: datetime | None = Field(None, description="Session scope expiration")
     created_at: datetime = Field(default_factory=datetime.now, description="Scope creation time")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "session_id": self.session_id,
@@ -395,7 +395,7 @@ class SessionScope(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SessionScope":
+    def from_dict(cls, data: dict[str, Any]) -> SessionScope:
         """Create from dictionary."""
         return cls(
             session_id=data["session_id"],
@@ -427,13 +427,13 @@ class PersistentScope(BaseModel):
     """Approvals persisted across sessions."""
 
     user_id: str = Field(..., description="User ID")
-    approved_tools: List[ToolScope] = Field(
+    approved_tools: list[ToolScope] = Field(
         default_factory=list, description="Persistent tool approvals"
     )
     created_at: datetime = Field(default_factory=datetime.now, description="Creation time")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update time")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "user_id": self.user_id,
@@ -464,11 +464,11 @@ class ScopeGrant(BaseModel):
     tool_name: str = Field(..., description="Tool/activity name to grant scope for")
     scope_type: ApprovalScope = Field(ApprovalScope.SESSION, description="Type of scope to grant")
     max_risk_level: str = Field("medium", description="Maximum risk level allowed under this scope")
-    conditions: Optional[Dict[str, Any]] = Field(
+    conditions: dict[str, Any] | None = Field(
         None, description="Optional conditions (e.g., path_pattern)"
     )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "tool_name": self.tool_name,
@@ -478,7 +478,7 @@ class ScopeGrant(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ScopeGrant":
+    def from_dict(cls, data: dict[str, Any]) -> ScopeGrant:
         """Create from dictionary."""
         return cls(
             tool_name=data["tool_name"],
@@ -520,7 +520,7 @@ class HITLStorageConfig(BaseModel):
     )
 
     # File backend options
-    file_path: Optional[str] = Field(
+    file_path: str | None = Field(
         None,
         description="Path for file-based storage (used when backend='file')",
     )
@@ -532,7 +532,7 @@ class HITLStorageConfig(BaseModel):
     )
 
     # PostgreSQL options
-    postgres_url: Optional[str] = Field(
+    postgres_url: str | None = Field(
         None,
         description="PostgreSQL connection URL",
     )
@@ -575,7 +575,7 @@ class HITLConfig(BaseModel):
     timeout_policy: TimeoutPolicy = Field(
         TimeoutPolicy.REJECT, description="Default timeout handling policy"
     )
-    timeout_policies_by_risk: Dict[str, TimeoutPolicy] = Field(
+    timeout_policies_by_risk: dict[str, TimeoutPolicy] = Field(
         default_factory=lambda: {
             "low": TimeoutPolicy.APPROVE,
             "medium": TimeoutPolicy.REJECT,
@@ -586,19 +586,19 @@ class HITLConfig(BaseModel):
     )
 
     # Tool classifications
-    safe_tools: List[str] = Field(
+    safe_tools: list[str] = Field(
         default_factory=lambda: ["final_answer", "respond_to_user", "think_aloud"],
         description="Tools that never require approval",
     )
-    low_risk_tools: List[str] = Field(
+    low_risk_tools: list[str] = Field(
         default_factory=lambda: ["file_read", "file_search", "list_directory"],
         description="Low risk tools",
     )
-    high_risk_tools: List[str] = Field(
+    high_risk_tools: list[str] = Field(
         default_factory=lambda: ["bash_exec", "python_exec", "file_delete"],
         description="High risk tools",
     )
-    critical_tools: List[str] = Field(
+    critical_tools: list[str] = Field(
         default_factory=lambda: ["execute_sudo", "drop_database"],
         description="Critical risk tools",
     )
@@ -609,7 +609,7 @@ class HITLConfig(BaseModel):
 
     # Audit
     audit_logging_enabled: bool = Field(True, description="Enable audit logging")
-    audit_log_path: Optional[str] = Field(None, description="Path for audit log file")
+    audit_log_path: str | None = Field(None, description="Path for audit log file")
 
     # Storage backend configuration (NEW for Phase 7.2)
     storage: HITLStorageConfig = Field(
@@ -629,15 +629,15 @@ class HITLAuditEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: str(uuid4()), description="Event ID")
     event_type: HITLEventType = Field(..., description="Event type")
     timestamp: datetime = Field(default_factory=datetime.now, description="Event time")
-    request_id: Optional[str] = Field(None, description="Related request ID")
-    user_id: Optional[str] = Field(None, description="User involved")
-    session_id: Optional[str] = Field(None, description="Session ID")
-    activity_type: Optional[str] = Field(None, description="Activity type")
-    risk_level: Optional[str] = Field(None, description="Risk level")
-    decision: Optional[str] = Field(None, description="Decision made")
-    details: Dict[str, Any] = Field(default_factory=dict, description="Additional details")
+    request_id: str | None = Field(None, description="Related request ID")
+    user_id: str | None = Field(None, description="User involved")
+    session_id: str | None = Field(None, description="Session ID")
+    activity_type: str | None = Field(None, description="Activity type")
+    risk_level: str | None = Field(None, description="Risk level")
+    decision: str | None = Field(None, description="Decision made")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional details")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for logging."""
         return {
             "event_id": self.event_id,

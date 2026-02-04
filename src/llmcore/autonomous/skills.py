@@ -73,8 +73,8 @@ class SkillMetadata:
 
     name: str
     path: Path
-    tags: List[str] = field(default_factory=list)
-    triggers: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    triggers: list[str] = field(default_factory=list)
     priority: int = 50
     token_estimate: int = 0
 
@@ -92,7 +92,7 @@ class Skill:
 
     metadata: SkillMetadata
     content: str
-    sections: Dict[str, str] = field(default_factory=dict)
+    sections: dict[str, str] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -141,9 +141,9 @@ class SkillLoader:
         """
         self.cache_size = cache_size
 
-        self._skill_dirs: List[Path] = []
-        self._metadata_cache: Dict[str, SkillMetadata] = {}
-        self._content_cache: Dict[str, str] = {}
+        self._skill_dirs: list[Path] = []
+        self._metadata_cache: dict[str, SkillMetadata] = {}
+        self._content_cache: dict[str, str] = {}
         self._loaded = False
 
     # ------------------------------------------------------------------
@@ -258,7 +258,7 @@ class SkillLoader:
         task_description: str,
         max_skills: int = 5,
         max_tokens: int = 20_000,
-    ) -> List[Skill]:
+    ) -> list[Skill]:
         """
         Load skills relevant to a task description.
 
@@ -279,7 +279,7 @@ class SkillLoader:
 
         # Score skills by relevance
         task_words = set(task_description.lower().split())
-        scored: List[tuple] = []
+        scored: list[tuple] = []
 
         for key, metadata in self._metadata_cache.items():
             score = self._score_skill(metadata, task_words)
@@ -290,7 +290,7 @@ class SkillLoader:
         scored.sort(key=lambda x: x[0], reverse=True)
 
         # Load top skills within budget
-        skills: List[Skill] = []
+        skills: list[Skill] = []
         total_tokens = 0
 
         for score, key, metadata in scored[: max_skills * 2]:
@@ -316,7 +316,7 @@ class SkillLoader:
     def _score_skill(
         self,
         metadata: SkillMetadata,
-        task_words: Set[str],
+        task_words: set[str],
     ) -> float:
         """
         Calculate relevance score for a skill.
@@ -362,7 +362,7 @@ class SkillLoader:
         self,
         key: str,
         metadata: SkillMetadata,
-    ) -> Optional[Skill]:
+    ) -> Skill | None:
         """
         Load a skill's full content from disk or cache.
 
@@ -401,7 +401,7 @@ class SkillLoader:
         )
 
     @staticmethod
-    def _parse_sections(content: str) -> Dict[str, str]:
+    def _parse_sections(content: str) -> dict[str, str]:
         """
         Parse markdown content into sections by ``##`` headings.
 
@@ -411,9 +411,9 @@ class SkillLoader:
         Returns:
             Dict mapping section name (lowercase, underscored) → content.
         """
-        sections: Dict[str, str] = {}
+        sections: dict[str, str] = {}
         current_section = "intro"
-        current_lines: List[str] = []
+        current_lines: list[str] = []
 
         for line in content.split("\n"):
             if line.startswith("## "):
@@ -439,8 +439,8 @@ class SkillLoader:
 
     def format_skills(
         self,
-        skills: List[Skill],
-        include_sections: Optional[List[str]] = None,
+        skills: list[Skill],
+        include_sections: list[str] | None = None,
     ) -> str:
         """
         Format loaded skills into a context string.
@@ -476,7 +476,7 @@ class SkillLoader:
     # Introspection
     # ------------------------------------------------------------------
 
-    def get_available_skills(self) -> List[SkillMetadata]:
+    def get_available_skills(self) -> list[SkillMetadata]:
         """
         Get metadata for all discovered skills.
 
@@ -491,7 +491,7 @@ class SkillLoader:
 # =============================================================================
 
 
-def _extract_list_field(content: str, field_name: str) -> List[str]:
+def _extract_list_field(content: str, field_name: str) -> list[str]:
     """
     Extract a list field from YAML frontmatter or inline comments.
 

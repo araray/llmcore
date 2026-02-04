@@ -55,8 +55,8 @@ class RAGResult:
 
     content: str
     similarity: float
-    source: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    source: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         # Normalize similarity to 0-1 range
@@ -160,7 +160,7 @@ class RAGContextFilter:
         ]
         self._corruption_patterns = [re.compile(p) for p in CORRUPTION_PATTERNS]
 
-    def filter(self, results: List[RAGResult]) -> List[RAGResult]:
+    def filter(self, results: list[RAGResult]) -> list[RAGResult]:
         """
         Filter RAG results for quality.
 
@@ -220,7 +220,7 @@ class RAGContextFilter:
 
         return filtered
 
-    def filter_with_stats(self, results: List[RAGResult]) -> tuple[List[RAGResult], FilterStats]:
+    def filter_with_stats(self, results: list[RAGResult]) -> tuple[list[RAGResult], FilterStats]:
         """
         Filter RAG results and return statistics.
 
@@ -342,7 +342,7 @@ class RAGContextFilter:
 
         return False
 
-    def _deduplicate(self, results: List[RAGResult]) -> List[RAGResult]:
+    def _deduplicate(self, results: list[RAGResult]) -> list[RAGResult]:
         """
         Remove near-duplicate results.
 
@@ -354,7 +354,7 @@ class RAGContextFilter:
         # Sort by similarity (highest first) so we keep the best match
         sorted_results = sorted(results, key=lambda r: r.similarity, reverse=True)
 
-        unique: List[RAGResult] = []
+        unique: list[RAGResult] = []
 
         for result in sorted_results:
             is_duplicate = False
@@ -413,8 +413,8 @@ class RAGContextFilter:
     # =========================================================================
 
     def filter_batches(
-        self, results_by_query: Dict[str, List[RAGResult]]
-    ) -> Dict[str, List[RAGResult]]:
+        self, results_by_query: dict[str, list[RAGResult]]
+    ) -> dict[str, list[RAGResult]]:
         """
         Filter multiple query results while deduplicating across queries.
 
@@ -430,8 +430,8 @@ class RAGContextFilter:
         }
 
         # Then deduplicate across queries
-        seen_contents: Set[str] = set()
-        final_results: Dict[str, List[RAGResult]] = {}
+        seen_contents: set[str] = set()
+        final_results: dict[str, list[RAGResult]] = {}
 
         for query, results in filtered_by_query.items():
             unique = []
@@ -452,10 +452,10 @@ class RAGContextFilter:
 
 
 def filter_rag_results(
-    results: List[RAGResult],
+    results: list[RAGResult],
     min_similarity: float = 0.7,
     max_results: int = 5,
-) -> List[RAGResult]:
+) -> list[RAGResult]:
     """
     Convenience function for quick RAG filtering.
 
@@ -475,7 +475,7 @@ def filter_rag_results(
 
 
 def format_rag_context(
-    results: List[RAGResult],
+    results: list[RAGResult],
     max_chars: int = 4000,
     include_sources: bool = True,
 ) -> str:

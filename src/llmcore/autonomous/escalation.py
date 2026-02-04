@@ -48,7 +48,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -149,18 +150,18 @@ class Escalation:
     message: str
 
     # Context
-    details: Dict[str, Any] = field(default_factory=dict)
-    goal_id: Optional[str] = None
-    task_id: Optional[str] = None
+    details: dict[str, Any] = field(default_factory=dict)
+    goal_id: str | None = None
+    task_id: str | None = None
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
-    acknowledged_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+    expires_at: datetime | None = None
 
     # Response
-    human_response: Optional[str] = None
+    human_response: str | None = None
     auto_resolved: bool = False
 
     def is_pending(self) -> bool:
@@ -180,7 +181,7 @@ class Escalation:
             return False
         return True
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for storage/notification payloads."""
         return {
             "id": self.id,
@@ -200,7 +201,7 @@ class Escalation:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Escalation":
+    def from_dict(cls, data: dict[str, Any]) -> "Escalation":
         """
         Deserialize from dictionary.
 
@@ -290,10 +291,10 @@ class EscalationManager:
         self.auto_resolve_below = auto_resolve_below
         self.dedup_window = dedup_window_seconds
 
-        self._escalations: Dict[str, Escalation] = {}
-        self._handlers: List[NotificationHandler] = []
-        self._recent_hashes: Dict[str, datetime] = {}
-        self._response_waiters: Dict[str, asyncio.Event] = {}
+        self._escalations: dict[str, Escalation] = {}
+        self._handlers: list[NotificationHandler] = []
+        self._recent_hashes: dict[str, datetime] = {}
+        self._response_waiters: dict[str, asyncio.Event] = {}
 
     def add_handler(self, handler: NotificationHandler) -> None:
         """
@@ -340,13 +341,13 @@ class EscalationManager:
         reason: EscalationReason,
         title: str,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
-        goal_id: Optional[str] = None,
-        task_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        goal_id: str | None = None,
+        task_id: str | None = None,
         wait_for_response: bool = False,
         timeout_seconds: float = 3600,
-        expires_in_seconds: Optional[float] = None,
-    ) -> Optional[str]:
+        expires_in_seconds: float | None = None,
+    ) -> str | None:
         """
         Create an escalation.
 
@@ -448,7 +449,7 @@ class EscalationManager:
         self,
         escalation_id: str,
         timeout: float,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Wait for human response to an escalation."""
         event = asyncio.Event()
         self._response_waiters[escalation_id] = event
@@ -457,7 +458,7 @@ class EscalationManager:
             await asyncio.wait_for(event.wait(), timeout=timeout)
             escalation = self._escalations.get(escalation_id)
             return escalation.human_response if escalation else None
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Escalation {escalation_id} timed out waiting for response")
             return None
         finally:
@@ -532,11 +533,11 @@ class EscalationManager:
 
         return True
 
-    def get_pending(self) -> List[Escalation]:
+    def get_pending(self) -> list[Escalation]:
         """Get all pending (unresolved) escalations."""
         return [e for e in self._escalations.values() if e.is_pending()]
 
-    def get_escalation(self, escalation_id: str) -> Optional[Escalation]:
+    def get_escalation(self, escalation_id: str) -> Escalation | None:
         """
         Get an escalation by ID.
 
@@ -548,11 +549,11 @@ class EscalationManager:
         """
         return self._escalations.get(escalation_id)
 
-    def get_all(self) -> List[Escalation]:
+    def get_all(self) -> list[Escalation]:
         """Get all escalations."""
         return list(self._escalations.values())
 
-    def get_by_level(self, level: EscalationLevel) -> List[Escalation]:
+    def get_by_level(self, level: EscalationLevel) -> list[Escalation]:
         """Get escalations at or above a specific level."""
         return [e for e in self._escalations.values() if e.level.value >= level.value]
 
@@ -576,10 +577,10 @@ class EscalationManager:
 
         return len(to_remove)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get escalation manager status."""
         pending = self.get_pending()
-        by_level: Dict[str, int] = {}
+        by_level: dict[str, int] = {}
         for level in EscalationLevel:
             by_level[level.name] = sum(1 for e in pending if e.level == level)
 
@@ -598,7 +599,7 @@ class EscalationManager:
 
 async def webhook_handler(
     webhook_url: str,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     timeout: float = 30,
 ) -> NotificationHandler:
     """

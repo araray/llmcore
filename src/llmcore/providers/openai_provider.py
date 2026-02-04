@@ -10,7 +10,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
 
 try:
     import openai
@@ -68,11 +69,11 @@ class OpenAIProvider(BaseProvider):
     Handles List[Message] context type and standardized tool-calling.
     """
 
-    _client: Optional[AsyncOpenAI] = None
-    _encoding: Optional[Any] = None
-    _api_key_env_var: Optional[str] = None
+    _client: AsyncOpenAI | None = None
+    _encoding: Any | None = None
+    _api_key_env_var: str | None = None
 
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the OpenAIProvider.
 
@@ -146,7 +147,7 @@ class OpenAIProvider(BaseProvider):
         """Returns the provider name: 'openai'."""
         return "openai"
 
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """
         Dynamically discovers available models from the OpenAI API.
         Note: The OpenAI API does not return context length or tool support flags,
@@ -180,7 +181,7 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"OpenAI API error fetching models: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Failed to fetch models from OpenAI API: {e}")
 
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported inference parameters for OpenAI models."""
         return {
             "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
@@ -192,7 +193,7 @@ class OpenAIProvider(BaseProvider):
             "seed": {"type": "integer"},
         }
 
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
+    def get_max_context_length(self, model: str | None = None) -> int:
         """Returns the maximum context length (tokens) for the given OpenAI model."""
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
@@ -217,12 +218,12 @@ class OpenAIProvider(BaseProvider):
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Sends a chat completion request to the OpenAI API with standardized tool support.
         """
@@ -238,7 +239,7 @@ class OpenAIProvider(BaseProvider):
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
 
-        messages_payload: List[Dict[str, Any]] = []
+        messages_payload: list[dict[str, Any]] = []
         for msg in context:
             msg_dict = {"role": msg.role.value, "content": msg.content}
             if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
@@ -304,7 +305,7 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"Unexpected error during OpenAI chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens for a text string using tiktoken."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating token count.")
@@ -314,7 +315,7 @@ class OpenAIProvider(BaseProvider):
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
     async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
+        self, messages: list[Message], model: str | None = None
     ) -> int:
         """Counts tokens for a list of messages using tiktoken, including overhead."""
         if not self._encoding:
@@ -344,7 +345,7 @@ class OpenAIProvider(BaseProvider):
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract text content from OpenAI non-streaming response.
 
@@ -366,7 +367,7 @@ class OpenAIProvider(BaseProvider):
             logger.warning(f"Failed to extract content from OpenAI response: {e}")
             return ""
 
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract text delta from OpenAI streaming chunk.
 

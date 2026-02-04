@@ -95,12 +95,12 @@ class FailureRecord:
     id: str
     failure_type: FailureType
     description: str
-    context: Dict[str, Any]
+    context: dict[str, Any]
     severity: FailureSeverity = FailureSeverity.MEDIUM
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
 
     # Tracking
-    session_id: Optional[str] = None
+    session_id: str | None = None
     iteration: int = 0
     timestamp: float = field(default_factory=time.time)
 
@@ -111,11 +111,11 @@ class FailureRecord:
     last_seen: float = field(default_factory=time.time)
 
     # Learning
-    resolution: Optional[str] = None
+    resolution: str | None = None
     resolved: bool = False
-    resolution_timestamp: Optional[float] = None
+    resolution_timestamp: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
@@ -137,7 +137,7 @@ class FailureRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FailureRecord":
+    def from_dict(cls, data: dict[str, Any]) -> FailureRecord:
         """Create from dictionary."""
         return cls(
             id=data["id"],
@@ -166,9 +166,9 @@ class FailurePattern:
     pattern_type: FailureType
     description: str
     occurrences: int
-    affected_models: List[str]
-    affected_tools: List[str]
-    common_context: Dict[str, Any]
+    affected_models: list[str]
+    affected_tools: list[str]
+    common_context: dict[str, Any]
     suggestion: str
     severity: FailureSeverity
     confidence: float  # 0-1, how confident we are in this pattern
@@ -193,7 +193,7 @@ Confidence: {self.confidence:.0%}
 
 
 # Pre-defined suggestions for common failure patterns
-FAILURE_SUGGESTIONS: Dict[FailureType, Dict[str, str]] = {
+FAILURE_SUGGESTIONS: dict[FailureType, dict[str, str]] = {
     FailureType.CAPABILITY_ERROR: {
         "default": "Check model capabilities before attempting operation",
         "tools": "Use activity system instead of native tools for this model",
@@ -231,7 +231,7 @@ FAILURE_SUGGESTIONS: Dict[FailureType, Dict[str, str]] = {
 
 def get_suggestion(
     failure_type: FailureType,
-    context: Dict[str, Any],
+    context: dict[str, Any],
 ) -> str:
     """Get suggestion for a failure type and context."""
     type_suggestions = FAILURE_SUGGESTIONS.get(failure_type, {})
@@ -268,19 +268,19 @@ class FailureMemory:
 
     def __init__(
         self,
-        persist_path: Optional[Path] = None,
+        persist_path: Path | None = None,
         max_records: int = 1000,
         dedup_window_seconds: float = 60.0,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ):
         self.persist_path = Path(persist_path) if persist_path else None
         self.max_records = max_records
         self.dedup_window_seconds = dedup_window_seconds
         self.session_id = session_id
 
-        self._records: Dict[str, FailureRecord] = {}
-        self._fingerprint_index: Dict[str, str] = {}  # fingerprint -> record_id
-        self._type_index: Dict[FailureType, List[str]] = {}  # type -> record_ids
+        self._records: dict[str, FailureRecord] = {}
+        self._fingerprint_index: dict[str, str] = {}  # fingerprint -> record_id
+        self._type_index: dict[FailureType, list[str]] = {}  # type -> record_ids
 
         # Load from persistence
         if self.persist_path and self.persist_path.exists():
@@ -290,9 +290,9 @@ class FailureMemory:
         self,
         failure_type: FailureType,
         description: str,
-        context: Optional[Dict[str, Any]] = None,
-        severity: Optional[FailureSeverity] = None,
-        suggestion: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        severity: FailureSeverity | None = None,
+        suggestion: str | None = None,
         iteration: int = 0,
     ) -> FailureRecord:
         """
@@ -370,9 +370,9 @@ class FailureMemory:
     def find_similar(
         self,
         query: str,
-        failure_type: Optional[FailureType] = None,
+        failure_type: FailureType | None = None,
         limit: int = 5,
-    ) -> List[FailureRecord]:
+    ) -> list[FailureRecord]:
         """
         Find failures similar to a query.
 
@@ -413,7 +413,7 @@ class FailureMemory:
 
         return [r for _, r in scored[:limit]]
 
-    def get_patterns(self, min_occurrences: int = 3) -> List[FailurePattern]:
+    def get_patterns(self, min_occurrences: int = 3) -> list[FailurePattern]:
         """
         Detect patterns in failure records.
 
@@ -516,9 +516,9 @@ class FailureMemory:
 
     def get_unresolved(
         self,
-        failure_type: Optional[FailureType] = None,
-        severity: Optional[FailureSeverity] = None,
-    ) -> List[FailureRecord]:
+        failure_type: FailureType | None = None,
+        severity: FailureSeverity | None = None,
+    ) -> list[FailureRecord]:
         """
         Get unresolved failures.
 
@@ -546,7 +546,7 @@ class FailureMemory:
 
         return sorted(records, key=lambda r: -r.occurrence_count)
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get statistics about failure memory."""
         if not self._records:
             return {
@@ -618,7 +618,7 @@ class FailureMemory:
         self,
         failure_type: FailureType,
         description: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> str:
         """Generate fingerprint for deduplication."""
         # Include key context fields
@@ -631,7 +631,7 @@ class FailureMemory:
     def _infer_severity(
         self,
         failure_type: FailureType,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> FailureSeverity:
         """Infer severity from failure type and context."""
         # Critical failures
@@ -653,14 +653,14 @@ class FailureMemory:
 
     def _find_common_context(
         self,
-        records: List[FailureRecord],
-    ) -> Dict[str, Any]:
+        records: list[FailureRecord],
+    ) -> dict[str, Any]:
         """Find common context across records."""
         if not records:
             return {}
 
         # Count value occurrences for each key
-        key_values: Dict[str, Dict[str, int]] = {}
+        key_values: dict[str, dict[str, int]] = {}
 
         for record in records:
             for key, value in record.context.items():
@@ -684,9 +684,9 @@ class FailureMemory:
     def _generate_pattern_suggestion(
         self,
         failure_type: FailureType,
-        common_context: Dict[str, Any],
-        affected_models: List[str],
-        affected_tools: List[str],
+        common_context: dict[str, Any],
+        affected_models: list[str],
+        affected_tools: list[str],
     ) -> str:
         """Generate suggestion for a pattern."""
         base = get_suggestion(failure_type, common_context)

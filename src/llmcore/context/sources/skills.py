@@ -60,7 +60,7 @@ class SkillContextSource:
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 10_000,
     ) -> ContextChunk:
         """

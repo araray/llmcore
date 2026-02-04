@@ -13,13 +13,14 @@ UPDATED: Added tools and tool_choice parameters to chat_completion() for unified
 
 import abc
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
 
 # Import models for type hinting
 from ..models import Message, ModelDetails, Tool
 
 # Define a type alias for the context payload that can be passed to providers.
-ContextPayload = List[Message]
+ContextPayload = list[Message]
 
 
 class BaseProvider(abc.ABC):
@@ -40,7 +41,7 @@ class BaseProvider(abc.ABC):
     log_raw_payloads_enabled: bool
 
     @abc.abstractmethod
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initialize the provider with its specific configuration.
 
@@ -66,7 +67,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """
         Asynchronously discover and return detailed information about available models.
 
@@ -80,7 +81,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """
         Return a schema describing the supported inference parameters for a model.
 
@@ -98,7 +99,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
+    def get_max_context_length(self, model: str | None = None) -> int:
         """
         Return the maximum context length (in tokens) for a specific model.
 
@@ -118,12 +119,12 @@ class BaseProvider(abc.ABC):
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Perform a chat completion request to the provider's API.
 
@@ -153,7 +154,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """
         Asynchronously count the number of tokens for a given text string.
 
@@ -169,7 +170,7 @@ class BaseProvider(abc.ABC):
 
     @abc.abstractmethod
     async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
+        self, messages: list[Message], model: str | None = None
     ) -> int:
         """
         Asynchronously count the total tokens for a list of messages.
@@ -188,7 +189,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract the text content from a non-streaming API response.
 
@@ -207,7 +208,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract the text delta from a streaming response chunk.
 
@@ -238,10 +239,10 @@ class BaseProvider(abc.ABC):
         self,
         model: str,
         duration: float,
-        input_tokens: Optional[int] = None,
-        output_tokens: Optional[int] = None,
-        error: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        error: str | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """
         Record metrics for an LLM API request.
@@ -317,12 +318,12 @@ class BaseProvider(abc.ABC):
     async def _instrumented_chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Instrumented wrapper for chat_completion that adds observability.
 

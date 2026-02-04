@@ -107,7 +107,7 @@ class ResourceLimits:
     timeout_seconds: int = 600
     pids_limit: int = 100
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "memory_limit": self.memory_limit,
@@ -117,7 +117,7 @@ class ResourceLimits:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ResourceLimits":
+    def from_dict(cls, data: dict[str, Any]) -> "ResourceLimits":
         """Create from dictionary."""
         return cls(
             memory_limit=data.get("memory_limit", "512m"),
@@ -155,17 +155,17 @@ class ImageManifest:
     name: str
     version: str
     tier: ImageTier
-    base_image: Optional[str] = None
-    capabilities: Set[ImageCapability] = field(default_factory=set)
-    tools: List[str] = field(default_factory=list)
+    base_image: str | None = None
+    capabilities: set[ImageCapability] = field(default_factory=set)
+    tools: list[str] = field(default_factory=list)
     default_access_mode: AccessMode = AccessMode.RESTRICTED
     resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
-    environment: Dict[str, str] = field(default_factory=dict)
+    environment: dict[str, str] = field(default_factory=dict)
     working_directory: str = "/workspace"
-    entrypoint: Optional[str] = None
+    entrypoint: str | None = None
     description: str = ""
-    build_date: Optional[datetime] = None
-    vcs_ref: Optional[str] = None
+    build_date: datetime | None = None
+    vcs_ref: str | None = None
 
     @property
     def full_name(self) -> str:
@@ -191,7 +191,7 @@ class ImageManifest:
         """Check if image has a specific capability."""
         return capability in self.capabilities
 
-    def has_all_capabilities(self, required: Set[ImageCapability]) -> bool:
+    def has_all_capabilities(self, required: set[ImageCapability]) -> bool:
         """Check if image has all required capabilities."""
         return required.issubset(self.capabilities)
 
@@ -199,7 +199,7 @@ class ImageManifest:
         """Check if image has a specific tool."""
         return tool in self.tools
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert manifest to dictionary for JSON serialization.
 
@@ -224,7 +224,7 @@ class ImageManifest:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ImageManifest":
+    def from_dict(cls, data: dict[str, Any]) -> "ImageManifest":
         """
         Create manifest from dictionary.
 
@@ -298,11 +298,11 @@ class ImageMetadata:
     """
 
     manifest: ImageManifest
-    docker_id: Optional[str] = None
+    docker_id: str | None = None
     size_bytes: int = 0
-    created: Optional[datetime] = None
+    created: datetime | None = None
     available_locally: bool = False
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -325,11 +325,11 @@ class ImageMetadata:
         return self.manifest.tier
 
     @property
-    def capabilities(self) -> Set[ImageCapability]:
+    def capabilities(self) -> set[ImageCapability]:
         """Get the image capabilities."""
         return self.manifest.capabilities
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "manifest": self.manifest.to_dict(),
@@ -511,7 +511,7 @@ WEBSEARCH_IMAGE_MANIFEST = ImageManifest(
 
 
 # Mapping of image names to their manifests
-BUILTIN_MANIFESTS: Dict[str, ImageManifest] = {
+BUILTIN_MANIFESTS: dict[str, ImageManifest] = {
     "llmcore-sandbox-base": BASE_IMAGE_MANIFEST,
     "llmcore-sandbox-python": PYTHON_IMAGE_MANIFEST,
     "llmcore-sandbox-nodejs": NODEJS_IMAGE_MANIFEST,

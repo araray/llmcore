@@ -90,11 +90,11 @@ class MetricsConfig:
     enabled: bool = True
     backend: MetricsBackendType = MetricsBackendType.MEMORY
     prefix: str = "llmcore_storage"
-    default_labels: Dict[str, str] = field(default_factory=dict)
+    default_labels: dict[str, str] = field(default_factory=dict)
     prometheus_port: int = 9090
     statsd_host: str = "localhost"
     statsd_port: int = 8125
-    histogram_buckets: Tuple[float, ...] = (
+    histogram_buckets: tuple[float, ...] = (
         0.001,
         0.005,
         0.01,
@@ -128,7 +128,7 @@ class MetricValue:
     """Base class for metric values."""
 
     name: str
-    labels: Dict[str, str]
+    labels: dict[str, str]
     timestamp: float = field(default_factory=time.time)
 
 
@@ -150,7 +150,7 @@ class GaugeValue(MetricValue):
 class HistogramValue(MetricValue):
     """Histogram metric value with buckets."""
 
-    buckets: Dict[float, int] = field(default_factory=dict)
+    buckets: dict[float, int] = field(default_factory=dict)
     sum: float = 0.0
     count: int = 0
 
@@ -168,7 +168,7 @@ class MetricsBackend(ABC):
         self,
         name: str,
         value: float = 1.0,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Increment a counter metric."""
         pass
@@ -178,7 +178,7 @@ class MetricsBackend(ABC):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Set a gauge metric value."""
         pass
@@ -188,13 +188,13 @@ class MetricsBackend(ABC):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Observe a histogram value."""
         pass
 
     @abstractmethod
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get all metrics for export."""
         pass
 
@@ -220,11 +220,11 @@ class InMemoryMetricsBackend(MetricsBackend):
     def __init__(self, config: MetricsConfig):
         self.config = config
         self._lock = threading.Lock()
-        self._counters: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-        self._gauges: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-        self._histograms: Dict[str, Dict[str, HistogramValue]] = defaultdict(dict)
+        self._counters: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        self._gauges: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        self._histograms: dict[str, dict[str, HistogramValue]] = defaultdict(dict)
 
-    def _labels_key(self, labels: Optional[Dict[str, str]]) -> str:
+    def _labels_key(self, labels: dict[str, str] | None) -> str:
         """Convert labels dict to a hashable key."""
         if not labels:
             return ""
@@ -236,7 +236,7 @@ class InMemoryMetricsBackend(MetricsBackend):
             return f"{self.config.prefix}_{name}"
         return name
 
-    def _merge_labels(self, labels: Optional[Dict[str, str]]) -> Dict[str, str]:
+    def _merge_labels(self, labels: dict[str, str] | None) -> dict[str, str]:
         """Merge provided labels with default labels."""
         merged = dict(self.config.default_labels)
         if labels:
@@ -247,7 +247,7 @@ class InMemoryMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float = 1.0,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Increment a counter metric."""
         full_name = self._full_name(name)
@@ -261,7 +261,7 @@ class InMemoryMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Set a gauge metric value."""
         full_name = self._full_name(name)
@@ -275,7 +275,7 @@ class InMemoryMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Observe a histogram value."""
         full_name = self._full_name(name)
@@ -300,7 +300,7 @@ class InMemoryMetricsBackend(MetricsBackend):
                 if value <= bucket:
                     hist.buckets[bucket] += 1
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get all metrics for export."""
         with self._lock:
             return {
@@ -319,7 +319,7 @@ class InMemoryMetricsBackend(MetricsBackend):
                 },
             }
 
-    def get_counter(self, name: str, labels: Optional[Dict[str, str]] = None) -> float:
+    def get_counter(self, name: str, labels: dict[str, str] | None = None) -> float:
         """Get current counter value."""
         full_name = self._full_name(name)
         merged_labels = self._merge_labels(labels)
@@ -328,7 +328,7 @@ class InMemoryMetricsBackend(MetricsBackend):
         with self._lock:
             return self._counters[full_name].get(key, 0.0)
 
-    def get_gauge(self, name: str, labels: Optional[Dict[str, str]] = None) -> float:
+    def get_gauge(self, name: str, labels: dict[str, str] | None = None) -> float:
         """Get current gauge value."""
         full_name = self._full_name(name)
         merged_labels = self._merge_labels(labels)
@@ -338,8 +338,8 @@ class InMemoryMetricsBackend(MetricsBackend):
             return self._gauges[full_name].get(key, 0.0)
 
     def get_histogram_stats(
-        self, name: str, labels: Optional[Dict[str, str]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, name: str, labels: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
         """Get histogram statistics."""
         full_name = self._full_name(name)
         merged_labels = self._merge_labels(labels)
@@ -379,9 +379,9 @@ class PrometheusMetricsBackend(MetricsBackend):
     def __init__(self, config: MetricsConfig):
         self.config = config
         self._lock = threading.Lock()
-        self._counters: Dict[str, Any] = {}
-        self._gauges: Dict[str, Any] = {}
-        self._histograms: Dict[str, Any] = {}
+        self._counters: dict[str, Any] = {}
+        self._gauges: dict[str, Any] = {}
+        self._histograms: dict[str, Any] = {}
         self._server = None
 
         # Try to import prometheus_client
@@ -397,7 +397,7 @@ class PrometheusMetricsBackend(MetricsBackend):
             self._prometheus = None
             self._available = False
 
-    def _get_or_create_counter(self, name: str, labels: Dict[str, str]) -> Any:
+    def _get_or_create_counter(self, name: str, labels: dict[str, str]) -> Any:
         """Get or create a Prometheus counter."""
         if not self._available:
             return None
@@ -415,7 +415,7 @@ class PrometheusMetricsBackend(MetricsBackend):
                 )
             return self._counters[key].labels(**labels)
 
-    def _get_or_create_gauge(self, name: str, labels: Dict[str, str]) -> Any:
+    def _get_or_create_gauge(self, name: str, labels: dict[str, str]) -> Any:
         """Get or create a Prometheus gauge."""
         if not self._available:
             return None
@@ -433,7 +433,7 @@ class PrometheusMetricsBackend(MetricsBackend):
                 )
             return self._gauges[key].labels(**labels)
 
-    def _get_or_create_histogram(self, name: str, labels: Dict[str, str]) -> Any:
+    def _get_or_create_histogram(self, name: str, labels: dict[str, str]) -> Any:
         """Get or create a Prometheus histogram."""
         if not self._available:
             return None
@@ -458,7 +458,7 @@ class PrometheusMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float = 1.0,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Increment a counter metric."""
         merged_labels = dict(self.config.default_labels)
@@ -473,7 +473,7 @@ class PrometheusMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Set a gauge metric value."""
         merged_labels = dict(self.config.default_labels)
@@ -488,7 +488,7 @@ class PrometheusMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """Observe a histogram value."""
         merged_labels = dict(self.config.default_labels)
@@ -499,7 +499,7 @@ class PrometheusMetricsBackend(MetricsBackend):
         if histogram:
             histogram.observe(value)
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get all metrics for export."""
         if not self._available:
             return {"error": "prometheus_client not available"}
@@ -541,7 +541,7 @@ class NullMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float = 1.0,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         pass
 
@@ -549,7 +549,7 @@ class NullMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         pass
 
@@ -557,11 +557,11 @@ class NullMetricsBackend(MetricsBackend):
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         pass
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         return {"enabled": False}
 
     def reset(self) -> None:
@@ -592,7 +592,7 @@ class MetricsCollector:
                                    labels={"backend": "postgres"})
     """
 
-    def __init__(self, config: Optional[MetricsConfig] = None):
+    def __init__(self, config: MetricsConfig | None = None):
         """
         Initialize metrics collector.
 
@@ -635,7 +635,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float = 1.0,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Increment a counter metric.
@@ -651,7 +651,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Set a gauge metric value.
@@ -667,7 +667,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Observe a histogram value.
@@ -683,7 +683,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Observe a duration value (alias for observe).
@@ -695,7 +695,7 @@ class MetricsCollector:
         """
         self.observe(name, value, labels)
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """
         Get all metrics for export or debugging.
 
@@ -717,7 +717,7 @@ class MetricsCollector:
         table: str,
         duration_seconds: float,
         success: bool = True,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
     ) -> None:
         """
         Record a complete storage operation.

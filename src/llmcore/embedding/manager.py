@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Type
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any]  # type: ignore [no-redef]
+    ConfyConfig = dict[str, Any]  # type: ignore [no-redef]
 
 
 from ..exceptions import ConfigError, EmbeddingError
@@ -32,7 +32,7 @@ from .sentence_transformer import SentenceTransformerEmbedding
 logger = logging.getLogger(__name__)
 
 # Mapping from config provider type string to BaseEmbeddingModel class
-EMBEDDING_PROVIDER_CLASS_MAP: Dict[str, Type[BaseEmbeddingModel]] = {
+EMBEDDING_PROVIDER_CLASS_MAP: dict[str, type[BaseEmbeddingModel]] = {
     "sentence-transformers": SentenceTransformerEmbedding,
     "openai": OpenAIEmbedding,
     "google": GoogleAIEmbedding,
@@ -53,13 +53,13 @@ class EmbeddingManager:
     """
 
     _global_config: ConfyConfig
-    _storage_manager: Optional[StorageManager]
-    _initialized_models: Dict[str, BaseEmbeddingModel]
-    _model_init_locks: Dict[str, asyncio.Lock]
+    _storage_manager: StorageManager | None
+    _initialized_models: dict[str, BaseEmbeddingModel]
+    _model_init_locks: dict[str, asyncio.Lock]
     _initialized: bool
 
     def __init__(
-        self, global_config: ConfyConfig, storage_manager: Optional[StorageManager] = None
+        self, global_config: ConfyConfig, storage_manager: StorageManager | None = None
     ):
         """
         Initializes the EmbeddingManager.
@@ -218,8 +218,8 @@ class EmbeddingManager:
                 ) from e_init
 
     async def generate_embedding(
-        self, text: str, model_identifier: Optional[str] = None
-    ) -> List[float]:
+        self, text: str, model_identifier: str | None = None
+    ) -> list[float]:
         """
         Generates an embedding for a single text using the specified or default model.
 
@@ -246,8 +246,8 @@ class EmbeddingManager:
         return await model.generate_embedding(text)
 
     async def generate_embeddings(
-        self, texts: List[str], model_identifier: Optional[str] = None
-    ) -> List[List[float]]:
+        self, texts: list[str], model_identifier: str | None = None
+    ) -> list[list[float]]:
         """
         Generates embeddings for multiple texts using the specified or default model.
 
@@ -273,7 +273,7 @@ class EmbeddingManager:
         model = await self.get_model(model_identifier)
         return await model.generate_embeddings(texts)
 
-    def get_cached_models(self) -> List[str]:
+    def get_cached_models(self) -> list[str]:
         """Returns a list of currently cached model identifiers."""
         return list(self._initialized_models.keys())
 

@@ -223,7 +223,7 @@ class SuccessCriterion:
 
         return 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "description": self.description,
@@ -234,7 +234,7 @@ class SuccessCriterion:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> SuccessCriterion:
+    def from_dict(cls, data: dict[str, Any]) -> SuccessCriterion:
         """Deserialize from dictionary."""
         return cls(
             description=data["description"],
@@ -245,7 +245,7 @@ class SuccessCriterion:
         )
 
 
-def _parse_datetime(value: Any) -> Optional[datetime]:
+def _parse_datetime(value: Any) -> datetime | None:
     """Parse an ISO-format string or pass through a datetime unchanged."""
     if value is None:
         return None
@@ -303,33 +303,33 @@ class Goal:
     status: GoalStatus = GoalStatus.PENDING
 
     # Hierarchy
-    parent_id: Optional[str] = None
-    sub_goal_ids: List[str] = field(default_factory=list)
+    parent_id: str | None = None
+    sub_goal_ids: list[str] = field(default_factory=list)
 
     # Success tracking
-    success_criteria: List[SuccessCriterion] = field(default_factory=list)
+    success_criteria: list[SuccessCriterion] = field(default_factory=list)
     progress: float = 0.0
 
     # Temporal
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    deadline: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    deadline: datetime | None = None
+    completed_at: datetime | None = None
 
     # Retry logic
     attempts: int = 0
     max_attempts: int = 10
-    last_attempt_at: Optional[datetime] = None
-    failure_reasons: List[str] = field(default_factory=list)
-    learned_strategies: List[str] = field(default_factory=list)
+    last_attempt_at: datetime | None = None
+    failure_reasons: list[str] = field(default_factory=list)
+    learned_strategies: list[str] = field(default_factory=list)
 
     # Cooldown (exponential backoff)
-    cooldown_until: Optional[datetime] = None
+    cooldown_until: datetime | None = None
     cooldown_multiplier: float = 1.0
 
     # Metadata
-    tags: List[str] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(
@@ -428,7 +428,7 @@ class Goal:
             self.completed_at = datetime.utcnow()
             logger.info("Goal completed: %s", self.description)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize goal to dictionary for storage."""
         return {
             "id": self.id,
@@ -455,7 +455,7 @@ class Goal:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Goal:
+    def from_dict(cls, data: dict[str, Any]) -> Goal:
         """Deserialize goal from dictionary."""
         return cls(
             id=data["id"],
@@ -493,7 +493,7 @@ class Goal:
 class GoalStorageProtocol(Protocol):
     """Protocol for goal storage backends."""
 
-    async def load_goals(self) -> List[Goal]: ...
+    async def load_goals(self) -> list[Goal]: ...
     async def save_goal(self, goal: Goal) -> None: ...
     async def delete_goal(self, goal_id: str) -> None: ...
 
@@ -516,7 +516,7 @@ class GoalStore:
     def __init__(self, path: str = "~/.local/share/llmcore/goals.json") -> None:
         self._path = Path(os.path.expanduser(path))
 
-    async def load_goals(self) -> List[Goal]:
+    async def load_goals(self) -> list[Goal]:
         """Load all goals from disk."""
         if not self._path.exists():
             return []
@@ -554,7 +554,7 @@ class GoalStore:
         goals = [g for g in goals if g.id != goal_id]
         await self._write_all(goals)
 
-    async def _write_all(self, goals: List[Goal]) -> None:
+    async def _write_all(self, goals: list[Goal]) -> None:
         """Atomically write all goals to disk."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._path.with_suffix(".tmp")
@@ -626,14 +626,14 @@ class GoalManager:
     def __init__(
         self,
         storage: GoalStorageProtocol,
-        llm_provider: Optional[Any] = None,
-        decomposition_model: Optional[str] = None,
+        llm_provider: Any | None = None,
+        decomposition_model: str | None = None,
     ) -> None:
         self.storage = storage
         self.llm_provider = llm_provider
         self.decomposition_model = decomposition_model
 
-        self._goals: Dict[str, Goal] = {}
+        self._goals: dict[str, Goal] = {}
         self._lock = asyncio.Lock()
         self._initialized = False
 
@@ -651,10 +651,10 @@ class GoalManager:
     def from_config(
         cls,
         config: Any,
-        llm_provider: Optional[Any] = None,
-        decomposition_model: Optional[str] = None,
-        storage: Optional[GoalStorageProtocol] = None,
-    ) -> "GoalManager":
+        llm_provider: Any | None = None,
+        decomposition_model: str | None = None,
+        storage: GoalStorageProtocol | None = None,
+    ) -> GoalManager:
         """
         Create a GoalManager from a GoalsAutonomousConfig.
 
@@ -719,11 +719,11 @@ class GoalManager:
         self,
         description: str,
         priority: GoalPriority = GoalPriority.HIGH,
-        success_criteria: Optional[List[SuccessCriterion]] = None,
-        deadline: Optional[datetime] = None,
-        auto_decompose: Optional[bool] = None,
-        tags: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        success_criteria: list[SuccessCriterion] | None = None,
+        deadline: datetime | None = None,
+        auto_decompose: bool | None = None,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> Goal:
         """
         Set the primary goal for autonomous operation.
@@ -786,7 +786,7 @@ class GoalManager:
 
     # ----- decomposition ------------------------------------------------------
 
-    async def _decompose_goal(self, goal: Goal) -> List[Goal]:
+    async def _decompose_goal(self, goal: Goal) -> list[Goal]:
         """
         Use LLM to decompose a high-level goal into sub-goals.
 
@@ -873,7 +873,7 @@ class GoalManager:
 
     # ----- scheduling ---------------------------------------------------------
 
-    async def get_next_actionable(self) -> Optional[Goal]:
+    async def get_next_actionable(self) -> Goal | None:
         """
         Get the highest priority actionable goal.
 
@@ -901,17 +901,17 @@ class GoalManager:
 
     # ----- queries ------------------------------------------------------------
 
-    async def get_goal(self, goal_id: str) -> Optional[Goal]:
+    async def get_goal(self, goal_id: str) -> Goal | None:
         """Get a goal by ID."""
         async with self._lock:
             return self._goals.get(goal_id)
 
-    async def get_all_goals(self) -> List[Goal]:
+    async def get_all_goals(self) -> list[Goal]:
         """Get all goals."""
         async with self._lock:
             return list(self._goals.values())
 
-    async def get_active_goals(self) -> List[Goal]:
+    async def get_active_goals(self) -> list[Goal]:
         """Get all active goals."""
         async with self._lock:
             return [g for g in self._goals.values() if g.status == GoalStatus.ACTIVE]
@@ -922,7 +922,7 @@ class GoalManager:
         self,
         goal_id: str,
         progress_delta: float = 0.1,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> None:
         """
         Report successful progress on a goal.
@@ -1122,7 +1122,7 @@ class GoalManager:
 
     # ----- status summary -----------------------------------------------------
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_status_summary(self) -> dict[str, Any]:
         """
         Get a summary of goal status.
 

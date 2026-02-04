@@ -21,14 +21,15 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from collections.abc import Awaitable, Callable
 
 from ..synthesis import ContextChunk
 
 logger = logging.getLogger(__name__)
 
 # Type for the retrieval function: (query, top_k) → list of chunk dicts
-RetrievalFn = Callable[..., Awaitable[List[Dict[str, Any]]]]
+RetrievalFn = Callable[..., Awaitable[list[dict[str, Any]]]]
 
 
 class SemanticContextSource:
@@ -60,7 +61,7 @@ class SemanticContextSource:
 
     async def get_context(
         self,
-        task: Optional[Any] = None,
+        task: Any | None = None,
         max_tokens: int = 10_000,
     ) -> ContextChunk:
         """

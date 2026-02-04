@@ -44,7 +44,8 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -89,19 +90,19 @@ class HeartbeatTask:
 
     # State
     enabled: bool = True
-    last_run: Optional[datetime] = None
-    next_run: Optional[datetime] = None
+    last_run: datetime | None = None
+    next_run: datetime | None = None
     run_count: int = 0
 
     # Error handling
     error_count: int = 0
     consecutive_errors: int = 0
     max_consecutive_errors: int = 5
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     # Metadata
     description: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     def should_run(self, now: datetime) -> bool:
         """
@@ -157,7 +158,7 @@ class HeartbeatTask:
         """Check if circuit breaker is open."""
         return self.consecutive_errors >= self.max_consecutive_errors
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "name": self.name,
@@ -230,15 +231,15 @@ class HeartbeatManager:
         """
         self.base_interval = base_interval
 
-        self._tasks: Dict[str, HeartbeatTask] = {}
+        self._tasks: dict[str, HeartbeatTask] = {}
         self._running = False
         self._paused = False
-        self._loop_task: Optional[asyncio.Task] = None
+        self._loop_task: asyncio.Task | None = None
 
         # Callbacks
-        self._on_heartbeat: List[Callable[[], Awaitable[None]]] = []
-        self._on_error: List[Callable[[str, Exception], Awaitable[None]]] = []
-        self._on_task_complete: List[Callable[[str, Any], Awaitable[None]]] = []
+        self._on_heartbeat: list[Callable[[], Awaitable[None]]] = []
+        self._on_error: list[Callable[[str, Exception], Awaitable[None]]] = []
+        self._on_task_complete: list[Callable[[str, Any], Awaitable[None]]] = []
 
     def register(self, task: HeartbeatTask) -> None:
         """
@@ -263,11 +264,11 @@ class HeartbeatManager:
             del self._tasks[name]
             logger.info(f"Unregistered heartbeat task: {name}")
 
-    def get_task(self, name: str) -> Optional[HeartbeatTask]:
+    def get_task(self, name: str) -> HeartbeatTask | None:
         """Get a task by name."""
         return self._tasks.get(name)
 
-    def list_tasks(self) -> List[str]:
+    def list_tasks(self) -> list[str]:
         """
         Get names of all registered tasks.
 
@@ -478,7 +479,7 @@ class HeartbeatManager:
         logger.info(f"Running task immediately: {name}")
         await self._run_task(task, now)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         Get current heartbeat status.
 
@@ -493,7 +494,7 @@ class HeartbeatManager:
             "tasks": {name: task.to_dict() for name, task in self._tasks.items()},
         }
 
-    def get_due_tasks(self) -> List[str]:
+    def get_due_tasks(self) -> list[str]:
         """Get names of tasks that are due to run."""
         now = datetime.utcnow()
         return [name for name, task in self._tasks.items() if task.should_run(now)]
@@ -506,9 +507,9 @@ class HeartbeatManager:
 
 def heartbeat_task(
     interval: timedelta,
-    name: Optional[str] = None,
+    name: str | None = None,
     description: str = "",
-    tags: Optional[List[str]] = None,
+    tags: list[str] | None = None,
 ) -> Callable[[Callable[[], Awaitable[Any]]], HeartbeatTask]:
     """
     Decorator to create a HeartbeatTask from an async function.

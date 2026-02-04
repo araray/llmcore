@@ -74,11 +74,11 @@ logger = logging.getLogger(__name__)
 class EmbeddingProvider(Protocol):
     """Protocol for embedding providers."""
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> list[float]:
         """Generate embedding for text."""
         ...
 
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         ...
 
@@ -90,8 +90,8 @@ class CacheEntry:
     key: str
     query: str
     response: str
-    embedding: List[float]
-    metadata: Dict[str, Any]
+    embedding: list[float]
+    metadata: dict[str, Any]
     created_at: float = field(default_factory=time.time)
     accessed_at: float = field(default_factory=time.time)
     access_count: int = 0
@@ -115,7 +115,7 @@ class CacheHit:
     response: str
     similarity: float
     key: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     age_seconds: float
 
 
@@ -151,7 +151,7 @@ class SimpleEmbeddingProvider:
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> list[float]:
         """Generate simple embedding based on character hashing."""
         # Normalize text
         text = text.lower().strip()
@@ -173,7 +173,7 @@ class SimpleEmbeddingProvider:
 
         return embedding
 
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts."""
         return [await self.embed(t) for t in texts]
 
@@ -183,7 +183,7 @@ class SimpleEmbeddingProvider:
 # =============================================================================
 
 
-def cosine_similarity(a: List[float], b: List[float]) -> float:
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
     if len(a) != len(b):
         return 0.0
@@ -198,7 +198,7 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
     return dot_product / (magnitude_a * magnitude_b)
 
 
-def euclidean_distance(a: List[float], b: List[float]) -> float:
+def euclidean_distance(a: list[float], b: list[float]) -> float:
     """Compute Euclidean distance between two vectors."""
     if len(a) != len(b):
         return float("inf")
@@ -247,14 +247,14 @@ class SemanticCache:
 
     def __init__(
         self,
-        embedding_provider: Optional[EmbeddingProvider] = None,
-        config: Optional[SemanticCacheConfig] = None,
+        embedding_provider: EmbeddingProvider | None = None,
+        config: SemanticCacheConfig | None = None,
     ):
         self.embedding_provider = embedding_provider or SimpleEmbeddingProvider()
         self.config = config or SemanticCacheConfig()
 
-        self._entries: Dict[str, CacheEntry] = {}
-        self._embedding_index: List[Tuple[str, List[float]]] = []  # (key, embedding)
+        self._entries: dict[str, CacheEntry] = {}
+        self._embedding_index: list[tuple[str, list[float]]] = []  # (key, embedding)
 
         self._stats = CacheStats(
             total_entries=0,
@@ -272,8 +272,8 @@ class SemanticCache:
     async def get(
         self,
         query: str,
-        metadata_filter: Optional[Dict[str, Any]] = None,
-    ) -> Optional[CacheHit]:
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> CacheHit | None:
         """
         Look up cached response for a query.
 
@@ -300,7 +300,7 @@ class SemanticCache:
 
         # Search for similar entries
         async with self._lock:
-            best_match: Optional[Tuple[float, CacheEntry]] = None
+            best_match: tuple[float, CacheEntry] | None = None
 
             for key, stored_embedding in self._embedding_index:
                 entry = self._entries.get(key)
@@ -345,8 +345,8 @@ class SemanticCache:
         self,
         query: str,
         response: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        ttl_seconds: Optional[float] = None,
+        metadata: dict[str, Any] | None = None,
+        ttl_seconds: float | None = None,
     ) -> str:
         """
         Cache a response.
@@ -446,8 +446,8 @@ class SemanticCache:
 
     def _matches_filter(
         self,
-        metadata: Dict[str, Any],
-        filter_: Dict[str, Any],
+        metadata: dict[str, Any],
+        filter_: dict[str, Any],
     ) -> bool:
         """Check if metadata matches filter."""
         for key, value in filter_.items():
@@ -519,8 +519,8 @@ class CachedPlan:
 
     plan_id: str
     goal: str
-    plan_steps: List[Dict[str, Any]]
-    embedding: List[float]
+    plan_steps: list[dict[str, Any]]
+    embedding: list[float]
     success_count: int = 0
     failure_count: int = 0
     created_at: float = field(default_factory=time.time)
@@ -553,7 +553,7 @@ class PlanCache:
 
     def __init__(
         self,
-        embedding_provider: Optional[EmbeddingProvider] = None,
+        embedding_provider: EmbeddingProvider | None = None,
         similarity_threshold: float = 0.85,
         min_success_rate: float = 0.7,
         max_plans: int = 500,
@@ -563,15 +563,15 @@ class PlanCache:
         self.min_success_rate = min_success_rate
         self.max_plans = max_plans
 
-        self._plans: Dict[str, CachedPlan] = {}
-        self._embedding_index: List[Tuple[str, List[float]]] = []
+        self._plans: dict[str, CachedPlan] = {}
+        self._embedding_index: list[tuple[str, list[float]]] = []
         self._lock = asyncio.Lock()
 
     async def find_similar_plan(
         self,
         goal: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Optional[CachedPlan]:
+        context: dict[str, Any] | None = None,
+    ) -> CachedPlan | None:
         """
         Find a similar successful plan for a goal.
 
@@ -589,7 +589,7 @@ class PlanCache:
             return None
 
         async with self._lock:
-            best_match: Optional[Tuple[float, CachedPlan]] = None
+            best_match: tuple[float, CachedPlan] | None = None
 
             for plan_id, stored_embedding in self._embedding_index:
                 plan = self._plans.get(plan_id)
@@ -618,7 +618,7 @@ class PlanCache:
     async def store_plan(
         self,
         goal: str,
-        plan_steps: List[Dict[str, Any]],
+        plan_steps: list[dict[str, Any]],
     ) -> str:
         """
         Store a new plan.
@@ -686,7 +686,7 @@ class PlanCache:
         self._plans.pop(plan_id)
         self._embedding_index = [(k, e) for k, e in self._embedding_index if k != plan_id]
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get plan cache statistics."""
         if not self._plans:
             return {

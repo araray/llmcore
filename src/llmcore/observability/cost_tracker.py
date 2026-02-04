@@ -61,10 +61,11 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, UTC
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
+from collections.abc import Generator
 
 from pydantic import BaseModel, Field
 
@@ -78,7 +79,7 @@ logger = logging.getLogger(__name__)
 # Prices per 1M tokens (as of January 2026)
 # These are fallback values; actual pricing should come from model cards when available
 # Format: {provider: {model: {"input": price, "output": price}}}
-PRICING_DATA: Dict[str, Dict[str, Dict[str, float]]] = {
+PRICING_DATA: dict[str, dict[str, dict[str, float]]] = {
     # OpenAI
     "openai": {
         "gpt-4o": {"input": 2.50, "output": 10.00},
@@ -171,7 +172,7 @@ def get_price_per_million_tokens(
     provider: str,
     model: str,
     token_type: Literal["input", "output"] = "input",
-    model_card_pricing: Optional[Dict[str, float]] = None,
+    model_card_pricing: dict[str, float] | None = None,
 ) -> float:
     """Get price per 1M tokens for a model.
 
@@ -254,7 +255,7 @@ class UsageRecord(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     provider: str
     model: str
     operation: str = Field(default="chat")
@@ -262,10 +263,10 @@ class UsageRecord(BaseModel):
     output_tokens: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
     estimated_cost_usd: float = Field(default=0.0, ge=0.0)
-    latency_ms: Optional[int] = Field(default=None, ge=0)
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    latency_ms: int | None = Field(default=None, ge=0)
+    session_id: str | None = None
+    user_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
         """Compute total tokens if not set."""
@@ -296,10 +297,10 @@ class UsageSummary(BaseModel):
     total_output_tokens: int = 0
     total_tokens: int = 0
     total_cost_usd: float = 0.0
-    avg_latency_ms: Optional[float] = None
-    by_provider: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
-    by_model: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
-    by_operation: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    avg_latency_ms: float | None = None
+    by_provider: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    by_model: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    by_operation: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class CostTrackingConfig(BaseModel):
@@ -360,7 +361,7 @@ class CostTracker:
 
     def __init__(
         self,
-        config: Optional[CostTrackingConfig] = None,
+        config: CostTrackingConfig | None = None,
         db_path: str = "~/.llmcore/costs.db",
         enabled: bool = True,
         retention_days: int = 90,
@@ -388,8 +389,8 @@ class CostTracker:
         self._local = threading.local()
 
         # Current session tracking (in-memory)
-        self._session_records: List[UsageRecord] = []
-        self._session_start = datetime.now(timezone.utc)
+        self._session_records: list[UsageRecord] = []
+        self._session_start = datetime.now(UTC)
 
         if self._enabled:
             self._init_db()
@@ -459,11 +460,11 @@ class CostTracker:
         operation: str = "chat",
         input_tokens: int = 0,
         output_tokens: int = 0,
-        latency_ms: Optional[int] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        model_card_pricing: Optional[Dict[str, float]] = None,
+        latency_ms: int | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        model_card_pricing: dict[str, float] | None = None,
     ) -> UsageRecord:
         """Record a single API usage event.
 
@@ -554,7 +555,7 @@ class CostTracker:
 
     def get_daily_summary(
         self,
-        target_date: Optional[date] = None,
+        target_date: date | None = None,
     ) -> UsageSummary:
         """Get usage summary for a specific day.
 
@@ -596,8 +597,8 @@ class CostTracker:
 
     def get_monthly_summary(
         self,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> UsageSummary:
         """Get usage summary for a month.
 
@@ -624,7 +625,7 @@ class CostTracker:
     def get_summary_by_provider(
         self,
         days: int = 30,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """Get usage breakdown by provider.
 
         Args:
@@ -633,7 +634,7 @@ class CostTracker:
         Returns:
             Dictionary mapping provider to usage stats.
         """
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
 
         with self._get_connection() as conn:
@@ -669,8 +670,8 @@ class CostTracker:
     def get_summary_by_model(
         self,
         days: int = 30,
-        provider: Optional[str] = None,
-    ) -> Dict[str, Dict[str, Any]]:
+        provider: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
         """Get usage breakdown by model.
 
         Args:
@@ -680,7 +681,7 @@ class CostTracker:
         Returns:
             Dictionary mapping model to usage stats.
         """
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
 
         query = """
@@ -695,7 +696,7 @@ class CostTracker:
             FROM usage_records
             WHERE timestamp >= ? AND timestamp <= ?
         """
-        params: List[Any] = [int(start.timestamp()), int(end.timestamp())]
+        params: list[Any] = [int(start.timestamp()), int(end.timestamp())]
 
         if provider:
             query += " AND provider = ?"
@@ -822,7 +823,7 @@ class CostTracker:
         """
         summary = UsageSummary(
             period_start=self._session_start,
-            period_end=datetime.now(timezone.utc),
+            period_end=datetime.now(UTC),
         )
 
         for record in self._session_records:
@@ -856,7 +857,7 @@ class CostTracker:
         if self._config.retention_days <= 0:
             return 0
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self._config.retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self._config.retention_days)
 
         with self._lock:
             with self._get_connection() as conn:
@@ -886,7 +887,7 @@ class CostTracker:
         Returns:
             Number of records exported.
         """
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
 
         with self._get_connection() as conn:
@@ -945,7 +946,7 @@ class CostTracker:
 
 
 def create_cost_tracker(
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
 ) -> CostTracker:
     """Create a CostTracker from a configuration dictionary.
 

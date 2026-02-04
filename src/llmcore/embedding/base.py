@@ -20,7 +20,7 @@ class BaseEmbeddingModel(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize the embedding model with its specific configuration.
 
@@ -42,7 +42,7 @@ class BaseEmbeddingModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate a vector embedding for a single text string.
 
@@ -58,7 +58,7 @@ class BaseEmbeddingModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
         Generate vector embeddings for a batch of text strings efficiently.
 

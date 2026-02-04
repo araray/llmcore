@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # Mapping of task types to required capabilities
-TASK_CAPABILITY_MAP: Dict[str, Set[ImageCapability]] = {
+TASK_CAPABILITY_MAP: dict[str, set[ImageCapability]] = {
     # Research tasks
     "research": {ImageCapability.PYTHON, ImageCapability.RESEARCH, ImageCapability.NETWORK},
     "literature_review": {ImageCapability.PYTHON, ImageCapability.RESEARCH},
@@ -80,7 +80,7 @@ TASK_CAPABILITY_MAP: Dict[str, Set[ImageCapability]] = {
 }
 
 # Mapping of task types to preferred images
-TASK_IMAGE_MAP: Dict[str, str] = {
+TASK_IMAGE_MAP: dict[str, str] = {
     "research": "llmcore-sandbox-research:1.0.0",
     "literature_review": "llmcore-sandbox-research:1.0.0",
     "document_analysis": "llmcore-sandbox-research:1.0.0",
@@ -99,7 +99,7 @@ TASK_IMAGE_MAP: Dict[str, str] = {
 }
 
 # Mapping of runtime to images
-RUNTIME_IMAGE_MAP: Dict[str, str] = {
+RUNTIME_IMAGE_MAP: dict[str, str] = {
     "python": "llmcore-sandbox-python:1.0.0",
     "python3": "llmcore-sandbox-python:1.0.0",
     "python3.12": "llmcore-sandbox-python:1.0.0",
@@ -131,16 +131,16 @@ class SelectionConfig:
     default_image: str = "llmcore-sandbox-python:1.0.0"
     prefer_local: bool = True
     prefer_task_images: bool = True
-    task_overrides: Dict[str, str] = field(default_factory=dict)
-    runtime_overrides: Dict[str, str] = field(default_factory=dict)
-    restricted_patterns: List[str] = field(
+    task_overrides: dict[str, str] = field(default_factory=dict)
+    runtime_overrides: dict[str, str] = field(default_factory=dict)
+    restricted_patterns: list[str] = field(
         default_factory=lambda: [
             "*-slim",
             "llmcore-sandbox-base:*",
             "llmcore-sandbox-shell:*",
         ]
     )
-    full_access_patterns: List[str] = field(
+    full_access_patterns: list[str] = field(
         default_factory=lambda: [
             "*-full",
             "llmcore-sandbox-websearch:*",
@@ -163,9 +163,9 @@ class SelectionResult:
     """
 
     image: str
-    manifest: Optional[ImageManifest] = None
+    manifest: ImageManifest | None = None
     reason: str = "default"
-    alternatives: List[str] = field(default_factory=list)
+    alternatives: list[str] = field(default_factory=list)
     access_mode: AccessMode = AccessMode.RESTRICTED
 
 
@@ -185,8 +185,8 @@ class ImageSelector:
 
     def __init__(
         self,
-        registry: Optional[ImageRegistry] = None,
-        config: Optional[SelectionConfig] = None,
+        registry: ImageRegistry | None = None,
+        config: SelectionConfig | None = None,
     ):
         """
         Initialize the image selector.
@@ -215,9 +215,9 @@ class ImageSelector:
     def select_for_task(
         self,
         task_type: str,
-        runtime: Optional[str] = None,
-        capabilities: Optional[Set[ImageCapability]] = None,
-        prefer_local: Optional[bool] = None,
+        runtime: str | None = None,
+        capabilities: set[ImageCapability] | None = None,
+        prefer_local: bool | None = None,
     ) -> SelectionResult:
         """
         Select an image for a specific task type.
@@ -276,7 +276,7 @@ class ImageSelector:
     def select_for_runtime(
         self,
         runtime: str,
-        prefer_local: Optional[bool] = None,
+        prefer_local: bool | None = None,
     ) -> SelectionResult:
         """
         Select an image for a specific runtime.
@@ -321,8 +321,8 @@ class ImageSelector:
 
     def select_for_capabilities(
         self,
-        capabilities: Set[ImageCapability],
-        prefer_local: Optional[bool] = None,
+        capabilities: set[ImageCapability],
+        prefer_local: bool | None = None,
     ) -> SelectionResult:
         """
         Select an image that has all required capabilities.
@@ -348,9 +348,9 @@ class ImageSelector:
 
     def _select_by_capabilities(
         self,
-        capabilities: Set[ImageCapability],
+        capabilities: set[ImageCapability],
         prefer_local: bool,
-    ) -> Optional[ImageMetadata]:
+    ) -> ImageMetadata | None:
         """
         Select the best image matching required capabilities.
 
@@ -396,7 +396,7 @@ class ImageSelector:
         self,
         image: str,
         reason: str,
-        alternatives: List[str],
+        alternatives: list[str],
     ) -> SelectionResult:
         """Build a SelectionResult from image name."""
         manifest = None
@@ -435,15 +435,15 @@ class ImageSelector:
         # Default to restricted
         return AccessMode.RESTRICTED
 
-    def get_task_types(self) -> List[str]:
+    def get_task_types(self) -> list[str]:
         """Get list of known task types."""
         return sorted(set(self._task_images.keys()) | set(TASK_CAPABILITY_MAP.keys()))
 
-    def get_runtimes(self) -> List[str]:
+    def get_runtimes(self) -> list[str]:
         """Get list of known runtimes."""
         return sorted(self._runtime_images.keys())
 
-    def get_image_for_task(self, task_type: str) -> Optional[str]:
+    def get_image_for_task(self, task_type: str) -> str | None:
         """
         Get the preferred image for a task type.
 
@@ -455,7 +455,7 @@ class ImageSelector:
         """
         return self._task_images.get(task_type.lower().strip())
 
-    def get_image_for_runtime(self, runtime: str) -> Optional[str]:
+    def get_image_for_runtime(self, runtime: str) -> str | None:
         """
         Get the preferred image for a runtime.
 

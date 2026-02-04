@@ -50,10 +50,10 @@ async def think_phase(
     provider_manager: "ProviderManager",
     memory_manager: "MemoryManager",
     tool_manager: "ToolManager",
-    prompt_registry: Optional[Any] = None,  # PromptRegistry
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    prompt_registry: Any | None = None,  # PromptRegistry
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
     agents_config: Optional["AgentsConfig"] = None,
 ) -> ThinkOutput:
     """
@@ -297,10 +297,10 @@ async def _think_phase_with_activities(
     think_input: ThinkInput,
     provider: Any,
     target_model: str,
-    prompt_registry: Optional[Any],
+    prompt_registry: Any | None,
     agents_config: "AgentsConfig",
-    tracer: Optional[Any],
-    span: Optional[Any],
+    tracer: Any | None,
+    span: Any | None,
 ) -> ThinkOutput:
     """
     Fallback think phase using activity system instead of native tools.
@@ -423,7 +423,7 @@ async def _think_phase_with_activities(
 
 
 def _generate_thinking_prompt(
-    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Optional[Any]
+    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Any | None
 ) -> str:
     """
     Generate the thinking prompt using prompt library or fallback.
@@ -491,7 +491,7 @@ Respond now:
     return prompt
 
 
-def _format_tools(tool_definitions: List[Dict[str, Any]]) -> str:
+def _format_tools(tool_definitions: list[dict[str, Any]]) -> str:
     """
     Format tool definitions for prompt.
 
@@ -541,7 +541,7 @@ def _format_tools(tool_definitions: List[Dict[str, Any]]) -> str:
 
 def _parse_think_response(
     response_text: str,
-    response_dict: Optional[Dict[str, Any]],
+    response_dict: dict[str, Any] | None,
     tool_manager: "ToolManager",
 ) -> ThinkOutput:
     """
