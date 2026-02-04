@@ -82,11 +82,7 @@ class GoalContextSource:
             try:
                 all_goals = await self.goal_manager.get_all_goals()
                 # Include pending goals as well
-                active = [
-                    g
-                    for g in all_goals
-                    if g.status.value in ("active", "pending")
-                ]
+                active = [g for g in all_goals if g.status.value in ("active", "pending")]
             except Exception as exc:
                 logger.warning("Failed to get all goals: %s", exc)
 

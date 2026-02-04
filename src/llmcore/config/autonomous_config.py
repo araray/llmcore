@@ -182,8 +182,7 @@ class WebhookConfig(BaseModel):
     url: str = Field(
         default="",
         description=(
-            "Webhook URL. Supports ${ENV_VAR} substitution. "
-            "Example: '${ESCALATION_WEBHOOK_URL}'"
+            "Webhook URL. Supports ${ENV_VAR} substitution. Example: '${ESCALATION_WEBHOOK_URL}'"
         ),
     )
     headers: Dict[str, str] = Field(
@@ -275,10 +274,7 @@ class EscalationConfig(BaseModel):
         """Validate escalation level string."""
         valid = {"debug", "info", "advisory", "action", "urgent", "critical"}
         if v.lower() not in valid:
-            raise ValueError(
-                f"Invalid escalation level: {v!r}. "
-                f"Valid levels: {sorted(valid)}"
-            )
+            raise ValueError(f"Invalid escalation level: {v!r}. Valid levels: {sorted(valid)}")
         return v.lower()
 
 
@@ -453,8 +449,7 @@ class ContextConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Compression triggers when context usage exceeds "
-            "this fraction of max_context_tokens"
+            "Compression triggers when context usage exceeds this fraction of max_context_tokens"
         ),
     )
     prioritization_strategy: str = Field(
@@ -471,9 +466,7 @@ class ContextConfig(BaseModel):
         """Validate prioritization strategy string."""
         valid = {"recency_relevance", "relevance_only", "recency_only"}
         if v not in valid:
-            raise ValueError(
-                f"Invalid strategy: {v!r}. Valid: {sorted(valid)}"
-            )
+            raise ValueError(f"Invalid strategy: {v!r}. Valid: {sorted(valid)}")
         return v
 
 

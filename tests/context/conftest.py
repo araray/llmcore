@@ -216,12 +216,8 @@ def mock_goal_manager_empty():
 def mock_goal_manager_failing():
     """Create a mock GoalManager that raises on all calls."""
     manager = MagicMock()
-    manager.get_active_goals = AsyncMock(
-        side_effect=RuntimeError("Storage unavailable")
-    )
-    manager.get_all_goals = AsyncMock(
-        side_effect=RuntimeError("Storage unavailable")
-    )
+    manager.get_active_goals = AsyncMock(side_effect=RuntimeError("Storage unavailable"))
+    manager.get_all_goals = AsyncMock(side_effect=RuntimeError("Storage unavailable"))
     return manager
 
 

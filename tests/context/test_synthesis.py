@@ -260,9 +260,7 @@ class TestSynthesizerSourceManagement:
         assert "goals" in sources
         assert sources["goals"] == 100
 
-    def test_add_multiple_sources(
-        self, synthesizer, high_priority_source, low_priority_source
-    ):
+    def test_add_multiple_sources(self, synthesizer, high_priority_source, low_priority_source):
         """Multiple sources can be registered."""
         synthesizer.add_source("goals", high_priority_source, priority=100)
         synthesizer.add_source("episodic", low_priority_source, priority=40)
@@ -320,9 +318,7 @@ class TestSynthesizerSynthesize:
         assert result.total_tokens > 0
 
     @pytest.mark.asyncio
-    async def test_multiple_sources_all_included(
-        self, synthesizer_with_sources
-    ):
+    async def test_multiple_sources_all_included(self, synthesizer_with_sources):
         """All sources included when within budget."""
         result = await synthesizer_with_sources.synthesize()
         assert len(result.sources_included) == 3
@@ -354,9 +350,7 @@ class TestSynthesizerSynthesize:
             assert src.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_task_passed_to_sources(
-        self, synthesizer, mock_source_factory, sample_task
-    ):
+    async def test_task_passed_to_sources(self, synthesizer, mock_source_factory, sample_task):
         """Current task is forwarded to all sources."""
         source = mock_source_factory(source_name="test")
         original_get = source.get_context
@@ -397,9 +391,7 @@ class TestSynthesizerFiltering:
     @pytest.mark.asyncio
     async def test_include_sources_whitelist(self, synthesizer_with_sources):
         """Only whitelisted sources are included."""
-        result = await synthesizer_with_sources.synthesize(
-            include_sources=["goals"]
-        )
+        result = await synthesizer_with_sources.synthesize(include_sources=["goals"])
         assert "goals" in result.sources_included
         assert "recent" not in result.sources_included
         assert "episodic" not in result.sources_included
@@ -407,16 +399,12 @@ class TestSynthesizerFiltering:
     @pytest.mark.asyncio
     async def test_exclude_sources_blacklist(self, synthesizer_with_sources):
         """Blacklisted sources are excluded."""
-        result = await synthesizer_with_sources.synthesize(
-            exclude_sources=["episodic"]
-        )
+        result = await synthesizer_with_sources.synthesize(exclude_sources=["episodic"])
         assert "episodic" not in result.sources_included
         assert "goals" in result.sources_included
 
     @pytest.mark.asyncio
-    async def test_include_and_exclude_combined(
-        self, synthesizer_with_sources
-    ):
+    async def test_include_and_exclude_combined(self, synthesizer_with_sources):
         """Include then exclude further narrows the set."""
         result = await synthesizer_with_sources.synthesize(
             include_sources=["goals", "recent"],
@@ -425,13 +413,9 @@ class TestSynthesizerFiltering:
         assert result.sources_included == ["goals"]
 
     @pytest.mark.asyncio
-    async def test_include_nonexistent_source(
-        self, synthesizer_with_sources
-    ):
+    async def test_include_nonexistent_source(self, synthesizer_with_sources):
         """Including a source that doesn't exist returns empty."""
-        result = await synthesizer_with_sources.synthesize(
-            include_sources=["nonexistent"]
-        )
+        result = await synthesizer_with_sources.synthesize(include_sources=["nonexistent"])
         assert result.content == ""
         assert result.sources_included == []
 
@@ -445,9 +429,7 @@ class TestSynthesizerErrorHandling:
     """Tests for graceful degradation on source failures."""
 
     @pytest.mark.asyncio
-    async def test_failing_source_skipped(
-        self, synthesizer, high_priority_source, failing_source
-    ):
+    async def test_failing_source_skipped(self, synthesizer, high_priority_source, failing_source):
         """A failing source is skipped; working sources still included."""
         synthesizer.add_source("goals", high_priority_source, priority=100)
         synthesizer.add_source("broken", failing_source, priority=90)
@@ -464,14 +446,10 @@ class TestSynthesizerErrorHandling:
         assert result.sources_included == []
 
     @pytest.mark.asyncio
-    async def test_empty_content_source_skipped(
-        self, synthesizer, mock_source_factory
-    ):
+    async def test_empty_content_source_skipped(self, synthesizer, mock_source_factory):
         """Sources returning empty content are excluded."""
         empty = mock_source_factory(source_name="empty", content="", tokens=0)
-        valid = mock_source_factory(
-            source_name="valid", content="Real content", tokens=5
-        )
+        valid = mock_source_factory(source_name="valid", content="Real content", tokens=5)
         synthesizer.add_source("empty", empty, priority=100)
         synthesizer.add_source("valid", valid, priority=50)
         result = await synthesizer.synthesize()
@@ -490,9 +468,7 @@ class TestSynthesizerBudgetFitting:
     """Tests for _fit_to_budget and _truncate_chunk."""
 
     @pytest.mark.asyncio
-    async def test_budget_overflow_triggers_truncation(
-        self, estimate_counter
-    ):
+    async def test_budget_overflow_triggers_truncation(self, estimate_counter):
         """When total tokens exceed budget, lower-priority chunks truncated."""
         from llmcore.context.synthesis import ContextSynthesizer
 
@@ -517,9 +493,7 @@ class TestSynthesizerBudgetFitting:
 
     def test_truncate_chunk_within_budget(self, synthesizer):
         """Chunk already within budget is returned as-is."""
-        chunk = ContextChunk(
-            source="x", content="short", tokens=2, priority=50
-        )
+        chunk = ContextChunk(source="x", content="short", tokens=2, priority=50)
         result = synthesizer._truncate_chunk(chunk, max_tokens=100)
         assert result is not None
         assert result.content == "short"
@@ -565,9 +539,7 @@ class TestSynthesizerAssembly:
 
     def test_assemble_single_chunk(self, synthesizer):
         """Single chunk formatted as section."""
-        chunks = [
-            ContextChunk(source="goals", content="Goal info", tokens=5)
-        ]
+        chunks = [ContextChunk(source="goals", content="Goal info", tokens=5)]
         result = synthesizer._assemble_content(chunks)
         assert "## GOALS" in result
         assert "Goal info" in result
@@ -603,9 +575,7 @@ class TestSynthesizerCompression:
     """Tests for the compression trigger."""
 
     @pytest.mark.asyncio
-    async def test_compression_triggered_above_threshold(
-        self, estimate_counter
-    ):
+    async def test_compression_triggered_above_threshold(self, estimate_counter):
         """Compression flag set when utilization exceeds threshold."""
         from tests.context.conftest import MockContextSource
 
@@ -635,13 +605,9 @@ class TestSynthesizerCompression:
         assert isinstance(result.compression_applied, bool)
 
     @pytest.mark.asyncio
-    async def test_no_compression_below_threshold(
-        self, synthesizer, mock_source_factory
-    ):
+    async def test_no_compression_below_threshold(self, synthesizer, mock_source_factory):
         """No compression when utilization is below threshold."""
-        small = mock_source_factory(
-            source_name="small", content="tiny", tokens=2
-        )
+        small = mock_source_factory(source_name="small", content="tiny", tokens=2)
         synthesizer.add_source("small", small, priority=50)
         result = await synthesizer.synthesize()
         # 2 tokens << 1000 max * 0.75 threshold

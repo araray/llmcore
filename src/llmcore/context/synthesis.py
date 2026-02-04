@@ -207,9 +207,7 @@ def _make_default_counter() -> TokenCounter:
     try:
         return TiktokenCounter()
     except (ImportError, Exception):
-        logger.warning(
-            "tiktoken not available — using character-based token estimation"
-        )
+        logger.warning("tiktoken not available — using character-based token estimation")
         return EstimateCounter()
 
 
@@ -352,9 +350,7 @@ class ContextSynthesizer:
         fetch_tasks = []
         for name in source_names:
             source, priority = self._sources[name]
-            fetch_tasks.append(
-                self._fetch_source(name, source, priority, current_task)
-            )
+            fetch_tasks.append(self._fetch_source(name, source, priority, current_task))
 
         results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 

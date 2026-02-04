@@ -395,9 +395,7 @@ class TestSemanticContextSource:
         assert chunk.content == ""
 
     @pytest.mark.asyncio
-    async def test_empty_retrieval_results(
-        self, mock_retrieval_fn_empty, sample_task
-    ):
+    async def test_empty_retrieval_results(self, mock_retrieval_fn_empty, sample_task):
         """Empty retrieval results → header only."""
         from llmcore.context.sources.semantic import SemanticContextSource
 
@@ -768,9 +766,7 @@ class TestSkillContextSource:
         from llmcore.context.sources.skills import SkillContextSource
 
         loader = MagicMock()
-        loader.load_for_task = AsyncMock(
-            side_effect=RuntimeError("Skill dir not found")
-        )
+        loader.load_for_task = AsyncMock(side_effect=RuntimeError("Skill dir not found"))
 
         source = SkillContextSource(loader)
         chunk = await source.get_context(task=sample_task)

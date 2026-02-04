@@ -688,7 +688,6 @@ class TestResourceMonitor:
             original_get = monitor._get_usage
 
             async def no_psutil_get():
-
                 # Simulate ImportError
                 try:
                     raise ImportError("no psutil")

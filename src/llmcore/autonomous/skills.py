@@ -422,9 +422,7 @@ class SkillLoader:
                     sections[current_section] = "\n".join(current_lines)
 
                 # Start new section
-                current_section = (
-                    line[3:].strip().lower().replace(" ", "_")
-                )
+                current_section = line[3:].strip().lower().replace(" ", "_")
                 current_lines = []
             else:
                 current_lines.append(line)
@@ -504,11 +502,7 @@ def _extract_list_field(content: str, field_name: str) -> List[str]:
     if not match:
         return []
     raw = match.group(1)
-    items = [
-        item.strip().strip("'\"")
-        for item in raw.split(",")
-        if item.strip()
-    ]
+    items = [item.strip().strip("'\"") for item in raw.split(",") if item.strip()]
     return items
 
 

@@ -290,63 +290,49 @@ class TestMetadataLoading:
     async def test_metadata_tags_from_frontmatter(self, loaded_loader):
         """Tags are extracted from YAML frontmatter."""
         # Find the testing skill
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         assert "python" in testing.tags
         assert "testing" in testing.tags
 
     @pytest.mark.asyncio
     async def test_metadata_triggers_from_frontmatter(self, loaded_loader):
         """Triggers are extracted from YAML frontmatter."""
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         assert "pytest" in testing.triggers
         assert "test" in testing.triggers
 
     @pytest.mark.asyncio
     async def test_metadata_priority_from_frontmatter(self, loaded_loader):
         """Priority is extracted from YAML frontmatter."""
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         assert testing.priority == 70
 
     @pytest.mark.asyncio
     async def test_metadata_default_priority(self, loaded_loader):
         """Skills without explicit priority get default 50."""
-        async_skill = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Async" in m.name
-        ][0]
+        async_skill = [m for m in loaded_loader._metadata_cache.values() if "Async" in m.name][0]
         assert async_skill.priority == 50
 
     @pytest.mark.asyncio
     async def test_implicit_tags_from_directory(self, loaded_loader):
         """Parent directory name added as implicit tag."""
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         assert "python" in testing.tags  # parent dir = "python"
 
     @pytest.mark.asyncio
     async def test_implicit_triggers_from_name(self, loaded_loader):
         """Name words added as implicit triggers."""
-        git_skill = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Git Workflow" in m.name
-        ][0]
+        git_skill = [m for m in loaded_loader._metadata_cache.values() if "Git Workflow" in m.name][
+            0
+        ]
         # "git", "workflow", "skill" from "Git Workflow Skill"
         assert "git" in git_skill.triggers
         assert "workflow" in git_skill.triggers
@@ -453,11 +439,9 @@ class TestLoadForTask:
     async def test_score_includes_triggers(self, loaded_loader):
         """Trigger keyword matches score +10 each."""
         task_words = {"pytest", "test"}
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         score = loaded_loader._score_skill(testing, task_words)
 
         # trigger matches: "pytest" and "test" → +20
@@ -468,11 +452,9 @@ class TestLoadForTask:
     async def test_score_includes_tag_matches(self, loaded_loader):
         """Tag keyword matches score +5 each."""
         task_words = {"python"}
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         score = loaded_loader._score_skill(testing, task_words)
 
         # "python" is both a tag and trigger
@@ -482,11 +464,9 @@ class TestLoadForTask:
     async def test_score_includes_priority_bonus(self, loaded_loader):
         """Priority / 10 is added as a bonus."""
         task_words = set()
-        testing = [
-            m
-            for m in loaded_loader._metadata_cache.values()
-            if "Python Testing" in m.name
-        ][0]
+        testing = [m for m in loaded_loader._metadata_cache.values() if "Python Testing" in m.name][
+            0
+        ]
         score = loaded_loader._score_skill(testing, task_words)
 
         # Only priority bonus: 70 / 10 = 7.0
@@ -531,10 +511,7 @@ class TestLoadForTask:
         if len(skills) >= 2:
             # First skill should have highest score
             task_words = {"python", "test", "pytest", "async", "commit"}
-            scores = [
-                loaded_loader._score_skill(s.metadata, task_words)
-                for s in skills
-            ]
+            scores = [loaded_loader._score_skill(s.metadata, task_words) for s in skills]
             assert scores == sorted(scores, reverse=True)
 
 
@@ -861,9 +838,7 @@ class TestEndToEnd:
         loader.add_skill_directory(tmp_skill_dir)
 
         skills = await loader.load_for_task("Write pytest tests")
-        formatted = loader.format_skills(
-            skills, include_sections=["when_to_use"]
-        )
+        formatted = loader.format_skills(skills, include_sections=["when_to_use"])
 
         # Should include "when_to_use" section content
         assert "writing or debugging" in formatted
