@@ -17,6 +17,7 @@ The configuration hierarchy:
     │   ├── WebhookConfig        - Webhook notification settings
     │   └── FileNotificationConfig - File-based notification settings
     ├── ResourcesConfig          - Resource monitoring settings
+    ├── SkillsConfig             - Skill loading settings
     └── ContextConfig            - Context synthesis settings
 
 Usage:
@@ -39,9 +40,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
 
 # =============================================================================
 # GOALS CONFIGURATION
@@ -181,7 +183,8 @@ class WebhookConfig(BaseModel):
     url: str = Field(
         default="",
         description=(
-            "Webhook URL. Supports ${ENV_VAR} substitution. Example: '${ESCALATION_WEBHOOK_URL}'"
+            "Webhook URL. Supports ${ENV_VAR} substitution. "
+            "Example: '${ESCALATION_WEBHOOK_URL}'"
         ),
     )
     headers: Dict[str, str] = Field(
@@ -273,7 +276,10 @@ class EscalationConfig(BaseModel):
         """Validate escalation level string."""
         valid = {"debug", "info", "advisory", "action", "urgent", "critical"}
         if v.lower() not in valid:
-            raise ValueError(f"Invalid escalation level: {v!r}. Valid levels: {sorted(valid)}")
+            raise ValueError(
+                f"Invalid escalation level: {v!r}. "
+                f"Valid levels: {sorted(valid)}"
+            )
         return v.lower()
 
 
@@ -366,6 +372,59 @@ class ResourcesConfig(BaseModel):
 
 
 # =============================================================================
+# SKILL LOADING CONFIGURATION
+# =============================================================================
+
+
+class SkillsConfig(BaseModel):
+    """
+    Configuration for the Skill Loading System.
+
+    Controls which directories are scanned for skill files, caching
+    behavior, and per-task loading limits.
+
+    Skill files are markdown (``.md``) documents with optional YAML
+    frontmatter.  The loader scans all registered directories
+    recursively for ``.md`` files on first use.
+
+    Examples:
+        >>> config = SkillsConfig()
+        >>> config.skill_directories
+        ['~/.local/share/llmcore/skills']
+        >>> config.cache_size
+        50
+
+    References:
+        - UNIFIED_ECOSYSTEM_SPECIFICATION.md §13 (Skill Loading System)
+    """
+
+    skill_directories: List[str] = Field(
+        default=["~/.local/share/llmcore/skills"],
+        description=(
+            "Directories to scan for skill markdown files. "
+            "Supports ~ expansion. Searched recursively."
+        ),
+    )
+    cache_size: int = Field(
+        default=50,
+        ge=0,
+        le=500,
+        description="Maximum number of skill file contents to cache in memory",
+    )
+    max_skills_per_task: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of skills loaded per task",
+    )
+    max_skill_tokens: int = Field(
+        default=20_000,
+        ge=1000,
+        description="Maximum total tokens for all skills loaded per task",
+    )
+
+
+# =============================================================================
 # CONTEXT SYNTHESIS CONFIGURATION
 # =============================================================================
 
@@ -395,7 +454,8 @@ class ContextConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Compression triggers when context usage exceeds this fraction of max_context_tokens"
+            "Compression triggers when context usage exceeds "
+            "this fraction of max_context_tokens"
         ),
     )
     prioritization_strategy: str = Field(
@@ -412,7 +472,9 @@ class ContextConfig(BaseModel):
         """Validate prioritization strategy string."""
         valid = {"recency_relevance", "relevance_only", "recency_only"}
         if v not in valid:
-            raise ValueError(f"Invalid strategy: {v!r}. Valid: {sorted(valid)}")
+            raise ValueError(
+                f"Invalid strategy: {v!r}. Valid: {sorted(valid)}"
+            )
         return v
 
 
@@ -472,6 +534,10 @@ class AutonomousConfig(BaseModel):
     resources: ResourcesConfig = Field(
         default_factory=ResourcesConfig,
         description="Resource monitoring and constraint configuration",
+    )
+    skills: SkillsConfig = Field(
+        default_factory=SkillsConfig,
+        description="Skill loading system configuration",
     )
     context: ContextConfig = Field(
         default_factory=ContextConfig,

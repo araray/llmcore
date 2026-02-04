@@ -7,6 +7,7 @@ Provides infrastructure for autonomous agent operation including:
 - Periodic task scheduling (heartbeat system)
 - Human escalation framework
 - System resource monitoring and constraint enforcement
+- Skill loading system for dynamic knowledge injection
 
 Phase 1 (Foundation):
     - GoalManager, Goal, GoalStatus, GoalPriority, SuccessCriterion
@@ -16,12 +17,16 @@ Phase 2 (Resource Management):
     - HeartbeatManager, HeartbeatTask
     - ResourceMonitor, ResourceConstraints, ResourceStatus
 
+Phase 3 (Context Intelligence):
+    - SkillLoader, Skill, SkillMetadata
+
 Example:
     from llmcore.autonomous import (
         GoalManager, GoalStore, SuccessCriterion,
         HeartbeatManager, HeartbeatTask,
         EscalationManager, EscalationLevel, EscalationReason,
         ResourceMonitor, ResourceConstraints,
+        SkillLoader, Skill, SkillMetadata,
     )
     from llmcore.config.autonomous_config import GoalsAutonomousConfig
 
@@ -30,9 +35,20 @@ Example:
     heartbeat = HeartbeatManager()
     escalation = EscalationManager()
     resources = ResourceMonitor()
+    skills = SkillLoader()
 """
 
 # Goal Management (Phase 1)
+from .goals import (
+    Goal,
+    GoalManager,
+    GoalPriority,
+    GoalStatus,
+    GoalStorageProtocol,
+    GoalStore,
+    SuccessCriterion,
+)
+
 # Escalation Framework (Phase 1)
 from .escalation import (
     Escalation,
@@ -43,15 +59,6 @@ from .escalation import (
     callback_handler,
     file_handler,
     webhook_handler,
-)
-from .goals import (
-    Goal,
-    GoalManager,
-    GoalPriority,
-    GoalStatus,
-    GoalStorageProtocol,
-    GoalStore,
-    SuccessCriterion,
 )
 
 # Heartbeat System (Phase 2)
@@ -68,6 +75,13 @@ from .resource import (
     ResourceMonitor,
     ResourceStatus,
     ResourceUsage,
+)
+
+# Skill Loading (Phase 3)
+from .skills import (
+    Skill,
+    SkillLoader,
+    SkillMetadata,
 )
 
 __all__ = [
@@ -98,4 +112,8 @@ __all__ = [
     "ResourceMonitor",
     "ResourceStatus",
     "ResourceUsage",
+    # Skills
+    "Skill",
+    "SkillLoader",
+    "SkillMetadata",
 ]
