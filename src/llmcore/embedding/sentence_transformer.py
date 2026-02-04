@@ -5,6 +5,8 @@ Sentence Transformer embedding model implementation for LLMCore.
 Uses the sentence-transformers library to generate embeddings locally.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional

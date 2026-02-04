@@ -5,6 +5,8 @@ Ollama Embedding model implementation for LLMCore.
 Uses the official ollama library to generate embeddings via a local Ollama instance.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional

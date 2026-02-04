@@ -6,6 +6,8 @@ Handles interactions with the OpenAI API (GPT models).
 Accepts context as List[Message] and supports standardized tool-calling.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging

@@ -7,6 +7,8 @@ Supports streaming and different API endpoints (/api/chat, /api/generate).
 Accepts context as List[Message].
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging

@@ -5,6 +5,8 @@ OpenAI Embedding model implementation for LLMCore.
 Uses the OpenAI Python SDK to generate embeddings via their API.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
