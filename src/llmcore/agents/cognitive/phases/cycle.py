@@ -126,6 +126,16 @@ class CognitiveCycle:
     handles errors, coordinates state updates, and provides a clean
     interface for agent execution.
 
+    Context Synthesis:
+        The cycle supports optional ``ContextSynthesizer`` for sophisticated
+        multi-source context assembly in the PERCEIVE phase. When provided,
+        the synthesizer gathers context from multiple sources (goals, recent
+        history, RAG, skills, episodic memory) in parallel, scores and
+        prioritizes chunks, and fits them into the token budget.
+
+        If no synthesizer is provided, the cycle falls back to direct
+        ``MemoryManager`` retrieval for backward compatibility.
+
     Example:
         >>> cycle = CognitiveCycle(
         ...     provider_manager=provider_manager,
@@ -146,6 +156,20 @@ class CognitiveCycle:
         ...     session_id="session-123",
         ...     max_iterations=10
         ... )
+        >>>
+        >>> # With context synthesis (recommended for autonomous operation)
+        >>> from llmcore.agents.cognitive.phases import create_default_synthesizer
+        >>> synthesizer = create_default_synthesizer(
+        ...     goal_manager=goal_manager,
+        ...     skill_loader=skill_loader,
+        ... )
+        >>> cycle = CognitiveCycle(
+        ...     provider_manager=provider_manager,
+        ...     memory_manager=memory_manager,
+        ...     storage_manager=storage_manager,
+        ...     tool_manager=tool_manager,
+        ...     context_synthesizer=synthesizer,
+        ... )
 
     Attributes:
         provider_manager: Provider manager for LLM calls
@@ -153,6 +177,7 @@ class CognitiveCycle:
         storage_manager: Storage manager for episodic memory
         tool_manager: Tool manager for actions
         prompt_registry: Optional prompt registry
+        context_synthesizer: Optional ContextSynthesizer for PERCEIVE phase
     """
 
     def __init__(
@@ -163,17 +188,24 @@ class CognitiveCycle:
         tool_manager: "ToolManager",
         prompt_registry: Any | None = None,
         tracer: Any | None = None,
+        context_synthesizer: Any | None = None,
     ):
         """
         Initialize the cognitive cycle orchestrator.
 
         Args:
-            provider_manager: Provider manager for LLM calls
-            memory_manager: Memory manager for context
-            storage_manager: Storage manager for episodic memory
-            tool_manager: Tool manager for actions
-            prompt_registry: Optional prompt registry
-            tracer: Optional OpenTelemetry tracer
+            provider_manager: Provider manager for LLM calls.
+            memory_manager: Memory manager for context retrieval.
+            storage_manager: Storage manager for episodic memory.
+            tool_manager: Tool manager for actions.
+            prompt_registry: Optional prompt registry.
+            tracer: Optional OpenTelemetry tracer.
+            context_synthesizer: Optional ContextSynthesizer for sophisticated
+                multi-source context assembly in the PERCEIVE phase. When
+                provided, enables synthesis mode with prioritized context
+                gathering from goals, recent history, RAG, skills, and
+                episodic memory. When None, falls back to direct
+                MemoryManager retrieval.
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -181,6 +213,7 @@ class CognitiveCycle:
         self.tool_manager = tool_manager
         self.prompt_registry = prompt_registry
         self.tracer = tracer
+        self.context_synthesizer = context_synthesizer
 
     async def run_iteration(
         self,
@@ -244,6 +277,7 @@ class CognitiveCycle:
                     perceive_input=perceive_input,
                     memory_manager=self.memory_manager,
                     sandbox=sandbox,
+                    context_synthesizer=self.context_synthesizer,
                     tracer=self.tracer,
                 )
 
