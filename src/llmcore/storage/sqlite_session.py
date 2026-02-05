@@ -107,7 +107,7 @@ class SqliteSessionStorage(BaseSessionStorage):
             await self._conn.execute("PRAGMA foreign_keys = ON;")
             await self._create_tables_if_not_exist()
             await self._conn.commit()
-            logger.info(f"SQLite storage initialized at: {self._db_path.resolve()}")
+            logger.debug(f"SQLite storage initialized at: {self._db_path.resolve()}")
         except aiosqlite.Error as e:
             raise SessionStorageError(f"Could not initialize SQLite database: {e}")
 

@@ -83,15 +83,14 @@ class GeminiProvider(BaseProvider):
         self._safety_settings = self._parse_safety_settings(config.get("safety_settings"))
 
         if not self.api_key:
-            logger.warning(
-                "Google API key not found. Ensure it is set if not using other auth methods."
+            raise ConfigError(
+                "Google API key not found. Set GOOGLE_API_KEY environment variable or configure api_key in config."
             )
 
         try:
             self._client = genai.Client(api_key=self.api_key)
-            logger.info("Google Gen AI client initialized successfully.")
+            logger.debug("Google Gen AI client initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to initialize Google Gen AI client: {e}", exc_info=True)
             raise ConfigError(f"Google Gen AI configuration failed: {e}")
 
     def _parse_safety_settings(

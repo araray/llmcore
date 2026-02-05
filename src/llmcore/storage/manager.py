@@ -164,7 +164,7 @@ class StorageManager:
         if validate_config:
             self._validate_configuration(strict_validation)
 
-        logger.info("StorageManager initialized for library mode (single-tenant).")
+        logger.debug("StorageManager initialized for library mode (single-tenant).")
 
     def _validate_configuration(self, strict: bool = False) -> None:
         """
@@ -323,14 +323,14 @@ class StorageManager:
         # Start health monitoring if enabled
         if enable_health_monitoring and self._health_config.enabled:
             await self._health_manager.start_all()
-            logger.info("Storage health monitoring started.")
+            logger.debug("Storage health monitoring started.")
 
         # Run initial health check if requested
         if run_initial_health_check:
             await self._run_initial_health_checks()
 
         self._initialized = True
-        logger.info("Storage backends initialized successfully.")
+        logger.debug("Storage backends initialized successfully.")
 
     async def _parse_session_storage_config(self) -> None:
         """
@@ -357,7 +357,7 @@ class StorageManager:
 
         self._session_storage_type = session_storage_type.lower()
         self._session_storage_config = session_storage_config
-        logger.info(f"Session storage type '{session_storage_type}' configured.")
+        logger.debug(f"Session storage type '{session_storage_type}' configured.")
 
     async def _parse_vector_storage_config(self) -> None:
         """
@@ -384,7 +384,7 @@ class StorageManager:
 
         self._vector_storage_type = vector_storage_type.lower()
         self._vector_storage_config = vector_storage_config
-        logger.info(f"Vector storage type '{vector_storage_type}' configured.")
+        logger.debug(f"Vector storage type '{vector_storage_type}' configured.")
 
     async def _initialize_observability(self) -> None:
         """
@@ -436,7 +436,7 @@ class StorageManager:
                 self._event_logger = EventLogger(config=event_config)
                 logger.debug("Event logger initialized (database pool will be connected later)")
 
-            logger.info("Observability components initialized successfully")
+            logger.debug("Observability components initialized successfully")
 
         except Exception as e:
             logger.error(f"Failed to initialize observability: {e}", exc_info=True)
@@ -495,7 +495,7 @@ class StorageManager:
             # Phase 4: Connect event logger to database pool
             await self._connect_event_logger_to_pool()
 
-            logger.info(
+            logger.debug(
                 f"Session storage backend '{self._session_storage_type}' instantiated and initialized.",
                 extra={
                     "backend_type": self._session_storage_type,
@@ -596,7 +596,7 @@ class StorageManager:
             # Register health monitor for vector storage
             await self._register_vector_health_monitor()
 
-            logger.info(
+            logger.debug(
                 f"Vector storage backend '{self._vector_storage_type}' instantiated and initialized.",
                 extra={
                     "backend_type": self._vector_storage_type,
@@ -671,7 +671,7 @@ class StorageManager:
                 result = await self._health_manager.run_health_check(backend_name)
                 if result:
                     if result.status == HealthStatus.HEALTHY:
-                        logger.info(
+                        logger.debug(
                             f"Initial health check passed for {backend_name}: "
                             f"latency={result.latency_ms:.1f}ms"
                         )

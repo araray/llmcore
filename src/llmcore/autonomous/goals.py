@@ -711,7 +711,7 @@ class GoalManager:
             stored_goals = await self.storage.load_goals()
             self._goals = {g.id: g for g in stored_goals}
             self._initialized = True
-            logger.info("GoalManager initialized with %d goals", len(self._goals))
+            logger.debug("GoalManager initialized with %d goals", len(self._goals))
 
     # ----- primary goal -------------------------------------------------------
 

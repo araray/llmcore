@@ -455,7 +455,7 @@ class StorageHealthMonitor:
 
     async def _monitoring_loop(self) -> None:
         """Background monitoring loop."""
-        logger.info(f"Starting health monitoring for {self.backend_name}")
+        logger.debug(f"Starting health monitoring for {self.backend_name}")
 
         while self._running:
             try:
@@ -465,7 +465,7 @@ class StorageHealthMonitor:
 
             await asyncio.sleep(self.config.check_interval_seconds)
 
-        logger.info(f"Stopped health monitoring for {self.backend_name}")
+        logger.debug(f"Stopped health monitoring for {self.backend_name}")
 
     async def start(self) -> None:
         """Start background health monitoring."""
@@ -703,7 +703,7 @@ class StorageHealthManager:
             await monitor.start()
 
         self._started = True
-        logger.info(f"Started {len(self._monitors)} health monitors")
+        logger.debug(f"Started {len(self._monitors)} health monitors")
 
     async def stop_all(self) -> None:
         """Stop all registered health monitors."""

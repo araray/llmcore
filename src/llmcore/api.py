@@ -252,7 +252,7 @@ class LLMCore:
             config_file_path: Optional path to config file
             env_prefix: Environment variable prefix
         """
-        logger.info("Initializing LLMCore components from configuration...")
+        logger.debug("Initializing LLMCore components from configuration...")
         try:
             from confy.loader import Config as ActualConfyConfig
 
@@ -323,7 +323,7 @@ class LLMCore:
                 storage_manager=self._storage_manager,
             )
 
-            logger.info("LLMCore initialization complete")
+            logger.debug("LLMCore initialization complete")
 
         except Exception as e:
             logger.error(f"Failed to initialize LLMCore: {e}", exc_info=True)

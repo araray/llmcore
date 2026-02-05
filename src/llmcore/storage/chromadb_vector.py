@@ -41,8 +41,8 @@ try:
         _chromadb_module.Client
     )  # Access Client after chromadb is confirmed imported
     chromadb_available = True
-    logger.info(
-        "Core ChromaDB components ('chromadb' module and 'Collection' model) imported successfully. ChromaDB is considered available."
+    logger.debug(
+        "Core ChromaDB components ('chromadb' module and 'Collection' model) imported successfully."
     )
 
     # Attempt to import specific error types from chromadb.errors
@@ -148,10 +148,10 @@ class ChromaVectorStorage(BaseVectorStorage):
                 expanded_path = os.path.expanduser(self._storage_path)
                 pathlib.Path(expanded_path).mkdir(parents=True, exist_ok=True)
                 self._client = _chromadb_module.PersistentClient(path=expanded_path)
-                logger.info(f"ChromaDB persistent client initialized at: {expanded_path}")
+                logger.debug(f"ChromaDB persistent client initialized at: {expanded_path}")
             else:
                 self._client = _ChromaClient_class()  # In-memory client
-                logger.info("ChromaDB in-memory client initialized.")
+                logger.debug("ChromaDB in-memory client initialized.")
 
             if self._client:
                 self._client.list_collections()

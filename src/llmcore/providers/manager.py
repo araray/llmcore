@@ -78,7 +78,7 @@ class ProviderManager:
         self._log_raw_payloads_override = log_raw_payloads
         self._initialized = False
         self._default_provider_name = self._config.get("llmcore.default_provider", "ollama").lower()
-        logger.info(
+        logger.debug(
             f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'."
         )
 
@@ -177,14 +177,20 @@ class ProviderManager:
                 self._providers[current_section_name_lower] = provider_cls(
                     provider_specific_config, log_raw_payloads=log_raw_payloads_global
                 )
-                logger.info(
+                logger.debug(
                     f"Provider instance '{current_section_name_lower}' (type: '{provider_type_key}') initialized."
                 )
             except ImportError as e:
-                logger.error(
+                logger.warning(
                     f"Failed to init '{current_section_name_lower}': Missing library. Install with 'pip install llmcore[{provider_type_key}]'. Error: {e}"
                 )
+            except ConfigError as e:
+                # Expected error for missing API keys - log without traceback
+                logger.warning(
+                    f"Provider '{current_section_name_lower}' not configured: {e}"
+                )
             except Exception as e:
+                # Unexpected error - log with traceback for debugging
                 logger.error(
                     f"Failed to initialize provider '{current_section_name_lower}': {e}",
                     exc_info=True,

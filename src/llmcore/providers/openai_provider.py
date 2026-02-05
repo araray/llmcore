@@ -111,8 +111,8 @@ class OpenAIProvider(BaseProvider):
         self.timeout = float(config.get("timeout", 60.0))
 
         if not self.api_key:
-            logger.warning(
-                "OpenAI API key not found in config or environment. Provider will likely fail."
+            raise ConfigError(
+                "OpenAI API key not found. Set OPENAI_API_KEY environment variable or configure api_key in config."
             )
 
         try:
@@ -123,7 +123,6 @@ class OpenAIProvider(BaseProvider):
             )
             logger.debug("AsyncOpenAI client initialized.")
         except Exception as e:
-            logger.error(f"Failed to initialize AsyncOpenAI client: {e}", exc_info=True)
             raise ConfigError(f"OpenAI client initialization failed: {e}")
 
         self._load_tokenizer(self.default_model)

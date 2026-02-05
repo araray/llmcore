@@ -94,7 +94,9 @@ class AnthropicProvider(BaseProvider):
         self.timeout = float(config.get("timeout", 60.0))
 
         if not self.api_key:
-            logger.warning("Anthropic API key not found. Provider will likely fail.")
+            raise ConfigError(
+                "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable or configure api_key in config."
+            )
 
         try:
             self._client = AsyncAnthropic(
@@ -105,7 +107,6 @@ class AnthropicProvider(BaseProvider):
             )
             logger.debug("Anthropic clients initialized.")
         except Exception as e:
-            logger.error(f"Failed to initialize Anthropic clients: {e}", exc_info=True)
             raise ConfigError(f"Anthropic client initialization failed: {e}")
 
     def get_name(self) -> str:

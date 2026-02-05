@@ -74,7 +74,7 @@ class MemoryManager:
         # Load and cache context management configurations
         self._cm_config = self._load_and_parse_cm_config()
 
-        logger.info("MemoryManager initialized as orchestrator.")
+        logger.debug("MemoryManager initialized as orchestrator.")
         logger.debug(f"Inclusion priority: {self._cm_config['inclusion_priority_order']}")
         logger.debug(f"Truncation priority: {self._cm_config['truncation_priority_order']}")
 
