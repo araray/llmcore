@@ -278,11 +278,15 @@ class LLMCore:
                 default_config_dict = {"llmcore": {"default_provider": "ollama"}}
 
             # Initialize Confy with all sources
+            # CRITICAL: Parameter names must match confy.Config.__init__ exactly:
+            #   file_path (not config_file_path)
+            #   prefix (not env_prefix)
+            #   overrides_dict (not overrides)
             self.config = ActualConfyConfig(
                 defaults=default_config_dict,
-                config_file_path=config_file_path,
-                env_prefix=env_prefix,
-                overrides=config_overrides,
+                file_path=config_file_path,
+                prefix=env_prefix,
+                overrides_dict=config_overrides,
             )
 
             # Phase 7: Track configuration state for diff/sync operations
@@ -4011,9 +4015,9 @@ class LLMCore:
 
             self.config = ActualConfyConfig(
                 defaults=config_dict,  # Use current state as defaults
-                config_file_path=None,  # Don't reload from file
-                env_prefix=None,  # Don't re-apply env vars
-                overrides=None,
+                file_path=None,  # Don't reload from file
+                prefix=None,  # Don't re-apply env vars
+                overrides_dict=None,
             )
 
             # Mark config as dirty (modified since last file sync)
