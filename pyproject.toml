@@ -138,6 +138,7 @@ where = ["src"]
 llmcore = [
     "py.typed",
     "config/*.toml",
+    "model_cards/default_cards/**/*.json",
 ]
 
 # --- Ruff Linter Configuration ---

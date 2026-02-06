@@ -47,7 +47,21 @@ DEFAULT_OLLAMA_TOKEN_LIMITS = {
     "llama3": 8000,
     "llama3:8b": 8000,
     "llama3:70b": 8000,
+    "llama3.2": 131072,
+    "llama3.2:latest": 131072,
+    "llama3.3": 131072,
+    "llama3.3:70b": 131072,
+    "qwen3": 262144,
+    "qwen3:4b": 262144,
+    "qwen3:8b": 262144,
+    "qwen3:14b": 262144,
+    "qwen3:32b": 262144,
+    "qwen2.5": 131072,
+    "qwen2.5:latest": 131072,
+    "gemma3": 128000,
     "gemma3:4b": 128000,
+    "gemma3:12b": 128000,
+    "gemma3:27b": 128000,
     "falcon3:3b": 8000,
     "gemma:latest": 8000,
     "gemma:7b": 8000,
@@ -207,17 +221,43 @@ class OllamaProvider(BaseProvider):
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
-        """Returns the maximum context length (tokens) for the given Ollama model."""
+        """Returns the maximum context length (tokens) for the given Ollama model.
+
+        Resolution order:
+            1. Hardcoded DEFAULT_OLLAMA_TOKEN_LIMITS (fast, known models)
+            2. Model card registry (covers newer models like qwen3)
+            3. Fallback to 4096
+        """
         model_name = model or self.default_model
         base_model_name = model_name.split(":")[0]
         limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(
             model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
         )
-        if limit is None:
-            limit = 4096
-            logger.warning(
-                f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
+        if limit is not None:
+            return limit
+
+        # Try the model card registry — it has context info for models
+        # not in the hardcoded dict (e.g. qwen3, llama3.2, etc.)
+        try:
+            from ..model_cards import get_model_card_registry
+
+            registry = get_model_card_registry()
+            card_limit = registry.get_context_length(
+                "ollama", model_name, default=0,
             )
+            if card_limit > 0:
+                logger.debug(
+                    f"Context length for Ollama model '{model_name}' "
+                    f"from model card: {card_limit}"
+                )
+                return card_limit
+        except Exception as e:
+            logger.warning(f"Model card registry lookup failed for '{model_name}': {e}")
+
+        limit = 4096
+        logger.warning(
+            f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
+        )
         return limit
 
     async def chat_completion(
