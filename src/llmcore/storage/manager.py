@@ -900,7 +900,8 @@ class StorageManager:
         # Shutdown metrics collector
         if self._metrics_collector:
             try:
-                await self._metrics_collector.shutdown()
+                if hasattr(self._metrics_collector, "shutdown"):
+                    await self._metrics_collector.shutdown()
                 logger.debug("Metrics collector shut down.")
             except Exception as e:
                 logger.warning(f"Error shutting down metrics collector: {e}")

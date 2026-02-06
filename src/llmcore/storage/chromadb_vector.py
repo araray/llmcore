@@ -481,19 +481,18 @@ class ChromaVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"ChromaDB delete_collection failed: {e}")
 
     def _sync_close(self) -> None:
-        """Synchronous closing logic for ChromaDB."""
+        """Synchronous closing logic for ChromaDB.
+
+        Note: We do NOT call client.reset() here. reset() is a destructive
+        operation that deletes ALL collections and data, and is blocked by
+        default on persistent clients (allow_reset=False). The correct cleanup
+        is to simply release the client reference and clear caches.
+        """
         if self._client:
             try:
-                if hasattr(self._client, "reset"):
-                    logger.info("Calling ChromaDB client.reset() to clear in-memory state.")
-                    self._client.reset()
-                else:
-                    logger.info(
-                        "ChromaDB client does not have a direct close/reset method. Resources are typically managed by its lifecycle."
-                    )
-            except AuthorizationError as auth_e:
-                logger.warning(
-                    f"ChromaDB client reset/cleanup might be restricted by config or permissions: {auth_e}"
+                logger.info(
+                    "Releasing ChromaDB client reference. "
+                    "Persistent data is retained on disk."
                 )
             except Exception as e:
                 logger.error(
