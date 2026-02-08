@@ -14,7 +14,8 @@ import logging
 import pathlib
 import time
 import uuid
-from datetime import datetime, timezone, UTC
+from collections.abc import AsyncGenerator, Callable
+from datetime import UTC, datetime, timezone
 from typing import (
     Any,
     Dict,
@@ -26,7 +27,6 @@ from typing import (
     Union,
     runtime_checkable,
 )
-from collections.abc import AsyncGenerator, Callable
 
 from .embedding.manager import EmbeddingManager
 from .exceptions import (
@@ -178,6 +178,7 @@ class LLMCore:
     _embedding_manager: EmbeddingManager
     _transient_sessions_cache: dict[str, ChatSession]
     _transient_last_interaction_info_cache: dict[str, ContextPreparationDetails]
+    _transient_last_raw_response_cache: dict[str, dict[str, Any]]
     _log_raw_payloads_enabled: bool
     _llmcore_log_level_str: str
     # Phase 7: Configuration Management state
@@ -191,6 +192,7 @@ class LLMCore:
         """
         self._transient_sessions_cache = {}
         self._transient_last_interaction_info_cache = {}
+        self._transient_last_raw_response_cache: dict[str, dict[str, Any]] = {}
         # Phase 7: Initialize config tracking state
         self._config_file_path = None
         self._runtime_config_dirty = False
@@ -716,6 +718,9 @@ class LLMCore:
         else:
             full_content = self._extract_full_content(response_data, active_provider)
 
+            # Cache raw response for tool-call inspection by callers
+            self._transient_last_raw_response_cache[chat_session.id] = response_data
+
             # Post-completion: Update token counts from actual response
             completion_tokens = await self._count_completion_tokens(
                 full_content, active_provider, actual_model
@@ -908,6 +913,26 @@ class LLMCore:
             ContextPreparationDetails if available, None otherwise
         """
         return self._transient_last_interaction_info_cache.get(session_id)
+
+    def get_last_raw_response(self, session_id: str) -> dict[str, Any] | None:
+        """Retrieve the raw provider response from the most recent chat() call.
+
+        This allows callers (e.g. wairu's tool dispatch) to inspect the full
+        provider response, including ``tool_calls`` that are not exposed
+        through the flattened string return value of :meth:`chat`.
+
+        The cache is transient (not persisted) and stores only the most
+        recent response per session.  It is populated during non-streaming
+        ``chat()`` calls only.
+
+        Args:
+            session_id: The session ID to query.
+
+        Returns:
+            Raw response dict from the provider, or ``None`` if not
+            available.
+        """
+        return self._transient_last_raw_response_cache.get(session_id)
 
     # =========================================================================
     # Statistics & Introspection
