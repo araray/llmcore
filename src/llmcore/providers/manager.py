@@ -32,11 +32,24 @@ from .openai_provider import OpenAIProvider
 logger = logging.getLogger(__name__)
 
 # --- Mapping from config provider name string to class ---
+# Native providers have dedicated implementations.  OpenAI-compatible
+# services (DeepSeek, Mistral, xAI, etc.) reuse OpenAIProvider with a
+# custom ``base_url``.  The "google" alias maps to GeminiProvider for
+# configs that use ``[providers.google]`` instead of ``[providers.gemini]``.
 PROVIDER_MAP: dict[str, type[BaseProvider]] = {
+    # Native providers
     "ollama": OllamaProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
+    # Alias: google → gemini
+    "google": GeminiProvider,
+    # OpenAI-compatible providers
+    "deepseek": OpenAIProvider,
+    "mistral": OpenAIProvider,
+    "xai": OpenAIProvider,
+    "groq": OpenAIProvider,
+    "together": OpenAIProvider,
 }
 # --- End Mapping ---
 
@@ -173,6 +186,23 @@ class ProviderManager:
                         f"Environment variable '{env_var_name}' specified for provider '{current_section_name_lower}' but it is not set."
                     )
 
+            # Auto-detect API key from conventional env var when section
+            # name differs from provider type (e.g. [providers.deepseek]
+            # using OpenAIProvider).  Tries {SECTION}_API_KEY before the
+            # provider class falls back to its own default env var.
+            if (
+                "api_key" not in provider_specific_config
+                and "api_key_env_var" not in provider_specific_config
+                and current_section_name_lower != provider_type_key
+            ):
+                conventional_env = f"{current_section_name_lower.upper()}_API_KEY"
+                api_key = os.environ.get(conventional_env)
+                if api_key:
+                    provider_specific_config["api_key"] = api_key
+                    logger.debug(
+                        f"Loaded API key for '{current_section_name_lower}' from conventional env var '{conventional_env}'."
+                    )
+
             try:
                 self._providers[current_section_name_lower] = provider_cls(
                     provider_specific_config, log_raw_payloads=log_raw_payloads_global
@@ -186,9 +216,7 @@ class ProviderManager:
                 )
             except ConfigError as e:
                 # Expected error for missing API keys - log without traceback
-                logger.warning(
-                    f"Provider '{current_section_name_lower}' not configured: {e}"
-                )
+                logger.warning(f"Provider '{current_section_name_lower}' not configured: {e}")
             except Exception as e:
                 # Unexpected error - log with traceback for debugging
                 logger.error(
