@@ -33,6 +33,19 @@ References:
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §13 (Skill Loading System)
 """
 
+# Compression (Phase 3)
+from .compression import (
+    CompressionResult,
+    CompressionStrategy,
+    ContextCompressor,
+)
+
+# Prioritization (Phase 3)
+from .prioritization import (
+    ContentPrioritizer,
+    PriorityWeights,
+    ScoredChunk,
+)
 from .synthesis import (
     ContextChunk,
     ContextSource,
@@ -55,4 +68,12 @@ __all__ = [
     # Token counter implementations
     "TiktokenCounter",
     "EstimateCounter",
+    # Compression
+    "CompressionResult",
+    "CompressionStrategy",
+    "ContextCompressor",
+    # Prioritization
+    "ContentPrioritizer",
+    "PriorityWeights",
+    "ScoredChunk",
 ]

@@ -83,6 +83,12 @@ from .skills import (
     SkillMetadata,
 )
 
+# State Persistence (Phase 1/3)
+from .state import (
+    AutonomousState,
+    StateManager,
+)
+
 __all__ = [
     # Goals
     "Goal",
@@ -115,4 +121,7 @@ __all__ = [
     "Skill",
     "SkillLoader",
     "SkillMetadata",
+    # State
+    "AutonomousState",
+    "StateManager",
 ]
