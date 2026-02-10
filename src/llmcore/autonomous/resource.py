@@ -37,11 +37,11 @@ Example:
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -372,8 +372,10 @@ class ResourceMonitor:
             self._daily_cost = 0.0
             self._last_day = now.date()
 
-        # CPU (brief sample)
-        cpu = psutil.cpu_percent(interval=0.5)
+        # CPU (brief sample — run in thread to avoid blocking the event loop;
+        # the interval=0.5 parameter causes psutil to sleep internally and
+        # a blocking call here prevents timely task cancellation on Ctrl+C)
+        cpu = await asyncio.to_thread(psutil.cpu_percent, 0.5)
 
         # Memory
         mem = psutil.virtual_memory()

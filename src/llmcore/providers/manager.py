@@ -53,6 +53,34 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
 }
 # --- End Mapping ---
 
+# Well-known defaults for providers that reuse OpenAIProvider.
+# Keys must match the ``PROVIDER_MAP`` section names above.
+# ``env_var``  – conventional environment variable for the API key
+# ``base_url`` – vendor API endpoint (required, since the default
+#                OpenAI base URL is wrong for these services)
+_OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
+    "deepseek": {
+        "env_var": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com",
+    },
+    "mistral": {
+        "env_var": "MISTRAL_API_KEY",
+        "base_url": "https://api.mistral.ai/v1",
+    },
+    "xai": {
+        "env_var": "XAI_API_KEY",
+        "base_url": "https://api.x.ai/v1",
+    },
+    "groq": {
+        "env_var": "GROQ_API_KEY",
+        "base_url": "https://api.groq.com/openai/v1",
+    },
+    "together": {
+        "env_var": "TOGETHER_API_KEY",
+        "base_url": "https://api.together.xyz/v1",
+    },
+}
+
 
 class ProviderManager:
     """
@@ -186,22 +214,45 @@ class ProviderManager:
                         f"Environment variable '{env_var_name}' specified for provider '{current_section_name_lower}' but it is not set."
                     )
 
-            # Auto-detect API key from conventional env var when section
-            # name differs from provider type (e.g. [providers.deepseek]
-            # using OpenAIProvider).  Tries {SECTION}_API_KEY before the
-            # provider class falls back to its own default env var.
+            # Auto-detect API key from conventional env var.
+            #
+            # Original condition only triggered when section name !=
+            # provider type key, but for providers like ``[providers.deepseek]``
+            # with no explicit ``type``, both equal "deepseek" – so the
+            # check was skipped and OpenAIProvider fell back to
+            # OPENAI_API_KEY which doesn't exist.
+            #
+            # Now also triggers for any section listed in
+            # ``_OPENAI_COMPATIBLE_DEFAULTS`` so that DeepSeek, Mistral,
+            # xAI, etc. correctly resolve their own env vars.
+            compat_defaults = _OPENAI_COMPATIBLE_DEFAULTS.get(current_section_name_lower)
             if (
                 "api_key" not in provider_specific_config
                 and "api_key_env_var" not in provider_specific_config
-                and current_section_name_lower != provider_type_key
+                and (current_section_name_lower != provider_type_key or compat_defaults is not None)
             ):
-                conventional_env = f"{current_section_name_lower.upper()}_API_KEY"
+                # Prefer the well-known env var for compatible providers,
+                # fall back to the generic {SECTION}_API_KEY convention.
+                if compat_defaults:
+                    conventional_env = compat_defaults["env_var"]
+                else:
+                    conventional_env = f"{current_section_name_lower.upper()}_API_KEY"
                 api_key = os.environ.get(conventional_env)
                 if api_key:
                     provider_specific_config["api_key"] = api_key
                     logger.debug(
                         f"Loaded API key for '{current_section_name_lower}' from conventional env var '{conventional_env}'."
                     )
+
+            # Auto-inject base_url for known OpenAI-compatible providers
+            # when not explicitly configured.  Without this, OpenAIProvider
+            # would send requests to the default OpenAI endpoint.
+            if compat_defaults and "base_url" not in provider_specific_config:
+                provider_specific_config["base_url"] = compat_defaults["base_url"]
+                logger.debug(
+                    f"Injected default base_url for '{current_section_name_lower}': "
+                    f"{compat_defaults['base_url']}"
+                )
 
             try:
                 self._providers[current_section_name_lower] = provider_cls(
