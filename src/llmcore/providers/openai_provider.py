@@ -12,8 +12,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
 from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 
 try:
     import openai
@@ -145,8 +145,8 @@ class OpenAIProvider(BaseProvider):
             self._encoding = None
 
     def get_name(self) -> str:
-        """Returns the provider name: 'openai'."""
-        return "openai"
+        """Returns the provider instance name (e.g. 'deepseek', 'xai', 'openai')."""
+        return self._provider_instance_name or "openai"
 
     async def get_models_details(self) -> list[ModelDetails]:
         """
@@ -315,9 +315,7 @@ class OpenAIProvider(BaseProvider):
             return 0
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(
-        self, messages: list[Message], model: str | None = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Counts tokens for a list of messages using tiktoken, including overhead."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating message token count.")

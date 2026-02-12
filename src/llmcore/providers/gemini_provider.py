@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
 from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +111,8 @@ class GeminiProvider(BaseProvider):
         return parsed_settings if parsed_settings else None
 
     def get_name(self) -> str:
-        """Returns the provider name: 'gemini'."""
-        return "gemini"
+        """Returns the provider instance name (e.g. 'gemini', 'google')."""
+        return self._provider_instance_name or "gemini"
 
     async def get_models_details(self) -> list[ModelDetails]:
         """Dynamically discovers available models from the Google AI API."""
@@ -325,9 +325,7 @@ class GeminiProvider(BaseProvider):
             )
             return (len(text) + 3) // 4
 
-    async def count_message_tokens(
-        self, messages: list[Message], model: str | None = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Counts tokens for a list of messages using the Gemini API."""
         if not self._client:
             logger.warning("Gemini client not available. Approximating message token count.")

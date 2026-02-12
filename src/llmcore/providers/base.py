@@ -13,8 +13,8 @@ UPDATED: Added tools and tool_choice parameters to chat_completion() for unified
 
 import abc
 import time
-from typing import Any, Dict, List, Optional, Union
 from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 
 # Import models for type hinting
 from ..models import Message, ModelDetails, Tool
@@ -53,6 +53,9 @@ class BaseProvider(abc.ABC):
                               payloads should be logged by this provider instance.
         """
         self.log_raw_payloads_enabled = log_raw_payloads
+        # Instance name injected by ProviderManager to distinguish
+        # OpenAI-compatible providers (deepseek, xai, mistral, etc.)
+        self._provider_instance_name: str | None = config.get("_instance_name")
 
     @abc.abstractmethod
     def get_name(self) -> str:
@@ -169,9 +172,7 @@ class BaseProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def count_message_tokens(
-        self, messages: list[Message], model: str | None = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """
         Asynchronously count the total tokens for a list of messages.
 

@@ -255,6 +255,7 @@ class ProviderManager:
                 )
 
             try:
+                provider_specific_config["_instance_name"] = current_section_name_lower
                 self._providers[current_section_name_lower] = provider_cls(
                     provider_specific_config, log_raw_payloads=log_raw_payloads_global
                 )

@@ -12,8 +12,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
 from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 
 # Use the official ollama library
 try:
@@ -157,8 +157,8 @@ class OllamaProvider(BaseProvider):
             logger.info("OllamaProvider using character division for token counting.")
 
     def get_name(self) -> str:
-        """Returns the provider name: 'ollama'."""
-        return "ollama"
+        """Returns the provider instance name."""
+        return self._provider_instance_name or "ollama"
 
     async def get_models_details(self) -> list[ModelDetails]:
         """
@@ -243,12 +243,13 @@ class OllamaProvider(BaseProvider):
 
             registry = get_model_card_registry()
             card_limit = registry.get_context_length(
-                "ollama", model_name, default=0,
+                "ollama",
+                model_name,
+                default=0,
             )
             if card_limit > 0:
                 logger.debug(
-                    f"Context length for Ollama model '{model_name}' "
-                    f"from model card: {card_limit}"
+                    f"Context length for Ollama model '{model_name}' from model card: {card_limit}"
                 )
                 return card_limit
         except Exception as e:
@@ -378,9 +379,7 @@ class OllamaProvider(BaseProvider):
             return 0
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(
-        self, messages: list[Message], model: str | None = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Approximates token count for a list of messages using tiktoken."""
         if not self._encoding:
             total_chars = sum(

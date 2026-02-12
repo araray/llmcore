@@ -13,8 +13,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
 from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 
 # Use the official anthropic library
 try:
@@ -110,8 +110,8 @@ class AnthropicProvider(BaseProvider):
             raise ConfigError(f"Anthropic client initialization failed: {e}")
 
     def get_name(self) -> str:
-        """Returns the provider name: 'anthropic'."""
-        return "anthropic"
+        """Returns the provider instance name."""
+        return self._provider_instance_name or "anthropic"
 
     async def get_models_details(self) -> list[ModelDetails]:
         """
@@ -357,9 +357,7 @@ class AnthropicProvider(BaseProvider):
             logger.error(f"Failed to count tokens with Anthropic client: {e}", exc_info=True)
             return (len(text) + 3) // 4
 
-    async def count_message_tokens(
-        self, messages: list[Message], model: str | None = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Approximates token count for a list of messages for Anthropic models."""
         # Anthropic's token counting is complex. A simple sum is a rough approximation.
         # For better accuracy, one would construct the full prompt string.
