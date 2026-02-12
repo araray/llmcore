@@ -242,7 +242,8 @@ class OpenAIProvider(BaseProvider):
 
         messages_payload: list[dict[str, Any]] = []
         for msg in context:
-            msg_dict = {"role": msg.role.value, "content": msg.content}
+            role_str = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+            msg_dict = {"role": role_str, "content": msg.content}
             if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
                 msg_dict["tool_call_id"] = msg.tool_call_id
             messages_payload.append(msg_dict)
@@ -319,7 +320,11 @@ class OpenAIProvider(BaseProvider):
         """Counts tokens for a list of messages using tiktoken, including overhead."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating message token count.")
-            total_chars = sum(len(msg.content) + len(msg.role.value) for msg in messages)
+            total_chars = sum(
+                len(msg.content)
+                + len(msg.role.value if hasattr(msg.role, "value") else str(msg.role))
+                for msg in messages
+            )
             return (total_chars + (len(messages) * 15)) // 4
 
         model_name = model or self.default_model
@@ -333,14 +338,20 @@ class OpenAIProvider(BaseProvider):
         for message in messages:
             num_tokens += tokens_per_message
             try:
-                num_tokens += len(self._encoding.encode(message.role.value))
+                role_val = (
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+                num_tokens += len(self._encoding.encode(role_val))
                 num_tokens += len(self._encoding.encode(message.content))
                 if message.role == LLMCoreRole.TOOL:
                     # A simplified approximation for tool call overhead
                     num_tokens += 5
             except Exception as e:
                 logger.warning(f"Tiktoken encoding failed for message part: {e}. Approximating.")
-                num_tokens += (len(message.role.value) + len(message.content)) // 4
+                role_len = len(
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+                num_tokens += (role_len + len(message.content)) // 4
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 

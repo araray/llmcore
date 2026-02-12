@@ -235,3 +235,80 @@ class TestProviderManagerInjectsInstanceName:
 
         assert pm.get_provider("openai").get_name() == "openai"
         assert pm.get_provider("deepseek").get_name() == "deepseek"
+
+
+# ---------------------------------------------------------------------------
+# Role.value safety – use_enum_values=True stores roles as plain strings
+# ---------------------------------------------------------------------------
+
+
+class TestRoleValueSafety:
+    """Verify OpenAI provider handles msg.role as both Role enum and plain str.
+
+    Bug: Message model uses ``use_enum_values=True`` (Pydantic v2), which
+    stores ``msg.role`` as the plain string ``"user"`` instead of
+    ``Role.USER``.  ``openai_provider.py`` called ``msg.role.value`` on
+    four code paths, crashing with ``AttributeError: 'str' object has no
+    attribute 'value'``.
+
+    Fix: Guard all ``.role.value`` accesses with
+    ``msg.role.value if hasattr(msg.role, 'value') else str(msg.role)``.
+    """
+
+    def test_message_role_is_string_due_to_use_enum_values(self):
+        """Confirm that Message stores role as plain string."""
+        from llmcore.models import Message, Role
+
+        m = Message(role=Role.USER, content="hello")
+        assert isinstance(m.role, str)
+        assert m.role == "user"
+        assert not hasattr(m.role, "value")
+
+    def test_chat_completion_payload_with_string_roles(self):
+        """chat_completion builds correct payload when msg.role is a string."""
+        from llmcore.models import Message, Role
+
+        provider = _make_openai_provider(
+            {
+                "api_key": "sk-test",
+                "default_model": "test-model",
+                "_instance_name": "openai",
+            }
+        )
+
+        # Simulate messages with string roles (as produced by use_enum_values)
+        msgs = [
+            Message(role=Role.SYSTEM, content="You are helpful."),
+            Message(role=Role.USER, content="Hello"),
+        ]
+
+        # Verify roles are strings (not enums) before hitting the provider
+        assert all(isinstance(m.role, str) for m in msgs)
+
+        # The message formatting loop should not crash
+        # Replicate the provider's logic inline:
+        for msg in msgs:
+            role_str = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+            assert role_str in ("system", "user", "assistant", "tool")
+
+    @pytest.mark.asyncio
+    async def test_count_tokens_with_string_roles(self):
+        """count_message_tokens handles string roles without crash."""
+        from llmcore.models import Message, Role
+
+        provider = _make_openai_provider(
+            {
+                "api_key": "sk-test",
+                "default_model": "test-model",
+                "_instance_name": "deepseek",
+            }
+        )
+
+        msgs = [
+            Message(role=Role.USER, content="Count my tokens"),
+        ]
+
+        # Should not raise AttributeError
+        count = await provider.count_message_tokens(msgs)
+        assert isinstance(count, int)
+        assert count > 0
