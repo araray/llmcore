@@ -36,6 +36,7 @@ except ImportError:
     tiktoken = None  # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
+from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool
 from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
@@ -151,28 +152,45 @@ class OpenAIProvider(BaseProvider):
     async def get_models_details(self) -> list[ModelDetails]:
         """
         Dynamically discovers available models from the OpenAI API.
-        Note: The OpenAI API does not return context length or tool support flags,
-        so these are populated from a static list.
+
+        The OpenAI API does not return context length or tool support flags,
+        so these are enriched from the model card registry (preferred) or
+        GPT-specific heuristics (legacy fallback).
         """
         if not self._client:
             raise ProviderError(self.get_name(), "OpenAI client not initialized.")
         try:
             models_response = await self._client.models.list()
             model_details_list = []
+            provider_name = self.get_name()
+            try:
+                registry = get_model_card_registry()
+            except Exception:
+                registry = None
+
             for model_obj in models_response.data:
                 model_id = model_obj.id
-                # OpenAI API doesn't return these details, so we use our static map.
                 context_length = self.get_max_context_length(model_id)
-                supports_tools = (
-                    "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
-                )
+
+                # Resolve tool support: prefer model card, then GPT heuristic
+                supports_tools = False
+                if registry is not None:
+                    card = registry.get(provider_name, model_id)
+                    if card is not None and card.capabilities:
+                        supports_tools = (
+                            card.capabilities.tool_use or card.capabilities.function_calling
+                        )
+                if not supports_tools:
+                    supports_tools = (
+                        "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
+                    )
 
                 details = ModelDetails(
                     id=model_id,
                     context_length=context_length,
                     supports_streaming=True,
                     supports_tools=supports_tools,
-                    provider_name=self.get_name(),
+                    provider_name=provider_name,
                     metadata={"owned_by": model_obj.owned_by, "created": model_obj.created},
                 )
                 model_details_list.append(details)
@@ -195,7 +213,16 @@ class OpenAIProvider(BaseProvider):
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
-        """Returns the maximum context length (tokens) for the given OpenAI model."""
+        """Returns the maximum context length (tokens) for the given OpenAI model.
+
+        Resolution order:
+        1. Hardcoded ``DEFAULT_OPENAI_TOKEN_LIMITS`` dict (GPT models).
+        2. GPT substring heuristics (covers dated model variants).
+        3. Model Card Registry lookup using the provider instance name
+           (handles DeepSeek, Mistral, xAI, and other OpenAI-compatible
+           providers whose cards live under their own provider key).
+        4. Fallback: 4096.
+        """
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
         if limit is None:
@@ -210,10 +237,39 @@ class OpenAIProvider(BaseProvider):
             elif "gpt-3.5-turbo" in model_name:
                 limit = 16385
             else:
-                limit = 4096
-                logger.warning(
-                    f"Unknown context length for OpenAI model '{model_name}'. Using fallback: {limit}."
-                )
+                # Consult the model card registry before falling back.
+                # OpenAI-compatible providers (deepseek, mistral, xai, …)
+                # have cards filed under their own provider name.
+                provider_name = self.get_name()
+                try:
+                    registry = get_model_card_registry()
+                    card = registry.get(provider_name, model_name)
+                    if card is not None:
+                        limit = card.get_context_length()
+                        logger.debug(
+                            "Resolved context length for '%s/%s' from model card: %d",
+                            provider_name,
+                            model_name,
+                            limit,
+                        )
+                    else:
+                        limit = 4096
+                        logger.warning(
+                            "Unknown context length for OpenAI model '%s' "
+                            "(provider=%s). No model card found. Using fallback: %d.",
+                            model_name,
+                            provider_name,
+                            limit,
+                        )
+                except Exception as e:
+                    limit = 4096
+                    logger.warning(
+                        "Unknown context length for OpenAI model '%s'. "
+                        "Model card lookup failed (%s). Using fallback: %d.",
+                        model_name,
+                        e,
+                        limit,
+                    )
         return limit
 
     async def chat_completion(
