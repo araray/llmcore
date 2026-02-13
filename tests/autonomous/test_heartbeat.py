@@ -681,3 +681,114 @@ class TestHeartbeatTaskDecorator:
     def heartbeat_manager(self):
         """Local fixture for decorator tests."""
         return HeartbeatManager(base_interval=timedelta(milliseconds=50))
+
+
+# =============================================================================
+# Concurrent Task Limit Tests
+# =============================================================================
+
+
+class TestHeartbeatConcurrentLimit:
+    """Tests for max_concurrent_tasks semaphore enforcement."""
+
+    @pytest.mark.asyncio
+    async def test_semaphore_created_when_limit_set(self):
+        """Semaphore is created when max_concurrent_tasks > 0."""
+        hb = HeartbeatManager(
+            base_interval=timedelta(milliseconds=50),
+            max_concurrent_tasks=2,
+        )
+        assert hb._semaphore is not None
+        assert hb.max_concurrent_tasks == 2
+
+    @pytest.mark.asyncio
+    async def test_no_semaphore_when_unlimited(self):
+        """No semaphore when max_concurrent_tasks is 0 (default)."""
+        hb = HeartbeatManager(base_interval=timedelta(milliseconds=50))
+        assert hb._semaphore is None
+        assert hb.max_concurrent_tasks == 0
+
+    @pytest.mark.asyncio
+    async def test_concurrent_limit_enforced(self):
+        """Only max_concurrent_tasks callbacks run simultaneously."""
+        max_concurrent = 2
+        hb = HeartbeatManager(
+            base_interval=timedelta(milliseconds=50),
+            max_concurrent_tasks=max_concurrent,
+        )
+
+        # Track concurrent execution
+        import asyncio
+
+        concurrent_count = 0
+        max_observed_concurrent = 0
+        lock = asyncio.Lock()
+
+        async def slow_task():
+            nonlocal concurrent_count, max_observed_concurrent
+            async with lock:
+                concurrent_count += 1
+                max_observed_concurrent = max(max_observed_concurrent, concurrent_count)
+            await asyncio.sleep(0.1)  # Simulate work
+            async with lock:
+                concurrent_count -= 1
+
+        # Register 5 tasks, all immediately due
+        now = datetime.utcnow()
+        for i in range(5):
+            task = HeartbeatTask(
+                name=f"task_{i}",
+                callback=slow_task,
+                interval=timedelta(seconds=0),  # Always due
+            )
+            task.next_run = now - timedelta(seconds=1)
+            hb.register(task)
+
+        # Run all due tasks concurrently via gather
+        due_tasks = [t for t in hb._tasks.values() if t.should_run(now)]
+        await asyncio.gather(*[hb._run_task(t, now) for t in due_tasks])
+
+        # The semaphore should have limited concurrency
+        assert max_observed_concurrent <= max_concurrent
+
+    @pytest.mark.asyncio
+    async def test_status_includes_concurrent_limit(self):
+        """get_status() reports max_concurrent_tasks."""
+        hb = HeartbeatManager(
+            base_interval=timedelta(milliseconds=50),
+            max_concurrent_tasks=3,
+        )
+        status = hb.get_status()
+        assert status["max_concurrent_tasks"] == 3
+
+    @pytest.mark.asyncio
+    async def test_unlimited_status(self):
+        """get_status() reports 0 for unlimited."""
+        hb = HeartbeatManager(base_interval=timedelta(milliseconds=50))
+        status = hb.get_status()
+        assert status["max_concurrent_tasks"] == 0
+
+    @pytest.mark.asyncio
+    async def test_semaphore_released_on_error(self):
+        """Semaphore is released even when task callback raises."""
+        hb = HeartbeatManager(
+            base_interval=timedelta(milliseconds=50),
+            max_concurrent_tasks=1,
+        )
+
+        async def failing_task():
+            raise RuntimeError("boom")
+
+        task = HeartbeatTask(
+            name="failing",
+            callback=failing_task,
+            interval=timedelta(seconds=0),
+        )
+        task.next_run = datetime.utcnow() - timedelta(seconds=1)
+        hb.register(task)
+
+        now = datetime.utcnow()
+        await hb._run_task(task, now)
+
+        # Semaphore should be released — next task should be able to acquire
+        assert hb._semaphore._value == 1  # type: ignore[union-attr]

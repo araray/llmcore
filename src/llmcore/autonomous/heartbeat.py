@@ -42,10 +42,10 @@ Example:
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -222,19 +222,28 @@ class HeartbeatManager:
     def __init__(
         self,
         base_interval: timedelta = timedelta(seconds=60),
+        max_concurrent_tasks: int = 0,
     ):
         """
         Initialize the HeartbeatManager.
 
         Args:
             base_interval: How often to check for due tasks (the "tick" rate)
+            max_concurrent_tasks: Maximum number of tasks that may run
+                concurrently.  0 (default) means unlimited.
         """
         self.base_interval = base_interval
+        self.max_concurrent_tasks = max_concurrent_tasks
 
         self._tasks: dict[str, HeartbeatTask] = {}
         self._running = False
         self._paused = False
         self._loop_task: asyncio.Task | None = None
+
+        # Concurrency limiter — only created when limit > 0
+        self._semaphore: asyncio.Semaphore | None = (
+            asyncio.Semaphore(max_concurrent_tasks) if max_concurrent_tasks > 0 else None
+        )
 
         # Callbacks
         self._on_heartbeat: list[Callable[[], Awaitable[None]]] = []
@@ -419,7 +428,11 @@ class HeartbeatManager:
 
     async def _run_task(self, task: HeartbeatTask, now: datetime) -> None:
         """
-        Run a single task with error handling.
+        Run a single task with error handling and optional concurrency limiting.
+
+        When ``max_concurrent_tasks > 0``, the semaphore is acquired before
+        invoking the callback and released afterwards.  This prevents more
+        than *max_concurrent_tasks* callbacks from running in parallel.
 
         Args:
             task: Task to run
@@ -427,7 +440,16 @@ class HeartbeatManager:
         """
         try:
             logger.debug(f"Running heartbeat task: {task.name}")
-            result = await task.callback()
+
+            if self._semaphore is not None:
+                await self._semaphore.acquire()
+
+            try:
+                result = await task.callback()
+            finally:
+                if self._semaphore is not None:
+                    self._semaphore.release()
+
             task.schedule_next(now)
             task.record_success()
 
@@ -490,6 +512,7 @@ class HeartbeatManager:
             "running": self._running,
             "paused": self._paused,
             "base_interval_seconds": self.base_interval.total_seconds(),
+            "max_concurrent_tasks": self.max_concurrent_tasks,
             "task_count": len(self._tasks),
             "tasks": {name: task.to_dict() for name, task in self._tasks.items()},
         }
