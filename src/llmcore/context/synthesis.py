@@ -37,7 +37,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
@@ -244,6 +244,8 @@ class ContextSynthesizer:
         max_tokens: int = 100_000,
         compression_threshold: float = 0.75,
         token_counter: TokenCounter | None = None,
+        compressor: Any | None = None,
+        prioritizer: Any | None = None,
     ) -> None:
         """
         Initialize the synthesizer.
@@ -254,12 +256,21 @@ class ContextSynthesizer:
                 exceeds this fraction of ``max_tokens``.
             token_counter: Token counting implementation.  Defaults to
                 tiktoken (cl100k_base) with character-estimation fallback.
+            compressor: Optional ``ContextCompressor`` instance.  When
+                provided, compression delegates to this object instead
+                of the built-in character truncation.
+            prioritizer: Optional ``ContentPrioritizer`` instance.  When
+                provided, chunk ranking uses the prioritizer's
+                ``rank()`` method instead of the default
+                ``ContextChunk.score`` ordering.
         """
         self.max_tokens = max_tokens
         self.compression_threshold = compression_threshold
         self.token_counter: TokenCounter = (
             token_counter if token_counter is not None else _make_default_counter()
         )
+        self.compressor = compressor
+        self.prioritizer = prioritizer
         # name → (source, priority)
         self._sources: dict[str, tuple[ContextSource, int]] = {}
 
@@ -363,7 +374,30 @@ class ContextSynthesizer:
                 valid_chunks.append(result)
 
         # Sort by composite score (highest first)
-        valid_chunks.sort(key=lambda c: c.score, reverse=True)
+        # When a prioritizer is configured, delegate ranking to it;
+        # fall back to ContextChunk.score on failure or absence.
+        if self.prioritizer is not None:
+            try:
+                task_desc = str(current_task) if current_task else None
+                scored = self.prioritizer.rank(
+                    valid_chunks,
+                    task_description=task_desc,
+                )
+                # Rebuild valid_chunks from scored order, mapping back to
+                # original ContextChunks so downstream code is unaffected.
+                scored_by_source: dict[str, float] = {s.source: s.composite_score for s in scored}
+                valid_chunks.sort(
+                    key=lambda c: scored_by_source.get(c.source, c.score),
+                    reverse=True,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Prioritizer failed, falling back to score: %s",
+                    exc,
+                )
+                valid_chunks.sort(key=lambda c: c.score, reverse=True)
+        else:
+            valid_chunks.sort(key=lambda c: c.score, reverse=True)
 
         # Fit into budget
         selected, truncated_names = self._fit_to_budget(valid_chunks)
@@ -519,8 +553,9 @@ class ContextSynthesizer:
         """
         Compress context to fit within the token budget.
 
-        Current implementation: simple truncation.
-        Future: LLM-based summarization of lower-priority sections.
+        When a ``compressor`` is configured, delegates to
+        ``compressor.compress()``; otherwise falls back to simple
+        character truncation.
 
         Args:
             content: Full context string.
@@ -529,6 +564,25 @@ class ContextSynthesizer:
         Returns:
             Compressed context string.
         """
+        # Delegate to external compressor when available
+        if self.compressor is not None:
+            try:
+                target = int(self.max_tokens * self.compression_threshold)
+                current = self.token_counter.count(content)
+                result = await self.compressor.compress(
+                    content=content,
+                    target_tokens=target,
+                    current_tokens=current,
+                )
+                return result.content
+            except Exception as exc:
+                logger.debug(
+                    "Compressor failed, falling back to truncation: %s",
+                    exc,
+                )
+                # Fall through to built-in truncation
+
+        # Built-in character truncation fallback
         max_chars = self.max_tokens * 4  # conservative estimate
         if len(content) > max_chars:
             return content[:max_chars] + "\n\n[Context compressed to fit limits]"
