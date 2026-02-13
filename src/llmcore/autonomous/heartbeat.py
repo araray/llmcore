@@ -250,6 +250,40 @@ class HeartbeatManager:
         self._on_error: list[Callable[[str, Exception], Awaitable[None]]] = []
         self._on_task_complete: list[Callable[[str, Any], Awaitable[None]]] = []
 
+    @classmethod
+    def from_config(cls, config: Any) -> "HeartbeatManager":
+        """Create a HeartbeatManager from a HeartbeatConfig model.
+
+        Maps configuration fields to constructor parameters:
+        - ``config.base_interval`` (float seconds) → ``base_interval`` timedelta
+        - ``config.max_concurrent_tasks`` → ``max_concurrent_tasks``
+
+        If the config has an ``enabled`` field set to ``False``, the manager
+        is still created (callers should check ``config.enabled`` before
+        calling ``start()``).
+
+        Args:
+            config: A :class:`~llmcore.config.autonomous_config.HeartbeatConfig`
+                instance (or any object with ``base_interval`` and
+                ``max_concurrent_tasks`` attributes).
+
+        Returns:
+            A configured HeartbeatManager instance.
+
+        Example:
+            from llmcore.config.autonomous_config import HeartbeatConfig
+            from llmcore.autonomous import HeartbeatManager
+
+            cfg = HeartbeatConfig(base_interval=30.0, max_concurrent_tasks=5)
+            manager = HeartbeatManager.from_config(cfg)
+        """
+        base_interval = timedelta(seconds=getattr(config, "base_interval", 60.0))
+        max_concurrent = getattr(config, "max_concurrent_tasks", 0)
+        return cls(
+            base_interval=base_interval,
+            max_concurrent_tasks=max_concurrent,
+        )
+
     def register(self, task: HeartbeatTask) -> None:
         """
         Register a periodic task.

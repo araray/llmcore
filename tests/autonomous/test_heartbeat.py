@@ -792,3 +792,104 @@ class TestHeartbeatConcurrentLimit:
 
         # Semaphore should be released — next task should be able to acquire
         assert hb._semaphore._value == 1  # type: ignore[union-attr]
+
+
+# =============================================================================
+# HeartbeatManager.from_config()
+# =============================================================================
+
+
+class TestHeartbeatManagerFromConfig:
+    """Tests for the HeartbeatManager.from_config() factory classmethod."""
+
+    def test_from_config_basic(self):
+        """from_config maps config fields to constructor params."""
+
+        class FakeConfig:
+            base_interval = 30.0
+            max_concurrent_tasks = 5
+            enabled = True
+
+        hb = HeartbeatManager.from_config(FakeConfig())
+
+        assert hb.base_interval == timedelta(seconds=30.0)
+        assert hb.max_concurrent_tasks == 5
+        assert hb._semaphore is not None
+
+    def test_from_config_defaults(self):
+        """from_config handles missing attributes gracefully."""
+
+        class MinimalConfig:
+            pass
+
+        hb = HeartbeatManager.from_config(MinimalConfig())
+
+        assert hb.base_interval == timedelta(seconds=60.0)
+        assert hb.max_concurrent_tasks == 0
+        assert hb._semaphore is None
+
+    def test_from_config_zero_concurrent(self):
+        """max_concurrent_tasks=0 means unlimited (no semaphore)."""
+
+        class ZeroConfig:
+            base_interval = 120.0
+            max_concurrent_tasks = 0
+
+        hb = HeartbeatManager.from_config(ZeroConfig())
+
+        assert hb.max_concurrent_tasks == 0
+        assert hb._semaphore is None
+
+    def test_from_config_preserves_type(self):
+        """from_config returns a HeartbeatManager instance."""
+
+        class Cfg:
+            base_interval = 10.0
+            max_concurrent_tasks = 2
+
+        hb = HeartbeatManager.from_config(Cfg())
+
+        assert isinstance(hb, HeartbeatManager)
+
+    @pytest.mark.asyncio
+    async def test_from_config_manager_is_functional(self):
+        """Manager created via from_config can register tasks and tick."""
+
+        class Cfg:
+            base_interval = 0.05
+            max_concurrent_tasks = 2
+
+        hb = HeartbeatManager.from_config(Cfg())
+
+        ran = False
+
+        async def my_task():
+            nonlocal ran
+            ran = True
+
+        task = HeartbeatTask(
+            name="test",
+            callback=my_task,
+            interval=timedelta(seconds=0),
+        )
+        hb.register(task)
+        await hb.tick()
+
+        assert ran is True
+
+    def test_from_config_with_pydantic_model(self):
+        """Works with actual Pydantic HeartbeatConfig if available."""
+        try:
+            from llmcore.config.autonomous_config import HeartbeatConfig
+
+            cfg = HeartbeatConfig(
+                enabled=True,
+                base_interval=45.0,
+                max_concurrent_tasks=4,
+            )
+            hb = HeartbeatManager.from_config(cfg)
+
+            assert hb.base_interval == timedelta(seconds=45.0)
+            assert hb.max_concurrent_tasks == 4
+        except ImportError:
+            pytest.skip("HeartbeatConfig not importable")

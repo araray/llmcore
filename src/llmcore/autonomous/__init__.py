@@ -28,11 +28,11 @@ Example:
         ResourceMonitor, ResourceConstraints,
         SkillLoader, Skill, SkillMetadata,
     )
-    from llmcore.config.autonomous_config import GoalsAutonomousConfig
+    from llmcore.config.autonomous_config import GoalsAutonomousConfig, HeartbeatConfig
 
     # Set up autonomous operation
     goals = GoalManager.from_config(GoalsAutonomousConfig())
-    heartbeat = HeartbeatManager()
+    heartbeat = HeartbeatManager.from_config(HeartbeatConfig())
     escalation = EscalationManager()
     resources = ResourceMonitor()
     skills = SkillLoader()
