@@ -46,7 +46,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -1224,10 +1224,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 params.append(user_id)
 
             async with self._pool.connection() as conn:
-                async with conn.cursor() as cur:
+                # Explicitly use dict_row to avoid KeyError when the pool
+                # returns a connection whose row_factory was previously set
+                # to dict_row by another method (e.g. get_collection_metadata).
+                async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(count_sql, tuple(params))
                     count_row = await cur.fetchone()
-                    doc_count = count_row[0] if count_row else 0
+                    doc_count = count_row["count"] if count_row else 0
 
             return CollectionInfo(
                 name=metadata["name"],
