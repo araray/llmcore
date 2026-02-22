@@ -42,7 +42,7 @@ async def act_phase(
     agent_state: EnhancedAgentState,
     act_input: ActInput,
     tool_manager: "ToolManager",
-    tracer: Optional[Any] = None,
+    tracer: Any | None = None,
     max_retries: int = 0,
     agents_config: Optional["AgentsConfig"] = None,
     sandbox: Optional["SandboxProvider"] = None,
@@ -235,8 +235,8 @@ async def _act_phase_with_activities(
     agent_state: EnhancedAgentState,
     tool_manager: "ToolManager",
     sandbox: Optional["SandboxProvider"],
-    tracer: Optional[Any],
-    span: Optional[Any],
+    tracer: Any | None,
+    span: Any | None,
 ) -> ActOutput:
     """
     Execute activities through the activity system (fallback for non-tool models).

@@ -25,7 +25,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.75,
-      "output": 14.00,
+      "output": 14.0,
       "cached_input": 0.175
     }
   },
@@ -41,7 +41,7 @@
   "tags": ["extended-thinking", "premium", "high-accuracy"],
   "provider_openai": {
     "supports_reasoning": true,
-    "reasoning_effort": "extra high",
+    "reasoning_effort": "high",
     "supports_predicted_outputs": true,
     "fine_tuning_available": false,
     "tier_requirements": {

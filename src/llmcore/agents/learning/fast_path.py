@@ -39,8 +39,6 @@ from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    Optional,
 )
 
 try:
@@ -86,7 +84,7 @@ class FastPathResult:
     duration_ms: int
     from_cache: bool = False
     iterations: int = 1
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def under_target(self) -> bool:
@@ -100,7 +98,7 @@ class FastPathResult:
 
 
 # Templates for common trivial responses
-RESPONSE_TEMPLATES: Dict[str, str] = {
+RESPONSE_TEMPLATES: dict[str, str] = {
     "greeting": "Hello! How can I help you today?",
     "greeting_morning": "Good morning! How can I assist you?",
     "greeting_afternoon": "Good afternoon! What can I do for you?",
@@ -113,8 +111,8 @@ RESPONSE_TEMPLATES: Dict[str, str] = {
 
 def get_template_response(
     intent: str,
-    context: Optional[Dict[str, Any]] = None,
-) -> Optional[str]:
+    context: dict[str, Any] | None = None,
+) -> str | None:
     """Get a template response if available."""
     intent_lower = intent.lower()
 
@@ -167,9 +165,9 @@ class ResponseCache:
         self.similarity_threshold = similarity_threshold
         self.ttl_seconds = ttl_seconds
 
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
 
-    def get(self, query: str) -> Optional[str]:
+    def get(self, query: str) -> str | None:
         """
         Get cached response for query.
 
@@ -294,8 +292,8 @@ class FastPathExecutor:
 
     def __init__(
         self,
-        llm_provider: Optional["BaseLLMProvider"] = None,
-        config: Optional[FastPathConfig] = None,
+        llm_provider: BaseLLMProvider | None = None,
+        config: FastPathConfig | None = None,
     ):
         self.llm_provider = llm_provider
         self.config = config or FastPathConfig()
@@ -313,8 +311,8 @@ class FastPathExecutor:
     async def execute(
         self,
         goal: str,
-        classification: Optional["GoalClassification"] = None,
-        context: Optional[str] = None,
+        classification: GoalClassification | None = None,
+        context: str | None = None,
     ) -> FastPathResult:
         """
         Execute fast-path for a goal.
@@ -397,7 +395,7 @@ class FastPathExecutor:
                 error="No LLM provider available",
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration_ms = int((time.time() - start_time) * 1000)
 
             if self.config.fallback_on_timeout:
@@ -432,7 +430,7 @@ class FastPathExecutor:
     async def _call_llm(
         self,
         goal: str,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> str:
         """Make direct LLM call."""
         if not self.llm_provider:
@@ -467,10 +465,10 @@ class FastPathExecutor:
             else:
                 return str(response)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get execution statistics."""
         total = self._stats["total_executions"]
 
@@ -495,8 +493,8 @@ class FastPathExecutor:
 
 
 def should_use_fast_path(
-    classification: "GoalClassification",
-    threshold_complexity: Optional["GoalComplexity"] = None,
+    classification: GoalClassification,
+    threshold_complexity: GoalComplexity | None = None,
 ) -> bool:
     """
     Determine if fast-path should be used.
@@ -529,7 +527,7 @@ def should_use_fast_path(
 
 async def execute_fast_path(
     goal: str,
-    llm_provider: "BaseLLMProvider",
+    llm_provider: BaseLLMProvider,
     timeout_ms: int = 5000,
 ) -> FastPathResult:
     """

@@ -22,7 +22,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from .models import (
     ApprovalScope,
@@ -93,8 +93,8 @@ class HITLCallback(ABC):
 
     async def batch_request_approval(
         self,
-        requests: List[HITLRequest],
-    ) -> List[HITLResponse]:
+        requests: list[HITLRequest],
+    ) -> list[HITLResponse]:
         """
         Request approval for multiple similar requests at once.
 
@@ -127,8 +127,8 @@ class ConsoleHITLCallback(HITLCallback):
 
     def __init__(
         self,
-        input_fn: Optional[Callable[[], str]] = None,
-        output_fn: Optional[Callable[[str], None]] = None,
+        input_fn: Callable[[], str] | None = None,
+        output_fn: Callable[[str], None] | None = None,
         use_colors: bool = True,
     ):
         """
@@ -159,7 +159,7 @@ class ConsoleHITLCallback(HITLCallback):
         color = colors.get(level.lower(), "")
         return f"{color}{level.upper()}{reset}"
 
-    def _format_box(self, title: str, content: List[str], width: int = 60) -> str:
+    def _format_box(self, title: str, content: list[str], width: int = 60) -> str:
         """Format content in a box."""
         lines = []
         lines.append("┌" + "─" * (width - 2) + "┐")
@@ -391,7 +391,7 @@ class AutoApproveCallback(HITLCallback):
         self.approve_all = approve_all
         self.delay_seconds = delay_seconds
         self.log_requests = log_requests
-        self._requests: List[HITLRequest] = []
+        self._requests: list[HITLRequest] = []
 
     async def request_approval(
         self,
@@ -429,7 +429,7 @@ class AutoApproveCallback(HITLCallback):
         if self.log_requests:
             logger.info(f"Result: {request.activity.activity_type} -> {decision.status.value}")
 
-    def get_requests(self) -> List[HITLRequest]:
+    def get_requests(self) -> list[HITLRequest]:
         """Get all requests received."""
         return self._requests.copy()
 
@@ -451,9 +451,9 @@ class QueueHITLCallback(HITLCallback):
         """Initialize with async queues."""
         self._request_queue: asyncio.Queue[HITLRequest] = asyncio.Queue()
         self._response_queue: asyncio.Queue[HITLResponse] = asyncio.Queue()
-        self._pending: Dict[str, HITLRequest] = {}
-        self._timeout_handlers: List[Callable] = []
-        self._result_handlers: List[Callable] = []
+        self._pending: dict[str, HITLRequest] = {}
+        self._timeout_handlers: list[Callable] = []
+        self._result_handlers: list[Callable] = []
 
     async def request_approval(
         self,
@@ -471,7 +471,7 @@ class QueueHITLCallback(HITLCallback):
                 timeout=max(1, timeout),
             )
             return response
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return HITLResponse(
                 request_id=request.request_id,
                 approved=False,
@@ -495,7 +495,7 @@ class QueueHITLCallback(HITLCallback):
         """Submit response from UI."""
         await self._response_queue.put(response)
 
-    async def get_pending_request(self) -> Optional[HITLRequest]:
+    async def get_pending_request(self) -> HITLRequest | None:
         """Get next pending request (for UI to display)."""
         try:
             return self._request_queue.get_nowait()
@@ -506,7 +506,7 @@ class QueueHITLCallback(HITLCallback):
         """Wait for a pending request."""
         return await asyncio.wait_for(self._request_queue.get(), timeout=timeout)
 
-    def get_all_pending(self) -> List[HITLRequest]:
+    def get_all_pending(self) -> list[HITLRequest]:
         """Get all currently pending requests."""
         return list(self._pending.values())
 

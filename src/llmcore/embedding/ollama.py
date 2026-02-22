@@ -5,9 +5,11 @@ Ollama Embedding model implementation for LLMCore.
 Uses the official ollama library to generate embeddings via a local Ollama instance.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Use the official ollama library
 try:
@@ -39,12 +41,12 @@ class OllamaEmbedding(BaseEmbeddingModel):
     Configuration for the host and model is read from `[embedding.ollama]`.
     """
 
-    _client: Optional[AsyncClient] = None
+    _client: AsyncClient | None = None
     _model_name: str
-    _host: Optional[str] = None
-    _timeout: Optional[float] = None
+    _host: str | None = None
+    _timeout: float | None = None
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initializes the OllamaEmbedding model.
 
@@ -102,7 +104,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
             self._client = None  # Ensure client is None on failure
             raise ConfigError(f"Ollama client initialization for embeddings failed: {e}")
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate a vector embedding for a single text string using Ollama API.
 
@@ -166,7 +168,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name,
                 message=f"Ollama API Error ({e.status_code}): {error_detail}",
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Request to Ollama embeddings API timed out (model: {self._model_name}).")
             raise EmbeddingError(model_name=self._model_name, message="Request timed out.")
         except Exception as e:
@@ -176,7 +178,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
             )
             raise EmbeddingError(model_name=self._model_name, message=f"Unexpected error: {e}")
 
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
         Generate vector embeddings for a batch of text strings using Ollama API.
 
@@ -205,7 +207,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
         logger.debug(
             f"Generating Ollama embeddings sequentially for batch of {len(texts)} texts (model: {self._model_name})..."
         )
-        embeddings_list: List[List[float]] = []
+        embeddings_list: list[list[float]] = []
         try:
             # Call generate_embedding for each text sequentially
             # Use asyncio.gather for potential concurrency, though underlying calls might still be sequential

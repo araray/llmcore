@@ -97,7 +97,7 @@ def get_active_sandbox() -> Optional["SandboxProvider"]:
     return _active_sandbox
 
 
-def _check_tool_access(tool_name: str) -> Optional[str]:
+def _check_tool_access(tool_name: str) -> str | None:
     """
     Check if a tool is allowed in the current sandbox.
 
@@ -124,7 +124,7 @@ def _check_tool_access(tool_name: str) -> Optional[str]:
 
 
 async def execute_shell(
-    command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+    command: str, timeout: int | None = None, working_dir: str | None = None
 ) -> str:
     """
     Execute a shell command in the sandbox.
@@ -159,7 +159,7 @@ async def execute_shell(
     return result.to_tool_output()
 
 
-async def execute_python(code: str, timeout: Optional[int] = None) -> str:
+async def execute_python(code: str, timeout: int | None = None) -> str:
     """
     Execute Python code in the sandbox.
 
@@ -199,7 +199,7 @@ async def execute_python(code: str, timeout: Optional[int] = None) -> str:
 # =============================================================================
 
 
-async def save_file(path: str, content: str, description: Optional[str] = None) -> str:
+async def save_file(path: str, content: str, description: str | None = None) -> str:
     """
     Save content to a file in the sandbox.
 

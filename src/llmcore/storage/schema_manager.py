@@ -26,9 +26,9 @@ Schema Version History:
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class SchemaVersion:
     version: int
     applied_at: datetime
     description: str
-    checksum: Optional[str] = None
+    checksum: str | None = None
 
 
 @dataclass
@@ -73,7 +73,7 @@ class SchemaMigration:
 # MIGRATION DEFINITIONS
 # =============================================================================
 
-MIGRATIONS: List[SchemaMigration] = [
+MIGRATIONS: list[SchemaMigration] = [
     # v0 -> v1: Create base schema
     SchemaMigration(
         from_version=0,
@@ -426,11 +426,11 @@ class SchemaManagerProtocol(Protocol):
         """Get the current schema version from the database."""
         ...
 
-    async def ensure_schema(self, target_version: Optional[int] = None) -> int:
+    async def ensure_schema(self, target_version: int | None = None) -> int:
         """Ensure schema is at target version, applying migrations as needed."""
         ...
 
-    async def get_version_history(self) -> List[SchemaVersion]:
+    async def get_version_history(self) -> list[SchemaVersion]:
         """Get the history of applied schema versions."""
         ...
 
@@ -464,9 +464,7 @@ class BaseSchemaManager(ABC):
         pass
 
     @abstractmethod
-    async def _execute_query(
-        self, sql: str, params: Optional[Tuple] = None
-    ) -> List[Dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute a query and return results as list of dicts."""
         pass
 
@@ -520,7 +518,7 @@ class BaseSchemaManager(ABC):
             return int(result[0]["version"])
         return 0
 
-    async def get_version_history(self) -> List[SchemaVersion]:
+    async def get_version_history(self) -> list[SchemaVersion]:
         """
         Get the history of applied schema versions.
 
@@ -553,7 +551,7 @@ class BaseSchemaManager(ABC):
 
     async def _record_version(self, version: int, description: str) -> None:
         """Record a schema version as applied."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if self.backend == SchemaBackend.POSTGRES:
             await self._execute_ddl(
@@ -567,7 +565,7 @@ class BaseSchemaManager(ABC):
                 f"VALUES ({version}, '{now.isoformat()}', '{description}')"
             )
 
-    async def ensure_schema(self, target_version: Optional[int] = None) -> int:
+    async def ensure_schema(self, target_version: int | None = None) -> int:
         """
         Ensure the database schema is at the target version.
 
@@ -670,9 +668,7 @@ class PostgresSchemaManager(BaseSchemaManager):
             async with conn.transaction():
                 await conn.execute(sql)
 
-    async def _execute_query(
-        self, sql: str, params: Optional[Tuple] = None
-    ) -> List[Dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute query and return results."""
         try:
             from psycopg.rows import dict_row
@@ -740,9 +736,7 @@ class SqliteSchemaManager(BaseSchemaManager):
             await self._conn.execute(stmt)
         await self._conn.commit()
 
-    async def _execute_query(
-        self, sql: str, params: Optional[Tuple] = None
-    ) -> List[Dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute query and return results."""
         if params:
             cursor = await self._conn.execute(sql, params)

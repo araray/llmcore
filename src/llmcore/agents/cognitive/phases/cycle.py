@@ -1,3 +1,4 @@
+# src/llmcore/agents/cognitive/phases/cycle.py
 # src/llmcore/agents/cognitive/cycle.py
 """
 Cognitive Cycle Orchestrator.
@@ -15,8 +16,9 @@ References:
 """
 
 import logging
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import (
     ActInput,
@@ -101,15 +103,15 @@ class StreamingIterationResult:
     status: str = "in_progress"
     current_phase: str = "unknown"
     message: str = ""
-    action_name: Optional[str] = None
-    action_summary: Optional[str] = None
-    observation_summary: Optional[str] = None
+    action_name: str | None = None
+    action_summary: str | None = None
+    observation_summary: str | None = None
     step_completed: bool = False
-    plan_step: Optional[str] = None
-    error: Optional[str] = None
+    plan_step: str | None = None
+    error: str | None = None
     tokens_used: int = 0
     duration_ms: float = 0.0
-    stop_reason: Optional[str] = None
+    stop_reason: str | None = None
 
 
 # =============================================================================
@@ -124,6 +126,16 @@ class CognitiveCycle:
     The CognitiveCycle manages the execution of all phases in sequence,
     handles errors, coordinates state updates, and provides a clean
     interface for agent execution.
+
+    Context Synthesis:
+        The cycle supports optional ``ContextSynthesizer`` for sophisticated
+        multi-source context assembly in the PERCEIVE phase. When provided,
+        the synthesizer gathers context from multiple sources (goals, recent
+        history, RAG, skills, episodic memory) in parallel, scores and
+        prioritizes chunks, and fits them into the token budget.
+
+        If no synthesizer is provided, the cycle falls back to direct
+        ``MemoryManager`` retrieval for backward compatibility.
 
     Example:
         >>> cycle = CognitiveCycle(
@@ -145,6 +157,20 @@ class CognitiveCycle:
         ...     session_id="session-123",
         ...     max_iterations=10
         ... )
+        >>>
+        >>> # With context synthesis (recommended for autonomous operation)
+        >>> from llmcore.agents.cognitive.phases import create_default_synthesizer
+        >>> synthesizer = create_default_synthesizer(
+        ...     goal_manager=goal_manager,
+        ...     skill_loader=skill_loader,
+        ... )
+        >>> cycle = CognitiveCycle(
+        ...     provider_manager=provider_manager,
+        ...     memory_manager=memory_manager,
+        ...     storage_manager=storage_manager,
+        ...     tool_manager=tool_manager,
+        ...     context_synthesizer=synthesizer,
+        ... )
 
     Attributes:
         provider_manager: Provider manager for LLM calls
@@ -152,6 +178,7 @@ class CognitiveCycle:
         storage_manager: Storage manager for episodic memory
         tool_manager: Tool manager for actions
         prompt_registry: Optional prompt registry
+        context_synthesizer: Optional ContextSynthesizer for PERCEIVE phase
     """
 
     def __init__(
@@ -160,19 +187,26 @@ class CognitiveCycle:
         memory_manager: "MemoryManager",
         storage_manager: "StorageManager",
         tool_manager: "ToolManager",
-        prompt_registry: Optional[Any] = None,
-        tracer: Optional[Any] = None,
+        prompt_registry: Any | None = None,
+        tracer: Any | None = None,
+        context_synthesizer: Any | None = None,
     ):
         """
         Initialize the cognitive cycle orchestrator.
 
         Args:
-            provider_manager: Provider manager for LLM calls
-            memory_manager: Memory manager for context
-            storage_manager: Storage manager for episodic memory
-            tool_manager: Tool manager for actions
-            prompt_registry: Optional prompt registry
-            tracer: Optional OpenTelemetry tracer
+            provider_manager: Provider manager for LLM calls.
+            memory_manager: Memory manager for context retrieval.
+            storage_manager: Storage manager for episodic memory.
+            tool_manager: Tool manager for actions.
+            prompt_registry: Optional prompt registry.
+            tracer: Optional OpenTelemetry tracer.
+            context_synthesizer: Optional ContextSynthesizer for sophisticated
+                multi-source context assembly in the PERCEIVE phase. When
+                provided, enables synthesis mode with prioritized context
+                gathering from goals, recent history, RAG, skills, and
+                episodic memory. When None, falls back to direct
+                MemoryManager retrieval.
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -180,16 +214,17 @@ class CognitiveCycle:
         self.tool_manager = tool_manager
         self.prompt_registry = prompt_registry
         self.tracer = tracer
+        self.context_synthesizer = context_synthesizer
 
     async def run_iteration(
         self,
         agent_state: EnhancedAgentState,
         session_id: str,
         sandbox: Optional["SandboxProvider"] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         skip_validation: bool = False,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> CycleIteration:
         """
         Run a single complete cognitive iteration.
@@ -243,6 +278,7 @@ class CognitiveCycle:
                     perceive_input=perceive_input,
                     memory_manager=self.memory_manager,
                     sandbox=sandbox,
+                    context_synthesizer=self.context_synthesizer,
                     tracer=self.tracer,
                 )
 
@@ -450,11 +486,11 @@ class CognitiveCycle:
         session_id: str,
         max_iterations: int = 10,
         sandbox: Optional["SandboxProvider"] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         skip_validation: bool = False,
         agents_config: Optional["AgentsConfig"] = None,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> str:
         """
         Run cognitive iterations until task is complete or max iterations reached.
@@ -492,7 +528,7 @@ class CognitiveCycle:
         cb_config = agents_config.circuit_breaker
 
         # Initialize circuit breaker (G3 Phase 5)
-        circuit_breaker: Optional[AgentCircuitBreaker] = None
+        circuit_breaker: AgentCircuitBreaker | None = None
         if cb_config.enabled:
             circuit_breaker = AgentCircuitBreaker(
                 max_iterations=min(max_iterations, cb_config.max_iterations),
@@ -513,7 +549,7 @@ class CognitiveCycle:
         actual_iterations = 0
         stopped_early = False
         stop_reason = None
-        last_error: Optional[str] = None
+        last_error: str | None = None
         accumulated_cost = 0.0
 
         for iteration_num in range(max_iterations):
@@ -665,11 +701,11 @@ class CognitiveCycle:
         session_id: str,
         max_iterations: int = 10,
         sandbox: Optional["SandboxProvider"] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         skip_validation: bool = False,
         agents_config: Optional["AgentsConfig"] = None,
-        approval_callback: Optional[Callable[[str], bool]] = None,
+        approval_callback: Callable[[str], bool] | None = None,
     ) -> AsyncIterator[StreamingIterationResult]:
         """
         Run cognitive iterations with streaming updates after each iteration.
@@ -707,7 +743,7 @@ class CognitiveCycle:
 
         cb_config = agents_config.circuit_breaker
 
-        circuit_breaker: Optional[AgentCircuitBreaker] = None
+        circuit_breaker: AgentCircuitBreaker | None = None
         if cb_config.enabled:
             circuit_breaker = AgentCircuitBreaker(
                 max_iterations=min(max_iterations, cb_config.max_iterations),
@@ -743,8 +779,8 @@ class CognitiveCycle:
                 return
 
             # Run single iteration
-            iteration_result: Optional[CycleIteration] = None
-            error_msg: Optional[str] = None
+            iteration_result: CycleIteration | None = None
+            error_msg: str | None = None
 
             try:
                 iteration_result = await self.run_iteration(
@@ -815,8 +851,8 @@ class CognitiveCycle:
             progress = getattr(agent_state, "progress_estimate", 0.0)
 
             # Get action information
-            action_name: Optional[str] = None
-            action_summary: Optional[str] = None
+            action_name: str | None = None
+            action_summary: str | None = None
             if iteration_result.think_output and iteration_result.think_output.proposed_action:
                 action = iteration_result.think_output.proposed_action
                 action_name = action.name
@@ -826,7 +862,7 @@ class CognitiveCycle:
                     action_summary = args_str[:100] + "..." if len(args_str) > 100 else args_str
 
             # Get observation summary
-            observation_summary: Optional[str] = None
+            observation_summary: str | None = None
             if iteration_result.observe_output:
                 obs = iteration_result.observe_output.observation
                 observation_summary = obs[:150] + "..." if len(obs) > 150 else obs
@@ -837,7 +873,7 @@ class CognitiveCycle:
                 step_completed = iteration_result.reflect_output.step_completed
 
             # Get current plan step
-            plan_step: Optional[str] = None
+            plan_step: str | None = None
             if agent_state.plan and agent_state.current_plan_step_index < len(agent_state.plan):
                 plan_step = agent_state.plan[agent_state.current_plan_step_index]
 
@@ -863,7 +899,7 @@ class CognitiveCycle:
 
             # Check circuit breaker
             should_stop = False
-            stop_reason: Optional[str] = None
+            stop_reason: str | None = None
 
             if circuit_breaker is not None and not is_complete:
                 cb_step_completed = None

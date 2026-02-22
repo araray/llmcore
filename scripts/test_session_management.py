@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# scripts/test_session_management.py
 """
 Enhanced test script for LLMCore library mode with session management.
 

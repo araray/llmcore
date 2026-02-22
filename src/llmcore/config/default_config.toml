@@ -533,6 +533,133 @@ posthog = "ERROR"
     # Environment Variable: LLMCORE_OBSERVABILITY__COST_TRACKING__TRACK_LATENCY
     track_latency = true
 
+    # =============================================================================
+    # AUTONOMOUS OPERATION CONFIGURATION
+    # =============================================================================
+    #
+    # Configuration for the autonomous operation module (llmcore.autonomous).
+    # These defaults are loaded as layer 1 (package defaults) and can be
+    # overridden by user config, environment variables, or runtime overrides.
+    #
+    # Pydantic models: llmcore.config.autonomous_config
+    # =============================================================================
+
+    [autonomous]
+    # Master switch — set to false to disable all autonomous capabilities
+    enabled = true
+
+    # -----------------------------------------------------------------------------
+    # [autonomous.goals] - Goal Management
+    # -----------------------------------------------------------------------------
+
+    [autonomous.goals]
+    # Enable persistent goal storage across sessions
+    persist_goals = true
+
+    # Path to goals storage file (JSON format).
+    # Supports ~ expansion and ${ENV_VAR} substitution.
+    storage_path = "~/.local/share/llmcore/goals.json"
+
+    # Automatically decompose high-level goals into sub-goals via LLM
+    auto_decompose = true
+
+    # Maximum number of sub-goals per parent goal (1–50)
+    max_sub_goals = 10
+
+    # Maximum nesting depth for goal hierarchies (1–10)
+    max_goal_depth = 4
+
+    # Maximum retry attempts before marking a goal as failed (1–100)
+    max_attempts_per_goal = 10
+
+    # Base cooldown between retry attempts in seconds (exponential backoff)
+    base_cooldown_seconds = 60
+
+    # Maximum cooldown cap in seconds for exponential backoff
+    max_cooldown_seconds = 3600
+
+    # -----------------------------------------------------------------------------
+    # [autonomous.heartbeat] - Periodic Task Scheduler
+    # -----------------------------------------------------------------------------
+
+    [autonomous.heartbeat]
+    # Enable the heartbeat task scheduler
+    enabled = true
+
+    # Base heartbeat interval in seconds (1–3600)
+    base_interval = 60
+
+    # Maximum number of heartbeat tasks running concurrently (1–20)
+    max_concurrent_tasks = 3
+
+    # -----------------------------------------------------------------------------
+    # [autonomous.escalation] - Human Escalation Framework
+    # -----------------------------------------------------------------------------
+
+    [autonomous.escalation]
+    # Enable human escalation
+    enabled = true
+
+    # Auto-resolve escalations below this level without human intervention.
+    # Levels (ascending severity): debug, info, advisory, action, urgent, critical
+    auto_resolve_below = "advisory"
+
+    # Deduplication window in seconds — identical escalations within this window
+    # are suppressed (0 = no deduplication, max 86400)
+    dedup_window = 300
+
+    # --- Webhook notification channel ---
+    [autonomous.escalation.webhook]
+    enabled = false
+    url = "${ESCALATION_WEBHOOK_URL}"
+    headers = { "Authorization" = "Bearer ${WEBHOOK_TOKEN}" }
+
+    # --- File notification channel ---
+    [autonomous.escalation.file]
+    enabled = true
+    path = "~/.local/share/llmcore/escalations.log"
+
+    # -----------------------------------------------------------------------------
+    # [autonomous.resources] - Resource Monitoring & Constraints
+    # -----------------------------------------------------------------------------
+
+    [autonomous.resources]
+    # Enable resource monitoring
+    enabled = true
+
+    # Resource check interval in seconds (5–600)
+    check_interval = 30
+
+    # Hardware limits
+    max_cpu_percent = 80.0          # Soft limit — triggers throttling
+    max_memory_percent = 80.0       # Soft limit — triggers throttling
+    max_temperature_c = 75.0        # Hard limit — halts execution (critical for RPi)
+    min_disk_free_gb = 1.0          # Hard limit — prevents writes
+
+    # API cost limits (USD)
+    max_hourly_cost_usd = 1.0       # Hard limit — blocks API calls when exceeded
+    max_daily_cost_usd = 10.0       # Hard limit — blocks API calls when exceeded
+
+    # Token limits
+    max_hourly_tokens = 100000      # Soft limit — triggers throttling
+    max_daily_tokens = 1000000      # Soft limit — triggers throttling
+
+    # -----------------------------------------------------------------------------
+    # [autonomous.context] - Adaptive Context Synthesis
+    # -----------------------------------------------------------------------------
+
+    [autonomous.context]
+    # Maximum tokens for the synthesized context window
+    max_context_tokens = 100000
+
+    # Compression triggers when context usage exceeds this fraction (0.0–1.0)
+    compression_threshold = 0.75
+
+    # Context prioritization strategy:
+    #   recency_relevance — balance recency and semantic relevance (default)
+    #   relevance_only    — rank purely by semantic similarity
+    #   recency_only      — rank purely by temporal proximity
+    prioritization_strategy = "recency_relevance"
 
   # =============================================================================
   # [agents.observability] - Agent Observability & Telemetry

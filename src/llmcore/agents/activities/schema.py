@@ -26,7 +26,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 try:
     from pydantic import BaseModel, ConfigDict, Field
@@ -116,11 +116,11 @@ class ParameterSchema(BaseModel):
     type: ParameterType = Field(ParameterType.STRING, description="Parameter type")
     description: str = Field("", description="Parameter description")
     required: bool = Field(False, description="Whether parameter is required")
-    default: Optional[Any] = Field(None, description="Default value")
-    enum: Optional[List[str]] = Field(None, description="Allowed values if constrained")
-    min_value: Optional[float] = Field(None, description="Minimum value for numbers")
-    max_value: Optional[float] = Field(None, description="Maximum value for numbers")
-    pattern: Optional[str] = Field(None, description="Regex pattern for strings")
+    default: Any | None = Field(None, description="Default value")
+    enum: list[str] | None = Field(None, description="Allowed values if constrained")
+    min_value: float | None = Field(None, description="Minimum value for numbers")
+    max_value: float | None = Field(None, description="Maximum value for numbers")
+    pattern: str | None = Field(None, description="Regex pattern for strings")
 
     model_config = ConfigDict(extra="allow")
 
@@ -154,29 +154,29 @@ class ActivityDefinition(BaseModel):
     name: str = Field(..., description="Unique activity name (snake_case)")
     category: ActivityCategory = Field(..., description="Activity category")
     description: str = Field(..., description="Human-readable description")
-    parameters: List[ParameterSchema] = Field(
+    parameters: list[ParameterSchema] = Field(
         default_factory=list, description="List of parameter schemas"
     )
     risk_level: RiskLevel = Field(RiskLevel.LOW, description="Risk level for HITL")
     requires_sandbox: bool = Field(False, description="Whether activity requires sandbox execution")
     timeout_seconds: int = Field(60, description="Default execution timeout")
-    supported_targets: List[ExecutionTarget] = Field(
+    supported_targets: list[ExecutionTarget] = Field(
         default_factory=lambda: [ExecutionTarget.LOCAL, ExecutionTarget.DOCKER],
         description="Supported execution targets",
     )
     version: str = Field("1.0.0", description="Activity version")
     deprecated: bool = Field(False, description="Whether activity is deprecated")
-    deprecation_message: Optional[str] = Field(None, description="Deprecation message")
-    tags: List[str] = Field(default_factory=list, description="Searchable tags")
-    examples: List[str] = Field(default_factory=list, description="Usage examples")
+    deprecation_message: str | None = Field(None, description="Deprecation message")
+    tags: list[str] = Field(default_factory=list, description="Searchable tags")
+    examples: list[str] = Field(default_factory=list, description="Usage examples")
 
     model_config = ConfigDict(extra="allow")
 
-    def get_required_parameters(self) -> List[ParameterSchema]:
+    def get_required_parameters(self) -> list[ParameterSchema]:
         """Get list of required parameters."""
         return [p for p in self.parameters if p.required]
 
-    def get_parameter(self, name: str) -> Optional[ParameterSchema]:
+    def get_parameter(self, name: str) -> ParameterSchema | None:
         """Get parameter schema by name."""
         for param in self.parameters:
             if param.name == name:
@@ -198,13 +198,13 @@ class ActivityDefinition(BaseModel):
 
         return "\n".join(lines)
 
-    def to_json_schema(self) -> Dict[str, Any]:
+    def to_json_schema(self) -> dict[str, Any]:
         """Convert to JSON Schema format for validation."""
         properties = {}
         required = []
 
         for param in self.parameters:
-            prop: Dict[str, Any] = {"type": param.type.value}
+            prop: dict[str, Any] = {"type": param.type.value}
             if param.description:
                 prop["description"] = param.description
             if param.enum:
@@ -249,11 +249,11 @@ class ActivityRequest(BaseModel):
     """
 
     activity: str = Field(..., description="Activity name to execute")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Activity parameters")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Activity parameters")
     target: ExecutionTarget = Field(ExecutionTarget.DOCKER, description="Execution target")
-    reason: Optional[str] = Field(None, description="Reasoning for this activity")
-    request_id: Optional[str] = Field(None, description="Unique request identifier")
-    timeout_seconds: Optional[int] = Field(None, description="Override default timeout")
+    reason: str | None = Field(None, description="Reasoning for this activity")
+    request_id: str | None = Field(None, description="Unique request identifier")
+    timeout_seconds: int | None = Field(None, description="Override default timeout")
     priority: int = Field(0, description="Execution priority (higher = sooner)")
 
     model_config = ConfigDict(extra="allow")
@@ -275,17 +275,17 @@ class ActivityResult(BaseModel):
     activity: str = Field(..., description="Activity that was executed")
     status: ActivityStatus = Field(..., description="Execution status")
     output: str = Field("", description="Activity output (stdout)")
-    error: Optional[str] = Field(None, description="Error message if failed")
-    return_code: Optional[int] = Field(None, description="Process return code")
+    error: str | None = Field(None, description="Error message if failed")
+    return_code: int | None = Field(None, description="Process return code")
     duration_ms: int = Field(0, description="Execution duration in milliseconds")
     target: ExecutionTarget = Field(
         ExecutionTarget.LOCAL, description="Where activity was executed"
     )
-    request_id: Optional[str] = Field(None, description="Request identifier")
-    structured_output: Optional[Dict[str, Any]] = Field(
+    request_id: str | None = Field(None, description="Request identifier")
+    structured_output: dict[str, Any] | None = Field(
         None, description="Parsed structured output if available"
     )
-    artifacts: List[str] = Field(default_factory=list, description="Paths to created artifacts")
+    artifacts: list[str] = Field(default_factory=list, description="Paths to created artifacts")
     timestamp: datetime = Field(default_factory=datetime.now, description="Execution timestamp")
 
     model_config = ConfigDict(extra="allow")
@@ -342,10 +342,10 @@ class ActivityExecution:
     """
 
     request: ActivityRequest
-    result: Optional[ActivityResult] = None
+    result: ActivityResult | None = None
     submitted_at: datetime = field(default_factory=datetime.now)
-    completed_at: Optional[datetime] = None
-    hitl_approval: Optional[bool] = None  # True=approved, False=rejected, None=not needed
+    completed_at: datetime | None = None
+    hitl_approval: bool | None = None  # True=approved, False=rejected, None=not needed
 
     @property
     def pending(self) -> bool:
@@ -374,11 +374,11 @@ class ActivityLoopResult(BaseModel):
     should_continue: bool = Field(True, description="Whether to continue iteration")
     is_final_answer: bool = Field(False, description="Whether this is a final answer")
     observation: str = Field("", description="Combined observation from activities")
-    executions: List[ActivityExecution] = Field(
+    executions: list[ActivityExecution] = Field(
         default_factory=list, description="Activity executions"
     )
     remaining_text: str = Field("", description="Text not parsed as activities")
-    parse_errors: List[str] = Field(default_factory=list, description="Errors during parsing")
+    parse_errors: list[str] = Field(default_factory=list, description="Errors during parsing")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

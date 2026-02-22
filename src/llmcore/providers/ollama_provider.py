@@ -7,10 +7,13 @@ Supports streaming and different API endpoints (/api/chat, /api/generate).
 Accepts context as List[Message].
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
+from typing import Any
 
 # Use the official ollama library
 try:
@@ -44,7 +47,21 @@ DEFAULT_OLLAMA_TOKEN_LIMITS = {
     "llama3": 8000,
     "llama3:8b": 8000,
     "llama3:70b": 8000,
+    "llama3.2": 131072,
+    "llama3.2:latest": 131072,
+    "llama3.3": 131072,
+    "llama3.3:70b": 131072,
+    "qwen3": 262144,
+    "qwen3:4b": 262144,
+    "qwen3:8b": 262144,
+    "qwen3:14b": 262144,
+    "qwen3:32b": 262144,
+    "qwen2.5": 131072,
+    "qwen2.5:latest": 131072,
+    "gemma3": 128000,
     "gemma3:4b": 128000,
+    "gemma3:12b": 128000,
+    "gemma3:27b": 128000,
     "falcon3:3b": 8000,
     "gemma:latest": 8000,
     "gemma:7b": 8000,
@@ -73,11 +90,11 @@ class OllamaProvider(BaseProvider):
     Handles List[Message] context type and standardized tool-calling.
     """
 
-    _client: Optional[AsyncClient] = None
-    _encoding: Optional[Any] = None
+    _client: AsyncClient | None = None
+    _encoding: Any | None = None
     tokenizer_name: str
 
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the OllamaProvider using the official ollama library.
 
@@ -140,10 +157,10 @@ class OllamaProvider(BaseProvider):
             logger.info("OllamaProvider using character division for token counting.")
 
     def get_name(self) -> str:
-        """Returns the provider name: 'ollama'."""
-        return "ollama"
+        """Returns the provider instance name."""
+        return self._provider_instance_name or "ollama"
 
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """
         Asynchronously discovers and returns detailed information about available local models
         by querying the Ollama API.
@@ -184,7 +201,7 @@ class OllamaProvider(BaseProvider):
             logger.error(f"Unexpected error fetching models from Ollama API: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Unexpected error fetching models: {e}")
 
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """
         Returns a schema of supported inference parameters for Ollama models.
         These correspond to the 'options' in the Ollama API.
@@ -203,29 +220,56 @@ class OllamaProvider(BaseProvider):
             "max_tokens": {"type": "integer"},
         }
 
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
-        """Returns the maximum context length (tokens) for the given Ollama model."""
+    def get_max_context_length(self, model: str | None = None) -> int:
+        """Returns the maximum context length (tokens) for the given Ollama model.
+
+        Resolution order:
+            1. Hardcoded DEFAULT_OLLAMA_TOKEN_LIMITS (fast, known models)
+            2. Model card registry (covers newer models like qwen3)
+            3. Fallback to 4096
+        """
         model_name = model or self.default_model
         base_model_name = model_name.split(":")[0]
         limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(
             model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
         )
-        if limit is None:
-            limit = 4096
-            logger.warning(
-                f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
+        if limit is not None:
+            return limit
+
+        # Try the model card registry — it has context info for models
+        # not in the hardcoded dict (e.g. qwen3, llama3.2, etc.)
+        try:
+            from ..model_cards import get_model_card_registry
+
+            registry = get_model_card_registry()
+            card_limit = registry.get_context_length(
+                "ollama",
+                model_name,
+                default=0,
             )
+            if card_limit > 0:
+                logger.debug(
+                    f"Context length for Ollama model '{model_name}' from model card: {card_limit}"
+                )
+                return card_limit
+        except Exception as e:
+            logger.warning(f"Model card registry lookup failed for '{model_name}': {e}")
+
+        limit = 4096
+        logger.warning(
+            f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
+        )
         return limit
 
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Sends a chat completion request to the Ollama API, with support for tools.
         """
@@ -242,7 +286,7 @@ class OllamaProvider(BaseProvider):
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
 
-        messages_payload: List[Dict[str, str]] = [
+        messages_payload: list[dict[str, str]] = [
             {
                 "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
                 "content": msg.content,
@@ -327,7 +371,7 @@ class OllamaProvider(BaseProvider):
             logger.error(f"Unexpected error during Ollama chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens using the configured tokenizer or character approximation."""
         if not self._encoding:
             return (len(text) + 3) // 4
@@ -335,9 +379,7 @@ class OllamaProvider(BaseProvider):
             return 0
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Approximates token count for a list of messages using tiktoken."""
         if not self._encoding:
             total_chars = sum(
@@ -372,7 +414,7 @@ class OllamaProvider(BaseProvider):
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract text content from Ollama non-streaming response.
 
@@ -404,7 +446,7 @@ class OllamaProvider(BaseProvider):
             logger.warning(f"Failed to extract content from Ollama response: {e}")
             return ""
 
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract text delta from Ollama streaming chunk.
 

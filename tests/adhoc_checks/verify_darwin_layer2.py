@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# tests/adhoc_checks/verify_darwin_layer2.py
 """
 Darwin Layer 2 Integration Verification Script.
 

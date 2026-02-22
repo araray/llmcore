@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class SandboxAccessLevel(Enum):
@@ -115,12 +115,12 @@ class SandboxConfig:
     network_enabled: bool = False
 
     # Environment
-    environment_vars: Dict[str, str] = field(default_factory=dict)
+    environment_vars: dict[str, str] = field(default_factory=dict)
 
     # Volume mounts - will be set by SandboxRegistry based on global config
-    share_mount_host: Optional[Path] = None
+    share_mount_host: Path | None = None
     share_mount_container: str = "/workspace/share"
-    output_mount_host: Optional[Path] = None
+    output_mount_host: Path | None = None
     output_mount_container: str = "/workspace/output"
 
     # Ephemeral resources
@@ -130,7 +130,7 @@ class SandboxConfig:
     working_directory: str = "/workspace"
 
     # Additional metadata
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -143,7 +143,7 @@ class SandboxConfig:
         if isinstance(self.output_mount_host, str):
             self.output_mount_host = Path(self.output_mount_host).expanduser()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize configuration to dictionary."""
         return {
             "sandbox_id": self.sandbox_id,
@@ -195,7 +195,7 @@ class ExecutionResult:
     execution_time_seconds: float = 0.0
     truncated: bool = False
     timed_out: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -239,7 +239,7 @@ class ExecutionResult:
 
         return "\n".join(parts)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize result to dictionary."""
         return {
             "exit_code": self.exit_code,
@@ -265,10 +265,10 @@ class FileInfo:
     name: str
     is_directory: bool
     size_bytes: int = 0
-    modified_at: Optional[datetime] = None
-    permissions: Optional[str] = None
+    modified_at: datetime | None = None
+    permissions: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "path": self.path,
@@ -338,7 +338,7 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     async def execute_shell(
-        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, command: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute a shell command in the sandbox.
@@ -364,7 +364,7 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     async def execute_python(
-        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, code: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute Python code in the sandbox.
@@ -411,7 +411,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    async def read_file(self, path: str) -> Optional[str]:
+    async def read_file(self, path: str) -> str | None:
         """
         Read content from a file in the sandbox.
 
@@ -449,7 +449,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    async def read_file_binary(self, path: str) -> Optional[bytes]:
+    async def read_file_binary(self, path: str) -> bytes | None:
         """
         Read binary content from a file in the sandbox.
 
@@ -465,7 +465,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> list[FileInfo]:
         """
         List files in a directory within the sandbox.
 
@@ -585,7 +585,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def get_config(self) -> Optional[SandboxConfig]:
+    def get_config(self) -> SandboxConfig | None:
         """
         Get the configuration used to initialize this sandbox.
 
@@ -595,7 +595,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def get_info(self) -> Dict[str, Any]:
+    def get_info(self) -> dict[str, Any]:
         """
         Get detailed information about the sandbox.
 

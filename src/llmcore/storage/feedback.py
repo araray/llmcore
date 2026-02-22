@@ -61,7 +61,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -133,7 +133,7 @@ class FeedbackRecord(BaseModel):
         created_at: When the feedback was recorded.
     """
 
-    id: Optional[int] = Field(default=None, description="Database record ID")
+    id: int | None = Field(default=None, description="Database record ID")
     item_id: str = Field(..., description="Retrieved item identifier")
     collection: str = Field(..., description="Collection name")
     query: str = Field(..., description="Query that triggered retrieval")
@@ -142,7 +142,7 @@ class FeedbackRecord(BaseModel):
         default="explicit", description="Type of feedback"
     )
     provider_id: str = Field(default="user", description="Feedback provider ID")
-    session_id: Optional[str] = Field(default=None, description="Session identifier")
+    session_id: str | None = Field(default=None, description="Session identifier")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
 
 
@@ -175,12 +175,8 @@ class AggregatedFeedback(BaseModel):
     trend: Literal["improving", "declining", "stable"] = Field(
         default="stable", description="Score trend"
     )
-    first_feedback_at: Optional[datetime] = Field(
-        default=None, description="First feedback timestamp"
-    )
-    last_feedback_at: Optional[datetime] = Field(
-        default=None, description="Last feedback timestamp"
-    )
+    first_feedback_at: datetime | None = Field(default=None, description="First feedback timestamp")
+    last_feedback_at: datetime | None = Field(default=None, description="Last feedback timestamp")
     updated_at: datetime = Field(
         default_factory=datetime.utcnow, description="Last update timestamp"
     )
@@ -272,7 +268,7 @@ class FeedbackManager:
         self,
         db_path: str = "~/.local/share/llmcore/feedback.db",
         enabled: bool = True,
-        config: Optional[FeedbackConfig] = None,
+        config: FeedbackConfig | None = None,
     ) -> None:
         """Initialize the feedback manager.
 
@@ -315,7 +311,7 @@ class FeedbackManager:
         relevance_score: float,
         feedback_type: Literal["explicit", "implicit", "agent"] = "explicit",
         provider_id: str = "user",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> FeedbackRecord:
         """Record feedback for a retrieved item.
 
@@ -382,8 +378,8 @@ class FeedbackManager:
 
     def record_batch(
         self,
-        feedbacks: List[Dict[str, Any]],
-    ) -> List[FeedbackRecord]:
+        feedbacks: list[dict[str, Any]],
+    ) -> list[FeedbackRecord]:
         """Record multiple feedback records efficiently.
 
         Args:
@@ -398,7 +394,7 @@ class FeedbackManager:
             return []
 
         records = []
-        affected_items: Dict[str, set] = {}  # collection -> set of item_ids
+        affected_items: dict[str, set] = {}  # collection -> set of item_ids
 
         with self._lock:
             with sqlite3.connect(self.db_path) as conn:
@@ -550,8 +546,8 @@ class FeedbackManager:
     def get_score_adjustments(
         self,
         collection: str,
-        min_feedback_count: Optional[int] = None,
-    ) -> Dict[str, float]:
+        min_feedback_count: int | None = None,
+    ) -> dict[str, float]:
         """Get score adjustments for retrieval reranking.
 
         Returns a dictionary mapping item_id to adjustment value in [-1.0, +1.0].
@@ -576,7 +572,7 @@ class FeedbackManager:
         if min_feedback_count is None:
             min_feedback_count = self._config.min_feedback_for_adjustment
 
-        adjustments: Dict[str, float] = {}
+        adjustments: dict[str, float] = {}
 
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(
@@ -597,9 +593,9 @@ class FeedbackManager:
 
     def get_item_adjustments(
         self,
-        item_ids: List[str],
+        item_ids: list[str],
         collection: str,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Get score adjustments for specific items.
 
         More efficient than get_score_adjustments when you only need
@@ -615,7 +611,7 @@ class FeedbackManager:
         if not self.enabled or not item_ids:
             return {}
 
-        adjustments: Dict[str, float] = {}
+        adjustments: dict[str, float] = {}
         min_count = self._config.min_feedback_for_adjustment
 
         with sqlite3.connect(self.db_path) as conn:
@@ -643,7 +639,7 @@ class FeedbackManager:
         self,
         item_id: str,
         collection: str,
-    ) -> Optional[AggregatedFeedback]:
+    ) -> AggregatedFeedback | None:
         """Get aggregated feedback statistics for an item.
 
         Args:
@@ -688,7 +684,7 @@ class FeedbackManager:
         item_id: str,
         collection: str,
         limit: int = 50,
-    ) -> List[FeedbackRecord]:
+    ) -> list[FeedbackRecord]:
         """Get feedback history for an item.
 
         Args:
@@ -728,7 +724,7 @@ class FeedbackManager:
                 for row in rows
             ]
 
-    def get_collection_stats(self, collection: str) -> Dict[str, Any]:
+    def get_collection_stats(self, collection: str) -> dict[str, Any]:
         """Get feedback statistics for a collection.
 
         Args:
@@ -810,7 +806,7 @@ class FeedbackManager:
     # Maintenance
     # -------------------------------------------------------------------------
 
-    def cleanup_old_feedback(self, days: Optional[int] = None) -> int:
+    def cleanup_old_feedback(self, days: int | None = None) -> int:
         """Remove feedback records older than specified days.
 
         Args:
@@ -914,7 +910,7 @@ class FeedbackManager:
 
 
 def create_feedback_manager(
-    config: Optional[FeedbackConfig] = None,
+    config: FeedbackConfig | None = None,
     **kwargs: Any,
 ) -> FeedbackManager:
     """Factory function to create a feedback manager.

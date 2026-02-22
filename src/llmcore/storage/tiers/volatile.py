@@ -51,8 +51,9 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -83,7 +84,7 @@ class VolatileMemoryConfig(BaseModel):
         ge=0,
         description="Maximum total size in bytes (0=unlimited)",
     )
-    default_ttl_seconds: Optional[int] = Field(
+    default_ttl_seconds: int | None = Field(
         default=3600, ge=0, description="Default TTL in seconds (None=no expiry)"
     )
     cleanup_interval_seconds: int = Field(
@@ -115,11 +116,11 @@ class VolatileItem:
     key: str
     value: Any
     created_at: float = field(default_factory=time.time)
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
     access_count: int = 0
     last_accessed: float = field(default_factory=time.time)
     size_bytes: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def is_expired(self) -> bool:
         """Check if the item has expired.
@@ -136,7 +137,7 @@ class VolatileItem:
         self.last_accessed = time.time()
         self.access_count += 1
 
-    def time_until_expiry(self) -> Optional[float]:
+    def time_until_expiry(self) -> float | None:
         """Get seconds until expiration.
 
         Returns:
@@ -195,9 +196,9 @@ class VolatileMemoryTier:
         self,
         max_items: int = 10000,
         max_size_bytes: int = 100 * 1024 * 1024,
-        default_ttl_seconds: Optional[int] = 3600,
+        default_ttl_seconds: int | None = 3600,
         cleanup_interval_seconds: int = 60,
-        config: Optional[VolatileMemoryConfig] = None,
+        config: VolatileMemoryConfig | None = None,
     ) -> None:
         """Initialize the volatile memory tier.
 
@@ -221,7 +222,7 @@ class VolatileMemoryTier:
         self.cleanup_interval = cleanup_interval_seconds
 
         # Internal storage
-        self._store: Dict[str, VolatileItem] = {}
+        self._store: dict[str, VolatileItem] = {}
         self._lock = threading.RLock()
         self._current_size_bytes: int = 0
         self._last_cleanup: float = time.time()
@@ -337,7 +338,7 @@ class VolatileMemoryTier:
     # Public API
     # -------------------------------------------------------------------------
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get an item from storage.
 
         If the item exists and hasn't expired, its access timestamp and
@@ -370,7 +371,7 @@ class VolatileMemoryTier:
             self._stats["hits"] += 1
             return item.value
 
-    def get_with_metadata(self, key: str) -> Optional[Tuple[Any, Dict[str, Any]]]:
+    def get_with_metadata(self, key: str) -> tuple[Any, dict[str, Any]] | None:
         """Get an item and its metadata.
 
         Args:
@@ -407,8 +408,8 @@ class VolatileMemoryTier:
         self,
         key: str,
         value: Any,
-        ttl_seconds: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store an item in memory.
 
@@ -505,7 +506,7 @@ class VolatileMemoryTier:
                 return False
             return True
 
-    def keys(self, pattern: Optional[str] = None) -> List[str]:
+    def keys(self, pattern: str | None = None) -> list[str]:
         """Get all keys, optionally filtered by prefix pattern.
 
         Args:
@@ -535,7 +536,7 @@ class VolatileMemoryTier:
             logger.debug(f"Cleared {count} items from volatile storage")
             return count
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get storage statistics.
 
         Returns:
@@ -566,7 +567,7 @@ class VolatileMemoryTier:
                 **self._stats.copy(),
             }
 
-    def get_item_info(self, key: str) -> Optional[Dict[str, Any]]:
+    def get_item_info(self, key: str) -> dict[str, Any] | None:
         """Get detailed information about an item without touching it.
 
         Args:
@@ -613,7 +614,7 @@ class VolatileMemoryTier:
 
 
 def create_volatile_tier(
-    config: Optional[VolatileMemoryConfig] = None,
+    config: VolatileMemoryConfig | None = None,
     **kwargs: Any,
 ) -> VolatileMemoryTier:
     """Factory function to create a volatile memory tier.

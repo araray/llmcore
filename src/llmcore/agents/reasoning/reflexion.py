@@ -28,15 +28,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
 )
 
 try:
@@ -88,7 +85,7 @@ class Reflection:
     outcome: TrialOutcome
     what_went_wrong: str
     what_to_improve: str
-    lessons_learned: List[str] = field(default_factory=list)
+    lessons_learned: list[str] = field(default_factory=list)
     confidence: float = 0.5
     timestamp: float = field(default_factory=time.time)
 
@@ -110,7 +107,7 @@ class TrialResult:
     trial_number: int
     react_result: ReActResult
     outcome: TrialOutcome
-    reflection: Optional[Reflection] = None
+    reflection: Reflection | None = None
     duration_ms: int = 0
 
     @property
@@ -125,14 +122,14 @@ if PYDANTIC_AVAILABLE:
         """Result of Reflexion reasoning."""
 
         success: bool = Field(description="Whether reasoning succeeded")
-        final_answer: Optional[str] = Field(None, description="Final answer")
+        final_answer: str | None = Field(None, description="Final answer")
         trials: int = Field(0, description="Number of trials attempted")
-        successful_trial: Optional[int] = Field(None, description="Which trial succeeded")
-        reflections: List[Dict[str, Any]] = Field(
+        successful_trial: int | None = Field(None, description="Which trial succeeded")
+        reflections: list[dict[str, Any]] = Field(
             default_factory=list, description="All reflections"
         )
         total_duration_ms: int = Field(0, description="Total duration")
-        error: Optional[str] = Field(None, description="Error if failed")
+        error: str | None = Field(None, description="Error if failed")
 
         model_config = ConfigDict(use_enum_values=True)
 else:
@@ -142,12 +139,12 @@ else:
         """Result of Reflexion reasoning."""
 
         success: bool
-        final_answer: Optional[str] = None
+        final_answer: str | None = None
         trials: int = 0
-        successful_trial: Optional[int] = None
-        reflections: List[Dict[str, Any]] = field(default_factory=list)
+        successful_trial: int | None = None
+        reflections: list[dict[str, Any]] = field(default_factory=list)
         total_duration_ms: int = 0
-        error: Optional[str] = None
+        error: str | None = None
 
 
 # =============================================================================
@@ -202,10 +199,10 @@ class ReflexionConfig:
     def __init__(
         self,
         max_trials: int = 3,
-        react_config: Optional[ReActConfig] = None,
+        react_config: ReActConfig | None = None,
         reflection_temperature: float = 0.5,
         require_evaluation: bool = True,
-        evaluation_prompt: Optional[str] = None,
+        evaluation_prompt: str | None = None,
         stop_on_success: bool = True,
         include_all_reflections: bool = True,
     ):
@@ -235,10 +232,10 @@ class ReflexionReasoner:
 
     def __init__(
         self,
-        llm_provider: Optional["BaseLLMProvider"] = None,
-        activity_loop: Optional["ActivityLoop"] = None,
-        config: Optional[ReflexionConfig] = None,
-        evaluator: Optional[Callable[[str, ReActResult], TrialOutcome]] = None,
+        llm_provider: BaseLLMProvider | None = None,
+        activity_loop: ActivityLoop | None = None,
+        config: ReflexionConfig | None = None,
+        evaluator: Callable[[str, ReActResult], TrialOutcome] | None = None,
     ):
         self.llm_provider = llm_provider
         self.activity_loop = activity_loop
@@ -253,16 +250,16 @@ class ReflexionReasoner:
         )
 
         # Trial history
-        self._trials: List[TrialResult] = []
-        self._reflections: List[Reflection] = []
+        self._trials: list[TrialResult] = []
+        self._reflections: list[Reflection] = []
 
     async def reason_with_reflection(
         self,
         goal: str,
-        context: Optional[str] = None,
-        available_activities: Optional[str] = None,
-        on_trial: Optional[Callable[[TrialResult], None]] = None,
-        on_reflection: Optional[Callable[[Reflection], None]] = None,
+        context: str | None = None,
+        available_activities: str | None = None,
+        on_trial: Callable[[TrialResult], None] | None = None,
+        on_reflection: Callable[[Reflection], None] | None = None,
     ) -> ReflexionResult:
         """
         Execute Reflexion reasoning loop.
@@ -343,7 +340,7 @@ class ReflexionReasoner:
             error="All trials exhausted without success",
         )
 
-    def _build_trial_context(self, base_context: Optional[str]) -> str:
+    def _build_trial_context(self, base_context: str | None) -> str:
         """Build context including reflections from previous trials."""
         parts = []
 
@@ -483,7 +480,7 @@ Error (if any): {trial.react_result.error or "None"}
             lessons_learned=lessons,
         )
 
-    def _find_best_trial(self) -> Optional[TrialResult]:
+    def _find_best_trial(self) -> TrialResult | None:
         """Find the best trial result."""
         if not self._trials:
             return None
@@ -508,9 +505,9 @@ Error (if any): {trial.react_result.error or "None"}
         self,
         success: bool,
         start_time: float,
-        final_answer: Optional[str] = None,
-        successful_trial: Optional[int] = None,
-        error: Optional[str] = None,
+        final_answer: str | None = None,
+        successful_trial: int | None = None,
+        error: str | None = None,
     ) -> ReflexionResult:
         """Create ReflexionResult."""
         duration_ms = int((time.time() - start_time) * 1000)
@@ -535,12 +532,12 @@ Error (if any): {trial.react_result.error or "None"}
         )
 
     @property
-    def trials(self) -> List[TrialResult]:
+    def trials(self) -> list[TrialResult]:
         """Get all trial results."""
         return self._trials.copy()
 
     @property
-    def reflections(self) -> List[Reflection]:
+    def reflections(self) -> list[Reflection]:
         """Get all reflections."""
         return self._reflections.copy()
 
@@ -552,9 +549,9 @@ Error (if any): {trial.react_result.error or "None"}
 
 async def reason_with_reflexion(
     goal: str,
-    llm_provider: "BaseLLMProvider",
-    activity_loop: Optional["ActivityLoop"] = None,
-    context: Optional[str] = None,
+    llm_provider: BaseLLMProvider,
+    activity_loop: ActivityLoop | None = None,
+    context: str | None = None,
     max_trials: int = 3,
     react_max_iterations: int = 10,
 ) -> ReflexionResult:

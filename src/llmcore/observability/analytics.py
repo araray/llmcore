@@ -42,10 +42,10 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 from statistics import linear_regression, mean, stdev
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -116,8 +116,8 @@ class PeriodComparison(BaseModel):
     calls_change_percent: float
 
     # Breakdowns
-    by_provider: Dict[str, Dict[str, float]] = Field(default_factory=dict)
-    by_model: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    by_provider: dict[str, dict[str, float]] = Field(default_factory=dict)
+    by_model: dict[str, dict[str, float]] = Field(default_factory=dict)
 
 
 class TrendAnalysis(BaseModel):
@@ -128,7 +128,7 @@ class TrendAnalysis(BaseModel):
     direction: TrendDirection
     slope: float  # Cost change per day
     r_squared: float  # Goodness of fit (0-1)
-    daily_costs: List[Tuple[str, float]] = Field(default_factory=list)
+    daily_costs: list[tuple[str, float]] = Field(default_factory=list)
 
     # Interpretation
     interpretation: str = ""
@@ -145,10 +145,10 @@ class CostForecast(BaseModel):
     upper_bound: float  # High estimate
 
     # Daily projections
-    daily_forecast: List[Tuple[str, float]] = Field(default_factory=list)
+    daily_forecast: list[tuple[str, float]] = Field(default_factory=list)
 
     # Assumptions
-    assumptions: List[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class BudgetAnalysis(BaseModel):
@@ -171,7 +171,7 @@ class BudgetAnalysis(BaseModel):
     will_exceed: bool
 
     # Recommendations
-    recommendations: List[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
 
 
 class CostAnomaly(BaseModel):
@@ -188,8 +188,8 @@ class CostAnomaly(BaseModel):
     deviation_percent: float
 
     # Affected dimensions
-    provider: Optional[str] = None
-    model: Optional[str] = None
+    provider: str | None = None
+    model: str | None = None
 
 
 class UsagePattern(BaseModel):
@@ -198,8 +198,8 @@ class UsagePattern(BaseModel):
     analysis_period_days: int
 
     # Time-based patterns
-    peak_hours: List[int] = Field(default_factory=list)  # 0-23
-    peak_days: List[str] = Field(default_factory=list)  # Monday, Tuesday, etc.
+    peak_hours: list[int] = Field(default_factory=list)  # 0-23
+    peak_days: list[str] = Field(default_factory=list)  # Monday, Tuesday, etc.
 
     # Volume patterns
     avg_daily_calls: float = 0.0
@@ -207,10 +207,10 @@ class UsagePattern(BaseModel):
     avg_daily_cost: float = 0.0
 
     # Provider/model patterns
-    most_used_provider: Optional[str] = None
-    most_used_model: Optional[str] = None
-    most_expensive_provider: Optional[str] = None
-    most_expensive_model: Optional[str] = None
+    most_used_provider: str | None = None
+    most_used_model: str | None = None
+    most_expensive_provider: str | None = None
+    most_expensive_model: str | None = None
 
     # Efficiency metrics
     avg_tokens_per_call: float = 0.0
@@ -221,7 +221,7 @@ class UsagePattern(BaseModel):
 class AnalyticsSummary(BaseModel):
     """Comprehensive analytics summary."""
 
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     analysis_period_days: int
 
     # Cost overview
@@ -230,19 +230,19 @@ class AnalyticsSummary(BaseModel):
     total_tokens: int
 
     # Comparisons
-    week_over_week: Optional[PeriodComparison] = None
-    month_over_month: Optional[PeriodComparison] = None
+    week_over_week: PeriodComparison | None = None
+    month_over_month: PeriodComparison | None = None
 
     # Trends
-    trend: Optional[TrendAnalysis] = None
-    forecast: Optional[CostForecast] = None
+    trend: TrendAnalysis | None = None
+    forecast: CostForecast | None = None
 
     # Patterns and anomalies
-    usage_pattern: Optional[UsagePattern] = None
-    anomalies: List[CostAnomaly] = Field(default_factory=list)
+    usage_pattern: UsagePattern | None = None
+    anomalies: list[CostAnomaly] = Field(default_factory=list)
 
     # Budget (if configured)
-    budget: Optional[BudgetAnalysis] = None
+    budget: BudgetAnalysis | None = None
 
 
 # =============================================================================
@@ -263,7 +263,7 @@ class CostAnalyzer:
 
     def __init__(
         self,
-        tracker: "CostTracker",
+        tracker: CostTracker,
         anomaly_threshold: float = 2.0,
     ):
         self.tracker = tracker
@@ -349,7 +349,7 @@ class CostAnalyzer:
         self,
         start_date: date,
         end_date: date,
-    ) -> "UsageSummary":
+    ) -> UsageSummary:
         """Get summary for a date range."""
         start = datetime.combine(start_date, datetime.min.time())
         end = datetime.combine(end_date, datetime.max.time())
@@ -357,10 +357,10 @@ class CostAnalyzer:
 
     def _compare_by_dimension(
         self,
-        current: "UsageSummary",
-        previous: "UsageSummary",
+        current: UsageSummary,
+        previous: UsageSummary,
         dimension: str,
-    ) -> Dict[str, Dict[str, float]]:
+    ) -> dict[str, dict[str, float]]:
         """Compare costs by a specific dimension (provider, model)."""
         result = {}
 
@@ -469,7 +469,7 @@ class CostAnalyzer:
             interpretation=interpretation,
         )
 
-    def _get_daily_costs(self, days: int) -> List[Tuple[str, float]]:
+    def _get_daily_costs(self, days: int) -> list[tuple[str, float]]:
         """Get cost data aggregated by day."""
         daily_costs = []
         today = date.today()
@@ -598,24 +598,22 @@ class CostAnalyzer:
             BudgetAnalysis with utilization and projections.
         """
         today = date.today()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Determine period boundaries
         if budget_period == "daily":
-            period_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
-            period_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc)
+            period_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
+            period_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=UTC)
             days_total = 1
         elif budget_period == "weekly":
             # Week starts on Monday
             week_start = today - timedelta(days=today.weekday())
-            period_start = datetime.combine(week_start, datetime.min.time()).replace(
-                tzinfo=timezone.utc
-            )
+            period_start = datetime.combine(week_start, datetime.min.time()).replace(tzinfo=UTC)
             period_end = period_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
             days_total = 7
         else:  # monthly
             period_start = datetime.combine(today.replace(day=1), datetime.min.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
             # Last day of month
             if today.month == 12:
@@ -624,7 +622,7 @@ class CostAnalyzer:
                 next_month = date(today.year, today.month + 1, 1)
             period_end = datetime.combine(
                 next_month - timedelta(days=1), datetime.max.time()
-            ).replace(tzinfo=timezone.utc)
+            ).replace(tzinfo=UTC)
             days_total = (period_end.date() - period_start.date()).days + 1
 
         # Get current usage
@@ -699,7 +697,7 @@ class CostAnalyzer:
     def detect_anomalies(
         self,
         days: int = 30,
-    ) -> List[CostAnomaly]:
+    ) -> list[CostAnomaly]:
         """
         Detect cost anomalies in recent data.
 
@@ -736,7 +734,7 @@ class CostAnalyzer:
                 anomalies.append(
                     CostAnomaly(
                         anomaly_type=anomaly_type,
-                        timestamp=datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc),
+                        timestamp=datetime.fromisoformat(date_str).replace(tzinfo=UTC),
                         severity=severity,
                         description=(
                             f"{'Unusually high' if z_score > 0 else 'Unusually low'} "
@@ -773,7 +771,7 @@ class CostAnalyzer:
         model_summary = self.tracker.get_summary_by_model(days=days)
 
         # Calculate daily averages
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         total_summary = self.tracker._get_summary(start, end)
 
@@ -847,7 +845,7 @@ class CostAnalyzer:
     def get_analytics_summary(
         self,
         days: int = 30,
-        budget_amount: Optional[float] = None,
+        budget_amount: float | None = None,
         budget_period: str = "monthly",
     ) -> AnalyticsSummary:
         """
@@ -861,7 +859,7 @@ class CostAnalyzer:
         Returns:
             Complete AnalyticsSummary.
         """
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         total_summary = self.tracker._get_summary(start, end)
 
@@ -923,7 +921,7 @@ class CostAnalyzer:
 
 
 def create_cost_analyzer(
-    tracker: "CostTracker",
+    tracker: CostTracker,
     anomaly_threshold: float = 2.0,
 ) -> CostAnalyzer:
     """

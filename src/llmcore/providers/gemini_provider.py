@@ -1,8 +1,10 @@
+# src/llmcore/providers/gemini_provider.py
 import asyncio
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +49,11 @@ class GeminiProvider(BaseProvider):
     Handles List[Message] context type and standardized tool-calling.
     """
 
-    _client: Optional[Any] = None  # Use Any for genai.Client
-    _api_key_env_var: Optional[str] = None
-    _safety_settings: Optional[List[Dict[str, Any]]] = None
+    _client: Any | None = None  # Use Any for genai.Client
+    _api_key_env_var: str | None = None
+    _safety_settings: list[dict[str, Any]] | None = None
 
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the GeminiProvider using the google-genai SDK.
 
@@ -82,20 +84,19 @@ class GeminiProvider(BaseProvider):
         self._safety_settings = self._parse_safety_settings(config.get("safety_settings"))
 
         if not self.api_key:
-            logger.warning(
-                "Google API key not found. Ensure it is set if not using other auth methods."
+            raise ConfigError(
+                "Google API key not found. Set GOOGLE_API_KEY environment variable or configure api_key in config."
             )
 
         try:
             self._client = genai.Client(api_key=self.api_key)
-            logger.info("Google Gen AI client initialized successfully.")
+            logger.debug("Google Gen AI client initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to initialize Google Gen AI client: {e}", exc_info=True)
             raise ConfigError(f"Google Gen AI configuration failed: {e}")
 
     def _parse_safety_settings(
-        self, settings_config: Optional[Dict[str, str]]
-    ) -> Optional[List[Dict[str, Any]]]:
+        self, settings_config: dict[str, str] | None
+    ) -> list[dict[str, Any]] | None:
         """Parses safety settings from config into the format expected by the SDK."""
         if not settings_config:
             return None
@@ -111,10 +112,10 @@ class GeminiProvider(BaseProvider):
         return parsed_settings if parsed_settings else None
 
     def get_name(self) -> str:
-        """Returns the provider name: 'gemini'."""
-        return "gemini"
+        """Returns the provider instance name (e.g. 'gemini', 'google')."""
+        return self._provider_instance_name or "gemini"
 
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """Dynamically discovers available models from the Google AI API."""
         details_list = []
         try:
@@ -138,7 +139,7 @@ class GeminiProvider(BaseProvider):
             raise ProviderError(self.get_name(), f"Failed to list models: {e}")
         return details_list
 
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported GenerationConfig parameters for Gemini."""
         return {
             "temperature": {"type": "number", "minimum": 0.0, "maximum": 1.0},
@@ -150,7 +151,7 @@ class GeminiProvider(BaseProvider):
             "response_mime_type": {"type": "string"},
         }
 
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
+    def get_max_context_length(self, model: str | None = None) -> int:
         """Returns the maximum context length (tokens) for the given Gemini model."""
         model_name = model or self.default_model
         limit = DEFAULT_GEMINI_TOKEN_LIMITS.get(model_name)
@@ -162,8 +163,8 @@ class GeminiProvider(BaseProvider):
         return limit
 
     def _convert_llmcore_msgs_to_genai_contents(
-        self, messages: List[Message]
-    ) -> List[Dict[str, Any]]:
+        self, messages: list[Message]
+    ) -> list[dict[str, Any]]:
         """Converts LLMCore messages to Gemini's `contents` format."""
         genai_history = []
         system_instruction_text = None
@@ -191,12 +192,12 @@ class GeminiProvider(BaseProvider):
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """Sends a chat completion request to the Google Gemini API."""
         if not self._client:
             raise ProviderError(self.get_name(), "Gemini client not initialized.")
@@ -304,7 +305,7 @@ class GeminiProvider(BaseProvider):
             logger.error(f"Unexpected error during Gemini chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens for a text string using the Gemini API."""
         if not self._client:
             logger.warning("Gemini client not available. Approximating token count.")
@@ -325,9 +326,7 @@ class GeminiProvider(BaseProvider):
             )
             return (len(text) + 3) // 4
 
-    async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Counts tokens for a list of messages using the Gemini API."""
         if not self._client:
             logger.warning("Gemini client not available. Approximating message token count.")
@@ -355,7 +354,7 @@ class GeminiProvider(BaseProvider):
             )
             return (total_chars + 3 * len(genai_contents)) // 4
 
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract text content from Gemini non-streaming response.
 
@@ -402,7 +401,7 @@ class GeminiProvider(BaseProvider):
             logger.warning(f"Failed to extract content from Gemini response: {e}")
             return ""
 
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract text delta from Gemini streaming chunk.
 

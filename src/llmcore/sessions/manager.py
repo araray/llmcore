@@ -8,7 +8,7 @@ and saving to a configured storage backend provided by StorageManager.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..exceptions import LLMCoreError, SessionNotFoundError, SessionStorageError
 from ..models import ChatSession, Role
@@ -42,7 +42,7 @@ class SessionManager:
         logger.debug("SessionManager initialized with storage backend: %s", type(storage).__name__)
 
     async def load_or_create_session(
-        self, session_id: Optional[str] = None, system_message: Optional[str] = None
+        self, session_id: str | None = None, system_message: str | None = None
     ) -> ChatSession:
         """
         Loads an existing session or creates a new one.
@@ -120,7 +120,7 @@ class SessionManager:
             new_temporary_session.add_message(message_content=system_message, role=Role.SYSTEM)
         return new_temporary_session
 
-    async def get_session_if_exists(self, session_id: str) -> Optional[ChatSession]:
+    async def get_session_if_exists(self, session_id: str) -> ChatSession | None:
         """
         Retrieves a session from storage only if it exists.
         Does not create a new session if the ID is not found.
@@ -230,7 +230,7 @@ class SessionManager:
                 f"An unexpected error occurred while updating session name: {e}"
             )
 
-    async def list_sessions(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def list_sessions(self, limit: int | None = None) -> list[dict[str, Any]]:
         """
         Lists all available chat sessions with metadata.
 

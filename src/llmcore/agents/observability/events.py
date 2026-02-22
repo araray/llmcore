@@ -57,9 +57,9 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -230,7 +230,7 @@ def _generate_event_id() -> str:
 
 def _utc_now() -> datetime:
     """Get current UTC timestamp with timezone awareness."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # =============================================================================
@@ -283,7 +283,7 @@ class AgentEvent(BaseModel):
 
     # Context
     session_id: str = Field(..., description="Agent session ID")
-    execution_id: Optional[str] = Field(None, description="Specific execution/run ID")
+    execution_id: str | None = Field(None, description="Specific execution/run ID")
 
     # Classification
     category: EventCategory = Field(..., description="Event category")
@@ -291,23 +291,23 @@ class AgentEvent(BaseModel):
     severity: EventSeverity = Field(default=EventSeverity.INFO, description="Event severity")
 
     # State
-    phase: Optional[str] = Field(None, description="Current cognitive phase")
-    iteration: Optional[int] = Field(None, ge=0, description="Current iteration number")
+    phase: str | None = Field(None, description="Current cognitive phase")
+    iteration: int | None = Field(None, ge=0, description="Current iteration number")
 
     # Payload
-    data: Dict[str, Any] = Field(default_factory=dict, description="Event-specific data payload")
+    data: dict[str, Any] = Field(default_factory=dict, description="Event-specific data payload")
 
     # Timing
-    duration_ms: Optional[float] = Field(None, ge=0, description="Duration in milliseconds")
+    duration_ms: float | None = Field(None, ge=0, description="Duration in milliseconds")
 
     # Relationships
-    parent_event_id: Optional[str] = Field(None, description="Parent event ID for nesting")
-    correlation_id: Optional[str] = Field(None, description="Correlation ID for related events")
+    parent_event_id: str | None = Field(None, description="Parent event ID for nesting")
+    correlation_id: str | None = Field(None, description="Correlation ID for related events")
 
     # Metadata
-    tags: List[str] = Field(default_factory=list, description="Tags for filtering")
+    tags: list[str] = Field(default_factory=list, description="Tags for filtering")
 
-    def with_duration(self, start_time: datetime) -> "AgentEvent":
+    def with_duration(self, start_time: datetime) -> AgentEvent:
         """
         Set duration based on start time.
 
@@ -321,7 +321,7 @@ class AgentEvent(BaseModel):
         self.duration_ms = delta.total_seconds() * 1000
         return self
 
-    def with_parent(self, parent_id: str) -> "AgentEvent":
+    def with_parent(self, parent_id: str) -> AgentEvent:
         """
         Set parent event ID.
 
@@ -334,7 +334,7 @@ class AgentEvent(BaseModel):
         self.parent_event_id = parent_id
         return self
 
-    def with_correlation(self, correlation_id: str) -> "AgentEvent":
+    def with_correlation(self, correlation_id: str) -> AgentEvent:
         """
         Set correlation ID.
 
@@ -347,7 +347,7 @@ class AgentEvent(BaseModel):
         self.correlation_id = correlation_id
         return self
 
-    def add_tag(self, tag: str) -> "AgentEvent":
+    def add_tag(self, tag: str) -> AgentEvent:
         """
         Add a tag to the event.
 
@@ -361,7 +361,7 @@ class AgentEvent(BaseModel):
             self.tags.append(tag)
         return self
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert event to dictionary for serialization.
 
@@ -405,17 +405,17 @@ class LifecycleEvent(AgentEvent):
     category: EventCategory = Field(default=EventCategory.LIFECYCLE, frozen=True)
 
     # Lifecycle-specific fields
-    goal: Optional[str] = Field(None, description="Goal being processed")
-    final_status: Optional[str] = Field(None, description="Final status")
-    total_iterations: Optional[int] = Field(None, ge=0, description="Total iterations")
-    total_tokens: Optional[int] = Field(None, ge=0, description="Total tokens used")
-    exit_reason: Optional[str] = Field(None, description="Exit reason")
+    goal: str | None = Field(None, description="Goal being processed")
+    final_status: str | None = Field(None, description="Final status")
+    total_iterations: int | None = Field(None, ge=0, description="Total iterations")
+    total_tokens: int | None = Field(None, ge=0, description="Total tokens used")
+    exit_reason: str | None = Field(None, description="Exit reason")
 
     # Complexity classification
-    goal_complexity: Optional[str] = Field(
+    goal_complexity: str | None = Field(
         None, description="Classified goal complexity (trivial, simple, complex)"
     )
-    recommended_strategy: Optional[str] = Field(None, description="Recommended execution strategy")
+    recommended_strategy: str | None = Field(None, description="Recommended execution strategy")
 
 
 class CognitiveEvent(AgentEvent):
@@ -439,18 +439,18 @@ class CognitiveEvent(AgentEvent):
     category: EventCategory = Field(default=EventCategory.COGNITIVE, frozen=True)
 
     # Cognitive-specific fields
-    input_summary: Optional[str] = Field(None, description="Summary of input to phase")
-    output_summary: Optional[str] = Field(None, description="Summary of phase output")
-    tokens_used: Optional[int] = Field(None, ge=0, description="Tokens used in phase")
-    reasoning: Optional[str] = Field(None, description="Reasoning or thought process")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Confidence score (0-1)")
+    input_summary: str | None = Field(None, description="Summary of input to phase")
+    output_summary: str | None = Field(None, description="Summary of phase output")
+    tokens_used: int | None = Field(None, ge=0, description="Tokens used in phase")
+    reasoning: str | None = Field(None, description="Reasoning or thought process")
+    confidence: float | None = Field(None, ge=0, le=1, description="Confidence score (0-1)")
 
     # Phase metadata
-    phase_name: Optional[str] = Field(None, description="Specific phase name")
-    phase_order: Optional[int] = Field(None, ge=0, description="Order in cognitive cycle")
+    phase_name: str | None = Field(None, description="Specific phase name")
+    phase_order: int | None = Field(None, ge=0, description="Order in cognitive cycle")
 
     # Decisions made
-    decisions: List[str] = Field(default_factory=list, description="Decisions made in this phase")
+    decisions: list[str] = Field(default_factory=list, description="Decisions made in this phase")
 
 
 class ActivityEvent(AgentEvent):
@@ -476,27 +476,27 @@ class ActivityEvent(AgentEvent):
 
     # Activity identification
     activity_name: str = Field(..., description="Activity/tool name")
-    activity_type: Optional[str] = Field(None, description="Activity type/category")
+    activity_type: str | None = Field(None, description="Activity type/category")
 
     # Execution details
-    activity_input: Dict[str, Any] = Field(default_factory=dict, description="Input parameters")
-    activity_output: Optional[Any] = Field(None, description="Output result")
+    activity_input: dict[str, Any] = Field(default_factory=dict, description="Input parameters")
+    activity_output: Any | None = Field(None, description="Output result")
     activity_output_truncated: bool = Field(
         default=False, description="Whether output was truncated"
     )
 
     # Status
     success: bool = Field(default=True, description="Execution success")
-    error_message: Optional[str] = Field(None, description="Error if failed")
-    error_type: Optional[str] = Field(None, description="Error type/class")
+    error_message: str | None = Field(None, description="Error if failed")
+    error_type: str | None = Field(None, description="Error type/class")
 
     # Retry information
     retry_count: int = Field(default=0, ge=0, description="Retry attempts")
-    max_retries: Optional[int] = Field(None, ge=0, description="Max retries")
+    max_retries: int | None = Field(None, ge=0, description="Max retries")
 
     # Sandbox context
-    sandbox_type: Optional[str] = Field(None, description="Sandbox type (docker, vm, etc.)")
-    container_id: Optional[str] = Field(None, description="Container ID")
+    sandbox_type: str | None = Field(None, description="Sandbox type (docker, vm, etc.)")
+    container_id: str | None = Field(None, description="Container ID")
 
 
 class MemoryEvent(AgentEvent):
@@ -520,8 +520,8 @@ class MemoryEvent(AgentEvent):
     memory_type: str = Field(..., description="Memory type (working, episodic, semantic, etc.)")
 
     # Content
-    key: Optional[str] = Field(None, description="Memory key")
-    value_summary: Optional[str] = Field(None, description="Summary of value")
+    key: str | None = Field(None, description="Memory key")
+    value_summary: str | None = Field(None, description="Summary of value")
 
     # Metrics
     items_affected: int = Field(default=1, ge=0, description="Number of items affected")
@@ -553,20 +553,20 @@ class HITLEvent(AgentEvent):
 
     # Risk assessment
     risk_level: str = Field(..., description="Risk level (safe, low, medium, high, critical)")
-    risk_factors: List[str] = Field(default_factory=list, description="Contributing risk factors")
+    risk_factors: list[str] = Field(default_factory=list, description="Contributing risk factors")
 
     # Response
     approval_status: str = Field(..., description="Approval status")
     timeout_occurred: bool = Field(default=False, description="Whether approval timed out")
-    timeout_seconds: Optional[float] = Field(None, ge=0, description="Timeout duration")
+    timeout_seconds: float | None = Field(None, ge=0, description="Timeout duration")
 
     # Human response
-    responder_id: Optional[str] = Field(None, description="Responder ID")
-    feedback: Optional[str] = Field(None, description="Human feedback")
+    responder_id: str | None = Field(None, description="Responder ID")
+    feedback: str | None = Field(None, description="Human feedback")
 
     # Scope
-    scope_granted: Optional[str] = Field(None, description="Approval scope granted")
-    scope_expiration: Optional[datetime] = Field(None, description="When scope expires")
+    scope_granted: str | None = Field(None, description="Approval scope granted")
+    scope_expiration: datetime | None = Field(None, description="When scope expires")
 
 
 class ErrorEvent(AgentEvent):
@@ -591,21 +591,21 @@ class ErrorEvent(AgentEvent):
     # Error details
     error_type: str = Field(..., description="Error type/class")
     error_message: str = Field(..., description="Error message")
-    error_code: Optional[str] = Field(None, description="Error code")
+    error_code: str | None = Field(None, description="Error code")
 
     # Debug info
-    stack_trace: Optional[str] = Field(None, description="Stack trace")
-    source_component: Optional[str] = Field(None, description="Source component")
-    source_file: Optional[str] = Field(None, description="Source file")
-    source_line: Optional[int] = Field(None, ge=0, description="Source line")
+    stack_trace: str | None = Field(None, description="Stack trace")
+    source_component: str | None = Field(None, description="Source component")
+    source_file: str | None = Field(None, description="Source file")
+    source_line: int | None = Field(None, ge=0, description="Source line")
 
     # Recovery
     recoverable: bool = Field(default=True, description="Is recoverable")
-    recovery_action: Optional[str] = Field(None, description="Recovery action taken")
-    recovery_successful: Optional[bool] = Field(None, description="Whether recovery succeeded")
+    recovery_action: str | None = Field(None, description="Recovery action taken")
+    recovery_successful: bool | None = Field(None, description="Whether recovery succeeded")
 
     # Context
-    context_snapshot: Dict[str, Any] = Field(
+    context_snapshot: dict[str, Any] = Field(
         default_factory=dict, description="Context at time of error"
     )
 
@@ -628,27 +628,25 @@ class MetricEvent(AgentEvent):
 
     # Metric identification
     metric_name: str = Field(..., description="Metric name")
-    metric_type: Optional[str] = Field(
+    metric_type: str | None = Field(
         None, description="Metric type (counter, gauge, histogram, etc.)"
     )
 
     # Value
-    metric_value: Union[int, float] = Field(..., description="Metric value")
-    metric_unit: Optional[str] = Field(None, description="Unit (ms, bytes, etc.)")
+    metric_value: int | float = Field(..., description="Metric value")
+    metric_unit: str | None = Field(None, description="Unit (ms, bytes, etc.)")
 
     # Aggregation
-    aggregation: Optional[str] = Field(
-        None, description="Aggregation type (sum, avg, max, min, etc.)"
-    )
+    aggregation: str | None = Field(None, description="Aggregation type (sum, avg, max, min, etc.)")
 
     # Additional values for distributions
-    min_value: Optional[float] = Field(None, description="Minimum value")
-    max_value: Optional[float] = Field(None, description="Maximum value")
-    avg_value: Optional[float] = Field(None, description="Average value")
-    p50_value: Optional[float] = Field(None, description="50th percentile")
-    p95_value: Optional[float] = Field(None, description="95th percentile")
-    p99_value: Optional[float] = Field(None, description="99th percentile")
-    sample_count: Optional[int] = Field(None, ge=0, description="Number of samples")
+    min_value: float | None = Field(None, description="Minimum value")
+    max_value: float | None = Field(None, description="Maximum value")
+    avg_value: float | None = Field(None, description="Average value")
+    p50_value: float | None = Field(None, description="50th percentile")
+    p95_value: float | None = Field(None, description="95th percentile")
+    p99_value: float | None = Field(None, description="99th percentile")
+    sample_count: int | None = Field(None, ge=0, description="Number of samples")
 
 
 class SandboxEvent(AgentEvent):
@@ -669,23 +667,23 @@ class SandboxEvent(AgentEvent):
 
     # Sandbox identification
     sandbox_type: str = Field(..., description="Sandbox type (docker, vm, ephemeral)")
-    sandbox_id: Optional[str] = Field(None, description="Sandbox ID")
+    sandbox_id: str | None = Field(None, description="Sandbox ID")
 
     # Configuration
-    image: Optional[str] = Field(None, description="Image used")
-    access_mode: Optional[str] = Field(None, description="Access mode (restricted, full)")
+    image: str | None = Field(None, description="Image used")
+    access_mode: str | None = Field(None, description="Access mode (restricted, full)")
 
     # Operation
     operation: str = Field(..., description="Operation (create, start, execute, stop, destroy)")
 
     # Execution results
-    exit_code: Optional[int] = Field(None, description="Exit code")
-    stdout_length: Optional[int] = Field(None, ge=0, description="Stdout bytes")
-    stderr_length: Optional[int] = Field(None, ge=0, description="Stderr bytes")
+    exit_code: int | None = Field(None, description="Exit code")
+    stdout_length: int | None = Field(None, ge=0, description="Stdout bytes")
+    stderr_length: int | None = Field(None, ge=0, description="Stderr bytes")
 
     # Resource usage
-    memory_used_mb: Optional[float] = Field(None, ge=0, description="Memory used (MB)")
-    cpu_time_ms: Optional[float] = Field(None, ge=0, description="CPU time (ms)")
+    memory_used_mb: float | None = Field(None, ge=0, description="Memory used (MB)")
+    cpu_time_ms: float | None = Field(None, ge=0, description="CPU time (ms)")
 
 
 class RAGEvent(AgentEvent):
@@ -707,23 +705,23 @@ class RAGEvent(AgentEvent):
 
     # Query
     query: str = Field(..., description="Search query")
-    query_type: Optional[str] = Field(None, description="Query type (semantic, keyword, hybrid)")
+    query_type: str | None = Field(None, description="Query type (semantic, keyword, hybrid)")
 
     # Source
     source: str = Field(..., description="RAG source (vector_store, documents, etc.)")
-    source_id: Optional[str] = Field(None, description="Specific source ID")
+    source_id: str | None = Field(None, description="Specific source ID")
 
     # Results
     num_results: int = Field(default=0, ge=0, description="Results count")
     results_truncated: bool = Field(default=False, description="Whether results were truncated")
 
     # Scores
-    top_score: Optional[float] = Field(None, description="Highest similarity score")
-    avg_score: Optional[float] = Field(None, description="Average similarity score")
-    threshold_score: Optional[float] = Field(None, description="Score threshold used")
+    top_score: float | None = Field(None, description="Highest similarity score")
+    avg_score: float | None = Field(None, description="Average similarity score")
+    threshold_score: float | None = Field(None, description="Score threshold used")
 
     # Documents
-    documents_used: List[str] = Field(default_factory=list, description="Document IDs used")
+    documents_used: list[str] = Field(default_factory=list, description="Document IDs used")
 
 
 # =============================================================================
@@ -733,10 +731,10 @@ class RAGEvent(AgentEvent):
 
 def create_lifecycle_event(
     session_id: str,
-    event_type: Union[LifecycleEventType, str],
+    event_type: LifecycleEventType | str,
     *,
-    execution_id: Optional[str] = None,
-    goal: Optional[str] = None,
+    execution_id: str | None = None,
+    goal: str | None = None,
     severity: EventSeverity = EventSeverity.INFO,
     **kwargs: Any,
 ) -> LifecycleEvent:
@@ -769,13 +767,13 @@ def create_lifecycle_event(
 
 def create_cognitive_event(
     session_id: str,
-    event_type: Union[CognitiveEventType, str],
+    event_type: CognitiveEventType | str,
     phase: str,
     *,
-    execution_id: Optional[str] = None,
-    iteration: Optional[int] = None,
-    input_summary: Optional[str] = None,
-    output_summary: Optional[str] = None,
+    execution_id: str | None = None,
+    iteration: int | None = None,
+    input_summary: str | None = None,
+    output_summary: str | None = None,
     **kwargs: Any,
 ) -> CognitiveEvent:
     """
@@ -812,11 +810,11 @@ def create_cognitive_event(
 
 def create_activity_event(
     session_id: str,
-    event_type: Union[ActivityEventType, str],
+    event_type: ActivityEventType | str,
     activity_name: str,
     *,
-    execution_id: Optional[str] = None,
-    activity_input: Optional[Dict[str, Any]] = None,
+    execution_id: str | None = None,
+    activity_input: dict[str, Any] | None = None,
     success: bool = True,
     **kwargs: Any,
 ) -> ActivityEvent:
@@ -854,10 +852,10 @@ def create_error_event(
     error_type: str,
     error_message: str,
     *,
-    execution_id: Optional[str] = None,
-    event_type: Union[ErrorEventType, str] = ErrorEventType.EXCEPTION,
+    execution_id: str | None = None,
+    event_type: ErrorEventType | str = ErrorEventType.EXCEPTION,
     severity: EventSeverity = EventSeverity.ERROR,
-    stack_trace: Optional[str] = None,
+    stack_trace: str | None = None,
     recoverable: bool = True,
     **kwargs: Any,
 ) -> ErrorEvent:
@@ -899,9 +897,9 @@ def create_metric_event(
     metric_name: str,
     metric_value: float,
     *,
-    execution_id: Optional[str] = None,
-    event_type: Union[MetricEventType, str] = "measurement",
-    metric_unit: Optional[str] = None,
+    execution_id: str | None = None,
+    event_type: MetricEventType | str = "measurement",
+    metric_unit: str | None = None,
     **kwargs: Any,
 ) -> MetricEvent:
     """
@@ -935,13 +933,13 @@ def create_metric_event(
 
 def create_hitl_event(
     session_id: str,
-    event_type: Union[HITLEventType, str],
+    event_type: HITLEventType | str,
     request_id: str,
     action_type: str,
     risk_level: str,
     approval_status: str,
     *,
-    execution_id: Optional[str] = None,
+    execution_id: str | None = None,
     **kwargs: Any,
 ) -> HITLEvent:
     """
@@ -977,13 +975,13 @@ def create_hitl_event(
 
 def create_sandbox_event(
     session_id: str,
-    event_type: Union[SandboxEventType, str],
+    event_type: SandboxEventType | str,
     sandbox_type: str,
     operation: str,
     *,
-    execution_id: Optional[str] = None,
-    sandbox_id: Optional[str] = None,
-    image: Optional[str] = None,
+    execution_id: str | None = None,
+    sandbox_id: str | None = None,
+    image: str | None = None,
     **kwargs: Any,
 ) -> SandboxEvent:
     """

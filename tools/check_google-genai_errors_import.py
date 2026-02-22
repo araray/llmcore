@@ -1,3 +1,4 @@
+# tools/check_google-genai_errors_import.py
 import google.genai as genai
 
 print(genai.__version__)

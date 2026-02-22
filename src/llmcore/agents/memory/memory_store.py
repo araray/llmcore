@@ -54,10 +54,6 @@ from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Set,
 )
 
 try:
@@ -111,8 +107,8 @@ class MemoryItem:
     content: str
     memory_type: MemoryType
     importance: MemoryImportance = MemoryImportance.MEDIUM
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    embedding: list[float] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
     accessed_at: float = field(default_factory=time.time)
     access_count: int = 0
@@ -124,7 +120,7 @@ class MemoryItem:
         self.accessed_at = time.time()
         self.access_count += 1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
@@ -140,7 +136,7 @@ class MemoryItem:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MemoryItem":
+    def from_dict(cls, data: dict[str, Any]) -> MemoryItem:
         """Create from dictionary."""
         return cls(
             id=data["id"],
@@ -160,7 +156,7 @@ class MemoryItem:
 class RecallResult:
     """Result of memory recall."""
 
-    memories: List[MemoryItem]
+    memories: list[MemoryItem]
     query: str
     total_searched: int
     retrieval_time_ms: int
@@ -197,13 +193,13 @@ class WorkingMemory:
         self.importance_threshold = importance_threshold
 
         self._items: OrderedDict[str, MemoryItem] = OrderedDict()
-        self._pinned: Set[str] = set()  # Items that won't be evicted
+        self._pinned: set[str] = set()  # Items that won't be evicted
 
     def add(
         self,
         content: str,
         importance: MemoryImportance = MemoryImportance.MEDIUM,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         pinned: bool = False,
     ) -> str:
         """
@@ -241,7 +237,7 @@ class WorkingMemory:
 
         return item_id
 
-    def get(self, item_id: str) -> Optional[MemoryItem]:
+    def get(self, item_id: str) -> MemoryItem | None:
         """Get item by ID."""
         item = self._items.get(item_id)
         if item:
@@ -269,7 +265,7 @@ class WorkingMemory:
         """Unpin an item."""
         self._pinned.discard(item_id)
 
-    def get_all(self) -> List[MemoryItem]:
+    def get_all(self) -> list[MemoryItem]:
         """Get all items in working memory."""
         return list(self._items.values())
 
@@ -349,8 +345,8 @@ class LongTermMemoryStore(ABC):
     async def store(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding: Optional[List[float]] = None,
+        metadata: dict[str, Any] | None = None,
+        embedding: list[float] | None = None,
     ) -> str:
         """Store a memory item."""
         ...
@@ -359,10 +355,10 @@ class LongTermMemoryStore(ABC):
     async def retrieve(
         self,
         query: str,
-        query_embedding: Optional[List[float]] = None,
+        query_embedding: list[float] | None = None,
         max_results: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[MemoryItem]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[MemoryItem]:
         """Retrieve relevant memories."""
         ...
 
@@ -397,14 +393,14 @@ class InMemoryStore(LongTermMemoryStore):
         self.memory_type = memory_type
         self.max_items = max_items
 
-        self._items: Dict[str, MemoryItem] = {}
+        self._items: dict[str, MemoryItem] = {}
         self._lock = asyncio.Lock()
 
     async def store(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding: Optional[List[float]] = None,
+        metadata: dict[str, Any] | None = None,
+        embedding: list[float] | None = None,
     ) -> str:
         """Store a memory item."""
         item_id = hashlib.sha256(f"{content}{time.time()}".encode()).hexdigest()[:16]
@@ -429,10 +425,10 @@ class InMemoryStore(LongTermMemoryStore):
     async def retrieve(
         self,
         query: str,
-        query_embedding: Optional[List[float]] = None,
+        query_embedding: list[float] | None = None,
         max_results: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[MemoryItem]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[MemoryItem]:
         """Retrieve relevant memories using text similarity."""
         async with self._lock:
             candidates = list(self._items.values())
@@ -511,8 +507,8 @@ class InMemoryStore(LongTermMemoryStore):
 
     def _matches_filter(
         self,
-        metadata: Dict[str, Any],
-        filter_: Dict[str, Any],
+        metadata: dict[str, Any],
+        filter_: dict[str, Any],
     ) -> bool:
         """Check if metadata matches filter."""
         for key, value in filter_.items():
@@ -588,8 +584,8 @@ class PersistentMemoryStore(LongTermMemoryStore):
     async def store(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding: Optional[List[float]] = None,
+        metadata: dict[str, Any] | None = None,
+        embedding: list[float] | None = None,
     ) -> str:
         """Store a memory item."""
         await self._ensure_loaded()
@@ -600,10 +596,10 @@ class PersistentMemoryStore(LongTermMemoryStore):
     async def retrieve(
         self,
         query: str,
-        query_embedding: Optional[List[float]] = None,
+        query_embedding: list[float] | None = None,
         max_results: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[MemoryItem]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[MemoryItem]:
         """Retrieve relevant memories."""
         await self._ensure_loaded()
         return await self._in_memory.retrieve(query, query_embedding, max_results, filter_metadata)
@@ -658,7 +654,7 @@ class MemoryManager:
     def __init__(
         self,
         working_memory_capacity: int = 10,
-        persist_path: Optional[Path] = None,
+        persist_path: Path | None = None,
     ):
         # Working memory
         self.working = WorkingMemory(capacity=working_memory_capacity)
@@ -693,7 +689,7 @@ class MemoryManager:
         content: str,
         memory_type: MemoryType = MemoryType.SEMANTIC,
         importance: MemoryImportance = MemoryImportance.MEDIUM,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         also_working: bool = False,
     ) -> str:
         """
@@ -734,10 +730,10 @@ class MemoryManager:
     async def recall(
         self,
         query: str,
-        memory_types: Optional[List[MemoryType]] = None,
+        memory_types: list[MemoryType] | None = None,
         max_results: int = 5,
         include_working: bool = True,
-        filter_metadata: Optional[Dict[str, Any]] = None,
+        filter_metadata: dict[str, Any] | None = None,
     ) -> RecallResult:
         """
         Recall relevant memories.
@@ -755,7 +751,7 @@ class MemoryManager:
         start_time = time.time()
 
         memory_types = memory_types or [MemoryType.SEMANTIC, MemoryType.EPISODIC]
-        all_results: List[MemoryItem] = []
+        all_results: list[MemoryItem] = []
         total_searched = 0
 
         # Search long-term stores
@@ -843,7 +839,7 @@ class MemoryManager:
             return await store.delete(item_id)
         return False
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """Get memory statistics."""
         return {
             "working": {
@@ -870,7 +866,7 @@ class MemoryManager:
 
 def create_memory_manager(
     working_capacity: int = 10,
-    persist_path: Optional[str] = None,
+    persist_path: str | None = None,
 ) -> MemoryManager:
     """Create a memory manager with default settings."""
     path = Path(persist_path) if persist_path else None

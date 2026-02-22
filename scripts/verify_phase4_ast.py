@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# scripts/verify_phase4_ast.py
 """
 AST-based verification script for Phase 4 implementation.
 

@@ -12,9 +12,9 @@ to eliminate deprecation warnings.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import (
     BaseModel,
@@ -71,7 +71,7 @@ class Message(BaseModel):
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()), description="Unique identifier for the message."
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None, description="Identifier of the chat session this message belongs to."
     )
     role: Role = Field(
@@ -79,16 +79,16 @@ class Message(BaseModel):
     )
     content: str = Field(description="The textual content of the message.")
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of when the message was created (UTC).",
     )
-    tool_call_id: Optional[str] = Field(
+    tool_call_id: str | None = Field(
         default=None, description="For role 'tool', the ID of the corresponding tool call."
     )
-    tokens: Optional[int] = Field(
+    tokens: int | None = Field(
         default=None, description="Optional token count for the message content."
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict, description="Optional dictionary for additional message metadata."
     )
 
@@ -123,14 +123,14 @@ class Message(BaseModel):
                     raise ValueError(f"Invalid datetime format: {v}")
 
             if v_parsed.tzinfo is None:
-                return v_parsed.replace(tzinfo=timezone.utc)
-            return v_parsed.astimezone(timezone.utc)
+                return v_parsed.replace(tzinfo=UTC)
+            return v_parsed.astimezone(UTC)
         if isinstance(v, datetime):
             if v.tzinfo is None:
-                return v.replace(tzinfo=timezone.utc)
-            return v.astimezone(timezone.utc)
+                return v.replace(tzinfo=UTC)
+            return v.astimezone(UTC)
         if v is None:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
         return v
 
 
@@ -165,13 +165,13 @@ class ContextItem(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: ContextItemType
-    source_id: Optional[str] = None
+    source_id: str | None = None
     content: str
-    tokens: Optional[int] = None
-    original_tokens: Optional[int] = None
+    tokens: int | None = None
+    original_tokens: int | None = None
     is_truncated: bool = False
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     model_config = ConfigDict(
         use_enum_values=True,
@@ -211,11 +211,11 @@ class Episode(BaseModel):
     )
     session_id: str = Field(description="The session this episode belongs to.")
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of the event (UTC).",
     )
     event_type: EpisodeType = Field(description="The type of event that occurred.")
-    data: Dict[str, Any] = Field(
+    data: dict[str, Any] = Field(
         description="A JSON blob containing the structured data of the event."
     )
 
@@ -250,14 +250,14 @@ class Episode(BaseModel):
                     raise ValueError(f"Invalid datetime format: {v}")
 
             if v_parsed.tzinfo is None:
-                return v_parsed.replace(tzinfo=timezone.utc)
-            return v_parsed.astimezone(timezone.utc)
+                return v_parsed.replace(tzinfo=UTC)
+            return v_parsed.astimezone(UTC)
         if isinstance(v, datetime):
             if v.tzinfo is None:
-                return v.replace(tzinfo=timezone.utc)
-            return v.astimezone(timezone.utc)
+                return v.replace(tzinfo=UTC)
+            return v.astimezone(UTC)
         if v is None:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
         return v
 
 
@@ -267,12 +267,12 @@ class ChatSession(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: Optional[str] = None
-    messages: List[Message] = Field(default_factory=list)
-    context_items: List[ContextItem] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    name: str | None = None
+    messages: list[Message] = Field(default_factory=list)
+    context_items: list[ContextItem] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         use_enum_values=True,
@@ -288,8 +288,8 @@ class ChatSession(BaseModel):
         self,
         message_content: str,
         role: Role,
-        session_id_override: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id_override: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Message:
         """
         Add a new message to the session.
@@ -311,24 +311,24 @@ class ChatSession(BaseModel):
             metadata=metadata or {},
         )
         self.messages.append(new_message)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         return new_message
 
     def add_context_item(self, item: ContextItem) -> None:
         self.context_items = [ci for ci in self.context_items if ci.id != item.id]
         self.context_items.append(item)
         self.context_items.sort(key=lambda x: x.timestamp)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def remove_context_item(self, item_id: str) -> bool:
         initial_len = len(self.context_items)
         self.context_items = [ci for ci in self.context_items if ci.id != item_id]
         if len(self.context_items) < initial_len:
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
             return True
         return False
 
-    def get_context_item(self, item_id: str) -> Optional[ContextItem]:
+    def get_context_item(self, item_id: str) -> ContextItem | None:
         for item in self.context_items:
             if item.id == item_id:
                 return item
@@ -342,9 +342,9 @@ class ContextDocument(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     content: str
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    score: Optional[float] = None
+    embedding: list[float] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    score: float | None = None
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -378,20 +378,20 @@ class ContextPreparationDetails(BaseModel):
     """
 
     # === Core Context Preparation Fields (existing) ===
-    prepared_messages: List[Message] = Field(
+    prepared_messages: list[Message] = Field(
         default_factory=list, description="The final list of messages prepared for the LLM"
     )
     final_token_count: int = Field(default=0, description="The token count of the prepared context")
     max_tokens_for_model: int = Field(
         default=0, description="The maximum context window for the model used"
     )
-    rag_documents_used: Optional[List[ContextDocument]] = Field(
+    rag_documents_used: list[ContextDocument] | None = Field(
         default=None, description="List of RAG documents included in context"
     )
-    rendered_rag_template_content: Optional[str] = Field(
+    rendered_rag_template_content: str | None = Field(
         default=None, description="The formatted RAG prompt with injected context"
     )
-    truncation_actions_taken: Dict[str, Any] = Field(
+    truncation_actions_taken: dict[str, Any] = Field(
         default_factory=dict, description="Details of any truncation operations performed"
     )
 
@@ -414,7 +414,7 @@ class ContextPreparationDetails(BaseModel):
     rag_used: bool = Field(
         default=False, description="Whether RAG was enabled for this interaction"
     )
-    rag_documents_retrieved: Optional[int] = Field(
+    rag_documents_retrieved: int | None = Field(
         default=None, description="Number of RAG documents retrieved (if applicable)"
     )
 
@@ -442,9 +442,9 @@ class ContextPresetItem(BaseModel):
 
     item_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: ContextItemType
-    content: Optional[str] = None
-    source_identifier: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    content: str | None = None
+    source_identifier: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         use_enum_values=True,
@@ -458,11 +458,11 @@ class ContextPreset(BaseModel):
     """
 
     name: str
-    description: Optional[str] = None
-    items: List[ContextPresetItem] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    description: str | None = None
+    items: list[ContextPresetItem] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -518,13 +518,11 @@ class ModelDetails(BaseModel):
 
     id: str = Field(description="The unique identifier for the model.")
     provider_name: str = Field(description="The name of the provider this model belongs to.")
-    display_name: Optional[str] = Field(
-        default=None, description="Human-friendly name for the model."
-    )
+    display_name: str | None = Field(default=None, description="Human-friendly name for the model.")
     context_length: int = Field(
         default=4096, description="The maximum context window size in tokens."
     )
-    max_output_tokens: Optional[int] = Field(
+    max_output_tokens: int | None = Field(
         default=None, description="Maximum number of output tokens the model can generate."
     )
     supports_streaming: bool = Field(
@@ -539,22 +537,22 @@ class ModelDetails(BaseModel):
     supports_reasoning: bool = Field(
         default=False, description="Indicates if the model supports extended reasoning."
     )
-    family: Optional[str] = Field(
+    family: str | None = Field(
         default=None, description="Model family (e.g., 'GPT-4', 'Claude', 'Llama')."
     )
-    parameter_count: Optional[str] = Field(
+    parameter_count: str | None = Field(
         default=None, description="Model parameter count as string (e.g., '70B', '8x7B')."
     )
-    quantization_level: Optional[str] = Field(
+    quantization_level: str | None = Field(
         default=None, description="Quantization level for local models (e.g., 'Q4_K_M')."
     )
-    file_size_bytes: Optional[int] = Field(
+    file_size_bytes: int | None = Field(
         default=None, description="File size on disk for local models (Ollama)."
     )
-    model_type: Optional[str] = Field(
+    model_type: str | None = Field(
         default="chat", description="Type of model ('chat', 'embedding', 'completion')."
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict, description="Provider-specific metadata."
     )
 
@@ -575,16 +573,16 @@ class ModelValidationResult(BaseModel):
     """
 
     is_valid: bool = Field(description="Whether the model is available for the provider.")
-    canonical_name: Optional[str] = Field(
+    canonical_name: str | None = Field(
         default=None, description="The correct/canonical model name (may differ in case)."
     )
-    suggestions: List[str] = Field(
+    suggestions: list[str] = Field(
         default_factory=list, description="List of similar model names if not found."
     )
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         default=None, description="Human-readable error or note message."
     )
-    model_details: Optional[ModelDetails] = Field(
+    model_details: ModelDetails | None = Field(
         default=None, description="Full model details if validation succeeded."
     )
 
@@ -605,15 +603,13 @@ class PullProgress(BaseModel):
     """
 
     status: str = Field(description="Current status of the pull operation.")
-    digest: Optional[str] = Field(default=None, description="Layer/file digest being processed.")
-    total_bytes: Optional[int] = Field(
+    digest: str | None = Field(default=None, description="Layer/file digest being processed.")
+    total_bytes: int | None = Field(
         default=None, description="Total bytes to download (may be None if unknown)."
     )
-    completed_bytes: Optional[int] = Field(default=None, description="Bytes downloaded so far.")
-    percent_complete: Optional[float] = Field(
-        default=None, description="Percentage complete (0-100)."
-    )
-    layer: Optional[str] = Field(
+    completed_bytes: int | None = Field(default=None, description="Bytes downloaded so far.")
+    percent_complete: float | None = Field(default=None, description="Percentage complete (0-100).")
+    layer: str | None = Field(
         default=None, description="Current layer identifier (Ollama-specific)."
     )
 
@@ -631,7 +627,7 @@ class PullResult(BaseModel):
 
     success: bool = Field(description="Whether the pull completed successfully.")
     model_name: str = Field(description="The name of the model that was pulled.")
-    error_message: Optional[str] = Field(default=None, description="Error message if pull failed.")
+    error_message: str | None = Field(default=None, description="Error message if pull failed.")
     duration_seconds: float = Field(
         default=0.0, description="Time taken to pull the model in seconds."
     )
@@ -679,13 +675,13 @@ class SessionTokenStats(BaseModel):
     max_completion_tokens: int = Field(
         default=0, description="Maximum completion tokens in any interaction."
     )
-    first_interaction_at: Optional[datetime] = Field(
+    first_interaction_at: datetime | None = Field(
         default=None, description="Timestamp of first interaction (UTC)."
     )
-    last_interaction_at: Optional[datetime] = Field(
+    last_interaction_at: datetime | None = Field(
         default=None, description="Timestamp of most recent interaction (UTC)."
     )
-    by_model: Dict[str, Dict[str, int]] = Field(
+    by_model: dict[str, dict[str, int]] = Field(
         default_factory=dict,
         description=(
             "Token usage breakdown by model. Format: "
@@ -696,7 +692,7 @@ class SessionTokenStats(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     @field_serializer("first_interaction_at", "last_interaction_at")
-    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+    def serialize_datetime(self, dt: datetime | None) -> str | None:
         """Serialize datetime to ISO format with Z suffix."""
         if dt is None:
             return None
@@ -747,19 +743,19 @@ class CostEstimate(BaseModel):
     reasoning_tokens: int = Field(default=0, description="Reasoning tokens used.")
 
     # Pricing rates used
-    input_price_per_million: Optional[float] = Field(
+    input_price_per_million: float | None = Field(
         default=None, description="Input price per 1M tokens."
     )
-    output_price_per_million: Optional[float] = Field(
+    output_price_per_million: float | None = Field(
         default=None, description="Output price per 1M tokens."
     )
-    cached_price_per_million: Optional[float] = Field(
+    cached_price_per_million: float | None = Field(
         default=None, description="Cached input price per 1M tokens."
     )
 
     # Model identification
-    model_id: Optional[str] = Field(default=None, description="Model identifier used for pricing.")
-    provider: Optional[str] = Field(default=None, description="Provider name.")
+    model_id: str | None = Field(default=None, description="Model identifier used for pricing.")
+    provider: str | None = Field(default=None, description="Provider name.")
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -791,7 +787,7 @@ class Tool(BaseModel):
 
     name: str = Field(description="The name of the tool/function.")
     description: str = Field(description="A description of what the tool does.")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         description="A JSON Schema object defining the tool's input parameters."
     )
 
@@ -808,7 +804,7 @@ class ToolCall(BaseModel):
 
     id: str = Field(description="Unique identifier for this specific tool call.")
     name: str = Field(description="The name of the tool to be executed.")
-    arguments: Dict[str, Any] = Field(
+    arguments: dict[str, Any] = Field(
         description="A dictionary of arguments for the tool, generated by the LLM."
     )
 
@@ -850,18 +846,18 @@ class AgentState(BaseModel):
     """
 
     goal: str = Field(description="The high-level objective for the agent.")
-    plan: List[str] = Field(default_factory=list, description="The decomposed plan of sub-tasks.")
+    plan: list[str] = Field(default_factory=list, description="The decomposed plan of sub-tasks.")
     current_plan_step_index: int = Field(
         default=0, description="Index of the current plan step being executed."
     )
-    plan_steps_status: List[str] = Field(
+    plan_steps_status: list[str] = Field(
         default_factory=list,
         description="Status of each plan step ('pending', 'completed', 'failed').",
     )
-    history_of_thoughts: List[str] = Field(
+    history_of_thoughts: list[str] = Field(
         default_factory=list, description="A chronological log of the agent's internal 'Thoughts'."
     )
-    observations: Dict[str, Any] = Field(
+    observations: dict[str, Any] = Field(
         default_factory=dict, description="A mapping of actions to their observed results."
     )
     scratchpad: str = Field(
@@ -896,18 +892,18 @@ class AgentTask(BaseModel):
     status: str = Field(default="PENDING", description="The current status of the task.")
     goal: str = Field(description="The original high-level goal for the task.")
     agent_state: AgentState = Field(description="The agent's current working memory state.")
-    pending_action_data: Optional[Dict[str, Any]] = Field(
+    pending_action_data: dict[str, Any] | None = Field(
         default=None, description="JSON representation of the ToolCall awaiting approval (HITL)."
     )
-    approval_prompt: Optional[str] = Field(
+    approval_prompt: str | None = Field(
         default=None, description="The question for the human operator (HITL workflow)."
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of task creation (UTC).",
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of last task update (UTC).",
     )
 

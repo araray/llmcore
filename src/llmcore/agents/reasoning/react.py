@@ -28,16 +28,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Union,
 )
 
 try:
@@ -101,7 +97,7 @@ class ReActAction:
     """An action step in ReAct reasoning."""
 
     activity: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     reason: str = ""
     iteration: int = 0
     timestamp: float = field(default_factory=time.time)
@@ -123,8 +119,8 @@ class ReActObservation:
 class ReActTrajectory:
     """Complete reasoning trajectory."""
 
-    steps: List[Union[ReActThought, ReActAction, ReActObservation]] = field(default_factory=list)
-    final_answer: Optional[str] = None
+    steps: list[ReActThought | ReActAction | ReActObservation] = field(default_factory=list)
+    final_answer: str | None = None
     status: ReActStatus = ReActStatus.IN_PROGRESS
     iterations: int = 0
     total_duration_ms: int = 0
@@ -146,19 +142,19 @@ class ReActTrajectory:
         if observation.success:
             self.successful_actions += 1
 
-    def get_thoughts(self) -> List[ReActThought]:
+    def get_thoughts(self) -> list[ReActThought]:
         """Get all thought steps."""
         return [s for s in self.steps if isinstance(s, ReActThought)]
 
-    def get_actions(self) -> List[ReActAction]:
+    def get_actions(self) -> list[ReActAction]:
         """Get all action steps."""
         return [s for s in self.steps if isinstance(s, ReActAction)]
 
-    def get_observations(self) -> List[ReActObservation]:
+    def get_observations(self) -> list[ReActObservation]:
         """Get all observation steps."""
         return [s for s in self.steps if isinstance(s, ReActObservation)]
 
-    def format_history(self, max_steps: Optional[int] = None) -> str:
+    def format_history(self, max_steps: int | None = None) -> str:
         """Format trajectory as history for LLM context."""
         lines = []
         steps = self.steps[-max_steps:] if max_steps else self.steps
@@ -190,12 +186,12 @@ if PYDANTIC_AVAILABLE:
         """Result of ReAct reasoning."""
 
         success: bool = Field(description="Whether reasoning succeeded")
-        final_answer: Optional[str] = Field(None, description="Final answer if successful")
+        final_answer: str | None = Field(None, description="Final answer if successful")
         status: ReActStatus = Field(description="Termination status")
-        trajectory: Optional[Dict[str, Any]] = Field(None, description="Full reasoning trajectory")
+        trajectory: dict[str, Any] | None = Field(None, description="Full reasoning trajectory")
         iterations: int = Field(0, description="Number of iterations")
         duration_ms: int = Field(0, description="Total duration in ms")
-        error: Optional[str] = Field(None, description="Error message if failed")
+        error: str | None = Field(None, description="Error message if failed")
 
         model_config = ConfigDict(use_enum_values=True)
 else:
@@ -205,12 +201,12 @@ else:
         """Result of ReAct reasoning."""
 
         success: bool
-        final_answer: Optional[str] = None
+        final_answer: str | None = None
         status: ReActStatus = ReActStatus.FAILURE
-        trajectory: Optional[Dict[str, Any]] = None
+        trajectory: dict[str, Any] | None = None
         iterations: int = 0
         duration_ms: int = 0
-        error: Optional[str] = None
+        error: str | None = None
 
 
 # =============================================================================
@@ -304,28 +300,26 @@ class ReActReasoner:
 
     def __init__(
         self,
-        llm_provider: Optional["BaseLLMProvider"] = None,
-        activity_loop: Optional["ActivityLoop"] = None,
-        config: Optional[ReActConfig] = None,
+        llm_provider: BaseLLMProvider | None = None,
+        activity_loop: ActivityLoop | None = None,
+        config: ReActConfig | None = None,
     ):
         self.llm_provider = llm_provider
         self.activity_loop = activity_loop
         self.config = config or ReActConfig()
 
         # Tracking
-        self._current_trajectory: Optional[ReActTrajectory] = None
+        self._current_trajectory: ReActTrajectory | None = None
         self._consecutive_failures = 0
-        self._last_error: Optional[str] = None
+        self._last_error: str | None = None
 
     async def reason(
         self,
         goal: str,
-        context: Optional[str] = None,
-        available_activities: Optional[str] = None,
-        initial_observations: Optional[List[str]] = None,
-        on_step: Optional[
-            Callable[[Union[ReActThought, ReActAction, ReActObservation]], None]
-        ] = None,
+        context: str | None = None,
+        available_activities: str | None = None,
+        initial_observations: list[str] | None = None,
+        on_step: Callable[[ReActThought | ReActAction | ReActObservation], None] | None = None,
     ) -> ReActResult:
         """
         Execute ReAct reasoning loop.
@@ -456,8 +450,8 @@ class ReActReasoner:
     async def _generate_step(
         self,
         goal: str,
-        context: Optional[str],
-        available_activities: Optional[str],
+        context: str | None,
+        available_activities: str | None,
         trajectory: ReActTrajectory,
     ) -> str:
         """Generate the next thought/action from LLM."""
@@ -496,8 +490,8 @@ class ReActReasoner:
         llm_output: str,
         iteration: int,
         trajectory: ReActTrajectory,
-        on_step: Optional[Callable] = None,
-    ) -> Optional[ReActObservation]:
+        on_step: Callable | None = None,
+    ) -> ReActObservation | None:
         """Execute actions from LLM output."""
         if not self.activity_loop:
             logger.warning("No activity loop configured, cannot execute actions")
@@ -532,7 +526,7 @@ class ReActReasoner:
 
         return None
 
-    def _extract_thought(self, llm_output: str, iteration: int) -> Optional[ReActThought]:
+    def _extract_thought(self, llm_output: str, iteration: int) -> ReActThought | None:
         """Extract thought from LLM output."""
         import re
 
@@ -572,7 +566,7 @@ class ReActReasoner:
 
         return None
 
-    def _extract_final_answer(self, llm_output: str) -> Optional[str]:
+    def _extract_final_answer(self, llm_output: str) -> str | None:
         """Extract final answer from LLM output."""
         import re
 
@@ -601,8 +595,8 @@ class ReActReasoner:
         trajectory: ReActTrajectory,
         success: bool,
         start_time: float,
-        final_answer: Optional[str] = None,
-        error: Optional[str] = None,
+        final_answer: str | None = None,
+        error: str | None = None,
     ) -> ReActResult:
         """Create ReActResult from trajectory."""
         duration_ms = int((time.time() - start_time) * 1000)
@@ -626,7 +620,7 @@ class ReActReasoner:
         )
 
     @property
-    def current_trajectory(self) -> Optional[ReActTrajectory]:
+    def current_trajectory(self) -> ReActTrajectory | None:
         """Get current reasoning trajectory."""
         return self._current_trajectory
 
@@ -638,9 +632,9 @@ class ReActReasoner:
 
 async def reason_with_react(
     goal: str,
-    llm_provider: "BaseLLMProvider",
-    activity_loop: Optional["ActivityLoop"] = None,
-    context: Optional[str] = None,
+    llm_provider: BaseLLMProvider,
+    activity_loop: ActivityLoop | None = None,
+    context: str | None = None,
     max_iterations: int = 10,
     timeout_seconds: float = 300.0,
 ) -> ReActResult:

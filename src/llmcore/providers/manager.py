@@ -11,13 +11,13 @@ UPDATED: Added async initialize() method for future async provider initializatio
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 # Assume ConfyConfig type for hinting
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any]  # type: ignore
+    ConfyConfig = dict[str, Any]  # type: ignore
 
 
 from ..exceptions import ConfigError
@@ -32,13 +32,54 @@ from .openai_provider import OpenAIProvider
 logger = logging.getLogger(__name__)
 
 # --- Mapping from config provider name string to class ---
-PROVIDER_MAP: Dict[str, Type[BaseProvider]] = {
+# Native providers have dedicated implementations.  OpenAI-compatible
+# services (DeepSeek, Mistral, xAI, etc.) reuse OpenAIProvider with a
+# custom ``base_url``.  The "google" alias maps to GeminiProvider for
+# configs that use ``[providers.google]`` instead of ``[providers.gemini]``.
+PROVIDER_MAP: dict[str, type[BaseProvider]] = {
+    # Native providers
     "ollama": OllamaProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
+    # Alias: google → gemini
+    "google": GeminiProvider,
+    # OpenAI-compatible providers
+    "deepseek": OpenAIProvider,
+    "mistral": OpenAIProvider,
+    "xai": OpenAIProvider,
+    "groq": OpenAIProvider,
+    "together": OpenAIProvider,
 }
 # --- End Mapping ---
+
+# Well-known defaults for providers that reuse OpenAIProvider.
+# Keys must match the ``PROVIDER_MAP`` section names above.
+# ``env_var``  – conventional environment variable for the API key
+# ``base_url`` – vendor API endpoint (required, since the default
+#                OpenAI base URL is wrong for these services)
+_OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
+    "deepseek": {
+        "env_var": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com",
+    },
+    "mistral": {
+        "env_var": "MISTRAL_API_KEY",
+        "base_url": "https://api.mistral.ai/v1",
+    },
+    "xai": {
+        "env_var": "XAI_API_KEY",
+        "base_url": "https://api.x.ai/v1",
+    },
+    "groq": {
+        "env_var": "GROQ_API_KEY",
+        "base_url": "https://api.groq.com/openai/v1",
+    },
+    "together": {
+        "env_var": "TOGETHER_API_KEY",
+        "base_url": "https://api.together.xyz/v1",
+    },
+}
 
 
 class ProviderManager:
@@ -53,10 +94,10 @@ class ProviderManager:
     control from LLMCore.create(), while maintaining backward compatibility.
     """
 
-    _providers: Dict[str, BaseProvider]
+    _providers: dict[str, BaseProvider]
     _config: ConfyConfig
     _default_provider_name: str
-    _log_raw_payloads_override: Optional[bool]
+    _log_raw_payloads_override: bool | None
     _initialized: bool
 
     def __init__(self, config: ConfyConfig, log_raw_payloads: bool = False):
@@ -78,7 +119,7 @@ class ProviderManager:
         self._log_raw_payloads_override = log_raw_payloads
         self._initialized = False
         self._default_provider_name = self._config.get("llmcore.default_provider", "ollama").lower()
-        logger.info(
+        logger.debug(
             f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'."
         )
 
@@ -173,18 +214,63 @@ class ProviderManager:
                         f"Environment variable '{env_var_name}' specified for provider '{current_section_name_lower}' but it is not set."
                     )
 
+            # Auto-detect API key from conventional env var.
+            #
+            # Original condition only triggered when section name !=
+            # provider type key, but for providers like ``[providers.deepseek]``
+            # with no explicit ``type``, both equal "deepseek" – so the
+            # check was skipped and OpenAIProvider fell back to
+            # OPENAI_API_KEY which doesn't exist.
+            #
+            # Now also triggers for any section listed in
+            # ``_OPENAI_COMPATIBLE_DEFAULTS`` so that DeepSeek, Mistral,
+            # xAI, etc. correctly resolve their own env vars.
+            compat_defaults = _OPENAI_COMPATIBLE_DEFAULTS.get(current_section_name_lower)
+            if (
+                "api_key" not in provider_specific_config
+                and "api_key_env_var" not in provider_specific_config
+                and (current_section_name_lower != provider_type_key or compat_defaults is not None)
+            ):
+                # Prefer the well-known env var for compatible providers,
+                # fall back to the generic {SECTION}_API_KEY convention.
+                if compat_defaults:
+                    conventional_env = compat_defaults["env_var"]
+                else:
+                    conventional_env = f"{current_section_name_lower.upper()}_API_KEY"
+                api_key = os.environ.get(conventional_env)
+                if api_key:
+                    provider_specific_config["api_key"] = api_key
+                    logger.debug(
+                        f"Loaded API key for '{current_section_name_lower}' from conventional env var '{conventional_env}'."
+                    )
+
+            # Auto-inject base_url for known OpenAI-compatible providers
+            # when not explicitly configured.  Without this, OpenAIProvider
+            # would send requests to the default OpenAI endpoint.
+            if compat_defaults and "base_url" not in provider_specific_config:
+                provider_specific_config["base_url"] = compat_defaults["base_url"]
+                logger.debug(
+                    f"Injected default base_url for '{current_section_name_lower}': "
+                    f"{compat_defaults['base_url']}"
+                )
+
             try:
+                provider_specific_config["_instance_name"] = current_section_name_lower
                 self._providers[current_section_name_lower] = provider_cls(
                     provider_specific_config, log_raw_payloads=log_raw_payloads_global
                 )
-                logger.info(
+                logger.debug(
                     f"Provider instance '{current_section_name_lower}' (type: '{provider_type_key}') initialized."
                 )
             except ImportError as e:
-                logger.error(
+                logger.warning(
                     f"Failed to init '{current_section_name_lower}': Missing library. Install with 'pip install llmcore[{provider_type_key}]'. Error: {e}"
                 )
+            except ConfigError as e:
+                # Expected error for missing API keys - log without traceback
+                logger.warning(f"Provider '{current_section_name_lower}' not configured: {e}")
             except Exception as e:
+                # Unexpected error - log with traceback for debugging
                 logger.error(
                     f"Failed to initialize provider '{current_section_name_lower}': {e}",
                     exc_info=True,
@@ -193,7 +279,7 @@ class ProviderManager:
         if not self._providers:
             logger.warning("No provider instances were successfully loaded.")
 
-    def get_provider(self, name: Optional[str] = None) -> BaseProvider:
+    def get_provider(self, name: str | None = None) -> BaseProvider:
         """
         Gets a provider instance by its configured name, or the default provider.
 
@@ -221,7 +307,7 @@ class ProviderManager:
         """Gets the instance of the configured default provider."""
         return self.get_provider(self._default_provider_name)
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """Lists the names of all successfully loaded provider instances."""
         return list(self._providers.keys())
 

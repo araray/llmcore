@@ -40,10 +40,11 @@ Usage:
 import asyncio
 import logging
 import time
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +78,11 @@ class HealthCheckResult:
 
     status: HealthStatus
     latency_ms: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    error_message: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    error_message: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for logging/API responses."""
         return {
             "status": self.status.value,
@@ -100,16 +101,16 @@ class StorageHealthReport:
     backend_type: str  # "session" or "vector"
     status: HealthStatus
     circuit_state: CircuitState
-    last_check: Optional[HealthCheckResult]
+    last_check: HealthCheckResult | None
     consecutive_failures: int
     total_checks: int
     total_failures: int
     uptime_percentage: float
     average_latency_ms: float
-    last_successful_check: Optional[datetime]
-    last_failed_check: Optional[datetime]
+    last_successful_check: datetime | None
+    last_failed_check: datetime | None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for logging/API responses."""
         return {
             "backend_name": self.backend_name,
@@ -200,7 +201,7 @@ class CircuitBreaker:
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._success_count = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._half_open_requests = 0
         self._lock = asyncio.Lock()
 
@@ -313,7 +314,7 @@ class StorageHealthMonitor:
         backend_name: str,
         backend_type: str,
         check_fn: HealthCheckFn,
-        config: Optional[HealthConfig] = None,
+        config: HealthConfig | None = None,
     ):
         """
         Initialize health monitor.
@@ -330,16 +331,16 @@ class StorageHealthMonitor:
         self.config = config or DEFAULT_HEALTH_CONFIG
 
         self._circuit_breaker = CircuitBreaker(self.config)
-        self._check_history: List[HealthCheckResult] = []
-        self._task: Optional[asyncio.Task] = None
+        self._check_history: list[HealthCheckResult] = []
+        self._task: asyncio.Task | None = None
         self._running = False
 
         # Statistics
         self._total_checks = 0
         self._total_failures = 0
         self._total_latency_ms = 0.0
-        self._last_successful_check: Optional[datetime] = None
-        self._last_failed_check: Optional[datetime] = None
+        self._last_successful_check: datetime | None = None
+        self._last_failed_check: datetime | None = None
 
     @property
     def is_healthy(self) -> bool:
@@ -409,7 +410,7 @@ class StorageHealthMonitor:
                         f"{result.latency_ms:.0f}ms"
                     )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             latency_ms = (time.perf_counter() - start_time) * 1000
             result = HealthCheckResult(
                 status=HealthStatus.UNHEALTHY,
@@ -454,7 +455,7 @@ class StorageHealthMonitor:
 
     async def _monitoring_loop(self) -> None:
         """Background monitoring loop."""
-        logger.info(f"Starting health monitoring for {self.backend_name}")
+        logger.debug(f"Starting health monitoring for {self.backend_name}")
 
         while self._running:
             try:
@@ -464,7 +465,7 @@ class StorageHealthMonitor:
 
             await asyncio.sleep(self.config.check_interval_seconds)
 
-        logger.info(f"Stopped health monitoring for {self.backend_name}")
+        logger.debug(f"Stopped health monitoring for {self.backend_name}")
 
     async def start(self) -> None:
         """Start background health monitoring."""
@@ -669,7 +670,7 @@ class StorageHealthManager:
 
     def __init__(self):
         """Initialize the health manager."""
-        self._monitors: Dict[str, StorageHealthMonitor] = {}
+        self._monitors: dict[str, StorageHealthMonitor] = {}
         self._started = False
 
     def register_monitor(self, monitor: StorageHealthMonitor) -> None:
@@ -702,7 +703,7 @@ class StorageHealthManager:
             await monitor.start()
 
         self._started = True
-        logger.info(f"Started {len(self._monitors)} health monitors")
+        logger.debug(f"Started {len(self._monitors)} health monitors")
 
     async def stop_all(self) -> None:
         """Stop all registered health monitors."""
@@ -712,7 +713,7 @@ class StorageHealthManager:
         self._started = False
         logger.info("Stopped all health monitors")
 
-    def is_healthy(self, backend_name: Optional[str] = None) -> bool:
+    def is_healthy(self, backend_name: str | None = None) -> bool:
         """
         Check if backends are healthy.
 
@@ -728,7 +729,7 @@ class StorageHealthManager:
 
         return all(m.is_healthy for m in self._monitors.values())
 
-    def get_report(self, backend_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_report(self, backend_name: str | None = None) -> dict[str, Any]:
         """
         Get health report for backend(s).
 
@@ -751,7 +752,7 @@ class StorageHealthManager:
             },
         }
 
-    async def run_health_check(self, backend_name: str) -> Optional[HealthCheckResult]:
+    async def run_health_check(self, backend_name: str) -> HealthCheckResult | None:
         """
         Manually trigger a health check for a specific backend.
 

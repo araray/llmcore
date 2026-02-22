@@ -15,7 +15,7 @@ Ensure the pgvector extension is enabled in your PostgreSQL database: `CREATE EX
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,13 +79,13 @@ class PgVectorStorage(BaseVectorStorage):
     """
 
     _pool: Optional["AsyncConnectionPool"] = None
-    _tenant_session: Optional[AsyncSession] = None  # NEW: Tenant-scoped session
+    _tenant_session: AsyncSession | None = None  # NEW: Tenant-scoped session
     _vectors_table: str
     _collections_table: str
     _default_collection_name: str = "default_rag"
     _default_vector_dimension: int = 384
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize PgVector storage.
 
@@ -172,10 +172,10 @@ class PgVectorStorage(BaseVectorStorage):
         conn: Any,
         name: str,
         dimension: int,
-        description: Optional[str] = None,
-        provider: Optional[str] = None,
-        model_name: Optional[str] = None,
-        collection_meta: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        provider: str | None = None,
+        model_name: str | None = None,
+        collection_meta: dict[str, Any] | None = None,
     ) -> None:
         """Ensures a collection record exists."""
         logger.debug(f"Ensuring vector collection '{name}' (dim: {dimension}) exists...")
@@ -236,8 +236,8 @@ class PgVectorStorage(BaseVectorStorage):
                 )
 
     async def add_documents(
-        self, documents: List[ContextDocument], collection_name: Optional[str] = None
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str | None = None
+    ) -> list[str]:
         """Adds or updates documents in PgVector."""
         if not documents:
             return []
@@ -256,10 +256,10 @@ class PgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to add documents: {e}")
 
     async def _add_documents_tenant_mode(
-        self, documents: List[ContextDocument], target_collection: str
-    ) -> List[str]:
+        self, documents: list[ContextDocument], target_collection: str
+    ) -> list[str]:
         """Add documents using tenant-scoped SQLAlchemy session."""
-        doc_ids_added: List[str] = []
+        doc_ids_added: list[str] = []
 
         # Implementation would follow similar pattern but using SQLAlchemy text() queries
         # Due to vector extension complexity, this might require raw SQL even in tenant mode
@@ -270,10 +270,10 @@ class PgVectorStorage(BaseVectorStorage):
         return [doc.id for doc in documents]
 
     async def _add_documents_legacy_mode(
-        self, documents: List[ContextDocument], target_collection: str
-    ) -> List[str]:
+        self, documents: list[ContextDocument], target_collection: str
+    ) -> list[str]:
         """Add documents using legacy psycopg pool mode."""
-        doc_ids_added: List[str] = []
+        doc_ids_added: list[str] = []
 
         async with self._pool.connection() as conn:
             if register_vector_async:
@@ -331,11 +331,11 @@ class PgVectorStorage(BaseVectorStorage):
 
     async def similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        collection_name: Optional[str] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[ContextDocument]:
+        collection_name: str | None = None,
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[ContextDocument]:
         """Performs similarity search in PgVector."""
         target_collection = collection_name or self._default_collection_name
 
@@ -354,13 +354,13 @@ class PgVectorStorage(BaseVectorStorage):
 
     async def _similarity_search_tenant_mode(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
         target_collection: str,
-        filter_metadata: Optional[Dict[str, Any]],
-    ) -> List[ContextDocument]:
+        filter_metadata: dict[str, Any] | None,
+    ) -> list[ContextDocument]:
         """Similarity search using tenant-scoped SQLAlchemy session."""
-        results: List[ContextDocument] = []
+        results: list[ContextDocument] = []
         query_dimension = len(query_embedding)
 
         # Get collection dimension
@@ -382,7 +382,7 @@ class PgVectorStorage(BaseVectorStorage):
 
         distance_operator = "<=>"  # Cosine distance
         sql_query = f"SELECT id, content, metadata, embedding {distance_operator} :query_embedding AS distance FROM {self._vectors_table} WHERE collection_name = :collection_name"
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "query_embedding": str(query_embedding),
             "collection_name": target_collection,
         }
@@ -422,16 +422,16 @@ class PgVectorStorage(BaseVectorStorage):
 
     async def _similarity_search_legacy_mode(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
         target_collection: str,
-        filter_metadata: Optional[Dict[str, Any]],
-    ) -> List[ContextDocument]:
+        filter_metadata: dict[str, Any] | None,
+    ) -> list[ContextDocument]:
         """Similarity search using legacy psycopg pool mode."""
         if not dict_row:
             raise VectorStorageError("psycopg dict_row factory not available.")
 
-        results: List[ContextDocument] = []
+        results: list[ContextDocument] = []
         query_dimension = len(query_embedding)
 
         async with self._pool.connection() as conn:
@@ -460,7 +460,7 @@ class PgVectorStorage(BaseVectorStorage):
 
             distance_operator = "<=>"
             sql_query = f"SELECT id, content, metadata, embedding {distance_operator} %s AS distance FROM {self._vectors_table} WHERE collection_name = %s"
-            params: List[Any] = [query_embedding, target_collection]
+            params: list[Any] = [query_embedding, target_collection]
 
             if filter_metadata:
                 filter_conditions = []
@@ -493,7 +493,7 @@ class PgVectorStorage(BaseVectorStorage):
         return results
 
     async def delete_documents(
-        self, document_ids: List[str], collection_name: Optional[str] = None
+        self, document_ids: list[str], collection_name: str | None = None
     ) -> bool:
         """Deletes documents from PgVector."""
         if not document_ids:
@@ -511,7 +511,7 @@ class PgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to delete: {e}")
 
     async def _delete_documents_tenant_mode(
-        self, document_ids: List[str], target_collection: str
+        self, document_ids: list[str], target_collection: str
     ) -> bool:
         """Delete documents using tenant-scoped SQLAlchemy session."""
         await self._tenant_session.execute(
@@ -525,7 +525,7 @@ class PgVectorStorage(BaseVectorStorage):
         return True
 
     async def _delete_documents_legacy_mode(
-        self, document_ids: List[str], target_collection: str
+        self, document_ids: list[str], target_collection: str
     ) -> bool:
         """Delete documents using legacy psycopg pool mode."""
         async with self._pool.connection() as conn:
@@ -541,7 +541,7 @@ class PgVectorStorage(BaseVectorStorage):
         )
         return True
 
-    async def list_collection_names(self) -> List[str]:
+    async def list_collection_names(self) -> list[str]:
         """Lists vector collection names."""
         logger.debug("Listing vector collection names from PostgreSQL...")
 
@@ -554,7 +554,7 @@ class PgVectorStorage(BaseVectorStorage):
             logger.error(f"Error listing vector collections: {e}", exc_info=True)
             raise VectorStorageError(f"Failed to list vector collections: {e}")
 
-    async def _list_collection_names_tenant_mode(self) -> List[str]:
+    async def _list_collection_names_tenant_mode(self) -> list[str]:
         """List collection names using tenant-scoped SQLAlchemy session."""
         result = await self._tenant_session.execute(
             text(f"SELECT name FROM {self._collections_table} ORDER BY name ASC")
@@ -565,12 +565,12 @@ class PgVectorStorage(BaseVectorStorage):
         )
         return collection_names
 
-    async def _list_collection_names_legacy_mode(self) -> List[str]:
+    async def _list_collection_names_legacy_mode(self) -> list[str]:
         """List collection names using legacy psycopg pool mode."""
         if not dict_row:
             raise VectorStorageError("psycopg dict_row factory not available.")
 
-        collection_names: List[str] = []
+        collection_names: list[str] = []
 
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row
@@ -585,8 +585,8 @@ class PgVectorStorage(BaseVectorStorage):
         return collection_names
 
     async def get_collection_metadata(
-        self, collection_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None = None
+    ) -> dict[str, Any] | None:
         """Retrieves metadata for a vector collection."""
         target_collection = collection_name or self._default_collection_name
         logger.debug(f"Getting metadata for PgVector collection '{target_collection}'...")
@@ -604,7 +604,7 @@ class PgVectorStorage(BaseVectorStorage):
 
     async def _get_collection_metadata_tenant_mode(
         self, target_collection: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get collection metadata using tenant-scoped SQLAlchemy session."""
         result = await self._tenant_session.execute(
             text(
@@ -637,7 +637,7 @@ class PgVectorStorage(BaseVectorStorage):
 
     async def _get_collection_metadata_legacy_mode(
         self, target_collection: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get collection metadata using legacy psycopg pool mode."""
         if not dict_row:
             raise VectorStorageError("psycopg dict_row factory not available.")

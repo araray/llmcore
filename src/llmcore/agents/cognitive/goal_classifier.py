@@ -32,7 +32,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 # Use Pydantic if available, otherwise use dataclasses
 try:
@@ -116,10 +116,10 @@ if PYDANTIC_AVAILABLE:
 
         # Clarification
         clarification_needed: bool = False
-        clarification_questions: List[str] = Field(default_factory=list)
+        clarification_questions: list[str] = Field(default_factory=list)
 
         # Debug info
-        matched_pattern: Optional[str] = None
+        matched_pattern: str | None = None
         classification_method: str = "heuristic"
 else:
 
@@ -137,9 +137,9 @@ else:
         requires_tools: bool = True
 
         clarification_needed: bool = False
-        clarification_questions: List[str] = field(default_factory=list)
+        clarification_questions: list[str] = field(default_factory=list)
 
-        matched_pattern: Optional[str] = None
+        matched_pattern: str | None = None
         classification_method: str = "heuristic"
 
 
@@ -148,7 +148,7 @@ else:
 # =============================================================================
 
 # Trivial patterns - greetings, thanks, simple social
-TRIVIAL_PATTERNS: List[Tuple[str, GoalIntent]] = [
+TRIVIAL_PATTERNS: list[tuple[str, GoalIntent]] = [
     # Greetings
     (r"^(hi|hello|hey|howdy|greetings)[\s!.,?]*$", GoalIntent.GREETING),
     (r"^good\s*(morning|afternoon|evening|day)[\s!.,?]*$", GoalIntent.GREETING),
@@ -162,7 +162,7 @@ TRIVIAL_PATTERNS: List[Tuple[str, GoalIntent]] = [
 ]
 
 # Simple patterns - single action requests
-SIMPLE_PATTERNS: List[Tuple[str, GoalIntent]] = [
+SIMPLE_PATTERNS: list[tuple[str, GoalIntent]] = [
     # File operations
     (r"^(read|show|display|cat|view|open)\s+(the\s+)?(file|document)\s+\S+", GoalIntent.TASK),
     (r"^(list|ls|show)\s+(the\s+)?(files?|directory|folder|contents)", GoalIntent.TASK),
@@ -179,7 +179,7 @@ SIMPLE_PATTERNS: List[Tuple[str, GoalIntent]] = [
 ]
 
 # Moderate patterns - multi-step but bounded
-MODERATE_PATTERNS: List[Tuple[str, GoalIntent]] = [
+MODERATE_PATTERNS: list[tuple[str, GoalIntent]] = [
     # File operations with processing
     (r"(read|load).+(and|then).+(process|analyze|parse|extract)", GoalIntent.TASK),
     (r"(find|search).+(and|then).+(show|display|list)", GoalIntent.TASK),
@@ -191,7 +191,7 @@ MODERATE_PATTERNS: List[Tuple[str, GoalIntent]] = [
 ]
 
 # Complex patterns - require planning and multiple phases
-COMPLEX_PATTERNS: List[Tuple[str, GoalIntent]] = [
+COMPLEX_PATTERNS: list[tuple[str, GoalIntent]] = [
     # Multi-step analysis
     (
         r"(analyze|research|investigate).+(create|write|generate).+(report|document|summary)",
@@ -212,7 +212,7 @@ COMPLEX_PATTERNS: List[Tuple[str, GoalIntent]] = [
 ]
 
 # Ambiguous patterns - need clarification
-AMBIGUOUS_PATTERNS: List[Tuple[str, List[str]]] = [
+AMBIGUOUS_PATTERNS: list[tuple[str, list[str]]] = [
     # Vague references
     (
         r"^(do|fix|check|handle)\s+(it|that|this|the\s+thing)[\s!.,?]*$",
@@ -256,7 +256,7 @@ class GoalClassifier:
     def __init__(
         self,
         use_llm_fallback: bool = False,
-        llm_provider: Optional["BaseLLMProvider"] = None,
+        llm_provider: BaseLLMProvider | None = None,
         confidence_threshold: float = 0.85,
     ):
         self.use_llm_fallback = use_llm_fallback
@@ -613,7 +613,7 @@ def is_trivial_goal(goal: str) -> bool:
     return result.complexity == GoalComplexity.TRIVIAL
 
 
-def needs_clarification(goal: str) -> Tuple[bool, List[str]]:
+def needs_clarification(goal: str) -> tuple[bool, list[str]]:
     """Check if a goal needs clarification before proceeding."""
     result = classify_goal(goal)
     return result.clarification_needed, result.clarification_questions

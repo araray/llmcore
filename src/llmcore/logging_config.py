@@ -27,7 +27,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional
 
 # Try to import confy for config loading
 try:
@@ -39,7 +39,7 @@ except ImportError:
 
 
 # Default logging configuration (used if no config file found)
-DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
+DEFAULT_LOGGING_CONFIG: dict[str, Any] = {
     "console_enabled": True,
     "console_level": "WARNING",
     "console_format": "%(levelname)s - %(message)s",
@@ -72,9 +72,9 @@ class UnifiedLoggingManager:
 
     _instance: Optional["UnifiedLoggingManager"] = None
     _configured: bool = False
-    _log_file_path: Optional[Path] = None
-    _console_handler: Optional[logging.Handler] = None
-    _file_handler: Optional[logging.Handler] = None
+    _log_file_path: Path | None = None
+    _console_handler: logging.Handler | None = None
+    _file_handler: logging.Handler | None = None
 
     def __new__(cls) -> "UnifiedLoggingManager":
         if cls._instance is None:
@@ -94,15 +94,15 @@ class UnifiedLoggingManager:
         return cls._configured
 
     @classmethod
-    def get_log_file_path(cls) -> Optional[Path]:
+    def get_log_file_path(cls) -> Path | None:
         """Get the current log file path."""
         return cls._log_file_path
 
     def configure(
         self,
         app_name: str = "llmcore",
-        config: Optional[Dict[str, Any]] = None,
-        config_file_path: Optional[Union[str, Path]] = None,
+        config: dict[str, Any] | None = None,
+        config_file_path: str | Path | None = None,
         force_reconfigure: bool = False,
     ) -> Path:
         """
@@ -164,8 +164,8 @@ class UnifiedLoggingManager:
         return self._log_file_path or Path("/dev/null")
 
     def _load_config(
-        self, config: Optional[Dict[str, Any]], config_file_path: Optional[Union[str, Path]]
-    ) -> Dict[str, Any]:
+        self, config: dict[str, Any] | None, config_file_path: str | Path | None
+    ) -> dict[str, Any]:
         """Load logging configuration from various sources."""
 
         # If config provided directly, use it
@@ -187,7 +187,7 @@ class UnifiedLoggingManager:
 
         return DEFAULT_LOGGING_CONFIG.copy()
 
-    def _create_console_handler(self, config: Dict[str, Any]) -> logging.Handler:
+    def _create_console_handler(self, config: dict[str, Any]) -> logging.Handler:
         """Create and configure the console handler."""
         handler = logging.StreamHandler(sys.stderr)
 
@@ -204,8 +204,8 @@ class UnifiedLoggingManager:
         return handler
 
     def _create_file_handler(
-        self, config: Dict[str, Any], app_name: str
-    ) -> tuple[Optional[logging.Handler], Optional[Path]]:
+        self, config: dict[str, Any], app_name: str
+    ) -> tuple[logging.Handler | None, Path | None]:
         """Create and configure the file handler."""
 
         # Resolve directory path
@@ -251,7 +251,7 @@ class UnifiedLoggingManager:
 
         return handler, log_file_path
 
-    def set_console_level(self, level: Union[str, int]) -> None:
+    def set_console_level(self, level: str | int) -> None:
         """Change the console handler's log level at runtime."""
         if self._console_handler is None:
             return
@@ -262,7 +262,7 @@ class UnifiedLoggingManager:
         if isinstance(level, int):
             self._console_handler.setLevel(level)
 
-    def set_file_level(self, level: Union[str, int]) -> None:
+    def set_file_level(self, level: str | int) -> None:
         """Change the file handler's log level at runtime."""
         if self._file_handler is None:
             return
@@ -273,7 +273,7 @@ class UnifiedLoggingManager:
         if isinstance(level, int):
             self._file_handler.setLevel(level)
 
-    def set_component_level(self, component: str, level: Union[str, int]) -> None:
+    def set_component_level(self, component: str, level: str | int) -> None:
         """Change a specific component's log level at runtime."""
         logger = logging.getLogger(component)
 
@@ -305,8 +305,8 @@ class UnifiedLoggingManager:
 
 def configure_logging(
     app_name: str = "llmcore",
-    config: Optional[Dict[str, Any]] = None,
-    config_file_path: Optional[Union[str, Path]] = None,
+    config: dict[str, Any] | None = None,
+    config_file_path: str | Path | None = None,
     force_reconfigure: bool = False,
 ) -> Path:
     """
@@ -349,22 +349,22 @@ def configure_logging(
     )
 
 
-def get_log_file_path() -> Optional[Path]:
+def get_log_file_path() -> Path | None:
     """Get the current log file path."""
     return UnifiedLoggingManager.get_log_file_path()
 
 
-def set_console_level(level: Union[str, int]) -> None:
+def set_console_level(level: str | int) -> None:
     """Change console log level at runtime."""
     UnifiedLoggingManager.get_instance().set_console_level(level)
 
 
-def set_file_level(level: Union[str, int]) -> None:
+def set_file_level(level: str | int) -> None:
     """Change file log level at runtime."""
     UnifiedLoggingManager.get_instance().set_file_level(level)
 
 
-def set_component_level(component: str, level: Union[str, int]) -> None:
+def set_component_level(component: str, level: str | int) -> None:
     """Change a specific component's log level at runtime."""
     UnifiedLoggingManager.get_instance().set_component_level(component, level)
 

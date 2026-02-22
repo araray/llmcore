@@ -38,8 +38,8 @@ async def update_phase(
     agent_state: EnhancedAgentState,
     update_input: UpdateInput,
     storage_manager: Optional["StorageManager"] = None,
-    session_id: Optional[str] = None,
-    tracer: Optional[Any] = None,
+    session_id: str | None = None,
+    tracer: Any | None = None,
 ) -> UpdateOutput:
     """
     Execute the UPDATE phase of the cognitive cycle.

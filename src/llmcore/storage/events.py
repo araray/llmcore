@@ -59,9 +59,9 @@ import queue
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -157,16 +157,16 @@ class StorageEvent:
     """
 
     event_type: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    collection_name: Optional[str] = None
-    operation_duration_ms: Optional[float] = None
-    metadata: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    id: Optional[int] = None  # Assigned by database
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    user_id: str | None = None
+    session_id: str | None = None
+    collection_name: str | None = None
+    operation_duration_ms: float | None = None
+    metadata: dict[str, Any] | None = None
+    error_message: str | None = None
+    id: int | None = None  # Assigned by database
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert event to dictionary."""
         return {
             "id": self.id,
@@ -181,13 +181,13 @@ class StorageEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StorageEvent":
+    def from_dict(cls, data: dict[str, Any]) -> StorageEvent:
         """Create event from dictionary."""
         timestamp = data.get("timestamp")
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         elif timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         return cls(
             id=data.get("id"),
@@ -281,8 +281,8 @@ class EventLogger:
 
     def __init__(
         self,
-        config: Optional[EventLoggerConfig] = None,
-        pool: Optional[Any] = None,  # asyncpg pool or aiosqlite connection
+        config: EventLoggerConfig | None = None,
+        pool: Any | None = None,  # asyncpg pool or aiosqlite connection
         backend: str = "postgres",  # "postgres" or "sqlite"
     ):
         """
@@ -300,12 +300,12 @@ class EventLogger:
 
         # Async event queue for non-blocking logging
         self._event_queue: asyncio.Queue[StorageEvent] = asyncio.Queue()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_task: asyncio.Task | None = None
         self._shutdown = False
 
         # Sync fallback queue for when async is not available
         self._sync_queue: queue.Queue[StorageEvent] = queue.Queue()
-        self._sync_thread: Optional[threading.Thread] = None
+        self._sync_thread: threading.Thread | None = None
 
         # Statistics
         self._events_logged = 0
@@ -399,7 +399,7 @@ class EventLogger:
 
     async def _flush_events(self) -> None:
         """Flush pending events to database."""
-        events: List[StorageEvent] = []
+        events: list[StorageEvent] = []
 
         # Drain the queue
         while not self._event_queue.empty() and len(events) < self.config.batch_size:
@@ -420,14 +420,14 @@ class EventLogger:
             logger.error(f"Failed to flush {len(events)} events: {e}")
             self._events_dropped += len(events)
 
-    async def _write_events_batch(self, events: List[StorageEvent]) -> None:
+    async def _write_events_batch(self, events: list[StorageEvent]) -> None:
         """Write a batch of events to the database."""
         if self._backend == "postgres":
             await self._write_events_postgres(events)
         else:
             await self._write_events_sqlite(events)
 
-    async def _write_events_postgres(self, events: List[StorageEvent]) -> None:
+    async def _write_events_postgres(self, events: list[StorageEvent]) -> None:
         """Write events to PostgreSQL."""
         sql = f"""
             INSERT INTO {self.config.table_name}
@@ -455,7 +455,7 @@ class EventLogger:
                     event.error_message,
                 )
 
-    async def _write_events_sqlite(self, events: List[StorageEvent]) -> None:
+    async def _write_events_sqlite(self, events: list[StorageEvent]) -> None:
         """Write events to SQLite."""
         sql = f"""
             INSERT INTO {self.config.table_name}
@@ -491,13 +491,13 @@ class EventLogger:
 
     async def log_event_async(
         self,
-        event_type: Union[str, EventType],
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        collection_name: Optional[str] = None,
-        operation_duration_ms: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        error_message: Optional[str] = None,
+        event_type: str | EventType,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        collection_name: str | None = None,
+        operation_duration_ms: float | None = None,
+        metadata: dict[str, Any] | None = None,
+        error_message: str | None = None,
     ) -> None:
         """
         Log an event asynchronously.
@@ -534,13 +534,13 @@ class EventLogger:
 
     def log_event(
         self,
-        event_type: Union[str, EventType],
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        collection_name: Optional[str] = None,
-        operation_duration_ms: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        error_message: Optional[str] = None,
+        event_type: str | EventType,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        collection_name: str | None = None,
+        operation_duration_ms: float | None = None,
+        metadata: dict[str, Any] | None = None,
+        error_message: str | None = None,
     ) -> None:
         """
         Log an event synchronously (queues for async flush).
@@ -588,14 +588,14 @@ class EventLogger:
 
     async def query_events(
         self,
-        event_type: Optional[str] = None,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
+        event_type: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[StorageEvent]:
+    ) -> list[StorageEvent]:
         """
         Query stored events.
 
@@ -625,14 +625,14 @@ class EventLogger:
 
     async def _query_events_postgres(
         self,
-        event_type: Optional[str],
-        user_id: Optional[str],
-        session_id: Optional[str],
-        since: Optional[datetime],
-        until: Optional[datetime],
+        event_type: str | None,
+        user_id: str | None,
+        session_id: str | None,
+        since: datetime | None,
+        until: datetime | None,
         limit: int,
         offset: int,
-    ) -> List[StorageEvent]:
+    ) -> list[StorageEvent]:
         """Query events from PostgreSQL."""
         conditions = []
         params = []
@@ -699,14 +699,14 @@ class EventLogger:
 
     async def _query_events_sqlite(
         self,
-        event_type: Optional[str],
-        user_id: Optional[str],
-        session_id: Optional[str],
-        since: Optional[datetime],
-        until: Optional[datetime],
+        event_type: str | None,
+        user_id: str | None,
+        session_id: str | None,
+        since: datetime | None,
+        until: datetime | None,
         limit: int,
         offset: int,
-    ) -> List[StorageEvent]:
+    ) -> list[StorageEvent]:
         """Query events from SQLite."""
         conditions = []
         params = []
@@ -748,7 +748,7 @@ class EventLogger:
         rows = await cursor.fetchall()
 
         for row in rows:
-            timestamp = datetime.fromisoformat(row[2]) if row[2] else datetime.now(timezone.utc)
+            timestamp = datetime.fromisoformat(row[2]) if row[2] else datetime.now(UTC)
             events.append(
                 StorageEvent(
                     id=row[0],
@@ -767,10 +767,10 @@ class EventLogger:
 
     async def count_events(
         self,
-        event_type: Optional[str] = None,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        since: Optional[datetime] = None,
+        event_type: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        since: datetime | None = None,
     ) -> int:
         """
         Count events matching criteria.
@@ -839,7 +839,7 @@ class EventLogger:
     # CLEANUP
     # =========================================================================
 
-    async def cleanup_old_events(self, retention_days: Optional[int] = None) -> int:
+    async def cleanup_old_events(self, retention_days: int | None = None) -> int:
         """
         Delete events older than the retention period.
 
@@ -857,7 +857,7 @@ class EventLogger:
             logger.debug("Event retention disabled; skipping cleanup")
             return 0
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         if self._backend == "postgres":
             sql = f"DELETE FROM {self.config.table_name} WHERE timestamp < $1"
@@ -875,7 +875,7 @@ class EventLogger:
 
         return deleted
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """
         Get event logger statistics.
 

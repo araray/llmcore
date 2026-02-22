@@ -33,7 +33,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base import (
     ExecutionResult,
@@ -95,10 +95,10 @@ class DockerSandboxProvider(SandboxProvider):
     def __init__(
         self,
         image: str,
-        image_whitelist: List[str],
+        image_whitelist: list[str],
         full_access_label: str = "llmcore.sandbox.full_access=true",
-        full_access_name_pattern: Optional[str] = None,
-        docker_host: Optional[str] = None,
+        full_access_name_pattern: str | None = None,
+        docker_host: str | None = None,
         auto_pull: bool = True,
     ):
         """
@@ -123,10 +123,10 @@ class DockerSandboxProvider(SandboxProvider):
         self._auto_pull = auto_pull
 
         # Runtime state (set during initialize)
-        self._client: Optional[Any] = None  # docker.DockerClient
-        self._container: Optional[Any] = None  # docker.Container
-        self._config: Optional[SandboxConfig] = None
-        self._access_level: Optional[SandboxAccessLevel] = None
+        self._client: Any | None = None  # docker.DockerClient
+        self._container: Any | None = None  # docker.Container
+        self._config: SandboxConfig | None = None
+        self._access_level: SandboxAccessLevel | None = None
         self._status: SandboxStatus = SandboxStatus.CREATED
 
         # Connect to Docker daemon
@@ -312,7 +312,7 @@ class DockerSandboxProvider(SandboxProvider):
             await self._cleanup_partial()
             raise SandboxInitializationError(f"Failed to create Docker container: {e}")
 
-    def _prepare_volumes(self, config: SandboxConfig) -> Dict[str, Dict[str, str]]:
+    def _prepare_volumes(self, config: SandboxConfig) -> dict[str, dict[str, str]]:
         """
         Prepare volume mount specifications.
 
@@ -338,7 +338,7 @@ class DockerSandboxProvider(SandboxProvider):
 
         return volumes
 
-    def _determine_network_mode(self, config: SandboxConfig) -> Optional[str]:
+    def _determine_network_mode(self, config: SandboxConfig) -> str | None:
         """
         Determine Docker network mode based on config and access level.
 
@@ -359,7 +359,7 @@ class DockerSandboxProvider(SandboxProvider):
         return None
 
     async def _create_container(
-        self, config: SandboxConfig, volumes: Dict, network_mode: Optional[str]
+        self, config: SandboxConfig, volumes: dict, network_mode: str | None
     ) -> None:
         """
         Create and start the Docker container.
@@ -473,7 +473,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
             )
 
     async def execute_shell(
-        self, command: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, command: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute a shell command in the Docker container.
@@ -541,7 +541,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 timed_out=False,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._status = SandboxStatus.READY
             execution_time = time.time() - start_time
 
@@ -565,7 +565,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
             )
 
     async def execute_python(
-        self, code: str, timeout: Optional[int] = None, working_dir: Optional[str] = None
+        self, code: str, timeout: int | None = None, working_dir: str | None = None
     ) -> ExecutionResult:
         """
         Execute Python code in the Docker container.
@@ -629,7 +629,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
 
         return result.success
 
-    async def read_file(self, path: str) -> Optional[str]:
+    async def read_file(self, path: str) -> str | None:
         """
         Read content from a file in the container.
 
@@ -677,7 +677,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
 
         return result.success
 
-    async def read_file_binary(self, path: str) -> Optional[bytes]:
+    async def read_file_binary(self, path: str) -> bytes | None:
         """
         Read binary content from a file in the container.
 
@@ -701,7 +701,7 @@ CREATE TABLE IF NOT EXISTS agent_files (
                 return None
         return None
 
-    async def list_files(self, path: str = ".", recursive: bool = False) -> List[FileInfo]:
+    async def list_files(self, path: str = ".", recursive: bool = False) -> list[FileInfo]:
         """
         List files in a directory in the container.
 
@@ -886,11 +886,11 @@ CREATE TABLE IF NOT EXISTS agent_files (
         """Get the current status of the sandbox."""
         return self._status
 
-    def get_config(self) -> Optional[SandboxConfig]:
+    def get_config(self) -> SandboxConfig | None:
         """Get the configuration used for this sandbox."""
         return self._config
 
-    def get_info(self) -> Dict[str, Any]:
+    def get_info(self) -> dict[str, Any]:
         """
         Get detailed information about the Docker sandbox.
 

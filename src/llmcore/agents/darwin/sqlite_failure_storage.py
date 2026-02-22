@@ -11,7 +11,7 @@ import logging
 import os
 import pathlib
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     import aiosqlite
@@ -82,10 +82,10 @@ class SqliteFailureStorage(BaseFailureStorage):
 
     def __init__(self):
         """Initialize SQLite failure storage."""
-        self._db_path: Optional[pathlib.Path] = None
-        self._conn: Optional["aiosqlite.Connection"] = None
+        self._db_path: pathlib.Path | None = None
+        self._conn: aiosqlite.Connection | None = None
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the SQLite database and create schema.
 
@@ -227,7 +227,7 @@ class SqliteFailureStorage(BaseFailureStorage):
                 ),
             )
 
-    async def get_failure(self, failure_id: str) -> Optional[FailureLog]:
+    async def get_failure(self, failure_id: str) -> FailureLog | None:
         """
         Retrieve a specific failure by ID.
 
@@ -250,9 +250,9 @@ class SqliteFailureStorage(BaseFailureStorage):
     async def get_similar_failures(
         self,
         goal: str,
-        failure_types: Optional[List[str]] = None,
+        failure_types: list[str] | None = None,
         limit: int = 5,
-    ) -> List[FailureLog]:
+    ) -> list[FailureLog]:
         """
         Retrieve similar past failures for a goal.
 
@@ -321,7 +321,7 @@ class SqliteFailureStorage(BaseFailureStorage):
 
         return failures[:limit]
 
-    async def get_pattern(self, pattern_id: str) -> Optional[FailurePattern]:
+    async def get_pattern(self, pattern_id: str) -> FailurePattern | None:
         """
         Retrieve a specific failure pattern by ID.
 
@@ -343,7 +343,7 @@ class SqliteFailureStorage(BaseFailureStorage):
             return self._row_to_pattern(row)
         return None
 
-    async def get_patterns_for_failures(self, failure_ids: List[str]) -> List[FailurePattern]:
+    async def get_patterns_for_failures(self, failure_ids: list[str]) -> list[FailurePattern]:
         """
         Retrieve patterns associated with given failures.
 
@@ -415,7 +415,7 @@ class SqliteFailureStorage(BaseFailureStorage):
         )
         await self._conn.commit()
 
-    async def get_failure_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_failure_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get failure statistics for analytics.
 

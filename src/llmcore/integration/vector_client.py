@@ -45,9 +45,6 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    List,
-    Optional,
     Protocol,
     runtime_checkable,
 )
@@ -74,18 +71,18 @@ class VectorClientProtocol(Protocol):
 
     def add_chunks(
         self,
-        chunks: List[Any],  # List[Chunk] from semantiscan
-        embeddings: List[List[float]],
+        chunks: list[Any],  # List[Chunk] from semantiscan
+        embeddings: list[list[float]],
     ) -> None:
         """Add chunks and their embeddings to the vector store."""
         ...
 
     def query(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 5,
-        where_filter: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        where_filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Query the vector store for similar chunks."""
         ...
 
@@ -112,8 +109,8 @@ class LLMCoreVectorClientConfig:
     """
 
     collection_name: str = "codebase_default"
-    user_id: Optional[str] = None
-    namespace: Optional[str] = None
+    user_id: str | None = None
+    namespace: str | None = None
     batch_size: int = 100
     retry_count: int = 3
     retry_delay: float = 1.0
@@ -142,7 +139,7 @@ class ChunkAdapter:
     """
 
     @staticmethod
-    def chunk_to_document(chunk: Any, embedding: List[float]) -> Dict[str, Any]:
+    def chunk_to_document(chunk: Any, embedding: list[float]) -> dict[str, Any]:
         """
         Convert a SemantiScan Chunk to LLMCore document format.
 
@@ -190,9 +187,9 @@ class ChunkAdapter:
     def document_to_result(
         doc_id: str,
         content: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
         distance: float,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convert LLMCore search result to ChromaDB-compatible format.
 
@@ -255,7 +252,7 @@ class LLMCoreVectorClient:
 
     def __init__(
         self,
-        llmcore: "LLMCore",
+        llmcore: LLMCore,
         config: LLMCoreVectorClientConfig,
     ):
         """
@@ -273,7 +270,7 @@ class LLMCoreVectorClient:
         self._initialized = False
 
         # Event loop for async-to-sync bridging
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         logger.info(
             f"LLMCoreVectorClient created: collection='{self._collection_name}', "
@@ -283,9 +280,9 @@ class LLMCoreVectorClient:
     @classmethod
     async def create(
         cls,
-        llmcore: "LLMCore",
-        config: Optional[LLMCoreVectorClientConfig] = None,
-    ) -> "LLMCoreVectorClient":
+        llmcore: LLMCore,
+        config: LLMCoreVectorClientConfig | None = None,
+    ) -> LLMCoreVectorClient:
         """
         Factory method to create and initialize the vector client.
 
@@ -375,8 +372,8 @@ class LLMCoreVectorClient:
 
     def add_chunks(
         self,
-        chunks: List[Any],
-        embeddings: List[List[float]],
+        chunks: list[Any],
+        embeddings: list[list[float]],
     ) -> None:
         """
         Add chunks and their embeddings to the vector store.
@@ -418,7 +415,7 @@ class LLMCoreVectorClient:
             )
             # Don't re-raise to match ChromaDBClient behavior
 
-    async def _add_documents_async(self, documents: List[Dict[str, Any]]) -> List[str]:
+    async def _add_documents_async(self, documents: list[dict[str, Any]]) -> list[str]:
         """
         Async implementation of document addition.
 
@@ -472,10 +469,10 @@ class LLMCoreVectorClient:
 
     def query(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 5,
-        where_filter: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        where_filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Query the vector store for similar chunks.
 
@@ -508,10 +505,10 @@ class LLMCoreVectorClient:
 
     async def _query_async(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int,
-        where_filter: Optional[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        where_filter: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
         """
         Async implementation of query.
 
@@ -588,11 +585,11 @@ class LLMCoreVectorClient:
     async def hybrid_search(
         self,
         query_text: str,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 5,
-        where_filter: Optional[Dict[str, Any]] = None,
-        vector_weight: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+        where_filter: dict[str, Any] | None = None,
+        vector_weight: float | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Perform hybrid search combining vector similarity and full-text search.
 
@@ -685,7 +682,7 @@ class LLMCoreVectorClient:
         return self._collection_name
 
     @property
-    def user_id(self) -> Optional[str]:
+    def user_id(self) -> str | None:
         """Get the user ID for isolation."""
         return self._config.user_id
 
@@ -696,9 +693,9 @@ class LLMCoreVectorClient:
 
 
 async def create_vector_client(
-    llmcore: "LLMCore",
+    llmcore: LLMCore,
     collection_name: str = "codebase_default",
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
     **kwargs,
 ) -> LLMCoreVectorClient:
     """

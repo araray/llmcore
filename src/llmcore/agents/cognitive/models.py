@@ -22,7 +22,7 @@ References:
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -81,7 +81,7 @@ class PerceiveInput(BaseModel):
     """Input to the PERCEIVE phase."""
 
     goal: str = Field(..., description="Current task goal")
-    context_query: Optional[str] = Field(
+    context_query: str | None = Field(
         default=None, description="Optional specific query for context retrieval"
     )
     force_refresh: bool = Field(
@@ -92,13 +92,13 @@ class PerceiveInput(BaseModel):
 class PerceiveOutput(BaseModel):
     """Output from the PERCEIVE phase."""
 
-    retrieved_context: List[str] = Field(
+    retrieved_context: list[str] = Field(
         default_factory=list, description="Context items retrieved from memory"
     )
-    working_memory_snapshot: Dict[str, Any] = Field(
+    working_memory_snapshot: dict[str, Any] = Field(
         default_factory=dict, description="Snapshot of working memory state"
     )
-    environmental_state: Dict[str, Any] = Field(
+    environmental_state: dict[str, Any] = Field(
         default_factory=dict, description="Current environmental state (sandbox, tools, etc.)"
     )
     perceived_at: datetime = Field(
@@ -110,22 +110,22 @@ class PlanInput(BaseModel):
     """Input to the PLAN phase."""
 
     goal: str = Field(..., description="The goal to plan for")
-    context: Optional[str] = Field(default=None, description="Relevant context for planning")
-    constraints: Optional[str] = Field(default=None, description="Constraints or requirements")
-    existing_plan: Optional[List[str]] = Field(default=None, description="Existing plan to refine")
+    context: str | None = Field(default=None, description="Relevant context for planning")
+    constraints: str | None = Field(default=None, description="Constraints or requirements")
+    existing_plan: list[str] | None = Field(default=None, description="Existing plan to refine")
 
 
 class PlanOutput(BaseModel):
     """Output from the PLAN phase."""
 
-    plan_steps: List[str] = Field(
+    plan_steps: list[str] = Field(
         default_factory=list, description="Ordered list of actionable steps"
     )
     reasoning: str = Field(default="", description="Strategic reasoning behind the plan")
-    estimated_iterations: Optional[int] = Field(
+    estimated_iterations: int | None = Field(
         default=None, description="Estimated iterations to complete plan"
     )
-    risks_identified: List[str] = Field(
+    risks_identified: list[str] = Field(
         default_factory=list, description="Potential risks or challenges identified"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -138,7 +138,7 @@ class ThinkInput(BaseModel):
     current_step: str = Field(..., description="Current plan step")
     history: str = Field(default="", description="Recent actions and observations")
     context: str = Field(default="", description="Relevant context from memory")
-    available_tools: List[Dict[str, Any]] = Field(
+    available_tools: list[dict[str, Any]] = Field(
         default_factory=list, description="Available tools for the agent"
     )
 
@@ -147,17 +147,15 @@ class ThinkOutput(BaseModel):
     """Output from the THINK phase."""
 
     thought: str = Field(..., description="Agent's reasoning")
-    proposed_action: Optional[ToolCall] = Field(default=None, description="Proposed tool call")
+    proposed_action: ToolCall | None = Field(default=None, description="Proposed tool call")
     is_final_answer: bool = Field(
         default=False, description="Whether this provides the final answer"
     )
-    final_answer: Optional[str] = Field(
-        default=None, description="Final answer if task is complete"
-    )
+    final_answer: str | None = Field(default=None, description="Final answer if task is complete")
     confidence: ConfidenceLevel = Field(
         default=ConfidenceLevel.MEDIUM, description="Confidence in the decision"
     )
-    reasoning_tokens: Optional[int] = Field(default=None, description="Tokens used in reasoning")
+    reasoning_tokens: int | None = Field(default=None, description="Tokens used in reasoning")
     using_activity_fallback: bool = Field(
         default=False, description="Whether activity fallback was used instead of native tools"
     )
@@ -177,12 +175,12 @@ class ValidateOutput(BaseModel):
 
     result: ValidationResult = Field(..., description="Validation result")
     confidence: ConfidenceLevel = Field(..., description="Confidence in validation")
-    concerns: List[str] = Field(default_factory=list, description="Issues or concerns identified")
-    suggestions: List[str] = Field(default_factory=list, description="Suggestions for improvement")
+    concerns: list[str] = Field(default_factory=list, description="Issues or concerns identified")
+    suggestions: list[str] = Field(default_factory=list, description="Suggestions for improvement")
     requires_human_approval: bool = Field(
         default=False, description="Whether human approval is needed"
     )
-    approval_prompt: Optional[str] = Field(
+    approval_prompt: str | None = Field(
         default=None, description="Prompt to show to human if approval needed"
     )
 
@@ -191,7 +189,7 @@ class ActInput(BaseModel):
     """Input to the ACT phase."""
 
     tool_call: ToolCall = Field(..., description="Tool call to execute")
-    validation_result: Optional[ValidationResult] = Field(
+    validation_result: ValidationResult | None = Field(
         default=None, description="Result of validation phase"
     )
 
@@ -209,17 +207,17 @@ class ObserveInput(BaseModel):
 
     action_taken: ToolCall = Field(..., description="Action that was taken")
     action_result: ToolResult = Field(..., description="Result of the action")
-    expected_outcome: Optional[str] = Field(default=None, description="What was expected to happen")
+    expected_outcome: str | None = Field(default=None, description="What was expected to happen")
 
 
 class ObserveOutput(BaseModel):
     """Output from the OBSERVE phase."""
 
     observation: str = Field(..., description="Processed observation of the result")
-    matches_expectation: Optional[bool] = Field(
+    matches_expectation: bool | None = Field(
         default=None, description="Whether result matched expectation"
     )
-    insights: List[str] = Field(default_factory=list, description="Key insights from observation")
+    insights: list[str] = Field(default_factory=list, description="Key insights from observation")
     follow_up_needed: bool = Field(default=False, description="Whether follow-up action is needed")
 
 
@@ -227,9 +225,9 @@ class ReflectInput(BaseModel):
     """Input to the REFLECT phase."""
 
     goal: str = Field(..., description="Original goal")
-    plan: List[str] = Field(..., description="Current plan")
+    plan: list[str] = Field(..., description="Current plan")
     current_step_index: int = Field(..., description="Current step index")
-    last_action: Optional[ToolCall] = Field(
+    last_action: ToolCall | None = Field(
         default=None, description="Last action taken (None if no action was proposed)"
     )
     observation: str = Field(..., description="Observation from OBSERVE phase")
@@ -243,15 +241,15 @@ class ReflectOutput(BaseModel):
     progress_estimate: float = Field(
         default=0.0, ge=0.0, le=1.0, description="Estimated progress toward goal (0.0 to 1.0)"
     )
-    insights: List[str] = Field(
+    insights: list[str] = Field(
         default_factory=list, description="Key learnings from this iteration"
     )
     plan_needs_update: bool = Field(default=False, description="Whether plan should be modified")
-    updated_plan: Optional[List[str]] = Field(
+    updated_plan: list[str] | None = Field(
         default=None, description="Updated plan if modification needed"
     )
     step_completed: bool = Field(default=False, description="Whether current step is complete")
-    next_focus: Optional[str] = Field(default=None, description="What to prioritize next")
+    next_focus: str | None = Field(default=None, description="What to prioritize next")
 
 
 class UpdateInput(BaseModel):
@@ -264,13 +262,13 @@ class UpdateInput(BaseModel):
 class UpdateOutput(BaseModel):
     """Output from the UPDATE phase."""
 
-    state_updates: Dict[str, Any] = Field(
+    state_updates: dict[str, Any] = Field(
         default_factory=dict, description="Updates to apply to agent state"
     )
-    memory_updates: List[Dict[str, Any]] = Field(
+    memory_updates: list[dict[str, Any]] = Field(
         default_factory=list, description="Updates to store in episodic memory"
     )
-    working_memory_updates: Dict[str, Any] = Field(
+    working_memory_updates: dict[str, Any] = Field(
         default_factory=dict, description="Updates to working memory"
     )
     should_continue: bool = Field(default=True, description="Whether to continue cognitive loop")
@@ -303,22 +301,22 @@ class CycleIteration(BaseModel):
 
     # Timestamps
     started_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
 
     # Phase outputs (populated as phases complete)
-    perceive_output: Optional[PerceiveOutput] = None
-    plan_output: Optional[PlanOutput] = None
-    think_output: Optional[ThinkOutput] = None
-    validate_output: Optional[ValidateOutput] = None
-    act_output: Optional[ActOutput] = None
-    observe_output: Optional[ObserveOutput] = None
-    reflect_output: Optional[ReflectOutput] = None
-    update_output: Optional[UpdateOutput] = None
+    perceive_output: PerceiveOutput | None = None
+    plan_output: PlanOutput | None = None
+    think_output: ThinkOutput | None = None
+    validate_output: ValidateOutput | None = None
+    act_output: ActOutput | None = None
+    observe_output: ObserveOutput | None = None
+    reflect_output: ReflectOutput | None = None
+    update_output: UpdateOutput | None = None
 
     # Metadata
     total_tokens_used: int = Field(default=0, description="Total tokens in this iteration")
     total_time_ms: float = Field(default=0.0, description="Total time in milliseconds")
-    error: Optional[str] = Field(default=None, description="Error if failed")
+    error: str | None = Field(default=None, description="Error if failed")
 
     def mark_completed(self, success: bool = True) -> None:
         """Mark iteration as completed."""
@@ -345,7 +343,7 @@ class CycleIteration(BaseModel):
         return 0.0
 
     @property
-    def phases_completed(self) -> Set[CognitivePhase]:
+    def phases_completed(self) -> set[CognitivePhase]:
         """Get set of completed phases."""
         completed = set()
         if self.perceive_output:
@@ -402,15 +400,15 @@ class EnhancedAgentState(AgentState):
     context: str = Field(default="", description="Initial context for the task")
 
     # Iteration tracking
-    iterations: List[CycleIteration] = Field(
+    iterations: list[CycleIteration] = Field(
         default_factory=list, description="Complete history of all iterations"
     )
-    current_iteration: Optional[CycleIteration] = Field(
+    current_iteration: CycleIteration | None = Field(
         default=None, description="Currently executing iteration"
     )
 
     # Working memory (ephemeral within task)
-    working_memory: Dict[str, Any] = Field(
+    working_memory: dict[str, Any] = Field(
         default_factory=dict, description="Ephemeral working memory for this task"
     )
 
@@ -425,18 +423,16 @@ class EnhancedAgentState(AgentState):
     )
 
     # Validation state
-    pending_validation: Optional[ValidateInput] = Field(
+    pending_validation: ValidateInput | None = Field(
         default=None, description="Action awaiting validation"
     )
-    validation_history: List[ValidateOutput] = Field(
+    validation_history: list[ValidateOutput] = Field(
         default_factory=list, description="History of validation decisions"
     )
 
     # Enhanced plan tracking
-    plan_created_at: Optional[datetime] = Field(
-        default=None, description="When the plan was created"
-    )
-    plan_updated_at: Optional[datetime] = Field(
+    plan_created_at: datetime | None = Field(default=None, description="When the plan was created")
+    plan_updated_at: datetime | None = Field(
         default=None, description="When the plan was last updated"
     )
     plan_version: int = Field(default=0, description="Plan version number")
@@ -446,23 +442,21 @@ class EnhancedAgentState(AgentState):
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
 
     # Metadata for extensibility
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict, description="Arbitrary metadata for extensibility and goal tracking"
     )
     # === P0 FIX: Added missing fields ===
     # Fix #1: Final answer storage when task completes
-    final_answer: Optional[str] = Field(
-        default=None, description="Final answer when task is complete"
-    )
+    final_answer: str | None = Field(default=None, description="Final answer when task is complete")
 
     # Fix #2: Tool call pending execution from THINK phase
-    pending_tool_call: Optional[ToolCall] = None
+    pending_tool_call: ToolCall | None = None
 
     # Fix #4: Flag indicating agent is waiting for human approval
     awaiting_human_approval: bool = False
 
     # Fix #5: Prompt to show user when human approval is required
-    pending_approval_prompt: Optional[str] = Field(
+    pending_approval_prompt: str | None = Field(
         default=None, description="Prompt to display when awaiting human approval"
     )
 
@@ -543,7 +537,7 @@ class EnhancedAgentState(AgentState):
             self.add_iteration(self.current_iteration)
             self.current_iteration = None
 
-    def update_plan(self, new_plan: List[str], reasoning: str = "") -> None:
+    def update_plan(self, new_plan: list[str], reasoning: str = "") -> None:
         """
         Update the agent's plan.
 

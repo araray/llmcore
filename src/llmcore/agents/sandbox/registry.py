@@ -21,7 +21,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from .base import SandboxAccessLevel, SandboxConfig, SandboxProvider, SandboxStatus
 from .docker_provider import DockerSandboxProvider
@@ -91,12 +91,12 @@ class SandboxRegistryConfig:
     # Docker configuration
     docker_enabled: bool = True
     docker_image: str = "python:3.11-slim"
-    docker_image_whitelist: List[str] = field(
+    docker_image_whitelist: list[str] = field(
         default_factory=lambda: ["python:3.*-slim", "python:3.*-bookworm", "llmcore-sandbox:*"]
     )
     docker_full_access_label: str = "llmcore.sandbox.full_access=true"
-    docker_full_access_name_pattern: Optional[str] = "*-full-access"
-    docker_host: Optional[str] = None
+    docker_full_access_name_pattern: str | None = "*-full-access"
+    docker_host: str | None = None
     docker_auto_pull: bool = True
     docker_memory_limit: str = "1g"
     docker_cpu_limit: float = 2.0
@@ -104,11 +104,11 @@ class SandboxRegistryConfig:
 
     # VM configuration
     vm_enabled: bool = False
-    vm_host: Optional[str] = None
+    vm_host: str | None = None
     vm_port: int = 22
     vm_username: str = "agent"
-    vm_private_key_path: Optional[str] = None
-    vm_full_access_hosts: List[str] = field(default_factory=list)
+    vm_private_key_path: str | None = None
+    vm_full_access_hosts: list[str] = field(default_factory=list)
     vm_use_ssh_agent: bool = True
     vm_connection_timeout: int = 30
 
@@ -117,7 +117,7 @@ class SandboxRegistryConfig:
     outputs_path: str = "~/.llmcore/agent_outputs"
 
     # Tool access control (for RESTRICTED sandboxes)
-    allowed_tools: List[str] = field(
+    allowed_tools: list[str] = field(
         default_factory=lambda: [
             "execute_shell",
             "execute_python",
@@ -136,7 +136,7 @@ class SandboxRegistryConfig:
             "human_approval",
         ]
     )
-    denied_tools: List[str] = field(
+    denied_tools: list[str] = field(
         default_factory=lambda: [
             "install_system_package",
             "sudo_execute",
@@ -191,11 +191,11 @@ class SandboxRegistry:
             config: Registry configuration
         """
         self._config = config
-        self._active_sandboxes: Dict[str, SandboxProvider] = {}
+        self._active_sandboxes: dict[str, SandboxProvider] = {}
 
         # Convert tool lists to sets for faster lookup
-        self._allowed_tools: Set[str] = set(config.allowed_tools)
-        self._denied_tools: Set[str] = set(config.denied_tools)
+        self._allowed_tools: set[str] = set(config.allowed_tools)
+        self._denied_tools: set[str] = set(config.denied_tools)
 
         logger.info(
             f"SandboxRegistry initialized: mode={config.mode.value}, "
@@ -205,8 +205,8 @@ class SandboxRegistry:
     async def create_sandbox(
         self,
         sandbox_config: SandboxConfig,
-        prefer_mode: Optional[SandboxMode] = None,
-        docker_image: Optional[str] = None,
+        prefer_mode: SandboxMode | None = None,
+        docker_image: str | None = None,
     ) -> SandboxProvider:
         """
         Create and initialize a sandbox.
@@ -291,7 +291,7 @@ class SandboxRegistry:
         return provider
 
     async def _create_docker_sandbox(
-        self, config: SandboxConfig, image: Optional[str] = None
+        self, config: SandboxConfig, image: str | None = None
     ) -> DockerSandboxProvider:
         """
         Create a Docker sandbox.
@@ -376,7 +376,7 @@ class SandboxRegistry:
         # Default: allow if not denied
         return True
 
-    def get_allowed_tools(self, access_level: SandboxAccessLevel) -> List[str]:
+    def get_allowed_tools(self, access_level: SandboxAccessLevel) -> list[str]:
         """
         Get list of allowed tools for the given access level.
 
@@ -394,7 +394,7 @@ class SandboxRegistry:
         # For restricted mode, return only explicitly allowed tools
         return list(self._allowed_tools - self._denied_tools)
 
-    async def get_sandbox(self, sandbox_id: str) -> Optional[SandboxProvider]:
+    async def get_sandbox(self, sandbox_id: str) -> SandboxProvider | None:
         """
         Get an active sandbox by ID.
 
@@ -406,7 +406,7 @@ class SandboxRegistry:
         """
         return self._active_sandboxes.get(sandbox_id)
 
-    async def get_sandbox_status(self, sandbox_id: str) -> Optional[SandboxStatus]:
+    async def get_sandbox_status(self, sandbox_id: str) -> SandboxStatus | None:
         """
         Get the status of a sandbox.
 
@@ -444,7 +444,7 @@ class SandboxRegistry:
 
         return False
 
-    async def cleanup_all(self) -> Dict[str, bool]:
+    async def cleanup_all(self) -> dict[str, bool]:
         """
         Clean up all active sandboxes.
 
@@ -458,7 +458,7 @@ class SandboxRegistry:
 
         return results
 
-    def list_active_sandboxes(self) -> List[Dict[str, Any]]:
+    def list_active_sandboxes(self) -> list[dict[str, Any]]:
         """
         List all active sandboxes.
 
@@ -494,7 +494,7 @@ class SandboxRegistry:
             return await sandbox.is_healthy()
         return False
 
-    async def health_check_all(self) -> Dict[str, bool]:
+    async def health_check_all(self) -> dict[str, bool]:
         """
         Health check all active sandboxes.
 

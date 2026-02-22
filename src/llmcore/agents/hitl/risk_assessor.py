@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple
+from re import Pattern
+from typing import Any
 
 from .models import (
     HITLConfig,
@@ -53,16 +55,16 @@ class RiskLevel(str, Enum):
         """Get numeric order for comparison."""
         return ["none", "low", "medium", "high", "critical"].index(self.value)
 
-    def __lt__(self, other: "RiskLevel") -> bool:
+    def __lt__(self, other: RiskLevel) -> bool:
         return self.order < other.order
 
-    def __le__(self, other: "RiskLevel") -> bool:
+    def __le__(self, other: RiskLevel) -> bool:
         return self.order <= other.order
 
-    def __gt__(self, other: "RiskLevel") -> bool:
+    def __gt__(self, other: RiskLevel) -> bool:
         return self.order > other.order
 
-    def __ge__(self, other: "RiskLevel") -> bool:
+    def __ge__(self, other: RiskLevel) -> bool:
         return self.order >= other.order
 
 
@@ -79,7 +81,7 @@ class DangerousPattern:
     description: str
     risk_level: RiskLevel = RiskLevel.HIGH
     parameter_name: str = "command"  # Which parameter to check
-    compiled: Optional[Pattern] = field(default=None, repr=False)
+    compiled: Pattern | None = field(default=None, repr=False)
 
     def __post_init__(self):
         """Compile regex pattern."""
@@ -234,7 +236,7 @@ class ResourceScope:
     """Defines resource scope risk levels."""
 
     # Safe paths (workspace, temp)
-    safe_patterns: List[str] = field(
+    safe_patterns: list[str] = field(
         default_factory=lambda: [
             r"^/workspace/",
             r"^/tmp/",
@@ -244,7 +246,7 @@ class ResourceScope:
     )
 
     # Sensitive paths (system)
-    sensitive_patterns: List[str] = field(
+    sensitive_patterns: list[str] = field(
         default_factory=lambda: [
             r"^/etc/",
             r"^/root/",
@@ -298,9 +300,9 @@ class RiskAssessor:
 
     def __init__(
         self,
-        config: Optional[HITLConfig] = None,
-        custom_patterns: Optional[List[DangerousPattern]] = None,
-        resource_scope: Optional[ResourceScope] = None,
+        config: HITLConfig | None = None,
+        custom_patterns: list[DangerousPattern] | None = None,
+        resource_scope: ResourceScope | None = None,
     ):
         """
         Initialize risk assessor.
@@ -314,7 +316,7 @@ class RiskAssessor:
         self.resource_scope = resource_scope or ResourceScope()
 
         # Build tool risk map from config
-        self._tool_risks: Dict[str, RiskLevel] = {}
+        self._tool_risks: dict[str, RiskLevel] = {}
         self._build_tool_risk_map()
 
         # Dangerous patterns
@@ -323,7 +325,7 @@ class RiskAssessor:
             self._patterns.extend(custom_patterns)
 
         # Custom risk assessors (activity_type -> assessor function)
-        self._custom_assessors: Dict[str, Callable[..., RiskLevel]] = {}
+        self._custom_assessors: dict[str, Callable[..., RiskLevel]] = {}
 
     def _build_tool_risk_map(self) -> None:
         """Build tool -> risk level mapping from config."""
@@ -339,8 +341,8 @@ class RiskAssessor:
     def assess(
         self,
         activity_type: str,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> RiskAssessment:
         """
         Assess risk for an activity.
@@ -353,8 +355,8 @@ class RiskAssessor:
         Returns:
             RiskAssessment with overall level and factors
         """
-        factors: List[RiskFactor] = []
-        dangerous_patterns: List[str] = []
+        factors: list[RiskFactor] = []
+        dangerous_patterns: list[str] = []
         context = context or {}
 
         # 1. Check tool-based risk
@@ -458,7 +460,7 @@ class RiskAssessor:
         else:
             return RiskLevel.MEDIUM
 
-    def _assess_scope_risk(self, activity_type: str, parameters: Dict[str, Any]) -> RiskLevel:
+    def _assess_scope_risk(self, activity_type: str, parameters: dict[str, Any]) -> RiskLevel:
         """Assess risk based on resource scope."""
         max_risk = RiskLevel.NONE
 
@@ -471,7 +473,7 @@ class RiskAssessor:
 
         return max_risk
 
-    def _assess_reversibility(self, activity_type: str, parameters: Dict[str, Any]) -> RiskLevel:
+    def _assess_reversibility(self, activity_type: str, parameters: dict[str, Any]) -> RiskLevel:
         """Assess risk based on reversibility."""
         # Destructive activities
         destructive = {
@@ -495,16 +497,16 @@ class RiskAssessor:
         return RiskLevel.NONE
 
     def _check_dangerous_patterns(
-        self, activity_type: str, parameters: Dict[str, Any]
-    ) -> Tuple[RiskLevel, List[str]]:
+        self, activity_type: str, parameters: dict[str, Any]
+    ) -> tuple[RiskLevel, list[str]]:
         """Check for dangerous patterns in parameters."""
         max_risk = RiskLevel.NONE
-        matched: List[str] = []
+        matched: list[str] = []
 
         for pattern in self._patterns:
             param_name = pattern.parameter_name
             # Check the specific parameter or all string parameters
-            values_to_check: List[str] = []
+            values_to_check: list[str] = []
 
             if param_name in parameters:
                 values_to_check.append(str(parameters[param_name]))
@@ -522,7 +524,7 @@ class RiskAssessor:
 
         return max_risk, matched
 
-    def _calculate_overall_risk(self, factors: List[RiskFactor]) -> RiskLevel:
+    def _calculate_overall_risk(self, factors: list[RiskFactor]) -> RiskLevel:
         """Calculate overall risk from factors."""
         if not factors:
             return RiskLevel.NONE
@@ -573,7 +575,7 @@ class RiskAssessor:
     def register_custom_assessor(
         self,
         activity_type: str,
-        assessor: Callable[[Dict[str, Any], Dict[str, Any]], RiskLevel],
+        assessor: Callable[[dict[str, Any], dict[str, Any]], RiskLevel],
     ) -> None:
         """
         Register a custom risk assessor for an activity type.
@@ -598,9 +600,9 @@ class RiskAssessor:
 
 
 def create_risk_assessor(
-    config: Optional[HITLConfig] = None,
-    additional_safe_tools: Optional[List[str]] = None,
-    additional_dangerous_patterns: Optional[List[DangerousPattern]] = None,
+    config: HITLConfig | None = None,
+    additional_safe_tools: list[str] | None = None,
+    additional_dangerous_patterns: list[DangerousPattern] | None = None,
 ) -> RiskAssessor:
     """Create a risk assessor with custom settings."""
     cfg = config or HITLConfig()
@@ -616,7 +618,7 @@ def create_risk_assessor(
 
 def quick_assess(
     activity_type: str,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
 ) -> RiskAssessment:
     """Quickly assess risk without creating an instance."""
     assessor = RiskAssessor()

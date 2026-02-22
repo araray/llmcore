@@ -1,3 +1,4 @@
+# src/llmcore/get_version.py
 import pathlib
 import tomllib
 

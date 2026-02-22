@@ -33,7 +33,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..config.models import LLMCoreConfig
@@ -63,9 +63,9 @@ class ObservabilityComponents:
     """
 
     enabled: bool = False
-    logger: Optional[Any] = None  # EventLogger
-    metrics: Optional[Any] = None  # MetricsCollector
-    config: Dict[str, Any] = field(default_factory=dict)
+    logger: Any | None = None  # EventLogger
+    metrics: Any | None = None  # MetricsCollector
+    config: dict[str, Any] = field(default_factory=dict)
 
     async def close(self) -> None:
         """Close all observability components."""
@@ -86,12 +86,12 @@ class ObservabilityComponents:
 
 
 def create_observability_from_config(
-    config: Optional["LLMCoreConfig"],
+    config: LLMCoreConfig | None,
     session_id: str,
     *,
-    execution_id: Optional[str] = None,
-    default_tags: Optional[List[str]] = None,
-    override_enabled: Optional[bool] = None,
+    execution_id: str | None = None,
+    default_tags: list[str] | None = None,
+    override_enabled: bool | None = None,
 ) -> ObservabilityComponents:
     """
     Create observability components from LLMCore configuration.
@@ -241,7 +241,7 @@ def create_observability_from_config(
     )
 
 
-def _extract_observability_config(config: Optional["LLMCoreConfig"]) -> Dict[str, Any]:
+def _extract_observability_config(config: LLMCoreConfig | None) -> dict[str, Any]:
     """
     Extract observability configuration from LLMCore config.
 
@@ -281,10 +281,10 @@ def _extract_observability_config(config: Optional["LLMCoreConfig"]) -> Dict[str
 def create_event_logger_simple(
     session_id: str,
     *,
-    log_path: Optional[str] = None,
-    execution_id: Optional[str] = None,
+    log_path: str | None = None,
+    execution_id: str | None = None,
     enabled: bool = True,
-) -> Optional[Any]:
+) -> Any | None:
     """
     Create a simple EventLogger without full configuration.
 

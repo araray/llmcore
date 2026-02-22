@@ -10,7 +10,7 @@ payload exceeds the model's token limit.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from ..models import ChatSession, ContextItem, ContextItemType, ContextPreparationDetails, Message
 from ..models import Role as LLMCoreRole
@@ -24,10 +24,10 @@ async def build_context_payload(
     provider: BaseProvider,
     target_model: str,
     max_model_tokens: int,
-    config: Dict[str, Any],
-    active_context_item_ids: Optional[List[str]] = None,
-    explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
-    message_inclusion_map: Optional[Dict[str, bool]] = None,
+    config: dict[str, Any],
+    active_context_item_ids: list[str] | None = None,
+    explicitly_staged_items: list[Message | ContextItem] | None = None,
+    message_inclusion_map: dict[str, bool] | None = None,
     final_user_query_content: str = "",
 ) -> ContextPreparationDetails:
     """
@@ -57,11 +57,11 @@ async def build_context_payload(
     truncation_priority = config.get("truncation_priority_order", [])
 
     available_tokens_for_prompt = max_model_tokens - reserved_response_tokens
-    truncation_actions: Dict[str, Any] = {"details": []}
+    truncation_actions: dict[str, Any] = {"details": []}
 
     all_categories = set(inclusion_priority) | set(truncation_priority)
-    components: Dict[str, List[Message]] = {cat: [] for cat in all_categories}
-    component_tokens: Dict[str, int] = dict.fromkeys(all_categories, 0)
+    components: dict[str, list[Message]] = {cat: [] for cat in all_categories}
+    component_tokens: dict[str, int] = dict.fromkeys(all_categories, 0)
 
     # 1. Gather and Prepare All Potential Components
     # System messages from session history
@@ -132,7 +132,7 @@ async def build_context_payload(
     component_tokens["history_chat"] = built_tokens
 
     # 3. Assemble Final Payload (Pre-truncation)
-    final_payload_messages: List[Message] = []
+    final_payload_messages: list[Message] = []
     current_tokens = 0
     for category in inclusion_priority:
         for msg in components[category]:
@@ -190,11 +190,11 @@ async def build_context_payload(
 
 
 async def _format_and_tokenize_item_as_message(
-    item: Union[Message, ContextItem],
+    item: Message | ContextItem,
     provider: BaseProvider,
     target_model: str,
     item_category: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> Message:
     """Formats a ContextItem into a Message or tokenizes an existing Message."""
 
@@ -234,12 +234,12 @@ async def _format_and_tokenize_item_as_message(
 
 
 async def _build_history_messages(
-    history_messages: List[Message],
+    history_messages: list[Message],
     provider: BaseProvider,
     target_model: str,
     budget: int,
-    config: Dict[str, Any],
-) -> Tuple[List[Message], int]:
+    config: dict[str, Any],
+) -> tuple[list[Message], int]:
     """Builds the chat history part of the context within a given token budget."""
     if budget <= 0 or not history_messages:
         return [], 0
@@ -250,11 +250,11 @@ async def _build_history_messages(
         if msg.tokens is None:
             msg.tokens = await provider.count_message_tokens([msg], target_model)
 
-    selected_history: List[Message] = []
+    selected_history: list[Message] = []
     current_tokens = 0
 
     # Prioritize N most recent user messages and their preceding assistant responses
-    retained_for_now: List[Message] = []
+    retained_for_now: list[Message] = []
     tokens_for_retained = 0
     num_user_retained = 0
 
@@ -282,7 +282,7 @@ async def _build_history_messages(
         older_candidates = [msg for msg in history_messages if msg.id not in ids_in_selected]
         older_candidates.sort(key=lambda m: m.timestamp, reverse=True)
 
-        backfill_history: List[Message] = []
+        backfill_history: list[Message] = []
         tokens_for_backfill = 0
         for msg in older_candidates:
             msg_tokens = msg.tokens or 0
@@ -298,8 +298,8 @@ async def _build_history_messages(
 
 
 def _truncate_message_list_from_start(
-    messages: List[Message], tokens_to_free: int
-) -> Tuple[List[Message], int]:
+    messages: list[Message], tokens_to_free: int
+) -> tuple[list[Message], int]:
     """Removes messages from the beginning of a list to free up tokens."""
     freed_so_far = 0
     truncated_list = list(messages)

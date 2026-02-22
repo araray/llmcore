@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# tests/verify_integration.py
 """
 llmcore Integration Verification Script
 ========================================

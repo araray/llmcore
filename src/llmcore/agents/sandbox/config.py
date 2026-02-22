@@ -46,7 +46,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +124,12 @@ class DockerConfig:
 
     enabled: bool = True
     image: str = "python:3.11-slim"
-    image_whitelist: List[str] = field(
+    image_whitelist: list[str] = field(
         default_factory=lambda: ["python:3.*-slim", "python:3.*-bookworm", "llmcore-sandbox:*"]
     )
     full_access_label: str = "llmcore.sandbox.full_access=true"
-    full_access_name_pattern: Optional[str] = "*-full-access"
-    host: Optional[str] = None
+    full_access_name_pattern: str | None = "*-full-access"
+    host: str | None = None
     auto_pull: bool = True
     memory_limit: str = "1g"
     cpu_limit: float = 2.0
@@ -141,11 +141,11 @@ class VMConfig:
     """VM sandbox configuration."""
 
     enabled: bool = False
-    host: Optional[str] = None
+    host: str | None = None
     port: int = 22
     username: str = "agent"
-    private_key_path: Optional[str] = None
-    full_access_hosts: List[str] = field(default_factory=list)
+    private_key_path: str | None = None
+    full_access_hosts: list[str] = field(default_factory=list)
     use_ssh_agent: bool = True
     connection_timeout: int = 30
 
@@ -162,8 +162,8 @@ class VolumeConfig:
 class ToolsConfig:
     """Tool access control configuration."""
 
-    allowed: List[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["allowed"])
-    denied: List[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["denied"])
+    allowed: list[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["allowed"])
+    denied: list[str] = field(default_factory=lambda: DEFAULT_CONFIG["tools"]["denied"])
 
 
 @dataclass
@@ -195,7 +195,7 @@ class SandboxSystemConfig:
     tools: ToolsConfig = field(default_factory=ToolsConfig)
     output_tracking: OutputTrackingConfig = field(default_factory=OutputTrackingConfig)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "mode": self.mode,
@@ -238,7 +238,7 @@ class SandboxSystemConfig:
         }
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge two dictionaries.
 
@@ -262,7 +262,7 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return result
 
 
-def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     """
     Apply environment variable overrides to configuration.
 
@@ -342,7 +342,7 @@ def _parse_env_value(value: str) -> Any:
     return value
 
 
-def load_toml_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
+def load_toml_config(config_path: Path | None = None) -> dict[str, Any]:
     """
     Load configuration from TOML file.
 
@@ -385,7 +385,7 @@ def load_toml_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def load_sandbox_config(
-    config_path: Optional[Path] = None, overrides: Optional[Dict[str, Any]] = None
+    config_path: Path | None = None, overrides: dict[str, Any] | None = None
 ) -> SandboxSystemConfig:
     """
     Load complete sandbox system configuration.
@@ -651,7 +651,7 @@ cleanup_keep_min_runs = 10
 """
 
 
-def write_sample_config(path: Optional[Path] = None) -> Path:
+def write_sample_config(path: Path | None = None) -> Path:
     """
     Write a sample configuration file.
 

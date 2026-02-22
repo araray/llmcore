@@ -1,3 +1,4 @@
+# scripts/test_semantiscan_pydantic_validation.py
 from llmcore.config.models import validate_semantiscan_config
 
 # Minimal config should validate

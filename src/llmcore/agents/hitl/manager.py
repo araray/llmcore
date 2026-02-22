@@ -28,8 +28,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from .callbacks import ConsoleHITLCallback, HITLCallback
@@ -68,7 +69,7 @@ class HITLAuditLogger:
 
     def __init__(
         self,
-        log_path: Optional[Path] = None,
+        log_path: Path | None = None,
         enabled: bool = True,
     ):
         """
@@ -80,7 +81,7 @@ class HITLAuditLogger:
         """
         self.log_path = log_path
         self.enabled = enabled
-        self._events: List[HITLAuditEvent] = []
+        self._events: list[HITLAuditEvent] = []
 
     def log_event(self, event: HITLAuditEvent) -> None:
         """Log an audit event."""
@@ -160,8 +161,8 @@ class HITLAuditLogger:
         self,
         scope_type: ApprovalScope,
         target: str,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         """Log scope grant."""
         self.log_event(
@@ -178,10 +179,10 @@ class HITLAuditLogger:
 
     def get_events(
         self,
-        request_id: Optional[str] = None,
-        event_type: Optional[HITLEventType] = None,
+        request_id: str | None = None,
+        event_type: HITLEventType | None = None,
         limit: int = 100,
-    ) -> List[HITLAuditEvent]:
+    ) -> list[HITLAuditEvent]:
         """Get audit events with optional filtering."""
         events = self._events
 
@@ -244,13 +245,13 @@ class HITLManager:
 
     def __init__(
         self,
-        config: Optional[HITLConfig] = None,
-        risk_assessor: Optional[RiskAssessor] = None,
-        scope_manager: Optional[ApprovalScopeManager] = None,
-        callback: Optional[HITLCallback] = None,
-        state_store: Optional[HITLStateStore] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        config: HITLConfig | None = None,
+        risk_assessor: RiskAssessor | None = None,
+        scope_manager: ApprovalScopeManager | None = None,
+        callback: HITLCallback | None = None,
+        state_store: HITLStateStore | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ):
         """
         Initialize HITL manager.
@@ -292,12 +293,12 @@ class HITLManager:
         )
 
         # Request batching
-        self._pending_batch: List[HITLRequest] = []
-        self._batch_task: Optional[asyncio.Task] = None
+        self._pending_batch: list[HITLRequest] = []
+        self._batch_task: asyncio.Task | None = None
 
         # Event callbacks
-        self._on_approval: List[Callable] = []
-        self._on_rejection: List[Callable] = []
+        self._on_approval: list[Callable] = []
+        self._on_rejection: list[Callable] = []
 
         # Statistics
         self._stats = {
@@ -395,9 +396,9 @@ class HITLManager:
     async def check_approval(
         self,
         activity_type: str,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        reason: Optional[str] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
+        reason: str | None = None,
     ) -> HITLDecision:
         """
         Check if activity requires approval and handle workflow.
@@ -546,7 +547,7 @@ class HITLManager:
                     response=response,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._stats["requests_timed_out"] += 1
             await self.callback.notify_timeout(request)
             return self._handle_timeout(request)
@@ -619,7 +620,7 @@ class HITLManager:
 
         self._stats["scope_grants"] += 1
 
-    def _build_context_summary(self, context: Dict[str, Any]) -> str:
+    def _build_context_summary(self, context: dict[str, Any]) -> str:
         """Build context summary for approval request."""
         parts = []
 
@@ -639,7 +640,7 @@ class HITLManager:
     # PUBLIC API
     # =========================================================================
 
-    async def submit_response(self, response: HITLResponse) -> Optional[HITLDecision]:
+    async def submit_response(self, response: HITLResponse) -> HITLDecision | None:
         """
         Submit response for pending request (for async workflows).
 
@@ -686,14 +687,14 @@ class HITLManager:
 
         return decision
 
-    async def get_pending_requests(self) -> List[HITLRequest]:
+    async def get_pending_requests(self) -> list[HITLRequest]:
         """Get all pending approval requests."""
         return await self.state_store.get_pending_requests(session_id=self.session_id)
 
     def grant_session_approval(
         self,
         tool_name: str,
-        conditions: Optional[Dict[str, Any]] = None,
+        conditions: dict[str, Any] | None = None,
         max_risk_level: RiskLevel = RiskLevel.MEDIUM,
     ) -> str:
         """Grant session approval for a tool."""
@@ -729,7 +730,7 @@ class HITLManager:
         """Register rejection event handler."""
         self._on_rejection.append(handler)
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get HITL statistics."""
         return {
             **self._stats,
@@ -751,12 +752,12 @@ class HITLManager:
 def create_hitl_manager(
     enabled: bool = True,
     risk_threshold: str = "medium",
-    callback: Optional[HITLCallback] = None,
-    persist_path: Optional[str] = None,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    callback: HITLCallback | None = None,
+    persist_path: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
     storage_backend: str = "memory",
-    storage_config: Optional[Dict[str, Any]] = None,
+    storage_config: dict[str, Any] | None = None,
 ) -> HITLManager:
     """
     Create HITL manager with common settings (sync convenience function).
@@ -818,11 +819,11 @@ def create_hitl_manager(
 
 
 async def create_hitl_manager_async(
-    config: Optional[HITLConfig] = None,
-    state_store: Optional[HITLStateStore] = None,
-    callback: Optional[HITLCallback] = None,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    config: HITLConfig | None = None,
+    state_store: HITLStateStore | None = None,
+    callback: HITLCallback | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> HITLManager:
     """
     Async factory function to create and initialize an HITLManager.

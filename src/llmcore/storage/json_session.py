@@ -13,8 +13,8 @@ import logging
 import os
 import pathlib
 import re  # For validating preset names as filenames
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import aiofiles
 import aiofiles.os as aios
@@ -47,7 +47,7 @@ class JsonSessionStorage(BaseSessionStorage):
     _presets_dir_name: str = "context_presets"  # Standardized subdirectory name
     _episodes_dir_name: str = "episodes"  # Standardized subdirectory name for episodes
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the JSON session and preset storage.
 
@@ -124,7 +124,7 @@ class JsonSessionStorage(BaseSessionStorage):
         except TypeError as e:
             logger.error(f"Error serializing session '{session.id}' to JSON: {e}")
             raise SessionStorageError(f"Failed to serialize session data for '{session.id}': {e}")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error writing session '{session.id}' to file {session_file_path}: {e}")
             raise SessionStorageError(f"Failed to write session file for '{session.id}': {e}")
         except Exception as e:
@@ -134,7 +134,7 @@ class JsonSessionStorage(BaseSessionStorage):
             )
             raise SessionStorageError(f"Unexpected error saving session '{session.id}': {e}")
 
-    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+    async def get_session(self, session_id: str) -> ChatSession | None:
         """
         Retrieve a specific chat session by its ID asynchronously from its JSON file.
 
@@ -152,7 +152,7 @@ class JsonSessionStorage(BaseSessionStorage):
             if not await aios.path.exists(session_file_path):
                 logger.debug(f"Session file not found for ID '{session_id}' at {session_file_path}")
                 return None
-            async with aiofiles.open(session_file_path, mode="r", encoding="utf-8") as f:
+            async with aiofiles.open(session_file_path, encoding="utf-8") as f:
                 content = await f.read()
             session_data = json.loads(content)
             chat_session = ChatSession.model_validate(session_data)
@@ -165,7 +165,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 f"Error decoding JSON for session '{session_id}' from {session_file_path}: {e}"
             )
             raise SessionStorageError(f"Corrupted session file for '{session_id}': {e}")
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"Error reading session file '{session_file_path}' for session '{session_id}': {e}"
             )
@@ -179,7 +179,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 f"Unexpected error or invalid data loading session '{session_id}': {e}"
             )
 
-    async def list_sessions(self) -> List[Dict[str, Any]]:
+    async def list_sessions(self) -> list[dict[str, Any]]:
         """
         List available persistent chat sessions, returning metadata only from each JSON file.
 
@@ -189,7 +189,7 @@ class JsonSessionStorage(BaseSessionStorage):
         Raises:
             SessionStorageError: If there's an error listing files in the storage directory.
         """
-        session_metadata_list: List[Dict[str, Any]] = []
+        session_metadata_list: list[dict[str, Any]] = []
         try:
             if not await aios.path.isdir(self._storage_dir):
                 logger.warning(
@@ -203,9 +203,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 ):  # Ensure it's a file, not preset dir
                     session_file_path = self._storage_dir / filename
                     try:
-                        async with aiofiles.open(
-                            session_file_path, mode="r", encoding="utf-8"
-                        ) as f:
+                        async with aiofiles.open(session_file_path, encoding="utf-8") as f:
                             content = await f.read()
                             data = json.loads(content)
                         session_id_from_file = data.get("id")
@@ -303,7 +301,7 @@ class JsonSessionStorage(BaseSessionStorage):
             return False
 
         session.name = new_name
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(UTC)
         try:
             await self.save_session(session)
             logger.info(f"Session '{session_id}' name updated to '{new_name}'.")
@@ -340,7 +338,7 @@ class JsonSessionStorage(BaseSessionStorage):
         except TypeError as e:
             logger.error(f"Error serializing context preset '{preset.name}' to JSON: {e}")
             raise StorageError(f"Failed to serialize preset data for '{preset.name}': {e}")
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"Error writing context preset '{preset.name}' to file {preset_file_path}: {e}"
             )
@@ -352,7 +350,7 @@ class JsonSessionStorage(BaseSessionStorage):
             )
             raise StorageError(f"Unexpected error saving preset '{preset.name}': {e}")
 
-    async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
+    async def get_context_preset(self, preset_name: str) -> ContextPreset | None:
         """
         Retrieve a specific context preset by its name.
 
@@ -373,7 +371,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 )
                 return None
 
-            async with aiofiles.open(preset_file_path, mode="r", encoding="utf-8") as f:
+            async with aiofiles.open(preset_file_path, encoding="utf-8") as f:
                 content = await f.read()
 
             preset_data = json.loads(content)
@@ -387,7 +385,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 f"Error decoding JSON for context preset '{preset_name}' from {preset_file_path}: {e}"
             )
             raise StorageError(f"Corrupted context preset file for '{preset_name}': {e}")
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"Error reading context preset file '{preset_file_path}' for preset '{preset_name}': {e}"
             )
@@ -401,7 +399,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 f"Unexpected error or invalid data loading preset '{preset_name}': {e}"
             )
 
-    async def list_context_presets(self) -> List[Dict[str, Any]]:
+    async def list_context_presets(self) -> list[dict[str, Any]]:
         """
         List available context presets, returning metadata only.
         Scans the presets subdirectory for JSON files.
@@ -409,7 +407,7 @@ class JsonSessionStorage(BaseSessionStorage):
         Returns:
             A list of dictionaries, each representing preset metadata.
         """
-        preset_metadata_list: List[Dict[str, Any]] = []
+        preset_metadata_list: list[dict[str, Any]] = []
         try:
             if not await aios.path.isdir(self._presets_dir):
                 logger.warning(f"Context presets directory {self._presets_dir} does not exist.")
@@ -419,7 +417,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 if filename.endswith(self._file_extension):
                     preset_file_path = self._presets_dir / filename
                     try:
-                        async with aiofiles.open(preset_file_path, mode="r", encoding="utf-8") as f:
+                        async with aiofiles.open(preset_file_path, encoding="utf-8") as f:
                             content = await f.read()
                             data = json.loads(content)
 
@@ -544,7 +542,7 @@ class JsonSessionStorage(BaseSessionStorage):
 
             # Update the preset object's attributes
             preset_to_rename.name = new_name
-            preset_to_rename.updated_at = datetime.now(timezone.utc)
+            preset_to_rename.updated_at = datetime.now(UTC)
 
             # Save under new name
             await self.save_context_preset(
@@ -605,7 +603,7 @@ class JsonSessionStorage(BaseSessionStorage):
         except TypeError as e:
             logger.error(f"Error serializing episode '{episode.episode_id}' to JSON: {e}")
             raise StorageError(f"Failed to serialize episode data for '{episode.episode_id}': {e}")
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"Error writing episode '{episode.episode_id}' to file {episode_file_path}: {e}"
             )
@@ -619,7 +617,7 @@ class JsonSessionStorage(BaseSessionStorage):
 
     async def get_episodes(
         self, session_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Episode]:
+    ) -> list[Episode]:
         """
         Retrieves a list of episodes for a given session, ordered by timestamp.
         Reads from JSON Lines format and applies pagination.
@@ -636,7 +634,7 @@ class JsonSessionStorage(BaseSessionStorage):
             StorageError: If an error occurs during file reading or JSON deserialization.
         """
         episode_file_path = self._get_episode_path(session_id)
-        episodes: List[Episode] = []
+        episodes: list[Episode] = []
 
         try:
             if not await aios.path.exists(episode_file_path):
@@ -645,7 +643,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 )
                 return []
 
-            async with aiofiles.open(episode_file_path, mode="r", encoding="utf-8") as f:
+            async with aiofiles.open(episode_file_path, encoding="utf-8") as f:
                 content = await f.read()
 
             lines = content.strip().split("\n")
@@ -683,7 +681,7 @@ class JsonSessionStorage(BaseSessionStorage):
             )
             return paginated_episodes
 
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"Error reading episode file '{episode_file_path}' for session '{session_id}': {e}"
             )

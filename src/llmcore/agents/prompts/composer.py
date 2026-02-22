@@ -41,7 +41,6 @@ References:
 
 import logging
 import re
-from typing import Dict, List, Optional, Set
 
 from .models import PromptSnippet
 
@@ -116,7 +115,7 @@ class PromptComposer:
 
     def __init__(self):
         """Initialize the composer with empty snippet registry."""
-        self._snippets: Dict[str, PromptSnippet] = {}
+        self._snippets: dict[str, PromptSnippet] = {}
 
     def register_snippet(self, snippet: PromptSnippet) -> None:
         """
@@ -128,7 +127,7 @@ class PromptComposer:
         self._snippets[snippet.key] = snippet
         logger.debug(f"Registered snippet: {snippet.key}")
 
-    def register_snippets(self, snippets: List[PromptSnippet]) -> None:
+    def register_snippets(self, snippets: list[PromptSnippet]) -> None:
         """
         Register multiple snippets at once.
 
@@ -149,7 +148,7 @@ class PromptComposer:
             del self._snippets[key]
             logger.debug(f"Unregistered snippet: {key}")
 
-    def get_snippet(self, key: str) -> Optional[PromptSnippet]:
+    def get_snippet(self, key: str) -> PromptSnippet | None:
         """
         Get a registered snippet by key.
 
@@ -161,11 +160,11 @@ class PromptComposer:
         """
         return self._snippets.get(key)
 
-    def list_snippets(self) -> List[str]:
+    def list_snippets(self) -> list[str]:
         """List all registered snippet keys."""
         return list(self._snippets.keys())
 
-    def extract_variables(self, template: str) -> Set[str]:
+    def extract_variables(self, template: str) -> set[str]:
         """
         Extract all variable names from a template.
 
@@ -181,7 +180,7 @@ class PromptComposer:
             variables.add(var_name)
         return variables
 
-    def extract_snippets(self, template: str) -> Set[str]:
+    def extract_snippets(self, template: str) -> set[str]:
         """
         Extract all snippet references from a template.
 
@@ -198,7 +197,7 @@ class PromptComposer:
         return snippets
 
     def validate_variables(
-        self, template: str, variables: Dict[str, str], required_vars: Optional[Set[str]] = None
+        self, template: str, variables: dict[str, str], required_vars: set[str] | None = None
     ) -> None:
         """
         Validate that all required variables are provided.
@@ -229,7 +228,7 @@ class PromptComposer:
         if missing:
             raise MissingVariableError(f"Missing required variables: {', '.join(sorted(missing))}")
 
-    def _expand_snippets(self, template: str, visited: Optional[Set[str]] = None) -> str:
+    def _expand_snippets(self, template: str, visited: set[str] | None = None) -> str:
         """
         Recursively expand all snippet inclusions in a template.
 
@@ -273,7 +272,7 @@ class PromptComposer:
 
         return result
 
-    def _substitute_variables(self, template: str, variables: Dict[str, str]) -> str:
+    def _substitute_variables(self, template: str, variables: dict[str, str]) -> str:
         """
         Substitute all variable placeholders with provided values.
 
@@ -304,8 +303,8 @@ class PromptComposer:
     def render(
         self,
         template: str,
-        variables: Optional[Dict[str, str]] = None,
-        required_vars: Optional[Set[str]] = None,
+        variables: dict[str, str] | None = None,
+        required_vars: set[str] | None = None,
         validate: bool = True,
     ) -> str:
         """

@@ -24,7 +24,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import SandboxProvider
@@ -49,7 +49,7 @@ class AgentLogEntry:
     level: str
     message: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "id": self.id,
@@ -76,7 +76,7 @@ class FileRecord:
     size_bytes: int = 0
     description: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "path": self.path,
@@ -115,7 +115,7 @@ class EphemeralResourceManager:
         >>> await manager.record_file("/workspace/output.py", 1024, "Generated code")
     """
 
-    def __init__(self, sandbox: "SandboxProvider", db_path: Optional[str] = None):
+    def __init__(self, sandbox: "SandboxProvider", db_path: str | None = None):
         """
         Initialize the ephemeral resource manager.
 
@@ -272,7 +272,7 @@ VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
 
         return result.success
 
-    async def list_state_keys(self) -> List[str]:
+    async def list_state_keys(self) -> list[str]:
         """
         List all state keys.
 
@@ -287,7 +287,7 @@ VALUES ('{key_escaped}', '{value_escaped}', '{value_type}', datetime('now'));
             return [k.strip() for k in result.stdout.strip().split("\n") if k.strip()]
         return []
 
-    async def get_all_state(self) -> Dict[str, Any]:
+    async def get_all_state(self) -> dict[str, Any]:
         """
         Get all state as a dictionary.
 
@@ -348,8 +348,8 @@ VALUES (datetime('now'), '{level_escaped}', '{message_escaped}');
         return result.success
 
     async def get_logs(
-        self, level: Optional[str] = None, limit: int = 100, offset: int = 0
-    ) -> List[AgentLogEntry]:
+        self, level: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[AgentLogEntry]:
         """
         Retrieve log entries.
 
@@ -421,7 +421,7 @@ VALUES ('{path_escaped}', datetime('now'), {size_bytes}, '{desc_escaped}');
 
         return result.success
 
-    async def list_recorded_files(self) -> List[FileRecord]:
+    async def list_recorded_files(self) -> list[FileRecord]:
         """
         List all recorded files.
 
@@ -499,7 +499,7 @@ ORDER BY created_at DESC;
                 return 0
         return 0
 
-    async def export_state(self) -> Dict[str, Any]:
+    async def export_state(self) -> dict[str, Any]:
         """
         Export all ephemeral data as a dictionary.
 

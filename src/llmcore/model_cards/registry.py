@@ -1,3 +1,4 @@
+# src/llmcore/model_cards/registry.py
 # llmcore/model_cards/registry.py
 """
 Model Card Registry - Singleton for managing model metadata.
@@ -23,7 +24,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from .schema import (
     ModelCard,
@@ -53,7 +54,7 @@ class ModelCardRegistry:
         ...     print(f"Supports vision: {card.capabilities.vision}")
     """
 
-    _instance: Optional[ModelCardRegistry] = None
+    _instance: ModelCardRegistry | None = None
     _lock: Lock = Lock()
 
     def __new__(cls) -> ModelCardRegistry:
@@ -72,17 +73,17 @@ class ModelCardRegistry:
             return
 
         # Provider -> model_id -> ModelCard
-        self._cards: Dict[str, Dict[str, ModelCard]] = {}
+        self._cards: dict[str, dict[str, ModelCard]] = {}
 
         # Alias -> (provider, model_id)
-        self._aliases: Dict[str, tuple[str, str]] = {}
+        self._aliases: dict[str, tuple[str, str]] = {}
 
         # Lowercase model_id -> (provider, original_model_id) for case-insensitive lookup
-        self._lowercase_index: Dict[str, List[tuple[str, str]]] = {}
+        self._lowercase_index: dict[str, list[tuple[str, str]]] = {}
 
         self._loaded = False
-        self._builtin_path: Optional[Path] = None
-        self._user_path: Optional[Path] = None
+        self._builtin_path: Path | None = None
+        self._user_path: Path | None = None
         self._config: Any = None  # Optional llmcore config object
 
         self._initialized = True
@@ -132,7 +133,7 @@ class ModelCardRegistry:
         self._config = config
         logger.debug("ModelCardRegistry configured with llmcore config")
 
-    def _get_configured_user_path(self) -> Optional[Path]:
+    def _get_configured_user_path(self) -> Path | None:
         """
         Get user_cards_path from stored config.
 
@@ -164,8 +165,8 @@ class ModelCardRegistry:
 
     def load(
         self,
-        builtin_path: Optional[Path] = None,
-        user_path: Optional[Path] = None,
+        builtin_path: Path | None = None,
+        user_path: Path | None = None,
         force_reload: bool = False,
     ) -> None:
         """
@@ -252,7 +253,7 @@ class ModelCardRegistry:
                 continue
 
             try:
-                with open(json_file, "r", encoding="utf-8") as f:
+                with open(json_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Handle single card or array of cards
@@ -353,7 +354,7 @@ class ModelCardRegistry:
         model_id: str,
         *,
         case_sensitive: bool = False,
-    ) -> Optional[ModelCard]:
+    ) -> ModelCard | None:
         """
         Get a model card by provider and model ID.
 
@@ -396,7 +397,7 @@ class ModelCardRegistry:
 
         return None
 
-    def get_by_alias(self, alias: str) -> Optional[ModelCard]:
+    def get_by_alias(self, alias: str) -> ModelCard | None:
         """
         Get a model card by alias (any provider).
 
@@ -416,12 +417,12 @@ class ModelCardRegistry:
 
     def list_cards(
         self,
-        provider: Optional[str] = None,
-        model_type: Optional[Union[ModelType, str]] = None,
-        tags: Optional[List[str]] = None,
-        status: Optional[Union[ModelStatus, str]] = None,
+        provider: str | None = None,
+        model_type: ModelType | str | None = None,
+        tags: list[str] | None = None,
+        status: ModelStatus | str | None = None,
         include_deprecated: bool = True,
-    ) -> List[ModelCardSummary]:
+    ) -> list[ModelCardSummary]:
         """
         List model cards with optional filtering.
 
@@ -444,16 +445,16 @@ class ModelCardRegistry:
         """
         self._ensure_loaded()
 
-        summaries: List[ModelCardSummary] = []
+        summaries: list[ModelCardSummary] = []
 
         # Normalize filters
         providers_to_check = [provider.lower()] if provider else list(self._cards.keys())
 
-        target_type: Optional[str] = None
+        target_type: str | None = None
         if model_type:
             target_type = model_type if isinstance(model_type, str) else model_type.value
 
-        target_status: Optional[str] = None
+        target_status: str | None = None
         if status:
             target_status = status if isinstance(status, str) else status.value
 
@@ -515,7 +516,7 @@ class ModelCardRegistry:
         self,
         provider: str,
         model_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get pricing information for a model.
 
@@ -538,7 +539,7 @@ class ModelCardRegistry:
             }
         return None
 
-    def get_providers(self) -> List[str]:
+    def get_providers(self) -> list[str]:
         """
         Get list of providers that have cards registered.
 
@@ -548,7 +549,7 @@ class ModelCardRegistry:
         self._ensure_loaded()
         return list(self._cards.keys())
 
-    def get_models_for_provider(self, provider: str) -> List[str]:
+    def get_models_for_provider(self, provider: str) -> list[str]:
         """
         Get list of model IDs for a provider.
 
@@ -675,7 +676,7 @@ class ModelCardRegistry:
         logger.info(f"Removed model card: {provider_lower}/{model_id}")
         return True
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """
         Get registry statistics.
 
@@ -721,7 +722,7 @@ def get_model_card_registry() -> ModelCardRegistry:
 
 
 @lru_cache(maxsize=128)
-def get_model_card(provider: str, model_id: str) -> Optional[ModelCard]:
+def get_model_card(provider: str, model_id: str) -> ModelCard | None:
     """
     Cached lookup for a model card.
 

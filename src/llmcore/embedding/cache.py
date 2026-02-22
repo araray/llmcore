@@ -53,10 +53,11 @@ import sqlite3
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -120,12 +121,12 @@ class LRUCache:
             maxsize: Maximum number of items to store. Set to 0 to disable.
         """
         self.maxsize = maxsize
-        self._cache: OrderedDict[str, List[float]] = OrderedDict()
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
         self._lock = threading.RLock()
         self.hits = 0
         self.misses = 0
 
-    def get(self, key: str) -> Optional[List[float]]:
+    def get(self, key: str) -> list[float] | None:
         """Get item from cache, moving it to end (most recent).
 
         Args:
@@ -147,7 +148,7 @@ class LRUCache:
             self.misses += 1
             return None
 
-    def set(self, key: str, value: List[float]) -> None:
+    def set(self, key: str, value: list[float]) -> None:
         """Store item in cache, evicting oldest if necessary.
 
         Args:
@@ -185,7 +186,7 @@ class LRUCache:
             return len(self._cache)
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics.
 
         Returns:
@@ -306,7 +307,7 @@ class DiskCache:
             self._local.conn.rollback()
             raise
 
-    def get(self, key: str) -> Optional[List[float]]:
+    def get(self, key: str) -> list[float] | None:
         """Get embedding from disk cache.
 
         Args:
@@ -351,7 +352,7 @@ class DiskCache:
     def set(
         self,
         key: str,
-        embedding: List[float],
+        embedding: list[float],
         model: str,
         provider: str,
         text_hash: str,
@@ -408,7 +409,7 @@ class DiskCache:
 
                 conn.commit()
 
-    def get_batch(self, keys: List[str]) -> Dict[str, List[float]]:
+    def get_batch(self, keys: list[str]) -> dict[str, list[float]]:
         """Get multiple embeddings from disk cache.
 
         Args:
@@ -502,7 +503,7 @@ class DiskCache:
                 return deleted
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get disk cache statistics.
 
         Returns:
@@ -584,7 +585,7 @@ class EmbeddingCache:
 
     def __init__(
         self,
-        config: Optional[EmbeddingCacheConfig] = None,
+        config: EmbeddingCacheConfig | None = None,
         memory_size: int = 10000,
         disk_path: str = "~/.cache/llmcore/embeddings.db",
         disk_enabled: bool = True,
@@ -619,7 +620,7 @@ class EmbeddingCache:
         self._memory_cache = LRUCache(maxsize=self._config.memory_size if self._enabled else 0)
 
         # Initialize disk cache if enabled
-        self._disk_cache: Optional[DiskCache] = None
+        self._disk_cache: DiskCache | None = None
         if self._enabled and self._config.disk_enabled:
             self._disk_cache = DiskCache(
                 db_path=self._config.disk_path,
@@ -660,7 +661,7 @@ class EmbeddingCache:
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    def get(self, text: str, model: str, provider: str) -> Optional[List[float]]:
+    def get(self, text: str, model: str, provider: str) -> list[float] | None:
         """Get embedding from cache.
 
         First checks memory cache, then disk cache.
@@ -702,7 +703,7 @@ class EmbeddingCache:
         text: str,
         model: str,
         provider: str,
-        embedding: List[float],
+        embedding: list[float],
     ) -> None:
         """Store embedding in cache.
 
@@ -731,10 +732,10 @@ class EmbeddingCache:
 
     def get_batch(
         self,
-        texts: List[str],
+        texts: list[str],
         model: str,
         provider: str,
-    ) -> Tuple[List[Optional[List[float]]], List[int]]:
+    ) -> tuple[list[list[float] | None], list[int]]:
         """Get embeddings for multiple texts from cache.
 
         Args:
@@ -750,13 +751,13 @@ class EmbeddingCache:
         if not self._enabled:
             return [None] * len(texts), list(range(len(texts)))
 
-        results: List[Optional[List[float]]] = [None] * len(texts)
-        missing_indices: List[int] = []
+        results: list[list[float] | None] = [None] * len(texts)
+        missing_indices: list[int] = []
 
         cache_keys = [self._make_cache_key(text, model, provider) for text in texts]
 
         # Check memory cache
-        disk_lookup_needed: List[Tuple[int, str]] = []
+        disk_lookup_needed: list[tuple[int, str]] = []
 
         for i, key in enumerate(cache_keys):
             embedding = self._memory_cache.get(key)
@@ -793,10 +794,10 @@ class EmbeddingCache:
 
     def set_batch(
         self,
-        texts: List[str],
+        texts: list[str],
         model: str,
         provider: str,
-        embeddings: List[List[float]],
+        embeddings: list[list[float]],
     ) -> None:
         """Store multiple embeddings in cache.
 
@@ -838,7 +839,7 @@ class EmbeddingCache:
         return self._enabled
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get comprehensive cache statistics.
 
         Returns:
@@ -879,7 +880,7 @@ class EmbeddingCache:
 
 
 def create_embedding_cache(
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
 ) -> EmbeddingCache:
     """Create an EmbeddingCache from a configuration dictionary.
 

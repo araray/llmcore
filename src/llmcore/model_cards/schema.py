@@ -1,3 +1,4 @@
+# src/llmcore/model_cards/schema.py
 # llmcore/model_cards/schema.py
 """
 Pydantic models for the Model Card Library.
@@ -23,7 +24,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -97,16 +98,14 @@ class Provider(str, Enum):
 class ModelArchitecture(BaseModel):
     """Model architecture details."""
 
-    family: Optional[str] = Field(
-        None, description="Model family (llama, gpt, claude, gemini, etc.)"
-    )
-    parameter_count: Optional[str] = Field(
+    family: str | None = Field(None, description="Model family (llama, gpt, claude, gemini, etc.)")
+    parameter_count: str | None = Field(
         None, description="Total parameters (e.g., '70B', '8B', '405B')"
     )
-    active_parameters: Optional[str] = Field(
+    active_parameters: str | None = Field(
         None, description="Active parameters for MoE models (e.g., '37B' for DeepSeek)"
     )
-    architecture_type: Optional[ArchitectureType] = Field(
+    architecture_type: ArchitectureType | None = Field(
         None, description="Architecture type (transformer, moe, ssm, hybrid)"
     )
 
@@ -117,10 +116,10 @@ class ModelContext(BaseModel):
     """Context window configuration."""
 
     max_input_tokens: int = Field(..., description="Maximum input context length in tokens")
-    max_output_tokens: Optional[int] = Field(
+    max_output_tokens: int | None = Field(
         None, description="Maximum output tokens (if different from input)"
     )
-    default_output_tokens: Optional[int] = Field(
+    default_output_tokens: int | None = Field(
         None, description="Default output length if not specified by user"
     )
 
@@ -149,10 +148,10 @@ class TokenPricing(BaseModel):
 
     input: float = Field(..., description="Input token price per 1M tokens")
     output: float = Field(..., description="Output token price per 1M tokens")
-    cached_input: Optional[float] = Field(
+    cached_input: float | None = Field(
         None, description="Cached input price per 1M tokens (prompt caching)"
     )
-    reasoning_output: Optional[float] = Field(
+    reasoning_output: float | None = Field(
         None, description="Reasoning token price per 1M (for o1/thinking models)"
     )
 
@@ -170,10 +169,10 @@ class ModelPricing(BaseModel):
 
     currency: str = Field("USD", description="Currency code (ISO 4217)")
     per_million_tokens: TokenPricing
-    batch_discount_percent: Optional[float] = Field(
+    batch_discount_percent: float | None = Field(
         None, description="Discount percentage for batch API (e.g., 50 for 50% off)"
     )
-    context_tiers: Optional[List[ContextTier]] = Field(
+    context_tiers: list[ContextTier] | None = Field(
         None, description="Tiered pricing based on context usage"
     )
 
@@ -215,15 +214,15 @@ class ModelPricing(BaseModel):
 class ModelLifecycle(BaseModel):
     """Model lifecycle and availability information."""
 
-    release_date: Optional[date] = Field(None, description="Initial release date")
-    knowledge_cutoff: Optional[str] = Field(
+    release_date: date | None = Field(None, description="Initial release date")
+    knowledge_cutoff: str | None = Field(
         None, description="Training data cutoff (e.g., '2024-04', '2023-10')"
     )
-    deprecation_date: Optional[date] = Field(
+    deprecation_date: date | None = Field(
         None, description="Date when model was/will be deprecated"
     )
-    shutdown_date: Optional[date] = Field(None, description="Date when model will be/was shut down")
-    successor_model: Optional[str] = Field(None, description="Recommended replacement model ID")
+    shutdown_date: date | None = Field(None, description="Date when model will be/was shut down")
+    successor_model: str | None = Field(None, description="Recommended replacement model ID")
     status: ModelStatus = Field(ModelStatus.ACTIVE, description="Current lifecycle status")
 
     model_config = {"use_enum_values": True}
@@ -232,46 +231,40 @@ class ModelLifecycle(BaseModel):
 class RateLimits(BaseModel):
     """Rate limit configuration for a pricing tier."""
 
-    requests_per_minute: Optional[int] = Field(None, description="RPM limit")
-    tokens_per_minute: Optional[int] = Field(None, description="TPM limit")
-    input_tokens_per_minute: Optional[int] = Field(
-        None, description="Input TPM limit (if separate)"
-    )
-    output_tokens_per_minute: Optional[int] = Field(
-        None, description="Output TPM limit (if separate)"
-    )
+    requests_per_minute: int | None = Field(None, description="RPM limit")
+    tokens_per_minute: int | None = Field(None, description="TPM limit")
+    input_tokens_per_minute: int | None = Field(None, description="Input TPM limit (if separate)")
+    output_tokens_per_minute: int | None = Field(None, description="Output TPM limit (if separate)")
 
 
 class EmbeddingConfig(BaseModel):
     """Configuration specific to embedding models."""
 
     dimensions_default: int = Field(..., description="Default embedding dimensions")
-    dimensions_configurable: Optional[List[int]] = Field(
+    dimensions_configurable: list[int] | None = Field(
         None, description="Available dimension options (for configurable models)"
     )
     supports_matryoshka: bool = Field(
         False, description="Supports Matryoshka representation learning"
     )
-    similarity_metrics: List[str] = Field(
+    similarity_metrics: list[str] = Field(
         default_factory=lambda: ["cosine"],
         description="Supported similarity metrics",
     )
-    normalization: Optional[str] = Field(None, description="Output normalization (L2, none)")
-    task_types: Optional[List[str]] = Field(
+    normalization: str | None = Field(None, description="Output normalization (L2, none)")
+    task_types: list[str] | None = Field(
         None,
         description="Supported task types (retrieval_query, retrieval_document, classification, etc.)",
     )
-    output_types: Optional[List[str]] = Field(
+    output_types: list[str] | None = Field(
         None, description="Output types (float, int8, binary, ubinary)"
     )
-    truncation_strategy: Optional[str] = Field(
-        None, description="How input is truncated if too long"
-    )
-    prefixes: Optional[Dict[str, str]] = Field(
+    truncation_strategy: str | None = Field(None, description="How input is truncated if too long")
+    prefixes: dict[str, str] | None = Field(
         None, description="Required prefixes for different task types"
     )
-    batch_limits: Optional[Dict[str, int]] = Field(None, description="Batch processing limits")
-    languages_supported: Optional[Union[int, List[str]]] = Field(
+    batch_limits: dict[str, int] | None = Field(None, description="Batch processing limits")
+    languages_supported: int | list[str] | None = Field(
         None, description="Number of languages or list of language codes"
     )
     multimodal: bool = Field(False, description="Supports multimodal input (text + image)")
@@ -285,22 +278,22 @@ class EmbeddingConfig(BaseModel):
 class OllamaExtension(BaseModel):
     """Ollama-specific model fields."""
 
-    format: Optional[Literal["gguf", "safetensors"]] = Field(None, description="Model file format")
-    quantization_level: Optional[str] = Field(
+    format: Literal["gguf", "safetensors"] | None = Field(None, description="Model file format")
+    quantization_level: str | None = Field(
         None, description="Quantization level (Q4_0, Q4_K_M, Q5_K_M, Q8_0, FP16, etc.)"
     )
-    file_size_bytes: Optional[int] = Field(None, description="Model file size in bytes")
-    digest: Optional[str] = Field(None, description="Model digest/hash for verification")
-    template: Optional[str] = Field(None, description="Chat template (Go template syntax)")
-    system_prompt: Optional[str] = Field(None, description="Default system prompt")
-    modelfile_parameters: Optional[Dict[str, Any]] = Field(
+    file_size_bytes: int | None = Field(None, description="Model file size in bytes")
+    digest: str | None = Field(None, description="Model digest/hash for verification")
+    template: str | None = Field(None, description="Chat template (Go template syntax)")
+    system_prompt: str | None = Field(None, description="Default system prompt")
+    modelfile_parameters: dict[str, Any] | None = Field(
         None, description="Modelfile parameters (num_ctx, temperature, stop, etc.)"
     )
-    gguf_metadata: Optional[Dict[str, Any]] = Field(
+    gguf_metadata: dict[str, Any] | None = Field(
         None, description="Metadata extracted from GGUF file"
     )
-    parent_model: Optional[str] = Field(None, description="Base model this was derived from")
-    modified_at: Optional[datetime] = Field(
+    parent_model: str | None = Field(None, description="Base model this was derived from")
+    modified_at: datetime | None = Field(
         None, description="When the model was last modified locally"
     )
 
@@ -308,9 +301,9 @@ class OllamaExtension(BaseModel):
 class OpenAIExtension(BaseModel):
     """OpenAI-specific model fields."""
 
-    owned_by: Optional[str] = Field(None, description="Organization that owns the model")
+    owned_by: str | None = Field(None, description="Organization that owns the model")
     supports_reasoning: bool = Field(False, description="o1/o3 series model with reasoning")
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(
+    reasoning_effort: Literal["low", "medium", "high"] | None = Field(
         None, description="Reasoning effort level for o1/o3 models"
     )
     supports_predicted_outputs: bool = Field(
@@ -318,7 +311,7 @@ class OpenAIExtension(BaseModel):
     )
     fine_tuning_available: bool = Field(False, description="Available for fine-tuning")
     moderation_model: bool = Field(False, description="This is a moderation model")
-    tier_requirements: Optional[Dict[str, Any]] = Field(
+    tier_requirements: dict[str, Any] | None = Field(
         None, description="Minimum tier requirements for access"
     )
 
@@ -326,37 +319,37 @@ class OpenAIExtension(BaseModel):
 class AnthropicExtension(BaseModel):
     """Anthropic-specific model fields."""
 
-    extended_thinking: Optional[Dict[str, Any]] = Field(
+    extended_thinking: dict[str, Any] | None = Field(
         None,
         description="Extended thinking configuration (supported, budget_tokens_range)",
     )
     computer_use: bool = Field(False, description="Supports computer use capability")
-    prompt_caching: Optional[Dict[str, float]] = Field(
+    prompt_caching: dict[str, float] | None = Field(
         None,
         description="Prompt caching multipliers (cache_write_5m, cache_write_1h, cache_read)",
     )
-    beta_features: Optional[List[str]] = Field(None, description="Available beta features")
+    beta_features: list[str] | None = Field(None, description="Available beta features")
 
 
 class GoogleExtension(BaseModel):
     """Google/Gemini-specific model fields."""
 
-    supported_inputs: Optional[List[str]] = Field(
+    supported_inputs: list[str] | None = Field(
         None, description="Supported input types (text, image, video, audio, pdf)"
     )
-    supported_outputs: Optional[List[str]] = Field(None, description="Supported output types")
-    grounding: Optional[Dict[str, Any]] = Field(
+    supported_outputs: list[str] | None = Field(None, description="Supported output types")
+    grounding: dict[str, Any] | None = Field(
         None, description="Grounding capabilities (google_search, maps)"
     )
-    thinking: Optional[Dict[str, Any]] = Field(
+    thinking: dict[str, Any] | None = Field(
         None, description="Thinking mode configuration (supported, budget_range)"
     )
     live_api: bool = Field(False, description="Supports Live API for real-time")
     url_context: bool = Field(False, description="Supports URL context input")
-    safety_settings: Optional[List[Dict[str, str]]] = Field(
+    safety_settings: list[dict[str, str]] | None = Field(
         None, description="Default safety settings"
     )
-    versions: Optional[Dict[str, str]] = Field(
+    versions: dict[str, str] | None = Field(
         None, description="Version aliases (stable, preview, experimental)"
     )
 
@@ -364,15 +357,15 @@ class GoogleExtension(BaseModel):
 class DeepSeekExtension(BaseModel):
     """DeepSeek-specific model fields."""
 
-    thinking_mode: Optional[Dict[str, Any]] = Field(
+    thinking_mode: dict[str, Any] | None = Field(
         None,
         description="Deep thinking mode configuration (supported, param, default)",
     )
-    cache_hit_discount: Optional[float] = Field(
+    cache_hit_discount: float | None = Field(
         None, description="Automatic cache hit discount rate (e.g., 0.90 for 90% off)"
     )
     fill_in_middle: bool = Field(False, description="Supports fill-in-middle for code completion")
-    moe_architecture: Optional[Dict[str, str]] = Field(
+    moe_architecture: dict[str, str] | None = Field(
         None, description="MoE details (total_parameters, active_parameters)"
     )
 
@@ -380,17 +373,15 @@ class DeepSeekExtension(BaseModel):
 class QwenExtension(BaseModel):
     """Qwen/Alibaba-specific model fields."""
 
-    deployment_regions: Optional[List[str]] = Field(
-        None, description="Available deployment regions"
-    )
-    thinking_mode: Optional[Dict[str, Any]] = Field(None, description="Thinking mode configuration")
-    context_tiers: Optional[List[Dict[str, Any]]] = Field(
+    deployment_regions: list[str] | None = Field(None, description="Available deployment regions")
+    thinking_mode: dict[str, Any] | None = Field(None, description="Thinking mode configuration")
+    context_tiers: list[dict[str, Any]] | None = Field(
         None, description="Context-based pricing tiers"
     )
-    cache_types: Optional[Dict[str, float]] = Field(
+    cache_types: dict[str, float] | None = Field(
         None, description="Cache discount rates (implicit, explicit)"
     )
-    specialized_variant: Optional[str] = Field(
+    specialized_variant: str | None = Field(
         None, description="Specialized variant (base, coder, vl, omni, math)"
     )
 
@@ -399,24 +390,22 @@ class MistralExtension(BaseModel):
     """Mistral-specific model fields."""
 
     open_weights: bool = Field(False, description="Open weights model")
-    license_type: Optional[str] = Field(
-        None, description="License type (apache-2.0, mrl, commercial)"
-    )
+    license_type: str | None = Field(None, description="License type (apache-2.0, mrl, commercial)")
     fill_in_middle: bool = Field(False, description="Codestral FIM support for code completion")
-    guardrails: Optional[Dict[str, bool]] = Field(None, description="Available guardrail settings")
-    fine_tuning: Optional[Dict[str, Any]] = Field(None, description="Fine-tuning capabilities")
+    guardrails: dict[str, bool] | None = Field(None, description="Available guardrail settings")
+    fine_tuning: dict[str, Any] | None = Field(None, description="Fine-tuning capabilities")
 
 
 class XAIExtension(BaseModel):
     """xAI/Grok-specific model fields."""
 
-    live_search: Optional[Dict[str, Any]] = Field(
+    live_search: dict[str, Any] | None = Field(
         None, description="Live search configuration (enabled, cost_per_source)"
     )
-    x_integration: Optional[Dict[str, Any]] = Field(
+    x_integration: dict[str, Any] | None = Field(
         None, description="X (Twitter) integration settings"
     )
-    server_tools: Optional[List[str]] = Field(
+    server_tools: list[str] | None = Field(
         None,
         description="Available server-side tools (web_search, X_search, code_execution, image_generation)",
     )
@@ -461,16 +450,14 @@ class ModelCard(BaseModel):
     # Core Identity
     # -------------------------------------------------------------------------
     model_id: str = Field(..., description="Unique model identifier")
-    display_name: Optional[str] = Field(None, description="Human-readable name")
-    provider: Union[Provider, str] = Field(..., description="Provider that hosts this model")
-    model_type: Union[ModelType, str] = Field(..., description="Type of model")
+    display_name: str | None = Field(None, description="Human-readable name")
+    provider: Provider | str = Field(..., description="Provider that hosts this model")
+    model_type: ModelType | str = Field(..., description="Type of model")
 
     # -------------------------------------------------------------------------
     # Technical Specifications
     # -------------------------------------------------------------------------
-    architecture: Optional[ModelArchitecture] = Field(
-        None, description="Model architecture details"
-    )
+    architecture: ModelArchitecture | None = Field(None, description="Model architecture details")
     context: ModelContext = Field(..., description="Context window configuration")
     capabilities: ModelCapabilities = Field(
         default_factory=ModelCapabilities, description="Supported features"
@@ -479,10 +466,10 @@ class ModelCard(BaseModel):
     # -------------------------------------------------------------------------
     # Commercial Information
     # -------------------------------------------------------------------------
-    pricing: Optional[ModelPricing] = Field(
+    pricing: ModelPricing | None = Field(
         None, description="Token pricing (None for local/free models)"
     )
-    rate_limits: Optional[Dict[str, RateLimits]] = Field(
+    rate_limits: dict[str, RateLimits] | None = Field(
         None, description="Rate limits by tier (tier_1, tier_2, etc.)"
     )
 
@@ -496,31 +483,31 @@ class ModelCard(BaseModel):
     # -------------------------------------------------------------------------
     # Metadata
     # -------------------------------------------------------------------------
-    license: Optional[str] = Field(None, description="License identifier")
+    license: str | None = Field(None, description="License identifier")
     open_weights: bool = Field(False, description="Weights publicly available")
-    aliases: List[str] = Field(default_factory=list, description="Alternative model IDs")
-    description: Optional[str] = Field(None, description="Model description")
-    tags: List[str] = Field(default_factory=list, description="Categorization tags")
+    aliases: list[str] = Field(default_factory=list, description="Alternative model IDs")
+    description: str | None = Field(None, description="Model description")
+    tags: list[str] = Field(default_factory=list, description="Categorization tags")
 
     # -------------------------------------------------------------------------
     # Type-Specific Configuration
     # -------------------------------------------------------------------------
-    embedding_config: Optional[EmbeddingConfig] = Field(
+    embedding_config: EmbeddingConfig | None = Field(
         None, description="Configuration for embedding models"
     )
 
     # -------------------------------------------------------------------------
     # Provider-Specific Extensions
     # -------------------------------------------------------------------------
-    provider_ollama: Optional[OllamaExtension] = None
-    provider_openai: Optional[OpenAIExtension] = None
-    provider_anthropic: Optional[AnthropicExtension] = None
-    provider_google: Optional[GoogleExtension] = None
-    provider_deepseek: Optional[DeepSeekExtension] = None
-    provider_qwen: Optional[QwenExtension] = None
-    provider_mistral: Optional[MistralExtension] = None
-    provider_xai: Optional[XAIExtension] = None
-    provider_extension: Optional[Dict[str, Any]] = Field(
+    provider_ollama: OllamaExtension | None = None
+    provider_openai: OpenAIExtension | None = None
+    provider_anthropic: AnthropicExtension | None = None
+    provider_google: GoogleExtension | None = None
+    provider_deepseek: DeepSeekExtension | None = None
+    provider_qwen: QwenExtension | None = None
+    provider_mistral: MistralExtension | None = None
+    provider_xai: XAIExtension | None = None
+    provider_extension: dict[str, Any] | None = Field(
         None, description="Generic extension for other providers"
     )
 
@@ -530,7 +517,7 @@ class ModelCard(BaseModel):
     source: Literal["builtin", "user", "api"] = Field(
         "builtin", description="Where this card came from"
     )
-    last_updated: Optional[datetime] = Field(None, description="When card was last updated")
+    last_updated: datetime | None = Field(None, description="When card was last updated")
 
     model_config = {"use_enum_values": True}
 
@@ -542,7 +529,7 @@ class ModelCard(BaseModel):
         """Get maximum input context length."""
         return self.context.max_input_tokens
 
-    def get_max_output(self) -> Optional[int]:
+    def get_max_output(self) -> int | None:
         """Get maximum output tokens."""
         return self.context.max_output_tokens
 
@@ -551,7 +538,7 @@ class ModelCard(BaseModel):
         input_tokens: int,
         output_tokens: int,
         cached_tokens: int = 0,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Estimate cost for given token counts.
 
@@ -579,7 +566,7 @@ class ModelCard(BaseModel):
         """
         return getattr(self.capabilities, capability, False)
 
-    def get_provider_extension(self) -> Optional[BaseModel]:
+    def get_provider_extension(self) -> BaseModel | None:
         """Get the provider-specific extension if present."""
         provider_str = self.provider if isinstance(self.provider, str) else self.provider.value
 
@@ -616,17 +603,17 @@ class ModelCardSummary(BaseModel):
     """
 
     model_id: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     provider: str
     model_type: str
     context_length: int
     status: str
     source: str
     has_pricing: bool = False
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_card(cls, card: ModelCard) -> "ModelCardSummary":
+    def from_card(cls, card: ModelCard) -> ModelCardSummary:
         """Create summary from a full ModelCard."""
         provider_str = card.provider if isinstance(card.provider, str) else card.provider.value
         model_type_str = (

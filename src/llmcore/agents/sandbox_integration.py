@@ -35,8 +35,9 @@ SECURITY INVARIANT:
 """
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from .sandbox import (
     SANDBOX_TOOL_IMPLEMENTATIONS,
@@ -173,8 +174,8 @@ class SandboxIntegration:
             config: SandboxRegistryConfig for the registry
         """
         self._config = config
-        self._registry: Optional[SandboxRegistry] = None
-        self._tracker: Optional[OutputTracker] = None
+        self._registry: SandboxRegistry | None = None
+        self._tracker: OutputTracker | None = None
         self._initialized = False
 
     @classmethod
@@ -210,7 +211,7 @@ class SandboxIntegration:
         return cls(registry_config)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "SandboxIntegration":
+    def from_dict(cls, config_dict: dict[str, Any]) -> "SandboxIntegration":
         """
         Create SandboxIntegration from a configuration dictionary.
 
@@ -251,7 +252,7 @@ class SandboxIntegration:
 
     @asynccontextmanager
     async def sandbox_context(
-        self, task: "AgentTask", sandbox_config: Optional[SandboxConfig] = None
+        self, task: "AgentTask", sandbox_config: SandboxConfig | None = None
     ) -> AsyncGenerator["SandboxContext", None]:
         """
         Context manager for sandbox-scoped agent execution.
@@ -338,12 +339,12 @@ class SandboxIntegration:
             await self._registry.cleanup_sandbox(sandbox_id)
 
     @property
-    def registry(self) -> Optional[SandboxRegistry]:
+    def registry(self) -> SandboxRegistry | None:
         """Get the sandbox registry."""
         return self._registry
 
     @property
-    def tracker(self) -> Optional[OutputTracker]:
+    def tracker(self) -> OutputTracker | None:
         """Get the output tracker."""
         return self._tracker
 
@@ -477,9 +478,9 @@ class SandboxAgentMixin:
         >>> result = await manager.run_agent_loop_sandboxed(task)
     """
 
-    _sandbox_integration: Optional[SandboxIntegration] = None
+    _sandbox_integration: SandboxIntegration | None = None
 
-    async def initialize_sandbox(self, config: Optional[Dict[str, Any]] = None) -> None:
+    async def initialize_sandbox(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize sandbox support for the agent manager.
 

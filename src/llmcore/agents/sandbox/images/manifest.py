@@ -21,7 +21,7 @@ Example:
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from .models import (
     BUILTIN_MANIFESTS,
@@ -61,7 +61,7 @@ class ManifestValidationError(ManifestError):
     pass
 
 
-def load_manifest_from_file(path: Union[str, Path]) -> ImageManifest:
+def load_manifest_from_file(path: str | Path) -> ImageManifest:
     """
     Load an image manifest from a JSON file.
 
@@ -82,7 +82,7 @@ def load_manifest_from_file(path: Union[str, Path]) -> ImageManifest:
         raise ManifestNotFoundError(f"Manifest file not found: {path}")
 
     try:
-        with open(path, "r") as f:
+        with open(path) as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         raise ManifestParseError(f"Invalid JSON in manifest: {e}")
@@ -114,7 +114,7 @@ def load_manifest_from_string(content: str) -> ImageManifest:
 
 def load_manifest_from_docker(
     image: str,
-    docker_client: Optional[Any] = None,
+    docker_client: Any | None = None,
 ) -> ImageManifest:
     """
     Load an image manifest from a Docker image.
@@ -246,7 +246,7 @@ def _create_manifest_from_inspection(
         )
 
 
-def parse_manifest(data: Dict[str, Any]) -> ImageManifest:
+def parse_manifest(data: dict[str, Any]) -> ImageManifest:
     """
     Parse manifest data dictionary into ImageManifest.
 
@@ -313,7 +313,7 @@ def validate_manifest(manifest: ImageManifest) -> None:
         raise ManifestValidationError(f"Manifest validation failed: {'; '.join(errors)}")
 
 
-def save_manifest_to_file(manifest: ImageManifest, path: Union[str, Path]) -> None:
+def save_manifest_to_file(manifest: ImageManifest, path: str | Path) -> None:
     """
     Save an ImageManifest to a JSON file.
 
@@ -330,7 +330,7 @@ def save_manifest_to_file(manifest: ImageManifest, path: Union[str, Path]) -> No
     logger.debug(f"Saved manifest to {path}")
 
 
-def get_builtin_manifest(name: str) -> Optional[ImageManifest]:
+def get_builtin_manifest(name: str) -> ImageManifest | None:
     """
     Get a builtin manifest by image name.
 
@@ -345,7 +345,7 @@ def get_builtin_manifest(name: str) -> Optional[ImageManifest]:
     return BUILTIN_MANIFESTS.get(base_name)
 
 
-def list_builtin_manifests() -> Dict[str, ImageManifest]:
+def list_builtin_manifests() -> dict[str, ImageManifest]:
     """
     Get all builtin image manifests.
 

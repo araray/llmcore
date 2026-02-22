@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# scripts/test_library_mode.py
 """
 Simple functional test for llmcore in pure library mode.
 Tests that LLMCore can be instantiated without service dependencies.

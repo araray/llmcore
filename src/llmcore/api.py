@@ -14,18 +14,13 @@ import logging
 import pathlib
 import time
 import uuid
-from datetime import datetime, timezone
+from collections.abc import AsyncGenerator, Callable
+from datetime import UTC, datetime
 from typing import (
     Any,
-    AsyncGenerator,
-    Callable,
-    Dict,
-    List,
     Literal,
     Optional,
     Protocol,
-    Tuple,
-    Union,
     runtime_checkable,
 )
 
@@ -63,7 +58,7 @@ from .storage.manager import StorageManager
 try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
-    ConfyConfig = Dict[str, Any]  # type: ignore [no-redef]
+    ConfyConfig = dict[str, Any]  # type: ignore [no-redef]
 try:
     import tomllib
 except ImportError:
@@ -113,23 +108,23 @@ class LLMCoreProtocol(Protocol):
         self,
         message: str,
         *,
-        session_id: Optional[str] = None,
-        system_message: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        session_id: str | None = None,
+        system_message: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         stream: bool = False,
         save_session: bool = True,
         enable_rag: bool = False,
-        rag_retrieval_k: Optional[int] = None,
-        rag_collection_name: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        active_context_item_ids: Optional[List[str]] = None,
-        explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        rag_retrieval_k: int | None = None,
+        rag_collection_name: str | None = None,
+        rag_metadata_filter: dict[str, Any] | None = None,
+        active_context_item_ids: list[str] | None = None,
+        explicitly_staged_items: list[Message | ContextItem] | None = None,
+        prompt_template_values: dict[str, str] | None = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **provider_kwargs,
-    ) -> Union[str, AsyncGenerator[str, None]]:
+    ) -> str | AsyncGenerator[str, None]:
         """
         Send a message to an LLM and return the response.
 
@@ -177,14 +172,15 @@ class LLMCore:
     _session_manager: SessionManager
     _memory_manager: MemoryManager
     _embedding_manager: EmbeddingManager
-    _transient_sessions_cache: Dict[str, ChatSession]
-    _transient_last_interaction_info_cache: Dict[str, ContextPreparationDetails]
+    _transient_sessions_cache: dict[str, ChatSession]
+    _transient_last_interaction_info_cache: dict[str, ContextPreparationDetails]
+    _transient_last_raw_response_cache: dict[str, dict[str, Any]]
     _log_raw_payloads_enabled: bool
     _llmcore_log_level_str: str
     # Phase 7: Configuration Management state
-    _config_file_path: Optional[str]
+    _config_file_path: str | None
     _runtime_config_dirty: bool
-    _original_config_dict: Dict[str, Any]
+    _original_config_dict: dict[str, Any]
 
     def __init__(self):
         """
@@ -192,6 +188,7 @@ class LLMCore:
         """
         self._transient_sessions_cache = {}
         self._transient_last_interaction_info_cache = {}
+        self._transient_last_raw_response_cache: dict[str, dict[str, Any]] = {}
         # Phase 7: Initialize config tracking state
         self._config_file_path = None
         self._runtime_config_dirty = False
@@ -200,9 +197,9 @@ class LLMCore:
     @classmethod
     async def create(
         cls,
-        config_overrides: Optional[Dict[str, Any]] = None,
-        config_file_path: Optional[str] = None,
-        env_prefix: Optional[str] = "LLMCORE",
+        config_overrides: dict[str, Any] | None = None,
+        config_file_path: str | None = None,
+        env_prefix: str | None = "LLMCORE",
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -237,9 +234,9 @@ class LLMCore:
 
     async def _initialize_from_config(
         self,
-        config_overrides: Optional[Dict[str, Any]],
-        config_file_path: Optional[str],
-        env_prefix: Optional[str],
+        config_overrides: dict[str, Any] | None,
+        config_file_path: str | None,
+        env_prefix: str | None,
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -253,7 +250,7 @@ class LLMCore:
             config_file_path: Optional path to config file
             env_prefix: Environment variable prefix
         """
-        logger.info("Initializing LLMCore components from configuration...")
+        logger.debug("Initializing LLMCore components from configuration...")
         try:
             from confy.loader import Config as ActualConfyConfig
 
@@ -279,11 +276,15 @@ class LLMCore:
                 default_config_dict = {"llmcore": {"default_provider": "ollama"}}
 
             # Initialize Confy with all sources
+            # CRITICAL: Parameter names must match confy.Config.__init__ exactly:
+            #   file_path (not config_file_path)
+            #   prefix (not env_prefix)
+            #   overrides_dict (not overrides)
             self.config = ActualConfyConfig(
                 defaults=default_config_dict,
-                config_file_path=config_file_path,
-                env_prefix=env_prefix,
-                overrides=config_overrides,
+                file_path=config_file_path,
+                prefix=env_prefix,
+                overrides_dict=config_overrides,
             )
 
             # Phase 7: Track configuration state for diff/sync operations
@@ -324,7 +325,7 @@ class LLMCore:
                 storage_manager=self._storage_manager,
             )
 
-            logger.info("LLMCore initialization complete")
+            logger.debug("LLMCore initialization complete")
 
         except Exception as e:
             logger.error(f"Failed to initialize LLMCore: {e}", exc_info=True)
@@ -403,7 +404,7 @@ class LLMCore:
 
         logger.info("Configuration reload complete with full state restoration")
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """
         Returns a list of provider names that are currently configured and available.
 
@@ -412,7 +413,7 @@ class LLMCore:
         """
         return self._provider_manager.get_available_providers()
 
-    def get_provider_details(self, provider_name: Optional[str] = None) -> ModelDetails:
+    def get_provider_details(self, provider_name: str | None = None) -> ModelDetails:
         """
         Gets detailed information about a specific provider or the default provider.
 
@@ -438,23 +439,23 @@ class LLMCore:
         self,
         message: str,
         *,
-        session_id: Optional[str] = None,
-        system_message: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        session_id: str | None = None,
+        system_message: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
         stream: bool = False,
         save_session: bool = True,
         enable_rag: bool = False,
-        rag_retrieval_k: Optional[int] = None,
-        rag_collection_name: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        active_context_item_ids: Optional[List[str]] = None,
-        explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        rag_retrieval_k: int | None = None,
+        rag_collection_name: str | None = None,
+        rag_metadata_filter: dict[str, Any] | None = None,
+        active_context_item_ids: list[str] | None = None,
+        explicitly_staged_items: list[Message | ContextItem] | None = None,
+        prompt_template_values: dict[str, str] | None = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **provider_kwargs,
-    ) -> Union[str, AsyncGenerator[str, None]]:
+    ) -> str | AsyncGenerator[str, None]:
         """
         Sends a message to an LLM and returns the response.
 
@@ -628,7 +629,7 @@ class LLMCore:
             self._transient_sessions_cache[chat_session.id] = chat_session
 
         # Build user message metadata (Issue 3 fix: track context info for user messages)
-        user_message_metadata: Dict[str, Any] = {
+        user_message_metadata: dict[str, Any] = {
             "provider": active_provider.get_name(),
             "model": actual_model,
         }
@@ -713,6 +714,9 @@ class LLMCore:
         else:
             full_content = self._extract_full_content(response_data, active_provider)
 
+            # Cache raw response for tool-call inspection by callers
+            self._transient_last_raw_response_cache[chat_session.id] = response_data
+
             # Post-completion: Update token counts from actual response
             completion_tokens = await self._count_completion_tokens(
                 full_content, active_provider, actual_model
@@ -724,7 +728,7 @@ class LLMCore:
             self._transient_last_interaction_info_cache[chat_session.id] = context_details
 
             # Build assistant message metadata (Issue 3 fix: track provider/model)
-            assistant_metadata: Dict[str, Any] = {
+            assistant_metadata: dict[str, Any] = {
                 "provider": active_provider.get_name(),
                 "model": actual_model,
                 "prompt_tokens": context_details.prompt_tokens,
@@ -770,7 +774,7 @@ class LLMCore:
         finally:
             if full_response:
                 # Basic metadata for legacy streaming (provider info only)
-                basic_metadata: Dict[str, Any] = {
+                basic_metadata: dict[str, Any] = {
                     "provider": provider.get_name(),
                 }
                 session.add_message(full_response, Role.ASSISTANT, metadata=basic_metadata)
@@ -821,7 +825,7 @@ class LLMCore:
                 self._transient_last_interaction_info_cache[session.id] = context_details
 
                 # Build assistant message metadata (Issue 3 fix: track provider/model)
-                assistant_metadata: Dict[str, Any] = {
+                assistant_metadata: dict[str, Any] = {
                     "provider": provider.get_name(),
                     "model": model,
                     "prompt_tokens": context_details.prompt_tokens,
@@ -839,7 +843,7 @@ class LLMCore:
                 if do_save:
                     await self._session_manager.save_session(session)
 
-    def _extract_full_content(self, response_data: Dict[str, Any], provider: BaseProvider) -> str:
+    def _extract_full_content(self, response_data: dict[str, Any], provider: BaseProvider) -> str:
         """
         Extracts full response content from a non-streaming response.
 
@@ -852,7 +856,7 @@ class LLMCore:
         """
         return provider.extract_response_content(response_data)
 
-    def _extract_delta_content(self, chunk: Dict[str, Any], provider: BaseProvider) -> str:
+    def _extract_delta_content(self, chunk: dict[str, Any], provider: BaseProvider) -> str:
         """
         Extracts delta content from a streaming chunk.
 
@@ -891,7 +895,7 @@ class LLMCore:
 
     def get_last_interaction_context_info(
         self, session_id: str
-    ) -> Optional[ContextPreparationDetails]:
+    ) -> ContextPreparationDetails | None:
         """
         Retrieves the context preparation details from the most recent interaction.
 
@@ -905,6 +909,26 @@ class LLMCore:
             ContextPreparationDetails if available, None otherwise
         """
         return self._transient_last_interaction_info_cache.get(session_id)
+
+    def get_last_raw_response(self, session_id: str) -> dict[str, Any] | None:
+        """Retrieve the raw provider response from the most recent chat() call.
+
+        This allows callers (e.g. wairu's tool dispatch) to inspect the full
+        provider response, including ``tool_calls`` that are not exposed
+        through the flattened string return value of :meth:`chat`.
+
+        The cache is transient (not persisted) and stores only the most
+        recent response per session.  It is populated during non-streaming
+        ``chat()`` calls only.
+
+        Args:
+            session_id: The session ID to query.
+
+        Returns:
+            Raw response dict from the provider, or ``None`` if not
+            available.
+        """
+        return self._transient_last_raw_response_cache.get(session_id)
 
     # =========================================================================
     # Statistics & Introspection
@@ -1188,18 +1212,18 @@ class LLMCore:
         self,
         current_user_query: str,
         *,
-        session_id: Optional[str] = None,
-        system_message: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
-        active_context_item_ids: Optional[List[str]] = None,
-        explicitly_staged_items: Optional[List[Union[Message, ContextItem]]] = None,
+        session_id: str | None = None,
+        system_message: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        active_context_item_ids: list[str] | None = None,
+        explicitly_staged_items: list[Message | ContextItem] | None = None,
         enable_rag: bool = False,
-        rag_retrieval_k: Optional[int] = None,
-        rag_collection_name: Optional[str] = None,
-        rag_metadata_filter: Optional[Dict[str, Any]] = None,
-        prompt_template_values: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        rag_retrieval_k: int | None = None,
+        rag_collection_name: str | None = None,
+        rag_metadata_filter: dict[str, Any] | None = None,
+        prompt_template_values: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """
         Previews the context that would be sent to the LLM without making an API call.
 
@@ -1279,7 +1303,7 @@ class LLMCore:
     # Session Management Methods
     # ==============================================================================
 
-    async def list_sessions(self, limit: Optional[int] = None) -> List[ChatSession]:
+    async def list_sessions(self, limit: int | None = None) -> list[ChatSession]:
         """
         Lists all available chat sessions.
 
@@ -1323,9 +1347,9 @@ class LLMCore:
 
     async def create_session(
         self,
-        session_id: Optional[str] = None,
-        name: Optional[str] = None,
-        system_message: Optional[str] = None,
+        session_id: str | None = None,
+        name: str | None = None,
+        system_message: str | None = None,
     ) -> ChatSession:
         """
         Creates a new chat session or loads an existing one.
@@ -1379,12 +1403,12 @@ class LLMCore:
         self,
         session_id: str,
         *,
-        new_name: Optional[str] = None,
-        from_message_id: Optional[str] = None,
-        message_ids: Optional[List[str]] = None,
-        message_range: Optional[Tuple[int, int]] = None,
+        new_name: str | None = None,
+        from_message_id: str | None = None,
+        message_ids: list[str] | None = None,
+        message_range: tuple[int, int] | None = None,
         include_context_items: bool = True,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Fork a session to create an independent copy with selected messages.
@@ -1501,9 +1525,9 @@ class LLMCore:
             new_name = f"{source_name}_fork_{timestamp}"
 
         # Create fork metadata
-        fork_metadata: Dict[str, Any] = {
+        fork_metadata: dict[str, Any] = {
             "forked_from": session_id,
-            "forked_at": dt.now(timezone.utc).isoformat(),
+            "forked_at": dt.now(UTC).isoformat(),
             "fork_type": fork_type,
             "source_message_count": len(source_messages),
             "forked_message_count": len(messages_to_copy),
@@ -1564,7 +1588,7 @@ class LLMCore:
     async def clone_session(
         self,
         session_id: str,
-        new_name: Optional[str] = None,
+        new_name: str | None = None,
         *,
         include_messages: bool = True,
         include_context_items: bool = True,
@@ -1609,9 +1633,9 @@ class LLMCore:
             new_name = f"{source_name}_clone_{timestamp}"
 
         # Create clone metadata
-        clone_metadata: Dict[str, Any] = {
+        clone_metadata: dict[str, Any] = {
             "cloned_from": session_id,
-            "cloned_at": dt.now(timezone.utc).isoformat(),
+            "cloned_at": dt.now(UTC).isoformat(),
             "messages_included": include_messages,
             "context_items_included": include_context_items,
         }
@@ -1670,7 +1694,7 @@ class LLMCore:
     async def delete_messages(
         self,
         session_id: str,
-        message_ids: List[str],
+        message_ids: list[str],
     ) -> int:
         """
         Delete specific messages from a session.
@@ -1697,7 +1721,7 @@ class LLMCore:
         deleted_count = original_count - len(session.messages)
 
         if deleted_count > 0:
-            session.updated_at = datetime.now(timezone.utc)
+            session.updated_at = datetime.now(UTC)
             await self._session_manager.save_session(session)
             logger.info(f"Deleted {deleted_count} messages from session {session_id}")
 
@@ -1707,10 +1731,10 @@ class LLMCore:
         self,
         source_session_id: str,
         target_session_id: str,
-        message_ids: List[str],
+        message_ids: list[str],
         *,
         preserve_timestamps: bool = True,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Copy specific messages from one session to another.
 
@@ -1748,7 +1772,7 @@ class LLMCore:
             raise ValueError(f"Message IDs not found in source session: {missing}")
 
         # Copy messages with new IDs
-        new_ids: List[str] = []
+        new_ids: list[str] = []
         for msg in messages_to_copy:
             new_id = str(uuid.uuid4())
             new_message = Message(
@@ -1756,7 +1780,7 @@ class LLMCore:
                 session_id=target_session_id,
                 role=msg.role,
                 content=msg.content,
-                timestamp=msg.timestamp if preserve_timestamps else dt.now(timezone.utc),
+                timestamp=msg.timestamp if preserve_timestamps else dt.now(UTC),
                 tool_call_id=msg.tool_call_id,
                 tokens=msg.tokens,
                 metadata={
@@ -1770,7 +1794,7 @@ class LLMCore:
 
         # Sort messages by timestamp
         target_session.messages.sort(key=lambda m: m.timestamp)
-        target_session.updated_at = dt.now(timezone.utc)
+        target_session.updated_at = dt.now(UTC)
 
         await self._session_manager.save_session(target_session)
 
@@ -1786,7 +1810,7 @@ class LLMCore:
         session_id: str,
         start_index: int,
         end_index: int,
-    ) -> List[Message]:
+    ) -> list[Message]:
         """
         Get messages from a session by index range.
 
@@ -1834,8 +1858,8 @@ class LLMCore:
         session_id: str,
         content: str,
         item_type: ContextItemType = ContextItemType.USER_TEXT,
-        source_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        source_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Adds a context item to a session's workspace.
@@ -1868,7 +1892,7 @@ class LLMCore:
 
         return item.id
 
-    async def get_context_item(self, session_id: str, item_id: str) -> Optional[ContextItem]:
+    async def get_context_item(self, session_id: str, item_id: str) -> ContextItem | None:
         """
         Retrieves a specific context item from a session's workspace.
 
@@ -1907,8 +1931,8 @@ class LLMCore:
     # ==============================================================================
 
     async def add_documents_to_vector_store(
-        self, documents: List[Dict[str, Any]], collection_name: Optional[str] = None
-    ) -> List[str]:
+        self, documents: list[dict[str, Any]], collection_name: str | None = None
+    ) -> list[str]:
         """
         Adds documents to the vector store for RAG.
 
@@ -1948,7 +1972,7 @@ class LLMCore:
         default_embedding_model = self.config.get("llmcore.default_embedding_model", "unknown")
 
         # Prepare ContextDocument objects with embeddings
-        context_docs: List[ContextDocument] = []
+        context_docs: list[ContextDocument] = []
 
         for i, doc in enumerate(documents):
             content = doc.get("content", "")
@@ -1985,9 +2009,9 @@ class LLMCore:
         self,
         query: str,
         k: int = 5,
-        collection_name: Optional[str] = None,
-        metadata_filter: Optional[Dict[str, Any]] = None,
-    ) -> List[ContextDocument]:
+        collection_name: str | None = None,
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> list[ContextDocument]:
         """
         Searches the vector store for relevant documents.
 
@@ -2005,7 +2029,7 @@ class LLMCore:
         """
         return await self._embedding_manager.search(query, k, collection_name, metadata_filter)
 
-    async def list_vector_collections(self) -> List[str]:
+    async def list_vector_collections(self) -> list[str]:
         """
         Lists all available vector store collections.
 
@@ -2021,7 +2045,7 @@ class LLMCore:
             return await vector_storage.list_collection_names()
         return []
 
-    async def list_rag_collections(self) -> List[str]:
+    async def list_rag_collections(self) -> list[str]:
         """
         Lists all available RAG collections.
 
@@ -2033,7 +2057,7 @@ class LLMCore:
         """
         return await self.list_vector_collections()
 
-    async def get_rag_collection_info(self, collection_name: str) -> Optional[Dict[str, Any]]:
+    async def get_rag_collection_info(self, collection_name: str) -> dict[str, Any] | None:
         """
         Get detailed information about a RAG collection.
 
@@ -2129,7 +2153,7 @@ class LLMCore:
         session_storage = self._storage_manager.session_storage
         await session_storage.save_context_preset(preset)
 
-    async def get_context_preset(self, preset_name: str) -> Optional[ContextPreset]:
+    async def get_context_preset(self, preset_name: str) -> ContextPreset | None:
         """
         Retrieves a context preset by name.
 
@@ -2142,7 +2166,7 @@ class LLMCore:
         session_storage = self._storage_manager.session_storage
         return await session_storage.get_context_preset(preset_name)
 
-    async def list_context_presets(self) -> List[Dict[str, Any]]:
+    async def list_context_presets(self) -> list[dict[str, Any]]:
         """
         Lists all available context presets.
 
@@ -2202,11 +2226,11 @@ class LLMCore:
 
     def list_model_cards(
         self,
-        provider_name: Optional[str] = None,
-        model_type: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        status: Optional[str] = None,
-    ) -> List["ModelCardSummary"]:
+        provider_name: str | None = None,
+        model_type: str | None = None,
+        tags: list[str] | None = None,
+        status: str | None = None,
+    ) -> list["ModelCardSummary"]:
         """
         List available model cards with optional filtering.
 
@@ -2293,7 +2317,7 @@ class LLMCore:
         self,
         provider_name: str,
         model_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get pricing information for a model.
 
@@ -2322,7 +2346,7 @@ class LLMCore:
         input_tokens: int,
         output_tokens: int,
         cached_tokens: int = 0,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Estimate cost for a given token usage.
 
@@ -2382,7 +2406,7 @@ class LLMCore:
         registry = get_model_card_registry()
         return registry.save_card(card, user_override=user_override)
 
-    def get_model_card_providers(self) -> List[str]:
+    def get_model_card_providers(self) -> list[str]:
         """
         Get list of providers that have model cards registered.
 
@@ -2398,7 +2422,7 @@ class LLMCore:
         registry = get_model_card_registry()
         return registry.get_providers()
 
-    def get_models_for_provider(self, provider_name: str) -> List[str]:
+    def get_models_for_provider(self, provider_name: str) -> list[str]:
         """
         Get list of model IDs available for a specific provider.
 
@@ -2421,7 +2445,7 @@ class LLMCore:
         registry = get_model_card_registry()
         return registry.get_models_for_provider(provider_name)
 
-    def get_model_card_registry_stats(self) -> Dict[str, Any]:
+    def get_model_card_registry_stats(self) -> dict[str, Any]:
         """
         Get statistics about the model card registry.
 
@@ -2447,11 +2471,11 @@ class LLMCore:
 
     async def get_provider_model_details(
         self,
-        provider_name: Optional[str] = None,
+        provider_name: str | None = None,
         *,
         fetch_remote: bool = False,
         include_embeddings: bool = True,
-    ) -> Dict[str, List[ModelDetails]]:
+    ) -> dict[str, list[ModelDetails]]:
         """
         Get detailed model information for one or all providers.
 
@@ -2493,10 +2517,10 @@ class LLMCore:
 
         providers_to_query = [provider_name] if provider_name else self.get_available_providers()
         registry = get_model_card_registry()
-        result: Dict[str, List[ModelDetails]] = {}
+        result: dict[str, list[ModelDetails]] = {}
 
         for prov_name in providers_to_query:
-            models: List[ModelDetails] = []
+            models: list[ModelDetails] = []
 
             # Special handling for Ollama - always query local API
             if prov_name.lower() == "ollama":
@@ -2546,7 +2570,7 @@ class LLMCore:
 
         return result
 
-    async def _get_ollama_models(self, provider_name: str) -> List[ModelDetails]:
+    async def _get_ollama_models(self, provider_name: str) -> list[ModelDetails]:
         """
         Query local Ollama API for installed models.
 
@@ -2585,7 +2609,7 @@ class LLMCore:
         except Exception as e:
             raise ProviderError(provider_name, f"Failed to list Ollama models: {e}")
 
-        models: List[ModelDetails] = []
+        models: list[ModelDetails] = []
         for model_data in models_data:
             # Handle both Model object and dict formats
             if hasattr(model_data, "model"):
@@ -2672,7 +2696,7 @@ class LLMCore:
         provider_name: str,
         registry: Any,
         include_embeddings: bool = True,
-    ) -> List[ModelDetails]:
+    ) -> list[ModelDetails]:
         """
         Get models from the model card registry.
 
@@ -2685,7 +2709,7 @@ class LLMCore:
             List of ModelDetails built from model cards
         """
         cards = registry.list_cards(provider=provider_name)
-        models: List[ModelDetails] = []
+        models: list[ModelDetails] = []
 
         for card_summary in cards:
             # Filter out embeddings if requested
@@ -2715,7 +2739,7 @@ class LLMCore:
 
         return models
 
-    async def _fetch_remote_model_list(self, provider_name: str) -> List[ModelDetails]:
+    async def _fetch_remote_model_list(self, provider_name: str) -> list[ModelDetails]:
         """
         Fetch model list from provider's remote API.
 
@@ -2842,9 +2866,9 @@ class LLMCore:
     def _generate_model_suggestions(
         self,
         query: str,
-        available: List[str],
+        available: list[str],
         max_suggestions: int = 5,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Generate model name suggestions using fuzzy matching.
 
@@ -2857,7 +2881,7 @@ class LLMCore:
             List of suggested model IDs, sorted by relevance
         """
         query_lower = query.lower()
-        scored: List[Tuple[int, str]] = []
+        scored: list[tuple[int, str]] = []
 
         for model_id in available:
             model_lower = model_id.lower()
@@ -2901,7 +2925,7 @@ class LLMCore:
         model_name: str,
         *,
         stream: bool = True,
-        progress_callback: Optional[Callable[[PullProgress], None]] = None,
+        progress_callback: Callable[[PullProgress], None] | None = None,
         insecure: bool = False,
     ) -> PullResult:
         """
@@ -3122,7 +3146,7 @@ class LLMCore:
         include_context_items: bool = True,
         include_metadata: bool = True,
         pretty: bool = True,
-    ) -> Union[str, Dict[str, Any]]:
+    ) -> str | dict[str, Any]:
         """
         Export a session to a serialized format.
 
@@ -3175,9 +3199,9 @@ class LLMCore:
             raise LLMCoreError(f"Session '{session_id}' not found")
 
         # Build export data structure
-        export_data: Dict[str, Any] = {
+        export_data: dict[str, Any] = {
             "llmcore_export_version": "1.0",
-            "export_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "export_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "session": {
                 "id": session.id,
                 "name": session.name,
@@ -3262,7 +3286,7 @@ class LLMCore:
 
     def _format_session_as_markdown(
         self,
-        export_data: Dict[str, Any],
+        export_data: dict[str, Any],
         session: ChatSession,
         include_context_items: bool,
     ) -> str:
@@ -3280,7 +3304,7 @@ class LLMCore:
         Returns:
             Formatted Markdown string.
         """
-        lines: List[str] = []
+        lines: list[str] = []
 
         # YAML frontmatter
         lines.append("---")
@@ -3376,11 +3400,11 @@ class LLMCore:
 
     async def import_session(
         self,
-        data: Union[str, Dict[str, Any]],
+        data: str | dict[str, Any],
         *,
         format: Literal["json", "yaml", "dict"] = "json",
-        new_name: Optional[str] = None,
-        merge_into: Optional[str] = None,
+        new_name: str | None = None,
+        merge_into: str | None = None,
     ) -> str:
         """
         Import a session from serialized data.
@@ -3479,7 +3503,7 @@ class LLMCore:
                     role=role,
                     content=msg_data.get("content", ""),
                     timestamp=datetime.fromisoformat(
-                        msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                        msg_data.get("timestamp", datetime.now(UTC).isoformat()).replace(
                             "Z", "+00:00"
                         )
                     ),
@@ -3507,14 +3531,14 @@ class LLMCore:
                     is_truncated=item_data.get("is_truncated", False),
                     metadata=item_data.get("metadata", {}),
                     timestamp=datetime.fromisoformat(
-                        item_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                        item_data.get("timestamp", datetime.now(UTC).isoformat()).replace(
                             "Z", "+00:00"
                         )
                     ),
                 )
                 existing_session.add_context_item(context_item)
 
-            existing_session.updated_at = datetime.now(timezone.utc)
+            existing_session.updated_at = datetime.now(UTC)
             self._storage_manager.save_session(existing_session)
             return merge_into
 
@@ -3537,7 +3561,7 @@ class LLMCore:
                     role=role,
                     content=msg_data.get("content", ""),
                     timestamp=datetime.fromisoformat(
-                        msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                        msg_data.get("timestamp", datetime.now(UTC).isoformat()).replace(
                             "Z", "+00:00"
                         )
                     ),
@@ -3565,21 +3589,21 @@ class LLMCore:
                     is_truncated=item_data.get("is_truncated", False),
                     metadata=item_data.get("metadata", {}),
                     timestamp=datetime.fromisoformat(
-                        item_data.get("timestamp", datetime.now(timezone.utc).isoformat()).replace(
+                        item_data.get("timestamp", datetime.now(UTC).isoformat()).replace(
                             "Z", "+00:00"
                         )
                     ),
                 )
                 new_session.add_context_item(context_item)
 
-            new_session.updated_at = datetime.now(timezone.utc)
+            new_session.updated_at = datetime.now(UTC)
             self._storage_manager.save_session(new_session)
             return new_session.id
 
     def export_context_items(
         self,
         session_id: str,
-        item_ids: Optional[List[str]] = None,
+        item_ids: list[str] | None = None,
         *,
         format: Literal["json", "yaml"] = "json",
         pretty: bool = True,
@@ -3636,7 +3660,7 @@ class LLMCore:
         # Build export structure
         export_data = {
             "llmcore_export_version": "1.0",
-            "export_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "export_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "source_session_id": session_id,
             "context_items": [],
         }
@@ -3689,7 +3713,7 @@ class LLMCore:
         *,
         include_context_items: bool = True,
         include_metadata: bool = True,
-        include_files: Optional[List[str]] = None,
+        include_files: list[str] | None = None,
     ) -> str:
         """
         Create a .llmchat bundle archive for a session.
@@ -3751,7 +3775,7 @@ class LLMCore:
         # Prepare manifest
         manifest = {
             "bundle_version": "1.0",
-            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "created_by": "llmcore",
             "session_id": session_id,
             "session_name": export_data.get("session", {}).get("name"),
@@ -3799,10 +3823,10 @@ class LLMCore:
         self,
         bundle_path: str,
         *,
-        new_name: Optional[str] = None,
-        merge_into: Optional[str] = None,
-        extract_files_to: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        new_name: str | None = None,
+        merge_into: str | None = None,
+        extract_files_to: str | None = None,
+    ) -> dict[str, Any]:
         """
         Import a session from a .llmchat bundle archive.
 
@@ -3868,7 +3892,7 @@ class LLMCore:
                 )
 
                 # Extract files if requested
-                files_extracted: List[str] = []
+                files_extracted: list[str] = []
                 if extract_files_to:
                     extract_dir = Path(extract_files_to).expanduser()
                     extract_dir.mkdir(parents=True, exist_ok=True)
@@ -3899,7 +3923,7 @@ class LLMCore:
     # Phase 7: Configuration Management APIs
     # ==========================================================================
 
-    def get_runtime_config(self, section: Optional[str] = None) -> Dict[str, Any]:
+    def get_runtime_config(self, section: str | None = None) -> dict[str, Any]:
         """
         Get current runtime configuration as a dictionary.
 
@@ -4012,9 +4036,9 @@ class LLMCore:
 
             self.config = ActualConfyConfig(
                 defaults=config_dict,  # Use current state as defaults
-                config_file_path=None,  # Don't reload from file
-                env_prefix=None,  # Don't re-apply env vars
-                overrides=None,
+                file_path=None,  # Don't reload from file
+                prefix=None,  # Don't re-apply env vars
+                overrides_dict=None,
             )
 
             # Mark config as dirty (modified since last file sync)
@@ -4076,7 +4100,7 @@ class LLMCore:
         self._llmcore_log_level_str = level.upper()
         logger.info(f"LLMCore log level set to: {level.upper()}")
 
-    def diff_config(self) -> Dict[str, Any]:
+    def diff_config(self) -> dict[str, Any]:
         """
         Compare runtime configuration against the original file configuration.
 
@@ -4190,7 +4214,7 @@ class LLMCore:
         # Flatten and filter empty strings
         return ".".join(p[0] or p[1] for p in parts)
 
-    def sync_config_to_file(self, path: Optional[str] = None) -> str:
+    def sync_config_to_file(self, path: str | None = None) -> str:
         """
         Write current runtime configuration to a TOML file.
 
@@ -4257,7 +4281,7 @@ class LLMCore:
             logger.error(f"Error syncing config to file: {e}", exc_info=True)
             raise ConfigError(f"Failed to write configuration file: {e}")
 
-    async def reload_config_from_file(self, path: Optional[str] = None) -> None:
+    async def reload_config_from_file(self, path: str | None = None) -> None:
         """
         Reload configuration from file, discarding runtime changes.
 
@@ -4314,7 +4338,7 @@ class LLMCore:
             logger.error(f"Error reloading config from file: {e}", exc_info=True)
             raise ConfigError(f"Failed to reload configuration: {e}")
 
-    def get_config_file_path(self) -> Optional[str]:
+    def get_config_file_path(self) -> str | None:
         """
         Get the path to the currently loaded configuration file.
 

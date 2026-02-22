@@ -48,7 +48,7 @@ import abc
 import hashlib
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -88,15 +88,15 @@ class FailureLog(BaseModel):
         created_at: When this failure occurred
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     task_id: str
     agent_run_id: str
 
     # What was attempted
     goal: str
     phase: str  # Which cognitive phase failed
-    genotype_id: Optional[str] = None
-    genotype_summary: Optional[str] = None
+    genotype_id: str | None = None
+    genotype_summary: str | None = None
 
     # What went wrong
     failure_type: Literal[
@@ -111,22 +111,22 @@ class FailureLog(BaseModel):
         "parse_error",  # Couldn't parse LLM output
     ]
     error_message: str
-    error_details: Dict[str, Any] = Field(default_factory=dict)
+    error_details: dict[str, Any] = Field(default_factory=dict)
 
     # The failed output
-    phenotype_id: Optional[str] = None
-    phenotype_summary: Optional[str] = None
+    phenotype_id: str | None = None
+    phenotype_summary: str | None = None
 
     # Test results if applicable
-    test_results: Optional[Dict[str, Any]] = None
+    test_results: dict[str, Any] | None = None
 
     # Arbiter feedback if applicable
-    arbiter_critique: Optional[str] = None
-    arbiter_score: Optional[float] = None
+    arbiter_critique: str | None = None
+    arbiter_score: float | None = None
 
     # Context for similarity matching
-    similarity_hash: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
+    similarity_hash: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -158,7 +158,7 @@ class FailurePattern(BaseModel):
     occurrence_count: int
     first_seen: datetime
     last_seen: datetime
-    common_error_messages: List[str] = Field(default_factory=list)
+    common_error_messages: list[str] = Field(default_factory=list)
     suggested_avoidance: str = ""
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
@@ -177,8 +177,8 @@ class FailureContext(BaseModel):
         avoidance_instructions: Generated prompt instructions
     """
 
-    relevant_failures: List[FailureLog] = Field(default_factory=list)
-    patterns: List[FailurePattern] = Field(default_factory=list)
+    relevant_failures: list[FailureLog] = Field(default_factory=list)
+    patterns: list[FailurePattern] = Field(default_factory=list)
     avoidance_instructions: str = ""
 
 
@@ -203,7 +203,7 @@ class BaseFailureStorage(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the storage backend with given configuration.
 
@@ -233,7 +233,7 @@ class BaseFailureStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_failure(self, failure_id: str) -> Optional[FailureLog]:
+    async def get_failure(self, failure_id: str) -> FailureLog | None:
         """
         Retrieve a specific failure by ID.
 
@@ -249,9 +249,9 @@ class BaseFailureStorage(abc.ABC):
     async def get_similar_failures(
         self,
         goal: str,
-        failure_types: Optional[List[str]] = None,
+        failure_types: list[str] | None = None,
         limit: int = 5,
-    ) -> List[FailureLog]:
+    ) -> list[FailureLog]:
         """
         Retrieve similar past failures for a goal.
 
@@ -266,7 +266,7 @@ class BaseFailureStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_pattern(self, pattern_id: str) -> Optional[FailurePattern]:
+    async def get_pattern(self, pattern_id: str) -> FailurePattern | None:
         """
         Retrieve a specific failure pattern by ID.
 
@@ -279,7 +279,7 @@ class BaseFailureStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_patterns_for_failures(self, failure_ids: List[str]) -> List[FailurePattern]:
+    async def get_patterns_for_failures(self, failure_ids: list[str]) -> list[FailurePattern]:
         """
         Retrieve patterns associated with given failures.
 
@@ -305,7 +305,7 @@ class BaseFailureStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_failure_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_failure_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get failure statistics for analytics.
 
@@ -414,8 +414,8 @@ class FailureLearningManager:
     def __init__(
         self,
         backend: Literal["sqlite", "postgres"] = "sqlite",
-        db_path: Optional[str] = None,
-        db_url: Optional[str] = None,
+        db_path: str | None = None,
+        db_url: str | None = None,
         enabled: bool = True,
         max_failures_to_retrieve: int = 5,
     ):
@@ -437,7 +437,7 @@ class FailureLearningManager:
         self.max_failures = max_failures_to_retrieve
 
         if not enabled:
-            self._backend: Optional[BaseFailureStorage] = None
+            self._backend: BaseFailureStorage | None = None
             return
 
         # Import backends only when needed
@@ -528,8 +528,8 @@ class FailureLearningManager:
     async def get_failure_context(
         self,
         goal: str,
-        task_type: Optional[str] = None,
-        max_results: Optional[int] = None,
+        task_type: str | None = None,
+        max_results: int | None = None,
     ) -> FailureContext:
         """
         Get complete failure context for planning.
@@ -572,8 +572,8 @@ class FailureLearningManager:
 
     def generate_avoidance_prompt(
         self,
-        failures: List[FailureLog],
-        patterns: Optional[List[FailurePattern]] = None,
+        failures: list[FailureLog],
+        patterns: list[FailurePattern] | None = None,
     ) -> str:
         """
         Generate prompt instructions to avoid past failures.
@@ -596,7 +596,7 @@ class FailureLearningManager:
         ]
 
         # Group by failure type
-        by_type: Dict[str, List[FailureLog]] = {}
+        by_type: dict[str, list[FailureLog]] = {}
         for f in failures:
             by_type.setdefault(f.failure_type, []).append(f)
 
@@ -626,7 +626,7 @@ class FailureLearningManager:
 
         return "\n".join(lines)
 
-    async def get_failure_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_failure_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get failure statistics for analytics.
 

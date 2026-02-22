@@ -46,8 +46,8 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,14 +138,14 @@ class CollectionInfo:
 
     name: str
     vector_dimension: int
-    description: Optional[str] = None
-    embedding_model_provider: Optional[str] = None
-    embedding_model_name: Optional[str] = None
-    created_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    description: str | None = None
+    embedding_model_provider: str | None = None
+    embedding_model_name: str | None = None
+    created_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     document_count: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "name": self.name,
@@ -198,8 +198,8 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     def __init__(self):
         """Initialize storage (configuration applied in initialize())."""
-        self._pool: Optional["AsyncConnectionPool"] = None
-        self._tenant_session: Optional[AsyncSession] = None
+        self._pool: AsyncConnectionPool | None = None
+        self._tenant_session: AsyncSession | None = None
         self._vectors_table: str = DEFAULT_VECTORS_TABLE
         self._collections_table: str = DEFAULT_COLLECTIONS_TABLE
         self._default_collection_name: str = DEFAULT_COLLECTION_NAME
@@ -213,7 +213,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
     # INITIALIZATION
     # =========================================================================
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the enhanced pgvector storage.
 
@@ -428,10 +428,10 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         conn: Any,
         name: str,
         dimension: int,
-        description: Optional[str] = None,
-        provider: Optional[str] = None,
-        model_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        provider: str | None = None,
+        model_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Ensure a collection record exists, creating or updating as needed.
@@ -538,10 +538,10 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def add_documents(
         self,
-        documents: List[ContextDocument],
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None,
-    ) -> List[str]:
+        documents: list[ContextDocument],
+        collection_name: str | None = None,
+        context: StorageContext | None = None,
+    ) -> list[str]:
         """
         Add or update documents in the vector store.
 
@@ -572,13 +572,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to add documents: {e}")
 
     async def _add_documents_pool(
-        self, documents: List[ContextDocument], collection_name: str, user_id: Optional[str]
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str, user_id: str | None
+    ) -> list[str]:
         """Add documents using connection pool."""
         if not Jsonb:
             raise VectorStorageError("psycopg Jsonb adapter not available")
 
-        added_ids: List[str] = []
+        added_ids: list[str] = []
 
         async with self._pool.connection() as conn:
             if register_vector_async:
@@ -646,11 +646,11 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         return added_ids
 
     async def _add_documents_tenant(
-        self, documents: List[ContextDocument], collection_name: str, user_id: Optional[str]
-    ) -> List[str]:
+        self, documents: list[ContextDocument], collection_name: str, user_id: str | None
+    ) -> list[str]:
         """Add documents using tenant session."""
         # Implementation similar to pool version but using SQLAlchemy text()
-        added_ids: List[str] = []
+        added_ids: list[str] = []
 
         for doc in documents:
             if not doc.id or not doc.embedding:
@@ -689,10 +689,10 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def batch_upsert_documents(
         self,
-        documents: List[ContextDocument],
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None,
-        batch_config: Optional[BatchConfig] = None,
+        documents: list[ContextDocument],
+        collection_name: str | None = None,
+        context: StorageContext | None = None,
+        batch_config: BatchConfig | None = None,
     ) -> BatchResult[str]:
         """
         Batch upsert documents with chunking and retry logic.
@@ -713,8 +713,8 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         target_collection = collection_name or self._default_collection_name
         start_time = time.time()
 
-        successful: List[str] = []
-        failed: List[Tuple[ContextDocument, str]] = []
+        successful: list[str] = []
+        failed: list[tuple[ContextDocument, str]] = []
 
         # Chunk documents
         chunks = chunk_list(documents, config.chunk_size)
@@ -773,13 +773,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        collection_name: Optional[str] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-        context: Optional[StorageContext] = None,
-        search_config: Optional[VectorSearchConfig] = None,
-    ) -> List[ContextDocument]:
+        collection_name: str | None = None,
+        filter_metadata: dict[str, Any] | None = None,
+        context: StorageContext | None = None,
+        search_config: VectorSearchConfig | None = None,
+    ) -> list[ContextDocument]:
         """
         Perform similarity search with user isolation and metadata filtering.
 
@@ -813,17 +813,17 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def _similarity_search_pool(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
         collection_name: str,
-        user_id: Optional[str],
+        user_id: str | None,
         config: VectorSearchConfig,
-    ) -> List[ContextDocument]:
+    ) -> list[ContextDocument]:
         """Similarity search using connection pool."""
         if not dict_row:
             raise VectorStorageError("psycopg dict_row not available")
 
-        results: List[ContextDocument] = []
+        results: list[ContextDocument] = []
         query_dim = len(query_embedding)
 
         async with self._pool.connection() as conn:
@@ -858,7 +858,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 FROM {self._vectors_table}
                 WHERE collection_name = %s
             """
-            params: List[Any] = [query_embedding, collection_name]
+            params: list[Any] = [query_embedding, collection_name]
 
             # User isolation
             if user_id:
@@ -908,14 +908,14 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def _similarity_search_tenant(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
         collection_name: str,
-        user_id: Optional[str],
+        user_id: str | None,
         config: VectorSearchConfig,
-    ) -> List[ContextDocument]:
+    ) -> list[ContextDocument]:
         """Similarity search using tenant session."""
-        results: List[ContextDocument] = []
+        results: list[ContextDocument] = []
         distance_op = config.get_distance_operator()
 
         # Build parameterized query - cast to vector type for pgvector operators
@@ -924,7 +924,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             FROM {self._vectors_table}
             WHERE collection_name = :collection
         """
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "embedding": str(query_embedding),
             "collection": collection_name,
         }
@@ -966,13 +966,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
     async def hybrid_search(
         self,
         query_text: str,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int = 10,
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None,
+        collection_name: str | None = None,
+        context: StorageContext | None = None,
         vector_weight: float = 0.7,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[HybridSearchResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[HybridSearchResult]:
         """
         Perform hybrid search combining vector similarity and full-text search.
 
@@ -1021,7 +1021,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                         WHERE collection_name = %s
                 """
 
-                params: List[Any] = [query_embedding, query_embedding, target_collection]
+                params: list[Any] = [query_embedding, query_embedding, target_collection]
 
                 if user_id:
                     vector_cte += " AND (user_id = %s OR user_id IS NULL)"
@@ -1079,7 +1079,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 """
                 params.append(k)
 
-                results: List[HybridSearchResult] = []
+                results: list[HybridSearchResult] = []
                 conn.row_factory = dict_row
 
                 async with conn.cursor() as cur:
@@ -1118,7 +1118,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
     # COLLECTION MANAGEMENT
     # =========================================================================
 
-    async def list_collection_names(self) -> List[str]:
+    async def list_collection_names(self) -> list[str]:
         """List all collection names."""
         try:
             if hasattr(self, "_tenant_session") and self._tenant_session is not None:
@@ -1137,13 +1137,13 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             logger.error(f"Error listing collections: {e}", exc_info=True)
             raise VectorStorageError(f"Failed to list collections: {e}")
 
-    async def list_collections(self) -> List[str]:
+    async def list_collections(self) -> list[str]:
         """Alias for list_collection_names for API compatibility with ChromaDB."""
         return await self.list_collection_names()
 
     async def get_collection_metadata(
-        self, collection_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, collection_name: str | None = None
+    ) -> dict[str, Any] | None:
         """Get metadata for a collection."""
         target = collection_name or self._default_collection_name
 
@@ -1195,8 +1195,8 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
             raise VectorStorageError(f"Failed to get collection metadata: {e}")
 
     async def get_collection_info(
-        self, collection_name: Optional[str] = None, context: Optional[StorageContext] = None
-    ) -> Optional[CollectionInfo]:
+        self, collection_name: str | None = None, context: StorageContext | None = None
+    ) -> CollectionInfo | None:
         """
         Get detailed collection information including document count.
 
@@ -1217,17 +1217,20 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
             # Get document count
             count_sql = f"SELECT COUNT(*) FROM {self._vectors_table} WHERE collection_name = %s"
-            params: List[Any] = [target]
+            params: list[Any] = [target]
 
             if user_id:
                 count_sql += " AND (user_id = %s OR user_id IS NULL)"
                 params.append(user_id)
 
             async with self._pool.connection() as conn:
-                async with conn.cursor() as cur:
+                # Explicitly use dict_row to avoid KeyError when the pool
+                # returns a connection whose row_factory was previously set
+                # to dict_row by another method (e.g. get_collection_metadata).
+                async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(count_sql, tuple(params))
                     count_row = await cur.fetchone()
-                    doc_count = count_row[0] if count_row else 0
+                    doc_count = count_row["count"] if count_row else 0
 
             return CollectionInfo(
                 name=metadata["name"],
@@ -1250,11 +1253,11 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
         self,
         name: str,
         dimension: int,
-        description: Optional[str] = None,
-        embedding_model_provider: Optional[str] = None,
-        embedding_model_name: Optional[str] = None,
-        hnsw_config: Optional[HNSWConfig] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        embedding_model_provider: str | None = None,
+        embedding_model_name: str | None = None,
+        hnsw_config: HNSWConfig | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> CollectionInfo:
         """
         Create a new vector collection.
@@ -1304,7 +1307,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 description=description,
                 embedding_model_provider=embedding_model_provider,
                 embedding_model_name=embedding_model_name,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 metadata=metadata or {},
                 document_count=0,
             )
@@ -1366,9 +1369,9 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
     async def delete_documents(
         self,
-        document_ids: List[str],
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None,
+        document_ids: list[str],
+        collection_name: str | None = None,
+        context: StorageContext | None = None,
     ) -> bool:
         """
         Delete documents by ID.
@@ -1389,7 +1392,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
 
         try:
             sql = f"DELETE FROM {self._vectors_table} WHERE collection_name = %s AND id = ANY(%s::TEXT[])"
-            params: List[Any] = [target, document_ids]
+            params: list[Any] = [target, document_ids]
 
             if user_id:
                 sql += " AND user_id = %s"
@@ -1411,10 +1414,10 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
     async def get_document(
         self,
         document_id: str,
-        collection_name: Optional[str] = None,
-        context: Optional[StorageContext] = None,
+        collection_name: str | None = None,
+        context: StorageContext | None = None,
         include_embedding: bool = False,
-    ) -> Optional[ContextDocument]:
+    ) -> ContextDocument | None:
         """
         Get a single document by ID.
 
@@ -1436,7 +1439,7 @@ class EnhancedPgVectorStorage(BaseVectorStorage):
                 select_cols += ", embedding"
 
             sql = f"SELECT {select_cols} FROM {self._vectors_table} WHERE collection_name = %s AND id = %s"
-            params: List[Any] = [target, document_id]
+            params: list[Any] = [target, document_id]
 
             if user_id:
                 sql += " AND (user_id = %s OR user_id IS NULL)"

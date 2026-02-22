@@ -25,7 +25,7 @@ import pathlib
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ValidationIssue:
     severity: ValidationSeverity
     field: str
     message: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
 
     def __str__(self) -> str:
         result = f"[{self.severity.value.upper()}] {self.field}: {self.message}"
@@ -65,16 +65,16 @@ class ValidationResult:
     """Result of configuration validation."""
 
     valid: bool
-    issues: List[ValidationIssue] = field(default_factory=list)
-    resolved_config: Dict[str, Any] = field(default_factory=dict)
+    issues: list[ValidationIssue] = field(default_factory=list)
+    resolved_config: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def errors(self) -> List[ValidationIssue]:
+    def errors(self) -> list[ValidationIssue]:
         """Get only error-level issues."""
         return [i for i in self.issues if i.severity == ValidationSeverity.ERROR]
 
     @property
-    def warnings(self) -> List[ValidationIssue]:
+    def warnings(self) -> list[ValidationIssue]:
         """Get only warning-level issues."""
         return [i for i in self.issues if i.severity == ValidationSeverity.WARNING]
 
@@ -155,7 +155,7 @@ def _resolve_env_vars(value: Any) -> Any:
     return value
 
 
-def _validate_postgres_url(url: str) -> Tuple[bool, Optional[str]]:
+def _validate_postgres_url(url: str) -> tuple[bool, str | None]:
     """
     Validate PostgreSQL connection URL format.
 
@@ -193,7 +193,7 @@ def _validate_postgres_url(url: str) -> Tuple[bool, Optional[str]]:
 
 def _validate_path(
     path: str, must_exist: bool = False, must_be_writable: bool = True
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Validate a filesystem path.
 
@@ -252,7 +252,7 @@ class StorageConfigValidator:
         """
         self.strict = strict
 
-    def validate(self, config: Dict[str, Any]) -> ValidationResult:
+    def validate(self, config: dict[str, Any]) -> ValidationResult:
         """
         Validate complete storage configuration.
 
@@ -304,7 +304,7 @@ class StorageConfigValidator:
 
         return result
 
-    def _validate_session_storage(self, config: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_session_storage(self, config: dict[str, Any], result: ValidationResult) -> None:
         """Validate session storage configuration."""
         session_type = config.get("type", "").lower()
 
@@ -336,7 +336,7 @@ class StorageConfigValidator:
         elif session_type in ("sqlite", "json"):
             self._validate_file_session(config, session_type, result)
 
-    def _validate_postgres_session(self, config: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_postgres_session(self, config: dict[str, Any], result: ValidationResult) -> None:
         """Validate PostgreSQL session storage config."""
         db_url = config.get("db_url", "")
 
@@ -389,7 +389,7 @@ class StorageConfigValidator:
                 )
 
     def _validate_file_session(
-        self, config: Dict[str, Any], session_type: str, result: ValidationResult
+        self, config: dict[str, Any], session_type: str, result: ValidationResult
     ) -> None:
         """Validate file-based session storage config (SQLite/JSON)."""
         path = config.get("path", "")
@@ -413,7 +413,7 @@ class StorageConfigValidator:
                 )
             )
 
-    def _validate_vector_storage(self, config: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_vector_storage(self, config: dict[str, Any], result: ValidationResult) -> None:
         """Validate vector storage configuration."""
         vector_type = config.get("type", "").lower()
 
@@ -445,7 +445,7 @@ class StorageConfigValidator:
         elif vector_type == "chromadb":
             self._validate_chromadb(config, result)
 
-    def _validate_pgvector(self, config: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_pgvector(self, config: dict[str, Any], result: ValidationResult) -> None:
         """Validate pgvector configuration."""
         db_url = config.get("db_url", "")
 
@@ -503,7 +503,7 @@ class StorageConfigValidator:
                     )
                 )
 
-    def _validate_chromadb(self, config: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_chromadb(self, config: dict[str, Any], result: ValidationResult) -> None:
         """Validate ChromaDB configuration."""
         path = config.get("path", "")
 
@@ -528,8 +528,8 @@ class StorageConfigValidator:
 
     def _validate_cross_backend_consistency(
         self,
-        session_config: Dict[str, Any],
-        vector_config: Dict[str, Any],
+        session_config: dict[str, Any],
+        vector_config: dict[str, Any],
         result: ValidationResult,
     ) -> None:
         """Validate consistency between session and vector storage configs."""
@@ -565,7 +565,7 @@ class StorageConfigValidator:
 # =============================================================================
 
 
-def validate_storage_config(config: Dict[str, Any], strict: bool = False) -> ValidationResult:
+def validate_storage_config(config: dict[str, Any], strict: bool = False) -> ValidationResult:
     """
     Validate storage configuration.
 

@@ -14,8 +14,8 @@ of the agent more explicit and easier to modify or extend.
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,9 +43,9 @@ async def plan_step(
     agent_state: AgentState,
     session_id: str,
     provider_manager: ProviderManager,
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> None:
     """
     Execute the PLANNING step: decompose the goal into actionable sub-tasks.
@@ -133,9 +133,9 @@ async def reflect_step(
     last_observation: ToolResult,
     session_id: str,
     provider_manager: ProviderManager,
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> None:
     """
     Execute the REFLECTION step: critically evaluate progress and update plan if needed.
@@ -241,10 +241,10 @@ async def think_step(
     memory_manager: MemoryManager,
     provider_manager: ProviderManager,
     tool_manager: ToolManager,
-    tracer: Optional[Any] = None,
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
-) -> Tuple[Optional[str], Optional[ToolCall]]:
+    tracer: Any | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
+) -> tuple[str | None, ToolCall | None]:
     """
     Execute the THINK step: retrieve context and call LLM for reasoning.
 
@@ -323,8 +323,8 @@ async def act_step(
     session_id: str,
     task: AgentTask,
     tool_manager: ToolManager,
-    tracer: Optional[Any] = None,
-    db_session: Optional[AsyncSession] = None,
+    tracer: Any | None = None,
+    db_session: AsyncSession | None = None,
 ) -> ToolResult:
     """
     Execute the ACT step: run the requested tool, with HITL check.
@@ -414,7 +414,7 @@ async def observe_step(
     observation: str,
     session_id: str,
     storage_manager: StorageManager,
-    tracer: Optional[Any] = None,
+    tracer: Any | None = None,
 ) -> None:
     """
     Execute the OBSERVE step: update state and log experience.
@@ -437,7 +437,7 @@ async def observe_step(
                 "tool_name": tool_call.name,
                 "arguments": tool_call.arguments,
                 "result": observation,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             current_step = ""
@@ -504,9 +504,9 @@ async def handle_task_resumption(
     session_id: str,
     tool_manager: ToolManager,
     storage_manager: StorageManager,
-    tracer: Optional[Any] = None,
-    db_session: Optional[AsyncSession] = None,
-) -> Optional[str]:
+    tracer: Any | None = None,
+    db_session: AsyncSession | None = None,
+) -> str | None:
     """Handle the resumption of a task from HITL workflow."""
     try:
         pending_data = task.pending_action_data
@@ -557,8 +557,8 @@ async def handle_task_resumption(
 async def update_task_for_approval(
     task: AgentTask,
     approval_prompt: str,
-    pending_action: Dict[str, Any],
-    db_session: Optional[AsyncSession] = None,
+    pending_action: dict[str, Any],
+    db_session: AsyncSession | None = None,
 ) -> None:
     """Update the task state for human approval workflow."""
     try:
@@ -566,9 +566,9 @@ async def update_task_for_approval(
         task.approval_prompt = approval_prompt
         task.pending_action_data = {
             "approved_action": pending_action,
-            "requested_at": datetime.now(timezone.utc).isoformat(),
+            "requested_at": datetime.now(UTC).isoformat(),
         }
-        task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(UTC)
 
         if db_session:
             update_query = text("""
@@ -597,12 +597,12 @@ async def update_task_for_approval(
         raise
 
 
-async def clear_pending_action_data(task: AgentTask, db_session: Optional[AsyncSession]) -> None:
+async def clear_pending_action_data(task: AgentTask, db_session: AsyncSession | None) -> None:
     """Clear the pending action data from the task."""
     try:
         task.pending_action_data = None
         task.approval_prompt = None
-        task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(UTC)
 
         if db_session:
             update_query = text("""

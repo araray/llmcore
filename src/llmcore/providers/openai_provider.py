@@ -6,11 +6,14 @@ Handles interactions with the OpenAI API (GPT models).
 Accepts context as List[Message] and supports standardized tool-calling.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator
+from typing import Any
 
 try:
     import openai
@@ -33,6 +36,7 @@ except ImportError:
     tiktoken = None  # type: ignore
 
 from ..exceptions import ConfigError, ProviderError
+from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool
 from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
@@ -68,11 +72,11 @@ class OpenAIProvider(BaseProvider):
     Handles List[Message] context type and standardized tool-calling.
     """
 
-    _client: Optional[AsyncOpenAI] = None
-    _encoding: Optional[Any] = None
-    _api_key_env_var: Optional[str] = None
+    _client: AsyncOpenAI | None = None
+    _encoding: Any | None = None
+    _api_key_env_var: str | None = None
 
-    def __init__(self, config: Dict[str, Any], log_raw_payloads: bool = False):
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """
         Initializes the OpenAIProvider.
 
@@ -108,8 +112,8 @@ class OpenAIProvider(BaseProvider):
         self.timeout = float(config.get("timeout", 60.0))
 
         if not self.api_key:
-            logger.warning(
-                "OpenAI API key not found in config or environment. Provider will likely fail."
+            raise ConfigError(
+                "OpenAI API key not found. Set OPENAI_API_KEY environment variable or configure api_key in config."
             )
 
         try:
@@ -120,7 +124,6 @@ class OpenAIProvider(BaseProvider):
             )
             logger.debug("AsyncOpenAI client initialized.")
         except Exception as e:
-            logger.error(f"Failed to initialize AsyncOpenAI client: {e}", exc_info=True)
             raise ConfigError(f"OpenAI client initialization failed: {e}")
 
         self._load_tokenizer(self.default_model)
@@ -143,34 +146,51 @@ class OpenAIProvider(BaseProvider):
             self._encoding = None
 
     def get_name(self) -> str:
-        """Returns the provider name: 'openai'."""
-        return "openai"
+        """Returns the provider instance name (e.g. 'deepseek', 'xai', 'openai')."""
+        return self._provider_instance_name or "openai"
 
-    async def get_models_details(self) -> List[ModelDetails]:
+    async def get_models_details(self) -> list[ModelDetails]:
         """
         Dynamically discovers available models from the OpenAI API.
-        Note: The OpenAI API does not return context length or tool support flags,
-        so these are populated from a static list.
+
+        The OpenAI API does not return context length or tool support flags,
+        so these are enriched from the model card registry (preferred) or
+        GPT-specific heuristics (legacy fallback).
         """
         if not self._client:
             raise ProviderError(self.get_name(), "OpenAI client not initialized.")
         try:
             models_response = await self._client.models.list()
             model_details_list = []
+            provider_name = self.get_name()
+            try:
+                registry = get_model_card_registry()
+            except Exception:
+                registry = None
+
             for model_obj in models_response.data:
                 model_id = model_obj.id
-                # OpenAI API doesn't return these details, so we use our static map.
                 context_length = self.get_max_context_length(model_id)
-                supports_tools = (
-                    "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
-                )
+
+                # Resolve tool support: prefer model card, then GPT heuristic
+                supports_tools = False
+                if registry is not None:
+                    card = registry.get(provider_name, model_id)
+                    if card is not None and card.capabilities:
+                        supports_tools = (
+                            card.capabilities.tool_use or card.capabilities.function_calling
+                        )
+                if not supports_tools:
+                    supports_tools = (
+                        "gpt-3.5-turbo" in model_id or "gpt-4" in model_id or "gpt-4o" in model_id
+                    )
 
                 details = ModelDetails(
                     id=model_id,
                     context_length=context_length,
                     supports_streaming=True,
                     supports_tools=supports_tools,
-                    provider_name=self.get_name(),
+                    provider_name=provider_name,
                     metadata={"owned_by": model_obj.owned_by, "created": model_obj.created},
                 )
                 model_details_list.append(details)
@@ -180,7 +200,7 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"OpenAI API error fetching models: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Failed to fetch models from OpenAI API: {e}")
 
-    def get_supported_parameters(self, model: Optional[str] = None) -> Dict[str, Any]:
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported inference parameters for OpenAI models."""
         return {
             "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
@@ -192,8 +212,17 @@ class OpenAIProvider(BaseProvider):
             "seed": {"type": "integer"},
         }
 
-    def get_max_context_length(self, model: Optional[str] = None) -> int:
-        """Returns the maximum context length (tokens) for the given OpenAI model."""
+    def get_max_context_length(self, model: str | None = None) -> int:
+        """Returns the maximum context length (tokens) for the given OpenAI model.
+
+        Resolution order:
+        1. Hardcoded ``DEFAULT_OPENAI_TOKEN_LIMITS`` dict (GPT models).
+        2. GPT substring heuristics (covers dated model variants).
+        3. Model Card Registry lookup using the provider instance name
+           (handles DeepSeek, Mistral, xAI, and other OpenAI-compatible
+           providers whose cards live under their own provider key).
+        4. Fallback: 4096.
+        """
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
         if limit is None:
@@ -208,21 +237,50 @@ class OpenAIProvider(BaseProvider):
             elif "gpt-3.5-turbo" in model_name:
                 limit = 16385
             else:
-                limit = 4096
-                logger.warning(
-                    f"Unknown context length for OpenAI model '{model_name}'. Using fallback: {limit}."
-                )
+                # Consult the model card registry before falling back.
+                # OpenAI-compatible providers (deepseek, mistral, xai, …)
+                # have cards filed under their own provider name.
+                provider_name = self.get_name()
+                try:
+                    registry = get_model_card_registry()
+                    card = registry.get(provider_name, model_name)
+                    if card is not None:
+                        limit = card.get_context_length()
+                        logger.debug(
+                            "Resolved context length for '%s/%s' from model card: %d",
+                            provider_name,
+                            model_name,
+                            limit,
+                        )
+                    else:
+                        limit = 4096
+                        logger.warning(
+                            "Unknown context length for OpenAI model '%s' "
+                            "(provider=%s). No model card found. Using fallback: %d.",
+                            model_name,
+                            provider_name,
+                            limit,
+                        )
+                except Exception as e:
+                    limit = 4096
+                    logger.warning(
+                        "Unknown context length for OpenAI model '%s'. "
+                        "Model card lookup failed (%s). Using fallback: %d.",
+                        model_name,
+                        e,
+                        limit,
+                    )
         return limit
 
     async def chat_completion(
         self,
         context: ContextPayload,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        tools: Optional[List[Tool]] = None,
-        tool_choice: Optional[str] = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
         **kwargs: Any,
-    ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """
         Sends a chat completion request to the OpenAI API with standardized tool support.
         """
@@ -238,9 +296,10 @@ class OpenAIProvider(BaseProvider):
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
 
-        messages_payload: List[Dict[str, Any]] = []
+        messages_payload: list[dict[str, Any]] = []
         for msg in context:
-            msg_dict = {"role": msg.role.value, "content": msg.content}
+            role_str = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+            msg_dict = {"role": role_str, "content": msg.content}
             if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
                 msg_dict["tool_call_id"] = msg.tool_call_id
             messages_payload.append(msg_dict)
@@ -304,7 +363,7 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"Unexpected error during OpenAI chat: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"An unexpected error occurred: {e}")
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens for a text string using tiktoken."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating token count.")
@@ -313,13 +372,15 @@ class OpenAIProvider(BaseProvider):
             return 0
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
-    async def count_message_tokens(
-        self, messages: List[Message], model: Optional[str] = None
-    ) -> int:
+    async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Counts tokens for a list of messages using tiktoken, including overhead."""
         if not self._encoding:
             logger.warning("Tiktoken not available. Approximating message token count.")
-            total_chars = sum(len(msg.content) + len(msg.role.value) for msg in messages)
+            total_chars = sum(
+                len(msg.content)
+                + len(msg.role.value if hasattr(msg.role, "value") else str(msg.role))
+                for msg in messages
+            )
             return (total_chars + (len(messages) * 15)) // 4
 
         model_name = model or self.default_model
@@ -333,18 +394,24 @@ class OpenAIProvider(BaseProvider):
         for message in messages:
             num_tokens += tokens_per_message
             try:
-                num_tokens += len(self._encoding.encode(message.role.value))
+                role_val = (
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+                num_tokens += len(self._encoding.encode(role_val))
                 num_tokens += len(self._encoding.encode(message.content))
                 if message.role == LLMCoreRole.TOOL:
                     # A simplified approximation for tool call overhead
                     num_tokens += 5
             except Exception as e:
                 logger.warning(f"Tiktoken encoding failed for message part: {e}. Approximating.")
-                num_tokens += (len(message.role.value) + len(message.content)) // 4
+                role_len = len(
+                    message.role.value if hasattr(message.role, "value") else str(message.role)
+                )
+                num_tokens += (role_len + len(message.content)) // 4
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
-    def extract_response_content(self, response: Dict[str, Any]) -> str:
+    def extract_response_content(self, response: dict[str, Any]) -> str:
         """
         Extract text content from OpenAI non-streaming response.
 
@@ -366,7 +433,7 @@ class OpenAIProvider(BaseProvider):
             logger.warning(f"Failed to extract content from OpenAI response: {e}")
             return ""
 
-    def extract_delta_content(self, chunk: Dict[str, Any]) -> str:
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         """
         Extract text delta from OpenAI streaming chunk.
 

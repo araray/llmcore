@@ -19,7 +19,7 @@ Security Model:
 import asyncio
 import logging
 import math
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 async def semantic_search(
-    query: str, memory_manager: MemoryManager, top_k: int = 5, collection_name: Optional[str] = None
+    query: str, memory_manager: MemoryManager, top_k: int = 5, collection_name: str | None = None
 ) -> str:
     """
     Search the knowledge base (vector store) for relevant information.
@@ -76,7 +76,7 @@ async def semantic_search(
 
 
 async def episodic_search(
-    query: str, storage_manager: StorageManager, session_id: Optional[str] = None, limit: int = 10
+    query: str, storage_manager: StorageManager, session_id: str | None = None, limit: int = 10
 ) -> str:
     """
     Search past experiences and interactions in episodic memory.
@@ -194,7 +194,7 @@ def human_approval(prompt: str, pending_action: str) -> str:
 # =============================================================================
 
 # This is the security boundary - only functions registered here can be executed
-_IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
+_IMPLEMENTATION_REGISTRY: dict[str, Callable] = {
     # Core search tools
     "llmcore.tools.search.semantic": semantic_search,
     "llmcore.tools.search.episodic": episodic_search,
@@ -208,7 +208,7 @@ _IMPLEMENTATION_REGISTRY: Dict[str, Callable] = {
 }
 
 # Human-readable descriptions for the implementation keys
-_IMPLEMENTATION_DESCRIPTIONS: Dict[str, str] = {
+_IMPLEMENTATION_DESCRIPTIONS: dict[str, str] = {
     "llmcore.tools.search.semantic": "Search the knowledge base (vector store) for relevant information",
     "llmcore.tools.search.episodic": "Search past experiences and interactions in episodic memory",
     "llmcore.tools.calculation.calculator": "Perform mathematical calculations safely",
@@ -241,7 +241,7 @@ def register_implementation(key: str, func: Callable, description: str = "") -> 
     logger.debug(f"Registered tool implementation: {key}")
 
 
-def register_implementations(implementations: Dict[str, Callable]) -> None:
+def register_implementations(implementations: dict[str, Callable]) -> None:
     """
     Register multiple tool implementations at once.
 
@@ -254,7 +254,7 @@ def register_implementations(implementations: Dict[str, Callable]) -> None:
             logger.debug(f"Registered tool implementation: {key}")
 
 
-def get_registered_implementations() -> List[str]:
+def get_registered_implementations() -> list[str]:
     """Get list of all registered implementation keys."""
     return list(_IMPLEMENTATION_REGISTRY.keys())
 
@@ -292,13 +292,13 @@ class ToolManager:
         self._storage_manager = storage_manager
 
         # These will be populated dynamically per run
-        self._tool_definitions: List[Tool] = []
-        self._implementation_map: Dict[str, str] = {}  # tool_name -> implementation_key
+        self._tool_definitions: list[Tool] = []
+        self._implementation_map: dict[str, str] = {}  # tool_name -> implementation_key
 
         logger.info("ToolManager initialized for dynamic tool loading")
 
     async def load_tools_for_run(
-        self, db_session: AsyncSession, enabled_toolkits: Optional[List[str]] = None
+        self, db_session: AsyncSession, enabled_toolkits: list[str] | None = None
     ) -> None:
         """
         Load tool definitions from the database for a specific tenant and toolkits.
@@ -416,7 +416,7 @@ class ToolManager:
 
         logger.info(f"Loaded {len(self._tool_definitions)} default tools")
 
-    def get_tool_definitions(self) -> List[Tool]:
+    def get_tool_definitions(self) -> list[Tool]:
         """
         Get all loaded tool definitions for the current run.
 
@@ -425,9 +425,7 @@ class ToolManager:
         """
         return self._tool_definitions.copy()
 
-    async def execute_tool(
-        self, tool_call: ToolCall, session_id: Optional[str] = None
-    ) -> ToolResult:
+    async def execute_tool(self, tool_call: ToolCall, session_id: str | None = None) -> ToolResult:
         """
         Execute a tool call and return the result.
 
@@ -498,7 +496,7 @@ class ToolManager:
             logger.error(error_msg, exc_info=True)
             return ToolResult(tool_call_id=tool_call.id, content=f"ERROR: {error_msg}")
 
-    def get_tool_names(self) -> List[str]:
+    def get_tool_names(self) -> list[str]:
         """Get a list of all loaded tool names for the current run."""
         return list(self._implementation_map.keys())
 
@@ -506,7 +504,7 @@ class ToolManager:
         """Check if a tool is loaded for this run."""
         return tool_name in self._implementation_map
 
-    def get_implementation_key(self, tool_name: str) -> Optional[str]:
+    def get_implementation_key(self, tool_name: str) -> str | None:
         """Get the implementation key for a tool."""
         return self._implementation_map.get(tool_name)
 

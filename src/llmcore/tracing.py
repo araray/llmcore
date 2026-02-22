@@ -9,7 +9,6 @@ trace correlation for complex agentic workflows.
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ def _configure_auto_instrumentation() -> None:
         logger.warning(f"Failed to configure auto-instrumentation: {e}")
 
 
-def get_tracer(name: str) -> Optional[object]:
+def get_tracer(name: str) -> object | None:
     """
     Get a tracer instance for creating manual spans.
 

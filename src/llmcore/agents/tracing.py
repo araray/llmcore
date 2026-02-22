@@ -1,3 +1,4 @@
+# src/llmcore/agents/tracing.py
 """
 Tracing utilities for llmcore agents.
 
@@ -16,15 +17,16 @@ Tests Fixed: TestCognitiveCycle::test_cognitive_cycle_single_iteration
 """
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
 def create_span(
-    name: str, attributes: Optional[Dict[str, Any]] = None, kind: str = "internal"
+    name: str, attributes: dict[str, Any] | None = None, kind: str = "internal"
 ) -> Generator[None, None, None]:
     """
     Create a trace span for observability.
@@ -55,7 +57,7 @@ def create_span(
         logger.debug(f"[TRACE] Exiting span: {name}")
 
 
-def add_span_attributes(attributes: Dict[str, Any]) -> None:
+def add_span_attributes(attributes: dict[str, Any]) -> None:
     """
     Add attributes to the current span.
 
@@ -75,7 +77,7 @@ def add_span_attributes(attributes: Dict[str, Any]) -> None:
 
 
 def record_span_exception(
-    exception: BaseException, attributes: Optional[Dict[str, Any]] = None
+    exception: BaseException, attributes: dict[str, Any] | None = None
 ) -> None:
     """
     Record an exception in the current span.

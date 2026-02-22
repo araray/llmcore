@@ -57,8 +57,9 @@ import abc
 import json
 import logging
 import re
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -94,16 +95,16 @@ class TestSpecification(BaseModel):
         created_at: When this spec was created
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     name: str
     description: str
     test_type: Literal["unit", "integration", "edge_case", "error"] = "unit"
-    inputs: Dict[str, Any] = Field(default_factory=dict)
-    expected_output: Optional[Any] = None
-    expected_behavior: Optional[str] = None
-    expected_exception: Optional[str] = None
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    expected_output: Any | None = None
+    expected_behavior: str | None = None
+    expected_exception: str | None = None
     priority: int = Field(default=2, ge=1, le=3)
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
@@ -130,16 +131,16 @@ class TestSuite(BaseModel):
         updated_at: Last update timestamp
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     task_id: str
     requirements: str
     language: Literal["python", "javascript", "typescript"] = "python"
     framework: Literal["pytest", "unittest", "jest", "mocha"] = "pytest"
-    specifications: List[TestSpecification] = Field(default_factory=list)
-    setup_code: Optional[str] = None
-    teardown_code: Optional[str] = None
-    fixture_code: Optional[str] = None
-    import_statements: List[str] = Field(default_factory=list)
+    specifications: list[TestSpecification] = Field(default_factory=list)
+    setup_code: str | None = None
+    teardown_code: str | None = None
+    fixture_code: str | None = None
+    import_statements: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -150,11 +151,11 @@ class TestSuite(BaseModel):
         """Get the number of test specifications."""
         return len(self.specifications)
 
-    def get_specs_by_type(self, test_type: str) -> List[TestSpecification]:
+    def get_specs_by_type(self, test_type: str) -> list[TestSpecification]:
         """Get specifications filtered by test type."""
         return [s for s in self.specifications if s.test_type == test_type]
 
-    def get_specs_by_priority(self, priority: int) -> List[TestSpecification]:
+    def get_specs_by_priority(self, priority: int) -> list[TestSpecification]:
         """Get specifications filtered by priority."""
         return [s for s in self.specifications if s.priority == priority]
 
@@ -177,14 +178,14 @@ class GeneratedTest(BaseModel):
         created_at: When this test was generated
     """
 
-    id: Optional[str] = None
-    spec_id: Optional[str] = None
+    id: str | None = None
+    spec_id: str | None = None
     spec_name: str
     test_code: str
-    imports: List[str] = Field(default_factory=list)
-    fixtures: Optional[str] = None
+    imports: list[str] = Field(default_factory=list)
+    fixtures: str | None = None
     validation_status: Literal["pending", "valid", "invalid"] = "pending"
-    validation_errors: List[str] = Field(default_factory=list)
+    validation_errors: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
@@ -210,13 +211,13 @@ class TestExecutionResult(BaseModel):
 
     test_name: str
     passed: bool
-    error_type: Optional[Literal["assertion", "exception", "timeout", "syntax"]] = None
-    error_message: Optional[str] = None
-    error_traceback: Optional[str] = None
+    error_type: Literal["assertion", "exception", "timeout", "syntax"] | None = None
+    error_message: str | None = None
+    error_traceback: str | None = None
     execution_time_ms: float = 0.0
     stdout: str = ""
     stderr: str = ""
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict()
 
@@ -246,20 +247,20 @@ class TDDCycleResult(BaseModel):
         created_at: When this cycle was executed
     """
 
-    id: Optional[str] = None
-    suite_id: Optional[str] = None
+    id: str | None = None
+    suite_id: str | None = None
     iteration: int
     tests_generated: int
     tests_executed: int
     tests_passed: int
     tests_failed: int
     code_generated: bool
-    implementation_code: Optional[str] = None
-    final_code: Optional[str] = None
+    implementation_code: str | None = None
+    final_code: str | None = None
     all_tests_pass: bool
-    execution_results: List[TestExecutionResult] = Field(default_factory=list)
-    failure_analysis: Optional[str] = None
-    suggestions: List[str] = Field(default_factory=list)
+    execution_results: list[TestExecutionResult] = Field(default_factory=list)
+    failure_analysis: str | None = None
+    suggestions: list[str] = Field(default_factory=list)
     total_time_ms: float = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -295,19 +296,19 @@ class TDDSession(BaseModel):
         completed_at: When session completed (if done)
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     task_id: str
     requirements: str
     language: str = "python"
     framework: str = "pytest"
-    suite_id: Optional[str] = None
-    cycles: List[TDDCycleResult] = Field(default_factory=list)
+    suite_id: str | None = None
+    cycles: list[TDDCycleResult] = Field(default_factory=list)
     current_iteration: int = 0
     status: Literal["pending", "in_progress", "success", "failed", "abandoned"] = "pending"
     best_pass_rate: float = 0.0
-    final_implementation: Optional[str] = None
+    final_implementation: str | None = None
     started_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
@@ -336,7 +337,7 @@ class BaseTDDStorage(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize the storage backend with given configuration.
 
@@ -366,7 +367,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_test_suite(self, suite_id: str) -> Optional[TestSuite]:
+    async def get_test_suite(self, suite_id: str) -> TestSuite | None:
         """
         Retrieve a specific test suite by ID.
 
@@ -379,7 +380,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_test_suites_for_task(self, task_id: str) -> List[TestSuite]:
+    async def get_test_suites_for_task(self, task_id: str) -> list[TestSuite]:
         """
         Retrieve all test suites for a task.
 
@@ -405,7 +406,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_generated_tests(self, suite_id: str) -> List[GeneratedTest]:
+    async def get_generated_tests(self, suite_id: str) -> list[GeneratedTest]:
         """
         Retrieve all generated tests for a suite.
 
@@ -435,7 +436,7 @@ class BaseTDDStorage(abc.ABC):
         self,
         suite_id: str,
         limit: int = 10,
-    ) -> List[TDDCycleResult]:
+    ) -> list[TDDCycleResult]:
         """
         Retrieve cycle results for a suite.
 
@@ -462,7 +463,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_session(self, session_id: str) -> Optional[TDDSession]:
+    async def get_session(self, session_id: str) -> TDDSession | None:
         """
         Retrieve a specific session by ID.
 
@@ -475,7 +476,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_sessions_for_task(self, task_id: str) -> List[TDDSession]:
+    async def get_sessions_for_task(self, task_id: str) -> list[TDDSession]:
         """
         Retrieve all sessions for a task.
 
@@ -488,7 +489,7 @@ class BaseTDDStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get TDD statistics for analytics.
 
@@ -617,7 +618,7 @@ Output only the implementation code, no explanations or markdown backticks.
 
     def __init__(
         self,
-        llm_callable: Optional[Callable] = None,
+        llm_callable: Callable | None = None,
         default_framework: str = "pytest",
         min_tests: int = 5,
     ):
@@ -641,9 +642,9 @@ Output only the implementation code, no explanations or markdown backticks.
         self,
         requirements: str,
         language: str = "python",
-        framework: Optional[str] = None,
-        min_tests: Optional[int] = None,
-        task_id: Optional[str] = None,
+        framework: str | None = None,
+        min_tests: int | None = None,
+        task_id: str | None = None,
     ) -> TestSuite:
         """
         Generate test specifications from requirements.
@@ -763,7 +764,7 @@ Output only the implementation code, no explanations or markdown backticks.
     async def generate_tests(
         self,
         suite: TestSuite,
-    ) -> List[GeneratedTest]:
+    ) -> list[GeneratedTest]:
         """
         Generate executable test code from specifications.
 
@@ -848,8 +849,8 @@ Output only the implementation code, no explanations or markdown backticks.
         requirements: str,
         test_file_content: str,
         language: str = "python",
-        previous_implementation: Optional[str] = None,
-        test_failures: Optional[List[TestExecutionResult]] = None,
+        previous_implementation: str | None = None,
+        test_failures: list[TestExecutionResult] | None = None,
     ) -> str:
         """
         Generate implementation code that should pass the tests.
@@ -928,7 +929,7 @@ Output only the implementation code, no explanations or markdown backticks.
 
         return code
 
-    def _parse_json_response(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_json_response(self, content: str) -> list[dict[str, Any]]:
         """Parse JSON from LLM response, handling common issues."""
         # Try direct parse first
         try:
@@ -962,7 +963,7 @@ Output only the implementation code, no explanations or markdown backticks.
         self,
         code: str,
         language: str,
-    ) -> tuple[List[str], List[str]]:
+    ) -> tuple[list[str], list[str]]:
         """
         Extract import statements from code.
 
@@ -1006,7 +1007,7 @@ class TestFileBuilder:
 
     def build_test_file(
         self,
-        tests: List[GeneratedTest],
+        tests: list[GeneratedTest],
         suite: TestSuite,
     ) -> str:
         """
@@ -1028,7 +1029,7 @@ class TestFileBuilder:
 
     def _build_python_test_file(
         self,
-        tests: List[GeneratedTest],
+        tests: list[GeneratedTest],
         suite: TestSuite,
     ) -> str:
         """Build Python test file."""
@@ -1103,7 +1104,7 @@ class TestFileBuilder:
 
     def _build_javascript_test_file(
         self,
-        tests: List[GeneratedTest],
+        tests: list[GeneratedTest],
         suite: TestSuite,
     ) -> str:
         """Build JavaScript test file."""
@@ -1185,14 +1186,14 @@ class TDDManager:
     def __init__(
         self,
         backend: Literal["sqlite", "postgres"] = "sqlite",
-        db_path: Optional[str] = None,
-        db_url: Optional[str] = None,
+        db_path: str | None = None,
+        db_url: str | None = None,
         enabled: bool = True,
         default_framework: str = "pytest",
         min_tests: int = 5,
         max_iterations: int = 3,
-        llm_callable: Optional[Callable] = None,
-        sandbox_executor: Optional[Callable] = None,
+        llm_callable: Callable | None = None,
+        sandbox_executor: Callable | None = None,
     ):
         """
         Initialize TDD manager.
@@ -1224,8 +1225,8 @@ class TDDManager:
         )
         self._test_file_builder = TestFileBuilder()
         self._sandbox_executor = sandbox_executor
-        self._backend: Optional[BaseTDDStorage] = None
-        self._config: Dict[str, Any] = {}
+        self._backend: BaseTDDStorage | None = None
+        self._config: dict[str, Any] = {}
 
         if not enabled:
             return
@@ -1283,8 +1284,8 @@ class TDDManager:
         self,
         requirements: str,
         language: str = "python",
-        framework: Optional[str] = None,
-        task_id: Optional[str] = None,
+        framework: str | None = None,
+        task_id: str | None = None,
     ) -> TestSuite:
         """
         Generate test specifications from requirements.
@@ -1314,7 +1315,7 @@ class TDDManager:
 
         return suite
 
-    async def generate_tests(self, suite: TestSuite) -> List[GeneratedTest]:
+    async def generate_tests(self, suite: TestSuite) -> list[GeneratedTest]:
         """
         Generate executable test code from specifications.
 
@@ -1338,8 +1339,8 @@ class TDDManager:
         requirements: str,
         test_file_content: str,
         language: str = "python",
-        previous_implementation: Optional[str] = None,
-        test_failures: Optional[List[TestExecutionResult]] = None,
+        previous_implementation: str | None = None,
+        test_failures: list[TestExecutionResult] | None = None,
     ) -> str:
         """
         Generate implementation code that should pass the tests.
@@ -1364,7 +1365,7 @@ class TDDManager:
 
     def build_test_file(
         self,
-        tests: List[GeneratedTest],
+        tests: list[GeneratedTest],
         suite: TestSuite,
     ) -> str:
         """
@@ -1386,7 +1387,7 @@ class TDDManager:
         language: str = "python",
         framework: str = "pytest",
         timeout_seconds: int = 60,
-    ) -> List[TestExecutionResult]:
+    ) -> list[TestExecutionResult]:
         """
         Execute tests against implementation in sandbox.
 
@@ -1433,7 +1434,7 @@ class TDDManager:
         self,
         execution_result: Any,
         framework: str,
-    ) -> List[TestExecutionResult]:
+    ) -> list[TestExecutionResult]:
         """Parse test execution output into results."""
         results = []
 
@@ -1481,7 +1482,7 @@ class TDDManager:
         self,
         stdout: str,
         stderr: str,
-    ) -> List[TestExecutionResult]:
+    ) -> list[TestExecutionResult]:
         """Parse pytest verbose output into results."""
         results = []
 
@@ -1524,7 +1525,7 @@ class TDDManager:
         self,
         stdout: str,
         stderr: str,
-    ) -> List[TestExecutionResult]:
+    ) -> list[TestExecutionResult]:
         """Parse unittest output into results."""
         results = []
 
@@ -1561,7 +1562,7 @@ class TDDManager:
         self,
         stdout: str,
         stderr: str,
-    ) -> List[TestExecutionResult]:
+    ) -> list[TestExecutionResult]:
         """Parse Jest output into results."""
         results = []
 
@@ -1600,9 +1601,9 @@ class TDDManager:
         self,
         requirements: str,
         language: str = "python",
-        framework: Optional[str] = None,
-        max_iterations: Optional[int] = None,
-        task_id: Optional[str] = None,
+        framework: str | None = None,
+        max_iterations: int | None = None,
+        task_id: str | None = None,
     ) -> TDDCycleResult:
         """
         Run a complete TDD cycle.
@@ -1647,7 +1648,7 @@ class TDDManager:
         test_file_content = self.build_test_file(tests, suite)
 
         implementation = None
-        test_results: List[TestExecutionResult] = []
+        test_results: list[TestExecutionResult] = []
 
         for iteration in range(1, max_iterations + 1):
             logger.info(f"TDD: Iteration {iteration}/{max_iterations}")
@@ -1751,7 +1752,7 @@ class TDDManager:
 
         return result
 
-    def _analyze_failures(self, results: List[TestExecutionResult]) -> str:
+    def _analyze_failures(self, results: list[TestExecutionResult]) -> str:
         """Analyze test failures for debugging."""
         failures = [r for r in results if not r.passed]
 
@@ -1770,7 +1771,7 @@ class TDDManager:
 
         return "\n".join(lines)
 
-    def _generate_suggestions(self, results: List[TestExecutionResult]) -> List[str]:
+    def _generate_suggestions(self, results: list[TestExecutionResult]) -> list[str]:
         """Generate suggestions for fixing failures."""
         suggestions = []
         failures = [r for r in results if not r.passed]
@@ -1789,7 +1790,7 @@ class TDDManager:
 
         return suggestions
 
-    async def get_stats(self, days: int = 30) -> Dict[str, Any]:
+    async def get_stats(self, days: int = 30) -> dict[str, Any]:
         """
         Get TDD statistics for analytics.
 

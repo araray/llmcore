@@ -1,3 +1,4 @@
+# tests/integration/phase10/test_config_validation.py
 """
 Phase 10 Integration Tests: Configuration Validation.
 

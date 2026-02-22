@@ -40,10 +40,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
+from typing import Any
 from uuid import uuid4
 
 from .events import (
@@ -133,7 +134,7 @@ class JSONLFileSink(EventSink):
 
     def __init__(
         self,
-        path: Union[str, Path],
+        path: str | Path,
         *,
         buffer_size: int = 1,
         create_dirs: bool = True,
@@ -149,7 +150,7 @@ class JSONLFileSink(EventSink):
         self.path = Path(path)
         self.buffer_size = buffer_size
         self.create_dirs = create_dirs
-        self._buffer: List[str] = []
+        self._buffer: list[str] = []
         self._file = None
         self._lock = asyncio.Lock()
 
@@ -218,7 +219,7 @@ class InMemorySink(EventSink):
             max_events: Maximum events to store
         """
         self.max_events = max_events
-        self._events: List[AgentEvent] = []
+        self._events: list[AgentEvent] = []
         self._lock = asyncio.Lock()
 
     async def write(self, event: AgentEvent) -> None:
@@ -244,21 +245,21 @@ class InMemorySink(EventSink):
             self._events.clear()
 
     @property
-    def events(self) -> List[AgentEvent]:
+    def events(self) -> list[AgentEvent]:
         """Get all stored events."""
         return list(self._events)
 
     def get_events(
         self,
         *,
-        category: Optional[EventCategory] = None,
-        session_id: Optional[str] = None,
-        execution_id: Optional[str] = None,
-        event_type: Optional[str] = None,
-        severity: Optional[EventSeverity] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
-    ) -> List[AgentEvent]:
+        category: EventCategory | None = None,
+        session_id: str | None = None,
+        execution_id: str | None = None,
+        event_type: str | None = None,
+        severity: EventSeverity | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[AgentEvent]:
         """
         Get filtered events.
 
@@ -310,7 +311,7 @@ class CallbackSink(EventSink):
         self,
         callback: Callable[[AgentEvent], None],
         *,
-        async_callback: Optional[Callable[[AgentEvent], Any]] = None,
+        async_callback: Callable[[AgentEvent], Any] | None = None,
     ) -> None:
         """
         Initialize callback sink.
@@ -354,10 +355,10 @@ class FilteredSink(EventSink):
         self,
         inner_sink: EventSink,
         *,
-        categories: Optional[List[EventCategory]] = None,
-        min_severity: Optional[EventSeverity] = None,
-        include_types: Optional[List[str]] = None,
-        exclude_types: Optional[List[str]] = None,
+        categories: list[EventCategory] | None = None,
+        min_severity: EventSeverity | None = None,
+        include_types: list[str] | None = None,
+        exclude_types: list[str] | None = None,
     ) -> None:
         """
         Initialize filtered sink.
@@ -465,9 +466,9 @@ class EventLogger:
         self,
         session_id: str,
         *,
-        execution_id: Optional[str] = None,
-        sinks: Optional[List[EventSink]] = None,
-        default_tags: Optional[List[str]] = None,
+        execution_id: str | None = None,
+        sinks: list[EventSink] | None = None,
+        default_tags: list[str] | None = None,
     ) -> None:
         """
         Initialize event logger.
@@ -480,15 +481,15 @@ class EventLogger:
         """
         self.session_id = session_id
         self.execution_id = execution_id or f"exec-{uuid4().hex[:12]}"
-        self.sinks: List[EventSink] = sinks or []
+        self.sinks: list[EventSink] = sinks or []
         self.default_tags = default_tags or []
 
         # State tracking
         self._iteration: int = 0
-        self._phase: Optional[str] = None
-        self._correlation_id: Optional[str] = None
-        self._parent_event_id: Optional[str] = None
-        self._event_stack: List[str] = []  # For nested events
+        self._phase: str | None = None
+        self._correlation_id: str | None = None
+        self._parent_event_id: str | None = None
+        self._event_stack: list[str] = []  # For nested events
 
         # Statistics
         self._event_count: int = 0
@@ -496,7 +497,7 @@ class EventLogger:
 
         self._logger = logging.getLogger(__name__)
 
-    async def __aenter__(self) -> "EventLogger":
+    async def __aenter__(self) -> EventLogger:
         """Async context manager entry."""
         return self
 
@@ -538,7 +539,7 @@ class EventLogger:
         """
         self._iteration = iteration
 
-    def set_phase(self, phase: Optional[str]) -> None:
+    def set_phase(self, phase: str | None) -> None:
         """
         Set current cognitive phase.
 
@@ -547,7 +548,7 @@ class EventLogger:
         """
         self._phase = phase
 
-    def set_correlation_id(self, correlation_id: Optional[str]) -> None:
+    def set_correlation_id(self, correlation_id: str | None) -> None:
         """
         Set correlation ID for related events.
 
@@ -559,7 +560,7 @@ class EventLogger:
     @asynccontextmanager
     async def event_scope(
         self,
-        parent_event: Optional[AgentEvent] = None,
+        parent_event: AgentEvent | None = None,
     ) -> AsyncIterator[None]:
         """
         Context manager for nested events.
@@ -649,8 +650,8 @@ class EventLogger:
         self,
         goal: str,
         *,
-        goal_complexity: Optional[str] = None,
-        recommended_strategy: Optional[str] = None,
+        goal_complexity: str | None = None,
+        recommended_strategy: str | None = None,
         **kwargs: Any,
     ) -> LifecycleEvent:
         """
@@ -679,10 +680,10 @@ class EventLogger:
         self,
         status: str,
         *,
-        exit_reason: Optional[str] = None,
-        total_iterations: Optional[int] = None,
-        total_tokens: Optional[int] = None,
-        duration_ms: Optional[float] = None,
+        exit_reason: str | None = None,
+        total_iterations: int | None = None,
+        total_tokens: int | None = None,
+        duration_ms: float | None = None,
         **kwargs: Any,
     ) -> LifecycleEvent:
         """
@@ -745,7 +746,7 @@ class EventLogger:
     async def log_iteration_end(
         self,
         iteration: int,
-        duration_ms: Optional[float] = None,
+        duration_ms: float | None = None,
         **kwargs: Any,
     ) -> LifecycleEvent:
         """
@@ -776,14 +777,14 @@ class EventLogger:
     async def log_cognitive_phase(
         self,
         phase: str,
-        event_type: Union[CognitiveEventType, str] = CognitiveEventType.PHASE_COMPLETED,
+        event_type: CognitiveEventType | str = CognitiveEventType.PHASE_COMPLETED,
         *,
-        input_summary: Optional[str] = None,
-        output_summary: Optional[str] = None,
-        tokens_used: Optional[int] = None,
-        reasoning: Optional[str] = None,
-        confidence: Optional[float] = None,
-        duration_ms: Optional[float] = None,
+        input_summary: str | None = None,
+        output_summary: str | None = None,
+        tokens_used: int | None = None,
+        reasoning: str | None = None,
+        confidence: float | None = None,
+        duration_ms: float | None = None,
         **kwargs: Any,
     ) -> CognitiveEvent:
         """
@@ -830,13 +831,13 @@ class EventLogger:
     async def log_activity(
         self,
         activity_name: str,
-        activity_input: Optional[Dict[str, Any]] = None,
-        activity_output: Optional[Any] = None,
+        activity_input: dict[str, Any] | None = None,
+        activity_output: Any | None = None,
         *,
         success: bool = True,
-        error_message: Optional[str] = None,
-        duration_ms: Optional[float] = None,
-        event_type: Union[ActivityEventType, str] = ActivityEventType.ACTIVITY_COMPLETED,
+        error_message: str | None = None,
+        duration_ms: float | None = None,
+        event_type: ActivityEventType | str = ActivityEventType.ACTIVITY_COMPLETED,
         **kwargs: Any,
     ) -> ActivityEvent:
         """
@@ -881,10 +882,10 @@ class EventLogger:
         error_type: str,
         error_message: str,
         *,
-        stack_trace: Optional[str] = None,
+        stack_trace: str | None = None,
         recoverable: bool = True,
         severity: EventSeverity = EventSeverity.ERROR,
-        source_component: Optional[str] = None,
+        source_component: str | None = None,
         **kwargs: Any,
     ) -> ErrorEvent:
         """
@@ -925,8 +926,8 @@ class EventLogger:
         metric_name: str,
         metric_value: float,
         *,
-        metric_unit: Optional[str] = None,
-        metric_type: Optional[str] = None,
+        metric_unit: str | None = None,
+        metric_type: str | None = None,
         **kwargs: Any,
     ) -> MetricEvent:
         """
@@ -960,15 +961,15 @@ class EventLogger:
 
     async def log_hitl(
         self,
-        event_type: Union[HITLEventType, str],
+        event_type: HITLEventType | str,
         request_id: str,
         action_type: str,
         risk_level: str,
         approval_status: str,
         *,
         timeout_occurred: bool = False,
-        responder_id: Optional[str] = None,
-        feedback: Optional[str] = None,
+        responder_id: str | None = None,
+        feedback: str | None = None,
         **kwargs: Any,
     ) -> HITLEvent:
         """
@@ -1011,14 +1012,14 @@ class EventLogger:
 
     async def log_sandbox(
         self,
-        event_type: Union[SandboxEventType, str],
+        event_type: SandboxEventType | str,
         sandbox_type: str,
         operation: str,
         *,
-        sandbox_id: Optional[str] = None,
-        image: Optional[str] = None,
-        exit_code: Optional[int] = None,
-        duration_ms: Optional[float] = None,
+        sandbox_id: str | None = None,
+        image: str | None = None,
+        exit_code: int | None = None,
+        duration_ms: float | None = None,
         **kwargs: Any,
     ) -> SandboxEvent:
         """
@@ -1067,7 +1068,7 @@ class EventLogger:
         """Get error event count."""
         return self._error_count
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get logger statistics.
 
@@ -1093,10 +1094,10 @@ class EventLogger:
 def create_event_logger(
     session_id: str,
     *,
-    log_path: Optional[Union[str, Path]] = None,
+    log_path: str | Path | None = None,
     in_memory: bool = False,
-    execution_id: Optional[str] = None,
-    default_tags: Optional[List[str]] = None,
+    execution_id: str | None = None,
+    default_tags: list[str] | None = None,
 ) -> EventLogger:
     """
     Factory function to create an EventLogger with common configurations.
@@ -1111,7 +1112,7 @@ def create_event_logger(
     Returns:
         Configured EventLogger
     """
-    sinks: List[EventSink] = []
+    sinks: list[EventSink] = []
 
     if log_path:
         sinks.append(JSONLFileSink(Path(log_path)))
