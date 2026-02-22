@@ -78,7 +78,9 @@ admin_api_key = ""
 # semantiscan, and confy. Configuration here is the single source of truth.
 
 [logging]
-# Console logging - set to false to suppress ALL console output
+# Console logging - set to false to suppress most console output.
+# When false, only messages logged with display=True (via log_display())
+# will appear on the console.  Set to true for verbose/debug sessions.
 console_enabled = false
 console_level = "WARNING"        # Minimum level for console (if enabled)
 console_format = "%(levelname)s - %(message)s"
@@ -87,8 +89,19 @@ console_format = "%(levelname)s - %(message)s"
 file_enabled = true
 file_level = "DEBUG"             # Capture full detail in files
 file_directory = "~/.local/share/llmcore/logs"
+
+# File mode: "per_run" (new file each invocation) or "single" (persistent + rotation)
+file_mode = "per_run"
 file_name_pattern = "{app}_{timestamp:%Y%m%d_%H%M%S}.log"
+
+# Single-file mode settings (ignored when file_mode = "per_run"):
+file_single_name = "{app}.log"
 file_format = "%(asctime)s [%(levelname)-8s] %(name)-30s - %(message)s (%(filename)s:%(lineno)d)"
+rotation_max_bytes = 10485760    # 10 MB - rotate when file exceeds this
+rotation_backup_count = 5        # Keep 5 rotated files (.1, .2, .3, .4, .5)
+
+# Minimum level for display=True records on console (even when console_enabled=false)
+display_min_level = "INFO"
 
 # Per-component log levels (override the handlers' levels for specific loggers)
 [logging.components]
