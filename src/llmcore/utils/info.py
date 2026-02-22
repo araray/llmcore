@@ -1,3 +1,4 @@
+# src/llmcore/utils/info.py
 def list_class_members(cls):
     """
     Print sorted lists of methods vs. attributes for the given class.

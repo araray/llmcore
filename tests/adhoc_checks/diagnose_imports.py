@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# tests/adhoc_checks/diagnose_imports.py
 """
 Import Chain Diagnostic for Darwin Layer 2.
 

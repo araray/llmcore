@@ -1,3 +1,4 @@
+# tests/memory/__init__.py
 """
 Memory module tests.
 

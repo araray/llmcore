@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# scripts/apply_step_1_3_patches.py
 """
 Step 1.3 Automated Patch Applicator
 ====================================

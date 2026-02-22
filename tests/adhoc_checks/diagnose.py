@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# tests/adhoc_checks/diagnose.py
 """
 Darwin Layer 2 Diagnostic Script.
 

@@ -1,3 +1,4 @@
+# src/llmcore/model_cards/registry.py
 # llmcore/model_cards/registry.py
 """
 Model Card Registry - Singleton for managing model metadata.

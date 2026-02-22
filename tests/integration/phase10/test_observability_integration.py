@@ -1,3 +1,4 @@
+# tests/integration/phase10/test_observability_integration.py
 """
 Phase 10 Integration Tests: Observability System.
 

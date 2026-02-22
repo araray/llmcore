@@ -1,3 +1,4 @@
+# scripts/check_gemini.py
 from os import environ
 
 from google import genai
