@@ -9,7 +9,6 @@ trace correlation for complex agentic workflows.
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

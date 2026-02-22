@@ -22,7 +22,7 @@ import hashlib
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -350,9 +350,7 @@ class PromptVersion(BaseModel):
         default_factory=list, description="Variable definitions for this template"
     )
     status: VersionStatus = Field(default=VersionStatus.DRAFT, description="Current status")
-    change_description: str | None = Field(
-        default=None, description="What changed in this version"
-    )
+    change_description: str | None = Field(default=None, description="What changed in this version")
     created_by: str | None = Field(default=None, description="Who created this version")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     activated_at: datetime | None = Field(
@@ -437,9 +435,7 @@ class PromptTemplate(BaseModel):
     category: PromptCategory = Field(..., description="Prompt category")
     description: str | None = Field(default=None, description="Template purpose and usage")
     tags: list[str] = Field(default_factory=list, description="Tags for discovery")
-    active_version_id: str | None = Field(
-        default=None, description="Currently active version ID"
-    )
+    active_version_id: str | None = Field(default=None, description="Currently active version ID")
     versions: list[PromptVersion] = Field(
         default_factory=list, description="All versions of this template"
     )

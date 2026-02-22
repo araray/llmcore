@@ -41,7 +41,6 @@ References:
 
 import logging
 import re
-from typing import Dict, List, Optional, Set
 
 from .models import PromptSnippet
 

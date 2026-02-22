@@ -26,9 +26,9 @@ Schema Version History:
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -464,9 +464,7 @@ class BaseSchemaManager(ABC):
         pass
 
     @abstractmethod
-    async def _execute_query(
-        self, sql: str, params: tuple | None = None
-    ) -> list[dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute a query and return results as list of dicts."""
         pass
 
@@ -670,9 +668,7 @@ class PostgresSchemaManager(BaseSchemaManager):
             async with conn.transaction():
                 await conn.execute(sql)
 
-    async def _execute_query(
-        self, sql: str, params: tuple | None = None
-    ) -> list[dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute query and return results."""
         try:
             from psycopg.rows import dict_row
@@ -740,9 +736,7 @@ class SqliteSchemaManager(BaseSchemaManager):
             await self._conn.execute(stmt)
         await self._conn.commit()
 
-    async def _execute_query(
-        self, sql: str, params: tuple | None = None
-    ) -> list[dict[str, Any]]:
+    async def _execute_query(self, sql: str, params: tuple | None = None) -> list[dict[str, Any]]:
         """Execute query and return results."""
         if params:
             cursor = await self._conn.execute(sql, params)

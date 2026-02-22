@@ -19,7 +19,6 @@ Security Model:
 import asyncio
 import logging
 import math
-from typing import Dict, List, Optional
 from collections.abc import Callable
 
 from sqlalchemy import text
@@ -426,9 +425,7 @@ class ToolManager:
         """
         return self._tool_definitions.copy()
 
-    async def execute_tool(
-        self, tool_call: ToolCall, session_id: str | None = None
-    ) -> ToolResult:
+    async def execute_tool(self, tool_call: ToolCall, session_id: str | None = None) -> ToolResult:
         """
         Execute a tool call and return the result.
 

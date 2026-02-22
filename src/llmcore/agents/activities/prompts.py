@@ -13,7 +13,6 @@ References:
     - LLMCORE_AGENTIC_SYSTEM_MASTER_PLAN_G3.md Section 9
 """
 
-from typing import List, Optional
 
 # =============================================================================
 # ACTIVITY SYSTEM PROMPT

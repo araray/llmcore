@@ -34,14 +34,11 @@ import logging
 import re
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
 )
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

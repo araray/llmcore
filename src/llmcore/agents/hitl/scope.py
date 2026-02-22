@@ -18,7 +18,7 @@ import fnmatch
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .models import (
     ApprovalScope,

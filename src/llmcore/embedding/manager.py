@@ -12,7 +12,7 @@ UPDATED: Added async initialize() method for future async initialization needs.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 # Assume ConfyConfig type for hinting
 try:
@@ -58,9 +58,7 @@ class EmbeddingManager:
     _model_init_locks: dict[str, asyncio.Lock]
     _initialized: bool
 
-    def __init__(
-        self, global_config: ConfyConfig, storage_manager: StorageManager | None = None
-    ):
+    def __init__(self, global_config: ConfyConfig, storage_manager: StorageManager | None = None):
         """
         Initializes the EmbeddingManager.
 

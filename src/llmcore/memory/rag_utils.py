@@ -8,7 +8,6 @@ prompt engineering from the main context assembly logic.
 """
 
 import logging
-from typing import Dict, List, Optional
 
 from ..models import ContextDocument
 

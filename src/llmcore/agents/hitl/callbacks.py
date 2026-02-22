@@ -22,7 +22,6 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 from collections.abc import Callable
 
 from .models import (

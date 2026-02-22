@@ -16,9 +16,9 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 try:
@@ -256,9 +256,7 @@ class HITLResponse(BaseModel):
         None, description="Modified parameters if approved with changes"
     )
     # Alias for modified_parameters
-    modified_params: dict[str, Any] | None = Field(
-        None, description="Modified parameters (alias)"
-    )
+    modified_params: dict[str, Any] | None = Field(None, description="Modified parameters (alias)")
     feedback: str | None = Field(None, description="Human feedback/reason")
     responded_at: datetime = Field(default_factory=datetime.now, description="Response time")
     response_time_ms: int = Field(0, description="Response time in milliseconds")

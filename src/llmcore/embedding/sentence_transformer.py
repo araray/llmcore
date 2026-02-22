@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Import sentence-transformers library
 try:
@@ -108,9 +108,7 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
                 model_name=self._model_name_or_path, message=f"Failed to load model: {e}"
             )
 
-    def _load_model_sync(
-        self, model_name_or_path: str, device: str | None
-    ) -> SentenceTransformer:
+    def _load_model_sync(self, model_name_or_path: str, device: str | None) -> SentenceTransformer:
         """Synchronous helper function to load the model."""
         # This function will run in a separate thread via asyncio.to_thread
         return SentenceTransformer(model_name_or_path, device=device)

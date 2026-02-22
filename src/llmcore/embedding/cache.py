@@ -53,11 +53,11 @@ import sqlite3
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from collections.abc import Generator
+from typing import Any
 
 from pydantic import BaseModel, Field
 

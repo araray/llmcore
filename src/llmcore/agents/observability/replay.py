@@ -38,11 +38,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Type, Union
-from collections.abc import Iterator
+from typing import Any
 
 from pydantic import BaseModel
 

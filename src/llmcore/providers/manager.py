@@ -11,7 +11,7 @@ UPDATED: Added async initialize() method for future async provider initializatio
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 # Assume ConfyConfig type for hinting
 try:

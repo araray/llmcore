@@ -24,7 +24,7 @@ import asyncio
 import fnmatch
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from .manifest import (
     ManifestError,

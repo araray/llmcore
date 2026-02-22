@@ -39,10 +39,11 @@ import os
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .registry import ActivityRegistry, ExecutionContext, get_default_registry
 from .schema import (
@@ -52,7 +53,6 @@ from .schema import (
     ActivityStatus,
     RiskLevel,
 )
-from datetime import UTC
 
 if TYPE_CHECKING:
     from ..memory.memory_store import MemoryManager
@@ -893,7 +893,7 @@ class ActivityExecutor:
         metadata = request.parameters.get("metadata", {})
 
         # Add standard metadata
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         metadata.update(
             {

@@ -42,19 +42,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from functools import wraps
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
     TypeVar,
 )
-from collections.abc import AsyncIterator, Callable, Iterator
 
 logger = logging.getLogger(__name__)
 

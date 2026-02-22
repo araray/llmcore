@@ -12,9 +12,9 @@ to eliminate deprecation warnings.
 """
 
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import (
     BaseModel,
@@ -518,9 +518,7 @@ class ModelDetails(BaseModel):
 
     id: str = Field(description="The unique identifier for the model.")
     provider_name: str = Field(description="The name of the provider this model belongs to.")
-    display_name: str | None = Field(
-        default=None, description="Human-friendly name for the model."
-    )
+    display_name: str | None = Field(default=None, description="Human-friendly name for the model.")
     context_length: int = Field(
         default=4096, description="The maximum context window size in tokens."
     )
@@ -610,9 +608,7 @@ class PullProgress(BaseModel):
         default=None, description="Total bytes to download (may be None if unknown)."
     )
     completed_bytes: int | None = Field(default=None, description="Bytes downloaded so far.")
-    percent_complete: float | None = Field(
-        default=None, description="Percentage complete (0-100)."
-    )
+    percent_complete: float | None = Field(default=None, description="Percentage complete (0-100).")
     layer: str | None = Field(
         default=None, description="Current layer identifier (Ollama-specific)."
     )

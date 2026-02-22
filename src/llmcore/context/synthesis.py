@@ -37,8 +37,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timezone
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 

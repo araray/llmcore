@@ -8,7 +8,7 @@ enabling Retrieval Augmented Generation (RAG).
 """
 
 import abc
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Import ContextDocument for type hinting
 # Use forward reference if needed, but direct should be fine

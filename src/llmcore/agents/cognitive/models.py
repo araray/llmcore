@@ -22,7 +22,7 @@ References:
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -151,9 +151,7 @@ class ThinkOutput(BaseModel):
     is_final_answer: bool = Field(
         default=False, description="Whether this provides the final answer"
     )
-    final_answer: str | None = Field(
-        default=None, description="Final answer if task is complete"
-    )
+    final_answer: str | None = Field(default=None, description="Final answer if task is complete")
     confidence: ConfidenceLevel = Field(
         default=ConfidenceLevel.MEDIUM, description="Confidence in the decision"
     )
@@ -433,9 +431,7 @@ class EnhancedAgentState(AgentState):
     )
 
     # Enhanced plan tracking
-    plan_created_at: datetime | None = Field(
-        default=None, description="When the plan was created"
-    )
+    plan_created_at: datetime | None = Field(default=None, description="When the plan was created")
     plan_updated_at: datetime | None = Field(
         default=None, description="When the plan was last updated"
     )
@@ -451,9 +447,7 @@ class EnhancedAgentState(AgentState):
     )
     # === P0 FIX: Added missing fields ===
     # Fix #1: Final answer storage when task completes
-    final_answer: str | None = Field(
-        default=None, description="Final answer when task is complete"
-    )
+    final_answer: str | None = Field(default=None, description="Final answer when task is complete")
 
     # Fix #2: Tool call pending execution from THINK phase
     pending_tool_call: ToolCall | None = None

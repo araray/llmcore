@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
 from re import Pattern
-from collections.abc import Callable
+from typing import Any
 
 from .models import (
     HITLConfig,

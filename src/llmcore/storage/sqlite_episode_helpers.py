@@ -9,8 +9,7 @@ functions are designed to be called by the main SqliteSessionStorage class.
 
 import json
 import logging
-from datetime import datetime, timezone, UTC
-from typing import List
+from datetime import UTC, datetime
 
 try:
     import aiosqlite

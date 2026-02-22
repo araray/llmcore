@@ -27,9 +27,9 @@ References:
 
 import logging
 import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from .cognitive import (
     CognitiveCycle,

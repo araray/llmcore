@@ -18,11 +18,10 @@ References:
 
 from __future__ import annotations
 
-import asyncio
-import pytest
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from llmcore.agents.cognitive.models import (
     EnhancedAgentState,
@@ -30,13 +29,12 @@ from llmcore.agents.cognitive.models import (
     PerceiveOutput,
 )
 from llmcore.agents.cognitive.phases.perceive import (
-    perceive_phase,
-    create_default_synthesizer,
     _parse_synthesized_content,
     _TaskProxy,
+    create_default_synthesizer,
+    perceive_phase,
 )
-from llmcore.context import ContextSynthesizer, ContextChunk, SynthesizedContext
-
+from llmcore.context import ContextChunk, ContextSynthesizer, SynthesizedContext
 
 # =============================================================================
 # FIXTURES
@@ -67,10 +65,12 @@ def perceive_input() -> PerceiveInput:
 def mock_memory_manager() -> AsyncMock:
     """Create a mock memory manager."""
     mm = AsyncMock()
-    mm.retrieve_relevant_context = AsyncMock(return_value=[
-        MagicMock(content="Legacy context item 1"),
-        MagicMock(content="Legacy context item 2"),
-    ])
+    mm.retrieve_relevant_context = AsyncMock(
+        return_value=[
+            MagicMock(content="Legacy context item 1"),
+            MagicMock(content="Legacy context item 2"),
+        ]
+    )
     return mm
 
 
@@ -78,15 +78,17 @@ def mock_memory_manager() -> AsyncMock:
 def mock_synthesizer() -> MagicMock:
     """Create a mock ContextSynthesizer."""
     synth = MagicMock(spec=ContextSynthesizer)
-    synth.synthesize = AsyncMock(return_value=SynthesizedContext(
-        content="## GOALS\n\nGoal content here\n\n---\n\n## RECENT\n\nRecent history",
-        total_tokens=500,
-        max_tokens=100_000,
-        sources_included=["goals", "recent"],
-        sources_truncated=[],
-        compression_applied=False,
-        synthesis_time_ms=10.5,
-    ))
+    synth.synthesize = AsyncMock(
+        return_value=SynthesizedContext(
+            content="## GOALS\n\nGoal content here\n\n---\n\n## RECENT\n\nRecent history",
+            total_tokens=500,
+            max_tokens=100_000,
+            sources_included=["goals", "recent"],
+            sources_truncated=[],
+            compression_applied=False,
+            synthesis_time_ms=10.5,
+        )
+    )
     return synth
 
 
@@ -160,14 +162,10 @@ class TestPerceivePhaseLegacyMode:
         assert output.environmental_state["sandbox_status"] == "running"
 
     @pytest.mark.asyncio
-    async def test_legacy_mode_handles_memory_failure_gracefully(
-        self, agent_state, perceive_input
-    ):
+    async def test_legacy_mode_handles_memory_failure_gracefully(self, agent_state, perceive_input):
         """Legacy mode should return empty context on memory failure."""
         mm = AsyncMock()
-        mm.retrieve_relevant_context = AsyncMock(
-            side_effect=Exception("Memory retrieval failed")
-        )
+        mm.retrieve_relevant_context = AsyncMock(side_effect=Exception("Memory retrieval failed"))
 
         output = await perceive_phase(
             agent_state=agent_state,
@@ -262,12 +260,14 @@ class TestPerceivePhaseSynthesisMode:
     ):
         """Synthesis mode should handle empty synthesized content."""
         synth = MagicMock(spec=ContextSynthesizer)
-        synth.synthesize = AsyncMock(return_value=SynthesizedContext(
-            content="",
-            total_tokens=0,
-            max_tokens=100_000,
-            sources_included=[],
-        ))
+        synth.synthesize = AsyncMock(
+            return_value=SynthesizedContext(
+                content="",
+                total_tokens=0,
+                max_tokens=100_000,
+                sources_included=[],
+            )
+        )
 
         output = await perceive_phase(
             agent_state=agent_state,
@@ -284,9 +284,7 @@ class TestPerceivePhaseSynthesisMode:
     ):
         """Synthesis mode should return empty context on synthesis failure."""
         synth = MagicMock(spec=ContextSynthesizer)
-        synth.synthesize = AsyncMock(
-            side_effect=Exception("Synthesis failed")
-        )
+        synth.synthesize = AsyncMock(side_effect=Exception("Synthesis failed"))
 
         output = await perceive_phase(
             agent_state=agent_state,
@@ -422,6 +420,7 @@ class TestCreateDefaultSynthesizer:
 
     def test_registers_semantic_source_when_retrieval_fn_provided(self):
         """Should register SemanticContextSource when retrieval_fn is provided."""
+
         async def mock_retrieval(query: str, top_k: int = 10):
             return []
 
@@ -446,9 +445,7 @@ class TestPerceivePhaseIntegration:
     """Integration tests using real ContextSynthesizer with mock sources."""
 
     @pytest.mark.asyncio
-    async def test_full_synthesis_with_real_synthesizer(
-        self, agent_state, perceive_input
-    ):
+    async def test_full_synthesis_with_real_synthesizer(self, agent_state, perceive_input):
         """Full integration test with real ContextSynthesizer and mock sources."""
         # Create real synthesizer
         synth = ContextSynthesizer(max_tokens=10_000)

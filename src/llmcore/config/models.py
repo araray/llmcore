@@ -17,7 +17,7 @@ configuration. However, these models can be used for:
 Note: The models here should be kept in sync with semantiscan/config/models.py
 """
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -96,9 +96,7 @@ class SemantiscanEmbeddingModelConfig(BaseModel):
     )
     model_name: str = Field(..., description="Name of the specific model to use")
     device: str = Field("cpu", description="Device for local models (cpu, cuda, mps)")
-    api_key_env: str | None = Field(
-        "", description="Environment variable name holding the API key"
-    )
+    api_key_env: str | None = Field("", description="Environment variable name holding the API key")
     max_request_tokens: int = Field(8000, description="Max tokens per API request batch")
     base_url: str | None = Field("", description="Base URL for API (Ollama, custom endpoints)")
     tokenizer_name: str | None = Field(
@@ -277,9 +275,7 @@ class SemantiscanLLMProviderConfig(BaseModel):
     provider: str = Field(..., description="LLM provider (ollama, openai, anthropic, etc.)")
     model_name: str = Field(..., description="Name of the specific LLM model")
     base_url: str | None = Field("", description="Base URL for API")
-    api_key_env: str | None = Field(
-        "", description="Environment variable name holding the API key"
-    )
+    api_key_env: str | None = Field("", description="Environment variable name holding the API key")
     tokenizer_name: str | None = Field(
         "", description="Specific tokenizer name for context estimation"
     )

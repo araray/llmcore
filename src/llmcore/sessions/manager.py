@@ -8,7 +8,7 @@ and saving to a configured storage backend provided by StorageManager.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..exceptions import LLMCoreError, SessionNotFoundError, SessionStorageError
 from ..models import ChatSession, Role

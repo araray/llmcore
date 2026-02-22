@@ -47,7 +47,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 

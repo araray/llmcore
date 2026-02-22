@@ -14,18 +14,13 @@ wrong names silently became extra dict entries instead of being
 used as config sources.
 """
 
-import os
-import tempfile
 import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_toml(path: Path, content: str) -> str:
     """Write TOML content to a file and return the path string."""
@@ -59,17 +54,22 @@ def _make_user_config(tmp_path: Path, **overrides) -> str:
 # Tests: confy parameter mapping
 # ---------------------------------------------------------------------------
 
+
 class TestConfyParameterNames:
     """Verify LLMCore passes the correct parameter names to confy.Config."""
 
     def test_file_path_is_used_not_config_file_path(self, tmp_path):
         """Config file values must override defaults when file_path is correct."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -87,12 +87,16 @@ class TestConfyParameterNames:
 
     def test_overrides_dict_is_used_not_overrides(self, tmp_path):
         """Override dict values must override everything when overrides_dict is correct."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -130,15 +134,11 @@ class TestConfyParameterNames:
 
         # CORRECT: prefix= — no spurious key
         cfg_correct = Config(defaults=minimal_defaults, prefix="LLMCORE")
-        assert "env_prefix" not in cfg_correct, (
-            "Spurious 'env_prefix' key found — wrong param name"
-        )
+        assert "env_prefix" not in cfg_correct, "Spurious 'env_prefix' key found — wrong param name"
 
         # WRONG (old bug): env_prefix= — creates spurious key
         cfg_wrong = Config(defaults=minimal_defaults, env_prefix="LLMCORE")
-        assert "env_prefix" in cfg_wrong, (
-            "Expected spurious 'env_prefix' key from wrong param name"
-        )
+        assert "env_prefix" in cfg_wrong, "Expected spurious 'env_prefix' key from wrong param name"
 
 
 class TestConfigFileMerging:
@@ -146,12 +146,16 @@ class TestConfigFileMerging:
 
     def test_user_model_overrides_default(self, tmp_path):
         """User config model must replace the hardcoded default."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -164,30 +168,36 @@ class TestConfigFileMerging:
 
     def test_user_api_url_overrides_default(self, tmp_path):
         """User config api_url must replace the default."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
 
-        user_config = _make_user_config(
-            tmp_path, api_url="http://remote-host:11434"
-        )
+        user_config = _make_user_config(tmp_path, api_url="http://remote-host:11434")
         cfg = Config(defaults=defaults, file_path=user_config)
         assert cfg.get("providers.ollama.api_url") == "http://remote-host:11434"
 
     def test_unset_values_keep_defaults(self, tmp_path):
         """Values not in user config must retain defaults."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -212,12 +222,16 @@ class TestConfigFileMerging:
 
     def test_override_dict_takes_highest_precedence(self, tmp_path):
         """overrides_dict must beat both defaults and config file."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -236,12 +250,16 @@ class TestWairuStyleConfigFile:
 
     def test_wairu_config_format(self, tmp_path):
         """Config in wairu's [llmcore.providers.X] format must be loaded."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)
@@ -291,12 +309,16 @@ class TestNoSpuriousKeys:
 
     def test_correct_params_no_extra_keys(self, tmp_path):
         """Using correct param names must not inject extra keys."""
-        from confy.loader import Config
         import tomllib
+
+        from confy.loader import Config
 
         defaults_path = (
             Path(__file__).resolve().parents[2]
-            / "src" / "llmcore" / "config" / "default_config.toml"
+            / "src"
+            / "llmcore"
+            / "config"
+            / "default_config.toml"
         )
         with open(defaults_path, "rb") as f:
             defaults = tomllib.load(f)

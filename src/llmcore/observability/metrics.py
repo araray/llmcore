@@ -62,18 +62,14 @@ import threading
 import time
 from bisect import insort
 from collections import defaultdict
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
 )
-from collections.abc import Generator
 
 import psutil
 from pydantic import BaseModel, Field

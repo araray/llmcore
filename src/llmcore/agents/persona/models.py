@@ -22,7 +22,6 @@ References:
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -222,9 +221,7 @@ class AgentPersona(BaseModel):
         default_factory=datetime.utcnow, description="When persona was created"
     )
 
-    updated_at: datetime | None = Field(
-        default=None, description="When persona was last updated"
-    )
+    updated_at: datetime | None = Field(default=None, description="When persona was last updated")
 
     is_builtin: bool = Field(default=False, description="Whether this is a built-in persona")
 

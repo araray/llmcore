@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncGenerator
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 # Use the official anthropic library
 try:

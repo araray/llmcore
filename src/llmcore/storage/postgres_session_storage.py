@@ -17,8 +17,8 @@ Requires `psycopg` for asynchronous PostgreSQL interaction.
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

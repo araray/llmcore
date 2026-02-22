@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -98,9 +98,7 @@ class Provider(str, Enum):
 class ModelArchitecture(BaseModel):
     """Model architecture details."""
 
-    family: str | None = Field(
-        None, description="Model family (llama, gpt, claude, gemini, etc.)"
-    )
+    family: str | None = Field(None, description="Model family (llama, gpt, claude, gemini, etc.)")
     parameter_count: str | None = Field(
         None, description="Total parameters (e.g., '70B', '8B', '405B')"
     )
@@ -235,12 +233,8 @@ class RateLimits(BaseModel):
 
     requests_per_minute: int | None = Field(None, description="RPM limit")
     tokens_per_minute: int | None = Field(None, description="TPM limit")
-    input_tokens_per_minute: int | None = Field(
-        None, description="Input TPM limit (if separate)"
-    )
-    output_tokens_per_minute: int | None = Field(
-        None, description="Output TPM limit (if separate)"
-    )
+    input_tokens_per_minute: int | None = Field(None, description="Input TPM limit (if separate)")
+    output_tokens_per_minute: int | None = Field(None, description="Output TPM limit (if separate)")
 
 
 class EmbeddingConfig(BaseModel):
@@ -265,9 +259,7 @@ class EmbeddingConfig(BaseModel):
     output_types: list[str] | None = Field(
         None, description="Output types (float, int8, binary, ubinary)"
     )
-    truncation_strategy: str | None = Field(
-        None, description="How input is truncated if too long"
-    )
+    truncation_strategy: str | None = Field(None, description="How input is truncated if too long")
     prefixes: dict[str, str] | None = Field(
         None, description="Required prefixes for different task types"
     )
@@ -381,9 +373,7 @@ class DeepSeekExtension(BaseModel):
 class QwenExtension(BaseModel):
     """Qwen/Alibaba-specific model fields."""
 
-    deployment_regions: list[str] | None = Field(
-        None, description="Available deployment regions"
-    )
+    deployment_regions: list[str] | None = Field(None, description="Available deployment regions")
     thinking_mode: dict[str, Any] | None = Field(None, description="Thinking mode configuration")
     context_tiers: list[dict[str, Any]] | None = Field(
         None, description="Context-based pricing tiers"
@@ -400,9 +390,7 @@ class MistralExtension(BaseModel):
     """Mistral-specific model fields."""
 
     open_weights: bool = Field(False, description="Open weights model")
-    license_type: str | None = Field(
-        None, description="License type (apache-2.0, mrl, commercial)"
-    )
+    license_type: str | None = Field(None, description="License type (apache-2.0, mrl, commercial)")
     fill_in_middle: bool = Field(False, description="Codestral FIM support for code completion")
     guardrails: dict[str, bool] | None = Field(None, description="Available guardrail settings")
     fine_tuning: dict[str, Any] | None = Field(None, description="Fine-tuning capabilities")
@@ -469,9 +457,7 @@ class ModelCard(BaseModel):
     # -------------------------------------------------------------------------
     # Technical Specifications
     # -------------------------------------------------------------------------
-    architecture: ModelArchitecture | None = Field(
-        None, description="Model architecture details"
-    )
+    architecture: ModelArchitecture | None = Field(None, description="Model architecture details")
     context: ModelContext = Field(..., description="Context window configuration")
     capabilities: ModelCapabilities = Field(
         default_factory=ModelCapabilities, description="Supported features"

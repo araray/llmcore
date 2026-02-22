@@ -40,11 +40,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from collections.abc import AsyncIterator, Callable
+from typing import Any
 from uuid import uuid4
 
 from .events import (

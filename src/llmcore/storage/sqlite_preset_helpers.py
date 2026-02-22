@@ -10,8 +10,8 @@ its database connection.
 
 import json
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 try:
     import aiosqlite

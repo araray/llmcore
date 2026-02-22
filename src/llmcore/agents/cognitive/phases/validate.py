@@ -20,7 +20,7 @@ References:
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..models import (
     ConfidenceLevel,
@@ -244,9 +244,7 @@ def _check_dangerous_patterns(tool_call: Any) -> str | None:
     return None
 
 
-def _generate_validation_prompt(
-    validate_input: ValidateInput, prompt_registry: Any | None
-) -> str:
+def _generate_validation_prompt(validate_input: ValidateInput, prompt_registry: Any | None) -> str:
     """
     Generate the validation prompt using prompt library or fallback.
 

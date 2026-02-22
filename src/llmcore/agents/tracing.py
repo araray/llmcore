@@ -17,9 +17,9 @@ Tests Fixed: TestCognitiveCycle::test_cognitive_cycle_single_iteration
 """
 
 import logging
-from contextlib import contextmanager
-from typing import Any, Dict, Optional
 from collections.abc import Generator
+from contextlib import contextmanager
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

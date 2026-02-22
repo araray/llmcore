@@ -195,7 +195,6 @@ class TestModelDetailsToolSupport:
         provider._client.models.list = MagicMock(return_value=mock_response)
 
         # Make the mock awaitable
-        import asyncio
 
         async def mock_list():
             return mock_response

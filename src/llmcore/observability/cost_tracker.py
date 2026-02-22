@@ -60,12 +60,12 @@ import logging
 import sqlite3
 import threading
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone, UTC
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
-from collections.abc import Generator
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 

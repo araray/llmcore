@@ -27,7 +27,7 @@ Exception Hierarchy:
         └── SandboxCleanupError - Failed to cleanup resources
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 # =============================================================================
 # BASE EXCEPTION

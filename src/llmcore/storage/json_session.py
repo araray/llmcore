@@ -13,8 +13,8 @@ import logging
 import os
 import pathlib
 import re  # For validating preset names as filenames
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import aiofiles
 import aiofiles.os as aios
@@ -203,9 +203,7 @@ class JsonSessionStorage(BaseSessionStorage):
                 ):  # Ensure it's a file, not preset dir
                     session_file_path = self._storage_dir / filename
                     try:
-                        async with aiofiles.open(
-                            session_file_path, encoding="utf-8"
-                        ) as f:
+                        async with aiofiles.open(session_file_path, encoding="utf-8") as f:
                             content = await f.read()
                             data = json.loads(content)
                         session_id_from_file = data.get("id")

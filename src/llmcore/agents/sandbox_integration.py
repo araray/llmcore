@@ -35,9 +35,9 @@ SECURITY INVARIANT:
 """
 
 import logging
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Dict, Optional
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any
 
 from .sandbox import (
     SANDBOX_TOOL_IMPLEMENTATIONS,

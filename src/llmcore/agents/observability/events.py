@@ -57,9 +57,9 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -637,9 +637,7 @@ class MetricEvent(AgentEvent):
     metric_unit: str | None = Field(None, description="Unit (ms, bytes, etc.)")
 
     # Aggregation
-    aggregation: str | None = Field(
-        None, description="Aggregation type (sum, avg, max, min, etc.)"
-    )
+    aggregation: str | None = Field(None, description="Aggregation type (sum, avg, max, min, etc.)")
 
     # Additional values for distributions
     min_value: float | None = Field(None, description="Minimum value")

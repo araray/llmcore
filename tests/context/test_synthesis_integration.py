@@ -10,13 +10,12 @@ Covers:
 - Backward compatibility: None compressor/prioritizer → original behaviour
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from llmcore.context.compression import (
     CompressionResult,
-    CompressionStrategy,
     ContextCompressor,
 )
 from llmcore.context.prioritization import (
@@ -27,7 +26,6 @@ from llmcore.context.synthesis import (
     ContextChunk,
     ContextSynthesizer,
     EstimateCounter,
-    SynthesizedContext,
 )
 
 # =============================================================================
@@ -57,7 +55,6 @@ class MockContextSource:
         self.recency = recency
 
     async def get_context(self, task=None, max_tokens=10_000):
-        from llmcore.context.synthesis import ContextChunk
 
         return ContextChunk(
             source="mock",

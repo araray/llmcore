@@ -25,7 +25,7 @@ DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
 import logging
 import time
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

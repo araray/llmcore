@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...memory.manager import MemoryManager

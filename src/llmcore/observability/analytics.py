@@ -42,10 +42,10 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone, UTC
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 from statistics import linear_regression, mean, stdev
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -608,9 +608,7 @@ class CostAnalyzer:
         elif budget_period == "weekly":
             # Week starts on Monday
             week_start = today - timedelta(days=today.weekday())
-            period_start = datetime.combine(week_start, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
+            period_start = datetime.combine(week_start, datetime.min.time()).replace(tzinfo=UTC)
             period_end = period_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
             days_total = 7
         else:  # monthly

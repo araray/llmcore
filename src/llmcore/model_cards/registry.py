@@ -24,7 +24,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from .schema import (
     ModelCard,

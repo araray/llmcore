@@ -14,8 +14,8 @@ of the agent more explicit and easier to modify or extend.
 import json
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

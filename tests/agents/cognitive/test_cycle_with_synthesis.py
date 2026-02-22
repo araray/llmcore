@@ -13,22 +13,20 @@ References:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any
 
+import pytest
+
+from llmcore.agents.cognitive.models import (
+    ConfidenceLevel,
+    EnhancedAgentState,
+    ValidationResult,
+)
 from llmcore.agents.cognitive.phases import (
     CognitiveCycle,
     StreamingIterationResult,
     create_default_synthesizer,
 )
-from llmcore.agents.cognitive.models import (
-    EnhancedAgentState,
-    PerceiveOutput,
-    ValidationResult,
-    ConfidenceLevel,
-)
-
 
 # =============================================================================
 # FIXTURES
@@ -257,30 +255,39 @@ class TestCognitiveCyclePerceiveIntegration:
         outputs = _create_mock_phase_outputs()
 
         # Mock all phase functions to track calls
-        with patch(
-            "llmcore.agents.cognitive.phases.cycle.perceive_phase",
-            return_value=outputs["perceive"],
-        ) as mock_perceive, patch(
-            "llmcore.agents.cognitive.phases.cycle.plan_phase",
-            return_value=outputs["plan"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.think_phase",
-            return_value=outputs["think"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.validate_phase",
-            return_value=outputs["validate"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.act_phase",
-            return_value=outputs["act"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.observe_phase",
-            return_value=outputs["observe"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.reflect_phase",
-            return_value=outputs["reflect"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.update_phase",
-            return_value=outputs["update"],
+        with (
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.perceive_phase",
+                return_value=outputs["perceive"],
+            ) as mock_perceive,
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.plan_phase",
+                return_value=outputs["plan"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.think_phase",
+                return_value=outputs["think"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.validate_phase",
+                return_value=outputs["validate"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.act_phase",
+                return_value=outputs["act"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.observe_phase",
+                return_value=outputs["observe"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.reflect_phase",
+                return_value=outputs["reflect"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.update_phase",
+                return_value=outputs["update"],
+            ),
         ):
             # Run iteration
             await cycle.run_iteration(
@@ -314,30 +321,39 @@ class TestCognitiveCyclePerceiveIntegration:
 
         outputs = _create_mock_phase_outputs()
 
-        with patch(
-            "llmcore.agents.cognitive.phases.cycle.perceive_phase",
-            return_value=outputs["perceive"],
-        ) as mock_perceive, patch(
-            "llmcore.agents.cognitive.phases.cycle.plan_phase",
-            return_value=outputs["plan"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.think_phase",
-            return_value=outputs["think"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.validate_phase",
-            return_value=outputs["validate"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.act_phase",
-            return_value=outputs["act"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.observe_phase",
-            return_value=outputs["observe"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.reflect_phase",
-            return_value=outputs["reflect"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.update_phase",
-            return_value=outputs["update"],
+        with (
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.perceive_phase",
+                return_value=outputs["perceive"],
+            ) as mock_perceive,
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.plan_phase",
+                return_value=outputs["plan"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.think_phase",
+                return_value=outputs["think"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.validate_phase",
+                return_value=outputs["validate"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.act_phase",
+                return_value=outputs["act"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.observe_phase",
+                return_value=outputs["observe"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.reflect_phase",
+                return_value=outputs["reflect"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.update_phase",
+                return_value=outputs["update"],
+            ),
         ):
             await cycle.run_iteration(
                 agent_state=agent_state,
@@ -527,12 +543,8 @@ class TestCognitiveCycleTracingWithSynthesis:
         """Tracing span includes synthesis_mode attribute when using synthesizer."""
         mock_tracer = MagicMock()
         mock_span = MagicMock()
-        mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(
-            return_value=mock_span
-        )
-        mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(
-            return_value=None
-        )
+        mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock(return_value=mock_span)
+        mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=None)
 
         cycle = CognitiveCycle(
             provider_manager=mock_provider_manager,
@@ -545,30 +557,39 @@ class TestCognitiveCycleTracingWithSynthesis:
 
         outputs = _create_mock_phase_outputs()
 
-        with patch(
-            "llmcore.agents.cognitive.phases.cycle.perceive_phase",
-            return_value=outputs["perceive"],
-        ) as mock_perceive, patch(
-            "llmcore.agents.cognitive.phases.cycle.plan_phase",
-            return_value=outputs["plan"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.think_phase",
-            return_value=outputs["think"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.validate_phase",
-            return_value=outputs["validate"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.act_phase",
-            return_value=outputs["act"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.observe_phase",
-            return_value=outputs["observe"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.reflect_phase",
-            return_value=outputs["reflect"],
-        ), patch(
-            "llmcore.agents.cognitive.phases.cycle.update_phase",
-            return_value=outputs["update"],
+        with (
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.perceive_phase",
+                return_value=outputs["perceive"],
+            ) as mock_perceive,
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.plan_phase",
+                return_value=outputs["plan"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.think_phase",
+                return_value=outputs["think"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.validate_phase",
+                return_value=outputs["validate"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.act_phase",
+                return_value=outputs["act"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.observe_phase",
+                return_value=outputs["observe"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.reflect_phase",
+                return_value=outputs["reflect"],
+            ),
+            patch(
+                "llmcore.agents.cognitive.phases.cycle.update_phase",
+                return_value=outputs["update"],
+            ),
         ):
             await cycle.run_iteration(
                 agent_state=agent_state,
@@ -597,7 +618,6 @@ class TestModuleExports:
 
     def test_streaming_result_exported_from_phases(self) -> None:
         """StreamingIterationResult is exported from phases module."""
-        from llmcore.agents.cognitive.phases import StreamingIterationResult
 
         assert StreamingIterationResult is not None
 

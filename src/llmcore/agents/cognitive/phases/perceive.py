@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, PerceiveInput, PerceiveOutput
 
@@ -488,6 +488,6 @@ def create_default_synthesizer(
 # =============================================================================
 
 __all__ = [
-    "perceive_phase",
     "create_default_synthesizer",
+    "perceive_phase",
 ]

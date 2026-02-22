@@ -19,7 +19,7 @@ import logging
 import os
 import pathlib
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     import aiosqlite

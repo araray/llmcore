@@ -22,9 +22,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .executor import ActivityExecutor
 from .parser import ActivityRequestParser, ParseResult

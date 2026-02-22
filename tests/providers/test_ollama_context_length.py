@@ -75,7 +75,9 @@ class TestOllamaContextLengthFromModelCard:
 
         assert result == 262144
         mock_registry.get_context_length.assert_called_once_with(
-            "ollama", "deepseek-r1:7b", default=0,
+            "ollama",
+            "deepseek-r1:7b",
+            default=0,
         )
 
     def test_model_card_returns_zero_falls_to_default(self, ollama_provider):
@@ -122,5 +124,7 @@ class TestOllamaContextLengthFromModelCard:
 
         assert result == 262144
         mock_registry.get_context_length.assert_called_once_with(
-            "ollama", "deepseek-r1:7b", default=0,
+            "ollama",
+            "deepseek-r1:7b",
+            default=0,
         )

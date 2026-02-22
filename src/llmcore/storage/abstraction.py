@@ -33,21 +33,16 @@ Usage:
 """
 
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
     Any,
-    Dict,
     Generic,
-    List,
-    Optional,
     Protocol,
-    Tuple,
     TypeVar,
-    Union,
     runtime_checkable,
 )
-from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 

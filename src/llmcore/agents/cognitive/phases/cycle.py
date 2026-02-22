@@ -16,9 +16,9 @@ References:
 """
 
 import logging
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
-from collections.abc import AsyncIterator, Callable
 
 from ..models import (
     ActInput,

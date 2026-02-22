@@ -61,7 +61,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -175,12 +175,8 @@ class AggregatedFeedback(BaseModel):
     trend: Literal["improving", "declining", "stable"] = Field(
         default="stable", description="Score trend"
     )
-    first_feedback_at: datetime | None = Field(
-        default=None, description="First feedback timestamp"
-    )
-    last_feedback_at: datetime | None = Field(
-        default=None, description="Last feedback timestamp"
-    )
+    first_feedback_at: datetime | None = Field(default=None, description="First feedback timestamp")
+    last_feedback_at: datetime | None = Field(default=None, description="Last feedback timestamp")
     updated_at: datetime = Field(
         default_factory=datetime.utcnow, description="Last update timestamp"
     )

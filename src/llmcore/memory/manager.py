@@ -15,7 +15,7 @@ and coordinate the context preparation process.
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from ..embedding.manager import EmbeddingManager
 from ..exceptions import ConfigError, ContextError

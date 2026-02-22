@@ -20,7 +20,7 @@ References:
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..models import EnhancedAgentState, ReflectInput, ReflectOutput
 

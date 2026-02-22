@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import pathlib
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
@@ -169,9 +169,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             self._client = None
             raise VectorStorageError(f"Could not initialize ChromaDB client: {e}")
 
-    def _sync_get_collection(
-        self, collection_name: str | None
-    ) -> Any:  # Return Any for collection
+    def _sync_get_collection(self, collection_name: str | None) -> Any:  # Return Any for collection
         """
         Synchronously gets or creates a ChromaDB collection.
         Caches retrieved collection objects.
@@ -339,9 +337,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             )
             raise VectorStorageError(f"ChromaDB similarity_search failed: {e}")
 
-    def _sync_delete_documents(
-        self, document_ids: list[str], collection_name: str | None
-    ) -> bool:
+    def _sync_delete_documents(self, document_ids: list[str], collection_name: str | None) -> bool:
         """Synchronous logic to delete documents."""
         if not document_ids:
             return True
@@ -372,9 +368,7 @@ class ChromaVectorStorage(BaseVectorStorage):
             logger.error(f"Failed to list ChromaDB collections: {e}", exc_info=True)
             raise VectorStorageError(f"ChromaDB list_collections failed: {e}")
 
-    def _sync_get_collection_metadata(
-        self, collection_name: str | None
-    ) -> dict[str, Any] | None:
+    def _sync_get_collection_metadata(self, collection_name: str | None) -> dict[str, Any] | None:
         """Synchronous logic to get collection metadata."""
         try:
             collection = self._sync_get_collection(collection_name)  # This handles default name
@@ -491,8 +485,7 @@ class ChromaVectorStorage(BaseVectorStorage):
         if self._client:
             try:
                 logger.info(
-                    "Releasing ChromaDB client reference. "
-                    "Persistent data is retained on disk."
+                    "Releasing ChromaDB client reference. Persistent data is retained on disk."
                 )
             except Exception as e:
                 logger.error(
