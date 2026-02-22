@@ -63,9 +63,9 @@ def reset_logging_manager():
 class TestDefaultLoggingConfig:
     """Tests for default logging configuration."""
 
-    def test_console_enabled_by_default(self):
-        """Test console logging is enabled by default."""
-        assert DEFAULT_LOGGING_CONFIG["console_enabled"] is True
+    def test_console_disabled_by_default(self):
+        """Test console logging is disabled by default."""
+        assert DEFAULT_LOGGING_CONFIG["console_enabled"] is False
 
     def test_file_enabled_by_default(self):
         """Test file logging is enabled by default."""
