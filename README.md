@@ -1,9 +1,6 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/araray/llmcore/main/docs/assets/llmcore_logo.png" alt="LLMCore Logo" width="461"/>
 </p>
-
-<h1 align="center">LLMCore</h1>
-
 <p align="center">
   <strong>A Production-Ready Framework for LLM Applications, Autonomous Agents, and RAG Systems</strong>
 </p>
