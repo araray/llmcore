@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/araray/llmcore/main/docs/assets/llmcore-logo.svg" alt="LLMCore Logo" width="200"/>
+  <img src="https://raw.githubusercontent.com/araray/llmcore/main/docs/assets/llmcore_logo.png" alt="LLMCore Logo" width="200"/>
 </p>
 
 <h1 align="center">LLMCore</h1>
