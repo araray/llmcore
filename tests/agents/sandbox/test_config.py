@@ -1,5 +1,4 @@
 # tests/agents/sandbox/test_config.py
-# tests/sandbox/test_config.py
 """
 Unit tests for sandbox configuration management.
 
@@ -409,7 +408,7 @@ class TestEdgeCases:
         config = load_sandbox_config(overrides=overrides)
 
         assert config.docker.memory_limit == "4g"
-        assert config.docker.image == "python:3.12-alpine"  # Default changed
+        assert config.docker.image == "python:3.11-slim"  # Default from SandboxSystemConfig
 
     def test_invalid_mode_defaults(self):
         """Test invalid mode falls back to docker."""

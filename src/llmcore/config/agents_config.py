@@ -46,11 +46,14 @@ import logging
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from .darwin_config import DarwinConfig
+
+if TYPE_CHECKING:
+    from confy.loader import Config as ConfyConfig
 
 logger = logging.getLogger(__name__)
 
@@ -460,60 +463,125 @@ class AgentsConfig(BaseModel):
 
 
 def load_agents_config(
+    config: "ConfyConfig | None" = None,
+    overrides: dict[str, Any] | None = None,
+    *,
+    # --- Backward-compatible parameters (deprecated) ---
     config_path: Path | None = None,
     config_dict: dict[str, Any] | None = None,
-    overrides: dict[str, Any] | None = None,
 ) -> AgentsConfig:
     """
-    Load agent configuration from TOML file or dictionary.
+    Load agent configuration from a unified confy Config or legacy sources.
 
-    Configuration is loaded and merged in order:
-        1. Default values (from Pydantic models)
-        2. TOML config file (if provided)
-        3. Config dictionary (if provided)
-        4. Environment variables (LLMCORE_AGENTS__*)
-        5. Runtime overrides (if provided)
+    **Preferred (new API)**::
+
+        # From unified confy Config (reads the "agents" section):
+        config = load_agents_config(config=llmcore.config)
+
+        # With runtime overrides:
+        config = load_agents_config(config=llmcore.config, overrides={"max_iterations": 20})
+
+    **Legacy (backward-compatible, deprecated)**::
+
+        # From TOML file:
+        config = load_agents_config(config_path=Path("config.toml"))
+
+        # From dict:
+        config = load_agents_config(config_dict={"agents": {"max_iterations": 20}})
+
+    When ``config`` is provided, the "agents" section is extracted from it.
+    When legacy parameters are used, a temporary confy Config is built internally
+    to perform the same merge (TOML → env → overrides).
 
     Args:
-        config_path: Optional path to TOML config file
-        config_dict: Optional config dictionary (e.g., from LLMCoreConfig.raw_config)
-        overrides: Optional runtime overrides
+        config: Unified confy Config object (from ``LLMCore.config``).
+            Reads the ``"agents"`` section.
+        overrides: Optional runtime overrides (merged last, highest precedence).
+        config_path: *Deprecated.* Path to a TOML config file.
+        config_dict: *Deprecated.* Configuration dictionary with an
+            ``"agents"`` top-level key.
 
     Returns:
-        AgentsConfig instance
-
-    Example:
-        >>> config = load_agents_config(Path("config.toml"))
-        >>> config.goals.classifier_enabled
-        True
-
-        >>> config = load_agents_config(config_dict={"agents": {"goals": {"classifier_enabled": False}}})
-        >>> config.goals.classifier_enabled
-        False
+        Validated ``AgentsConfig`` instance.  Falls back to defaults on
+        validation errors.
     """
-    # Start with empty dict (Pydantic will fill defaults)
-    merged_config: dict[str, Any] = {}
+    import warnings
+
+    agents_dict: dict[str, Any] = {}
+
+    # --- New path: extract from unified confy Config ---
+    if config is not None:
+        agents_section = config.get("agents", {})
+        if hasattr(agents_section, "as_dict"):
+            agents_dict = agents_section.as_dict()
+        elif isinstance(agents_section, dict):
+            agents_dict = dict(agents_section)
+        # Note: env vars already merged by confy when building `config`.
+
+    # --- Legacy path: build from config_path / config_dict ---
+    elif config_path is not None or config_dict is not None:
+        warnings.warn(
+            "load_agents_config(config_path=..., config_dict=...) is deprecated. "
+            "Pass the unified confy Config via config= instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        agents_dict = _load_agents_legacy(config_path, config_dict)
+
+    else:
+        # No arguments: still apply env var overrides (LLMCORE_AGENTS__*).
+        agents_dict = _apply_env_overrides_legacy(agents_dict)
+
+    # --- Apply runtime overrides ---
+    if overrides:
+        try:
+            from confy.loader import deep_merge
+        except ImportError:
+            deep_merge = _deep_merge_fallback  # type: ignore[assignment]
+        agents_dict = deep_merge(agents_dict, overrides)
+
+    # --- Validate and return ---
+    try:
+        return AgentsConfig(**agents_dict)
+    except Exception as e:
+        logger.error(f"Invalid agents configuration: {e}")
+        logger.warning("Using default configuration")
+        return AgentsConfig()
+
+
+# ---------------------------------------------------------------------------
+# Legacy helpers (backward compat)
+# ---------------------------------------------------------------------------
+
+
+def _load_agents_legacy(
+    config_path: Path | None,
+    config_dict: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Load agents dict from legacy TOML-path / dict sources.
+
+    Delegates to confy when available, falls back to manual TOML loading.
+    """
+    merged: dict[str, Any] = {}
 
     # Load from TOML file
     if config_path is not None:
         try:
-            import sys
+            from confy.loader import Config as ActualConfyConfig
 
-            if sys.version_info >= (3, 11):
-                import tomllib
-            else:
-                try:
-                    import tomli as tomllib
-                except ImportError:
-                    tomllib = None
-                    logger.warning("No TOML parser available (install tomli for Python <3.11)")
-
-            if tomllib:
-                with open(config_path, "rb") as f:
-                    full_config = tomllib.load(f)
-                    agents_section = full_config.get("agents", {})
-                    merged_config = _deep_merge(merged_config, agents_section)
-                    logger.debug(f"Loaded agents config from {config_path}")
+            cfg = ActualConfyConfig(
+                file_path=str(config_path),
+                load_dotenv_file=False,
+                prefix=None,
+            )
+            agents_section = cfg.get("agents", {})
+            if hasattr(agents_section, "as_dict"):
+                merged = agents_section.as_dict()
+            elif isinstance(agents_section, dict):
+                merged = dict(agents_section)
+        except ImportError:
+            # confy not available — manual TOML loading
+            merged = _load_toml_agents_section(config_path)
         except FileNotFoundError:
             logger.warning(f"Config file not found: {config_path}")
         except Exception as e:
@@ -522,61 +590,50 @@ def load_agents_config(
     # Merge config dictionary
     if config_dict is not None:
         agents_section = config_dict.get("agents", {})
-        merged_config = _deep_merge(merged_config, agents_section)
+        try:
+            from confy.loader import deep_merge
+        except ImportError:
+            deep_merge = _deep_merge_fallback  # type: ignore[assignment]
+        merged = deep_merge(merged, agents_section)
 
-    # Apply environment variable overrides
-    merged_config = _apply_env_overrides(merged_config)
+    # Apply environment variable overrides (confy handles this when available,
+    # but in legacy mode without a full Config we do it manually)
+    merged = _apply_env_overrides_legacy(merged)
 
-    # Apply runtime overrides
-    if overrides is not None:
-        merged_config = _deep_merge(merged_config, overrides)
+    return merged
 
-    # Create and validate config
+
+def _load_toml_agents_section(config_path: Path) -> dict[str, Any]:
+    """Load the ``[agents]`` section from a TOML file (no confy)."""
     try:
-        return AgentsConfig(**merged_config)
-    except Exception as e:
-        logger.error(f"Invalid agents configuration: {e}")
-        logger.warning("Using default configuration")
-        return AgentsConfig()
+        import sys
 
-
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """
-    Deep merge two dictionaries, with override taking precedence.
-
-    Args:
-        base: Base dictionary
-        override: Override dictionary (values take precedence)
-
-    Returns:
-        Merged dictionary
-    """
-    result = base.copy()
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
+        if sys.version_info >= (3, 11):
+            import tomllib as _tomllib
         else:
-            result[key] = value
-    return result
+            try:
+                import tomli as _tomllib
+            except ImportError:
+                logger.warning("No TOML parser available (install tomli for Python <3.11)")
+                return {}
+
+        with open(config_path, "rb") as f:
+            full_config = _tomllib.load(f)
+            agents_section = full_config.get("agents", {})
+            logger.debug(f"Loaded agents config from {config_path}")
+            return agents_section
+    except FileNotFoundError:
+        logger.warning(f"Config file not found: {config_path}")
+    except Exception as e:
+        logger.warning(f"Failed to load agents config from {config_path}: {e}")
+    return {}
 
 
-def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
-    """
-    Apply environment variable overrides.
+def _apply_env_overrides_legacy(config: dict[str, Any]) -> dict[str, Any]:
+    """Apply ``LLMCORE_AGENTS__*`` environment variable overrides (legacy path).
 
-    Environment variables follow the pattern:
-        LLMCORE_AGENTS__<SECTION>__<KEY>=value
-
-    Examples:
-        LLMCORE_AGENTS__GOALS__CLASSIFIER_ENABLED=false
-        LLMCORE_AGENTS__CIRCUIT_BREAKER__MAX_SAME_ERRORS=5
-        LLMCORE_AGENTS__DARWIN__FAILURE_LEARNING__BACKEND=postgres
-
-    Args:
-        config: Current config dictionary
-
-    Returns:
-        Config with environment overrides applied
+    This is the fallback when the caller does not pass a unified confy Config.
+    When confy is used, its own env-var collection handles this automatically.
     """
     prefix = "LLMCORE_AGENTS__"
 
@@ -598,22 +655,13 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
 
         # Set the value (with type conversion)
         final_key = path_parts[-1]
-        current[final_key] = _convert_env_value(value)
+        current[final_key] = _convert_env_value_legacy(value)
 
     return config
 
 
-def _convert_env_value(value: str) -> Any:
-    """
-    Convert environment variable string to appropriate type.
-
-    Args:
-        value: String value from environment
-
-    Returns:
-        Converted value (bool, int, float, or string)
-    """
-    # Boolean
+def _convert_env_value_legacy(value: str) -> Any:
+    """Convert environment variable string to appropriate type (legacy path)."""
     if value.lower() in ("true", "false"):
         return value.lower() == "true"
 
@@ -631,6 +679,25 @@ def _convert_env_value(value: str) -> Any:
 
     # String
     return value
+
+
+def _deep_merge_fallback(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Minimal deep merge fallback when confy is not installed.
+
+    This preserves backward compatibility for code that imports ``_deep_merge``
+    from this module (e.g. tests).  Prefer ``confy.loader.deep_merge`` instead.
+    """
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge_fallback(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+# Backward-compatible alias — some tests import ``_deep_merge`` directly.
+_deep_merge = _deep_merge_fallback
 
 
 # =============================================================================
@@ -668,4 +735,6 @@ __all__ = [
     "AgentsConfig",
     # Functions
     "load_agents_config",
+    # Backward-compat aliases (prefer confy.loader.deep_merge)
+    "_deep_merge",
 ]

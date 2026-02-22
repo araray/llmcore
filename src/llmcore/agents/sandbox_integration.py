@@ -183,6 +183,9 @@ class SandboxIntegration:
         """
         Create SandboxIntegration from llmcore's configuration object.
 
+        Uses the unified confy Config to extract the ``[agents.sandbox]``
+        section directly, without manual attribute traversal.
+
         Args:
             llmcore_config: The llmcore Config object containing sandbox settings
 
@@ -194,18 +197,7 @@ class SandboxIntegration:
             >>> llm = await LLMCore.create()
             >>> integration = SandboxIntegration.from_llmcore_config(llm.config)
         """
-        # Extract sandbox config section
-        sandbox_dict = {}
-
-        if hasattr(llmcore_config, "agents") and hasattr(llmcore_config.agents, "sandbox"):
-            sandbox_section = llmcore_config.agents.sandbox
-            if hasattr(sandbox_section, "as_dict"):
-                sandbox_dict = sandbox_section.as_dict()
-            elif isinstance(sandbox_section, dict):
-                sandbox_dict = sandbox_section
-
-        # Load and convert config
-        sandbox_config = load_sandbox_config(overrides=sandbox_dict)
+        sandbox_config = load_sandbox_config(config=llmcore_config)
         registry_config = create_registry_config(sandbox_config)
 
         return cls(registry_config)

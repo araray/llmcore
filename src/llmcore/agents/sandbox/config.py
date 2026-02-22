@@ -238,41 +238,49 @@ class SandboxSystemConfig:
         }
 
 
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """
-    Deep merge two dictionaries.
+def _deep_merge_fallback(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Minimal deep merge fallback when confy is not installed.
 
-    Values in override take precedence. Nested dictionaries are merged recursively.
-
-    Args:
-        base: Base dictionary
-        override: Override dictionary
-
-    Returns:
-        Merged dictionary
+    Preserves backward compatibility for code that imports ``_deep_merge``
+    from this module (e.g. tests).  Prefer ``confy.loader.deep_merge`` instead.
     """
     result = base.copy()
 
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
+            result[key] = _deep_merge_fallback(result[key], value)
         else:
             result[key] = value
 
     return result
 
 
-def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge two dictionaries — backward-compatible alias.
+
+    Delegates to ``confy.loader.deep_merge`` when available, otherwise
+    uses the local fallback.
+
+    Args:
+        base: Base dictionary
+        override: Override dictionary (values take precedence)
+
+    Returns:
+        Merged dictionary
     """
-    Apply environment variable overrides to configuration.
+    try:
+        from confy.loader import deep_merge
 
-    Environment variables follow the pattern:
-        LLMCORE_SANDBOX_<SECTION>_<KEY>=value
+        return deep_merge(base, override)
+    except ImportError:
+        return _deep_merge_fallback(base, override)
 
-    Examples:
-        LLMCORE_SANDBOX_MODE=vm
-        LLMCORE_SANDBOX_DOCKER_IMAGE=python:3.12-slim
-        LLMCORE_SANDBOX_VM_HOST=192.168.1.100
+
+def _apply_env_overrides_legacy(config: dict[str, Any]) -> dict[str, Any]:
+    """Apply ``LLMCORE_SANDBOX_*`` environment variable overrides (legacy path).
+
+    This is the fallback when the caller does not pass a unified confy Config.
+    When confy is used, its own env-var collection handles this automatically.
 
     Args:
         config: Configuration dictionary
@@ -293,7 +301,7 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
             # Top-level setting
             config_key = parts[0]
             if config_key in config:
-                config[config_key] = _parse_env_value(value)
+                config[config_key] = _parse_env_value_legacy(value)
         elif len(parts) >= 2:
             # Nested setting
             section = parts[0]
@@ -301,14 +309,13 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
 
             if section in config and isinstance(config[section], dict):
                 if nested_key in config[section]:
-                    config[section][nested_key] = _parse_env_value(value)
+                    config[section][nested_key] = _parse_env_value_legacy(value)
 
     return config
 
 
-def _parse_env_value(value: str) -> Any:
-    """
-    Parse environment variable value to appropriate type.
+def _parse_env_value_legacy(value: str) -> Any:
+    """Parse environment variable value to appropriate type (legacy path).
 
     Args:
         value: String value from environment
@@ -342,15 +349,22 @@ def _parse_env_value(value: str) -> Any:
     return value
 
 
+# Backward-compatible aliases for code that imports the old names.
+_apply_env_overrides = _apply_env_overrides_legacy
+_parse_env_value = _parse_env_value_legacy
+
+
 def load_toml_config(config_path: Path | None = None) -> dict[str, Any]:
-    """
-    Load configuration from TOML file.
+    """Load sandbox configuration from a TOML file (legacy helper).
+
+    .. deprecated::
+        Use the unified confy ``Config`` object instead.
 
     Args:
-        config_path: Path to TOML file (default: ~/.llmcore/config.toml)
+        config_path: Path to TOML file (default: ``~/.llmcore/config.toml``)
 
     Returns:
-        Configuration dictionary
+        Configuration dictionary (``[agents.sandbox]`` section)
     """
     if config_path is None:
         config_path = Path.home() / ".llmcore" / "config.toml"
@@ -385,85 +399,153 @@ def load_toml_config(config_path: Path | None = None) -> dict[str, Any]:
 
 
 def load_sandbox_config(
-    config_path: Path | None = None, overrides: dict[str, Any] | None = None
+    config: "Any | None" = None,
+    overrides: dict[str, Any] | None = None,
+    *,
+    # --- Backward-compatible parameter (deprecated) ---
+    config_path: Path | None = None,
 ) -> SandboxSystemConfig:
     """
     Load complete sandbox system configuration.
 
-    Configuration is loaded and merged in order:
-        1. Default values
-        2. TOML config file
-        3. Environment variables
-        4. Runtime overrides
+    **Preferred (new API)**::
+
+        # From unified confy Config (reads ``agents.sandbox``):
+        config = load_sandbox_config(config=llmcore.config)
+
+        # With runtime overrides:
+        config = load_sandbox_config(config=llmcore.config, overrides={"mode": "vm"})
+
+    **Legacy (backward-compatible, deprecated)**::
+
+        # From TOML file:
+        config = load_sandbox_config(config_path=Path("config.toml"))
+
+        # Just overrides on top of defaults:
+        config = load_sandbox_config(overrides={"mode": "hybrid"})
+
+    Configuration merge order (lowest → highest precedence):
+
+    1. ``DEFAULT_CONFIG`` (module-level defaults)
+    2. Unified confy Config ``agents.sandbox`` section  — or —  TOML file
+    3. ``LLMCORE_SANDBOX_*`` environment variables (legacy path only)
+    4. ``overrides`` dict
 
     Args:
-        config_path: Optional path to TOML config file
-        overrides: Optional runtime overrides
+        config: Unified confy Config object (from ``LLMCore.config``).
+            Reads ``config.get("agents", {}).get("sandbox", {})`` or
+            ``config.agents.sandbox``.
+        overrides: Optional runtime overrides (merged last).
+        config_path: *Deprecated.* Path to a TOML config file.
 
     Returns:
-        SandboxSystemConfig instance
+        ``SandboxSystemConfig`` instance.
     """
+    import copy as _copy
+
     # Start with defaults
-    config = DEFAULT_CONFIG.copy()
+    merged = _copy.deepcopy(DEFAULT_CONFIG)
 
-    # Merge TOML config
-    toml_config = load_toml_config(config_path)
-    if toml_config:
-        config = _deep_merge(config, toml_config)
+    # --- New path: extract from unified confy Config ---
+    if config is not None:
+        sandbox_section: dict[str, Any] = {}
 
-    # Apply environment overrides
-    config = _apply_env_overrides(config)
+        # Try attribute access first (confy Config objects)
+        if hasattr(config, "agents"):
+            agents = getattr(config, "agents", None)
+            if agents is not None and hasattr(agents, "sandbox"):
+                sandbox_obj = getattr(agents, "sandbox", None)
+                if sandbox_obj is not None:
+                    if hasattr(sandbox_obj, "as_dict"):
+                        sandbox_section = sandbox_obj.as_dict()
+                    elif isinstance(sandbox_obj, dict):
+                        sandbox_section = dict(sandbox_obj)
+
+        # Fallback to dict-style access
+        if not sandbox_section:
+            agents_data = config.get("agents", {}) if hasattr(config, "get") else {}
+            if hasattr(agents_data, "get"):
+                sb = agents_data.get("sandbox", {})
+                if hasattr(sb, "as_dict"):
+                    sandbox_section = sb.as_dict()
+                elif isinstance(sb, dict):
+                    sandbox_section = dict(sb)
+
+        if sandbox_section:
+            merged = _deep_merge(merged, sandbox_section)
+
+    # --- Legacy path: load from TOML file ---
+    elif config_path is not None:
+        import warnings
+
+        warnings.warn(
+            "load_sandbox_config(config_path=...) is deprecated. "
+            "Pass the unified confy Config via config= instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        toml_config = load_toml_config(config_path)
+        if toml_config:
+            merged = _deep_merge(merged, toml_config)
+
+        # Apply environment overrides (only in legacy path; confy handles
+        # this automatically in the new path)
+        merged = _apply_env_overrides_legacy(merged)
+
+    else:
+        # No config source — just defaults + env overrides
+        merged = _apply_env_overrides_legacy(merged)
 
     # Apply runtime overrides
     if overrides:
-        config = _deep_merge(config, overrides)
+        merged = _deep_merge(merged, overrides)
 
     # Build typed config objects
     docker_config = DockerConfig(
-        enabled=config["docker"].get("enabled", True),
-        image=config["docker"].get("image", "python:3.11-slim"),
-        image_whitelist=config["docker"].get("image_whitelist", []),
-        full_access_label=config["docker"].get("full_access_label", ""),
-        full_access_name_pattern=config["docker"].get("full_access_name_pattern"),
-        host=config["docker"].get("host"),
-        auto_pull=config["docker"].get("auto_pull", True),
-        memory_limit=config["docker"].get("memory_limit", "1g"),
-        cpu_limit=config["docker"].get("cpu_limit", 2.0),
-        timeout_seconds=config["docker"].get("timeout_seconds", 600),
+        enabled=merged["docker"].get("enabled", True),
+        image=merged["docker"].get("image", "python:3.11-slim"),
+        image_whitelist=merged["docker"].get("image_whitelist", []),
+        full_access_label=merged["docker"].get("full_access_label", ""),
+        full_access_name_pattern=merged["docker"].get("full_access_name_pattern"),
+        host=merged["docker"].get("host"),
+        auto_pull=merged["docker"].get("auto_pull", True),
+        memory_limit=merged["docker"].get("memory_limit", "1g"),
+        cpu_limit=merged["docker"].get("cpu_limit", 2.0),
+        timeout_seconds=merged["docker"].get("timeout_seconds", 600),
     )
 
     vm_config = VMConfig(
-        enabled=config["vm"].get("enabled", False),
-        host=config["vm"].get("host"),
-        port=config["vm"].get("port", 22),
-        username=config["vm"].get("username", "agent"),
-        private_key_path=config["vm"].get("private_key_path"),
-        full_access_hosts=config["vm"].get("full_access_hosts", []),
-        use_ssh_agent=config["vm"].get("use_ssh_agent", True),
-        connection_timeout=config["vm"].get("connection_timeout", 30),
+        enabled=merged["vm"].get("enabled", False),
+        host=merged["vm"].get("host"),
+        port=merged["vm"].get("port", 22),
+        username=merged["vm"].get("username", "agent"),
+        private_key_path=merged["vm"].get("private_key_path"),
+        full_access_hosts=merged["vm"].get("full_access_hosts", []),
+        use_ssh_agent=merged["vm"].get("use_ssh_agent", True),
+        connection_timeout=merged["vm"].get("connection_timeout", 30),
     )
 
     volumes_config = VolumeConfig(
-        share_path=config["volumes"].get("share_path", "~/.llmcore/agent_share"),
-        outputs_path=config["volumes"].get("outputs_path", "~/.llmcore/agent_outputs"),
+        share_path=merged["volumes"].get("share_path", "~/.llmcore/agent_share"),
+        outputs_path=merged["volumes"].get("outputs_path", "~/.llmcore/agent_outputs"),
     )
 
     tools_config = ToolsConfig(
-        allowed=config["tools"].get("allowed", []), denied=config["tools"].get("denied", [])
+        allowed=merged["tools"].get("allowed", []), denied=merged["tools"].get("denied", [])
     )
 
     output_config = OutputTrackingConfig(
-        enabled=config["output_tracking"].get("enabled", True),
-        max_log_entries=config["output_tracking"].get("max_log_entries", 10000),
-        log_input_preview_length=config["output_tracking"].get("log_input_preview_length", 200),
-        log_output_preview_length=config["output_tracking"].get("log_output_preview_length", 500),
-        cleanup_max_age_days=config["output_tracking"].get("cleanup_max_age_days", 30),
-        cleanup_keep_min_runs=config["output_tracking"].get("cleanup_keep_min_runs", 10),
+        enabled=merged["output_tracking"].get("enabled", True),
+        max_log_entries=merged["output_tracking"].get("max_log_entries", 10000),
+        log_input_preview_length=merged["output_tracking"].get("log_input_preview_length", 200),
+        log_output_preview_length=merged["output_tracking"].get("log_output_preview_length", 500),
+        cleanup_max_age_days=merged["output_tracking"].get("cleanup_max_age_days", 30),
+        cleanup_keep_min_runs=merged["output_tracking"].get("cleanup_keep_min_runs", 10),
     )
 
     return SandboxSystemConfig(
-        mode=config.get("mode", "docker"),
-        fallback_enabled=config.get("fallback_enabled", True),
+        mode=merged.get("mode", "docker"),
+        fallback_enabled=merged.get("fallback_enabled", True),
         docker=docker_config,
         vm=vm_config,
         volumes=volumes_config,

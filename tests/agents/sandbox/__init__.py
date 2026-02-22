@@ -1,5 +1,4 @@
 # tests/agents/sandbox/__init__.py
-# tests/sandbox/__init__.py
 """
 Sandbox Test Package.
 

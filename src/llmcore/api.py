@@ -232,6 +232,28 @@ class LLMCore:
         """Context manager exit - clean up resources."""
         await self.close()
 
+    @staticmethod
+    def _load_package_defaults() -> dict[str, Any]:
+        """Load default configuration from the package's ``default_config.toml``.
+
+        Returns:
+            Parsed TOML defaults as a dict, or minimal fallback on error.
+        """
+        try:
+            if hasattr(importlib.resources, "files"):
+                config_files = importlib.resources.files("llmcore.config")
+                default_config_path = config_files / "default_config.toml"
+                with default_config_path.open("rb") as f:
+                    return tomllib.load(f)
+            else:
+                with importlib.resources.open_binary("llmcore.config", "default_config.toml") as f:
+                    return tomllib.load(f)
+        except Exception as e:
+            logger.warning(
+                f"Could not load default config from package: {e}. Using minimal defaults."
+            )
+            return {"llmcore": {"default_provider": "ollama"}}
+
     async def _initialize_from_config(
         self,
         config_overrides: dict[str, Any] | None,
@@ -241,9 +263,20 @@ class LLMCore:
         """
         Initializes or re-initializes all components from a configuration.
 
-        This method is used by both `create` and `reload_config`.
+        This method is used by both ``create`` and ``reload_config``.
         It sets up all managers (providers, storage, sessions, memory, embeddings)
         based on the loaded configuration.
+
+        Uses confy's multi-file loading and app-defaults capabilities to build a
+        single unified configuration object.  The merge order (lowest → highest
+        precedence) is:
+
+        1. Package defaults (``default_config.toml``)
+        2. Downstream app defaults (e.g. semantiscan ``DEFAULT_CONFIG``)
+        3. User config file (``~/.config/llmcore/config.toml``, if present)
+        4. Custom config file (``config_file_path`` argument)
+        5. Environment variables (``LLMCORE_*``, ``SEMANTISCAN_*``, …)
+        6. ``config_overrides`` dict
 
         Args:
             config_overrides: Optional configuration overrides
@@ -257,34 +290,46 @@ class LLMCore:
             if not tomllib:
                 raise ImportError("tomli (for Python < 3.11) or tomllib is required.")
 
-            # Load default config from package
-            try:
-                if hasattr(importlib.resources, "files"):
-                    config_files = importlib.resources.files("llmcore.config")
-                    default_config_path = config_files / "default_config.toml"
-                    with default_config_path.open("rb") as f:
-                        default_config_dict = tomllib.load(f)
-                else:
-                    with importlib.resources.open_binary(
-                        "llmcore.config", "default_config.toml"
-                    ) as f:
-                        default_config_dict = tomllib.load(f)
-            except Exception as e:
-                logger.warning(
-                    f"Could not load default config from package: {e}. Using minimal defaults."
-                )
-                default_config_dict = {"llmcore": {"default_provider": "ollama"}}
+            # --- Load package defaults ---
+            default_config_dict = self._load_package_defaults()
 
-            # Initialize Confy with all sources
+            # --- Build ordered file paths list ---
+            # Confy merges files in order; later files override earlier ones.
+            effective_file_paths: list[str | tuple[str, str]] = []
+
+            # User config (~/.config/llmcore/config.toml) if it exists
+            user_config = pathlib.Path("~/.config/llmcore/config.toml").expanduser()
+            if user_config.exists():
+                effective_file_paths.append(str(user_config))
+
+            # Custom config file (if provided by caller)
+            if config_file_path:
+                effective_file_paths.append(config_file_path)
+
+            # --- Discover downstream app defaults (optional imports) ---
+            app_defaults: dict[str, dict[str, Any]] = {}
+            app_prefixes: dict[str, str] = {}
+
+            try:
+                from semantiscan.config.loader import DEFAULT_CONFIG as SS_DEFAULTS
+
+                app_defaults["semantiscan"] = SS_DEFAULTS
+                app_prefixes["semantiscan"] = "SEMANTISCAN"
+            except ImportError:
+                pass  # semantiscan not installed — fine
+
+            # --- Build unified Config ---
             # CRITICAL: Parameter names must match confy.Config.__init__ exactly:
-            #   file_path (not config_file_path)
-            #   prefix (not env_prefix)
-            #   overrides_dict (not overrides)
+            #   file_paths  (multi-file list, Phase 1)
+            #   prefix      (env var prefix)
+            #   overrides_dict (highest-precedence overrides)
             self.config = ActualConfyConfig(
                 defaults=default_config_dict,
-                file_path=config_file_path,
+                file_paths=effective_file_paths if effective_file_paths else None,
                 prefix=env_prefix,
                 overrides_dict=config_overrides,
+                app_defaults=app_defaults if app_defaults else None,
+                app_prefixes=app_prefixes if app_prefixes else None,
             )
 
             # Phase 7: Track configuration state for diff/sync operations

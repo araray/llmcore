@@ -1,5 +1,4 @@
 # tests/agents/sandbox/test_registry.py
-# tests/sandbox/test_registry.py
 """
 Unit tests for the SandboxRegistry class.
 

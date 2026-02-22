@@ -1,5 +1,4 @@
 # tests/agents/sandbox/test_exceptions.py
-# tests/sandbox/test_exceptions.py
 """
 Unit tests for sandbox exception classes.
 

@@ -1,5 +1,4 @@
 # tests/agents/sandbox/test_integration.py
-# tests/sandbox/test_integration.py
 """
 Integration tests for the sandbox system.
 
