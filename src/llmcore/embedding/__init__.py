@@ -35,6 +35,18 @@ from .cache import (
 from .manager import EmbeddingManager
 from .sentence_transformer import SentenceTransformerEmbedding
 
+# Optional providers — imported lazily to avoid hard dependency on their SDKs.
+# Users should install the relevant package (cohere, voyageai) before use.
+try:
+    from .cohere import CohereEmbedding
+except ImportError:
+    CohereEmbedding = None  # type: ignore[assignment,misc]
+
+try:
+    from .voyageai import VoyageAIEmbedding
+except ImportError:
+    VoyageAIEmbedding = None  # type: ignore[assignment,misc]
+
 # Define what gets imported with 'from llmcore.embedding import *'
 __all__ = [
     # Base classes
@@ -48,4 +60,7 @@ __all__ = [
     "LRUCache",
     "DiskCache",
     "create_embedding_cache",
+    # Optional providers (may be None if SDK not installed)
+    "CohereEmbedding",
+    "VoyageAIEmbedding",
 ]

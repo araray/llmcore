@@ -39,6 +39,16 @@ EMBEDDING_PROVIDER_CLASS_MAP: dict[str, type[BaseEmbeddingModel]] = {
     "ollama": OllamaEmbedding,
 }
 
+# Lazy-loaded providers that require optional dependencies.
+# These are resolved in _resolve_provider_class() to avoid ImportError
+# at module load time when the SDK is not installed.
+_LAZY_PROVIDER_MAP: dict[str, tuple[str, str]] = {
+    # key: (module_path_relative_to_embedding_pkg, class_name)
+    "cohere": (".cohere", "CohereEmbedding"),
+    "voyageai": (".voyageai", "VoyageAIEmbedding"),
+    "voyage": (".voyageai", "VoyageAIEmbedding"),  # alias
+}
+
 
 class EmbeddingManager:
     """
@@ -147,16 +157,25 @@ class EmbeddingManager:
                 provider_type_for_map = parts[0].lower()
                 actual_model_name_for_class = parts[1]
                 if provider_type_for_map not in EMBEDDING_PROVIDER_CLASS_MAP:
-                    raise ConfigError(
-                        f"Unknown embedding provider type '{provider_type_for_map}' in identifier '{model_identifier}'. "
-                        f"Known types: {list(EMBEDDING_PROVIDER_CLASS_MAP.keys())}"
-                    )
+                    # Try lazy-loaded providers
+                    resolved = self._resolve_lazy_provider(provider_type_for_map)
+                    if resolved is None:
+                        raise ConfigError(
+                            f"Unknown embedding provider type '{provider_type_for_map}' in identifier '{model_identifier}'. "
+                            f"Known types: {list(EMBEDDING_PROVIDER_CLASS_MAP.keys()) + list(_LAZY_PROVIDER_MAP.keys())}"
+                        )
             else:
                 # Default to sentence-transformers if no prefix
                 provider_type_for_map = "sentence-transformers"
                 actual_model_name_for_class = model_identifier
 
-            EmbeddingCls = EMBEDDING_PROVIDER_CLASS_MAP[provider_type_for_map]
+            EmbeddingCls = EMBEDDING_PROVIDER_CLASS_MAP.get(provider_type_for_map)
+            if EmbeddingCls is None:
+                EmbeddingCls = self._resolve_lazy_provider(provider_type_for_map)
+            if EmbeddingCls is None:
+                raise ConfigError(
+                    f"Could not resolve embedding provider '{provider_type_for_map}'."
+                )
 
             # Get the base configuration block for this provider type from global config
             config_section_key_for_provider = provider_type_for_map
@@ -180,10 +199,9 @@ class EmbeddingManager:
             # The individual embedding classes expect the model name under a specific key
             if EmbeddingCls == SentenceTransformerEmbedding:
                 instance_config["model_name_or_path"] = actual_model_name_for_class
-            elif EmbeddingCls in [OpenAIEmbedding, GoogleAIEmbedding, OllamaEmbedding]:
-                instance_config["default_model"] = actual_model_name_for_class
             else:
-                instance_config["model_name"] = actual_model_name_for_class
+                # OpenAI, Google, Ollama, Cohere, VoyageAI all use 'default_model'
+                instance_config["default_model"] = actual_model_name_for_class
 
             logger.debug(
                 f"Instantiating {EmbeddingCls.__name__} with model '{actual_model_name_for_class}' "
@@ -214,6 +232,45 @@ class EmbeddingManager:
                 raise EmbeddingError(
                     model_name=model_identifier, message=f"Initialization failed: {e_init}"
                 ) from e_init
+
+    @staticmethod
+    def _resolve_lazy_provider(provider_type: str) -> type[BaseEmbeddingModel] | None:
+        """Resolve a lazily-loaded embedding provider class.
+
+        Looks up ``provider_type`` in :data:`_LAZY_PROVIDER_MAP`, performs
+        a dynamic import, registers the class in
+        :data:`EMBEDDING_PROVIDER_CLASS_MAP` for future fast-path access,
+        and returns the class.
+
+        Returns:
+            The embedding model class, or *None* if *provider_type* is
+            unknown or the required SDK is not installed.
+        """
+        spec = _LAZY_PROVIDER_MAP.get(provider_type)
+        if spec is None:
+            return None
+
+        module_path, class_name = spec
+        try:
+            import importlib
+
+            mod = importlib.import_module(module_path, package="llmcore.embedding")
+            cls: type[BaseEmbeddingModel] = getattr(mod, class_name)
+            # Cache for subsequent calls
+            EMBEDDING_PROVIDER_CLASS_MAP[provider_type] = cls
+            logger.debug("Lazy-loaded embedding provider '%s' → %s.", provider_type, class_name)
+            return cls
+        except ImportError as exc:
+            logger.warning(
+                "Embedding provider '%s' requires library '%s' which is not installed: %s",
+                provider_type,
+                module_path,
+                exc,
+            )
+            return None
+        except Exception as exc:
+            logger.error("Failed to lazy-load embedding provider '%s': %s", provider_type, exc)
+            return None
 
     async def generate_embedding(
         self, text: str, model_identifier: str | None = None

@@ -2,19 +2,33 @@
 """
 Storage Tiers Package.
 
-This package provides tiered storage implementations for different
-access patterns and performance requirements.
+Provides tiered storage implementations for different access patterns
+and performance requirements.
 
 Tiers:
-- VolatileMemoryTier: In-memory storage with TTL for session data
-- (Future) CachedTier: Disk-based LRU cache for warm data
-- (Future) PersistentTier: Database-backed storage for cold data
+- **VolatileMemoryTier** (hot): In-memory storage with TTL for session data
+- **CachedStorageTier** (warm): Disk-based LRU cache for frequently accessed data
+- **PersistentStorageTier** (cold): Database-backed durable storage
+
+Architecture::
+
+    VolatileMemoryTier → CachedStorageTier → PersistentStorageTier
+         (memory)           (SQLite LRU)        (SQLite/PostgreSQL)
 
 References:
-- UNIFIED_IMPLEMENTATION_PLAN.md Phase 3, Task 3.1
-- Storage_System_Spec_v2r0.md Section 3 (Tiered Architecture)
+    - UNIFIED_ECOSYSTEM_SPECIFICATION.md §7.1 (Storage Tiers)
 """
 
+from .cached import (
+    CachedStorageConfig,
+    CachedStorageTier,
+    create_cached_tier,
+)
+from .persistent import (
+    PersistentStorageConfig,
+    PersistentStorageTier,
+    create_persistent_tier,
+)
 from .volatile import (
     VolatileItem,
     VolatileMemoryConfig,
@@ -23,8 +37,17 @@ from .volatile import (
 )
 
 __all__ = [
+    # Volatile (hot)
     "VolatileItem",
     "VolatileMemoryConfig",
     "VolatileMemoryTier",
     "create_volatile_tier",
+    # Cached (warm)
+    "CachedStorageConfig",
+    "CachedStorageTier",
+    "create_cached_tier",
+    # Persistent (cold)
+    "PersistentStorageConfig",
+    "PersistentStorageTier",
+    "create_persistent_tier",
 ]

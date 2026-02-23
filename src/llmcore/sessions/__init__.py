@@ -3,14 +3,19 @@
 Session management module for the LLMCore library.
 
 This package handles the lifecycle and content of chat sessions,
-including conversation history. It interacts with storage backends
-for persistence.
+including conversation history and crash recovery for autonomous agents.
+
+Components:
+    - SessionManager: Core session CRUD operations
+    - SessionRecovery: Checkpoint-based crash recovery
 """
 
-# This file intentionally left largely blank.
-# Its presence makes 'llmcore.sessions' a Python package.
-# The SessionManager class will be a key component of this package.
+from .manager import SessionManager
+from .recovery import CheckpointStatus, RecoveryCheckpoint, SessionRecovery
 
-# Example:
-# from .manager import SessionManager
-# __all__ = ["SessionManager"]
+__all__ = [
+    "SessionManager",
+    "SessionRecovery",
+    "RecoveryCheckpoint",
+    "CheckpointStatus",
+]

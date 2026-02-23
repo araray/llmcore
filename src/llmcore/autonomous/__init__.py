@@ -76,6 +76,13 @@ from .resource import (
     ResourceUsage,
 )
 
+# Scheduler (Phase 2 — wraps HeartbeatManager)
+from .scheduler import (
+    AutonomousScheduler,
+    ScheduledTask,
+    TaskPriority,
+)
+
 # Skill Loading (Phase 3)
 from .skills import (
     Skill,
@@ -88,6 +95,10 @@ from .state import (
     AutonomousState,
     StateManager,
 )
+
+# Context redirect (Phase 3 — delegates to llmcore.context)
+# NOTE: Not imported at package level to avoid circular imports.
+# Use ``from llmcore.autonomous.context import ContextSynthesizer`` directly.
 
 __all__ = [
     # Goals
@@ -124,4 +135,8 @@ __all__ = [
     # State
     "AutonomousState",
     "StateManager",
+    # Scheduler
+    "AutonomousScheduler",
+    "ScheduledTask",
+    "TaskPriority",
 ]

@@ -2,15 +2,34 @@
 """
 Memory management module for the LLMCore library.
 
-This package is responsible for assembling the final context payload
-sent to the LLM provider and managing the hierarchical memory system.
-It handles token limits, Retrieval Augmented Generation (RAG) logic,
-episodic memory retrieval, and other context-aware operations.
+This package provides the hierarchical memory system with five tiers:
 
-The MemoryManager serves as the central, intelligent retrieval interface
-for the entire three-tiered memory system (Semantic, Episodic, and Working Memory).
+1. **Volatile** — In-memory working context (fast, ephemeral)
+2. **Session** — Conversation-scoped persistent memory
+3. **Semantic** — Long-term knowledge via embedding-based retrieval (RAG)
+4. **Episodic** — Past experiences and outcomes for learning
+5. **Hierarchical** — Coordinator across all tiers
+
+The :class:`MemoryManager` serves as the primary interface for context
+preparation and retrieval orchestration.
+
+Sub-modules:
+    - ``memory.volatile`` — Volatile memory tier
+    - ``memory.session`` — Session memory tier
+    - ``memory.semantic`` — Semantic memory (RAG) tier
+    - ``memory.episodic`` — Episodic memory tier
+    - ``memory.hierarchical`` — Cross-tier coordinator
+
+References:
+    - UNIFIED_ECOSYSTEM_SPECIFICATION.md §8 (Memory System)
 """
 
+from .hierarchical import HierarchicalMemoryManager, MemoryItem, MemoryTier
 from .manager import MemoryManager
 
-__all__ = ["MemoryManager"]
+__all__ = [
+    "MemoryManager",
+    "HierarchicalMemoryManager",
+    "MemoryItem",
+    "MemoryTier",
+]

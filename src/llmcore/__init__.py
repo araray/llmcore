@@ -1,33 +1,81 @@
 # src/llmcore/__init__.py
 """
-LLMCore - A comprehensive library for LLM interaction, session management, and RAG.
+LLMCore — Comprehensive AI Agent Infrastructure Library.
 
-This library provides a unified interface for working with multiple LLM providers,
+Provides a unified interface for working with multiple LLM providers,
 managing conversation sessions, implementing Retrieval Augmented Generation (RAG),
-and supporting hierarchical memory including episodic memory for agent experiences.
+supporting hierarchical memory (including episodic memory for agent experiences),
+and orchestrating autonomous agents via the Darwin cognitive cycle.
 
-UPDATED v0.26.0: Added sandbox system for isolated agent code execution.
-                 AgentManager now supports optional sandbox integration.
+Key subsystems:
+    - **Providers**: OpenAI, Anthropic, Google/Gemini, Ollama + OpenAI-compatible
+      (DeepSeek, Mistral, xAI, Groq, Together)
+    - **Agents**: 8-phase Darwin cognitive cycle, personas, HITL, sandboxing
+    - **Memory**: Volatile / Session / Semantic / Episodic tiers
+    - **Storage**: SQLite, PostgreSQL, ChromaDB, pgvector backends
+    - **Embedding**: OpenAI, Google, Ollama, SentenceTransformers, Cohere, VoyageAI
+    - **Context**: Adaptive Context Synthesis with compression & prioritization
+    - **Autonomous**: Goal management, heartbeat scheduling, resource monitoring
+    - **Observability**: Cost tracking, metrics, structured events, tracing
+
+Most classes can be imported directly from ``llmcore``::
+
+    from llmcore import (
+        LLMCore,
+        AgentManager,
+        ContextSynthesizer,
+        GoalManager,
+        MemoryManager,
+        StorageManager,
+    )
+
+For advanced or less-common types, import from sub-packages::
+
+    from llmcore.agents.hitl import HITLManager
+    from llmcore.autonomous import AutonomousScheduler
+
+Version: 0.41.1
 """
 
 from importlib.metadata import PackageNotFoundError, version
 
 # =============================================================================
-# SANDBOX EXPORTS (NEW in v0.26.0)
+# AGENTS (Darwin Layer 2)
 # =============================================================================
-# These exports provide access to the sandbox system for isolated agent execution.
-# Import these directly from llmcore or from llmcore.agents.sandbox
 from .agents import (
+    # Sandbox: core classes
     SANDBOX_TOOL_IMPLEMENTATIONS,
     SANDBOX_TOOL_SCHEMAS,
+    # Resilience
+    AgentCircuitBreaker,
+    # Core managers
     AgentManager,
-    # Sandbox providers
+    AgentMode,
+    # Persona system
+    AgentPersona,
+    # Single agent
+    AgentResult,
+    # Routing
+    CapabilityChecker,
+    # Cognitive cycle
+    CognitiveCycle,
+    # Memory integration
+    CognitiveMemoryIntegrator,
+    CognitivePhase,
     DockerSandboxProvider,
-    # Sandbox utilities
+    EnhancedAgentManager,
+    EnhancedAgentState,
     EphemeralResourceManager,
     ExecutionResult,
     FileInfo,
     OutputTracker,
+    PersonaManager,
+    # Prompts
+    PromptComposer,
+    PromptRegistry,
+    PromptTemplate,
+    # Context
+    RAGContextFilter,
     SandboxAccessDenied,
     SandboxAccessLevel,
     SandboxAgentMixin,
@@ -35,43 +83,105 @@ from .agents import (
     SandboxConfig,
     SandboxConnectionError,
     SandboxContext,
-    # Sandbox exceptions
     SandboxError,
     SandboxExecutionError,
     SandboxInitializationError,
-    # Integration bridge
     SandboxIntegration,
     SandboxMode,
     SandboxProvider,
-    # Sandbox core classes
     SandboxRegistry,
     SandboxRegistryConfig,
     SandboxResourceError,
     SandboxStatus,
     SandboxTimeoutError,
+    SingleAgentMode,
+    # Tools
     ToolManager,
     VMSandboxProvider,
     clear_active_sandbox,
     create_registry_config,
     get_active_sandbox,
     get_sandbox_tool_definitions,
-    # Sandbox configuration helpers
     load_sandbox_config,
     register_sandbox_tools,
-    # Sandbox tool management
     set_active_sandbox,
 )
+
+# =============================================================================
+# HITL (via agents — tightly coupled to agent execution)
+# =============================================================================
+from .agents.hitl import (
+    HITLConfig,
+    HITLManager,
+    RiskAssessor,
+    RiskLevel,
+)
+
+# =============================================================================
+# CORE API
+# =============================================================================
 from .api import LLMCore
 
 # =============================================================================
-# EMBEDDING CACHE MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+# AUTONOMOUS
 # =============================================================================
-# These exports provide embedding caching for cost reduction.
+from .autonomous import (
+    AutonomousScheduler,
+    AutonomousState,
+    ConstraintViolation,
+    Escalation,
+    EscalationLevel,
+    EscalationManager,
+    EscalationReason,
+    Goal,
+    GoalManager,
+    GoalPriority,
+    GoalStatus,
+    GoalStore,
+    HeartbeatManager,
+    HeartbeatTask,
+    ResourceConstraints,
+    ResourceMonitor,
+    ResourceStatus,
+    Skill,
+    SkillLoader,
+    SkillMetadata,
+    StateManager,
+    SuccessCriterion,
+    TaskPriority,
+    heartbeat_task,
+)
+
+# =============================================================================
+# CONTEXT (Adaptive Context Synthesis)
+# =============================================================================
+from .context import (
+    ContentPrioritizer,
+    ContextChunk,
+    ContextCompressor,
+    ContextSource,
+    ContextSynthesizer,
+    EstimateCounter,
+    SynthesizedContext,
+    TiktokenCounter,
+    TokenCounter,
+)
+
+# =============================================================================
+# EMBEDDING
+# =============================================================================
 from .embedding import (
+    BaseEmbeddingModel,
     EmbeddingCache,
     EmbeddingCacheConfig,
+    EmbeddingManager,
+    SentenceTransformerEmbedding,
     create_embedding_cache,
 )
+
+# =============================================================================
+# EXCEPTIONS
+# =============================================================================
 from .exceptions import (
     ConfigError,
     ContextError,
@@ -86,9 +196,8 @@ from .exceptions import (
 )
 
 # =============================================================================
-# INGESTION MODULE (Phase 3 SYMBIOSIS)
+# INGESTION
 # =============================================================================
-# These exports provide chunking strategies for document ingestion.
 from .ingestion import (
     Chunk,
     ChunkingConfig,
@@ -99,9 +208,8 @@ from .ingestion import (
 )
 
 # =============================================================================
-# INTEGRATION MODULE (Phase 3 SYMBIOSIS)
+# INTEGRATION
 # =============================================================================
-# These exports provide integration points for external RAG engines.
 from .integration import (
     LLMCoreVectorClient,
     LLMCoreVectorClientConfig,
@@ -109,9 +217,13 @@ from .integration import (
 )
 
 # =============================================================================
-# MODEL CARD LIBRARY EXPORTS (Phase 4 Integration)
+# MEMORY
 # =============================================================================
-# These exports provide access to the Model Card Library for model metadata.
+from .memory import MemoryManager
+
+# =============================================================================
+# MODEL CARD LIBRARY
+# =============================================================================
 from .model_cards import (
     AnthropicExtension,
     ArchitectureType,
@@ -119,12 +231,9 @@ from .model_cards import (
     EmbeddingConfig,
     GoogleExtension,
     MistralExtension,
-    # Schema components
     ModelArchitecture,
     ModelCapabilities,
-    # Core models
     ModelCard,
-    # Registry
     ModelCardRegistry,
     ModelCardSummary,
     ModelContext,
@@ -132,10 +241,8 @@ from .model_cards import (
     ModelPricing,
     ModelStatus,
     ModelType,
-    # Provider extensions
     OllamaExtension,
     OpenAIExtension,
-    # Enums
     Provider,
     QwenExtension,
     TokenPricing,
@@ -144,6 +251,10 @@ from .model_cards import (
     get_model_card,
     get_model_card_registry,
 )
+
+# =============================================================================
+# DATA MODELS
+# =============================================================================
 from .models import (
     AgentState,
     AgentTask,
@@ -170,20 +281,40 @@ from .models import (
 )
 
 # =============================================================================
-# OBSERVABILITY MODULE (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
+# OBSERVABILITY
 # =============================================================================
-# These exports provide cost tracking and observability features.
 from .observability import (
     PRICING_DATA,
+    CostAnalyzer,
     CostTracker,
     CostTrackingConfig,
+    MetricsRegistry,
+    ObservabilityLogger,
     UsageRecord,
     UsageSummary,
     create_cost_tracker,
     get_price_per_million_tokens,
 )
+
+# =============================================================================
+# PROVIDERS
+# =============================================================================
+from .providers.base import BaseProvider
+from .providers.manager import ProviderManager
+
+# =============================================================================
+# SESSIONS
+# =============================================================================
+from .sessions.manager import SessionManager
+
+# =============================================================================
+# STORAGE
+# =============================================================================
 from .storage import StorageManager
 
+# =============================================================================
+# VERSION
+# =============================================================================
 try:
     __version__ = version("llmcore")
 except PackageNotFoundError:
@@ -192,14 +323,16 @@ except PackageNotFoundError:
     __version__ = _get_version_from_pyproject()
 
 
+# =============================================================================
+# PUBLIC API (__all__)
+# =============================================================================
 __all__ = [
-    # ==========================================================================
-    # Core API
-    # ==========================================================================
+    # -- Core API --
     "LLMCore",
-    # ==========================================================================
-    # Data Models
-    # ==========================================================================
+    # -- Providers --
+    "BaseProvider",
+    "ProviderManager",
+    # -- Data Models --
     "ChatSession",
     "Message",
     "Role",
@@ -220,42 +353,9 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "ContextPreparationDetails",
-    # ==========================================================================
-    # Model Card Library
-    # ==========================================================================
-    # Core models
-    "ModelCard",
-    "ModelCardSummary",
-    # Schema components
-    "ModelArchitecture",
-    "ModelContext",
-    "ModelCapabilities",
-    "ModelPricing",
-    "ModelLifecycle",
-    "TokenPricing",
-    # Enums
-    "Provider",
-    "ModelType",
-    "ModelStatus",
-    "ArchitectureType",
-    # Provider extensions
-    "OllamaExtension",
-    "OpenAIExtension",
-    "AnthropicExtension",
-    "GoogleExtension",
-    "DeepSeekExtension",
-    "QwenExtension",
-    "MistralExtension",
-    "XAIExtension",
-    "EmbeddingConfig",
-    # Registry
-    "ModelCardRegistry",
-    "get_model_card_registry",
-    "get_model_card",
-    "clear_model_card_cache",
-    # ==========================================================================
-    # Core Exceptions
-    # ==========================================================================
+    "SessionTokenStats",
+    "CostEstimate",
+    # -- Exceptions --
     "LLMCoreError",
     "ConfigError",
     "ProviderError",
@@ -266,34 +366,40 @@ __all__ = [
     "ContextError",
     "ContextLengthError",
     "EmbeddingError",
-    # ==========================================================================
-    # Storage
-    # ==========================================================================
+    # -- Storage --
     "StorageManager",
-    # ==========================================================================
-    # Integration (Phase 3 SYMBIOSIS)
-    # ==========================================================================
-    "LLMCoreVectorClient",
-    "LLMCoreVectorClientConfig",
-    "VectorClientProtocol",
-    # ==========================================================================
-    # Ingestion (Phase 3 SYMBIOSIS)
-    # ==========================================================================
-    "Chunk",
-    "ChunkingStrategy",
-    "ChunkingConfig",
-    "FixedSizeChunker",
-    "RecursiveTextChunker",
-    "SentenceChunker",
-    # ==========================================================================
-    # Agents (Core)
-    # ==========================================================================
+    # -- Embedding --
+    "BaseEmbeddingModel",
+    "EmbeddingManager",
+    "EmbeddingCache",
+    "EmbeddingCacheConfig",
+    "SentenceTransformerEmbedding",
+    "create_embedding_cache",
+    # -- Agents --
     "AgentManager",
+    "AgentMode",
+    "EnhancedAgentManager",
+    "SingleAgentMode",
+    "AgentResult",
+    "CognitiveCycle",
+    "CognitivePhase",
+    "EnhancedAgentState",
     "ToolManager",
-    # ==========================================================================
-    # Sandbox System (NEW in v0.26.0)
-    # ==========================================================================
-    # Core classes
+    "AgentPersona",
+    "PersonaManager",
+    "PromptRegistry",
+    "PromptTemplate",
+    "PromptComposer",
+    "CognitiveMemoryIntegrator",
+    "RAGContextFilter",
+    "AgentCircuitBreaker",
+    "CapabilityChecker",
+    # -- HITL --
+    "HITLManager",
+    "HITLConfig",
+    "RiskAssessor",
+    "RiskLevel",
+    # -- Sandbox --
     "SandboxRegistry",
     "SandboxRegistryConfig",
     "SandboxConfig",
@@ -303,16 +409,12 @@ __all__ = [
     "SandboxStatus",
     "ExecutionResult",
     "FileInfo",
-    # Providers
     "DockerSandboxProvider",
     "VMSandboxProvider",
-    # Utilities
     "EphemeralResourceManager",
     "OutputTracker",
-    # Configuration
     "load_sandbox_config",
     "create_registry_config",
-    # Sandbox Exceptions
     "SandboxError",
     "SandboxInitializationError",
     "SandboxExecutionError",
@@ -321,28 +423,93 @@ __all__ = [
     "SandboxResourceError",
     "SandboxConnectionError",
     "SandboxCleanupError",
-    # Tool Management
     "set_active_sandbox",
     "clear_active_sandbox",
     "get_active_sandbox",
     "SANDBOX_TOOL_IMPLEMENTATIONS",
     "SANDBOX_TOOL_SCHEMAS",
-    # Integration Bridge
     "SandboxIntegration",
     "SandboxContext",
     "SandboxAgentMixin",
     "register_sandbox_tools",
     "get_sandbox_tool_definitions",
-    # ==========================================================================
-    # Version
-    # ==========================================================================
-    "__version__",
-    # Statistics Models
-    "SessionTokenStats",
-    "CostEstimate",
-    # ==========================================================================
-    # Observability (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
-    # ==========================================================================
+    # -- Memory --
+    "MemoryManager",
+    # -- Sessions --
+    "SessionManager",
+    # -- Autonomous --
+    "Goal",
+    "GoalManager",
+    "GoalPriority",
+    "GoalStatus",
+    "GoalStore",
+    "SuccessCriterion",
+    "Escalation",
+    "EscalationLevel",
+    "EscalationManager",
+    "EscalationReason",
+    "HeartbeatManager",
+    "HeartbeatTask",
+    "heartbeat_task",
+    "ResourceMonitor",
+    "ResourceConstraints",
+    "ResourceStatus",
+    "ConstraintViolation",
+    "SkillLoader",
+    "Skill",
+    "SkillMetadata",
+    "AutonomousState",
+    "StateManager",
+    "AutonomousScheduler",
+    "TaskPriority",
+    # -- Context --
+    "ContextSynthesizer",
+    "ContextSource",
+    "ContextChunk",
+    "SynthesizedContext",
+    "TokenCounter",
+    "TiktokenCounter",
+    "EstimateCounter",
+    "ContextCompressor",
+    "ContentPrioritizer",
+    # -- Ingestion --
+    "Chunk",
+    "ChunkingStrategy",
+    "ChunkingConfig",
+    "FixedSizeChunker",
+    "RecursiveTextChunker",
+    "SentenceChunker",
+    # -- Integration --
+    "LLMCoreVectorClient",
+    "LLMCoreVectorClientConfig",
+    "VectorClientProtocol",
+    # -- Model Card Library --
+    "ModelCard",
+    "ModelCardSummary",
+    "ModelArchitecture",
+    "ModelContext",
+    "ModelCapabilities",
+    "ModelPricing",
+    "ModelLifecycle",
+    "TokenPricing",
+    "Provider",
+    "ModelType",
+    "ModelStatus",
+    "ArchitectureType",
+    "OllamaExtension",
+    "OpenAIExtension",
+    "AnthropicExtension",
+    "GoogleExtension",
+    "DeepSeekExtension",
+    "QwenExtension",
+    "MistralExtension",
+    "XAIExtension",
+    "EmbeddingConfig",
+    "ModelCardRegistry",
+    "get_model_card_registry",
+    "get_model_card",
+    "clear_model_card_cache",
+    # -- Observability --
     "CostTracker",
     "CostTrackingConfig",
     "UsageRecord",
@@ -350,10 +517,9 @@ __all__ = [
     "PRICING_DATA",
     "create_cost_tracker",
     "get_price_per_million_tokens",
-    # ==========================================================================
-    # Embedding Cache (Phase 1 UNIFIED_IMPLEMENTATION_PLAN)
-    # ==========================================================================
-    "EmbeddingCache",
-    "EmbeddingCacheConfig",
-    "create_embedding_cache",
+    "MetricsRegistry",
+    "ObservabilityLogger",
+    "CostAnalyzer",
+    # -- Version --
+    "__version__",
 ]
