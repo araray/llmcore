@@ -378,14 +378,15 @@ class TestObservabilityTracing:
         )
 
     def test_get_tracer_noop(self):
-        """get_tracer should return a no-op when OTel is not configured."""
+        """get_tracer should return a tracer whose spans accept attributes."""
         from llmcore.observability.tracing import get_tracer
 
         tracer = get_tracer("test")
-        # Should not raise
-        span = tracer.start_as_current_span("test_span")
-        span.set_attribute("key", "value")
-        span.end()
+        # start_as_current_span returns a context manager (both real OTel
+        # and the _NoOpTracer stub), so use it with `with`:
+        with tracer.start_as_current_span("test_span") as span:
+            span.set_attribute("key", "value")
+            # Should not raise
 
     def test_trace_span_context_manager(self):
         """trace_span should work as a context manager."""
