@@ -1,0 +1,63 @@
+{
+  "model_id": "qwen3.5:2b",
+  "display_name": "Qwen 3.5 2B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "qwen",
+    "parameter_count": "2B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "release_date": "2025-08-06",
+    "knowledge_cutoff": "2025-06",
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": ["qwen3.5:2b-instruct", "qwen3.5-2b", "qwen3.5-2b-chat"],
+  "description": "Qwen 3.5 2B offers balanced performance for local deployment with enhanced reasoning and tool use capabilities at 256K context.",
+  "tags": ["open-source", "local", "balanced", "reasoning", "qwen"],
+  "provider_ollama": {
+    "format": "gguf",
+    "quantization_level": "Q4_K_M",
+    "file_size_bytes": 1400000000,
+    "modelfile_parameters": {
+      "num_ctx": 8192,
+      "temperature": 0.7,
+      "top_p": 0.9
+    },
+    "parent_model": "qwen3.5",
+    "modified_at": "2025-08-06T10:00:00Z"
+  },
+  "provider_qwen": {
+    "thinking_mode": {
+      "supported": true,
+      "enable_param": "enable_thinking"
+    },
+    "specialized_variant": "base"
+  },
+  "source": "user"
+}
