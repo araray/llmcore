@@ -123,21 +123,28 @@ class GeminiProvider(BaseProvider):
             models_pager = await asyncio.to_thread(self._client.models.list)
             for model in models_pager:
                 # google-genai SDK: model is a Model object with .name, .input_token_limit, etc.
-                supported_methods = getattr(model, "supported_generation_methods", []) or []
-                if "generateContent" in supported_methods:
-                    details = ModelDetails(
-                        id=model.name.replace("models/", ""),
-                        context_length=getattr(model, "input_token_limit", None)
-                        or self.fallback_context_length,
-                        supports_streaming=True,
-                        supports_tools="functionCalling" in supported_methods,
-                        provider_name=self.get_name(),
-                        metadata={
-                            "display_name": getattr(model, "display_name", None),
-                            "version": getattr(model, "version", None),
-                        },
-                    )
-                    details_list.append(details)
+                supported_methods = getattr(model, "supported_generation_methods", None) or []
+                # Include model if it supports generateContent, or if the field is absent (new SDK)
+                if supported_methods and "generateContent" not in supported_methods:
+                    continue
+                model_id = (model.name or "").replace("models/", "")
+                if not model_id:
+                    continue
+                details = ModelDetails(
+                    id=model_id,
+                    context_length=getattr(model, "input_token_limit", None)
+                    or self.fallback_context_length,
+                    supports_streaming=True,
+                    supports_tools="functionCalling" in supported_methods
+                    if supported_methods
+                    else True,
+                    provider_name=self.get_name(),
+                    metadata={
+                        "display_name": getattr(model, "display_name", None),
+                        "version": getattr(model, "version", None),
+                    },
+                )
+                details_list.append(details)
             logger.info(f"Discovered {len(details_list)} supported models from Google AI.")
         except Exception as e:
             logger.error(f"Failed to list models from Google AI: {e}", exc_info=True)
@@ -223,20 +230,28 @@ class GeminiProvider(BaseProvider):
         if not genai_contents:
             raise ProviderError(self.get_name(), "No valid messages to send.")
 
-        generation_config = types.GenerationConfig(**kwargs) if kwargs else None
+        generation_config_kwargs = dict(kwargs) if kwargs else {}
 
-        # system_instruction is a top-level parameter to generate_content,
-        # NOT a field of GenerationConfig.
-        system_instruction = system_instruction_text or None
+        # system_instruction goes inside GenerateContentConfig in google-genai SDK
+        if system_instruction_text:
+            generation_config_kwargs["system_instruction"] = system_instruction_text
+
+        if self._safety_settings:
+            generation_config_kwargs["safety_settings"] = self._safety_settings
 
         function_declarations = (
             [types.FunctionDeclaration.from_dict(tool.model_dump()) for tool in tools]
             if tools
             else None
         )
-        tools_payload = (
-            [types.Tool(function_declarations=function_declarations)]
-            if function_declarations
+        if function_declarations:
+            generation_config_kwargs["tools"] = [
+                types.Tool(function_declarations=function_declarations)
+            ]
+
+        config = (
+            types.GenerateContentConfig(**generation_config_kwargs)
+            if generation_config_kwargs
             else None
         )
 
@@ -245,8 +260,7 @@ class GeminiProvider(BaseProvider):
                 "model": model_name,
                 "contents": genai_contents,
                 "stream": stream,
-                "generation_config": kwargs,
-                "tools": tools_payload,
+                "config": str(generation_config_kwargs),
             }
             logger.debug(
                 f"RAW LLM REQUEST ({self.get_name()}): {json.dumps(log_data, indent=2, default=str)}"
@@ -257,10 +271,7 @@ class GeminiProvider(BaseProvider):
                 response = await self._client.aio.models.generate_content_stream(
                     model=model_name,
                     contents=genai_contents,
-                    config=generation_config,
-                    tools=tools_payload,
-                    safety_settings=self._safety_settings,
-                    system_instruction=system_instruction,
+                    config=config,
                 )
 
                 async def stream_wrapper():
@@ -274,10 +285,7 @@ class GeminiProvider(BaseProvider):
                 response = await self._client.aio.models.generate_content(
                     model=model_name,
                     contents=genai_contents,
-                    config=generation_config,
-                    tools=tools_payload,
-                    safety_settings=self._safety_settings,
-                    system_instruction=system_instruction,
+                    config=config,
                 )
                 response_dict = {
                     "id": None,  # Gemini API doesn't provide a top-level ID in this response
