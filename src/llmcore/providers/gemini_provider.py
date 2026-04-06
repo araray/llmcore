@@ -119,18 +119,23 @@ class GeminiProvider(BaseProvider):
         """Dynamically discovers available models from the Google AI API."""
         details_list = []
         try:
-            # The google-genai library doesn't have an async list_models, so we run sync in thread
-            models = await asyncio.to_thread(genai.list_models)
-            for model in models:
-                # Check if the model supports the 'generateContent' method
-                if "generateContent" in model.supported_generation_methods:
+            # Use the client instance's models.list() method (google-genai SDK)
+            models_pager = await asyncio.to_thread(self._client.models.list)
+            for model in models_pager:
+                # google-genai SDK: model is a Model object with .name, .input_token_limit, etc.
+                supported_methods = getattr(model, "supported_generation_methods", []) or []
+                if "generateContent" in supported_methods:
                     details = ModelDetails(
                         id=model.name.replace("models/", ""),
-                        context_length=model.input_token_limit,
+                        context_length=getattr(model, "input_token_limit", None)
+                        or self.fallback_context_length,
                         supports_streaming=True,
-                        supports_tools="functionCalling" in model.supported_generation_methods,
+                        supports_tools="functionCalling" in supported_methods,
                         provider_name=self.get_name(),
-                        metadata={"display_name": model.display_name, "version": model.version},
+                        metadata={
+                            "display_name": getattr(model, "display_name", None),
+                            "version": getattr(model, "version", None),
+                        },
                     )
                     details_list.append(details)
             logger.info(f"Discovered {len(details_list)} supported models from Google AI.")
@@ -219,8 +224,10 @@ class GeminiProvider(BaseProvider):
             raise ProviderError(self.get_name(), "No valid messages to send.")
 
         generation_config = types.GenerationConfig(**kwargs) if kwargs else None
-        if system_instruction_text:
-            generation_config.system_instruction = system_instruction_text
+
+        # system_instruction is a top-level parameter to generate_content,
+        # NOT a field of GenerationConfig.
+        system_instruction = system_instruction_text or None
 
         function_declarations = (
             [types.FunctionDeclaration.from_dict(tool.model_dump()) for tool in tools]
@@ -253,6 +260,7 @@ class GeminiProvider(BaseProvider):
                     config=generation_config,
                     tools=tools_payload,
                     safety_settings=self._safety_settings,
+                    system_instruction=system_instruction,
                 )
 
                 async def stream_wrapper():
@@ -269,6 +277,7 @@ class GeminiProvider(BaseProvider):
                     config=generation_config,
                     tools=tools_payload,
                     safety_settings=self._safety_settings,
+                    system_instruction=system_instruction,
                 )
                 response_dict = {
                     "id": None,  # Gemini API doesn't provide a top-level ID in this response
@@ -336,7 +345,12 @@ class GeminiProvider(BaseProvider):
             return 0
 
         target_model = model or self.default_model
-        genai_contents, _ = self._convert_llmcore_msgs_to_genai_contents(messages)
+        genai_contents, system_text = self._convert_llmcore_msgs_to_genai_contents(messages)
+        if not genai_contents:
+            # All messages were system-only or empty; count the system text if present
+            if system_text:
+                return await self.count_tokens(system_text, model=target_model)
+            return 0
         try:
             response = await self._client.aio.models.count_tokens(
                 contents=genai_contents, model=target_model

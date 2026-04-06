@@ -1,0 +1,59 @@
+{
+  "model_id": "gemini-3.1-pro-preview",
+  "display_name": "Gemini 3.1 Pro Preview",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "web_search": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
+  "lifecycle": {
+    "release_date": "2026-02-19",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-3.1-pro"],
+  "description": "Gemini 3.1 Pro Preview is Google's frontier reasoning model. It features a 1M token context window, natively processes text, audio, images, and video, and delivers enhanced software engineering performance and agentic reliability across complex workflows.",
+  "tags": ["flagship", "multimodal", "reasoning", "long-context", "enterprise"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
+    "supported_outputs": ["text"],
+    "grounding": {
+      "google_search": true,
+      "maps": false
+    },
+    "thinking": {
+      "supported": true,
+      "budget_range": [1024, 65536]
+    },
+    "live_api": true,
+    "url_context": true,
+    "safety_settings": []
+  },
+  "source": "api"
+}

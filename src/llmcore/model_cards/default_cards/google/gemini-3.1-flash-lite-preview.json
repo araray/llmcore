@@ -1,0 +1,60 @@
+{
+  "model_id": "gemini-3.1-flash-lite-preview",
+  "display_name": "Gemini 3.1 Flash-Lite Preview",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "web_search": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.25,
+      "output": 1.5
+    }
+  },
+  "lifecycle": {
+    "release_date": "2026-03-03",
+    "knowledge_cutoff": "2025-01",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-3.1-flash-lite"],
+  "description": "Gemini 3.1 Flash-Lite Preview is a fast, cost-efficient multimodal reasoning model by Google. It features a 1M token context window and is designed for complex, multi-step problem solving at scale. It offers native support for text, image, speech, and video inputs.",
+  "tags": ["fast", "cost-efficient", "multimodal", "reasoning", "long-context"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
+    "supported_outputs": ["text"],
+    "grounding": {
+      "google_search": true,
+      "maps": false
+    },
+    "thinking": {
+      "supported": true,
+      "budget_range": [1024, 65536]
+    },
+    "live_api": true,
+    "url_context": true,
+    "safety_settings": []
+  },
+  "source": "api"
+}
