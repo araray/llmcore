@@ -1,0 +1,24 @@
+{
+  "model_id": "gpt-5.1-codex-mini",
+  "display_name": "GPT-5.1 Codex-mini",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "gpt", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 400000, "max_output_tokens": 128000},
+  "capabilities": {
+    "streaming": true, "function_calling": true, "tool_use": true,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 1.25, "output": 10.00, "cached_input": 0.125}
+  },
+  "lifecycle": {"release_date": "2025-11-13", "knowledge_cutoff": "2024-09", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": [],
+  "description": "GPT-5.1 Codex variant optimized for agentic coding in Codex environments.",
+  "tags": ["coding", "agentic"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "medium"},
+  "source": "model_cards_02"
+}

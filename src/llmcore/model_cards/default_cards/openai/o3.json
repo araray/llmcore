@@ -1,0 +1,24 @@
+{
+  "model_id": "o3",
+  "display_name": "OpenAI o3",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "o-series", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 200000, "max_output_tokens": 100000},
+  "capabilities": {
+    "streaming": true, "function_calling": true, "tool_use": true,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 2.00, "output": 8.00, "cached_input": 0.50}
+  },
+  "lifecycle": {"release_date": "2025-04-16", "knowledge_cutoff": "2024-05", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": ["o3-2025-04-16"],
+  "description": "OpenAI o3 is a dedicated reasoning model excelling at math, science, coding, and multi-step analysis.",
+  "tags": ["reasoning", "math", "science", "coding"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "high"},
+  "source": "model_cards_02"
+}

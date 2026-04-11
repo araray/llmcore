@@ -1,0 +1,24 @@
+{
+  "model_id": "gpt-5-nano",
+  "display_name": "GPT-5 Nano",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "gpt", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 400000, "max_output_tokens": 128000},
+  "capabilities": {
+    "streaming": true, "function_calling": true, "tool_use": true,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 0.05, "output": 0.40, "cached_input": 0.005}
+  },
+  "lifecycle": {"release_date": "2025-08-07", "knowledge_cutoff": "2024-05", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": ["gpt-5-nano-2025-08-07"],
+  "description": "GPT-5 Nano is the fastest, cheapest version of GPT-5 for summarization and classification.",
+  "tags": ["reasoning", "fast", "cheap"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "low"},
+  "source": "model_cards_02"
+}

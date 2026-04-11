@@ -1,0 +1,24 @@
+{
+  "model_id": "o1-pro",
+  "display_name": "OpenAI o1 Pro",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "o-series", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 200000, "max_output_tokens": 100000},
+  "capabilities": {
+    "streaming": true, "function_calling": false, "tool_use": false,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 150.00, "output": 600.00, "cached_input": 37.50}
+  },
+  "lifecycle": {"release_date": "2025-03-19", "knowledge_cutoff": "2024-05", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": ["o1-pro-2025-03-19"],
+  "description": "OpenAI o1 Pro uses more compute for better reasoning and consistency on hard problems.",
+  "tags": ["reasoning", "pro"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "high"},
+  "source": "model_cards_02"
+}

@@ -33,7 +33,7 @@ classifiers = [
 
 # Core dependencies for llmcore - LIBRARY MODE ONLY
 dependencies = [
-    "confy>=0.3.0",
+    "confy>=0.4.0",
     "aiohttp>=3.11.0",
     "aiofiles>=24.0.0",
     "python-dotenv>=1.0.0",

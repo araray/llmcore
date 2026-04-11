@@ -1,0 +1,24 @@
+{
+  "model_id": "gpt-5.3-codex",
+  "display_name": "GPT-5.3 Codex",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "gpt", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 400000, "max_output_tokens": 128000},
+  "capabilities": {
+    "streaming": true, "function_calling": true, "tool_use": true,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 1.75, "output": 14.00, "cached_input": 0.175}
+  },
+  "lifecycle": {"release_date": "2026-02-05", "knowledge_cutoff": "2025-08", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": ["gpt-5.3-chat-latest"],
+  "description": "GPT-5.3 Codex is the most capable agentic coding model, combining frontier coding and reasoning.",
+  "tags": ["coding", "agentic", "reasoning"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "high"},
+  "source": "model_cards_02"
+}

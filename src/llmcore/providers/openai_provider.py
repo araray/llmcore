@@ -63,6 +63,36 @@ DEFAULT_OPENAI_TOKEN_LIMITS = {
     "gpt-3.5-turbo-16k": 16000,
     "gpt-3.5-turbo-16k-0613": 16000,
 }
+
+# Prefix-based context length heuristics for model families that lack
+# explicit cards.  Checked *after* the registry lookup so that a concrete
+# card always wins.  Order matters — more specific prefixes first.
+_OPENAI_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
+    # GPT-5.4 and GPT-5.4 pro have a 1.05M context window
+    ("gpt-5.4-pro", 1050000),
+    ("gpt-5.4-mini", 400000),
+    ("gpt-5.4-nano", 400000),
+    ("gpt-5.4", 1050000),
+    # GPT-5.x family (5, 5.1, 5.2, 5.3) — 400K context
+    ("gpt-5.3", 400000),
+    ("gpt-5.2", 400000),
+    ("gpt-5.1", 400000),
+    ("gpt-5", 400000),
+    # o-series reasoning models — 200K context
+    ("o4-mini", 200000),
+    ("o3-pro", 200000),
+    ("o3-mini", 200000),
+    ("o3", 200000),
+    ("o1-pro", 200000),
+    ("o1", 200000),
+    # GPT-4.1 family — 1M context
+    ("gpt-4.1", 1048576),
+    # GPT-4o family
+    ("gpt-4o", 128000),
+]
+
+# Models we have already warned about (to avoid per-turn log spam).
+_warned_unknown_models: set[str] = set()
 DEFAULT_MODEL = "gpt-4o"
 
 
@@ -221,7 +251,8 @@ class OpenAIProvider(BaseProvider):
         3. Model Card Registry lookup using the provider instance name
            (handles DeepSeek, Mistral, xAI, and other OpenAI-compatible
            providers whose cards live under their own provider key).
-        4. Fallback: 4096.
+        4. Prefix-based family heuristics (``_OPENAI_PREFIX_CONTEXT_HEURISTICS``).
+        5. Fallback: 4096.
         """
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
@@ -253,23 +284,44 @@ class OpenAIProvider(BaseProvider):
                             limit,
                         )
                     else:
-                        limit = 4096
-                        logger.warning(
-                            "Unknown context length for OpenAI model '%s' "
-                            "(provider=%s). No model card found. Using fallback: %d.",
-                            model_name,
-                            provider_name,
-                            limit,
-                        )
+                        # Try prefix-based family heuristics before the
+                        # hard 4096 fallback.  This catches dated snapshots
+                        # (e.g. gpt-5.4-2026-03-05) that share a family's
+                        # context window but lack their own card.
+                        for prefix, ctx in _OPENAI_PREFIX_CONTEXT_HEURISTICS:
+                            if model_name.startswith(prefix):
+                                limit = ctx
+                                logger.debug(
+                                    "Resolved context length for '%s' via "
+                                    "prefix heuristic '%s': %d",
+                                    model_name,
+                                    prefix,
+                                    limit,
+                                )
+                                break
+                        if limit is None:
+                            limit = 4096
+                            if model_name not in _warned_unknown_models:
+                                _warned_unknown_models.add(model_name)
+                                logger.warning(
+                                    "Unknown context length for OpenAI model '%s' "
+                                    "(provider=%s). No model card found. "
+                                    "Using fallback: %d.",
+                                    model_name,
+                                    provider_name,
+                                    limit,
+                                )
                 except Exception as e:
                     limit = 4096
-                    logger.warning(
-                        "Unknown context length for OpenAI model '%s'. "
-                        "Model card lookup failed (%s). Using fallback: %d.",
-                        model_name,
-                        e,
-                        limit,
-                    )
+                    if model_name not in _warned_unknown_models:
+                        _warned_unknown_models.add(model_name)
+                        logger.warning(
+                            "Unknown context length for OpenAI model '%s'. "
+                            "Model card lookup failed (%s). Using fallback: %d.",
+                            model_name,
+                            e,
+                            limit,
+                        )
         return limit
 
     async def chat_completion(

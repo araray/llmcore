@@ -1,0 +1,24 @@
+{
+  "model_id": "gpt-5.4",
+  "display_name": "GPT-5.4",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {"family": "gpt", "architecture_type": "transformer"},
+  "context": {"max_input_tokens": 1050000, "max_output_tokens": 128000},
+  "capabilities": {
+    "streaming": true, "function_calling": true, "tool_use": true,
+    "json_mode": false, "structured_output": true, "vision": true,
+    "audio_input": false, "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {"input": 2.50, "output": 15.00, "cached_input": 0.25}
+  },
+  "lifecycle": {"release_date": "2026-03-05", "knowledge_cutoff": "2025-08", "status": "active"},
+  "license": null, "open_weights": false,
+  "aliases": ["gpt-5.4-2026-03-05"],
+  "description": "GPT-5.4 is OpenAI's frontier model with 1M context window, native computer use, and compaction support.",
+  "tags": ["reasoning", "coding", "agentic", "multimodal"],
+  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "medium"},
+  "source": "model_cards_02"
+}
