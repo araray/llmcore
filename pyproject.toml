@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.42.0"
+version = "0.42.1"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,9 +49,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # Dependencies for specific LLM providers
-openai = ["openai>=2.8.0"]
-anthropic = ["anthropic>=0.74.0"]
-gemini = ["google-genai>=1.57.0", "google-api-core>=2.29.0"]
+openai = ["openai>=2.31.0"]
+anthropic = ["anthropic>=0.94.0"]
+gemini = ["google-genai>=1.72.0", "google-api-core>=2.30.0"]
 ollama = ["ollama>=0.6.0"]
 
 sentence_transformers = ["sentence-transformers>=5.2.0"]
