@@ -1,0 +1,48 @@
+{
+  "model_id": "meta-llama/llama-3.3-70b-instruct",
+  "display_name": "Llama 3.3 70B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Llama"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Meta's open-weight 70B model. Strong general-purpose performance.",
+  "tags": [
+    "open-weight",
+    "general"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.39,
+      "output": 0.39
+    }
+  }
+}

@@ -8,18 +8,23 @@
     "architecture_type": "transformer"
   },
   "context": {
-    "max_input_tokens": 1000000,
+    "max_input_tokens": 1048576,
     "max_output_tokens": 65536
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": true,
     "vision": true,
     "audio_input": true,
-    "reasoning": true
+    "audio_output": false,
+    "video_input": true,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": true,
+    "file_processing": true
   },
   "pricing": {
     "currency": "USD",
@@ -33,24 +38,29 @@
   "lifecycle": {
     "release_date": "2025-12-17",
     "knowledge_cutoff": "2025-07",
-    "status": "active"
+    "status": "preview"
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["Gemini3-Flash"],
-  "description": "Gemini 3 Flash is optimized for high-speed performance at a fraction of the cost. It supports the same 1.0M token context as Pro but is tuned for low latency, making it ideal for real-time applications. Flash provides Pro-level reasoning at 1/4 the price – just $0.50/M input and $3.00/M output tokens. It excels in agentic workflows, code tasks, and complex analysis with minimal delay. This model is well-suited for high-volume deployments, offering near frontier intelligence with significantly reduced cost.",
-  "tags": ["fast", "cost-effective", "long-context", "agentic"],
+  "aliases": ["gemini-flash-latest"],
+  "description": "Gemini 3 Flash is Google's default model (as of Apr 2026) with 1M context. Always-on thinking with configurable levels. Supports function calling, code execution, search grounding, computer use, and multimodal inputs including vision and audio.",
+  "tags": ["fast", "cost-effective", "long-context", "agentic", "default"],
   "provider_google": {
-    "supported_inputs": ["text", "image", "video", "audio"],
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
     "supported_outputs": ["text"],
     "grounding": {
-      "search": true
+      "google_search": true,
+      "maps": true
     },
     "thinking": {
-      "mode": "efficient",
-      "default_enabled": true
+      "supported": true,
+      "mode": "always_on",
+      "levels": ["minimal", "low", "medium", "high"],
+      "default_level": "high"
     },
-    "live_api": true
+    "live_api": false,
+    "url_context": true,
+    "safety_settings": []
   },
-  "source": "model_cards_01"
+  "source": "builtin"
 }

@@ -87,6 +87,7 @@ class Provider(str, Enum):
     PERPLEXITY = "perplexity"
     AI21 = "ai21"
     GROQ = "groq"
+    OPENROUTER = "openrouter"
     LOCAL = "local"
 
 

@@ -1,0 +1,49 @@
+{
+  "model_id": "openai/o4-mini",
+  "display_name": "o4-mini",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "o-series"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 100000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's reasoning model. Extended thinking with configurable effort.",
+  "tags": [
+    "reasoning",
+    "math",
+    "coding"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.1,
+      "output": 4.4
+    }
+  }
+}

@@ -28,6 +28,7 @@ from .gemini_provider import GeminiProvider
 # Import concrete implementations
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
+from .openrouter_provider import OpenRouterProvider
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
+    "openrouter": OpenRouterProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers

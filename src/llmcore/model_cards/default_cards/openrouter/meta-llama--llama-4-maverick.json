@@ -1,0 +1,49 @@
+{
+  "model_id": "meta-llama/llama-4-maverick",
+  "display_name": "Llama 4 Maverick",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Llama"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Meta's MoE model with 400B total / 17B active params. Multimodal.",
+  "tags": [
+    "open-weight",
+    "moe",
+    "multimodal"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.6
+    }
+  }
+}

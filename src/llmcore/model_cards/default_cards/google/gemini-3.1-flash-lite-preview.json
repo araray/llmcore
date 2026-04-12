@@ -21,25 +21,29 @@
     "audio_input": true,
     "audio_output": false,
     "video_input": true,
+    "code_execution": true,
     "web_search": true,
-    "reasoning": true
+    "reasoning": true,
+    "file_processing": true
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.25,
-      "output": 1.5
-    }
+      "output": 1.50,
+      "cached_input": 0.025
+    },
+    "batch_discount_percent": 50
   },
   "lifecycle": {
     "release_date": "2026-03-03",
-    "knowledge_cutoff": "2025-01",
+    "knowledge_cutoff": "2025-07",
     "status": "preview"
   },
   "license": null,
   "open_weights": false,
   "aliases": ["gemini-3.1-flash-lite"],
-  "description": "Gemini 3.1 Flash-Lite Preview is a fast, cost-efficient multimodal reasoning model by Google. It features a 1M token context window and is designed for complex, multi-step problem solving at scale. It offers native support for text, image, speech, and video inputs.",
+  "description": "Gemini 3.1 Flash-Lite is the most cost-efficient Gemini model. 2.5x faster TTFT than 2.5 Flash, optional thinking (minimal by default). Ideal for translation, transcription, classification, routing, and lightweight agentic tasks.",
   "tags": ["fast", "cost-efficient", "multimodal", "reasoning", "long-context"],
   "provider_google": {
     "supported_inputs": ["text", "image", "video", "audio", "pdf"],
@@ -50,11 +54,13 @@
     },
     "thinking": {
       "supported": true,
-      "budget_range": [1024, 65536]
+      "mode": "optional",
+      "levels": ["minimal", "low", "medium", "high"],
+      "default_level": "minimal"
     },
-    "live_api": true,
+    "live_api": false,
     "url_context": true,
     "safety_settings": []
   },
-  "source": "api"
+  "source": "builtin"
 }

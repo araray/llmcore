@@ -1,0 +1,47 @@
+{
+  "model_id": "gemini-2.0-flash-lite",
+  "display_name": "Gemini 2.0 Flash-Lite (Deprecated)",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.075,
+      "output": 0.30
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-02-01",
+    "knowledge_cutoff": "2024-08",
+    "deprecation_date": "2026-04-01",
+    "shutdown_date": "2026-06-01",
+    "successor_model": "gemini-2.5-flash-lite",
+    "status": "deprecated"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-2.0-flash-lite-001"],
+  "description": "Gemini 2.0 Flash-Lite is DEPRECATED (shutdown June 1, 2026). Migrate to Gemini 2.5 Flash-Lite or 3.1 Flash-Lite.",
+  "tags": ["deprecated", "legacy"],
+  "source": "builtin"
+}

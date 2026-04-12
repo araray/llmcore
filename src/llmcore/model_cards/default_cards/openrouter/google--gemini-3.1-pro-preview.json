@@ -1,0 +1,51 @@
+{
+  "model_id": "google/gemini-3.1-pro-preview",
+  "display_name": "Gemini 3.1 Pro Preview",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "google/gemini-pro-latest"
+  ],
+  "description": "Google's most capable model. ARC-AGI-2 77.1%, always-on thinking.",
+  "tags": [
+    "flagship",
+    "reasoning",
+    "multimodal"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  }
+}

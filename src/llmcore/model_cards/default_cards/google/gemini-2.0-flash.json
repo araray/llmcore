@@ -1,0 +1,63 @@
+{
+  "model_id": "gemini-2.0-flash",
+  "display_name": "Gemini 2.0 Flash (Deprecated)",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.10,
+      "output": 0.40,
+      "cached_input": 0.025
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-02-01",
+    "knowledge_cutoff": "2024-08",
+    "deprecation_date": "2026-04-01",
+    "shutdown_date": "2026-06-01",
+    "successor_model": "gemini-2.5-flash",
+    "status": "deprecated"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": ["gemini-2.0-flash-001"],
+  "description": "Gemini 2.0 Flash is DEPRECATED (shutdown June 1, 2026). Migrate to Gemini 2.5 Flash or 3.x. Note: max output is only 8K tokens vs 64K for newer models.",
+  "tags": ["deprecated", "legacy"],
+  "provider_google": {
+    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
+    "supported_outputs": ["text"],
+    "grounding": {
+      "google_search": true
+    },
+    "thinking": {
+      "supported": false
+    },
+    "live_api": false,
+    "url_context": false
+  },
+  "source": "builtin"
+}

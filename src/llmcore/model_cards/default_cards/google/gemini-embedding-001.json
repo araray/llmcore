@@ -1,0 +1,46 @@
+{
+  "model_id": "gemini-embedding-001",
+  "display_name": "Gemini Embedding 001",
+  "provider": "google",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "Gemini"
+  },
+  "context": {
+    "max_input_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.0
+    },
+    "batch_discount_percent": 50
+  },
+  "lifecycle": {
+    "release_date": "2026-02-19",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini Embedding 001 is Google's GA text embedding model. 3072 default dimensions with MRL support. Top-ranked on MTEB Multilingual leaderboard.",
+  "tags": ["embedding", "text", "multilingual"],
+  "embedding_config": {
+    "dimensions_default": 3072,
+    "dimensions_configurable": [768, 1536, 3072],
+    "supports_matryoshka": true,
+    "similarity_metrics": ["cosine", "euclidean", "dot_product"],
+    "task_types": [
+      "SEMANTIC_SIMILARITY", "RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY",
+      "CLASSIFICATION", "CLUSTERING", "QUESTION_ANSWERING",
+      "FACT_VERIFICATION", "CODE_RETRIEVAL_QUERY"
+    ],
+    "languages_supported": 100,
+    "multimodal": false
+  },
+  "source": "builtin"
+}

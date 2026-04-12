@@ -1,0 +1,55 @@
+{
+  "model_id": "gemini-3.1-flash-live-preview",
+  "display_name": "Gemini 3.1 Flash Live Preview",
+  "provider": "google",
+  "model_type": "multimodal",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": true,
+    "video_input": true,
+    "web_search": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.75,
+      "output": 4.50
+    }
+  },
+  "lifecycle": {
+    "release_date": "2026-03-26",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.1 Flash Live enables real-time bidirectional audio/video sessions via the Live API. Supports 90+ languages, function calling, search grounding, and session resumption.",
+  "tags": ["live", "realtime", "audio", "multimodal", "bidirectional"],
+  "provider_google": {
+    "supported_inputs": ["audio", "image", "video", "text"],
+    "supported_outputs": ["audio", "text"],
+    "grounding": {
+      "google_search": true
+    },
+    "thinking": {
+      "supported": true,
+      "default_level": "minimal"
+    },
+    "live_api": true,
+    "url_context": false
+  },
+  "source": "builtin"
+}

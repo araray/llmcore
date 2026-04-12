@@ -1,0 +1,41 @@
+{
+  "model_id": "google/gemma-3-27b-it:free",
+  "display_name": "Gemma 3 27B (Free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemma"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Google's open model. Free tier with rate limits.",
+  "tags": [
+    "free",
+    "open-weight"
+  ],
+  "source": "builtin"
+}

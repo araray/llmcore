@@ -1,0 +1,38 @@
+{
+  "model_id": "gemini-2.5-flash-preview-tts",
+  "display_name": "Gemini 2.5 Flash TTS Preview",
+  "provider": "google",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Gemini"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "audio_output": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.50,
+      "output": 10.00
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-09-01",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.5 Flash TTS converts text to natural-sounding speech. Supports multiple voices and languages.",
+  "tags": ["tts", "speech", "audio"],
+  "provider_google": {
+    "supported_inputs": ["text"],
+    "supported_outputs": ["audio"]
+  },
+  "source": "builtin"
+}

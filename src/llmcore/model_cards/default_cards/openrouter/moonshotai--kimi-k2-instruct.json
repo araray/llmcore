@@ -1,0 +1,49 @@
+{
+  "model_id": "moonshotai/kimi-k2-instruct",
+  "display_name": "Kimi K2 Instruct",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Moonshot's open-weight MoE model. Strong agentic capabilities.",
+  "tags": [
+    "agentic",
+    "open-weight",
+    "moe"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.6,
+      "output": 2.4
+    }
+  }
+}

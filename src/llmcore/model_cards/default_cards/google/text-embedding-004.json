@@ -1,0 +1,36 @@
+{
+  "model_id": "text-embedding-004",
+  "display_name": "Text Embedding 004 (Shutdown)",
+  "provider": "google",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "Gecko"
+  },
+  "context": {
+    "max_input_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "lifecycle": {
+    "shutdown_date": "2026-01-14",
+    "successor_model": "gemini-embedding-001",
+    "status": "retired"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Text Embedding 004 is SHUTDOWN (Jan 14, 2026). Migrate to gemini-embedding-001 or gemini-embedding-2-preview.",
+  "tags": ["retired", "legacy", "embedding"],
+  "embedding_config": {
+    "dimensions_default": 768,
+    "supports_matryoshka": false,
+    "similarity_metrics": ["cosine"],
+    "task_types": [
+      "RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY", "SEMANTIC_SIMILARITY",
+      "CLASSIFICATION", "CLUSTERING"
+    ],
+    "multimodal": false
+  },
+  "source": "builtin"
+}

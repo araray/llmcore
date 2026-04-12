@@ -1,0 +1,50 @@
+{
+  "model_id": "deepseek/deepseek-chat",
+  "display_name": "DeepSeek V3.2",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "DeepSeek"
+  },
+  "context": {
+    "max_input_tokens": 164000,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "deepseek/deepseek-chat-v3.2"
+  ],
+  "description": "DeepSeek's frontier chat model. Near-GPT-5 quality at 1/50th cost.",
+  "tags": [
+    "cost-efficient",
+    "value"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.32,
+      "output": 0.89
+    }
+  }
+}

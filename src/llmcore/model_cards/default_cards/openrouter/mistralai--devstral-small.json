@@ -1,0 +1,49 @@
+{
+  "model_id": "mistralai/devstral-small",
+  "display_name": "Devstral Small",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Mistral"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Mistral's agentic coding model. Multi-file orchestration.",
+  "tags": [
+    "coding",
+    "agentic",
+    "open-weight"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.3
+    }
+  }
+}

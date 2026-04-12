@@ -1,0 +1,41 @@
+{
+  "model_id": "deepseek/deepseek-r1:free",
+  "display_name": "DeepSeek R1 (Free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "DeepSeek"
+  },
+  "context": {
+    "max_input_tokens": 164000,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek R1 reasoning model. Free tier with rate limits.",
+  "tags": [
+    "free",
+    "reasoning"
+  ],
+  "source": "builtin"
+}

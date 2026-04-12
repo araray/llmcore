@@ -1,0 +1,49 @@
+{
+  "model_id": "x-ai/grok-4-heavy",
+  "display_name": "Grok 4 Heavy",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Grok"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": true,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "xAI's most capable reasoning model. Deep thinking, web search.",
+  "tags": [
+    "flagship",
+    "reasoning",
+    "premium"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 10.0,
+      "output": 30.0
+    }
+  }
+}

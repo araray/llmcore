@@ -1,0 +1,49 @@
+{
+  "model_id": "google/gemini-2.5-flash",
+  "display_name": "Gemini 2.5 Flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Gemini"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google's stable production model. 1M context, configurable thinking.",
+  "tags": [
+    "production",
+    "stable",
+    "multimodal"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 2.5
+    }
+  }
+}

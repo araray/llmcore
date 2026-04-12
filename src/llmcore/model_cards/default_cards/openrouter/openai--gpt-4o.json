@@ -1,0 +1,48 @@
+{
+  "model_id": "openai/gpt-4o",
+  "display_name": "GPT-4o",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GPT"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's multimodal model. Vision, audio input, function calling.",
+  "tags": [
+    "multimodal",
+    "vision"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.5,
+      "output": 10.0
+    }
+  }
+}

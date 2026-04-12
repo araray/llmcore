@@ -1,0 +1,53 @@
+{
+  "model_id": "gemini-3.1-flash-image-preview",
+  "display_name": "Gemini 3.1 Flash Image Preview",
+  "provider": "google",
+  "model_type": "multimodal",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "image_generation": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.50,
+      "output": 60.00
+    },
+    "batch_discount_percent": 50
+  },
+  "lifecycle": {
+    "release_date": "2026-02-26",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.1 Flash Image (Nano Banana 2) generates and edits images up to 4K resolution. Supports conversational image editing, grounding with Google Image Search, and thinking.",
+  "tags": ["image-generation", "multimodal", "creative"],
+  "provider_google": {
+    "supported_inputs": ["text", "image"],
+    "supported_outputs": ["text", "image"],
+    "grounding": {
+      "google_search": true,
+      "image_search": true
+    },
+    "thinking": {
+      "supported": true
+    }
+  },
+  "source": "builtin"
+}

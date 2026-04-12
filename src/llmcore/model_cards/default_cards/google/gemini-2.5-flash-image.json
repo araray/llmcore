@@ -1,0 +1,42 @@
+{
+  "model_id": "gemini-2.5-flash-image",
+  "display_name": "Gemini 2.5 Flash Image",
+  "provider": "google",
+  "model_type": "multimodal",
+  "architecture": {
+    "family": "Gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "vision": true,
+    "image_generation": true,
+    "structured_output": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.30,
+      "output": 30.00
+    }
+  },
+  "lifecycle": {
+    "release_date": "2025-10-01",
+    "deprecation_date": "2026-10-16",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.5 Flash Image (Nano Banana) generates and edits images natively. Does not support thinking or function calling.",
+  "tags": ["image-generation", "multimodal", "stable"],
+  "provider_google": {
+    "supported_inputs": ["text", "image"],
+    "supported_outputs": ["text", "image"]
+  },
+  "source": "builtin"
+}

@@ -1,0 +1,41 @@
+{
+  "model_id": "qwen/qwen3-coder-480b:free",
+  "display_name": "Qwen3 Coder 480B (Free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Qwen"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Alibaba's coding model. Free tier with rate limits.",
+  "tags": [
+    "free",
+    "coding"
+  ],
+  "source": "builtin"
+}

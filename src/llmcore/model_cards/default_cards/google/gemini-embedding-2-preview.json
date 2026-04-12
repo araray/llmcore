@@ -1,0 +1,43 @@
+{
+  "model_id": "gemini-embedding-2-preview",
+  "display_name": "Gemini Embedding 2 Preview",
+  "provider": "google",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "Gemini"
+  },
+  "context": {
+    "max_input_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": false,
+    "vision": true,
+    "audio_input": true,
+    "video_input": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.20,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "release_date": "2026-03-10",
+    "status": "preview"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini Embedding 2 is the first multimodal embedding model from Google. Maps text, images, video, audio, and PDFs into a unified embedding space. Supports MRL for flexible dimensionality.",
+  "tags": ["embedding", "multimodal", "text", "image", "audio", "video"],
+  "embedding_config": {
+    "dimensions_default": 3072,
+    "dimensions_configurable": [768, 1536, 3072],
+    "supports_matryoshka": true,
+    "similarity_metrics": ["cosine", "euclidean", "dot_product"],
+    "languages_supported": 100,
+    "multimodal": true
+  },
+  "source": "builtin"
+}

@@ -21,39 +21,50 @@
     "audio_input": true,
     "audio_output": false,
     "video_input": true,
+    "code_execution": true,
     "web_search": true,
-    "reasoning": true
+    "reasoning": true,
+    "file_processing": true
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 2.0,
-      "output": 12.0
-    }
+      "input": 2.00,
+      "output": 12.00,
+      "cached_input": 0.50
+    },
+    "batch_discount_percent": 50,
+    "context_tiers": [
+      {"threshold_tokens": 200000, "input_price": 2.00, "output_price": 12.00},
+      {"threshold_tokens": 1048576, "input_price": 4.00, "output_price": 18.00}
+    ]
   },
   "lifecycle": {
     "release_date": "2026-02-19",
+    "knowledge_cutoff": "2025-07",
     "status": "preview"
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gemini-3.1-pro"],
-  "description": "Gemini 3.1 Pro Preview is Google's frontier reasoning model. It features a 1M token context window, natively processes text, audio, images, and video, and delivers enhanced software engineering performance and agentic reliability across complex workflows.",
-  "tags": ["flagship", "multimodal", "reasoning", "long-context", "enterprise"],
+  "aliases": ["gemini-pro-latest", "gemini-3.1-pro-preview-customtools"],
+  "description": "Gemini 3.1 Pro Preview is Google's most capable model. Always-on thinking with adjustable levels. ARC-AGI-2 77.1%, SWE-Bench 80.6%. Supports function calling, code execution, computer use, file search, and search grounding.",
+  "tags": ["flagship", "multimodal", "reasoning", "long-context", "enterprise", "frontier"],
   "provider_google": {
     "supported_inputs": ["text", "image", "video", "audio", "pdf"],
     "supported_outputs": ["text"],
     "grounding": {
       "google_search": true,
-      "maps": false
+      "maps": true
     },
     "thinking": {
       "supported": true,
-      "budget_range": [1024, 65536]
+      "mode": "always_on",
+      "levels": ["low", "medium", "high"],
+      "default_level": "high"
     },
-    "live_api": true,
+    "live_api": false,
     "url_context": true,
     "safety_settings": []
   },
-  "source": "api"
+  "source": "builtin"
 }

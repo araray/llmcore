@@ -1,6 +1,6 @@
 {
-  "model_id": "gemini-2.5-flash",
-  "display_name": "Gemini 2.5 Flash",
+  "model_id": "gemini-2.5-flash-lite",
+  "display_name": "Gemini 2.5 Flash-Lite",
   "provider": "google",
   "model_type": "chat",
   "architecture": {
@@ -30,27 +30,23 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.30,
-      "output": 2.50,
-      "cached_input": 0.0375
+      "input": 0.10,
+      "output": 0.40,
+      "cached_input": 0.025
     },
-    "batch_discount_percent": 50,
-    "context_tiers": [
-      {"threshold_tokens": 200000, "input_price": 0.30, "output_price": 2.50},
-      {"threshold_tokens": 1048576, "input_price": 0.60, "output_price": 5.00}
-    ]
+    "batch_discount_percent": 50
   },
   "lifecycle": {
-    "release_date": "2025-06-17",
+    "release_date": "2025-07-01",
     "knowledge_cutoff": "2025-01",
     "deprecation_date": "2026-10-16",
     "status": "active"
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gemini-2.5-flash-001"],
-  "description": "Gemini 2.5 Flash is Google's production-grade fast model with 1M context window. Supports configurable thinking mode, function calling, code execution, and multimodal inputs. Scheduled for deprecation Oct 2026.",
-  "tags": ["fast", "efficient", "multimodal", "long-context", "production"],
+  "aliases": ["gemini-2.5-flash-lite-001"],
+  "description": "Gemini 2.5 Flash-Lite is the lowest-cost stable Gemini model at $0.10/M input. 1M context window, configurable thinking, ~393 tokens/sec throughput. Ideal for high-volume workloads.",
+  "tags": ["cost-efficient", "fast", "multimodal", "production", "long-context"],
   "provider_google": {
     "supported_inputs": ["text", "image", "video", "audio", "pdf"],
     "supported_outputs": ["text"],
@@ -64,8 +60,7 @@
       "default_enabled": false
     },
     "live_api": false,
-    "url_context": true,
-    "safety_settings": []
+    "url_context": true
   },
   "source": "builtin"
 }

@@ -1,0 +1,48 @@
+{
+  "model_id": "anthropic/claude-haiku-4.5",
+  "display_name": "Claude Haiku 4.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Claude"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "code_execution": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Anthropic's fastest model. Cost-efficient with vision support.",
+  "tags": [
+    "fast",
+    "cost-efficient"
+  ],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 5.0
+    }
+  }
+}
