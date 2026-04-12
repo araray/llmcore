@@ -1,0 +1,62 @@
+{
+  "model_id": "liquid/lfm-2.5-1.2b-thinking:free",
+  "display_name": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Liquid"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "LFM2.5-1.2B-Thinking is a lightweight reasoning-focused model optimized for agentic tasks, data extraction, and RAG\u2014while still running comfortably on edge devices. It supports long context (up to 32K tokens) and is...",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "liquid/lfm-2.5-1.2b-thinking-20260120",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

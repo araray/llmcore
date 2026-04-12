@@ -1,0 +1,60 @@
+{
+  "model_id": "liquid/lfm-2.5-1.2b-instruct:free",
+  "display_name": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Liquid"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "LFM2.5-1.2B-Instruct is a compact, high-performance instruction-tuned model built for fast on-device AI. It delivers strong chat quality in a 1.2B parameter footprint, with efficient edge inference and broad runtime support.",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "liquid/lfm-2.5-1.2b-instruct-20260120",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

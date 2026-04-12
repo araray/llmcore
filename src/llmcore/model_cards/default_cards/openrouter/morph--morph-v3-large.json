@@ -1,0 +1,61 @@
+{
+  "model_id": "morph/morph-v3-large",
+  "display_name": "Morph: Morph V3 Large",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Morph"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: <instruction>{instruction}</instruction> <code>{initial_code}</code>...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.9,
+      "output": 1.9
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "morph/morph-v3-large",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "stop",
+      "temperature"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

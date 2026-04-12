@@ -1,0 +1,68 @@
+{
+  "model_id": "inception/mercury-2",
+  "display_name": "Inception: Mercury 2",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Inception"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 50000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mercury 2 is an extremely fast reasoning LLM, and the first reasoning diffusion LLM (dLLM). Instead of generating tokens sequentially, Mercury 2 produces and refines multiple tokens in parallel, achieving...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.25,
+      "output": 0.75,
+      "cached_input": 0.025
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "inception/mercury-2-20260304",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

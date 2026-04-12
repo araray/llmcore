@@ -1,0 +1,67 @@
+{
+  "model_id": "qwen/qwen2.5-coder-7b-instruct",
+  "display_name": "Qwen: Qwen2.5 Coder 7B Instruct",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Qwen"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-06-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen2.5-Coder-7B-Instruct is a 7B parameter instruction-tuned language model optimized for code-related tasks such as code generation, reasoning, and bug fixing. Based on the Qwen2.5 architecture, it incorporates enhancements like RoPE,...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.03,
+      "output": 0.09
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "qwen/qwen2.5-coder-7b-instruct",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "response_format",
+      "structured_outputs",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Qwen"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "model_id": "meta-llama/llama-guard-3-8b",
+  "display_name": "Llama Guard 3 8B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Meta-Llama"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-12-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Llama Guard 3 is a Llama-3.1-8B pretrained model, fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM inputs (prompt classification)...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.02,
+      "output": 0.06
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "meta-llama/llama-guard-3-8b",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": "none",
+    "tokenizer": "Llama3"
+  }
+}

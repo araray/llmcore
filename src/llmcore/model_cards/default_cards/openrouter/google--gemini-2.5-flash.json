@@ -1,14 +1,14 @@
 {
   "model_id": "google/gemini-2.5-flash",
-  "display_name": "Gemini 2.5 Flash",
+  "display_name": "Google: Gemini 2.5 Flash",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Gemini"
+    "family": "Google"
   },
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 65536
+    "max_output_tokens": 65535
   },
   "capabilities": {
     "streaming": true,
@@ -21,29 +21,56 @@
     "audio_output": false,
     "video_input": true,
     "image_generation": false,
-    "code_execution": true,
-    "web_search": true,
+    "web_search": false,
     "reasoning": true,
     "file_processing": true
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2025-01-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Google's stable production model. 1M context, configurable thinking.",
-  "tags": [
-    "production",
-    "stable",
-    "multimodal"
-  ],
+  "description": "Gemini 2.5 Flash is Google's state-of-the-art workhorse model, specifically designed for advanced reasoning, coding, mathematics, and scientific tasks. It includes built-in \"thinking\" capabilities, enabling it to provide responses with greater...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.3,
-      "output": 2.5
+      "output": 2.5,
+      "cached_input": 0.03,
+      "reasoning_output": 2.5
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "google/gemini-2.5-flash",
+    "input_modalities": [
+      "file",
+      "image",
+      "text",
+      "audio",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Gemini"
   }
 }

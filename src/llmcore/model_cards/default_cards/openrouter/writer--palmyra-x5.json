@@ -1,0 +1,63 @@
+{
+  "model_id": "writer/palmyra-x5",
+  "display_name": "Writer: Palmyra X5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Writer"
+  },
+  "context": {
+    "max_input_tokens": 1040000,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Palmyra X5 is Writer's most advanced model, purpose-built for building and scaling AI agents across the enterprise. It delivers industry-leading speed and efficiency on context windows up to 1 million...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.6,
+      "output": 6.0
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "writer/palmyra-x5-20250428",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

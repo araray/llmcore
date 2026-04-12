@@ -1,49 +1,67 @@
 {
   "model_id": "mistralai/mistral-small-3.1-24b-instruct",
-  "display_name": "Mistral Small 3.1",
+  "display_name": "Mistral: Mistral Small 3.1 24B",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Mistral"
+    "family": "Mistralai"
   },
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 8192
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
-    "json_mode": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
     "structured_output": false,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
     "reasoning": false,
     "file_processing": false
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2023-10-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Mistral's efficient small model. Vision support, 131K context.",
-  "tags": [
-    "fast",
-    "cost-efficient",
-    "vision"
-  ],
+  "description": "Mistral Small 3.1 24B Instruct is an upgraded variant of Mistral Small 3 (2501), featuring 24 billion parameters with advanced multimodal capabilities. It provides state-of-the-art performance in text-based reasoning and...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.1,
-      "output": 0.3
+      "input": 0.35,
+      "output": 0.56
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "mistralai/mistral-small-3.1-24b-instruct-2503",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Mistral"
   }
 }

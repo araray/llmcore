@@ -1,0 +1,61 @@
+{
+  "model_id": "mistralai/mistral-small-creative",
+  "display_name": "Mistral: Mistral Small Creative",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Mistralai"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "deprecated",
+    "deprecation_date": "2026-04-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral Small Creative is an experimental small model designed for creative writing, narrative generation, roleplay and character-driven dialogue, general-purpose instruction following, and conversational agents.",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.3,
+      "cached_input": 0.01
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "mistralai/mistral-small-creative-20251216",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "tool_choice",
+      "tools"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Mistral"
+  }
+}

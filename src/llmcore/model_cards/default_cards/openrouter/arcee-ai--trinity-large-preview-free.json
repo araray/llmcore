@@ -1,0 +1,58 @@
+{
+  "model_id": "arcee-ai/trinity-large-preview:free",
+  "display_name": "Arcee AI: Trinity Large Preview (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Arcee-Ai"
+  },
+  "context": {
+    "max_input_tokens": 131000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "deprecated",
+    "deprecation_date": "2026-04-22"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Trinity-Large-Preview is a frontier-scale open-weight language model from Arcee, built as a 400B-parameter sparse Mixture-of-Experts with 13B active parameters per token using 4-of-256 expert routing. It excels in creative writing,...",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "arcee-ai/trinity-large-preview",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "response_format",
+      "structured_outputs",
+      "temperature",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

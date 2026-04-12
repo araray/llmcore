@@ -1,0 +1,70 @@
+{
+  "model_id": "arcee-ai/spotlight",
+  "display_name": "Arcee AI: Spotlight",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Arcee-Ai"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 65537
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-03-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Spotlight is a 7\u2011billion\u2011parameter vision\u2011language model derived from Qwen 2.5\u2011VL and fine\u2011tuned by Arcee AI for tight image\u2011text grounding tasks. It offers a 32 k\u2011token context window, enabling rich multimodal...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.18,
+      "output": 0.18
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "arcee-ai/spotlight",
+    "input_modalities": [
+      "image",
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

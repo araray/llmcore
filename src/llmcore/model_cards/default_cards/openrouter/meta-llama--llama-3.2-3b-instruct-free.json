@@ -1,0 +1,58 @@
+{
+  "model_id": "meta-llama/llama-3.2-3b-instruct:free",
+  "display_name": "Meta: Llama 3.2 3B Instruct (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Meta-Llama"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-12-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Llama 3.2 3B is a 3-billion-parameter multilingual large language model, optimized for advanced natural language processing tasks like dialogue generation, reasoning, and summarization. Designed with the latest transformer architecture, it...",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "meta-llama/llama-3.2-3b-instruct",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": "llama3",
+    "tokenizer": "Llama3"
+  }
+}

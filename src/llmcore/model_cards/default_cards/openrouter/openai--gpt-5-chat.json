@@ -1,0 +1,66 @@
+{
+  "model_id": "openai/gpt-5-chat",
+  "display_name": "OpenAI: GPT-5 Chat",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Openai"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-09-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-5 Chat is designed for advanced, natural, multimodal, and context-aware conversations for enterprise applications.",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.25,
+      "output": 10.0,
+      "cached_input": 0.125
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/gpt-5-chat-2025-08-07",
+    "input_modalities": [
+      "file",
+      "image",
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "response_format",
+      "seed",
+      "structured_outputs"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "GPT"
+  }
+}

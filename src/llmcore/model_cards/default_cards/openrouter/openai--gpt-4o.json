@@ -1,10 +1,10 @@
 {
   "model_id": "openai/gpt-4o",
-  "display_name": "GPT-4o",
+  "display_name": "OpenAI: GPT-4o",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "GPT"
+    "family": "Openai"
   },
   "context": {
     "max_input_tokens": 128000,
@@ -17,26 +17,23 @@
     "json_mode": true,
     "structured_output": true,
     "vision": true,
-    "audio_input": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
-    "web_search": false,
+    "web_search": true,
     "reasoning": false,
-    "file_processing": false
+    "file_processing": true
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2023-10-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI's multimodal model. Vision, audio input, function calling.",
-  "tags": [
-    "multimodal",
-    "vision"
-  ],
+  "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of [GPT-4 Turbo](/models/openai/gpt-4-turbo) while being twice as...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
@@ -44,5 +41,37 @@
       "input": 2.5,
       "output": 10.0
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/gpt-4o",
+    "input_modalities": [
+      "text",
+      "image",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "logprobs",
+      "max_completion_tokens",
+      "max_tokens",
+      "presence_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_logprobs",
+      "top_p",
+      "web_search_options"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "GPT"
   }
 }

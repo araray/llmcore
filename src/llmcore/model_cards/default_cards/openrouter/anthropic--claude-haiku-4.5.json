@@ -1,14 +1,14 @@
 {
   "model_id": "anthropic/claude-haiku-4.5",
-  "display_name": "Claude Haiku 4.5",
+  "display_name": "Anthropic: Claude Haiku 4.5",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Claude"
+    "family": "Anthropic"
   },
   "context": {
-    "max_input_tokens": 1048576,
-    "max_output_tokens": 8192
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000
   },
   "capabilities": {
     "streaming": true,
@@ -21,9 +21,8 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
-    "reasoning": false,
+    "reasoning": true,
     "file_processing": false
   },
   "lifecycle": {
@@ -32,17 +31,41 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Anthropic's fastest model. Cost-efficient with vision support.",
-  "tags": [
-    "fast",
-    "cost-efficient"
-  ],
+  "description": "Claude Haiku 4.5 is Anthropic\u2019s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4\u2019s performance...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.0,
-      "output": 5.0
+      "output": 5.0,
+      "cached_input": 0.1
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "anthropic/claude-4.5-haiku-20251001",
+    "input_modalities": [
+      "image",
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "Claude"
   }
 }

@@ -1,10 +1,10 @@
 {
   "model_id": "openai/gpt-4o-mini",
-  "display_name": "GPT-4o Mini",
+  "display_name": "OpenAI: GPT-4o-mini",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "GPT"
+    "family": "Openai"
   },
   "context": {
     "max_input_tokens": 128000,
@@ -21,29 +21,58 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
-    "web_search": false,
+    "web_search": true,
     "reasoning": false,
-    "file_processing": false
+    "file_processing": true
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2023-10-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI's affordable small model. Great value for most tasks.",
-  "tags": [
-    "fast",
-    "cost-efficient",
-    "default"
-  ],
+  "description": "GPT-4o mini is OpenAI's newest model after [GPT-4 Omni](/models/openai/gpt-4o), supporting both text and image inputs with text outputs. As their most advanced small model, it is many multiples more affordable...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.15,
-      "output": 0.6
+      "output": 0.6,
+      "cached_input": 0.075
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/gpt-4o-mini",
+    "input_modalities": [
+      "text",
+      "image",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "logprobs",
+      "max_completion_tokens",
+      "max_tokens",
+      "presence_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_logprobs",
+      "top_p",
+      "web_search_options"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "GPT"
   }
 }

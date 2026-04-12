@@ -1,14 +1,14 @@
 {
   "model_id": "anthropic/claude-opus-4.6",
-  "display_name": "Claude Opus 4.6",
+  "display_name": "Anthropic: Claude Opus 4.6",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Claude"
+    "family": "Anthropic"
   },
   "context": {
-    "max_input_tokens": 1048576,
-    "max_output_tokens": 32768
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -21,10 +21,9 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": true,
     "web_search": false,
     "reasoning": true,
-    "file_processing": true
+    "file_processing": false
   },
   "lifecycle": {
     "status": "active"
@@ -32,18 +31,43 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Anthropic's most capable model. Extended thinking, computer use, 1M context.",
-  "tags": [
-    "flagship",
-    "reasoning",
-    "agentic"
-  ],
+  "description": "Opus 4.6 is Anthropic\u2019s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 5.0,
-      "output": 25.0
+      "output": 25.0,
+      "cached_input": 0.5
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "anthropic/claude-4.6-opus-20260205",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p",
+      "verbosity"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "Claude"
   }
 }

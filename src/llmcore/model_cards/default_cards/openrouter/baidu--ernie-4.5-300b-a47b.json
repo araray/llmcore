@@ -1,0 +1,70 @@
+{
+  "model_id": "baidu/ernie-4.5-300b-a47b",
+  "display_name": "Baidu: ERNIE 4.5 300B A47B ",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Baidu"
+  },
+  "context": {
+    "max_input_tokens": 123000,
+    "max_output_tokens": 12000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-03-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "ERNIE-4.5-300B-A47B is a 300B parameter Mixture-of-Experts (MoE) language model developed by Baidu as part of the ERNIE 4.5 series. It activates 47B parameters per token and supports text generation in...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.28,
+      "output": 1.1
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "baidu/ernie-4.5-300b-a47b",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

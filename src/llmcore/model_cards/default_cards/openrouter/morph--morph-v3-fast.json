@@ -1,0 +1,61 @@
+{
+  "model_id": "morph/morph-v3-fast",
+  "display_name": "Morph: Morph V3 Fast",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Morph"
+  },
+  "context": {
+    "max_input_tokens": 81920,
+    "max_output_tokens": 38000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations. The model requires the prompt to be in the following format: <instruction>{instruction}</instruction> <code>{initial_code}</code> <update>{edit_snippet}</update>...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.8,
+      "output": 1.2
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "morph/morph-v3-fast",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "stop",
+      "temperature"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

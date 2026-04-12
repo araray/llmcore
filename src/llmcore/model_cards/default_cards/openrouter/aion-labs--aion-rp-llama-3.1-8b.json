@@ -1,0 +1,62 @@
+{
+  "model_id": "aion-labs/aion-rp-llama-3.1-8b",
+  "display_name": "AionLabs: Aion-RP 1.0 (8B)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Aion-Labs"
+  },
+  "context": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-12-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Aion-RP-Llama-3.1-8B ranks the highest in the character evaluation portion of the RPBench-Auto benchmark, a roleplaying-specific variant of Arena-Hard-Auto, where LLMs evaluate each other\u2019s responses. It is a fine-tuned base model...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.8,
+      "output": 1.6
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "aion-labs/aion-rp-llama-3.1-8b",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "temperature",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "model_id": "allenai/olmo-2-0325-32b-instruct",
+  "display_name": "AllenAI: Olmo 2 32B Instruct",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Allenai"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-10-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OLMo-2 32B Instruct is a supervised instruction-finetuned variant of the OLMo-2 32B March 2025 base model. It excels in complex reasoning and instruction-following tasks across diverse benchmarks such as GSM8K,...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.05,
+      "output": 0.2
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "allenai/olmo-2-0325-32b-instruct",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

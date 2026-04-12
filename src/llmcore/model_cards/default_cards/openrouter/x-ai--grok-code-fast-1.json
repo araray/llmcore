@@ -1,0 +1,73 @@
+{
+  "model_id": "x-ai/grok-code-fast-1",
+  "display_name": "xAI: Grok Code Fast 1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "X-Ai"
+  },
+  "context": {
+    "max_input_tokens": 256000,
+    "max_output_tokens": 10000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-09-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok Code Fast 1 is a speedy and economical reasoning model that excels at agentic coding. With reasoning traces visible in the response, developers can steer Grok Code for high-quality...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 1.5,
+      "cached_input": 0.02
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "x-ai/grok-code-fast-1",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "logprobs",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_logprobs",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Grok"
+  }
+}

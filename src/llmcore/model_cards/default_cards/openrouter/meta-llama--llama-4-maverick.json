@@ -1,14 +1,14 @@
 {
   "model_id": "meta-llama/llama-4-maverick",
-  "display_name": "Llama 4 Maverick",
+  "display_name": "Meta: Llama 4 Maverick",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Llama"
+    "family": "Meta-Llama"
   },
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 65536
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -21,29 +21,55 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
-    "reasoning": true,
+    "reasoning": false,
     "file_processing": false
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2024-08-31"
   },
   "license": null,
-  "open_weights": true,
+  "open_weights": false,
   "aliases": [],
-  "description": "Meta's MoE model with 400B total / 17B active params. Multimodal.",
-  "tags": [
-    "open-weight",
-    "moe",
-    "multimodal"
-  ],
+  "description": "Llama 4 Maverick 17B Instruct (128E) is a high-capacity multimodal language model from Meta, built on a mixture-of-experts (MoE) architecture with 128 experts and 17 billion active parameters per forward...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.2,
+      "input": 0.15,
       "output": 0.6
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Llama4"
   }
 }

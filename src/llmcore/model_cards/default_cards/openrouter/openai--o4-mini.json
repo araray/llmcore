@@ -1,10 +1,10 @@
 {
   "model_id": "openai/o4-mini",
-  "display_name": "o4-mini",
+  "display_name": "OpenAI: o4 Mini",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "o-series"
+    "family": "Openai"
   },
   "context": {
     "max_input_tokens": 200000,
@@ -21,29 +21,50 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
     "reasoning": true,
-    "file_processing": false
+    "file_processing": true
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2024-06-30"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI's reasoning model. Extended thinking with configurable effort.",
-  "tags": [
-    "reasoning",
-    "math",
-    "coding"
-  ],
+  "description": "OpenAI o4-mini is a compact reasoning model in the o-series, optimized for fast, cost-efficient performance while retaining strong multimodal and agentic capabilities. It supports tool use and demonstrates competitive reasoning...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.1,
-      "output": 4.4
+      "output": 4.4,
+      "cached_input": 0.275
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/o4-mini-2025-04-16",
+    "input_modalities": [
+      "image",
+      "text",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "tool_choice",
+      "tools"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "GPT"
   }
 }

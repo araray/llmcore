@@ -1,0 +1,74 @@
+{
+  "model_id": "openai/gpt-3.5-turbo-16k",
+  "display_name": "OpenAI: GPT-3.5 Turbo 16k",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Openai"
+  },
+  "context": {
+    "max_input_tokens": 16385,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2021-09-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model offers four times the context length of gpt-3.5-turbo, allowing it to support approximately 20 pages of text in a single request at a higher cost. Training data: up...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 3.0,
+      "output": 4.0
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/gpt-3.5-turbo-16k",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "logprobs",
+      "max_completion_tokens",
+      "max_tokens",
+      "presence_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_logprobs",
+      "top_p"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "GPT"
+  }
+}

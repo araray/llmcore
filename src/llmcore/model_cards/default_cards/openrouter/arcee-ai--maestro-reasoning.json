@@ -1,0 +1,69 @@
+{
+  "model_id": "arcee-ai/maestro-reasoning",
+  "display_name": "Arcee AI: Maestro Reasoning",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Arcee-Ai"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 32000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-03-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Maestro Reasoning is Arcee's flagship analysis model: a 32 B\u2011parameter derivative of Qwen 2.5\u201132 B tuned with DPO and chain\u2011of\u2011thought RL for step\u2011by\u2011step logic. Compared to the earlier 7 B...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.9,
+      "output": 3.3
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "arcee-ai/maestro-reasoning",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

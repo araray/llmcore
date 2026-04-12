@@ -1,0 +1,70 @@
+{
+  "model_id": "thedrummer/cydonia-24b-v4.1",
+  "display_name": "TheDrummer: Cydonia 24B V4.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Thedrummer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-04-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Uncensored and creative writing model based on Mistral Small 3.2 24B with good recall, prompt adherence, and intelligence.",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 0.5,
+      "cached_input": 0.15
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "thedrummer/cydonia-24b-v4.1",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

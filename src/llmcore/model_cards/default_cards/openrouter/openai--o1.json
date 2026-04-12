@@ -1,0 +1,70 @@
+{
+  "model_id": "openai/o1",
+  "display_name": "OpenAI: o1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Openai"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 100000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-10-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The latest and strongest model family from OpenAI, o1 is designed to spend more time thinking before responding. The o1 model series is trained with large-scale reinforcement learning to reason...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 15.0,
+      "output": 60.0,
+      "cached_input": 7.5
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/o1-2024-12-17",
+    "input_modalities": [
+      "text",
+      "image",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "tool_choice",
+      "tools"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "GPT"
+  }
+}

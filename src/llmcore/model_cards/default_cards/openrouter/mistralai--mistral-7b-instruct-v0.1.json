@@ -1,0 +1,66 @@
+{
+  "model_id": "mistralai/mistral-7b-instruct-v0.1",
+  "display_name": "Mistral: Mistral 7B Instruct v0.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Mistralai"
+  },
+  "context": {
+    "max_input_tokens": 2824
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-09-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "A 7.3B parameter model that outperforms Llama 2 13B on all benchmarks, with optimizations for speed and context length.",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.11,
+      "output": 0.19
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "mistralai/mistral-7b-instruct-v0.1",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": "mistral",
+    "tokenizer": "Mistral"
+  }
+}

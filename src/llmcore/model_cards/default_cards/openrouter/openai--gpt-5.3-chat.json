@@ -1,0 +1,68 @@
+{
+  "model_id": "openai/gpt-5.3-chat",
+  "display_name": "OpenAI: GPT-5.3 Chat",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Openai"
+  },
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-5.3 Chat is an update to ChatGPT's most-used model that makes everyday conversations smoother, more useful, and more directly helpful. It delivers more accurate answers with better contextualization and significantly...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.75,
+      "output": 14.0,
+      "cached_input": 0.175
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "openai/gpt-5.3-chat-20260303",
+    "input_modalities": [
+      "text",
+      "image",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_completion_tokens",
+      "max_tokens",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "tool_choice",
+      "tools"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "GPT"
+  }
+}

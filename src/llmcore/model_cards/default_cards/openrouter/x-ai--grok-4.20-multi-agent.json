@@ -1,0 +1,71 @@
+{
+  "model_id": "x-ai/grok-4.20-multi-agent",
+  "display_name": "xAI: Grok 4.20 Multi-Agent",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "X-Ai"
+  },
+  "context": {
+    "max_input_tokens": 2000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-09-01"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok 4.20 Multi-Agent is a variant of xAI\u2019s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 6.0,
+      "cached_input": 0.2
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "x-ai/grok-4.20-multi-agent-20260309",
+    "input_modalities": [
+      "text",
+      "image",
+      "file"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "logprobs",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "temperature",
+      "top_logprobs",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Grok"
+  }
+}

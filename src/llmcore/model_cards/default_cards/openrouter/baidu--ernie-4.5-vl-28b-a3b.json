@@ -1,0 +1,73 @@
+{
+  "model_id": "baidu/ernie-4.5-vl-28b-a3b",
+  "display_name": "Baidu: ERNIE 4.5 VL 28B A3B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Baidu"
+  },
+  "context": {
+    "max_input_tokens": 30000,
+    "max_output_tokens": 8000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2025-03-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "A powerful multimodal Mixture-of-Experts chat model featuring 28B total parameters with 3B activated per token, delivering exceptional text and vision understanding through its innovative heterogeneous MoE structure with modality-isolated routing....",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.14,
+      "output": 0.56
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "baidu/ernie-4.5-vl-28b-a3b",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "max_tokens",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

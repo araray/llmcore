@@ -1,49 +1,73 @@
 {
   "model_id": "deepseek/deepseek-r1",
-  "display_name": "DeepSeek R1",
+  "display_name": "DeepSeek: R1",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "DeepSeek"
+    "family": "Deepseek"
   },
   "context": {
-    "max_input_tokens": 164000,
-    "max_output_tokens": 8192
+    "max_input_tokens": 64000,
+    "max_output_tokens": 16000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
-    "json_mode": true,
+    "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
     "reasoning": true,
     "file_processing": false
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2024-07-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "DeepSeek's reasoning model. Strong math and coding with chain-of-thought.",
-  "tags": [
-    "reasoning",
-    "math",
-    "coding"
-  ],
+  "description": "DeepSeek R1 is here: Performance on par with [OpenAI o1](/openai/o1), but open-sourced and with fully open reasoning tokens. It's 671B parameters in size, with 37B active in an inference pass....",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.55,
-      "output": 2.19
+      "input": 0.7,
+      "output": 2.5
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "deepseek/deepseek-r1",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": "deepseek-r1",
+    "tokenizer": "DeepSeek"
   }
 }

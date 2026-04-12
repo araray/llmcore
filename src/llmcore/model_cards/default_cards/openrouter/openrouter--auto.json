@@ -1,0 +1,77 @@
+{
+  "model_id": "openrouter/auto",
+  "display_name": "Auto Router",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": {
+    "family": "Openrouter"
+  },
+  "context": {
+    "max_input_tokens": 2000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": true,
+    "web_search": true,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Your prompt will be processed by a meta-model and routed to one of dozens of models (see below), optimizing for the best possible output. To see which model was used,...",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "openrouter/auto",
+    "input_modalities": [
+      "text",
+      "image",
+      "audio",
+      "file",
+      "video"
+    ],
+    "output_modalities": [
+      "text",
+      "image"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_completion_tokens",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "reasoning_effort",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p",
+      "web_search_options"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Router"
+  }
+}

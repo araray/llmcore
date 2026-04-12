@@ -1,0 +1,63 @@
+{
+  "model_id": "inflection/inflection-3-pi",
+  "display_name": "Inflection: Inflection 3 Pi",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Inflection"
+  },
+  "context": {
+    "max_input_tokens": 8000,
+    "max_output_tokens": 1024
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-10-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Inflection 3 Pi powers Inflection's [Pi](https://pi.ai) chatbot, including backstory, emotional intelligence, productivity, and safety. It has access to recent news, and excels in scenarios like customer support and roleplay. Pi...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.5,
+      "output": 10.0
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "inflection/inflection-3-pi",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "stop",
+      "temperature",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Other"
+  }
+}

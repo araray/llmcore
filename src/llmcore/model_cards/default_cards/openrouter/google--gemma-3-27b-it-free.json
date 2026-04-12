@@ -1,10 +1,10 @@
 {
   "model_id": "google/gemma-3-27b-it:free",
-  "display_name": "Gemma 3 27B (Free)",
+  "display_name": "Google: Gemma 3 27B (free)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Gemma"
+    "family": "Google"
   },
   "context": {
     "max_input_tokens": 131072,
@@ -12,8 +12,8 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
+    "function_calling": false,
+    "tool_use": false,
     "json_mode": true,
     "structured_output": false,
     "vision": true,
@@ -21,21 +21,39 @@
     "audio_output": false,
     "video_input": false,
     "image_generation": false,
-    "code_execution": false,
     "web_search": false,
     "reasoning": false,
     "file_processing": false
   },
   "lifecycle": {
-    "status": "active"
+    "status": "active",
+    "knowledge_cutoff": "2024-08-31"
   },
   "license": null,
-  "open_weights": true,
+  "open_weights": false,
   "aliases": [],
-  "description": "Google's open model. Free tier with rate limits.",
-  "tags": [
-    "free",
-    "open-weight"
-  ],
-  "source": "builtin"
+  "description": "Gemma 3 introduces multimodality, supporting vision-language input and text outputs. It handles context windows up to 128k tokens, understands over 140 languages, and offers improved math, reasoning, and chat capabilities,...",
+  "tags": [],
+  "source": "builtin",
+  "provider_extension": {
+    "canonical_slug": "google/gemma-3-27b-it",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "response_format",
+      "seed",
+      "stop",
+      "temperature",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": "gemma",
+    "tokenizer": "Gemini"
+  }
 }

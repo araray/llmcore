@@ -1,10 +1,10 @@
 {
   "model_id": "google/gemini-3.1-pro-preview",
-  "display_name": "Gemini 3.1 Pro Preview",
+  "display_name": "Google: Gemini 3.1 Pro Preview",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": {
-    "family": "Gemini"
+    "family": "Google"
   },
   "context": {
     "max_input_tokens": 1048576,
@@ -21,31 +21,55 @@
     "audio_output": false,
     "video_input": true,
     "image_generation": false,
-    "code_execution": true,
-    "web_search": true,
+    "web_search": false,
     "reasoning": true,
     "file_processing": true
   },
   "lifecycle": {
-    "status": "preview"
+    "status": "active"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [
-    "google/gemini-pro-latest"
-  ],
-  "description": "Google's most capable model. ARC-AGI-2 77.1%, always-on thinking.",
-  "tags": [
-    "flagship",
-    "reasoning",
-    "multimodal"
-  ],
+  "aliases": [],
+  "description": "Gemini 3.1 Pro Preview is Google\u2019s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation...",
+  "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 2.0,
-      "output": 12.0
+      "output": 12.0,
+      "cached_input": 0.2,
+      "reasoning_output": 12.0
     }
+  },
+  "provider_extension": {
+    "canonical_slug": "google/gemini-3.1-pro-preview-20260219",
+    "input_modalities": [
+      "audio",
+      "file",
+      "image",
+      "text",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Gemini"
   }
 }

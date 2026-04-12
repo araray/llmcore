@@ -1,0 +1,69 @@
+{
+  "model_id": "sao10k/l3.1-70b-hanami-x1",
+  "display_name": "Sao10K: Llama 3.1 70B Hanami x1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Sao10K"
+  },
+  "context": {
+    "max_input_tokens": 16000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2023-12-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This is [Sao10K](/sao10k)'s experiment over [Euryale v2.2](/sao10k/l3.1-euryale-70b).",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 3.0,
+      "output": 3.0
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "sao10k/l3.1-70b-hanami-x1",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "seed",
+      "stop",
+      "temperature",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Llama3"
+  }
+}

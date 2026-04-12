@@ -1,0 +1,66 @@
+{
+  "model_id": "amazon/nova-lite-v1",
+  "display_name": "Amazon: Nova Lite 1.0",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Amazon"
+  },
+  "context": {
+    "max_input_tokens": 300000,
+    "max_output_tokens": 5120
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-10-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Amazon Nova Lite 1.0 is a very low-cost multimodal model from Amazon that focused on fast processing of image, video, and text inputs to generate text output. Amazon Nova Lite...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.06,
+      "output": 0.24
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "amazon/nova-lite-v1",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "max_tokens",
+      "stop",
+      "temperature",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": true,
+    "instruct_type": null,
+    "tokenizer": "Nova"
+  }
+}

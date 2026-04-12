@@ -1,0 +1,74 @@
+{
+  "model_id": "meta-llama/llama-4-scout",
+  "display_name": "Meta: Llama 4 Scout",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Meta-Llama"
+  },
+  "context": {
+    "max_input_tokens": 327680,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active",
+    "knowledge_cutoff": "2024-08-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Llama 4 Scout 17B Instruct (16E) is a mixture-of-experts (MoE) language model developed by Meta, activating 17 billion parameters out of a total of 109B. It supports native multimodal input...",
+  "tags": [],
+  "source": "builtin",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.08,
+      "output": 0.3
+    }
+  },
+  "provider_extension": {
+    "canonical_slug": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_parameters": [
+      "frequency_penalty",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "is_moderated": false,
+    "instruct_type": null,
+    "tokenizer": "Llama4"
+  }
+}
