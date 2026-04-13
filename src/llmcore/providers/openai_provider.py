@@ -677,3 +677,332 @@ class OpenAIProvider(BaseProvider):
                 logger.error(f"Error closing: {e}", exc_info=True)
             finally:
                 self._client = None
+
+    # ------------------------------------------------------------------
+    # Multimodal: Text-to-Speech (TTS)
+    # ------------------------------------------------------------------
+
+    async def generate_speech(
+        self,
+        text: str,
+        *,
+        voice: str = "alloy",
+        model: str | None = None,
+        response_format: str = "mp3",
+        speed: float = 1.0,
+        instructions: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Generate speech audio from text using OpenAI TTS.
+
+        Models: ``tts-1``, ``tts-1-hd``, ``gpt-4o-mini-tts``.
+        Voices: alloy, ash, ballad, coral, echo, fable, onyx, nova,
+                sage, shimmer, verse, marin, cedar.
+
+        Args:
+            text: Text to convert (max 4096 characters).
+            voice: Voice identifier.
+            model: TTS model.  Defaults to ``tts-1``.
+            response_format: mp3, opus, aac, flac, wav, pcm.
+            speed: 0.25–4.0 (default 1.0).
+            instructions: Voice control instructions
+                (gpt-4o-mini-tts only).
+            **kwargs: Extra API parameters.
+
+        Returns:
+            ``SpeechResult`` with raw audio bytes.
+        """
+        from ..models_multimodal import SpeechResult
+
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+
+        tts_model = model or "tts-1"
+
+        api_kwargs: dict[str, Any] = {
+            "input": text,
+            "model": tts_model,
+            "voice": voice,
+            "response_format": response_format,
+            "speed": speed,
+        }
+        if instructions is not None:
+            api_kwargs["instructions"] = instructions
+        api_kwargs.update(kwargs)
+
+        logger.debug(
+            "TTS request: model=%s, voice=%s, format=%s, len=%d",
+            tts_model,
+            voice,
+            response_format,
+            len(text),
+        )
+
+        try:
+            response = await self._client.audio.speech.create(**api_kwargs)
+            audio_bytes = response.content
+
+            return SpeechResult(
+                audio_data=audio_bytes,
+                format=response_format,
+                model=tts_model,
+                voice=voice,
+                metadata={},
+            )
+
+        except OpenAIAPIStatusError as e:
+            raise ProviderError(self.get_name(), f"TTS Error ({e.status_code}): {e}")
+        except OpenAIAPITimeoutError as e:
+            raise ProviderError(self.get_name(), f"TTS timeout: {e}")
+        except OpenAIAPIConnectionError as e:
+            raise ProviderError(self.get_name(), f"TTS connection error: {e}")
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"TTS error: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected TTS error: {e}", exc_info=True)
+            raise ProviderError(self.get_name(), f"TTS unexpected error: {e}")
+
+    # ------------------------------------------------------------------
+    # Multimodal: Speech-to-Text (STT)
+    # ------------------------------------------------------------------
+
+    async def transcribe_audio(
+        self,
+        audio_data: bytes | str,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        prompt: str | None = None,
+        response_format: str = "json",
+        temperature: float | None = None,
+        timestamp_granularities: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Transcribe audio to text using OpenAI Whisper / GPT-4o-transcribe.
+
+        Models: ``whisper-1``, ``gpt-4o-transcribe``,
+                ``gpt-4o-mini-transcribe``, ``gpt-4o-transcribe-diarize``.
+
+        Args:
+            audio_data: Raw audio bytes or file path string.
+            model: STT model.  Defaults to ``whisper-1``.
+            language: Input language hint (ISO-639-1).
+            prompt: Optional transcription style guide.
+            response_format: json, text, srt, verbose_json, vtt.
+            temperature: Sampling temperature.
+            timestamp_granularities: ``["word"]`` and/or ``["segment"]``.
+            **kwargs: Extra API parameters (e.g. ``chunking_strategy``).
+
+        Returns:
+            ``TranscriptionResult`` with transcribed text and segments.
+        """
+        from ..models_multimodal import TranscriptionResult, TranscriptionSegment
+
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+
+        stt_model = model or "whisper-1"
+
+        # Build file parameter
+        if isinstance(audio_data, str):
+            # File path
+            import pathlib
+
+            file_path = pathlib.Path(audio_data)
+            file_obj: Any = open(file_path, "rb")
+            file_name = file_path.name
+        else:
+            # Raw bytes — wrap in a tuple for the SDK
+            import io
+
+            file_obj = ("audio.wav", io.BytesIO(audio_data), "audio/wav")
+            file_name = "audio.wav"
+
+        api_kwargs: dict[str, Any] = {
+            "file": file_obj,
+            "model": stt_model,
+        }
+        if language is not None:
+            api_kwargs["language"] = language
+        if prompt is not None:
+            api_kwargs["prompt"] = prompt
+        if response_format != "json":
+            api_kwargs["response_format"] = response_format
+        if temperature is not None:
+            api_kwargs["temperature"] = temperature
+        if timestamp_granularities:
+            api_kwargs["timestamp_granularities"] = timestamp_granularities
+            # verbose_json needed for timestamps
+            if response_format == "json":
+                api_kwargs["response_format"] = "verbose_json"
+        api_kwargs.update(kwargs)
+
+        logger.debug(
+            "STT request: model=%s, language=%s, format=%s",
+            stt_model,
+            language,
+            response_format,
+        )
+
+        try:
+            response = await self._client.audio.transcriptions.create(**api_kwargs)
+
+            # Close file handle if we opened one
+            if isinstance(audio_data, str) and hasattr(file_obj, "close"):
+                file_obj.close()
+
+            # Parse response — structure depends on format
+            if hasattr(response, "text"):
+                text = response.text
+            elif isinstance(response, str):
+                text = response
+            else:
+                text = str(response)
+
+            # Extract segments if available (verbose_json format)
+            segments: list[TranscriptionSegment] = []
+            if hasattr(response, "segments") and response.segments:
+                for seg in response.segments:
+                    segments.append(
+                        TranscriptionSegment(
+                            text=seg.get("text", "")
+                            if isinstance(seg, dict)
+                            else getattr(seg, "text", ""),
+                            start=seg.get("start", 0.0)
+                            if isinstance(seg, dict)
+                            else getattr(seg, "start", 0.0),
+                            end=seg.get("end", 0.0)
+                            if isinstance(seg, dict)
+                            else getattr(seg, "end", 0.0),
+                        )
+                    )
+
+            duration = None
+            if hasattr(response, "duration"):
+                duration = response.duration
+
+            detected_lang = None
+            if hasattr(response, "language"):
+                detected_lang = response.language
+
+            return TranscriptionResult(
+                text=text,
+                language=detected_lang or language,
+                duration_seconds=duration,
+                segments=segments,
+                model=stt_model,
+                metadata={},
+            )
+
+        except OpenAIAPIStatusError as e:
+            raise ProviderError(self.get_name(), f"STT Error ({e.status_code}): {e}")
+        except OpenAIAPITimeoutError as e:
+            raise ProviderError(self.get_name(), f"STT timeout: {e}")
+        except OpenAIAPIConnectionError as e:
+            raise ProviderError(self.get_name(), f"STT connection error: {e}")
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"STT error: {e}")
+        except ProviderError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected STT error: {e}", exc_info=True)
+            raise ProviderError(self.get_name(), f"STT unexpected error: {e}")
+
+    # ------------------------------------------------------------------
+    # Multimodal: Image Generation
+    # ------------------------------------------------------------------
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        quality: str | None = None,
+        response_format: str = "b64_json",
+        style: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Generate images from a text prompt using OpenAI.
+
+        Models: ``dall-e-2``, ``dall-e-3``, ``gpt-image-1``,
+                ``gpt-image-1-mini``, ``gpt-image-1.5``.
+
+        Args:
+            prompt: Text description of desired image(s).
+            model: Image model.  Defaults to ``gpt-image-1``.
+            n: Number of images (1–10; dall-e-3 only supports 1).
+            size: Dimensions (e.g. ``"1024x1024"``).
+            quality: Quality level (standard, hd, low, medium, high, auto).
+            response_format: ``"url"`` or ``"b64_json"``.
+            style: ``"vivid"`` or ``"natural"`` (dall-e-3).
+            **kwargs: Extra params (background, output_format, etc.).
+
+        Returns:
+            ``ImageGenerationResult`` with generated images.
+        """
+        from ..models_multimodal import GeneratedImage, ImageGenerationResult
+
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+
+        img_model = model or "gpt-image-1"
+
+        api_kwargs: dict[str, Any] = {
+            "prompt": prompt,
+            "model": img_model,
+            "n": n,
+            "response_format": response_format,
+        }
+        if size is not None:
+            api_kwargs["size"] = size
+        if quality is not None:
+            api_kwargs["quality"] = quality
+        if style is not None:
+            api_kwargs["style"] = style
+        api_kwargs.update(kwargs)
+
+        logger.debug(
+            "Image gen: model=%s, n=%d, size=%s, quality=%s",
+            img_model,
+            n,
+            size,
+            quality,
+        )
+
+        try:
+            response = await self._client.images.generate(**api_kwargs)
+
+            images: list[GeneratedImage] = []
+            for img_data in response.data:
+                images.append(
+                    GeneratedImage(
+                        data=getattr(img_data, "b64_json", None),
+                        url=getattr(img_data, "url", None),
+                        revised_prompt=getattr(img_data, "revised_prompt", None),
+                        format=kwargs.get("output_format", "png"),
+                    )
+                )
+
+            return ImageGenerationResult(
+                images=images,
+                model=img_model,
+                metadata={
+                    "created": getattr(response, "created", None),
+                },
+            )
+
+        except OpenAIAPIStatusError as e:
+            raise ProviderError(self.get_name(), f"Image Error ({e.status_code}): {e}")
+        except OpenAIAPITimeoutError as e:
+            raise ProviderError(self.get_name(), f"Image timeout: {e}")
+        except OpenAIAPIConnectionError as e:
+            raise ProviderError(self.get_name(), f"Image connection error: {e}")
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"Image error: {e}")
+        except ProviderError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected image error: {e}", exc_info=True)
+            raise ProviderError(self.get_name(), f"Image unexpected error: {e}")

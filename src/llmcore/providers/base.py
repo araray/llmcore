@@ -233,6 +233,115 @@ class BaseProvider(abc.ABC):
         pass
 
     # ============================================================================
+    # Optional: Multimodal Media APIs (TTS, STT, Image Generation)
+    # ============================================================================
+    #
+    # These methods have default implementations that raise NotImplementedError.
+    # Providers that support these capabilities should override them.
+    # This keeps existing providers compatible without changes.
+
+    async def generate_speech(
+        self,
+        text: str,
+        *,
+        voice: str = "alloy",
+        model: str | None = None,
+        response_format: str = "mp3",
+        speed: float = 1.0,
+        instructions: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Generate speech audio from text (Text-to-Speech).
+
+        Args:
+            text: The text to convert to speech.
+            voice: Voice identifier (provider-specific).
+            model: TTS model to use.  If None, uses provider default.
+            response_format: Audio format (mp3, wav, opus, flac, aac, pcm).
+            speed: Playback speed multiplier (0.25–4.0).
+            instructions: Additional voice control instructions
+                (supported by some models).
+            **kwargs: Additional provider-specific parameters.
+
+        Returns:
+            A ``SpeechResult`` object (from ``models_multimodal``).
+
+        Raises:
+            NotImplementedError: If the provider does not support TTS.
+            ProviderError: On API errors.
+        """
+        raise NotImplementedError(f"Provider '{self.get_name()}' does not support text-to-speech.")
+
+    async def transcribe_audio(
+        self,
+        audio_data: bytes | str,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        prompt: str | None = None,
+        response_format: str = "json",
+        temperature: float | None = None,
+        timestamp_granularities: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Transcribe audio to text (Speech-to-Text).
+
+        Args:
+            audio_data: Raw audio bytes or a file path string.
+            model: STT model to use.  If None, uses provider default.
+            language: Input language hint (ISO-639-1, e.g. ``"en"``).
+            prompt: Optional text to guide transcription style.
+            response_format: Output format (json, text, srt, verbose_json, vtt).
+            temperature: Sampling temperature for transcription.
+            timestamp_granularities: Timing detail level (``["word"]``,
+                ``["segment"]``, or both).
+            **kwargs: Additional provider-specific parameters.
+
+        Returns:
+            A ``TranscriptionResult`` object (from ``models_multimodal``).
+
+        Raises:
+            NotImplementedError: If the provider does not support STT.
+            ProviderError: On API errors.
+        """
+        raise NotImplementedError(f"Provider '{self.get_name()}' does not support speech-to-text.")
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        quality: str | None = None,
+        response_format: str = "b64_json",
+        style: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Generate images from a text prompt.
+
+        Args:
+            prompt: Text description of the desired image(s).
+            model: Image generation model.  If None, uses provider default.
+            n: Number of images to generate (1–10).
+            size: Image dimensions (e.g. ``"1024x1024"``).
+            quality: Quality level (standard, hd, low, medium, high, auto).
+            response_format: ``"url"`` or ``"b64_json"``.
+            style: Style hint (``"vivid"`` or ``"natural"``).
+            **kwargs: Additional provider-specific parameters.
+
+        Returns:
+            An ``ImageGenerationResult`` object (from ``models_multimodal``).
+
+        Raises:
+            NotImplementedError: If the provider does not support image generation.
+            ProviderError: On API errors.
+        """
+        raise NotImplementedError(
+            f"Provider '{self.get_name()}' does not support image generation."
+        )
+
+    # ============================================================================
     # NEW: Observability Instrumentation Methods
     # ============================================================================
 
