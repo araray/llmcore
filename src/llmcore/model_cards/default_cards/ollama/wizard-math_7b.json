@@ -1,0 +1,41 @@
+{
+  "model_id": "wizard-math:7b",
+  "display_name": "WizardMath 7B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 4096,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "microsoft",
+  "open_weights": true,
+  "aliases": [],
+  "description": "WizardMath 7B \u2014 fine-tuned for mathematical reasoning.",
+  "tags": [
+    "open-source",
+    "local",
+    "math",
+    "specialized"
+  ],
+  "source": "builtin"
+}

@@ -1,0 +1,42 @@
+{
+  "model_id": "nous-hermes2:10.7b",
+  "display_name": "Nous Hermes 2 10.7B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "solar",
+    "parameter_count": "10.7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 4096,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "nous-hermes2"
+  ],
+  "description": "NousResearch Hermes 2 \u2014 fine-tuned on Solar 10.7B for instruction following.",
+  "tags": [
+    "open-source",
+    "local",
+    "nous"
+  ],
+  "source": "builtin"
+}

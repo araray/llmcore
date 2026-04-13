@@ -1,0 +1,40 @@
+{
+  "model_id": "samantha-mistral:7b",
+  "display_name": "Samantha Mistral 7B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "Samantha fine-tune of Mistral 7B \u2014 conversational assistant personality.",
+  "tags": [
+    "open-source",
+    "local",
+    "conversational"
+  ],
+  "source": "builtin"
+}

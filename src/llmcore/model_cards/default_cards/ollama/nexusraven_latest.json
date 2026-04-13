@@ -1,0 +1,43 @@
+{
+  "model_id": "nexusraven:latest",
+  "display_name": "NexusRaven 13B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "13B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 16384,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "nexusraven",
+  "open_weights": true,
+  "aliases": [
+    "nexusraven"
+  ],
+  "description": "NexusRaven v2 \u2014 specialized for function calling with open-source models.",
+  "tags": [
+    "open-source",
+    "local",
+    "tools",
+    "specialized"
+  ],
+  "source": "builtin"
+}

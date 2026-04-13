@@ -1,0 +1,40 @@
+{
+  "model_id": "all-minilm:33m",
+  "display_name": "All MiniLM L12 v2 33M",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert",
+    "parameter_count": "33M",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 256
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "Sentence Transformers All-MiniLM-L12-v2 \u2014 small fast embedding model (33M params).",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding",
+    "tiny",
+    "fast"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 384,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ]
+  }
+}

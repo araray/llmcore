@@ -1,0 +1,43 @@
+{
+  "model_id": "llama3:latest",
+  "display_name": "Llama 3 8B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "llama3",
+  "open_weights": true,
+  "aliases": [
+    "llama3",
+    "llama3:8b"
+  ],
+  "description": "Meta Llama 3 8B \u2014 instruction-tuned model with 8K context.",
+  "tags": [
+    "open-source",
+    "local",
+    "meta"
+  ],
+  "source": "builtin"
+}

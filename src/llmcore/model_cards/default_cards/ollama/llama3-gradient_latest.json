@@ -1,0 +1,37 @@
+{
+  "model_id": "llama3-gradient:latest",
+  "display_name": "Llama 3 Gradient 8B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "tool_use": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "llama3",
+  "open_weights": true,
+  "aliases": [
+    "llama3-gradient",
+    "llama3-gradient:8b"
+  ],
+  "description": "Gradient AI fine-tune of Llama 3 8B with extended 1M token context window.",
+  "tags": [
+    "open-source",
+    "local",
+    "long-context",
+    "meta"
+  ],
+  "source": "builtin"
+}

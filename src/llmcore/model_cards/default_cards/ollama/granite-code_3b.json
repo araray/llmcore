@@ -1,0 +1,41 @@
+{
+  "model_id": "granite-code:3b",
+  "display_name": "Granite Code 3B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "granite",
+    "parameter_count": "3B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "IBM Granite Code 3B \u2014 code-specialized model.",
+  "tags": [
+    "open-source",
+    "local",
+    "code",
+    "ibm"
+  ],
+  "source": "builtin"
+}

@@ -1,0 +1,41 @@
+{
+  "model_id": "deepseek-r1:1.5b",
+  "display_name": "DeepSeek R1 1.5B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek",
+    "parameter_count": "1.5B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "mit",
+  "open_weights": true,
+  "aliases": [],
+  "description": "DeepSeek R1 1.5B \u2014 compact reasoning model with chain-of-thought via distillation.",
+  "tags": [
+    "open-source",
+    "local",
+    "reasoning",
+    "deepseek"
+  ],
+  "source": "builtin"
+}

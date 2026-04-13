@@ -1,0 +1,46 @@
+{
+  "model_id": "qwen3-embedding:4b",
+  "display_name": "Qwen 3 Embedding 4B",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "qwen",
+    "parameter_count": "4B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "Alibaba Qwen 3 Embedding 4B \u2014 efficient embedding model.",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding",
+    "alibaba"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 2560,
+    "supports_matryoshka": true,
+    "similarity_metrics": [
+      "cosine",
+      "dot_product"
+    ],
+    "task_types": [
+      "retrieval_query",
+      "retrieval_document",
+      "classification",
+      "clustering"
+    ]
+  }
+}

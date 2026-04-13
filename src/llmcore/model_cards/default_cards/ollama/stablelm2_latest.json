@@ -1,0 +1,45 @@
+{
+  "model_id": "stablelm2:latest",
+  "display_name": "StableLM 2 1.6B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "stablelm",
+    "parameter_count": "1.6B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 4096,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "stability-ai",
+  "open_weights": true,
+  "aliases": [
+    "stablelm2",
+    "stablelm2:1.6b"
+  ],
+  "description": "Stability AI StableLM 2 1.6B \u2014 compact general-purpose model.",
+  "tags": [
+    "open-source",
+    "local",
+    "compact",
+    "stability",
+    "legacy"
+  ],
+  "source": "builtin"
+}

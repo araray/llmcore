@@ -1,0 +1,44 @@
+{
+  "model_id": "gemma3n:e4b",
+  "display_name": "Gemma 3N E4B (Nano)",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemma",
+    "parameter_count": "4B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "gemma",
+  "open_weights": true,
+  "aliases": [
+    "gemma3n"
+  ],
+  "description": "Gemma 3N E4B \u2014 Nano variant optimized for on-device/edge deployment with vision support.",
+  "tags": [
+    "open-source",
+    "local",
+    "edge",
+    "vision",
+    "google-deepmind"
+  ],
+  "source": "builtin"
+}

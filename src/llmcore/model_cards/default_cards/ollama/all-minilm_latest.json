@@ -1,0 +1,43 @@
+{
+  "model_id": "all-minilm:latest",
+  "display_name": "All MiniLM L6 v2 22M",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert",
+    "parameter_count": "22M",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 256
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "all-minilm",
+    "all-minilm:22m"
+  ],
+  "description": "Sentence Transformers All-MiniLM-L6-v2 \u2014 tiny fast embedding model (22M params).",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding",
+    "tiny",
+    "fast"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 384,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "model_id": "mxbai-embed-large:latest",
+  "display_name": "MxBai Embed Large",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert",
+    "parameter_count": "335M",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 512
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "mxbai-embed-large"
+  ],
+  "description": "Mixed Bread AI mxbai-embed-large \u2014 high-quality BERT-based embedding model.",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 1024,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ]
+  }
+}

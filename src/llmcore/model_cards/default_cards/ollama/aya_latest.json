@@ -1,0 +1,43 @@
+{
+  "model_id": "aya:latest",
+  "display_name": "Aya 23 8B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "command-r",
+    "parameter_count": "8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "cc-by-nc-4.0",
+  "open_weights": true,
+  "aliases": [
+    "aya"
+  ],
+  "description": "Cohere Aya 23 \u2014 multilingual model supporting 23 languages.",
+  "tags": [
+    "open-source",
+    "local",
+    "multilingual",
+    "cohere"
+  ],
+  "source": "builtin"
+}

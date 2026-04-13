@@ -1,0 +1,44 @@
+{
+  "model_id": "falcon2:latest",
+  "display_name": "Falcon 2 11B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "falcon",
+    "parameter_count": "11B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "falcon2"
+  ],
+  "description": "TII Falcon 2 11B \u2014 previous generation Falcon model.",
+  "tags": [
+    "open-source",
+    "local",
+    "falcon",
+    "tii",
+    "legacy"
+  ],
+  "source": "builtin"
+}

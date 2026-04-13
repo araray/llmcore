@@ -1,0 +1,44 @@
+{
+  "model_id": "bge-large:latest",
+  "display_name": "BGE Large EN v1.5",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert",
+    "parameter_count": "335M",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 512
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "mit",
+  "open_weights": true,
+  "aliases": [
+    "bge-large",
+    "bge-large:335m"
+  ],
+  "description": "BAAI BGE Large English v1.5 \u2014 BERT-based embedding model.",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 1024,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ],
+    "prefixes": {
+      "query": "Represent this sentence for searching relevant passages: "
+    }
+  }
+}

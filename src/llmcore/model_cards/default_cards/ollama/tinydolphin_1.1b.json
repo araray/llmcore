@@ -1,0 +1,41 @@
+{
+  "model_id": "tinydolphin:1.1b",
+  "display_name": "TinyDolphin 1.1B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "1.1B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 2048,
+    "max_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "TinyDolphin \u2014 uncensored fine-tune of TinyLlama.",
+  "tags": [
+    "open-source",
+    "local",
+    "tiny",
+    "uncensored"
+  ],
+  "source": "builtin"
+}

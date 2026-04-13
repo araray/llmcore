@@ -1,0 +1,44 @@
+{
+  "model_id": "moondream:1.8b",
+  "display_name": "Moondream 1.8B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "moondream",
+    "parameter_count": "1.8B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 2048,
+    "max_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "moondream"
+  ],
+  "description": "Moondream \u2014 tiny vision-language model for image understanding on edge devices.",
+  "tags": [
+    "open-source",
+    "local",
+    "vision",
+    "tiny",
+    "edge"
+  ],
+  "source": "builtin"
+}

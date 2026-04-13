@@ -1,0 +1,41 @@
+{
+  "model_id": "deepcoder:1.5b",
+  "display_name": "DeepCoder 1.5B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek",
+    "parameter_count": "1.5B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "mit",
+  "open_weights": true,
+  "aliases": [],
+  "description": "DeepCoder \u2014 code-focused reasoning model.",
+  "tags": [
+    "open-source",
+    "local",
+    "code",
+    "reasoning"
+  ],
+  "source": "builtin"
+}

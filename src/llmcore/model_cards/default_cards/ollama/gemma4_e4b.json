@@ -1,0 +1,45 @@
+{
+  "model_id": "gemma4:e4b",
+  "display_name": "Gemma 4 E4B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemma",
+    "parameter_count": "4B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "gemma",
+  "open_weights": true,
+  "aliases": [
+    "gemma4"
+  ],
+  "description": "Google DeepMind Gemma 4 E4B \u2014 multimodal model with vision, audio input, thinking, and tool use. 128K context.",
+  "tags": [
+    "open-source",
+    "local",
+    "multimodal",
+    "vision",
+    "audio",
+    "google-deepmind"
+  ],
+  "source": "builtin"
+}

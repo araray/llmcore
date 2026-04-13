@@ -1,0 +1,43 @@
+{
+  "model_id": "qwen3:32b",
+  "display_name": "Qwen 3 32B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "qwen",
+    "parameter_count": "32B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "qwen3:latest"
+  ],
+  "description": "Qwen 3 32B \u2014 large reasoning model with 256K context and thinking mode.",
+  "tags": [
+    "open-source",
+    "local",
+    "reasoning",
+    "alibaba"
+  ],
+  "source": "builtin"
+}

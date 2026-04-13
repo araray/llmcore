@@ -1,0 +1,43 @@
+{
+  "model_id": "tinyllama:latest",
+  "display_name": "TinyLlama 1.1B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "llama",
+    "parameter_count": "1.1B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 2048,
+    "max_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "tinyllama"
+  ],
+  "description": "TinyLlama 1.1B \u2014 very small model trained on 3T tokens.",
+  "tags": [
+    "open-source",
+    "local",
+    "tiny",
+    "edge"
+  ],
+  "source": "builtin"
+}

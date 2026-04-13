@@ -1,0 +1,43 @@
+{
+  "model_id": "smollm:1.7b",
+  "display_name": "SmolLM 1.7B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "smollm",
+    "parameter_count": "1.7B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "smollm"
+  ],
+  "description": "HuggingFace SmolLM 1.7B \u2014 compact model for on-device use.",
+  "tags": [
+    "open-source",
+    "local",
+    "compact",
+    "huggingface"
+  ],
+  "source": "builtin"
+}

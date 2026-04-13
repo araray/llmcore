@@ -106,15 +106,13 @@ DEFAULT_MODEL = "gemma3:4b"
 
 # Top-level chat parameters that go directly into the chat() call,
 # NOT inside the ``options`` dict.  Everything else goes into ``options``.
-_TOP_LEVEL_CHAT_PARAMS = frozenset(
-    {
-        "format",
-        "keep_alive",
-        "think",
-        "logprobs",
-        "top_logprobs",
-    }
-)
+_TOP_LEVEL_CHAT_PARAMS = frozenset({
+    "format",
+    "keep_alive",
+    "think",
+    "logprobs",
+    "top_logprobs",
+})
 
 
 class OllamaProvider(BaseProvider):
@@ -247,7 +245,8 @@ class OllamaProvider(BaseProvider):
                         supports_reasoning = "thinking" in capabilities
                 except Exception as e:
                     logger.debug(
-                        f"Could not fetch capabilities for '{model_name}': {e}. Using defaults."
+                        f"Could not fetch capabilities for '{model_name}': {e}. "
+                        f"Using defaults."
                     )
 
                 details = ModelDetails(
@@ -538,7 +537,9 @@ class OllamaProvider(BaseProvider):
 
         except ResponseError as e:
             error_detail = e.error if hasattr(e, "error") and e.error else str(e)
-            logger.error(f"Ollama API error: HTTP {e.status_code} - {error_detail}", exc_info=True)
+            logger.error(
+                f"Ollama API error: HTTP {e.status_code} - {error_detail}", exc_info=True
+            )
             if e.status_code == 404:
                 raise ProviderError(
                     self.get_name(),
@@ -589,7 +590,9 @@ class OllamaProvider(BaseProvider):
             )
         return response_dict
 
-    async def _wrap_stream(self, stream: Any) -> AsyncGenerator[dict[str, Any], None]:
+    async def _wrap_stream(
+        self, stream: Any
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Wrap the SDK's async stream, yielding normalized dicts.
 
         Each ``ChatResponse`` chunk is converted to a dict via
@@ -809,7 +812,11 @@ class OllamaProvider(BaseProvider):
         if not self._encoding:
             total_chars = sum(
                 len(msg.content)
-                + len(msg.role.value if hasattr(msg.role, "value") else str(msg.role))
+                + len(
+                    msg.role.value
+                    if hasattr(msg.role, "value")
+                    else str(msg.role)
+                )
                 for msg in messages
             )
             return (total_chars + (len(messages) * 5) + 3) // 4

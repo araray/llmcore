@@ -71,12 +71,12 @@ class TestOllamaContextLengthFromModelCard:
             return_value=mock_registry,
         ):
             # Use a model NOT in DEFAULT_OLLAMA_TOKEN_LIMITS
-            result = ollama_provider.get_max_context_length("deepseek-r1:7b")
+            result = ollama_provider.get_max_context_length("completely-unknown-model:7b")
 
         assert result == 262144
         mock_registry.get_context_length.assert_called_once_with(
             "ollama",
-            "deepseek-r1:7b",
+            "completely-unknown-model:7b",
             default=0,
         )
 
@@ -100,7 +100,7 @@ class TestOllamaContextLengthFromModelCard:
             side_effect=ImportError("no model_cards module"),
         ):
             # Use a model NOT in DEFAULT_OLLAMA_TOKEN_LIMITS
-            result = ollama_provider.get_max_context_length("deepseek-r1:7b")
+            result = ollama_provider.get_max_context_length("completely-unknown-model:7b")
 
         assert result == 4096
 
@@ -111,7 +111,7 @@ class TestOllamaContextLengthFromModelCard:
     def test_default_model_used_when_none(self, ollama_provider):
         """When model=None, uses provider's default_model."""
         # Override default_model to something NOT in the hardcoded dict
-        ollama_provider.default_model = "deepseek-r1:7b"
+        ollama_provider.default_model = "completely-unknown-model:7b"
 
         mock_registry = MagicMock()
         mock_registry.get_context_length.return_value = 262144
@@ -125,6 +125,6 @@ class TestOllamaContextLengthFromModelCard:
         assert result == 262144
         mock_registry.get_context_length.assert_called_once_with(
             "ollama",
-            "deepseek-r1:7b",
+            "completely-unknown-model:7b",
             default=0,
         )

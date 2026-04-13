@@ -179,7 +179,8 @@ class OllamaEmbedding(BaseEmbeddingModel):
             if embeddings and len(embeddings) > 0:
                 embedding_vector = list(embeddings[0])
                 logger.debug(
-                    f"Successfully generated Ollama embedding, dimension: {len(embedding_vector)}."
+                    f"Successfully generated Ollama embedding, "
+                    f"dimension: {len(embedding_vector)}."
                 )
                 return embedding_vector
             else:
@@ -211,16 +212,23 @@ class OllamaEmbedding(BaseEmbeddingModel):
                 message=f"Ollama API Error ({e.status_code}): {error_detail}",
             )
         except TimeoutError:
-            logger.error(f"Request to Ollama embed API timed out (model: {self._model_name}).")
-            raise EmbeddingError(model_name=self._model_name, message="Request timed out.")
+            logger.error(
+                f"Request to Ollama embed API timed out (model: {self._model_name})."
+            )
+            raise EmbeddingError(
+                model_name=self._model_name, message="Request timed out."
+            )
         except EmbeddingError:
             raise
         except Exception as e:
             logger.error(
-                f"Unexpected error generating Ollama embedding (model: {self._model_name}): {e}",
+                f"Unexpected error generating Ollama embedding "
+                f"(model: {self._model_name}): {e}",
                 exc_info=True,
             )
-            raise EmbeddingError(model_name=self._model_name, message=f"Unexpected error: {e}")
+            raise EmbeddingError(
+                model_name=self._model_name, message=f"Unexpected error: {e}"
+            )
 
     async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """
@@ -301,7 +309,8 @@ class OllamaEmbedding(BaseEmbeddingModel):
                         result[i] = [0.0] * dim
 
             logger.debug(
-                f"Successfully generated batch of {len(non_empty_texts)} Ollama embeddings."
+                f"Successfully generated batch of {len(non_empty_texts)} "
+                f"Ollama embeddings."
             )
             return result
 

@@ -1,0 +1,52 @@
+{
+  "model_id": "nomic-embed-text:latest",
+  "display_name": "Nomic Embed Text v1.5",
+  "provider": "ollama",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "nomic",
+    "parameter_count": "137M",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [
+    "nomic-embed-text"
+  ],
+  "description": "Nomic AI Embed Text v1.5 \u2014 long-context embedding model with 8K token window.",
+  "tags": [
+    "open-source",
+    "local",
+    "embedding",
+    "long-context"
+  ],
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 768,
+    "dimensions_configurable": [
+      64,
+      128,
+      256,
+      512,
+      768
+    ],
+    "supports_matryoshka": true,
+    "similarity_metrics": [
+      "cosine"
+    ],
+    "prefixes": {
+      "search_query": "search_query: ",
+      "search_document": "search_document: "
+    }
+  }
+}

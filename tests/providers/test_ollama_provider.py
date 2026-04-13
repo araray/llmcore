@@ -318,7 +318,9 @@ class TestChatCompletionParamRouting:
     @pytest.mark.asyncio
     async def test_top_level_params_not_in_options(self, ollama_provider):
         """format, think, logprobs go as top-level args, not inside options."""
-        mock_response = SimpleNamespace(model_dump=lambda: _make_chat_response())
+        mock_response = SimpleNamespace(
+            model_dump=lambda: _make_chat_response()
+        )
         ollama_provider._client.chat = AsyncMock(return_value=mock_response)
 
         msgs = [_make_message("user", "Hello")]
@@ -347,11 +349,15 @@ class TestChatCompletionParamRouting:
     @pytest.mark.asyncio
     async def test_max_tokens_aliased_to_num_predict(self, ollama_provider):
         """max_tokens kwarg becomes num_predict in options."""
-        mock_response = SimpleNamespace(model_dump=lambda: _make_chat_response())
+        mock_response = SimpleNamespace(
+            model_dump=lambda: _make_chat_response()
+        )
         ollama_provider._client.chat = AsyncMock(return_value=mock_response)
 
         msgs = [_make_message("user", "Hello")]
-        await ollama_provider.chat_completion(context=msgs, stream=False, max_tokens=100)
+        await ollama_provider.chat_completion(
+            context=msgs, stream=False, max_tokens=100
+        )
 
         call_kwargs = ollama_provider._client.chat.call_args[1]
         assert call_kwargs["options"]["num_predict"] == 100
@@ -361,7 +367,9 @@ class TestChatCompletionParamRouting:
     async def test_default_keep_alive_applied(self, ollama_provider_with_keep_alive):
         """Config-level keep_alive is applied when not explicitly set."""
         provider = ollama_provider_with_keep_alive
-        mock_response = SimpleNamespace(model_dump=lambda: _make_chat_response())
+        mock_response = SimpleNamespace(
+            model_dump=lambda: _make_chat_response()
+        )
         provider._client.chat = AsyncMock(return_value=mock_response)
 
         msgs = [_make_message("user", "Hello")]
@@ -374,11 +382,15 @@ class TestChatCompletionParamRouting:
     async def test_explicit_keep_alive_overrides_default(self, ollama_provider_with_keep_alive):
         """Explicit keep_alive kwarg overrides config default."""
         provider = ollama_provider_with_keep_alive
-        mock_response = SimpleNamespace(model_dump=lambda: _make_chat_response())
+        mock_response = SimpleNamespace(
+            model_dump=lambda: _make_chat_response()
+        )
         provider._client.chat = AsyncMock(return_value=mock_response)
 
         msgs = [_make_message("user", "Hello")]
-        await provider.chat_completion(context=msgs, stream=False, keep_alive="5m")
+        await provider.chat_completion(
+            context=msgs, stream=False, keep_alive="5m"
+        )
 
         call_kwargs = provider._client.chat.call_args[1]
         assert call_kwargs["keep_alive"] == "5m"
@@ -388,7 +400,9 @@ class TestChatCompletionParamRouting:
         """Tool objects are serialized to Ollama's expected format."""
         from llmcore.models import Tool
 
-        mock_response = SimpleNamespace(model_dump=lambda: _make_chat_response())
+        mock_response = SimpleNamespace(
+            model_dump=lambda: _make_chat_response()
+        )
         ollama_provider._client.chat = AsyncMock(return_value=mock_response)
 
         tool = Tool(
@@ -401,7 +415,9 @@ class TestChatCompletionParamRouting:
             },
         )
         msgs = [_make_message("user", "What's the weather?")]
-        await ollama_provider.chat_completion(context=msgs, stream=False, tools=[tool])
+        await ollama_provider.chat_completion(
+            context=msgs, stream=False, tools=[tool]
+        )
 
         call_kwargs = ollama_provider._client.chat.call_args[1]
         tools_payload = call_kwargs["tools"]
@@ -510,7 +526,9 @@ class TestExtractThinking:
 
     def test_extracts_thinking(self, ollama_provider):
         """Thinking content extracted from message.thinking."""
-        response = _make_chat_response(content="42", thinking="Let me think... 40 + 2 = 42")
+        response = _make_chat_response(
+            content="42", thinking="Let me think... 40 + 2 = 42"
+        )
 
         thinking = ollama_provider.extract_thinking_content(response)
 
@@ -649,18 +667,9 @@ class TestSupportedParameters:
         params = ollama_provider.get_supported_parameters()
 
         for key in [
-            "temperature",
-            "top_p",
-            "top_k",
-            "seed",
-            "stop",
-            "presence_penalty",
-            "frequency_penalty",
-            "repeat_penalty",
-            "repeat_last_n",
-            "tfs_z",
-            "typical_p",
-            "penalize_newline",
+            "temperature", "top_p", "top_k", "seed", "stop",
+            "presence_penalty", "frequency_penalty", "repeat_penalty",
+            "repeat_last_n", "tfs_z", "typical_p", "penalize_newline",
         ]:
             assert key in params, f"Missing sampling param: {key}"
 
@@ -674,15 +683,8 @@ class TestSupportedParameters:
         params = ollama_provider.get_supported_parameters()
 
         for key in [
-            "num_ctx",
-            "num_predict",
-            "num_batch",
-            "num_gpu",
-            "num_thread",
-            "num_keep",
-            "low_vram",
-            "use_mmap",
-            "use_mlock",
+            "num_ctx", "num_predict", "num_batch", "num_gpu",
+            "num_thread", "num_keep", "low_vram", "use_mmap", "use_mlock",
         ]:
             assert key in params, f"Missing runtime param: {key}"
 
@@ -740,7 +742,9 @@ class TestClose:
     @pytest.mark.asyncio
     async def test_close_handles_error_gracefully(self, ollama_provider):
         """close() doesn't raise even if client.close() errors."""
-        ollama_provider._client.close = AsyncMock(side_effect=RuntimeError("socket error"))
+        ollama_provider._client.close = AsyncMock(
+            side_effect=RuntimeError("socket error")
+        )
 
         await ollama_provider.close()
 
@@ -796,7 +800,6 @@ class TestStreamingNormalization:
     @pytest.mark.asyncio
     async def test_wrap_stream_handles_plain_dicts(self, ollama_provider):
         """If stream yields plain dicts, they pass through."""
-
         async def fake_stream():
             yield {"message": {"content": "Hi"}, "done": True}
 
@@ -857,10 +860,14 @@ class TestOllamaEmbedding:
     @pytest.mark.asyncio
     async def test_generate_embeddings_batch(self, ollama_embedding):
         """Batch embedding sends all texts in one request."""
-        mock_response = SimpleNamespace(embeddings=[[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
+        mock_response = SimpleNamespace(
+            embeddings=[[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+        )
         ollama_embedding._client.embed = AsyncMock(return_value=mock_response)
 
-        result = await ollama_embedding.generate_embeddings(["text1", "text2", "text3"])
+        result = await ollama_embedding.generate_embeddings(
+            ["text1", "text2", "text3"]
+        )
 
         # Only one HTTP call
         ollama_embedding._client.embed.assert_called_once()
@@ -902,7 +909,9 @@ class TestOllamaEmbedding:
     @pytest.mark.asyncio
     async def test_close_handles_error_gracefully(self, ollama_embedding):
         """close() doesn't raise on error."""
-        ollama_embedding._client.close = AsyncMock(side_effect=RuntimeError("err"))
+        ollama_embedding._client.close = AsyncMock(
+            side_effect=RuntimeError("err")
+        )
 
         await ollama_embedding.close()
 

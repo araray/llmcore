@@ -1,0 +1,42 @@
+{
+  "model_id": "granite3.1-dense:2b",
+  "display_name": "Granite 3.1 Dense 2B",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "granite",
+    "parameter_count": "2B",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "IBM Granite 3.1 Dense 2B \u2014 dense (non-MoE) variant.",
+  "tags": [
+    "open-source",
+    "local",
+    "enterprise",
+    "ibm",
+    "compact"
+  ],
+  "source": "builtin"
+}
