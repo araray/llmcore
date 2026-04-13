@@ -151,10 +151,42 @@ posthog = "ERROR"
   # api_key = "sk-ant-..."
 
   # Default model for this provider instance.
+  # Use the dash format (canonical API model IDs), not dot format.
   # Current models (April 2026):
-  #   claude-opus-4.6, claude-sonnet-4.6, claude-haiku-4.5
-  default_model = "claude-sonnet-4.6"
-  timeout = 60
+  #   claude-opus-4-6, claude-sonnet-4-6          (Claude 4.6 family)
+  #   claude-opus-4-5, claude-sonnet-4-5           (Claude 4.5 family)
+  #   claude-haiku-4-5, claude-haiku-4-5-20251001  (Claude 4.5 Haiku)
+  #   claude-opus-4-1, claude-opus-4-0, claude-sonnet-4-0
+  # Dated variants (e.g., claude-sonnet-4-5-20250929) are also accepted.
+  default_model = "claude-sonnet-4-6"
+
+  # Request timeout in seconds.
+  # Extended thinking responses can take 30-90s; 120s accommodates this.
+  timeout = 120
+
+  # Default max_tokens for responses (Anthropic requires this parameter).
+  # Override per-request via chat_completion(max_tokens=...).
+  # max_tokens = 4096
+
+  # --- Extended Thinking ---
+  # Claude 4.x models support extended thinking for step-by-step reasoning.
+  # Configure via chat_completion(thinking={...}) per-request, or set a default:
+  # thinking_type = "adaptive"    # "enabled", "adaptive", or "disabled"
+  # thinking_budget_tokens = 8192 # Only for type="enabled"; must be >= 1024
+
+  # --- Prompt Caching ---
+  # Anthropic supports prompt caching to reduce costs on repeated context.
+  # Applied via Message.metadata["cache_control"] = {"type": "ephemeral"}
+  # on system prompts and content blocks. No config-level setting needed.
+
+  # --- Vision / Multimodal ---
+  # Claude supports image input (JPEG, PNG, GIF, WebP) and PDF documents.
+  # Pass via Message.metadata["inline_images"] or metadata["inline_documents"].
+  # No config-level setting needed.
+
+  # --- Structured Output ---
+  # JSON schema output via chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
+  # Reasoning effort via chat_completion(output_config={"effort": "high"})
 
   # --- Ollama Provider ---
   # For locally running models via Ollama.
