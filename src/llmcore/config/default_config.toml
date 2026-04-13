@@ -141,7 +141,7 @@ posthog = "ERROR"
   default_model = "gpt-4o"
 
   # Request timeout in seconds.
-  timeout = 60
+  timeout = 120
 
   # --- Anthropic Provider ---
   # For Claude models.
@@ -199,7 +199,7 @@ posthog = "ERROR"
   default_model = "llama3"
 
   # Longer timeout is recommended for local models.
-  timeout = 120
+  timeout = 240
 
   # Tokenizer for token counting. `tiktoken_cl100k_base` is a good default.
   # Use 'char_div_4' as a rough fallback if tiktoken causes issues with a model.
@@ -219,7 +219,7 @@ posthog = "ERROR"
   #   2.5 (stable):   gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
   #   2.0 (deprecated, shutdown June 2026): gemini-2.0-flash, gemini-2.0-flash-lite
   default_model = "gemini-3.1-flash-lite-preview"
-  timeout = 60
+  timeout = 120
 
   # Fallback context length when model is not in the card registry or API.
   # Most current Gemini models support 1M tokens.
@@ -259,7 +259,7 @@ posthog = "ERROR"
   # Base URL (normally no need to change).
   # base_url = "https://openrouter.ai/api/v1"
 
-  timeout = 120
+  timeout = 240
 
   # --- App identification for OpenRouter rankings & dashboard ---
   # Your app's URL (sent as HTTP-Referer header).
@@ -528,7 +528,7 @@ posthog = "ERROR"
   # Default Ollama model for embeddings. Ensure it's pulled locally.
   # Examples: "mxbai-embed-large", "nomic-embed-text"
   default_model = "mxbai-embed-large"
-  timeout = 60
+  timeout = 120
 
   [embedding.sentence_transformer]
   # Additional configuration for local `sentence-transformers` models.
