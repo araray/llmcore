@@ -19,7 +19,7 @@
 #               by default when no provider is explicitly chosen.
 # Purpose: Allows you to switch between different LLM backends quickly.
 # Possible Values: The name of any configured provider instance (e.g., "ollama",
-#                  "openai", "anthropic", "gemini").
+#                  "openai", "anthropic", "gemini", "openrouter").
 # Default Value: "ollama"
 # Environment Variable: LLMCORE_DEFAULT_PROVIDER
 default_provider = "ollama"
@@ -32,7 +32,7 @@ default_provider = "ollama"
 #     model hub (e.g., "all-MiniLM-L6-v2", "all-mpnet-base-v2").
 #     The model will be downloaded automatically.
 #   - For service-based models: A string in the format "provider:model_name"
-#     (e.g., "openai:text-embedding-3-small", "google:models/embedding-001").
+#     (e.g., "openai:text-embedding-3-small", "google:gemini-embedding-001").
 # Default Value: "all-MiniLM-L6-v2"
 # Environment Variable: LLMCORE_DEFAULT_EMBEDDING_MODEL
 default_embedding_model = "all-MiniLM-L6-v2"
@@ -151,7 +151,9 @@ posthog = "ERROR"
   # api_key = "sk-ant-..."
 
   # Default model for this provider instance.
-  default_model = "claude-3-opus-20240229"
+  # Current models (April 2026):
+  #   claude-opus-4.6, claude-sonnet-4.6, claude-haiku-4.5
+  default_model = "claude-sonnet-4.6"
   timeout = 60
 
   # --- Ollama Provider ---
@@ -172,21 +174,73 @@ posthog = "ERROR"
   # tokenizer = "tiktoken_cl100k_base"
 
   # --- Google Gemini Provider ---
-  # For Gemini models.
+  # For Gemini models via Google AI (Gemini API) or Vertex AI.
   [providers.gemini]
   # API Key: Set via environment variable for security.
   # Environment Variable: LLMCORE_PROVIDERS__GEMINI__API_KEY or GOOGLE_API_KEY
   # api_key = "..."
 
   # Default model for this provider instance.
-  default_model = "gemini-1.5-pro-latest"
+  # Current models (April 2026):
+  #   3.x (preview):  gemini-3.1-pro-preview, gemini-3-flash-preview,
+  #                   gemini-3.1-flash-lite-preview
+  #   2.5 (stable):   gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
+  #   2.0 (deprecated, shutdown June 2026): gemini-2.0-flash, gemini-2.0-flash-lite
+  default_model = "gemini-3.1-flash-lite-preview"
   timeout = 60
+
+  # Fallback context length when model is not in the card registry or API.
+  # Most current Gemini models support 1M tokens.
+  fallback_context_length = 1048576
+
+  # --- Vertex AI mode ---
+  # Set to true to use Vertex AI backend instead of the Gemini API.
+  # Requires GCP authentication (Application Default Credentials or service account).
+  # vertex_ai = false
+  # project = "my-gcp-project"
+  # location = "us-central1"
 
   # Optional: Configure Google AI's safety filters.
   # This table is passed directly to the `google-genai` SDK.
   # [providers.gemini.safety_settings]
   # HARM_CATEGORY_HARASSMENT = "BLOCK_NONE"
   # HARM_CATEGORY_HATE_SPEECH = "BLOCK_NONE"
+
+  # --- OpenRouter Provider ---
+  # Unified gateway to 300+ AI models from all major providers via a single
+  # OpenAI-compatible API.  Supports multi-model routing, provider preferences,
+  # and automatic fallback.
+  # Docs: https://openrouter.ai/docs
+  [providers.openrouter]
+  # type = "openrouter"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: OPENROUTER_API_KEY
+  # api_key = "sk-or-..."
+  api_key_env_var = "OPENROUTER_API_KEY"
+
+  # Default model.  OpenRouter uses "provider/model" format.
+  # Examples: "openai/gpt-4o-mini", "anthropic/claude-sonnet-4.6",
+  #           "google/gemini-3-flash-preview", "deepseek/deepseek-chat"
+  default_model = "openai/gpt-4o-mini"
+
+  # Base URL (normally no need to change).
+  # base_url = "https://openrouter.ai/api/v1"
+
+  timeout = 120
+
+  # --- App identification for OpenRouter rankings & dashboard ---
+  # Your app's URL (sent as HTTP-Referer header).
+  # app_url = "https://myapp.example.com"
+  # Your app's display name (sent as X-Title header).
+  # app_title = "My App"
+
+  # --- Backend mode ---
+  # "openai"  (default): Uses the `openai` Python SDK with base_url override.
+  #           No extra dependencies beyond `openai`.
+  # "sdk"   : Uses the native `openrouter` Python SDK (pip install openrouter).
+  #           Falls back to "openai" mode if the package is not installed.
+  backend = "openai"
 
 
 # ==============================================================================
@@ -424,7 +478,17 @@ posthog = "ERROR"
   # API Key for Google AI (Gemini) embeddings.
   # Environment Variable: LLMCORE_EMBEDDING__GOOGLE__API_KEY
   # api_key = ""
-  default_model = "models/embedding-001"
+  #
+  # Default embedding model. As of 2026:
+  #   - "gemini-embedding-001"      — GA, text-only, 3072 dims, 100+ languages
+  #   - "gemini-embedding-2-preview" — multimodal (text+image+audio+video), 3072 dims
+  # DEPRECATED (shutdown Jan 2026): "text-embedding-004", "models/embedding-001"
+  default_model = "gemini-embedding-001"
+  # Optional: task type for the embedding (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY,
+  # SEMANTIC_SIMILARITY, CLASSIFICATION, CLUSTERING, QUESTION_ANSWERING, etc.)
+  # task_type = "RETRIEVAL_DOCUMENT"
+  # Optional: reduce output embedding dimensions (supported by newer models)
+  # output_dimensionality = 768
 
   [embedding.ollama]
   # Host URL for the Ollama server for embeddings.
