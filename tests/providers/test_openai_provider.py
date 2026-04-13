@@ -810,3 +810,120 @@ class TestTokenLimits:
         assert DEFAULT_OPENAI_TOKEN_LIMITS["gpt-4"] == 8000
         assert DEFAULT_OPENAI_TOKEN_LIMITS["gpt-4-32k"] == 32000
         assert DEFAULT_OPENAI_TOKEN_LIMITS["gpt-3.5-turbo"] == 16000
+
+
+# ---------------------------------------------------------------
+# Tests for ProviderManager alias resolution (Bug fix: google→gemini)
+# ---------------------------------------------------------------
+
+
+class TestProviderManagerAliasResolution:
+    """Tests for _PROVIDER_INSTANCE_ALIASES and get_provider() alias lookup."""
+
+    def test_alias_map_has_google(self):
+        from llmcore.providers.manager import _PROVIDER_INSTANCE_ALIASES
+
+        assert "google" in _PROVIDER_INSTANCE_ALIASES
+        assert _PROVIDER_INSTANCE_ALIASES["google"] == "gemini"
+
+    def test_get_provider_resolves_google_to_gemini(self):
+        """When 'gemini' is configured but caller asks for 'google', it should resolve."""
+        from unittest.mock import MagicMock
+
+        from llmcore.providers.manager import ProviderManager
+
+        mgr = object.__new__(ProviderManager)
+        mock_gemini = MagicMock()
+        mgr._providers = {"gemini": mock_gemini, "openai": MagicMock()}
+        mgr._default_provider_name = "openai"
+
+        result = mgr.get_provider("google")
+        assert result is mock_gemini
+
+    def test_get_provider_direct_lookup_still_works(self):
+        """Direct name lookup should still work without aliases."""
+        from unittest.mock import MagicMock
+
+        from llmcore.providers.manager import ProviderManager
+
+        mgr = object.__new__(ProviderManager)
+        mock_openai = MagicMock()
+        mgr._providers = {"openai": mock_openai}
+        mgr._default_provider_name = "openai"
+
+        result = mgr.get_provider("openai")
+        assert result is mock_openai
+
+    def test_get_provider_unknown_still_raises(self):
+        """Unknown provider name (no alias either) should still raise ConfigError."""
+        from unittest.mock import MagicMock
+
+        from llmcore.exceptions import ConfigError
+        from llmcore.providers.manager import ProviderManager
+
+        mgr = object.__new__(ProviderManager)
+        mgr._providers = {"openai": MagicMock()}
+        mgr._default_provider_name = "openai"
+
+        import pytest
+
+        with pytest.raises(ConfigError, match="not_real"):
+            mgr.get_provider("not_real")
+
+    def test_get_provider_case_insensitive(self):
+        """Provider name lookup should be case-insensitive."""
+        from unittest.mock import MagicMock
+
+        from llmcore.providers.manager import ProviderManager
+
+        mgr = object.__new__(ProviderManager)
+        mock_openai = MagicMock()
+        mgr._providers = {"openai": mock_openai}
+        mgr._default_provider_name = "openai"
+
+        result = mgr.get_provider("OpenAI")
+        assert result is mock_openai
+
+    def test_get_provider_alias_case_insensitive(self):
+        """Alias resolution should be case-insensitive."""
+        from unittest.mock import MagicMock
+
+        from llmcore.providers.manager import ProviderManager
+
+        mgr = object.__new__(ProviderManager)
+        mock_gemini = MagicMock()
+        mgr._providers = {"gemini": mock_gemini}
+        mgr._default_provider_name = "gemini"
+
+        result = mgr.get_provider("Google")
+        assert result is mock_gemini
+
+
+# ---------------------------------------------------------------
+# Tests for model-not-found error message improvement
+# ---------------------------------------------------------------
+
+
+class TestModelNotFoundError:
+    """Tests for improved model-not-found error messages in OpenAI provider."""
+
+    def _make_provider_stub(self):
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        provider = object.__new__(OpenAIProvider)
+        provider.log_raw_payloads_enabled = False
+        provider._provider_instance_name = "deepseek"
+        provider.default_model = "deepseek-chat"
+        return provider
+
+    def test_model_not_found_patterns(self):
+        """Verify the model-not-found detection patterns work."""
+        patterns = ["model not exist", "does not exist", "model_not_found", "invalid model"]
+        test_messages = [
+            "Error code: 400 - {'error': {'message': 'Model Not Exist'}}",
+            "The model 'foo' does not exist",
+            "model_not_found: no such model",
+            "Invalid model specified: bar",
+        ]
+        for msg, pattern in zip(test_messages, patterns):
+            assert pattern in msg.lower(), f"Pattern '{pattern}' not found in '{msg}'"

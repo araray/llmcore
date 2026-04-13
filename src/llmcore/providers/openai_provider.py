@@ -514,6 +514,27 @@ class OpenAIProvider(BaseProvider):
                     requested_tokens=None,
                     message=msg,
                 )
+            # Detect model-not-found errors and provide actionable info.
+            # Different providers use different phrasing:
+            #   DeepSeek: "Model Not Exist"
+            #   OpenAI:   "does not exist" / "model_not_found"
+            if status == 400 and any(
+                phrase in msg.lower()
+                for phrase in (
+                    "model not exist",
+                    "does not exist",
+                    "model_not_found",
+                    "invalid model",
+                )
+            ):
+                raise ProviderError(
+                    self.get_name(),
+                    f"Model '{model_name}' not found on provider "
+                    f"'{self.get_name()}'. The provider's default model "
+                    f"is '{self.default_model}'. Please verify the model "
+                    f"name is correct for this provider's API. "
+                    f"Original error: {msg}",
+                )
             raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
         except OpenAIAPITimeoutError as e:
             logger.error(f"OpenAI timeout: {e}", exc_info=True)

@@ -55,6 +55,15 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
 }
 # --- End Mapping ---
 
+# Runtime aliases: when a caller requests a provider by an alternative
+# name (e.g. ``get_provider("google")``), resolve it to the canonical
+# instance name (``"gemini"``) that appears in ``[providers.*]`` config.
+# This is independent of ``PROVIDER_MAP`` which only governs *class*
+# selection during init.
+_PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
+    "google": "gemini",
+}
+
 # Well-known defaults for providers that reuse OpenAIProvider.
 # Keys must match the ``PROVIDER_MAP`` section names above.
 # ``env_var``  – conventional environment variable for the API key
@@ -285,6 +294,9 @@ class ProviderManager:
         """
         Gets a provider instance by its configured name, or the default provider.
 
+        Supports alias resolution: e.g. requesting ``"google"`` will resolve
+        to the ``"gemini"`` instance if ``[providers.gemini]`` is configured.
+
         Args:
             name: The configuration section name of the provider instance.
                   If None, returns the default provider instance.
@@ -297,6 +309,18 @@ class ProviderManager:
         """
         target_name_lower = name.lower() if name else self._default_provider_name
         provider_instance = self._providers.get(target_name_lower)
+
+        # Alias resolution: try canonical name if direct lookup failed
+        if provider_instance is None:
+            canonical = _PROVIDER_INSTANCE_ALIASES.get(target_name_lower)
+            if canonical:
+                provider_instance = self._providers.get(canonical)
+                if provider_instance is not None:
+                    logger.debug(
+                        "Resolved provider alias '%s' → '%s'.",
+                        target_name_lower,
+                        canonical,
+                    )
 
         if provider_instance is None:
             raise ConfigError(
