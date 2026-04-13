@@ -3,22 +3,61 @@
   "display_name": "GPT-5.4",
   "provider": "openai",
   "model_type": "chat",
-  "architecture": {"family": "gpt", "architecture_type": "transformer"},
-  "context": {"max_input_tokens": 1050000, "max_output_tokens": 128000},
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1050000,
+    "max_output_tokens": 128000
+  },
   "capabilities": {
-    "streaming": true, "function_calling": true, "tool_use": true,
-    "json_mode": false, "structured_output": true, "vision": true,
-    "audio_input": false, "reasoning": true
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "image_generation": false,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": true
   },
   "pricing": {
     "currency": "USD",
-    "per_million_tokens": {"input": 2.50, "output": 15.00, "cached_input": 0.25}
+    "per_million_tokens": {
+      "input": 2.5,
+      "output": 15.0,
+      "cached_input": 0.25
+    },
+    "batch_discount_percent": 50
   },
-  "lifecycle": {"release_date": "2026-03-05", "knowledge_cutoff": "2025-08", "status": "active"},
-  "license": null, "open_weights": false,
-  "aliases": ["gpt-5.4-2026-03-05"],
-  "description": "GPT-5.4 is OpenAI's frontier model with 1M context window, native computer use, and compaction support.",
-  "tags": ["reasoning", "coding", "agentic", "multimodal"],
-  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "medium"},
-  "source": "model_cards_02"
+  "lifecycle": {
+    "release_date": "2026-03-05",
+    "knowledge_cutoff": "2025-08",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "gpt-5.4-2026-03-05"
+  ],
+  "description": "GPT-5.4 is OpenAI's frontier model with 1.05M context, native computer use, unified reasoning (none-xhigh), web search, and code execution. Long-context tier: inputs >272K cost 2x.",
+  "tags": [
+    "flagship",
+    "reasoning",
+    "coding",
+    "agentic",
+    "multimodal",
+    "computer-use"
+  ],
+  "provider_openai": {
+    "supports_reasoning": true,
+    "reasoning_effort": "medium",
+    "supports_predicted_outputs": false,
+    "fine_tuning_available": false
+  },
+  "source": "builtin"
 }

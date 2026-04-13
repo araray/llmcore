@@ -1,6 +1,6 @@
 {
   "model_id": "gpt-5.2-codex",
-  "display_name": "ChatGPT 5.2 Codex",
+  "display_name": "GPT-5.2 Codex",
   "provider": "openai",
   "model_type": "chat",
   "architecture": {
@@ -9,40 +9,43 @@
   },
   "context": {
     "max_input_tokens": 400000,
-    "max_output_tokens": 65536
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": true,
-    "vision": false,
+    "vision": true,
+    "audio_input": false,
     "reasoning": true
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.75,
-      "output": 14.00,
+      "output": 14.0,
       "cached_input": 0.175
-    }
+    },
+    "batch_discount_percent": 50
   },
   "lifecycle": {
-    "release_date": "2025-07-22",
-    "knowledge_cutoff": "2025-06",
-    "status": "active"
+    "release_date": "2025-12-11",
+    "knowledge_cutoff": "2025-08",
+    "status": "legacy"
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gpt-5.2-coder"],
-  "description": "ChatGPT 5.2 Codex is a code-centric model designed for agentic coding workflows. It uses GPT-5.2 architecture but is fine-tuned for structured, deterministic code generation with minimal extra commentary. Codex 5.2 excels at transforming instructions into working code quickly, acting like a 'co-pilot' in an IDE. It supports long context (up to 400K tokens) for reading multiple files, and has specialized function-calling formats to integrate with developer tools. The model avoids verbose reasoning by default (no intermediate <think> steps in output) to prioritize execution speed. Pricing aligns with GPT-5.2 standard rates ($1.75/M input, $14/M output), making it cost-effective for large codebases. ChatGPT 5.2 Codex is ideal for automated code writing, refactoring, and agent-driven software tasks, supporting tool use like test execution or web browsing as needed.",
-  "tags": ["coding", "agentic", "deterministic"],
+  "aliases": [],
+  "description": "GPT-5.2: Coding-optimized GPT-5.2 variant.",
+  "tags": [
+    "reasoning",
+    "legacy"
+  ],
   "provider_openai": {
     "supports_reasoning": true,
-    "reasoning_effort": "low",
-    "supports_predicted_outputs": false,
-    "fine_tuning_available": false
+    "reasoning_effort": "medium"
   },
-  "source": "model_cards_01"
+  "source": "builtin"
 }

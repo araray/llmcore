@@ -1,6 +1,6 @@
 {
-  "model_id": "o1-pro",
-  "display_name": "OpenAI o1-pro",
+  "model_id": "o3-pro",
+  "display_name": "OpenAI o3-pro",
   "provider": "openai",
   "model_type": "chat",
   "architecture": {
@@ -12,7 +12,7 @@
     "max_output_tokens": 100000
   },
   "capabilities": {
-    "streaming": false,
+    "streaming": true,
     "function_calling": true,
     "tool_use": true,
     "structured_output": true,
@@ -22,23 +22,24 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 150.0,
-      "output": 600.0
+      "input": 20.0,
+      "output": 80.0,
+      "cached_input": 5.0
     }
   },
   "lifecycle": {
-    "release_date": "2025-03-19",
-    "knowledge_cutoff": "2023-09",
+    "release_date": "2025-06-10",
+    "knowledge_cutoff": "2024-06",
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI o1-pro: highest-reliability reasoning. No streaming support. Responses API only. $150/$600 per 1M tokens.",
+  "description": "OpenAI o3-pro: maximum reliability reasoning for the hardest problems. Supports vision but lacks image gen and Canvas.",
   "tags": [
     "reasoning",
     "pro",
-    "premium"
+    "reliability"
   ],
   "provider_openai": {
     "supports_reasoning": true,

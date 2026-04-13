@@ -27,7 +27,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.15,
-      "output": 0.60,
+      "output": 0.6,
       "cached_input": 0.075
     },
     "batch_discount_percent": 50
@@ -39,11 +39,16 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gpt-4o-mini-2024-07-18"],
-  "description": "GPT-4o Mini is a cost-efficient, smaller variant of GPT-4o, ideal for high-volume tasks requiring strong capabilities at lower cost.",
-  "tags": ["efficient", "cost-effective", "vision"],
+  "aliases": [
+    "gpt-4o-mini-2024-07-18"
+  ],
+  "description": "GPT-4o Mini: affordable multimodal model with vision, tool use, and structured outputs.",
+  "tags": [
+    "mini",
+    "multimodal",
+    "budget"
+  ],
   "provider_openai": {
-    "owned_by": "openai",
     "supports_predicted_outputs": true,
     "fine_tuning_available": true
   },

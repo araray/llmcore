@@ -24,7 +24,8 @@
     "per_million_tokens": {
       "input": 0.13,
       "output": 0.0
-    }
+    },
+    "batch_discount_percent": 50
   },
   "lifecycle": {
     "release_date": "2024-01-25",
@@ -32,18 +33,46 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["text-embedding-3-large-2024-01-25"],
-  "description": "OpenAI's most capable embedding model with 3072 dimensions. Supports dimension reduction via the dimensions parameter for optimizing storage and performance.",
-  "tags": ["embedding", "semantic-search", "rag"],
+  "aliases": [],
+  "description": "Text Embedding 3 Large: highest-quality OpenAI embedding with Matryoshka support up to 3072 dimensions. MTEB: 64.6%. At 256 dims still outperforms ada-002 at 1536.",
+  "tags": [
+    "embedding",
+    "matryoshka",
+    "high-quality"
+  ],
   "embedding_config": {
     "dimensions_default": 3072,
-    "dimensions": 3072,
-    "max_dimensions": 3072,
-    "similarity_metric": "cosine",
-    "supports_dimension_reduction": true
-  },
-  "provider_openai": {
-    "owned_by": "openai"
+    "dimensions_configurable": [
+      256,
+      512,
+      768,
+      1024,
+      1536,
+      3072
+    ],
+    "supports_matryoshka": true,
+    "similarity_metrics": [
+      "cosine",
+      "dot_product",
+      "euclidean"
+    ],
+    "normalization": "L2",
+    "task_types": [
+      "search_query",
+      "search_document",
+      "classification",
+      "clustering"
+    ],
+    "output_types": [
+      "float",
+      "base64"
+    ],
+    "truncation_strategy": "right",
+    "batch_limits": {
+      "max_inputs": 2048,
+      "max_tokens_total": 300000
+    },
+    "multimodal": false
   },
   "source": "builtin"
 }

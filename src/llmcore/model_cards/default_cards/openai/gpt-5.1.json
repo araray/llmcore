@@ -3,22 +3,51 @@
   "display_name": "GPT-5.1",
   "provider": "openai",
   "model_type": "chat",
-  "architecture": {"family": "gpt", "architecture_type": "transformer"},
-  "context": {"max_input_tokens": 400000, "max_output_tokens": 128000},
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 128000
+  },
   "capabilities": {
-    "streaming": true, "function_calling": true, "tool_use": true,
-    "json_mode": false, "structured_output": true, "vision": true,
-    "audio_input": false, "reasoning": true
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
   },
   "pricing": {
     "currency": "USD",
-    "per_million_tokens": {"input": 1.25, "output": 10.00, "cached_input": 0.125}
+    "per_million_tokens": {
+      "input": 1.25,
+      "output": 10.0,
+      "cached_input": 0.125
+    },
+    "batch_discount_percent": 50
   },
-  "lifecycle": {"release_date": "2025-11-13", "knowledge_cutoff": "2024-09", "status": "active"},
-  "license": null, "open_weights": false,
-  "aliases": ["gpt-5.1-2025-11-13", "gpt-5.1-chat-latest"],
-  "description": "GPT-5.1 is OpenAI's model for coding and agentic tasks with configurable reasoning.",
-  "tags": ["reasoning", "coding", "agentic"],
-  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "medium"},
-  "source": "model_cards_02"
+  "lifecycle": {
+    "release_date": "2025-11-13",
+    "knowledge_cutoff": "2024-09",
+    "status": "legacy"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "gpt-5.1-2025-11-13",
+    "gpt-5.1-chat-latest"
+  ],
+  "description": "GPT-5.1: configurable reasoning with 'none' effort level. 400K context.",
+  "tags": [
+    "reasoning",
+    "legacy"
+  ],
+  "provider_openai": {
+    "supports_reasoning": true,
+    "reasoning_effort": "medium"
+  },
+  "source": "builtin"
 }

@@ -1,6 +1,6 @@
 {
-  "model_id": "gpt-4o",
-  "display_name": "GPT-4o",
+  "model_id": "gpt-4o-audio-preview",
+  "display_name": "GPT-4o Audio Preview",
   "provider": "openai",
   "model_type": "chat",
   "architecture": {
@@ -9,8 +9,7 @@
   },
   "context": {
     "max_input_tokens": 128000,
-    "max_output_tokens": 16384,
-    "default_output_tokens": 4096
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -18,7 +17,7 @@
     "tool_use": true,
     "json_mode": true,
     "structured_output": true,
-    "vision": true,
+    "vision": false,
     "audio_input": true,
     "audio_output": true,
     "reasoning": false
@@ -29,31 +28,27 @@
       "input": 2.5,
       "output": 10.0,
       "cached_input": 1.25
-    },
-    "batch_discount_percent": 50
+    }
   },
   "lifecycle": {
-    "release_date": "2024-05-13",
+    "release_date": "2024-10-01",
     "knowledge_cutoff": "2023-10",
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "gpt-4o-2024-05-13",
-    "gpt-4o-2024-08-06",
-    "gpt-4o-2024-11-20"
+    "gpt-4o-audio-preview-2024-10-01",
+    "gpt-4o-audio-preview-2024-12-17",
+    "gpt-4o-audio-preview-2025-06-03"
   ],
-  "description": "GPT-4o: multimodal model with vision, audio I/O, tool use, structured outputs, and predicted outputs. 128K context.",
+  "description": "GPT-4o Audio Preview: audio input/output via chat completions with modalities=['text','audio']. Audio tokens priced at $40/$80 per 1M. No vision support.",
   "tags": [
-    "multimodal",
-    "vision",
-    "audio"
+    "audio",
+    "tts",
+    "stt",
+    "multimodal"
   ],
-  "provider_openai": {
-    "owned_by": "openai",
-    "supports_predicted_outputs": true,
-    "fine_tuning_available": true
-  },
+  "provider_openai": {},
   "source": "builtin"
 }

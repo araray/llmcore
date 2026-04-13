@@ -1,16 +1,15 @@
 {
   "model_id": "o3-mini",
-  "display_name": "o3-mini",
+  "display_name": "OpenAI o3-mini",
   "provider": "openai",
   "model_type": "chat",
   "architecture": {
-    "family": "o3",
+    "family": "o-series",
     "architecture_type": "transformer"
   },
   "context": {
     "max_input_tokens": 200000,
-    "max_output_tokens": 100000,
-    "default_output_tokens": 16384
+    "max_output_tokens": 100000
   },
   "capabilities": {
     "streaming": true,
@@ -19,33 +18,36 @@
     "json_mode": true,
     "structured_output": true,
     "vision": false,
-    "audio_input": false,
-    "audio_output": false,
     "reasoning": true
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.10,
-      "output": 4.40,
+      "input": 1.1,
+      "output": 4.4,
       "cached_input": 0.55
-    }
+    },
+    "batch_discount_percent": 50
   },
   "lifecycle": {
     "release_date": "2025-01-31",
-    "knowledge_cutoff": "2024-10",
+    "knowledge_cutoff": "2023-10",
     "status": "active"
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["o3-mini-2025-01-31"],
-  "description": "o3-mini is OpenAI's cost-effective reasoning model, optimized for STEM tasks. It offers adjustable reasoning effort levels for balancing speed and accuracy.",
-  "tags": ["reasoning", "chain-of-thought", "efficient", "STEM"],
+  "aliases": [
+    "o3-mini-2025-01-31"
+  ],
+  "description": "OpenAI o3-mini: cost-effective reasoning model. Text-only (no image input, unlike o3).",
+  "tags": [
+    "reasoning",
+    "mini",
+    "budget"
+  ],
   "provider_openai": {
-    "owned_by": "openai",
-    "supports_predicted_outputs": false,
-    "fine_tuning_available": false,
-    "reasoning_effort_levels": ["low", "medium", "high"]
+    "supports_reasoning": true,
+    "reasoning_effort": "high"
   },
   "source": "builtin"
 }

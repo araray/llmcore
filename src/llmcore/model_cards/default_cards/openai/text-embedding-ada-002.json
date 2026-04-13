@@ -1,6 +1,6 @@
 {
-  "model_id": "text-embedding-3-small",
-  "display_name": "Text Embedding 3 Small",
+  "model_id": "text-embedding-ada-002",
+  "display_name": "Text Embedding Ada 002",
   "provider": "openai",
   "model_type": "embedding",
   "architecture": {
@@ -22,34 +22,28 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.02,
+      "input": 0.1,
       "output": 0.0
     },
     "batch_discount_percent": 50
   },
   "lifecycle": {
-    "release_date": "2024-01-25",
-    "status": "active"
+    "release_date": "2022-12-15",
+    "status": "legacy",
+    "successor_model": "text-embedding-3-small"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Text Embedding 3 Small: cost-efficient embedding model with Matryoshka dimension support (any size up to 1536). MTEB: 62.3%.",
+  "description": "Text Embedding Ada 002: legacy embedding model. Fixed 1536 dimensions, no Matryoshka. Superseded by text-embedding-3-small (5x cheaper, better quality).",
   "tags": [
     "embedding",
-    "matryoshka",
-    "efficient"
+    "legacy"
   ],
   "embedding_config": {
     "dimensions_default": 1536,
-    "dimensions_configurable": [
-      256,
-      512,
-      768,
-      1024,
-      1536
-    ],
-    "supports_matryoshka": true,
+    "dimensions_configurable": null,
+    "supports_matryoshka": false,
     "similarity_metrics": [
       "cosine",
       "dot_product",

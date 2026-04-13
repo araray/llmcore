@@ -3,22 +3,55 @@
   "display_name": "OpenAI o4-mini",
   "provider": "openai",
   "model_type": "chat",
-  "architecture": {"family": "o-series", "architecture_type": "transformer"},
-  "context": {"max_input_tokens": 200000, "max_output_tokens": 100000},
+  "architecture": {
+    "family": "o-series",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 100000
+  },
   "capabilities": {
-    "streaming": true, "function_calling": true, "tool_use": true,
-    "json_mode": false, "structured_output": true, "vision": true,
-    "audio_input": false, "reasoning": true
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "image_generation": true,
+    "code_execution": true,
+    "web_search": true,
+    "reasoning": true
   },
   "pricing": {
     "currency": "USD",
-    "per_million_tokens": {"input": 1.10, "output": 4.40, "cached_input": 0.275}
+    "per_million_tokens": {
+      "input": 1.1,
+      "output": 4.4,
+      "cached_input": 0.275
+    },
+    "batch_discount_percent": 50
   },
-  "lifecycle": {"release_date": "2025-04-16", "knowledge_cutoff": "2024-05", "status": "active"},
-  "license": null, "open_weights": false,
-  "aliases": ["o4-mini-2025-04-16"],
-  "description": "OpenAI o4-mini is a small, fast reasoning model for cost-efficient math, coding, and visual tasks.",
-  "tags": ["reasoning", "fast", "cost-efficient"],
-  "provider_openai": {"supports_reasoning": true, "reasoning_effort": "medium"},
-  "source": "model_cards_02"
+  "lifecycle": {
+    "release_date": "2025-04-16",
+    "knowledge_cutoff": "2024-06",
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "o4-mini-2025-04-16"
+  ],
+  "description": "OpenAI o4-mini: first reasoning model to think with images. Supports fine-tuning ($100/hr), web search, code exec, image gen.",
+  "tags": [
+    "reasoning",
+    "mini",
+    "vision"
+  ],
+  "provider_openai": {
+    "supports_reasoning": true,
+    "reasoning_effort": "high",
+    "fine_tuning_available": true
+  },
+  "source": "builtin"
 }

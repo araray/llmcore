@@ -1,6 +1,6 @@
 {
-  "model_id": "gpt-5.2",
-  "display_name": "GPT-5.2",
+  "model_id": "gpt-4.1",
+  "display_name": "GPT-4.1",
   "provider": "openai",
   "model_type": "chat",
   "architecture": {
@@ -8,8 +8,8 @@
     "architecture_type": "transformer"
   },
   "context": {
-    "max_input_tokens": 400000,
-    "max_output_tokens": 128000
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
@@ -19,36 +19,37 @@
     "structured_output": true,
     "vision": true,
     "audio_input": false,
-    "reasoning": true
+    "audio_output": false,
+    "reasoning": false,
+    "code_execution": false,
+    "web_search": true
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.75,
-      "output": 14.0,
-      "cached_input": 0.175
+      "input": 2.0,
+      "output": 8.0,
+      "cached_input": 0.5
     },
     "batch_discount_percent": 50
   },
   "lifecycle": {
-    "release_date": "2025-12-11",
-    "knowledge_cutoff": "2025-08",
-    "status": "legacy"
+    "release_date": "2025-04-14",
+    "knowledge_cutoff": "2024-06",
+    "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "gpt-5.2-2025-12-11",
-    "gpt-5.2-chat-latest"
+    "gpt-4.1-2025-04-14"
   ],
-  "description": "GPT-5.2: General-purpose with adaptive reasoning and xhigh effort support.",
+  "description": "GPT-4.1: 1M context, optimized for long-context, instruction following, and coding. Supports predicted outputs. Fine-tuning: SFT + DPO.",
   "tags": [
-    "reasoning",
-    "legacy"
+    "long-context",
+    "instruction-following",
+    "coding"
   ],
   "provider_openai": {
-    "supports_reasoning": true,
-    "reasoning_effort": "medium",
     "supports_predicted_outputs": true,
     "fine_tuning_available": true
   },
