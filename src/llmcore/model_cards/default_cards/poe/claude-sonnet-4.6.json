@@ -1,0 +1,60 @@
+{
+  "model_id": "claude-sonnet-4.6",
+  "display_name": "Claude Sonnet 4.6 from Anthropic is built for high-quality conversations, advanced coding, and agentic workflows at scale. It excels at iterative development and navigating complex codebases, supports",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Claude Sonnet 4.6 from Anthropic is built for high-quality conversations, advanced coding, and agentic workflows at scale. It excels at iterative development and navigating complex codebases, supports end-to-end project management with memory, and produces polished documents. The model also enables confident computer use for web QA and workflow automation, along with financial modeling, compliance review, and accurate data summarization. It features a 1M token context window for handling extensive projects and long-form content with ease.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "anthropic",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.362942+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.6,
+      "output": 13.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Anthropic",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1770262891433
+  }
+}

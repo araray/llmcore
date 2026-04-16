@@ -1,0 +1,52 @@
+{
+  "model_id": "kling-2.0-master",
+  "display_name": "Generate high-quality videos from text or images using Kling 2.0 Master. Use `--negative_prompt` to send a negative prompt, and `--cfg_scale` to send a classifier-free guidance scale between 0.0 and 1",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate high-quality videos from text or images using Kling 2.0 Master. Use `--negative_prompt` to send a negative prompt, and `--cfg_scale` to send a classifier-free guidance scale between 0.0 and 1.0 (inclusive). Use `--aspect` to set the aspect ratio (One of `16:9`, `9:16` and `1:1`). Use `--duration` to set either 5 or 10 second video.",
+  "tags": [
+    "fal",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.417299+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1744698597290
+  }
+}

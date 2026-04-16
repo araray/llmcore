@@ -1,0 +1,52 @@
+{
+  "model_id": "hailuo-director-01",
+  "display_name": "Generate video clips more accurately with respect to natural language descriptions and using camera movement instructions for shot control. Both text-to-video and image-to-video are supported. \nCamera",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate video clips more accurately with respect to natural language descriptions and using camera movement instructions for shot control. Both text-to-video and image-to-video are supported. \nCamera movement instructions can be added using square brackets (e.g. [Pan left] or [Zoom in]). \nYou can use up to 3 combined movements per prompt. Duration is fixed to 5 seconds. \nSupported movements: Truck left/right, Pan left/right, Push in/Pull out, Pedestal up/down, Tilt up/down, Zoom in/out, Shake, Tracking shot, Static shot. For example: [Truck left, Pan right, Zoom in]. \nFor a more detailed guide, refer https://sixth-switch-2ac.notion.site/T2V-01-Director-Model-Tutorial-with-camera-movement-1886c20a98eb80f395b8e05291ad8645",
+  "tags": [
+    "fal",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.412785+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1749502785341
+  }
+}

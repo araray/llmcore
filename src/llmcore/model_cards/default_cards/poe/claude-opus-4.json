@@ -1,0 +1,60 @@
+{
+  "model_id": "claude-opus-4",
+  "display_name": "Claude Opus 4 from Anthropic, supports customizable thinking budget (up to 30k tokens) and 200k context window.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Claude Opus 4 from Anthropic, supports customizable thinking budget (up to 30k tokens) and 200k context window.",
+  "tags": [
+    "anthropic",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.391083+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 13.0,
+      "output": 64.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Anthropic",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1747863925397
+  }
+}

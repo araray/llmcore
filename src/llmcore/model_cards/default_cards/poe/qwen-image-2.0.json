@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen-image-2.0",
+  "display_name": "Qwen Image 2.0 is Alibaba's unified image generation and editing model, excelling at complex text rendering in both Chinese and English, realistic textures, precise semantic adherence, and multi-image",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen Image 2.0 is Alibaba's unified image generation and editing model, excelling at complex text rendering in both Chinese and English, realistic textures, precise semantic adherence, and multi-image fusion. The Pro variant delivers enhanced detail fidelity and professional-grade text-in-image accuracy, while the Standard variant balances quality with faster response times.\n\nNotes:\n- This model is served from the Singapore region.\n- Upload 1-3 images to enable image editing mode. Without images, the bot operates in text-to-image generation mode.\n- Responses may take 10-30 seconds depending on resolution, number of images, and prompt complexity.\n- Positive prompt has a max of 800 characters, negative prompt has a max of 500 characters. \n\nParameter controls available:\n1. Generation\n- Model: Select from Qwen Image 2.0 Pro or Qwen Image 2.0. Pro offers enhanced text rendering, realism, and semantic adherence. Standard is faster and lower cost. (Default: Pro)\n- Image Size: Select from (16:9, 9:16, 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5). Mapped resolutions: 16:9 = 1920x1080, 3:2 = 1536x1024, 4:3 = 1440x1080, 5:4 = 1280x1024, 1:1 = 1024x1024, 4:5 = 1024x1280, 3:4 = 1080x1440, 2:3 = 1024x1536, 9:16 = 1080x1920. If selected, this size is sent. If not selected: text-to-image defaults to 16:9; image editing uses model defaults based on input image ratio (for multiple input images, the last image determines the ratio).\n- Custom Width / Custom Height: Shown when Custom Size is enabled. Enter pixel values between 512 and 2048. Total pixels must be between 512x512 and 2048x2048. (Default: disabled)\n- Number of Images: Generate 1 to 6 images per request. Each image is billed separately. (Default: 1)\n\n2. Advanced\n- Prompt Enhancement: Automatically optimizes short prompts using AI for better results. Adds 3-5 seconds of latency. (Default: enabled)\n- Negative Prompt: Describe content to exclude from the generated image (e.g. \"low quality, blurry, distorted, extra fingers\").\n- Seed: Set from 0-2147483647 for reproducible results. Leave empty for random.\n- Watermark: Add a Qwen-Image watermark to the bottom-right corner. (Default: disabled)\n\nAttachments (Image Editing Mode):\n- Attach 1-3 images (JPEG, PNG, BMP, WEBP, TIFF, GIF) with a text instruction to edit them.\n- For best results, input image resolution should be between 384 and 3072 pixels per side.\n- Maximum file size per image: 10 MB.\n- Multi-image editing: Reference images by order (e.g. \"The girl in Image 1 wears the dress from Image 2 and sits in the pose from Image 3\") (images should be referenced in the order they are uploaded by).\n- Supported editing operations: style transfer, text modification, object addition/removal, pose changes, background replacement, viewpoint transformation, sketch-to-image, depth map generation, and more.",
+  "tags": [
+    "empirio labs ai",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.371911+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1772682269871
+  }
+}

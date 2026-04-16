@@ -1,0 +1,61 @@
+{
+  "model_id": "grok-4.1-fast-non-reasoning",
+  "display_name": "Grok-4.1-Fast-Non-Reasoning is a streamlined companion to Grok\u202f4.1\u202fFast, xAI\u2019s best agentic tool\u2011calling model. It has 2M context window and high responsiveness but is optimized for non\u2011reasoning task",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok-4.1-Fast-Non-Reasoning is a streamlined companion to Grok\u202f4.1\u202fFast, xAI\u2019s best agentic tool\u2011calling model. It has 2M context window and high responsiveness but is optimized for non\u2011reasoning tasks \u2014 excelling at text generation, summarization, and automated workflows that demand speed and efficiency over deep logic. Ideal for high-throughput use cases like customer support automation, bulk content creation, and fast conversational responses.",
+  "tags": [
+    "reasoning",
+    "vision",
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.369130+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.51
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1763585662409
+  }
+}

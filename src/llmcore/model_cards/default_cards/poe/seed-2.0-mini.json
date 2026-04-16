@@ -1,0 +1,61 @@
+{
+  "model_id": "seed-2.0-mini",
+  "display_name": "Seed-2.0-Mini from Bytedance targets latency-sensitive, high-concurrency, and cost-sensitive scenarios, emphasizing fast response and flexible inference deployment. It supports 256k context, four reas",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seed-2.0-Mini from Bytedance targets latency-sensitive, high-concurrency, and cost-sensitive scenarios, emphasizing fast response and flexible inference deployment. It supports 256k context, four reasoning effort modes, and multimodal understanding (including image and video), and is optimized for lightweight tasks where cost and speed take priority.\nThis model is served from Malaysia.\n\nNote: Pricing is 2x when input tokens >=128k\n\nParameter controls available:\n1. Reasoning\n- Default: Thinking enabled\n- Reasoning effort [low, medium, high]: How deeply the model thinks. Low=fast, Medium=balanced, High=thorough (default: medium). Only applies if thinking is enabled.\n\n2. Search & Vision\n- Web Search: Enable real-time web search for up-to-date information (default: false).\n- Image Detail [low, high, xhigh]: Quality for image understanding. Higher = more accurate but uses more tokens (default: high).\n- Video FPS [0.2-5]: Frame sampling rate for video input. Higher = more frames analyzed, more accurate, more tokens (default: 1).",
+  "tags": [
+    "empirio labs ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.362686+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.13,
+      "output": 0.51
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "image",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video->text",
+    "poe_object_type": "model",
+    "created": 1771632981140
+  }
+}

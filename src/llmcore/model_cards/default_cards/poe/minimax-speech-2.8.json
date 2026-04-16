@@ -1,0 +1,52 @@
+{
+  "model_id": "minimax-speech-2.8",
+  "display_name": "MiniMax Speech 2.8 is a premium text-to-speech model delivering studio-quality audio with enhanced clarity and naturalness. With support for multiple voice presets, emotional tones, and fine-grained a",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiniMax Speech 2.8 is a premium text-to-speech model delivering studio-quality audio with enhanced clarity and naturalness. With support for multiple voice presets, emotional tones, and fine-grained audio controls, it produces broadcast-ready speech synthesis for professional applications.",
+  "tags": [
+    "audio",
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.364713+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1774510258443
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "model_id": "deepseek-r1-n",
+  "display_name": "The DeepSeek-R1 (latest Snapshot model DeepSeek-R1-0528) model features enhanced reasoning and inference capabilities through optimized algorithms and increased computational resources. It excels in m",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The DeepSeek-R1 (latest Snapshot model DeepSeek-R1-0528) model features enhanced reasoning and inference capabilities through optimized algorithms and increased computational resources. It excels in mathematics, programming, and logic, with performance nearing top-tier models like o3 and Gemini 2.5 Pro. This bot does not accept attachments. \n\nTechnical Specifications\n\nFile Support: Attachments not supported\nContext window: 160k tokens",
+  "tags": [
+    "novita ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.400901+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1754049641148
+  }
+}

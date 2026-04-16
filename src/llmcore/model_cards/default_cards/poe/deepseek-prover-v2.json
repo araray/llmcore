@@ -1,0 +1,51 @@
+{
+  "model_id": "deepseek-prover-v2",
+  "display_name": "DeepSeek-Prover-V2 is an open-source large language model specifically designed for formal theorem proving in Lean 4. The model builds on a recursive theorem proving pipeline powered by the company's ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek-Prover-V2 is an open-source large language model specifically designed for formal theorem proving in Lean 4. The model builds on a recursive theorem proving pipeline powered by the company's DeepSeek-V3 foundation model.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.400533+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1747979752008
+  }
+}

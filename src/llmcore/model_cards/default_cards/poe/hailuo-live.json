@@ -1,0 +1,54 @@
+{
+  "model_id": "hailuo-live",
+  "display_name": "Hailuo Live, the latest model from Minimax, sets a new standard for bringing still images to life. From breathtakingly vivid motion to finely tuned expressions, this state-of-the-art model enables you",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Hailuo Live, the latest model from Minimax, sets a new standard for bringing still images to life. From breathtakingly vivid motion to finely tuned expressions, this state-of-the-art model enables your characters to captivate, move, and shine like never before. It excels in bring art and drawings to life, exceptional realism without morphing, emotional range, and unparalleled character consistency. Generates 5 second video.",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.417813+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1734370063740
+  }
+}

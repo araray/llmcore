@@ -1,0 +1,51 @@
+{
+  "model_id": "gpt-researcher",
+  "display_name": "GPT Researcher is an agent that conducts deep research on any topic and generates a comprehensive report with citations. GPT Researcher is powered by Tavily's search engine.\n\nGPTR is based on the popu",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GPT Researcher"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT Researcher is an agent that conducts deep research on any topic and generates a comprehensive report with citations. GPT Researcher is powered by Tavily's search engine.\n\nGPTR is based on the popular open source project: https://github.com/assafelovic/gpt-researcher -- by integrating Tavily search, it is optimized for curation and ranking of trusted research sources. Learn more at https://gptr.dev or https://tavily.com",
+  "tags": [
+    "gpt researcher"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.401285+00:00",
+  "provider_extension": {
+    "owned_by": "GPT Researcher",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1735901906014
+  }
+}

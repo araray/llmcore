@@ -1,0 +1,53 @@
+{
+  "model_id": "linkup-deep-search",
+  "display_name": "Linkup Deep Search is an AI-powered search bot that continues to search iteratively if it hasn't found sufficient information on the first attempt. Results are slower compared to its Standard search c",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Linkup Deep Search is an AI-powered search bot that continues to search iteratively if it hasn't found sufficient information on the first attempt. Results are slower compared to its Standard search counterpart, but often yield to more comprehensive results.\nLinkup's technology ranks #1 globally for factual accuracy, achieving state-of-the-art scores on OpenAI\u2019s SimpleQA benchmark. \n\nNotes:\nContext Window: 100k\nAudio/video files are not supported at this time. \n\nParameter controls available: \n1. Domain control. To search only within specific domains select `Include only these domains`, To exclude domains from the search result select `Exclude these domains`. \n2. Prioritize Domains. To give higher priority on search\n3. Date Range: Set `from date` and `to date` to select date range search. Use YYYY-MM-DD date format\n4. Content Option: Toggle `include image` to include relevant images on search and set `image count` (up to 45) to display specific number of images to display.\n5. Citation options: Toggle enable inline citation to include inline citations in the response text (Default: `on`). Toggle include sources list to include a list of sources in the response (Default: `on`)\n\nLearn more: https://www.linkup.so/",
+  "tags": [
+    "empirio labs ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.402145+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1755390159000
+  }
+}

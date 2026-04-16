@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-schnell-di",
+  "display_name": "This is the fastest version of FLUX, featuring highly optimized abstract models that excel at creative and unconventional renders. To further customize the prompt, you can follow the parameters availa",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "DeepInfra"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This is the fastest version of FLUX, featuring highly optimized abstract models that excel at creative and unconventional renders. To further customize the prompt, you can follow the parameters available:\n\nTo set width, use \"--width\". Valid pixel options from 128 up to 1920. Default value: 1024\nTo set height, use \"--height\". Valid pixel options from 128, up to 1920. Default value: 1024\nTo set seed, use \"--seed\" for reproducible result. Options from 1 up to 2**32. Default value: random\nTo set inference, use \"--num_inference_steps\". Options from 1 up to 50. Default: 1",
+  "tags": [
+    "deepinfra",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.409546+00:00",
+  "provider_extension": {
+    "owned_by": "DeepInfra",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1750333477944
+  }
+}

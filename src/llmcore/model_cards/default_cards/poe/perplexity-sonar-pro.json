@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-sonar-pro",
+  "display_name": "Sonar Pro by Perplexity is an advanced AI model that enhances real-time, web-connected search capabilities with double the citations and a larger context window. It's designed for complex queries, pro",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sonar Pro by Perplexity is an advanced AI model that enhances real-time, web-connected search capabilities with double the citations and a larger context window. It's designed for complex queries, providing in-depth, nuanced answers and extended extensibility, making it ideal for enterprises and developers needing robust search solutions. Context Length: 200k (max output token limit of 8k)",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.402579+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1737790959209
+  }
+}

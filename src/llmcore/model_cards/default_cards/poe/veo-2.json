@@ -1,0 +1,52 @@
+{
+  "model_id": "veo-2",
+  "display_name": "Veo 2 creates incredibly high-quality videos in a wide range of subjects and styles. It brings an improved understanding of real-world physics and the nuances of human movement and expression, which h",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Veo 2 creates incredibly high-quality videos in a wide range of subjects and styles. It brings an improved understanding of real-world physics and the nuances of human movement and expression, which helps improve its detail and realism overall. Veo 2 understands the unique language of cinematography: ask it for a genre, specify a lens, suggest cinematic effects and Veo 2 will deliver in 8-second clips. Use `--aspect_ratio` (16:9 or 9:16) to customize video aspect ratio. Supports text-to-video as well as image-to-video. Non english input will be translated first. Note: currently has low rate limit so you may need to retry your request at times of peak usage.",
+  "tags": [
+    "google",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.417172+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1733117805122
+  }
+}

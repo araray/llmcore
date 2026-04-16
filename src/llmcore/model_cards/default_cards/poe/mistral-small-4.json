@@ -1,0 +1,51 @@
+{
+  "model_id": "mistral-small-4",
+  "display_name": "Mistral Small 4 is a powerful hybrid model capable of acting as both a general instruction model and a reasoning model. It unifies the capabilities of three different model families\u2014Instruct, Reasonin",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral Small 4 is a powerful hybrid model capable of acting as both a general instruction model and a reasoning model. It unifies the capabilities of three different model families\u2014Instruct, Reasoning (previously called Magistral), and Devstral\u2014into a single, unified model.\n\nWith its multimodal capabilities, efficient architecture, and flexible mode switching, it is a powerful general-purpose model for any task. In a latency-optimized setup, Mistral Small 4 achieves a 40% reduction in end-to-end completion time, and in a throughput-optimized setup, it handles 3x more requests per second compared to Mistral Small 3.\n\nNotes:\n- Context Window: 256k\n- Supported input modalities: Text, Image, Documents\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.356891+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1773801727930
+  }
+}

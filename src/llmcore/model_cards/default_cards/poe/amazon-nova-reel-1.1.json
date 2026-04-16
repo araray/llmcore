@@ -1,0 +1,52 @@
+{
+  "model_id": "amazon-nova-reel-1.1",
+  "display_name": "Amazon Nova Reel 1.1 is an advanced AI video generation model that creates up to 2-minute multi-shot videos from text and optional image prompts, offering improved video quality, latency, and visual c",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Amazon Nova Reel 1.1 is an advanced AI video generation model that creates up to 2-minute multi-shot videos from text and optional image prompts, offering improved video quality, latency, and visual consistency compared to its predecessor.",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.389040+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1757629656513
+  }
+}

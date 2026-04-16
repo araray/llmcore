@@ -1,0 +1,51 @@
+{
+  "model_id": "inception-mercury-co",
+  "display_name": "This model has been deprecated and will end-of-life on April 15, 2026.\n\nMercury Coder is the first diffusion large language model (dLLM). Applying a breakthrough discrete diffusion approach, the model",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Inception Labs"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model has been deprecated and will end-of-life on April 15, 2026.\n\nMercury Coder is the first diffusion large language model (dLLM). Applying a breakthrough discrete diffusion approach, the model runs 5-10x faster than even speed optimized models like Claude 3.5 Haiku and GPT-4o Mini while matching their performance. Mercury Coder Small's speed means that developers can stay in the flow while coding, enjoying rapid chat-based iteration and responsive code completion suggestions. On Copilot Arena, Mercury Coder ranks 1st in speed and ties for 2nd in quality. Read more in the blog post here: https://www.inceptionlabs.ai/introducing-mercury.",
+  "tags": [
+    "inception labs"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.399877+00:00",
+  "provider_extension": {
+    "owned_by": "Inception Labs",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1747072614396
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-5.1-instant",
+  "display_name": "OpenAI\u2019s most flagship model optimized for conversational intelligence. It excels at natural dialogue, contextual memory, and adaptive tone, making it perfect for interactive agents, tutoring, and cus",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI\u2019s most flagship model optimized for conversational intelligence. It excels at natural dialogue, contextual memory, and adaptive tone, making it perfect for interactive agents, tutoring, and customer support. It balances speed, reliability, and empathy for seamless real\u2011time communication. \n\nSupports 128k tokens of input context.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.377403+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.1,
+      "output": 9.1
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1762990086156
+  }
+}

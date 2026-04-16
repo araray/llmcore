@@ -1,0 +1,51 @@
+{
+  "model_id": "deepseek-v3.1-t",
+  "display_name": "DeepSeek-V3.1 is a hybrid model that supports both thinking mode and non-thinking mode. Compared to the previous version, this upgrade brings improvements in multiple aspects: Hybrid thinking mode: On",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek-V3.1 is a hybrid model that supports both thinking mode and non-thinking mode. Compared to the previous version, this upgrade brings improvements in multiple aspects: Hybrid thinking mode: One model supports both thinking mode and non-thinking mode by changing the chat template. Smarter tool calling: Through post-training optimization, the model's performance in tool usage and agent tasks has significantly improved. Higher thinking efficiency: DeepSeek-V3.1-Think achieves comparable answer quality to DeepSeek-R1-0528, while responding more quickly.",
+  "tags": [
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.393152+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1735963694067
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "veo-3-fast",
+  "display_name": "Veo 3 Fast is a speed-optimized variant of Google\u2019s Veo 3 AI video generation engine. It\u2019s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Veo 3 Fast is a speed-optimized variant of Google\u2019s Veo 3 AI video generation engine. It\u2019s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound, effects). Prioritizes faster generation times while still delivering solid visual and audio quality, supports text-to-video and image-to-video workflows, allowing creators to animate still images into motion sequences, operates under defined constraints (e.g. video lengths of 4, 6, or 8 seconds). Set the aspect ratio (either `16:9` or `9:16`), which defaults to `16:9`.\nPlease only upload photos that you own or have the right to use, otherwise the bot will throw an error.",
+  "tags": [
+    "google",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415352+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1760335513509
+  }
+}

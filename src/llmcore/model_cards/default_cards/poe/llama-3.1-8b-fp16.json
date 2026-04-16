@@ -1,0 +1,51 @@
+{
+  "model_id": "llama-3.1-8b-fp16",
+  "display_name": "The smallest and fastest member of the Llama 3.1 family, offering exceptional efficiency and rapid response times with 128K context length.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Hyperbolic"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The smallest and fastest member of the Llama 3.1 family, offering exceptional efficiency and rapid response times with 128K context length.",
+  "tags": [
+    "hyperbolic"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.422757+00:00",
+  "provider_extension": {
+    "owned_by": "Hyperbolic",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1724034517400
+  }
+}

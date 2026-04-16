@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen3-vl-235b-a22b-t",
+  "display_name": "Qwen3-VL is the most advanced vision-language model in the Qwen series, offering enhanced text understanding, visual reasoning, spatial perception, and agent capabilities. It supports Dense/MoE archit",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-VL is the most advanced vision-language model in the Qwen series, offering enhanced text understanding, visual reasoning, spatial perception, and agent capabilities. It supports Dense/MoE architectures and Instruct/Thinking editions for versatile deployment.\n\nKey Features:\n- Visual Agent: Operates GUIs, recognizes elements, invokes tools, and completes tasks.\n- Coding Boost: Generates Draw.io, HTML, CSS, and JS from images/videos.\n- Spatial Perception: Enables 2D/3D reasoning with strong object positioning and occlusion analysis.\n- Long Context: Processes up to 1M tokens for books or long videos.\n- Multimodal Reasoning: Excels in STEM, math, causal analysis, and evidence-based answers.\n- Visual Recognition: Recognizes a wide range of objects, landmarks, and more.\n- OCR: Supports 32 languages with improved performance in challenging conditions.\n- Text-Vision Fusion: Achieves seamless, unified comprehension.\n\nIdeal for multimodal reasoning, spatial analysis, and integrated text-vision tasks.\n\nTechnical Specifications\n\nFile Support: Image, Video, PDF and Markdown files\nContext window: 128k tokens",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.397092+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1758695878297
+  }
+}

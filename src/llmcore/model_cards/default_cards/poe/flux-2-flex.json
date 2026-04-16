@@ -1,0 +1,54 @@
+{
+  "model_id": "flux-2-flex",
+  "display_name": "Flux.2 [Flex] is Black Forest Lab's latest model, with Multi-Reference Support, Fine-grained text rendering, and other features. Supports structured JSON prompts, and allows use of hex color codes wit",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Flux.2 [Flex] is Black Forest Lab's latest model, with Multi-Reference Support, Fine-grained text rendering, and other features. Supports structured JSON prompts, and allows use of hex color codes within the prompt for precise coloring.\nSend images in jpeg/png/webp format for editing. Total megapixels (input + output) should not exceed 14 megapixels.\n\nOptional parameters:\nSet aspect ratio. Select from (16:9, 4:3, 1:1, 3:4, 9:16). It is set to 4:3 aspect ratio as default.",
+  "tags": [
+    "fal",
+    "image-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.386884+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1764085409921
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "ideogram-v2a",
+  "display_name": "Fast, affordable text-to-image model, optimized for graphic design and photography. For faster and more cost-effective generations, use https://poe.com/Ideogram-v2A-Turbo.\nNote: Supported file type: J",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "IdeogramAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Fast, affordable text-to-image model, optimized for graphic design and photography. For faster and more cost-effective generations, use https://poe.com/Ideogram-v2A-Turbo.\nNote: Supported file type: JPEG, WebP and PNG.\n\nOptional parameters:\nAspect to set the aspect ratio. Valid aspect ratios are 10:16, 16:10, 9:16, 16:9, 3:2, 2:3, 4:3, 3:4, & 1:1.\nStyle to specify a style (one of `GENERAL`, `REALISTIC`, `DESIGN`, `3D RENDER` and `ANIME` default: `GENERAL`.)",
+  "tags": [
+    "ideogramai",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.418592+00:00",
+  "provider_extension": {
+    "owned_by": "IdeogramAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1740678539688
+  }
+}

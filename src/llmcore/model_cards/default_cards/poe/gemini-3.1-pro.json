@@ -1,0 +1,62 @@
+{
+  "model_id": "gemini-3.1-pro",
+  "display_name": "Gemini 3.1 Pro is a state-of-the-art model for complex problem-solving, advanced reasoning, creative coding, and ambitious agentic workflows, delivering top benchmark results including a verified scor",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.1 Pro is a state-of-the-art model for complex problem-solving, advanced reasoning, creative coding, and ambitious agentic workflows, delivering top benchmark results including a verified score of 77.1% on the ARC-AGI-2 benchmark (more than double the reasoning performance of Gemini 3 Pro).\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.353871+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1771460884211
+  }
+}

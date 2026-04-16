@@ -1,0 +1,52 @@
+{
+  "model_id": "imagen-3-fast",
+  "display_name": "Google DeepMind's highest quality text-to-image model, capable of generating images with great detail, rich lighting, and few distracting artifacts \u2014 optimized for short, simple prompts. \n\nOptional pa",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google DeepMind's highest quality text-to-image model, capable of generating images with great detail, rich lighting, and few distracting artifacts \u2014 optimized for short, simple prompts. \n\nOptional parameters:\nAspect ratio of your image (1:1, 16:9, 9:16, 4:3, 3:4). \n\nNotes: For more complex prompts, use @Imagen3. Non english input will be translated first. Image prompt cannot exceed 480 tokens.",
+  "tags": [
+    "google",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.408542+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1729127959259
+  }
+}

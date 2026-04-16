@@ -1,0 +1,58 @@
+{
+  "model_id": "glm-4.7-flash",
+  "display_name": "GLM-4.7-Flash, a state-of-the-art model in the 30B class, delivers a compelling balance of high performance and efficiency. Tailored for Agentic Coding, it strengthens coding proficiency, long-horizon",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM-4.7-Flash, a state-of-the-art model in the 30B class, delivers a compelling balance of high performance and efficiency. Tailored for Agentic Coding, it strengthens coding proficiency, long-horizon planning, and tool synergy, securing top-tier results on public benchmarks among similarly sized open-source models. It excels in complex agent tasks with superior instruction following for tool use, while significantly elevating the frontend aesthetics and completion efficiency of long-range workflows in Artifacts and Agentic Coding. \n\nContext window: 200k tokens\n\nOptional parameters:\nEnable thinking about the response before giving a final answer: toggle it `on`, otherwise it is `off`  by default.\nSet temperature to control randomness in the response: Set number from 1 to 2.  This is set to `0.7` by default. Lower values make the output more focused and deterministic.\nSet max output tokens: Set number from 1 to 65500. This is set to 65500 by default.",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.377141+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.071,
+      "output": 0.4
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1768838511598
+  }
+}

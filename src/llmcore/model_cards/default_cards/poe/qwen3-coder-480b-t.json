@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen3-coder-480b-t",
+  "display_name": "Qwen3\u2011Coder\u2011480B is a state of the art mixture\u2011of\u2011experts (MoE) code\u2011specialized language model with 480\u202fbillion total parameters and 35\u202fbillion activated parameters. Qwen3\u2011Coder delivers exceptional ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3\u2011Coder\u2011480B is a state of the art mixture\u2011of\u2011experts (MoE) code\u2011specialized language model with 480\u202fbillion total parameters and 35\u202fbillion activated parameters. Qwen3\u2011Coder delivers exceptional performance across code generation, function calling, tool use, and long\u2011context reasoning. It natively supports up to 262,144\u2011token context windows, making it ideal for large repository and multi\u2011file coding tasks.",
+  "tags": [
+    "code",
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.397646+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1753465729255
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "model_id": "stable-audio-2.0",
+  "display_name": "Stable Audio 2.0 generates audio up to 3 minutes long from text prompts, supporting text-to-audio and audio-to-audio transformations with customizable settings like duration, steps, CFG scale, and mor",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Stable Audio 2.0 generates audio up to 3 minutes long from text prompts, supporting text-to-audio and audio-to-audio transformations with customizable settings like duration, steps, CFG scale, and more. It is ideal for creative professionals seeking detailed and extended outputs from simple prompts.\n\nNote: Audio-to-audio mode requires a prompt alongside an uploaded audio file for generation.\n\nParameter controls available:\n1. Basic\n- Generation Mode: Text to Audio, Audio to Audio (Transform)\n- Output format: WAV (high quality), MP3 (Compressed)\n\n2. Timing and Randomness\n- Duration [1-190 seconds] controls how long generated audio is\n- Seed [0-4294967294]' disables random seed generation. Use random seed must be toggled off to set.\n\n3. Advanced\n- Cfg scale [1-25]: Higher = closer to prompt (recommended 7-15)\n- Steps [4-8]`: Higher = better quality (recommended 6-8)\n\n4. Transformation control (only for audio-to-audio)\n- Strength [0-1]`: How much to change/transform (0.3-0.7 typical)",
+  "tags": [
+    "audio",
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.403913+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "audio"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text,audio->audio",
+    "poe_object_type": "model",
+    "created": 1756880177270
+  }
+}

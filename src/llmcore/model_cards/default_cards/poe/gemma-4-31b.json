@@ -1,0 +1,53 @@
+{
+  "model_id": "gemma-4-31b",
+  "display_name": "Google's most capable open model, delivering frontier-class reasoning and multimodal understanding in a 31 billion parameter dense architecture. Gemma 4 supports a 256K token context window, understan",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google's most capable open model, delivering frontier-class reasoning and multimodal understanding in a 31 billion parameter dense architecture. Gemma 4 supports a 256K token context window, understands over 140 languages, and accepts both text and image inputs. It features built-in chain-of-thought reasoning for complex multi-step tasks, strong coding and math performance, and function calling support. Released under the Apache 2.0 license, Gemma 4 31B offers competitive performance with leading proprietary models while being fully open-weight. This bot may experience degraded performance due to high traffic to this model.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.355121+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1775161622456
+  }
+}

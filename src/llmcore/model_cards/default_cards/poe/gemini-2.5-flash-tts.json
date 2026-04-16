@@ -1,0 +1,52 @@
+{
+  "model_id": "gemini-2.5-flash-tts",
+  "display_name": "Gemini\u20112.5\u2011Flash\u2011TTS is Google\u2019s low\u2010latency text\u2011to\u2011speech model that converts text input into audio output, supporting both single\u2011 and multi\u2011speaker voices with controllable style, accent, and expr",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini\u20112.5\u2011Flash\u2011TTS is Google\u2019s low\u2010latency text\u2011to\u2011speech model that converts text input into audio output, supporting both single\u2011 and multi\u2011speaker voices with controllable style, accent, and expressive tone \u2014 ideal for applications like podcasts, audiobooks, and conversational voice systems.\n\nNotes:\n- Text and style prompt limited to 4,000 bytes each (8,000 bytes combined)\n- Max output duration: approximately 10 minutes\n- Multi-speaker requires SpeakerName: text format (example: Alice: Hi! Bob: Hello, must be on new lines)\n- The model auto-detects the input language. The Language setting is a hint to help choose the right voice/accent, the model may override it if the text is in a different language.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "audio",
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.404300+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1758667568690
+  }
+}

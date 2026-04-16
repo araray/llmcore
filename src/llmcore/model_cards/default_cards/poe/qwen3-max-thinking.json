@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen3-max-thinking",
+  "display_name": "Qwen3-Max-Thinking is a flagship reasoning model that integrates adaptive tool use, autonomously employing search, memory, and code interpretation to address complex tasks. It further optimizes perfor",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-Max-Thinking is a flagship reasoning model that integrates adaptive tool use, autonomously employing search, memory, and code interpretation to address complex tasks. It further optimizes performance through test-time scaling, a strategy that allocates additional computation during inference to improve reasoning accuracy and context efficiency.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Context window: 256K\n- Supported file types: PNG, JPG, JPEG, HEIC, PDF, TXT, DOC, DOCX\n- Audio/Video files are not supported.\n\nParameter controls available:\n1. Model Configuration\nThinking to let the model reason step-by-step before answering. It is `on`  by default.\n\n2. Tools\n- Web search to search the web for real-time info. It is `on` by default.\n- Web search mode. Select from `Standard` for efficient search or `Thorough` for comprehensive search. It is set to `Standard` by default (requires thinking enabled).\n- Web extractor to extract/read content from URLs (requires thinking enabled). It is `on` by default.\n- Code interpreter to run Python code in a sandbox (requires thinking enabled). It is `on` by default.",
+  "tags": [
+    "empirio labs ai",
+    "reasoning"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.367003+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1769457283480
+  }
+}

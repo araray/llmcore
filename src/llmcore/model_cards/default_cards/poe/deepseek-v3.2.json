@@ -1,0 +1,58 @@
+{
+  "model_id": "deepseek-v3.2",
+  "display_name": "We introduce DeepSeek-V3.2, a next-generation foundation model designed to unify high computational efficiency with state-of-the-art reasoning and agentic performance. DeepSeek-V3.2 is built upon thre",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "We introduce DeepSeek-V3.2, a next-generation foundation model designed to unify high computational efficiency with state-of-the-art reasoning and agentic performance. DeepSeek-V3.2 is built upon three core technical breakthroughs:\n\n\u2022 DeepSeek Sparse Attention (DSA):\nA new highly efficient attention mechanism that significantly reduces computational overhead while preserving model quality, purpose-built for long-context reasoning and high-throughput workloads.\n\n\u2022 Scalable Reinforcement Learning Framework:\nDeepSeek-V3.2 leverages a robust RL training protocol and expanded post-training compute to reach GPT-5-level performance. Its high-compute variant, DeepSeek-V3.2-Speciale, surpasses GPT-5 and demonstrates reasoning capabilities comparable to Gemini-3.0-Pro.\n\n\u2022 Large-Scale Agentic Task Synthesis Pipeline:\nTo enable reliable tool-use and multi-step decision-making, we develop a novel agentic data synthesis pipeline that generates high-quality interactive reasoning tasks at scale, greatly enhancing the model\u2019s\n\nFile Support: Text, Markdown and PDF files\nContext window: 164k tokens",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.370413+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.27,
+      "output": 0.4
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1764585257709
+  }
+}

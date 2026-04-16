@@ -1,0 +1,60 @@
+{
+  "model_id": "claude-haiku-3",
+  "display_name": "Anthropic's Claude Haiku 3 outperforms models in its intelligence category on performance, speed and cost without the need for specialized fine-tuning. The compute points value is subject to change. F",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Anthropic's Claude Haiku 3 outperforms models in its intelligence category on performance, speed and cost without the need for specialized fine-tuning. The compute points value is subject to change. For most use cases, https://poe.com/Claude-Haiku-3.5 will be better.",
+  "tags": [
+    "anthropic",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.424500+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.21,
+      "output": 1.1
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Anthropic",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1709942726436
+  }
+}

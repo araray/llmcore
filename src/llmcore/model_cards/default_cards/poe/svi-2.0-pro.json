@@ -1,0 +1,52 @@
+{
+  "model_id": "svi-2.0-pro",
+  "display_name": "Stable Video Infinity 2.0 Pro, powered by WAN 2.2, generates seamlessly extending, theoretically infinite-length videos from still images while maintaining consistent character IDs. It uses advanced t",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Stable Video Infinity 2.0 Pro, powered by WAN 2.2, generates seamlessly extending, theoretically infinite-length videos from still images while maintaining consistent character IDs. It uses advanced temporal coherence and generative scene expansion to maintain visual consistency, allowing endless, smooth motion and evolving visuals without looping or abrupt transitions.\n\nThis model is hosted by EmpirioLabs.ai and is exclusive to the Poe platform.\n\nLearn more: https://stable-video-infinity.github.io/homepage/\n\nNotes: \n- Generations may take upwards of 45 minutes depending on the selected length.\n- If you are experiencing issues with slow motion, try adjusting the prompt to describe more consecutive motion per segment (ex. A knight stands in the rain, water dripping from his helmet as he clenches his fist, looks up toward the castle gates, takes a steadying breath, then turns and marches forward.).\n- Image-to-Video generations will likely yield superior results.\n- Supported image upload file types: .jpg, .jpeg, .png, .webp, .heic, .heif, .bmp, .tiff, .tif\n\nParameter controls available:\n1. Video Settings\n- Resolution. [832x480, 480x832, 720x1280, 1280x720]: Controls output dimensions (Default: 832x480)\n- Duration [18-121.5]: Estimated video length in seconds (Step 4.5)\n  - For 480p: Max 121.5s\n  - For 720p: Max 40.5s\n\n2. Advanced\n- Cfg [1.0-2.0]: Prompt adherence strength (Default: 1.0)\n- Negative prompt [text]`: Standard negative prompt included by default (e.g. \"vibrant tone, overexposed...\")\n\n3. Text-to-Video Settings\n- t2v quality [fast or quality]: Generation mode for text-to-video (Default: quality)",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.406767+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1767577823164
+  }
+}

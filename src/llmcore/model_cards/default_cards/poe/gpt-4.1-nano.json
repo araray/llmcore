@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-4.1-nano",
+  "display_name": "GPT-4.1 nano is an extremely fast and cheap model, ideal for text/vision summarization/categorization tasks. Supports native vision and 1M input tokens of context.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-4.1 nano is an extremely fast and cheap model, ideal for text/vision summarization/categorization tasks. Supports native vision and 1M input tokens of context.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.394135+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.091,
+      "output": 0.36
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1744675276376
+  }
+}

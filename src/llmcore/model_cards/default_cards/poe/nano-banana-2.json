@@ -1,0 +1,59 @@
+{
+  "model_id": "nano-banana-2",
+  "display_name": "Google's latest image model combines Pro-level intelligence with lightning-fast generation. It features advanced world knowledge, precise text rendering, strong subject consistency, and 4K production-",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google's latest image model combines Pro-level intelligence with lightning-fast generation. It features advanced world knowledge, precise text rendering, strong subject consistency, and 4K production-ready outputs.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "google",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.352002+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.51,
+      "output": 3.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1772107200000
+  }
+}

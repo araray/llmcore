@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen3.5-397b-a17b-t",
+  "display_name": "Over recent months, we have intensified our focus on developing foundation models that deliver exceptional utility and performance. Qwen3.5 represents a significant leap forward, integrating breakthro",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Over recent months, we have intensified our focus on developing foundation models that deliver exceptional utility and performance. Qwen3.5 represents a significant leap forward, integrating breakthroughs in multimodal learning, architectural efficiency, reinforcement learning scale, and global accessibility to empower developers and enterprises with unprecedented capability and efficiency.\n\nQwen3.5 features the following enhancement:\n\nUnified Vision-Language Foundation: Early fusion training on multimodal tokens achieves cross-generational parity with Qwen3 and outperforms Qwen3-VL models across reasoning, coding, agents, and visual understanding benchmarks.\n\nEfficient Hybrid Architecture: Gated Delta Networks combined with sparse Mixture-of-Experts deliver high-throughput inference with minimal latency and cost overhead.\n\nScalable RL Generalization: Reinforcement learning scaled across million-agent environments with progressively complex task distributions for robust real-world adaptability.\n\nGlobal Linguistic Coverage: Expanded support to 201 languages and dialects, enabling inclusive, worldwide deployment with nuanced cultural and regional understanding.\n\nNext-Generation Training Infrastructure: Near-100% multimodal training efficiency compared to text-only training and asynchronous RL frameworks supporting massive-scale agent scaffolds and environment orchestration.",
+  "tags": [
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.362431+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1771354710620
+  }
+}

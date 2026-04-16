@@ -1,0 +1,51 @@
+{
+  "model_id": "mixtral8x22b-inst-fw",
+  "display_name": "Mixtral 8x22B Mixture-of-Experts instruct model from Mistral hosted by Fireworks. ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Fireworks AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mixtral 8x22B Mixture-of-Experts instruct model from Mistral hosted by Fireworks. ",
+  "tags": [
+    "fireworks ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.420693+00:00",
+  "provider_extension": {
+    "owned_by": "Fireworks AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1712949013942
+  }
+}

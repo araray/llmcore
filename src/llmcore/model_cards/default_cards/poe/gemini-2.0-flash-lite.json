@@ -1,0 +1,62 @@
+{
+  "model_id": "gemini-2.0-flash-lite",
+  "display_name": "Gemini 2.0 Flash Lite is a new model variant from Google that is our most cost-efficient model yet, and often considered a spiritual successor to Gemini 1.5 Flash in terms of capability, context windo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.0 Flash Lite is a new model variant from Google that is our most cost-efficient model yet, and often considered a spiritual successor to Gemini 1.5 Flash in terms of capability, context window size and cost. Does not support web search (if you need search, we recommend using https://poe.com/Gemini-2.0-Flash), supports 1 million tokens of input context.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.395318+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.053,
+      "output": 0.21
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1738780480313
+  }
+}

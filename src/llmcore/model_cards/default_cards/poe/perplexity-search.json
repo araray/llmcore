@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-search",
+  "display_name": "Utilize Perplexity's technology for real-time web search with filtering by domain, language, date and more.\nNote: This endpoint does not return an LLM-style response. File upload is not supported.\n\nPa",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Utilize Perplexity's technology for real-time web search with filtering by domain, language, date and more.\nNote: This endpoint does not return an LLM-style response. File upload is not supported.\n\nParameter Controls Available:\n1. General\n   - `query` (required): Your search query as a single string\n   - `multi_query`: Up to 5 queries separated by newlines for batch searching\n   - `max_results` [1-20]: Number of search results to return (default 5)\n   - `max_tokens` [5000-100000]: Total content token budget across all results\n   - `max_tokens_per_page` [256-8192]: Maximum tokens extracted per individual page\n\n2. Filters\n   - `search_domain_filter`: Allow or deny specific domains (prefix with `-` to deny, max 20, no mixing allow/deny)\n   - `search_language_filter`: Restrict results by language using ISO 639-1 codes (e.g. `en`, `fr`), comma-separated, max 10\n   - `country`: Restrict results by country using ISO 3166-1 alpha-2 code (e.g. `US`, `GB`)\n\n3. Date & Recency\n   - `search_recency_filter`: Limit results to `hour`, `day`, `week`, `month`, or `year`\n   - `search_after_date_filter` (MM/DD/YYYY): Only return results published after this date (overrides recency)\n   - `search_before_date_filter` (MM/DD/YYYY): Only return results published before this date (overrides recency)\n   - `last_updated_after_filter` (MM/DD/YYYY): Only return results last updated after this date\n   - `last_updated_before_filter` (MM/DD/YYYY): Only return results last updated before this date\n   - `display_server_time`: Toggle to include the server timestamp in the response",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.372650+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1771723986988
+  }
+}

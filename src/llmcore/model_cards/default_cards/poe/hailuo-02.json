@@ -1,0 +1,52 @@
+{
+  "model_id": "hailuo-02",
+  "display_name": "Hailuo-02, MiniMax's latest video generation model. Generates 6-second, 768p videos, just submit a text prompt or an image with a prompt describing the desired video behavior, and it will create it; t",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Minimax"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Hailuo-02, MiniMax's latest video generation model. Generates 6-second, 768p videos, just submit a text prompt or an image with a prompt describing the desired video behavior, and it will create it; typically takes ~5 minutes for generation time. Strong motion effects and ultra-clear quality.",
+  "tags": [
+    "minimax",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.412197+00:00",
+  "provider_extension": {
+    "owned_by": "Minimax",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1750150747414
+  }
+}

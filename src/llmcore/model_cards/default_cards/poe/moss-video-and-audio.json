@@ -1,0 +1,52 @@
+{
+  "model_id": "moss-video-and-audio",
+  "display_name": "MOSS Video and Audio (MOVA) is an open-source foundation model developed by OpenMOSS that generates synchronized, high-fidelity video and audio in a single end-to-end inference step. Built on a 32-bil",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MOSS Video and Audio (MOVA) is an open-source foundation model developed by OpenMOSS that generates synchronized, high-fidelity video and audio in a single end-to-end inference step. Built on a 32-billion parameter Mixture-of-Experts (MoE) architecture, it employs an asymmetric dual-tower design to achieve precise lip-synchronization and eliminate the error accumulation found in traditional cascaded systems. \n\nThis model is hosted by EmpirioLabs.ai and is exclusive to the Poe platform.\n\nLearn more: https://mosi.cn/models/mova\n\nNotes:\n- Generations may take upwards of 20 minutes to complete.\n- Image-to-Video generations will likely yield superior results.\n- Supported image upload file types: .jpg, .jpeg, .png, .webp, .heic, .heif, .bmp, .tiff, .tif, .gif\n- Only 1 image attachment is supported (first frame), and video attachments are not supported.\n\nParameter controls available:\n1. Generation\n- Resolution `360p` or q720p` (default: 360p)\n- Aspect ratio `landscape` or `portrait` or `square` (default: landscape; auto-detected for uploaded images)\n- Duration [2-8] video length in seconds (default: 4)\n- t2v quality 1fast` or `quality` (default: quality; only for text-to-video)\n\n2. Advanced\n- Inference steps [10-50] more steps = higher quality but slower (default: 25, step: 5)\n- CFG scale [1.0-10.0] prompt adherence strength, higher = more literal (default: 5.0, step: 0.5)\n- Sigma_shift [1.0-10.0] noise schedule shift, 360p only (default: 5.0, step: 0.5)\n- Seed [number] for reproducibility, omit for random\n- Negative prompt \"your negative prompt\" leave blank for optimized default",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.374104+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1771382022972
+  }
+}

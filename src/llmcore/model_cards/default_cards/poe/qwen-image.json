@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen-image",
+  "display_name": "Qwen-Image is an image generation foundation model in the Qwen series that achieves significant advances in complex text rendering. Experiments show strong general capabilities in image generation, wi",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen-Image is an image generation foundation model in the Qwen series that achieves significant advances in complex text rendering. Experiments show strong general capabilities in image generation, with exceptional performance in text rendering, especially for Chinese. Prompt input cannot exceed 2,000 characters.",
+  "tags": [
+    "image-generation",
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.406342+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1754383747239
+  }
+}

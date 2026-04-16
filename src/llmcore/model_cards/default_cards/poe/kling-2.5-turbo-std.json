@@ -1,0 +1,54 @@
+{
+  "model_id": "kling-2.5-turbo-std",
+  "display_name": "Generate high-quality videos from images using Kling 2.5 Turbo Standard. \n\nOptional parameters:\n- Negative prompt. Type things to avoid in generated images\n- CFG Scale. To send a classifier-free guida",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate high-quality videos from images using Kling 2.5 Turbo Standard. \n\nOptional parameters:\n- Negative prompt. Type things to avoid in generated images\n- CFG Scale. To send a classifier-free guidance scale between 0.0 and 1.0. This is set to 0.5 as default\n- Set Duration. Select from (5 seconds or 10 seconds) to specify video length in seconds. Set to 5 seconds as default\n\nNote: Only Image to Video is supported, aspect ratio is inferred automatically from the image and cannot be set.\n\nSupported image file format: jpeg, png, webp",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.411467+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1761145308745
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-sonar-rsn-pro",
+  "display_name": "This model operates on the open-sourced uncensored R1-1776 model from Perplexity with web search capabilities. The Perplexity Sonar Rsn Pro Reasoning Model takes AI-powered answers to the next level, ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model operates on the open-sourced uncensored R1-1776 model from Perplexity with web search capabilities. The Perplexity Sonar Rsn Pro Reasoning Model takes AI-powered answers to the next level, offering unmatched quality and precision. Outperforming leading search engines and LLMs, This model has demonstrated superior performance in the SimpleQA benchmark, making it the gold standard for high-quality answer generation. Context Length: 128k (max output token limit of 8k)",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.402711+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1739997380566
+  }
+}

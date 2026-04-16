@@ -1,0 +1,52 @@
+{
+  "model_id": "omnihuman",
+  "display_name": "OmniHuman, by Bytedance, generates video using an image of a human figure paired with an audio file. It produces vivid, high-quality videos where the character\u2019s emotions and movements maintain a stro",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Bytedance"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OmniHuman, by Bytedance, generates video using an image of a human figure paired with an audio file. It produces vivid, high-quality videos where the character\u2019s emotions and movements maintain a strong correlation with the audio. Send an image including a human figure with a visible face, and an audio, and the bot will return a video. The maximum audio length accepted is 30 seconds.",
+  "tags": [
+    "bytedance",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415628+00:00",
+  "provider_extension": {
+    "owned_by": "Bytedance",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1753875678785
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "imagen-4-fast",
+  "display_name": "DeepMind's June 2025 text-to-image model with exceptional prompt adherence, capable of generating images with great detail, rich lighting, and few distracting artifacts. \n\nOptional parameters:\nAspect ",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepMind's June 2025 text-to-image model with exceptional prompt adherence, capable of generating images with great detail, rich lighting, and few distracting artifacts. \n\nOptional parameters:\nAspect ratio of your image (1:1, 16:9, 9:16, 4:3, 3:4). \n\nNotes:\nNon-English input will be translated first. Serves the `imagen-4.0-fast-generate-preview-06-06` model from Google Vertex, and has a maximum input of 480 tokens.",
+  "tags": [
+    "google",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.405692+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1750875079224
+  }
+}

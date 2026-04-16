@@ -1,0 +1,51 @@
+{
+  "model_id": "nova-pro-1.0",
+  "display_name": "Amazon Nova Pro 1.0 is a highly capable multimodal foundation model from Amazon Nova, offering a strong balance of accuracy, speed, and cost for processing text, images, and video. Its context window ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Amazon Nova Pro 1.0 is a highly capable multimodal foundation model from Amazon Nova, offering a strong balance of accuracy, speed, and cost for processing text, images, and video. Its context window is 300,000 tokens, which enables handling very large inputs (including up to ~30 minutes of video input) in a single request.\n\nOptional parameter:\nLatency Optimized Inference to enable faster inference at a higher cost. It is `off` by default.\nNote that if enabled, costs may increase. Check the rate card for more information.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.384488+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1733715164341
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "model_id": "llama-3.1-8b-cs",
+  "display_name": "World\u2019s fastest inference for Llama 3.1 8B with Cerebras. This Llama 8B instruct-tuned version is fast and efficient. The Llama 3.1 8B is an instruction tuned text only model, optimized for multilingu",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "CerebrasAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "World\u2019s fastest inference for Llama 3.1 8B with Cerebras. This Llama 8B instruct-tuned version is fast and efficient. The Llama 3.1 8B is an instruction tuned text only model, optimized for multilingual dialogue use cases. It has demonstrated strong performance compared to leading closed-source models in human evaluations.",
+  "tags": [
+    "cerebrasai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.401150+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.1
+    }
+  },
+  "provider_extension": {
+    "owned_by": "CerebrasAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1747179273060
+  }
+}

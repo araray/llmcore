@@ -1,0 +1,54 @@
+{
+  "model_id": "seedance-1.0-pro-fast",
+  "display_name": "Seedance Pro Fast is a faster version of Seedance 1.0 Pro that balances speed, quality and cost. Seedance is a video generation model with text-to-video and image-to-video capabilities. It achieves br",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Bytedance"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seedance Pro Fast is a faster version of Seedance 1.0 Pro that balances speed, quality and cost. Seedance is a video generation model with text-to-video and image-to-video capabilities. It achieves breakthroughs in semantic understanding and prompt following.\n\nOptional prompts:\nSet the aspect ratio (available values: `21:9`, `16:9`, `4:3`, `1:1`, `3:4`, `9:16`). Set to `16:9` as default.\nSet resolution (one of `480p`,`720p`,`1080p` to set the video resolution. Set to `1080p` as default.\nSet video duration (3s to 12s). Set to `5s` as default.\n\nNotes:\nNumber of video tokens calculated for pricing is approximately: `height * width * fps * duration / 1024).\nFile attachment accepted: jpeg, png, webp",
+  "tags": [
+    "bytedance",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415491+00:00",
+  "provider_extension": {
+    "owned_by": "Bytedance",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1761334162620
+  }
+}

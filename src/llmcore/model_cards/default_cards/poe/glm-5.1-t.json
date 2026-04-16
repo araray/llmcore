@@ -1,0 +1,51 @@
+{
+  "model_id": "glm-5.1-t",
+  "display_name": "GLM-5.1 is Z.ai's next-generation flagship model for agentic engineering. It achieves state-of-the-art on SWE-Bench Pro and leads GLM-5 by a wide margin on NL2Repo and Terminal-Bench 2.0. The real bre",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM-5.1 is Z.ai's next-generation flagship model for agentic engineering. It achieves state-of-the-art on SWE-Bench Pro and leads GLM-5 by a wide margin on NL2Repo and Terminal-Bench 2.0. The real breakthrough, though, is endurance. Previous models plateau early \u2014 they apply familiar techniques for quick gains, then stall. More time doesn't help. GLM-5.1 stays productive over far longer horizons, breaking down ambiguous problems, running experiments, reading results, and revising its strategy with real precision. Across hundreds of rounds and thousands of tool calls, it keeps optimizing. The longer it runs, the better the result.",
+  "tags": [
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.369906+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1775682073807
+  }
+}

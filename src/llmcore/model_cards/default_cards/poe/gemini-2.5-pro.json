@@ -1,0 +1,62 @@
+{
+  "model_id": "gemini-2.5-pro",
+  "display_name": "Gemini 2.5 Pro is Google's advanced model with frontier performance on various key benchmarks; supports web search and 1 million tokens of input context.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.5 Pro is Google's advanced model with frontier performance on various key benchmarks; supports web search and 1 million tokens of input context.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.376396+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.88,
+      "output": 7.1
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1738780524168
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model_id": "gemma-4-26b-a4b",
+  "display_name": "Gemma 4 26B A4B is built for developers who need scalable performance without sacrificing core capabilities. Crucially, it retains the massive 262k-token context window of the 31B model, making it hig",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemma 4 26B A4B is built for developers who need scalable performance without sacrificing core capabilities. Crucially, it retains the massive 262k-token context window of the 31B model, making it highly competitive for long-context RAG and processing extensive, image-rich document datasets. It fully supports the series' core innovations: native Thinking mode for advanced logic, Interleaved Multimodal Input for dynamic text-image workflows, and flawless document/UI parsing. Equipped with native Function Calling and robust coding proficiencies, the 26B A4B is the ideal, cost-effective engine for powering real-world agentic workflows, visual automation, and global applications across its 140+ pre-trained languages.\n\nFile Support: Text, Markdown, Image and PDF files\nContext window: 262k tokens\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "novita ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.361147+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.13,
+      "output": 0.4
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1775147437939
+  }
+}

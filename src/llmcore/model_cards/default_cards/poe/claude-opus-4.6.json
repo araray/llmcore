@@ -1,0 +1,60 @@
+{
+  "model_id": "claude-opus-4.6",
+  "display_name": "Claude Opus 4.6 is Anthropic\u2019s most advanced AI model, built for deep reasoning, complex coding, and long\u2011running autonomous tasks. It excels at planning, debugging, and working across large codebases",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Claude Opus 4.6 is Anthropic\u2019s most advanced AI model, built for deep reasoning, complex coding, and long\u2011running autonomous tasks. It excels at planning, debugging, and working across large codebases, and supports a 1M\u2011token context window for understanding massive amounts of information. Designed for professional knowledge work, it combines state\u2011of\u2011the\u2011art performance with strong safety and reliability.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "anthropic",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.351605+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 4.3,
+      "output": 21.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Anthropic",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1770248062467
+  }
+}

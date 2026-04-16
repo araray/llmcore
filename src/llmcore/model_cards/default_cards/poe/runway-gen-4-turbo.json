@@ -1,0 +1,54 @@
+{
+  "model_id": "runway-gen-4-turbo",
+  "display_name": "Runway's Gen-4 Turbo model creates best-in-class, controllable, and high-fidelity video generations based on your prompts. Both text inputs (max 1000 characters) and image inputs are supported, but we",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "RunwayML"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Runway's Gen-4 Turbo model creates best-in-class, controllable, and high-fidelity video generations based on your prompts. Both text inputs (max 1000 characters) and image inputs are supported, but we recommend using image inputs for best results. \n\nOptional parameters:\n\nAspect ratio (16:9, 1:1, 9:16) for landscape/portrait videos. \nDuration (5, 10) to specify video length in seconds. \n\nFull prompting guide here: https://help.runwayml.com/hc/en-us/articles/39789879462419-Gen-4-Video-Prompting-Guide",
+  "tags": [
+    "runwayml",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.416916+00:00",
+  "provider_extension": {
+    "owned_by": "RunwayML",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1746825004531
+  }
+}

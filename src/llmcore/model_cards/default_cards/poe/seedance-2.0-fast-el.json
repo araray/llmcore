@@ -1,0 +1,52 @@
+{
+  "model_id": "seedance-2.0-fast-el",
+  "display_name": "[Free Promotional Period] Seedance 2.0 Fast is the speed-optimized version of Seedance 2.0, designed to generate cinematic videos with native audio sync, camera control, and stable motion more quickly",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "[Free Promotional Period] Seedance 2.0 Fast is the speed-optimized version of Seedance 2.0, designed to generate cinematic videos with native audio sync, camera control, and stable motion more quickly. It is a strong choice for rapid iteration and high-volume production because it is built to deliver faster results at a lower cost than the standard version.\nServed from Malaysia.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.382491+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1775794638727
+  }
+}

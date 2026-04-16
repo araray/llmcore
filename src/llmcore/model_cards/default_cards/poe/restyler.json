@@ -1,0 +1,51 @@
+{
+  "model_id": "restyler",
+  "display_name": "This bot enables rapid transformation of existing images, delivering high-quality style transfers and image modifications. Takes in a text input and an image attachment. Use --strength to control the ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This bot enables rapid transformation of existing images, delivering high-quality style transfers and image modifications. Takes in a text input and an image attachment. Use --strength to control the guidance given by the initial image, with higher values adhering to the image more strongly.",
+  "tags": [
+    "fal"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.422879+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1739302186273
+  }
+}

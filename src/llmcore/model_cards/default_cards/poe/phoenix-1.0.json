@@ -1,0 +1,52 @@
+{
+  "model_id": "phoenix-1.0",
+  "display_name": "High-fidelity image generation with strong prompt adherence, especially for long and detailed instructions. Phoenix is capable of rendering coherent text in a wide variety of contexts. Prompt enhance ",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Leonardo AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "High-fidelity image generation with strong prompt adherence, especially for long and detailed instructions. Phoenix is capable of rendering coherent text in a wide variety of contexts. Prompt enhance is on to see the full power of a long, detailed prompt, but it can be turned off for full control. Uses the Phoenix 1.0 Fast model for performant, high-quality generations.\n\nParameters:\n- Aspect Ratio (1:1, 3:2, 2:3, 9:16, 16:9)\n- Prompt Enhance (Enable the prompt for better image generation)\n- Style (Please see parameter control to identify available styles)\n\nImage generation prompts can be a maximum of 1500 characters.",
+  "tags": [
+    "image-generation",
+    "leonardo ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.406085+00:00",
+  "provider_extension": {
+    "owned_by": "Leonardo AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1748565176146
+  }
+}

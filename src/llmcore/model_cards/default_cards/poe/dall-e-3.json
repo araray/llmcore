@@ -1,0 +1,52 @@
+{
+  "model_id": "dall-e-3",
+  "display_name": "OpenAI's most powerful image generation model. Generates high quality images with intricate details based on the user's most recent prompt. For most prompts, https://poe.com/FLUX-pro-1.1-ultra or http",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's most powerful image generation model. Generates high quality images with intricate details based on the user's most recent prompt. For most prompts, https://poe.com/FLUX-pro-1.1-ultra or https://poe.com/FLUX-dev or https://poe.com/Imagen3 will produce better results. \n\nOptional parameters:\nAspect Ratio to select an aspect ratio. Valid aspect ratios are 1:1, 7:4, & 4:7.",
+  "tags": [
+    "image-generation",
+    "openai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.420955+00:00",
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1699306131647
+  }
+}

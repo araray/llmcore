@@ -1,0 +1,54 @@
+{
+  "model_id": "gpt-image-1.5",
+  "display_name": "OpenAI's frontier image generation model in ChatGPT as of December 2025, offering exceptional prompt adherence, world knowledge, precise edits, facial preservation, level of detail, and overall qualit",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's frontier image generation model in ChatGPT as of December 2025, offering exceptional prompt adherence, world knowledge, precise edits, facial preservation, level of detail, and overall quality with improved latency/generation times. It supports editing, restyling, and combining images attached to the latest user query. For a conversational image generation and editing experience use: https://poe.com/GPT-5.2\n\nOptional Parameters:\nSet aspect ratio, with options 3:2, 1:1 and 2:3. \nSet quality to low, medium and high. Default is set to high.\nEnable use mask by toggling it on or by typing 'use_mask' in the prompt. This option is turned off by default.\nDisable high fidelity by toggling it off or by typing 'use_high_fidelity'. This option is turned on by default.",
+  "tags": [
+    "image-generation",
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.371164+00:00",
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1765850472161
+  }
+}

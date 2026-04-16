@@ -1,0 +1,61 @@
+{
+  "model_id": "nova-lite-2",
+  "display_name": "Amazon Nova 2 Lite is a fast, cost-effective multimodal reasoning model from Amazon that can process text, images, documents, and video, designed for everyday workloads like chatbots, document process",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Amazon Nova 2 Lite is a fast, cost-effective multimodal reasoning model from Amazon that can process text, images, documents, and video, designed for everyday workloads like chatbots, document processing, and business automation. It offers a 1 million token context window, enabling very large, complex inputs in a single request, including long documents and extended video clips (~90 minutes).\n\nNotes: \n- Video file uploads are limited to ~1GB. Also note that reasoning traces are not exposed from AWS.\n- Supported file types: JPEG, PNG, GIF, WEBP, PDF, DOCX, TXT, MP4, MOV, MKV, WebM, FLV, MPEG, MPG, WMV, 3GP\n\nParameter controls available:\n- Enable Extended thinking. Enable step-by-step reasoning (default: on).\n- Set reasoning effort: Select from  low (faster), medium (balanced) , high (deep analysis). Default: medium (balanced)",
+  "tags": [
+    "empirio labs ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.388358+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.38,
+      "output": 3.2
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "image",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video->text",
+    "poe_object_type": "model",
+    "created": 1764827272207
+  }
+}

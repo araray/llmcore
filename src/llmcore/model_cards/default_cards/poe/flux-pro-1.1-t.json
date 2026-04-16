@@ -1,0 +1,54 @@
+{
+  "model_id": "flux-pro-1.1-t",
+  "display_name": "The best state of the art image model from BFL. FLUX 1.1 Pro generates images six times faster than its predecessor, FLUX 1 Pro, while also improving image quality, prompt adherence, and output divers",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The best state of the art image model from BFL. FLUX 1.1 Pro generates images six times faster than its predecessor, FLUX 1 Pro, while also improving image quality, prompt adherence, and output diversity. The bot does not support any attachments.",
+  "tags": [
+    "image-generation",
+    "together ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.421722+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1730863432942
+  }
+}

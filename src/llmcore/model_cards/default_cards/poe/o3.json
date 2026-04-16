@@ -1,0 +1,61 @@
+{
+  "model_id": "o3",
+  "display_name": "o3 provides state-of-the-art intelligence on a variety of tasks and domains, including science, math, and coding. This bot uses medium reasoning effort by default but low, medium & high are also selec",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "o3 provides state-of-the-art intelligence on a variety of tasks and domains, including science, math, and coding. This bot uses medium reasoning effort by default but low, medium & high are also selectable; supports 200k tokens of input context and 100k tokens of output context.\n\nOptional parameters:\nSet reasoning effort: Select from `low`, `medium`, `high`. Medium reasoning effort is set by default.",
+  "tags": [
+    "openai",
+    "reasoning",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.392746+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.8,
+      "output": 7.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1744826529075
+  }
+}

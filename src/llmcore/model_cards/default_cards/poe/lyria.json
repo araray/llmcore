@@ -1,0 +1,52 @@
+{
+  "model_id": "lyria",
+  "display_name": "Google DeepMind's Lyria 2 delivers high-quality audio generation, capable of creating diverse soundscapes and musical pieces from text prompts.\n\nOptional parameters:\nNegative prompt. Allows users to s",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google DeepMind's Lyria 2 delivers high-quality audio generation, capable of creating diverse soundscapes and musical pieces from text prompts.\n\nOptional parameters:\nNegative prompt. Allows users to specify elements to exclude in the audio. \nSeed for deterministic generation. e.g. \"An energetic electronic dance track `no vocals`, slow tempo 1seed 123`\". \n\nNotes: \nLyria blocks prompts that name specific artists or songs (artist-intent and recitation checks)\nThis bot does not support attachments. \nThis bot accepts input prompts of up to 480 tokens.",
+  "tags": [
+    "audio",
+    "google"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.413597+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1749063911995
+  }
+}

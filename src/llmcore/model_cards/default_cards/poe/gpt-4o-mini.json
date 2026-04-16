@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-4o-mini",
+  "display_name": "This intelligent small model from OpenAI is significantly smarter, cheaper, and just as fast as GPT-3.5 Turbo.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This intelligent small model from OpenAI is significantly smarter, cheaper, and just as fast as GPT-3.5 Turbo.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.399064+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.14,
+      "output": 0.55
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1721338046069
+  }
+}

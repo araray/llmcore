@@ -1,0 +1,61 @@
+{
+  "model_id": "o3-pro",
+  "display_name": "o3-pro is a well-rounded and powerful model across domains, with more capability than https://poe.com/o3 at the cost of higher price and lower speed. It is especially capable at math, science, coding,",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "o3-pro is a well-rounded and powerful model across domains, with more capability than https://poe.com/o3 at the cost of higher price and lower speed. It is especially capable at math, science, coding, visual reasoning tasks, technical writing, and instruction-following. Use it to think through multi-step problems that involve analysis across text, code, and images. \n\nOptional parameters:\nSet reasoning effort: Select from `low`, `medium`, `high`. Medium reasoning effort is set by default.",
+  "tags": [
+    "openai",
+    "reasoning",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.391745+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 18.0,
+      "output": 73.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1749588430571
+  }
+}

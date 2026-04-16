@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-4-turbo",
+  "display_name": "Powered by OpenAI's GPT-4 Turbo. For most tasks, https://poe.com/GPT-4o will perform better. Supports 128k tokens of context. Requests with images will be routed to @GPT-4o.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Powered by OpenAI's GPT-4 Turbo. For most tasks, https://poe.com/GPT-4o will perform better. Supports 128k tokens of context. Requests with images will be routed to @GPT-4o.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.423573+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 9.1,
+      "output": 27.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1694610718932
+  }
+}

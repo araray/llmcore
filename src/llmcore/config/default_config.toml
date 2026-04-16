@@ -274,6 +274,61 @@ posthog = "ERROR"
   #           Falls back to "openai" mode if the package is not installed.
   backend = "openai"
 
+  # --- Poe Provider ---
+  # Unified gateway to hundreds of AI models and bots on Poe, including
+  # frontier models from OpenAI, Anthropic, Google, xAI, Meta, and millions
+  # of community-created bots.  Uses the Poe OpenAI-compatible API with
+  # optional fallback to the native fastapi_poe SSE protocol.
+  #
+  # Docs: https://creator.poe.com/api-reference/overview
+  # Get an API key: https://poe.com/api/keys
+  #
+  # Model IDs on Poe are **bot names** (e.g., "Claude-Sonnet-4.6",
+  # "GPT-5.4", "Gemini-3.1-Pro", "Sora-2").  List available models via
+  # `GET /v1/models` or run `python tools/generate_poe_cards.py` to
+  # populate model cards with pricing and modality metadata.
+  [providers.poe]
+  # type = "poe"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: POE_API_KEY
+  # api_key = "..."
+  api_key_env_var = "POE_API_KEY"
+
+  # Default bot to use.  Bot names are case-sensitive as registered on Poe.
+  # Examples: "Claude-Opus-4.6", "Claude-Sonnet-4.6", "GPT-5.4",
+  #           "Gemini-3.1-Pro", "Grok-4", "DeepSeek-V3.2-Exp",
+  #           "Sora-2", "Veo-3.1" (video), "GPT-Image-1.5" (images)
+  default_model = "GPT-4o-Mini"
+
+  # Base URL (normally no need to change).
+  # base_url = "https://api.poe.com/v1"
+
+  # Request timeout in seconds.  Video/image generation bots may need
+  # higher values (300+) since they perform async long-running work.
+  timeout = 120
+
+  # --- Backend mode ---
+  # "openai" (default): Uses the `openai` Python SDK with base_url override.
+  #            All standard OpenAI-compatible features supported.
+  #            No extra dependencies beyond `openai`.
+  # "native" : Uses the native `fastapi_poe` SSE client (pip install fastapi-poe).
+  #            Required for:
+  #              - Poe-specific custom bot parameters not in OpenAI schema
+  #              - File attachments via the Attachment protocol
+  #              - Bot-to-bot invocation (when running as a Poe server bot)
+  #            Falls back to "openai" mode if the package is not installed
+  #            or any request error occurs.
+  backend = "openai"
+
+  # --- Unsupported parameters (Poe silently ignores these) ---
+  # The PoeProvider strips these automatically before forwarding:
+  #   response_format, seed, frequency_penalty, presence_penalty,
+  #   logit_bias, user, service_tier, audio, modalities.
+  # To pass Poe-specific bot parameters (e.g. reasoning_effort,
+  # thinking_budget, aspect ratio for Sora-2), use `extra_body`:
+  #   chat_completion(model="Sora-2", extra_body={"aspect": "1280x720"})
+
 
 # ==============================================================================
 # [storage] - Persistence Configurations

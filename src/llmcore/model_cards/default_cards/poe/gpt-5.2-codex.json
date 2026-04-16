@@ -1,0 +1,61 @@
+{
+  "model_id": "gpt-5.2-codex",
+  "display_name": "GPT\u20115.2\u2011Codex extends GPT\u20115.2\u2019s capabilities for software development. It understands complex codebases, provides accurate completions, explains algorithms, and assists with debugging across modern pr",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT\u20115.2\u2011Codex extends GPT\u20115.2\u2019s capabilities for software development. It understands complex codebases, provides accurate completions, explains algorithms, and assists with debugging across modern programming languages. Designed for developers, it elevates productivity and supports full\u2011stack coding workflows with precision. Supports 400k tokens of input context.\n\nOptional parameters:\nSet reasoning effort: Select from  `low`, `medium`, `high`, `xhigh`. This is set to `medium` by default.",
+  "tags": [
+    "code",
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.370144+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.6,
+      "output": 13.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1768427021441
+  }
+}

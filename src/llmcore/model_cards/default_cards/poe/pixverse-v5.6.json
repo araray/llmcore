@@ -1,0 +1,52 @@
+{
+  "model_id": "pixverse-v5.6",
+  "display_name": "PixVerse v5.6 is capable of creating high-quality videos from text prompts alone or by animating uploaded images (1 or 2 frames). It supports resolutions up to 1080p, multiple aspect ratios, durations",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "PixVerse v5.6 is capable of creating high-quality videos from text prompts alone or by animating uploaded images (1 or 2 frames). It supports resolutions up to 1080p, multiple aspect ratios, durations of 5\u201310 seconds, optional synchronized audio, and the ability to control style presets, thinking mode, negative prompts, and seed-based reproducibility.\n\nParameter controls available:\n1. Basic\n- Default: text-to-video (no images needed)\n- If animating from image(s): attach 1 image (first frame) or 2 images (first + last frame)\n- Resolution [360p | 540p | 720p | 1080p]` (default: 1080p)\n- Aspect ratio [16:9 | 4:3 | 1:1 | 3:4 | 9:16]` (default: 16:9) (ignored for image input)\n- Audio [true | false]` generate synchronized audio (default: true)\n\n2. Timing and Randomness\n- Duration [5 | 8 | 10]` seconds (default: 5; 10s not available at 1080p)\n- Seed [1-9223372036854775807]` for reproducible results (omit for random)\n\n3. Advanced\n- Style [none | anime | 3d_animation | clay | comic | cyberpunk]` visual style preset (default: none)\n- Thinking [auto | enabled | disabled]` enhanced reasoning during generation (default: auto)\n- Negative prompt \"blurry, low quality, distorted\"` content to exclude (max 2048 chars)\n\nInput Limits & Requirements:\n- Prompt length: 2,048 characters max (both positive and negative prompt)\n- Image inputs: JPEG, PNG, WEBP, or HEIC only. Max 20MB per file. Images below 300x300 are automatically upscaled; images above 4000x4000 are automatically downscaled.",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.373828+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1771637794517
+  }
+}

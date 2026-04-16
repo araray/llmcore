@@ -1,0 +1,53 @@
+{
+  "model_id": "whisper-v3-large-t",
+  "display_name": "Whisper v3 Large is a state-of-the-art automatic speech recognition and translation model developed by OpenAI, offering 10\u201320% lower error rates than its predecessor, Whisper large-v2. It supports tra",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Whisper v3 Large is a state-of-the-art automatic speech recognition and translation model developed by OpenAI, offering 10\u201320% lower error rates than its predecessor, Whisper large-v2. It supports transcription and translation across numerous languages, with improvements in handling diverse audio inputs, including noisy conditions and long-form audio files.",
+  "tags": [
+    "audio",
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.403643+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text",
+      "audio"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text,audio->audio",
+    "poe_object_type": "model",
+    "created": 1756410173218
+  }
+}

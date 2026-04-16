@@ -1,0 +1,52 @@
+{
+  "model_id": "luma-photon",
+  "display_name": "Luma Photon delivers industry-specific visual excellence, crafting images that align perfectly with professional standards - not just generic AI art. From marketing to creative design, each generation",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Luma Photon delivers industry-specific visual excellence, crafting images that align perfectly with professional standards - not just generic AI art. From marketing to creative design, each generation is purposefully tailored to your industry's unique requirements. \n\nOptional parameters:\nAspect ratio to change the aspect ratio of your generations (1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 9:21 are supported). \n\nNote: Prompt input cannot exceed 5,000 characters.",
+  "tags": [
+    "fal",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.416181+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1733181326256
+  }
+}

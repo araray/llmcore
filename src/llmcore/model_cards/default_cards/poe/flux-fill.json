@@ -1,0 +1,51 @@
+{
+  "model_id": "flux-fill",
+  "display_name": "Given an image and a mask (separate images), fills in the region of the image given by the mask as per the prompt. The base image should be the first image attached and the black-and-white mask should",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Given an image and a mask (separate images), fills in the region of the image given by the mask as per the prompt. The base image should be the first image attached and the black-and-white mask should be the second image; a text prompt is required and should specify what you want the model to inpaint in the white area of the mask.",
+  "tags": [
+    "fal"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.419095+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1736787123399
+  }
+}

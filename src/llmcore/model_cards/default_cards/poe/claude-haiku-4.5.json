@@ -1,0 +1,60 @@
+{
+  "model_id": "claude-haiku-4.5",
+  "display_name": "Claude Haiku 4.5 is Anthropic\u2019s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4\u2019s perfor",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Claude Haiku 4.5 is Anthropic\u2019s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4\u2019s performance across reasoning, coding, and computer-use tasks, Haiku 4.5 brings frontier-level capability to real-time and high-volume applications. It introduces extended thinking to the Haiku line, and scores >73% on SWE-bench verified, ranking among the world's best coding models. Supports 200k tokens of context.",
+  "tags": [
+    "anthropic",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.362161+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.86,
+      "output": 4.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Anthropic",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1760556959473
+  }
+}

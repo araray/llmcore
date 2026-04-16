@@ -1,0 +1,52 @@
+{
+  "model_id": "hunyuan-video-1.5",
+  "display_name": "HunyuanVideo 1.5 is a 8.3B-parameter video generation model from Tencent that delivers high-quality, smooth text-to-video and image-to-video outputs. It supports native 720p (upscalable to 1080p) vide",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "HunyuanVideo 1.5 is a 8.3B-parameter video generation model from Tencent that delivers high-quality, smooth text-to-video and image-to-video outputs. It supports native 720p (upscalable to 1080p) videos with strong motion coherence, detailed visuals, and robust bilingual prompt understanding and accurate in-video text rendering.\n\nThis model is hosted by EmpirioLabs.ai and is the only endpoint that supports 1080p upscaling alongside generations up to 10s and fully customizable aspect ratios. This is exclusive to the Poe platform.\n\nSupported file type uploads (for image-to-video): .jpg, .jpeg, .png, .webp, .heic, .heif, .bmp, .tiff, .tif\nNote: 1080p is limited to 5s generations.\n\nParameter controls available:\n1. Basic\n- Default: text-to-video (no mode needed)\n- If transforming uploaded image: image-to-video (auto-detected via attachment)\n- Resolution [480p, 720p, 1080p] (Default: 480p)\n- Aspect ratio [16:9, 4:3, 1:1, 9:16, 3:4] (Default: 16:9)\n\n2. Timing and Randomness\n- Duration [1-10 seconds] controls how long generated video is (Default: 5, 1080p limited to 5s)\n- Seed [integer] disables random seed generation\n\n3. Advanced\n- Cfg scale [1-20]: Higher = closer to prompt (Default: 6.0)\n- Steps [10-50]: Higher = better quality (Default: 25)\n- Negative prompt [text]`: Content to avoid",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.406899+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1765145930507
+  }
+}

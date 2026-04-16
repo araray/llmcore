@@ -1,0 +1,61 @@
+{
+  "model_id": "qwen3.5-flash",
+  "display_name": "The Qwen3.5 native vision-language Flash models are built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference effic",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Qwen3.5 native vision-language Flash models are built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. Compared to the 3 series, these models deliver a leap forward in performance for both pure text and multimodal tasks, offering fast response times while balancing inference speed and overall performance.\nThis model is served by Alibaba Cloud Int. from Singapore.\nSave 10% on input tokens and 8% on output tokens compared to standard API rates.\n\nNotes:\n- Context Window: 1,000,000\n- Text, Image, & Video input are supported\n- Built-in tool calls are not supported with video attachments\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.360099+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.091,
+      "output": 0.37
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "image",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video->text",
+    "poe_object_type": "model",
+    "created": 1771963175057
+  }
+}

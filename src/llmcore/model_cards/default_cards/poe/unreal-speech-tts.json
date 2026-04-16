@@ -1,0 +1,52 @@
+{
+  "model_id": "unreal-speech-tts",
+  "display_name": "Convert chats, URLs, and documents into natural speech. 8 Languages: English, Japanese, Chinese, Spanish, French, Hindi, Italian, Portuguese. Defaults to Voice: Sierra. Full list below:\n\nAmerican Engl",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Unreal Speech"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Convert chats, URLs, and documents into natural speech. 8 Languages: English, Japanese, Chinese, Spanish, French, Hindi, Italian, Portuguese. Defaults to Voice: Sierra. Full list below:\n\nAmerican English\n- Male: Noah, Jasper, Caleb, Ronan, Ethan, Daniel, Zane, Rowan\n- Female: Autumn, Melody, Hannah, Emily, Ivy, Kaitlyn, Luna, Willow, Lauren, Sierra\n\nBritish English\n- Male: Benjamin, Arthur, Edward, Oliver\n- Female: Eleanor, Chloe, Amelia, Charlotte\n\nJapanese\n- Male: Haruto\n- Female: Sakura, Hana, Yuki, Rina\n\nChinese\n- Male: Wei, Jian, Hao, Sheng\n- Female: Mei, Lian, Ting, Jing\n\nSpanish\n- Male: Mateo, Javier\n- Female: Luc\u00eda\n\nFrench\n- Female: \u00c9lodie\n\nHindi\n- Male: Arjun, Rohan\n- Female: Ananya, Priya\n\nItalian\n- Male: Luca\n- Female: Giulia\n\nPortuguese\n- Male: Thiago, Rafael\n- Female: Camila",
+  "tags": [
+    "audio",
+    "unreal speech"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.404834+00:00",
+  "provider_extension": {
+    "owned_by": "Unreal Speech",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1741061137514
+  }
+}

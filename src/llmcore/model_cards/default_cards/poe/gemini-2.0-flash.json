@@ -1,0 +1,62 @@
+{
+  "model_id": "gemini-2.0-flash",
+  "display_name": "Gemini 2.0 Flash is Google's most popular model yet with enhanced performance and blazingly fast response times; supports web search grounding so can intelligently answer questions related to recent e",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.0 Flash is Google's most popular model yet with enhanced performance and blazingly fast response times; supports web search grounding so can intelligently answer questions related to recent events. Notably, 2.0 Flash even outperforms 1.5 Pro on key benchmarks, at twice the speed. Supports 1 million tokens of input context.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.395016+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.11,
+      "output": 0.42
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1733958136993
+  }
+}

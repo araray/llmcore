@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-sonar",
+  "display_name": "Sonar by Perplexity is a cutting-edge AI model that delivers real-time, web-connected search results with accurate citations. It's designed to provide up-to-date information and customizable search so",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sonar by Perplexity is a cutting-edge AI model that delivers real-time, web-connected search results with accurate citations. It's designed to provide up-to-date information and customizable search sources, making it a powerful tool for integrating AI search into various applications. Context Length: 127k \n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.402020+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1737790362317
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "model_id": "veo-3.1-fast",
+  "display_name": "Google\u2019s Veo 3.1 Fast is an updated version of the Veo family of models that's optimized for speed and cost, but still features richer native audio, from natural conversations to synchronized sound ef",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google\u2019s Veo 3.1 Fast is an updated version of the Veo family of models that's optimized for speed and cost, but still features richer native audio, from natural conversations to synchronized sound effects, and offer greater narrative control with an improved understanding of cinematic styles. Enhanced image-to-video capabilities ensure better prompt adherence while delivering superior audio and visual quality and maintaining character consistency across multiple scenes.\n\nOptional parameters:\n- Set the aspect ratio (either `16:9` or `9:16`), which defaults to `16:9`\n- Negative prompt can be set on elements to avoid\n- Set the duration (one of `4s`, `6s`, or `8s`), which defaults to `8s`\n- Seed to set the seed (set number value)\n- Resolution (set from 720p or 1080p)\n\nFor first & last frame video generation support, please use www.poe.com/Veo-v3.1-Fast",
+  "tags": [
+    "google",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.411046+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1760540647924
+  }
+}

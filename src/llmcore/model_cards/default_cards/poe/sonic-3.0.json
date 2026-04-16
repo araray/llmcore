@@ -1,0 +1,52 @@
+{
+  "model_id": "sonic-3.0",
+  "display_name": "Generates audio based on your prompt using the latest Cartesia's Sonic 3.0 text-to-speech model in your voice of choice.\nSupports 10k characters.\n\nYou can select a voice and language in option menu in",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Cartesia AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generates audio based on your prompt using the latest Cartesia's Sonic 3.0 text-to-speech model in your voice of choice.\nSupports 10k characters.\n\nYou can select a voice and language in option menu in the input bar.\n\nThe following voices are supported covering 42 languages (English, Arabic, Bengali, Bulgarian, Chinese, Croatian, Czech, Danish, Dutch, Finnish, French, Georgian, German, Greek, Gujarati, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Kannada, Korean, Malay, Malayalam, Marathi, Norwegian, Polish, Portuguese, Punjabi, Romanian, Russian, Slovak, Spanish, Swedish, Tagalog, Tamil, Telugu, Thai, Turkish, Ukrainian, Vietnamese):\n\n-- English --\nAriana\nKiefer\nTessa\nBrandon\nLinda - Conversational Guide\nRonald - Thinker\nBrooke - Big Sister\nKatie - Friendly Fixer\nJacqueline - Reassuring Agent\nCaroline - Southern Guide\n\n-- Arabic --\nAmira - Dreamy Whisperer\nOmar - High-Energy Presenter\n\n-- Bengali --\nPooja - Everyday Assistant\nRubel - City Guide\n\n-- Bulgarian --\nIvana - Instruction Provider\nGeorgi - Conversationalist\n\n-- Chinese --\nHua - Sunny Support\nYue - Gentle Woman\nTao - Lecturer\nLan - Instructor\n\n-- Croatian --\nPetra - Strict Lecturer\nIvan - Bar Companion\n\n-- Czech --\nJana - Crisp Conversationalist\nPetr - Pastor\n\n-- Danish --\nKatrine - Calm Caregiver\n\n-- Dutch --\nBram - Instructional\nDaan - Business Baritone\nSanne - Clear Companion\nLucas - Storyteller\n\n-- Finnish --\nHelmi - Warm Friend\nMikko - Narration Expert\n\n-- French --\nHelpful French Lady\nFrench Narrator Man\nCalm French Woman\nAntoine - Stern Man\n\n-- Georgian --\nLevan - Support Guide\nTamara - Support Specialist\n\n-- German --\nThomas - Anchor\nViktoria - Phone Conversationalist\nLukas - Professional\nLena - Muse\n\n-- Greek --\nDespina - Motherly Woman\nNikos - Radio Storyteller\n\n-- Gujarati --\nIsha - Learner\nAmit - Sports Student\n\n-- Hebrew --\nNoam - Broadcaster\n\n-- Hindi --\nArushi - Hinglish Speaker\nSunil - Official Announcer\nRiya - College Roommate\nAadhya - Soother\n\n-- Hungarian --\nGabor - Reassuring\nEszter - Customer Companion\n\n-- Indonesian --\nSiti - Ad Narrator\nAndi - Dynamic Presenter\n\n-- Italian --\nLiv - Casual Friend\nAlessandra - Melodic Guide\nFrancesca - Elegant Partner\nGiancarlo - Support Leader\n\n-- Japanese --\nYumiko - Friendly Agent\nEmi - Soft-Spoken Friend\nYuki - Calm Woman\nDaisuke - Businessman\n\n-- Kannada --\nPrakash - Instructor\nDivya - Joyful Narrator\n\n-- Korean --\nJihyun - Anchorwoman\nMimi - Show Stopper\nByungtae - Enforcer\nJiwoo - Service Specialist\n\n-- Malay --\nAisyah - Chat Partner\nFaiz - Family Guide\n\n-- Malayalam --\nLatha - Friendly Host\n\n-- Marathi --\nSuresh - Instruction\nAnika - Enthusiastic Seller\n\n-- Norwegian --\nLars - Casual Conversationalist\n\n-- Polish --\nTomek - Casual Companion\nWojciech - Documentarian\nPiotr - Corporate Lead\nKatarzyna - Melodic Storyteller\n\n-- Portuguese --\nLuana - Public Speaker\nFelipe - Casual Talker\nAna Paula - Marketer\nBeatriz - Support Guide\n\n-- Punjabi --\nGurpreet - Companion\nJaspreet - Commercial Woman\n\n-- Romanian --\nAndrada - Steady Speaker\nAndrei - Conversationalist Guy\n\n-- Russian --\nTatiana - Friendly Storyteller\nNatalya - Soothing Guide\nIrina - Poetic\nSergei - Expressive Narrator\n\n-- Slovak --\nKatarina - Friendly Sales\nPeter - Narrator Man\n\n-- Spanish --\nPedro - Formal Speaker\nDaniela - Relaxed Woman\nFran - Confident Young Professional\nIsabel - Teacher\n\n-- Swedish --\nFreja - Nordic Reader\nIngrid - Peaceful Guide\nAnders - Nordic Baritone\nCees - Nordic Narrator\n\n-- Tagalog --\nLuz - Casual Speaker\nAngelo - Calm Narrator\n\n-- Tamil --\nArun - Lively\nLakshmi - Everyday\n\n-- Telugu --\nSindhu - Conversational Partner\nVikram - Folk Narrator\n\n-- Thai --\nSomchai - Star\nSuda - Fortune Teller\n\n-- Turkish --\nEmre - Calming Speaker\nLeyla - Story Companion\nAzra - Service Specialist\nTaylan - Expressive\n\n-- Ukrainian --\nOleh - Professional Guy\n\n-- Vietnamese --\nMinh - Conversational Partner\nXia - Calm Companion",
+  "tags": [
+    "audio",
+    "cartesia ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.403224+00:00",
+  "provider_extension": {
+    "owned_by": "Cartesia AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1761174377362
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "llama-3.3-70b",
+  "display_name": "Llama 3.3 70B \u2013 with similar performance as Llama 3.1 405B while being faster and much smaller! Llama 3.3 70B is a new open source model that delivers leading performance and quality across text-based",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Llama 3.3 70B \u2013 with similar performance as Llama 3.1 405B while being faster and much smaller! Llama 3.3 70B is a new open source model that delivers leading performance and quality across text-based use cases such as synthetic data generation at a fraction of the inference cost, improving over Llama 3.1 70B.",
+  "tags": [
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.400409+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1733509126023
+  }
+}

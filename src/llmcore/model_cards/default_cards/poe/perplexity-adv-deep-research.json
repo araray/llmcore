@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-adv-deep-research",
+  "display_name": "Perplexity Advanced Deep Research is designed for institutional-grade inquiry, leveraging the powerful reasoning of Claude Opus 4.6 to deliver sophisticated analysis and maximum depth. With enhanced t",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Perplexity Advanced Deep Research is designed for institutional-grade inquiry, leveraging the powerful reasoning of Claude Opus 4.6 to deliver sophisticated analysis and maximum depth. With enhanced tool access and extensive source coverage, it is the ideal choice for complex tasks requiring rigorous, comprehensive research.\n\nSupported file types: PNG, JPEG, WEBP, GIF, PDF, DOCX, TXT\n\nParameter controls available:\n1. General\n- Reasoning effort [low/medium/high]: Level of reasoning depth (default: high)\n- Max output tokens [10000-16000]: Maximum response length in tokens (default: 10000)\n- Max tokens per page [4096-16384]: Max tokens extracted per search result page (default: 4096)\n\n2. Search Filters\n- Search domain filter [domains]: Comma-separated domains to include/exclude. Prefix with '-' to exclude. Max 20. (e.g., \"nature.com, arxiv.org, -pinterest.com\")\n- Search language filter [codes]: Comma-separated ISO 639-1 language codes. Max 10. (e.g., \"en, fr, de\")\n\n3. Date & Recency\n- Search after date [MM/DD/YYYY]: Only include sources published after this date\n- Search before date [MM/DD/YYYY]: Only include sources published before this date\n- Search recency filter [none/day/week/month/year]: Relative time filter (cannot be combined with specific dates)\n\n4. Location\n- Country [code]: Two-letter ISO 3166-1 country code (e.g., \"US\", \"FR\", \"JP\")\n- Region [name]: State or province (e.g., \"California\")\n- City [name]: City name (e.g., \"San Francisco\")\n- Latitude [decimal]: Latitude (must be provided with longitude and country)\n- Longitude [decimal]: Longitude (must be provided with latitude and country)",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.372162+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1770838387525
+  }
+}

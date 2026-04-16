@@ -1,0 +1,52 @@
+{
+  "model_id": "veo-3-vfast",
+  "display_name": "Veo-3 Fast is a faster and more cost effective version of Google's Veo 3. \n\nOptional parameters:\nSet the aspect ratio of the generated image (one of `16:9`, `1:1`, `9:16`). \nToggle `on` the generate a",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Veo-3 Fast is a faster and more cost effective version of Google's Veo 3. \n\nOptional parameters:\nSet the aspect ratio of the generated image (one of `16:9`, `1:1`, `9:16`). \nToggle `on` the generate audio with your video at a higher cost. \nNegative prompt on what to exclude e.g. `blur`, `low resolution`, `poor quality`. \nDuration is limited to 7 seconds. This is a text to video generation model only.",
+  "tags": [
+    "fal",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.414957+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1752140109634
+  }
+}

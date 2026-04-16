@@ -1,0 +1,52 @@
+{
+  "model_id": "hailuo-02-pro",
+  "display_name": "MiniMax Hailuo-02 Pro Video Generation model: Advanced image-to-video generation model with 1080p resolution. Send a prompt with an image for image-to-video, and just a prompt for text-to-video genera",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiniMax Hailuo-02 Pro Video Generation model: Advanced image-to-video generation model with 1080p resolution. Send a prompt with an image for image-to-video, and just a prompt for text-to-video generation. Generates 5 second video.",
+  "tags": [
+    "fal",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.412472+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1753281868828
+  }
+}

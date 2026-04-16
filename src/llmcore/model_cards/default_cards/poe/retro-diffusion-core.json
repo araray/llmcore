@@ -1,0 +1,52 @@
+{
+  "model_id": "retro-diffusion-core",
+  "display_name": "Generate true game ready pixel art in seconds at any resolution between 16x16 and 512x512 across the various styles. Create 48x48 walking animations of sprites using the \"animation_four_angle_walking\"",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Retro Diffusion"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate true game ready pixel art in seconds at any resolution between 16x16 and 512x512 across the various styles. Create 48x48 walking animations of sprites using the \"animation_four_angle_walking\" style! First 50 basic image requests worth of points free! Check out more settings below \ud83d\udc47\n\n\nExample message: \"A cute corgi wearing sunglasses and a party hat\"\n\nSettings:\n- Set AR: Image size in pixels, larger images cost more. Or aspect ratio like 16:9\n- Set style: The name of the style you want to use. Available styles: rd_fast__anime, rd_fast__retro, rd_fast__simple, rd_fast__detailed, rd_fast__game_asset, rd_fast__portrait, rd_fast__texture, rd_fast__ui, rd_fast__item_sheet, rd_fast__mc_texture, rd_fast__mc_item, rd_fast__character_turnaround, rd_fast__1_bit, animation__four_angle_walking, rd_plus__default, rd_plus__retro, rd_plus__watercolor, rd_plus__textured, rd_plus__cartoon, rd_plus__ui_element, rd_plus__item_sheet, rd_plus__character_turnaround, rd_plus__isometric, rd_plus__isometric_asset, rd_plus__topdown_map, rd_plus__top_down_asset\n- Seed. Random number, keep the same for consistent generations\n- Tile. Creates seamless edges on applicable images\n- Tile X. Seamless horizontally only\n- Tile Y. Seamless vertically only\n- Native. Returns pixel art at native resolution, without upscaling\n- Remove background. Automatically remove the background\n- Strength. Controls how strong the image generation is. 0.0 for small changes, 1.0 for big changes\n\nAdditional notes: All styles have a size range of 48x48 -> 512x512, except for the \"mc\" styles, which have a size range of 16x16 -> 128x128, and the \"animation_four_angle_walking\" style, which will only create 48x48 animations.",
+  "tags": [
+    "image-generation",
+    "retro diffusion"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.410080+00:00",
+  "provider_extension": {
+    "owned_by": "Retro Diffusion",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1742484693553
+  }
+}

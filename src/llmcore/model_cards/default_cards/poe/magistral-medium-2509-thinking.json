@@ -1,0 +1,61 @@
+{
+  "model_id": "magistral-medium-2509-thinking",
+  "display_name": "Magistral Medium 2509 (thinking) by EmpirioLabs.\nMagistral is Mistral's first reasoning model. It is ideal for general purpose use requiring longer thought processing and better accuracy than with non",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Magistral Medium 2509 (thinking) by EmpirioLabs.\nMagistral is Mistral's first reasoning model. It is ideal for general purpose use requiring longer thought processing and better accuracy than with non-reasoning LLMs. From legal research and financial forecasting to software development and creative storytelling \u2014 this model solves multi-step challenges where transparency and precision are critical. Context Window: 40,000k\nSupported file type uploads: PDF, XLSX, TXT, PNG, JPG, JPEG",
+  "tags": [
+    "empirio labs ai",
+    "reasoning",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.398421+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.6,
+      "output": 6.6
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1750288555644
+  }
+}

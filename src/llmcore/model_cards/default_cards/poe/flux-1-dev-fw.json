@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-1-dev-fw",
+  "display_name": "FLUX.1 [dev] is a 12 billion parameter rectified flow transformer capable of generating images from text descriptions.\n\nKey Features\n1. Cutting-edge output quality, second only to our state-of-the-art",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Fireworks AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "FLUX.1 [dev] is a 12 billion parameter rectified flow transformer capable of generating images from text descriptions.\n\nKey Features\n1. Cutting-edge output quality, second only to our state-of-the-art model FLUX.1 [pro].\n2. Competitive prompt following, matching the performance of closed source alternatives.\n3. Trained using guidance distillation, making FLUX.1 [dev] more efficient.\n4. Open weights to drive new scientific research, and empower artists to develop innovative workflows.\n5. Generated outputs can be used for personal, scientific, and commercial purposes as described in the FLUX.1 [dev] Non-Commercial License.\nBot does not accept attachments.",
+  "tags": [
+    "fireworks ai",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.423841+00:00",
+  "provider_extension": {
+    "owned_by": "Fireworks AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1729618505818
+  }
+}

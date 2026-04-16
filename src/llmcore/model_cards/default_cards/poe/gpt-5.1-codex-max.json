@@ -1,0 +1,61 @@
+{
+  "model_id": "gpt-5.1-codex-max",
+  "display_name": "OpenAI's most capable agentic coding model; recommended for use in agentic harnesses or similar environments (e.g. Cursor, Claude Code, Codex); the default reasoning effort is set to `Xhigh` so the mo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's most capable agentic coding model; recommended for use in agentic harnesses or similar environments (e.g. Cursor, Claude Code, Codex); the default reasoning effort is set to `Xhigh` so the model will reason extensively on problems given to it (i.e. expect long generation times) and points-intensive. Accepts image attachments.",
+  "tags": [
+    "code",
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.381123+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.1,
+      "output": 9.1
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1765227284928
+  }
+}

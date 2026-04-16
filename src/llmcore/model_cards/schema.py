@@ -1,5 +1,4 @@
 # src/llmcore/model_cards/schema.py
-# llmcore/model_cards/schema.py
 """
 Pydantic models for the Model Card Library.
 
@@ -88,6 +87,7 @@ class Provider(str, Enum):
     AI21 = "ai21"
     GROQ = "groq"
     OPENROUTER = "openrouter"
+    POE = "poe"
     LOCAL = "local"
 
 

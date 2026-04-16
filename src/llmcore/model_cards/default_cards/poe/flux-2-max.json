@@ -1,0 +1,54 @@
+{
+  "model_id": "flux-2-max",
+  "display_name": "Flux.2 [Max] is Black Forest Labs' latest, state-of-the-art model with multi-reference support, fine-grained text rendering, and other features. \n\nNotes:\nSupports structured JSON prompts, and allows u",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Flux.2 [Max] is Black Forest Labs' latest, state-of-the-art model with multi-reference support, fine-grained text rendering, and other features. \n\nNotes:\nSupports structured JSON prompts, and allows use of hex colour codes within the prompt for precise colouring.  \nSend images (Up to 8 images) in jpeg/png/webp format for editing.\n\nOptional parameters:\n- Set aspect ratio. Select from (16:9, 4:3, 1:1, 3:4, 9:16). It is set to 4:3 aspect ratio as default.",
+  "tags": [
+    "fal",
+    "image-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.404964+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1765899203651
+  }
+}

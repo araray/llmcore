@@ -1,0 +1,60 @@
+{
+  "model_id": "grok-4",
+  "display_name": "Grok 4 is xAI's latest and most intelligent language model. It features state-of-the-art capabilities in coding, reasoning, and answering questions. It excels at handling complex and multi-step tasks.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok 4 is xAI's latest and most intelligent language model. It features state-of-the-art capabilities in coding, reasoning, and answering questions. It excels at handling complex and multi-step tasks. Reasoning traces are not available via the xAI API.",
+  "tags": [
+    "vision",
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.370914+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 3.0,
+      "output": 15.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1752143407651
+  }
+}

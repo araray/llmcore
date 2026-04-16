@@ -1,0 +1,52 @@
+{
+  "model_id": "gpt-audio-mini",
+  "display_name": "OpenAI's gpt-audio-mini model, brought to Poe as a server bot! This model accepts text and audio inputs and can respond with natural-sounding speech. Learn more about this model at https://platform.op",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Bina AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's gpt-audio-mini model, brought to Poe as a server bot! This model accepts text and audio inputs and can respond with natural-sounding speech. Learn more about this model at https://platform.openai.com/docs/models/gpt-audio-mini.\n\nWhen audio output is on, responses include both a voice recording and a text transcript. When audio output is off, one of the messages in the conversation must include an audio file attachment (audio in previous messages from either you or the bot is fine).\n\nOptional parameters:\n- enable_audio_output: either true or false to control whether responses are spoken aloud (default: true)\n- voice: the name of a voice for voice outputs: \"alloy\", \"ash\", \"ballad\", \"cedar\", \"coral\", \"echo\", \"fable\", \"marin\", \"nova\", \"onyx\", \"sage\", or \"shimmer\" (default: marin)\n-  model_snapshot: select a specific model version\n- auto_max_tokens: Let the model decide the max number of tokens to output (enabled by default). Disable this option to manually specify a token limit between 10 and 16,384 using the max_tokens parameter.",
+  "tags": [
+    "audio",
+    "bina ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.378173+00:00",
+  "provider_extension": {
+    "owned_by": "Bina AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1768926869174
+  }
+}

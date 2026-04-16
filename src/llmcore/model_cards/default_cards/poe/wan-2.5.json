@@ -1,0 +1,54 @@
+{
+  "model_id": "wan-2.5",
+  "display_name": "Wan-2.5 Video Generation bot. Has text-to-video and image-to-video capabilities. Optionally, send an audio file (mp3) to guide the video generation. \n\nOptional Parameters:\nControl the output's resolut",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Wan-2.5 Video Generation bot. Has text-to-video and image-to-video capabilities. Optionally, send an audio file (mp3) to guide the video generation. \n\nOptional Parameters:\nControl the output's resolution. Select from 480p, 720p or 1080p defaults to 720. Pricing varies on the basis of resolution.\nAspect ratio. Select from 16:9, 1:1, 9:16 defaults to 16:9 aspect ratio.\nDuration. Select video duration either 5 seconds or 10 seconds. Defaults to 5 seconds.",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.413066+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1758919750787
+  }
+}

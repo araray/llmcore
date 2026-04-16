@@ -1,0 +1,52 @@
+{
+  "model_id": "wan-2.6",
+  "display_name": "Wan 2.6 is Alibaba\u2019s multimodal video generation model built for cinematic, multi-shot storytelling\u2014creating high-fidelity videos from text and/or images while keeping characters and style consistent ",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Wan 2.6 is Alibaba\u2019s multimodal video generation model built for cinematic, multi-shot storytelling\u2014creating high-fidelity videos from text and/or images while keeping characters and style consistent across scenes. It also supports native audio-visual sync (including lip-sync) and can generate or align dialogue/music/SFX with the visuals, enabling \u201cprompt-to-video\u201d results that feel production-ready without heavy post work.\n\nNotes:\n- This model is served from the Singapore area. \n- Upload an image to enable image-to-video generations or video(s) for reference-to-video generations. The mode is auto-detected from your attachments, or you can choose manually to override.\n- Responses may take upwards of 10 minutes to finish generating. \n\nAttachments\n   - For i2v: Attach an image as the first frame\n   - For r2v: Attach up to 5 images + 1-3 reference videos (1-30 seconds each, 100MB max, MP4/MOV) (Use `character1`, `character2`, `character3` in prompt to reference subjects, ex. character1 references the subject in the first uploaded video) (combined max 5). Uploaded audio files are silently ignored in R2V. Instead, audio is extracted from reference videos.\n   - For t2v/i2v: Optionally attach an audio file (3-30 seconds, max 15mb, .mp3/.wav) for custom audio\n   - Images are automatically resized to fit limits (I2V: 240\u20138,000px, R2V: 240\u20138,000px). HEIC/HEIF images are auto-converted. Videos for R2V are validated (MP4/MOV, 1\u201330s, \u2264100 MB) and auto-trimmed if longer than 30 seconds. For R2V, if output duration is set above 10 seconds, it will be automatically capped to 10 seconds.\n\nMulti-Shot Prompting\n   - For multi-shot mode, use timeline syntax: `[Shot #] [Timestamp] [Action]`. Example: `[Shot 1] [0-5s] Wide shot of city skyline. [Shot 2] [5-10s] Close-up of character walking.` \n   - Ensure timestamps match your selected duration and use transition keywords like \"Hard cut\" or \"Fade in\" between shots.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.411609+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1765907288740
+  }
+}

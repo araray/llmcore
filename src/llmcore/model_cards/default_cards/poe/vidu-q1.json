@@ -1,0 +1,54 @@
+{
+  "model_id": "vidu-q1",
+  "display_name": "The Vidu Q1 Video Generation Bot creates videos using text prompts and images. You can generate videos in three modes: \n(1) Text-to-Video: send a text prompt, \n(2) Image-to-Video: send 1 image with a ",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Vidu Q1 Video Generation Bot creates videos using text prompts and images. You can generate videos in three modes: \n(1) Text-to-Video: send a text prompt, \n(2) Image-to-Video: send 1 image with a prompt, and \n(3) Reference-to-Video: send up to 7 images. \n\nNumber of images required varies by template: `dynasty_dress` and `shop_frame` accept 1-2 images, `wish_sender` requires exactly 3 images, all other templates accept only 1 image.\n\nThe bot support aspect ratios (16:9, 1:1, 9:16) and set movement amplitude  that can be customized for text-to-video and reference-to-video tasks. \nTasks are mutually exclusive (e.g., you cannot combine start-to-end frame and reference-to-video generation).\nThe bot accepts PNG, JPEG, and WEBP formats. Duration is limited to 5 seconds.",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415206+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1755797522439
+  }
+}

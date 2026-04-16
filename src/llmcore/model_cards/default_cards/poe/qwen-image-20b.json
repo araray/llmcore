@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen-image-20b",
+  "display_name": "Qwen-Image (20B) is an image generation foundation model in the Qwen series that achieves significant advances in complex text rendering. \n\nOptional parameters:\nAspect ratio. Valid aspect ratios are 1",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen-Image (20B) is an image generation foundation model in the Qwen series that achieves significant advances in complex text rendering. \n\nOptional parameters:\nAspect ratio. Valid aspect ratios are 16:9, 4:3, 1:1, 3:4, 9:16. \nNegative_prompt to set the negative prompt.",
+  "tags": [
+    "fal",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.406477+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1754502513609
+  }
+}

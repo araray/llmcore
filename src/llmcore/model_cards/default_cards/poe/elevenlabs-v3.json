@@ -1,0 +1,52 @@
+{
+  "model_id": "elevenlabs-v3",
+  "display_name": "ElevenLabs v3 is a cutting-edge text-to-speech model that brings scripts to life with remarkable realism and performance-level control. Unlike traditional TTS systems, it allows creators to shape the ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "ElevenLabs"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "ElevenLabs v3 is a cutting-edge text-to-speech model that brings scripts to life with remarkable realism and performance-level control. Unlike traditional TTS systems, it allows creators to shape the emotional tone, pacing, and soundscape of their audio through the use of inline audio tags. These tags are enclosed in square brackets and act as stage directions\u2014guiding how a line is spoken or what sound effects are inserted\u2014without being spoken aloud. This enables rich, expressive narration and dialogue for applications like audiobooks, games, podcasts, and interactive media. Whether you\u2019re aiming for a tense whisper, a sarcastic remark, or a dramatic soundscape full of explosions and ambient effects, v3 gives you granular control directly in the text prompt. This bot will also run text-to-speech on PDF attachments / URL links.\n\nExamples of voice delivery tags include:\n* [whispers] I have to tell you a secret. \n* [angry] That was *never* the plan.\n* [sarcastic] Oh, sure. That\u2019ll totally work.\n* and [laughs] You're hilarious.\n\nExamples of sound effect tags are:\n* [gunshot] Get down!\n* [applause] Thank you, everyone.\n* and [explosion] What was that?!\n\nThese can also be combined.\n\nMultiple speakers can be supported via the parameter control. Dialogue for multiple speakers must follow the format, e.g. for 3 speakers:\n\nSpeaker 1: [dialogue]\nSpeaker 2: [dialogue]\nSpeaker 3: [dialogue]\nSpeaker 1: [dialogue]\nSpeaker 2: [dialogue]\n\nThe following voices are supported:\nAlexandra - Conversational & Real\nAmy - Young & Natural\nArabella - Mature Female Narrator\nAustin - Good Ol' Texas Boy\nBlondie - Warm & Conversational\nBradford - British Male Storyteller\nCallum - Gravelly Yet Unsettling\nCharlotte - Raspy & Sensual\nChris - Down-to-Earth\nCoco Li - Shanghainese Female\nGaming - Unreal Tonemanagement 2003\nHarry - Animated Warrior\nHayato - Soothing Zen Male\nHope - Upbeat & Clear\nJames - Husky & Engaging\nJames Gao - Calm Chinese Voice\nJane - Professional Audiobook Reader\nJessica - Playful American Female\nJuniper - Grounded Female Professional\nKaro Yang - Youthful Asian Male\nKuon - Acute Fantastic Female\nLaura - Quirky Female Voice\nLiam - Warm, Energetic Youth\nMonika Sogam - Indian-English Accent\nNichalia Schwartz - Engaging Female American\nPriyanka Sogam - Late-Night Radio\nReginald - Brooding, Intense Villain\nShanShan - Young, Energetic Female\nXiao Bai - Shrill & Annoying\n\nPrompt input cannot exceed 5,000 characters.",
+  "tags": [
+    "audio",
+    "elevenlabs"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.377927+00:00",
+  "provider_extension": {
+    "owned_by": "ElevenLabs",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1749151405074
+  }
+}

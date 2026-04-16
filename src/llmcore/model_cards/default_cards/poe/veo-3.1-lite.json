@@ -1,0 +1,54 @@
+{
+  "model_id": "veo-3.1-lite",
+  "display_name": "Google\u2019s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and i",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google\u2019s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and image-to-video workflows, with synchronized dialogue, sound effects, and ambient audio. While optimized for affordability, it still benefits from the Veo 3.1 generation\u2019s improved prompt adherence and cinematic understanding.\n\nThis bot supports optional parameters for additional customization.\n\nNote: 1080p requires 8s duration\nReference mode: Use up to 3 input images as references for video generation\nReference images require 8s duration\nPlease only upload photos that you own or have the right to use. Otherwise, the bot will return an error.",
+  "tags": [
+    "google",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.366677+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1774976562653
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-5-mini",
+  "display_name": "GPT-5 mini is a small, fast & affordable model that matches or beats GPT-4.1 in many intelligence and vision-related tasks. Supports 400k tokens of context. Provides a 90% chat history cache discount.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-5 mini is a small, fast & affordable model that matches or beats GPT-4.1 in many intelligence and vision-related tasks. Supports 400k tokens of context. Provides a 90% chat history cache discount.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.382936+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.23,
+      "output": 1.8
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1750886324513
+  }
+}

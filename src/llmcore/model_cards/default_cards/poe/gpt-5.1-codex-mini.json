@@ -1,0 +1,59 @@
+{
+  "model_id": "gpt-5.1-codex-mini",
+  "display_name": "GPT\u20115.1\u2011Codex\u2011Mini is a lightweight, fast, and efficient code\u2011generation model derived from GPT\u20115.1\u2011Codex. It\u2019s optimized for quick iterations, smaller environments, and edge applications\u2014offering str",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT\u20115.1\u2011Codex\u2011Mini is a lightweight, fast, and efficient code\u2011generation model derived from GPT\u20115.1\u2011Codex. It\u2019s optimized for quick iterations, smaller environments, and edge applications\u2014offering strong coding assistance with lower computational cost while maintaining accuracy and utility. \n\nSupports 400k tokens of input context.\n\nOptional parameters:\nSet reasoning effort: Select from  `low`, `medium`, `high`. Medium reasoning effort is set by default.",
+  "tags": [
+    "code",
+    "openai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.380895+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.23,
+      "output": 1.8
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1762990151662
+  }
+}

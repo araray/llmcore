@@ -1,0 +1,62 @@
+{
+  "model_id": "gemini-3-flash",
+  "display_name": "Building on the reasoning capabilities of Gemini 3 Pro, Gemini 3 Flash is a powerful but affordable and performant model. It has exceptional world knowledge, multimodal understanding and reasoning cap",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Building on the reasoning capabilities of Gemini 3 Pro, Gemini 3 Flash is a powerful but affordable and performant model. It has exceptional world knowledge, multimodal understanding and reasoning capabilities at a fraction of the cost of equivalent models (as of December 2025).\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "google",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.365719+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.4,
+      "output": 2.4
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1759803302884
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "model_id": "kling-omni",
+  "display_name": "Bot for Kling Omni Image-to-Video inference. Send one image for image-to-video generation and two images for first-to-last frame video generation. \n\nOptional parameters:\nSet Duration. Select from (5 s",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Bot for Kling Omni Image-to-Video inference. Send one image for image-to-video generation and two images for first-to-last frame video generation. \n\nOptional parameters:\nSet Duration. Select from (5 seconds, 10 seconds) to specify video length in seconds. Set to 5 seconds as default.\n\nNotes:\nAccepted file type: jpeg, png, webp, heic, heif. \nThis bot does not accept video files.\nPrompt is required after attaching images to generate video.",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.376900+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1764600004756
+  }
+}

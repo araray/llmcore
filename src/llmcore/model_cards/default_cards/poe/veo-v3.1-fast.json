@@ -1,0 +1,54 @@
+{
+  "model_id": "veo-v3.1-fast",
+  "display_name": "Google's Veo 3.1 Fast is a fast version of Veo 3.1.\n\nOptional parameters:\nSet the aspect ratio of the generated image (one of `16:9`, `9:16`).\nSilent to generate a silent video at a lower cost.\nSet ne",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google's Veo 3.1 Fast is a fast version of Veo 3.1.\n\nOptional parameters:\nSet the aspect ratio of the generated image (one of `16:9`, `9:16`).\nSilent to generate a silent video at a lower cost.\nSet negative prompt option `blur`, `low resolution`, `poor quality`. (only for T2V).\nSet the duration `4s`, `6s`, `8s`, default `8s`. `4s` and `6s` are only supported for text-to-video generation\n\nNote: Pass a single image for image to video tasks. Pass two images for a first-frame-to-last-frame video generation task.",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.414255+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1760650990090
+  }
+}

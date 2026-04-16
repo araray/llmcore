@@ -1,0 +1,61 @@
+{
+  "model_id": "nano-banana",
+  "display_name": "Google DeepMind's Nano Banana (i.e. Gemini 2.5 Flash Image model) offers image generation and editing capabilities, state-of-the-art performance in photo-realistic multi-turn edits at exceptional spee",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google DeepMind's Nano Banana (i.e. Gemini 2.5 Flash Image model) offers image generation and editing capabilities, state-of-the-art performance in photo-realistic multi-turn edits at exceptional speeds. Supports a maximum input context of 32k tokens.\n\nOptional parameters:\nSet aspect ratio. Select from (1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9). It is set to 16:9 aspect ratio as default.\nImage only to only generate image output. It is `off` by default\n\nNote: Simply enabling image only will not result in an image unless the prompt is phrased specifically for image generation, but it does guarantee that only a single image (or none) will be produced.",
+  "tags": [
+    "google",
+    "image-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.381823+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.21,
+      "output": 1.8
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1755817420757
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "pixverse-v5",
+  "display_name": "Pixverse v5 offers advanced creative tools with three main features: \n1. Text-to-Video, which transforms written prompts into cinematic, high-detail video clips with fluid motion and accurate visual i",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Pixverse v5 offers advanced creative tools with three main features: \n1. Text-to-Video, which transforms written prompts into cinematic, high-detail video clips with fluid motion and accurate visual interpretation;\n2. Image-to-Video, which animates static images into dynamic short videos with lifelike motion and smooth transitions; and \n3. Transition, which generates seamless morphs between frames or scenes to create unified, professional-quality visual flow.\n\nParameter Controls and Usage:\n1. Video Generation (Main Control Section)\n  - Set Video Resolution. Select from 360p , 540p, 720p, 1080p. This is set to 720p by default.\n  - Set Duration. Select from (5 seconds or 8 seconds) to specify video length in seconds. Set to 5 seconds as default. Note: 8s not supported for 1080p.\n  - Set aspect ratio. Select from (16:9, 4:3, 1:1, 3:4, 9:16). It is set to 16:9 aspect ratio as default.\n  - Negative prompt. Type things to avoid in generated images\n  - Seed. Random seed number for reproducible generation with fixed seed (e.g. 12345)\n\n2. Generation Modes (Determined by attachments)\n- Text-to-Video: Provide a prompt with 0 image attachments.\n- Image-to-Video: Provide 1 image attachment.\n- Transition: Provide 2 image attachments (first is start frame, second is end frame).\n\n3. Limitations\n- The combination of resolution `1080p` and duration `8 seconds` is not supported.\n- Only 0, 1, or 2 image attachments are supported.\n- Attachments must be images (PNG/JPEG/WEBP/TIFF/BMP/HEIC/GIF).",
+  "tags": [
+    "empirio labs ai",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.412913+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1760645525570
+  }
+}

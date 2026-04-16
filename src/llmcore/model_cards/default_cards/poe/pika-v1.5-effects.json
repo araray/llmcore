@@ -1,0 +1,51 @@
+{
+  "model_id": "pika-v1.5-effects",
+  "display_name": "Apply surprising, mind blowing effects to your photo with Pika-v1.5 Effects. Attach an image and be amazed by the effects like \"cakeify,\" \"crush\" and \"crumble\", open the parameter controls shelf for a",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Apply surprising, mind blowing effects to your photo with Pika-v1.5 Effects. Attach an image and be amazed by the effects like \"cakeify,\" \"crush\" and \"crumble\", open the parameter controls shelf for a full list of effects.\n\nFull list of effects:\nCake-ify, Crumble, Crush, Decapitate, Deflate, Dissolve, Explode, Eye-pop, Inflate, Levitate, Melt, Peel, Poke, Squish, Ta-da, Tear\n\nOptional parameters:\n- Seed. Random seed number for reproducible generation with fixed seed\n- Negative prompt. Type things to avoid in generated images",
+  "tags": [
+    "fal"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.390117+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1765555623083
+  }
+}

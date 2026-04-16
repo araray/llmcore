@@ -1,0 +1,51 @@
+{
+  "model_id": "mimo-v2-flash-el",
+  "display_name": "MiMo V2 Flash is Xiaomi's lightweight, high-speed reasoning model designed for fast and cost-effective text generation. It uses a hybrid attention architecture and multi-token prediction to keep infer",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiMo V2 Flash is Xiaomi's lightweight, high-speed reasoning model designed for fast and cost-effective text generation. It uses a hybrid attention architecture and multi-token prediction to keep inference costs low while maintaining strong performance on complex reasoning benchmarks.\n\nNotes:\nContext Window: 256K\nMax Output: 64K\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.363471+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1773981634473
+  }
+}

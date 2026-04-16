@@ -1,0 +1,51 @@
+{
+  "model_id": "exa-search",
+  "display_name": "Utilize Exa's technology for searching web pages, finding similar web pages, crawling, and more.\nNote: This endpoint does not return an LLM-style response (visit the following if you want an LLM-style",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Utilize Exa's technology for searching web pages, finding similar web pages, crawling, and more.\nNote: This endpoint does not return an LLM-style response (visit the following if you want an LLM-style response: https://poe.com/Exa-Answer or https://poe.com/Exa-Research). File upload is not supported. \n\nParameter Controls Available:\n1. Operation Mode\n   - Default: Web Search\n   - Find Similar pages. For finding similar pages.\n   - Get page contents. For getting page contents.\n   - Code search. For code search.\n\n2. Search Settings (search operation)\n   - Search Type: Select from Auto (Intelligent), Instant (Sub-150ms), Neural (Embeddings), Deep Search (Exa 2.1) and Fast (Streamlined). Default: Auto (Intelligent)\n   - Show Full Content. Toggle to display full page content in results\n   - Include domains. Include comma-separated domains to include\n   - Include text. Input text that must appear (up to 5 words)\n   - Exclude text. Input text that must NOT appear (up to 5 words)\n  \n3. Common Search Settings (search & similar operations)\n   - Number of results: Select from 1 to 100 to set number of results to return. This is set to 10 by default.\n   - Category Filter: All Categories, Company, Research Paper, News, PDF, Github, Tweet, Personal Site, LinkedIn Profile, Financial Report. This is set to None by default\n   - Exclude domains. Include comma-separated domains to exclude\n\n4. Date Filters (search operation)\n   - Start Crawl Date. Results crawled after this date (ISO 8601)\n   - End Crawl Date. Results crawled before this date (ISO 8601)\n   - Start Published Date. Content published after this date (ISO 8601)\n   - End Published Date. Content published before this date (ISO 8601)\n\n5. Content Options (search, similar, & contents operations)\n   - Return Text. Toggle to fetch page text content (default: on)\n   - Max Characters. Set number to limit text length (empty = unlimited)\n   - Include HTML Tags. Toggle `on` to preserve HTML structure. (default: off)\n   - Return Highlights. Toggle `on` to get AI-selected key snippets. (default: off)\n   - Sentences per highlight. Set sentences per highlight from 1 to 10. (default: 3)\n   - Highlights per page. Set highlights per result from 1 to 10. (default: 3)\n   - Highlights query. Set text to guide highlight selection\n   - Return Summary. Toggle `on` to get AI-generated summaries. (default: off)\n   - Summary query. Set text to guide summary generation\n\n6. Advanced Options (search, similar, & contents operations)\n   - Livecrawl Mode: Fallback (Cache first), Never (Cache only), Always (Fresh Only), Preferred (Fresh Preferred). Default: Fallback\n   - Subpages to crawl. Set number of linked subpages to crawl from 0 to 10. (default: 0)\n   - Subpage Target. Set text to find specific subpages matching keyword\n\n7. Code Search Controls (code operation)\n   - `--code_tokens Response Length. Set maximum length of code search results. Select from Dynamic (Optimal), 5000 tokens (Standard), 10000 tokens (Extended), 20000 tokens (Maximum). This is set to Dynamic as default.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.387909+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1764132329592
+  }
+}

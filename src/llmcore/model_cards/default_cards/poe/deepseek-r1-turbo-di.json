@@ -1,0 +1,51 @@
+{
+  "model_id": "deepseek-r1-turbo-di",
+  "display_name": "Top open-source reasoning LLM rivaling OpenAI's o1 model; delivers top-tier performance across math, code, and reasoning tasks at a fraction of the cost. Turbo model is quantized to achieve higher spe",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "DeepInfra"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Top open-source reasoning LLM rivaling OpenAI's o1 model; delivers top-tier performance across math, code, and reasoning tasks at a fraction of the cost. Turbo model is quantized to achieve higher speeds. All data you provide this bot will not be used in training, and is sent only to DeepInfra, a US-based company.\n\nSupports 32k tokens of input context and 8k tokens of output context. Quantization: FP4 (turbo).",
+  "tags": [
+    "deepinfra"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.412599+00:00",
+  "provider_extension": {
+    "owned_by": "DeepInfra",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1741250889407
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "lyria-3",
+  "display_name": "Google DeepMind\u2019s Lyria 3 is an advanced AI music generation model that creates high-fidelity, up to three-minute tracks from text or image prompts, with detailed control over vocals, style, and compo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google DeepMind\u2019s Lyria 3 is an advanced AI music generation model that creates high-fidelity, up to three-minute tracks from text or image prompts, with detailed control over vocals, style, and composition.\n\nOptional parameters:\nFull song: Turn it on to generate a full-length track (up to 3 minutes).\n\nNotes:\nLyria blocks prompts that name specific artists or songs (artist-intent and recitation checks).",
+  "tags": [
+    "audio",
+    "google"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.413469+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1774462776129
+  }
+}

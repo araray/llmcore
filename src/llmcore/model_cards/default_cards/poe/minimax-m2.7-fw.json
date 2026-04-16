@@ -1,0 +1,51 @@
+{
+  "model_id": "minimax-m2.7-fw",
+  "display_name": "Mixture-of-Experts language model. M2.7 is capable of building complex agent harnesses and completing highly elaborate productivity tasks, leveraging Agent Teams, complex Skills, and dynamic tool sear",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Fireworks AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mixture-of-Experts language model. M2.7 is capable of building complex agent harnesses and completing highly elaborate productivity tasks, leveraging Agent Teams, complex Skills, and dynamic tool search.",
+  "tags": [
+    "fireworks ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.425265+00:00",
+  "provider_extension": {
+    "owned_by": "Fireworks AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1776304104364
+  }
+}

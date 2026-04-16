@@ -1,0 +1,59 @@
+{
+  "model_id": "o4-mini-deep-research",
+  "display_name": "Deep Research from OpenAI powered by the o4-mini model, can search through extensive web information to answer complex, nuanced research questions in various domains such as finance, consulting, and s",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deep Research from OpenAI powered by the o4-mini model, can search through extensive web information to answer complex, nuanced research questions in various domains such as finance, consulting, and science.",
+  "tags": [
+    "openai",
+    "reasoning"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.391965+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.8,
+      "output": 7.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1750982713340
+  }
+}

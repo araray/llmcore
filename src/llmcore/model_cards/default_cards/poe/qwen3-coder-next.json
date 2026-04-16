@@ -1,0 +1,59 @@
+{
+  "model_id": "qwen3-coder-next",
+  "display_name": "Qwen3-Coder-Next is an open-weight language model specifically engineered for coding agents and local development environments. This highly efficient model delivers exceptional performance with only 3",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-Coder-Next is an open-weight language model specifically engineered for coding agents and local development environments. This highly efficient model delivers exceptional performance with only 3B activated parameters out of 80B total parameters, achieving results comparable to models with 10-20x more active parameters while maintaining remarkable cost-effectiveness for agent deployment. Through its sophisticated training methodology, Qwen3-Coder-Next excels in advanced agentic capabilities including long-horizon reasoning, complex tool usage, and robust recovery from execution failures, ensuring reliable performance across dynamic coding tasks. The model's versatility is further enhanced by its 256k context length and adaptability to various scaffold templates, enabling seamless integration with diverse CLI/IDE platforms such as Claude Code, Qwen Code, Qoder, Kilo, Trae, and Cline, making it an ideal solution for comprehensive development environments.\n\nOptional parameters:\nSet temperature to control randomness in the response: Set number from 1 to 2.  This is set to 0.7 by default. Lower values make the output more focused and deterministic.\nSet max output tokens: Set number from 1 to 65536. This is set to 65536 by default.",
+  "tags": [
+    "code",
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.368574+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 1.5
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1770157079067
+  }
+}

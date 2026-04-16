@@ -1,0 +1,52 @@
+{
+  "model_id": "seedream-3.0",
+  "display_name": "Seedream 3.0 by ByteDance is a bilingual (Chinese and English) text-to-image model that excels at text-to-image generation.\n\nThis bot supports optional parameters for additional customization.",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Bytedance"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seedream 3.0 by ByteDance is a bilingual (Chinese and English) text-to-image model that excels at text-to-image generation.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "bytedance",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.408674+00:00",
+  "provider_extension": {
+    "owned_by": "Bytedance",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1750007407012
+  }
+}

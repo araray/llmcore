@@ -1,0 +1,51 @@
+{
+  "model_id": "llama-3.1-8b-di",
+  "display_name": "The smallest and fastest model from Meta's Llama 3.1 family. This open-source language model excels in multilingual dialogue, outperforming numerous industry benchmarks for both closed and open-source",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "DeepInfra"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The smallest and fastest model from Meta's Llama 3.1 family. This open-source language model excels in multilingual dialogue, outperforming numerous industry benchmarks for both closed and open-source conversational AI systems.  All data you submit to this bot is governed by the Poe privacy policy and is only sent to DeepInfra, a US-based company.\n\nInput token limit 128k, output token limit 8k. Quantization: FP16 (official).",
+  "tags": [
+    "deepinfra"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.399621+00:00",
+  "provider_extension": {
+    "owned_by": "DeepInfra",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1740488781419
+  }
+}

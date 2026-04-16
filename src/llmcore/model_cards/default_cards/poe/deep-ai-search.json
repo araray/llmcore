@@ -1,0 +1,51 @@
+{
+  "model_id": "deep-ai-search",
+  "display_name": "Deep search engine that integrates Brave AI with real-time web search. This research assistant executes commands, validates facts and scrapes websites at scale while preserving its hallmark speed and ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Open-Source-Lab"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deep search engine that integrates Brave AI with real-time web search. This research assistant executes commands, validates facts and scrapes websites at scale while preserving its hallmark speed and intelligence advantage. The bot doesn't accept file attachments.\n\nExamples:\nhttps://poe.com/s/HZSVi8Ma2qoN9Qx4QBKR\nhttps://poe.com/s/P0BQmsvbE7zusdY0n49l\nhttps://poe.com/s/QgQSPsLD9efQrIwbmwuO",
+  "tags": [
+    "open-source-lab"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415909+00:00",
+  "provider_extension": {
+    "owned_by": "Open-Source-Lab",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1753262625533
+  }
+}

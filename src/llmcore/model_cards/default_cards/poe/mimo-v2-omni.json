@@ -1,0 +1,51 @@
+{
+  "model_id": "mimo-v2-omni",
+  "display_name": "MiMo V2 Omni is Xiaomi\u2019s omni-modal foundation model that natively sees, hears, and understands text, images, audio, and video within a single unified architecture. It combines deep reasoning and web ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiMo V2 Omni is Xiaomi\u2019s omni-modal foundation model that natively sees, hears, and understands text, images, audio, and video within a single unified architecture. It combines deep reasoning and web search with agent-like capabilities\u2014such as multi-step planning and tool use\u2014to seamlessly power complex, real-world workflows.\n\nNotes:\n- Context Window: 256K\n- Max Output: 128K\n- Supported input modalities: Text, Image, Audio, Video\n\nParameter controls available:\n1. Reasoning\n- Deep Thinking (toggle, default: on): Step-by-step reasoning before answering.\n\n2. Web Search\n- Enable Web Search (toggle, default: off): Search the web for real-time information.\n- Force Search (toggle, default: off): Always search, even if the model thinks it can answer directly. Only shown when Web Search is enabled.\n- Max Keywords (slider, 1\u20135, default: 3): Maximum search keywords per round. Each keyword triggers a separate search call. More = broader but costlier. Only shown when Web Search is enabled.\n- Results Limit (slider, 1\u201310, default: 5): Maximum web pages returned per search round. Only shown when Web Search is enabled.\n\n3. Video Settings\n- Video FPS (slider, 0.1-10, default: 2): Frames extracted per second from video. Higher = finer temporal detail but more tokens.\n- Video Resolution (dropdown, default/max, default: default): Resolution tier for video frame analysis. 'Max' enhances recognition of small objects and fine details but uses more tokens.\n\nInput Limits\n- Images: JPEG, PNG, GIF, WebP, BMP (max 10 MB each). Multiple images supported.\n- Audio: MP3, WAV, FLAC, M4A, OGG (max 100 MB each). Multiple files supported.\n- Video: MP4, MOV, AVI, WMV (max 300 MB each). Multiple videos supported.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.360908+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1773985518635
+  }
+}

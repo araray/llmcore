@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-5.2-instant",
+  "display_name": "A fast, steady conversational model built for day-to-day use. It handles long threads without drifting, keeps context clean, and answers in a straightforward way. Good for planning, rewriting, summari",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "A fast, steady conversational model built for day-to-day use. It handles long threads without drifting, keeps context clean, and answers in a straightforward way. Good for planning, rewriting, summarizing, and quick technical help. Supports 400k tokens of context and native vision.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.365978+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.6,
+      "output": 13.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1765479696878
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "perplexity-pro-search",
+  "display_name": "Perplexity Pro Search turns Sonar Pro into a full agentic researcher that autonomously chains web searches, and fetches full pages while streaming its live reasoning. It dynamically adapts its strateg",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Perplexity Pro Search turns Sonar Pro into a full agentic researcher that autonomously chains web searches, and fetches full pages while streaming its live reasoning. It dynamically adapts its strategy for complex queries, far beyond standard Sonar Pro's single search. \n\nParameter controls available:\n1. Search Configuration\n   - Search Context Size (low, medium, high] adjusts search depth (affects cost and comprehensiveness)\n   - Stream mode full switches from concise reasoning display to traditional streaming\n\n2. Content Filtering\n   - Search mode academic restricts results to academic sources\n   - Search mode sec limits to SEC filings only\n   - Search domain filter example.com,nasa.gov` includes only specified domains (max 20)\n   - Search domain filter -pinterest.com,-spam.com` excludes domains (prefix with `-`)\n   - Search language filter e.g.`en,fr,de` filters by ISO 639-1 language codes (max 10, two-letter codes)\n\n3. Date and Recency Filters\n   - Search recency filter (day, week, month, year) filters by relative time from today\n   - Search after date `MM/DD/YYYY` and `Search before date `MM/DD/YYYY` for exact publication dates\n   - Note: Specific dates and recency filters are mutually exclusive (dates take priority)\n   - Last updated after filter `MM/DD/YYYY` and Last updated before filter `MM/DD/YYYY` filter by last modified date\n\n4. Location-Based Search\n   - Country e.g `US` sets two-letter ISO 3166-1 country code for localized results\n   - Region e.g. `California` specifies state/province (requires country)\n   - City e.g. \"San Francisco\" narrows to city level (requires country)\n   - Latitude -37.7749 Longitude -122.4194 for precise coordinate-based search (requires country)\n\n5. Media Results\n   - Return images includes images in search results with inline previews\n   - Image domain filter wikimedia.org,-getty.com` filters image sources (max 10, prefix `-` to exclude)\n   - Image format filter e.g. jpg,png,webp restricts to specific formats (gif, jpg, png, webp supported)\n   - Return videos includes embedded video previews (YouTube videos render as iframes)",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.402432+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1763705720172
+  }
+}

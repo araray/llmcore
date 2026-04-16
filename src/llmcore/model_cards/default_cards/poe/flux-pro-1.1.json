@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-pro-1.1",
+  "display_name": "State-of-the-art image generation with top-of-the-line prompt following, visual quality, image detail and output diversity. This is the most powerful version of FLUX 1.1. \n\nOptional parameters:\nSet as",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "State-of-the-art image generation with top-of-the-line prompt following, visual quality, image detail and output diversity. This is the most powerful version of FLUX 1.1. \n\nOptional parameters:\nSet aspect ratio. Select from (16:9, 4:3, 1:1, 3:4, 9:16). It is set to 1:1 aspect ratio as default.\n\nNotes:\nSend an image (jpeg/png/webp/heic/heif) to have this model reimagine/regenerate it via FLUX Redux.",
+  "tags": [
+    "fal",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.409685+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1727968438767
+  }
+}

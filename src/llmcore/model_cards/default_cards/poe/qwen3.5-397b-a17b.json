@@ -1,0 +1,61 @@
+{
+  "model_id": "qwen3.5-397b-a17b",
+  "display_name": "The Qwen3.5 series 397B-A17B native vision-language model is based on a hybrid architecture design that integrates linear attention mechanisms with sparse Mixture-of-Experts (MoE), achieving higher in",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Qwen3.5 series 397B-A17B native vision-language model is based on a hybrid architecture design that integrates linear attention mechanisms with sparse Mixture-of-Experts (MoE), achieving higher inference efficiency. Across a variety of tasks\u2014including language understanding, logical reasoning, code generation, agentic tasks, image understanding, video understanding, and graphical user interface (GUI) interaction\u2014it demonstrates exceptional performance comparable to current top-tier frontier models. Possessing robust code generation and agentic capabilities, it exhibits strong generalization across various agent scenarios.\n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 262k tokens\n\nOptional parameters:\nEnable thinking about the response before giving a final answer: toggle it `on`, otherwise it is `off`  by default.\nSet temperature to control randomness in the response: Set number from 1 to 2.  This is set to `0.7` by default. Lower values make the output more focused and deterministic.\nSet max output tokens: Set number from 1 to 64000. This is set to 64000 by default.",
+  "tags": [
+    "novita ai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.363198+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.61,
+      "output": 3.6
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text",
+      "image",
+      "video"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image,video->text",
+    "poe_object_type": "model",
+    "created": 1771239767882
+  }
+}

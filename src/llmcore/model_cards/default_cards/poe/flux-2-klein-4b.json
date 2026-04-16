@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-2-klein-4b",
+  "display_name": "Text-to-image generation and Image Editing with Flux 2 [klein] 4B Distilled from Black Forest Labs. Enhanced realism, crisper text generation, and native editing capabilities. Send up to 3 images (jpe",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Text-to-image generation and Image Editing with Flux 2 [klein] 4B Distilled from Black Forest Labs. Enhanced realism, crisper text generation, and native editing capabilities. Send up to 3 images (jpeg/png/webp) to use for image editing or as references.\n\nOptional parameters:\nSet aspect ratio. Supported aspect ratios - 16:9, 4:3, 1:1, 3:4, 9:16",
+  "tags": [
+    "fal",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.405824+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1768504648686
+  }
+}

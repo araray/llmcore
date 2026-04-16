@@ -1,0 +1,54 @@
+{
+  "model_id": "ltx-2-fast",
+  "display_name": "LTX-2 Fast is a video model by Lightricks that delivers exceptional quality and speed. It can generate videos at up to 50 FPS in high resolutions and supports both text-to-video and image-to-video gen",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "LTX-2 Fast is a video model by Lightricks that delivers exceptional quality and speed. It can generate videos at up to 50 FPS in high resolutions and supports both text-to-video and image-to-video generation.\n\nOptional Prompts:\nGenerate an audio with the video. This is disabled by default. \nSet. resolution with one of `1080p`, `1440p`, `2160p`. This is set to 1080p by default.\nSet the duration of the generated video (one of `6s, 8s, 10s`). This is set to 6s by default. \nSet the fps of the generated video to one of 25 or 50. This is set to 25 by default\n\nNotes: \nDuration and resolution values will change the price. \nFile attachment accepted: jpeg, png, webp",
+  "tags": [
+    "fal",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.414574+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1761343254536
+  }
+}

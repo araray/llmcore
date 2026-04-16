@@ -1,0 +1,52 @@
+{
+  "model_id": "wan2.7-image",
+  "display_name": "Wan2.7 Image is Alibaba's Wan 2.7 series image generation and editing model, supporting text-to-image, image editing, interactive editing with bounding boxes, and cohesive image set generation from a ",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Wan2.7 Image is Alibaba's Wan 2.7 series image generation and editing model, supporting text-to-image, image editing, interactive editing with bounding boxes, and cohesive image set generation from a single prompt. The Pro variant supports up to 4K output resolution with enhanced quality, while the Standard variant offers faster generation at lower cost.\n\nNotes:\n- This model is served from the Singapore region.\n- Upload 1-9 images to enable image editing mode. Without images, the bot operates in text-to-image generation mode.\n- Responses may take 10-60 seconds depending on resolution, number of images, model variant, and whether thinking mode is enabled.\n- Prompt has a max of 5,000 characters.\n\nAttachments (Image Editing Mode):\n- Attach 1-9 images (JPEG, PNG, BMP, WEBP) with a text instruction to edit them.\n- Input image resolution must be between 240-8000 pixels per side with an aspect ratio between 1:8 and 8:1.\n- Maximum file size per image: 20 MB.\n- Multi-image editing: Reference images by order (e.g. \"Spray the graffiti from image 2 onto the car in image 1\").\n- Interactive editing: Use bounding boxes to specify regions on images for targeted edits (e.g. \"Place the object from image 1 in the selected area of image 2\").\n- Supported operations: style transfer, object placement, graffiti/texture application, scene blending, background replacement, multi-reference composition, and more.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.373246+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1775077688892
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "veo-3",
+  "display_name": "Veo 3 produces incredibly high-quality videos across a diverse range of subjects and styles. It incorporates an enhanced understanding of real-world physics and the subtleties of human movement and ex",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Veo 3 produces incredibly high-quality videos across a diverse range of subjects and styles. It incorporates an enhanced understanding of real-world physics and the subtleties of human movement and expression, resulting in greater detail and overall realism.\n\nVeo 3 is fluent in the unique language of cinematography: you can request a specific genre, specify a lens, or suggest cinematic effects, and Veo 3 will deliver stunning 8-second video clips. It supports both text-to-video and image-to-video generation and also features native audio generation based on text prompts.\n\nNote: Please note that Veo 3 does not accept audio attachments.\n\nOptional parameters:\nSet negative prompt to exclude specific elements (e.g., blurry, cloudy, or other attributes). \nSet seed to set a specific seed value by entering the desired number.\nSet aspect ratio followed by either 16:9 or 9:16.\nSet duration followed by either 4s, 6s, 8s.",
+  "tags": [
+    "google",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.414831+00:00",
+  "provider_extension": {
+    "owned_by": "Google",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1747796700448
+  }
+}

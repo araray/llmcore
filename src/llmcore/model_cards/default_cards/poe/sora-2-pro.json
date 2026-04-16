@@ -1,0 +1,54 @@
+{
+  "model_id": "sora-2-pro",
+  "display_name": "Sora 2 Pro is OpenAI\u2019s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds ",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sora 2 Pro is OpenAI\u2019s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds on Sora 2\u2019s capabilities with enhanced physical accuracy, intricate world-state persistence, and higher fidelity in cinematic styles. The model excels at generating synchronized dialogue, sound effects, and realistic simulations, all while adhering to real-world physics. Sora 2 Pro also supports seamless editing, complex multi-shot prompt execution, and the integration of real-world elements like people, animals, and objects with unparalleled detail and accuracy.\nThis bot supports text-to-video and image-to-video generation.\n\nOptional parameters:\n- Duration. Video output duration in seconds (options: 4, 8, 12)\n- Size. Resolution of the output video. Options: [Landscape] - 1280x720, 1792x1024, [Portrait] - 720x1280, 1024x1792",
+  "tags": [
+    "openai",
+    "video-generation",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.411184+00:00",
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text,image->video",
+    "poe_object_type": "model",
+    "created": 1759779974530
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "deepreasoning",
+  "display_name": "DeepReasoning (previously DeepClaude) is a high-performance LLM inference that combines DeepSeek R1's Chain of Thought (CoT) reasoning capabilities with Anthropic Claude's creative and code generation",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepReasoning (previously DeepClaude) is a high-performance LLM inference that combines DeepSeek R1's Chain of Thought (CoT) reasoning capabilities with Anthropic Claude's creative and code generation prowess. It provides a unified interface for leveraging the strengths of both models while maintaining complete control over your data. Learn more: https://deepclaude.com/\n\nSupported file type upload: PDF, TXT, PNG, JPG, JPEG\n\nAvailable Claude model to pair with:\nClaude Sonnet 4.5 (Default)\nClaude Haiku 4.5 (Fastest)\nClaude Opus 4.5 (Most capable)\nClaude Sonnet 4\nClaude Opus 4.1\nClaude Opus 4\nClaude Sonnet 3.7\nClaude Haiku 3.5\nClaude Opus 3",
+  "tags": [
+    "empirio labs ai",
+    "reasoning"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.419476+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1740454833334
+  }
+}

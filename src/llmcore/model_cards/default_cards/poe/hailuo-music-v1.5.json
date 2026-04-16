@@ -1,0 +1,52 @@
+{
+  "model_id": "hailuo-music-v1.5",
+  "display_name": "Generate music from text prompts using the MiniMax model, which leverages advanced AI techniques to create high-quality, diverse musical compositions. \n\nNotes: \nSend the lyrics of the music over as yo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate music from text prompts using the MiniMax model, which leverages advanced AI techniques to create high-quality, diverse musical compositions. \n\nNotes: \nSend the lyrics of the music over as your prompt. \nBoth prompt/lyrics and style must be sent over for best quality.\nThe prompt supports [intro][verse][chorus][bridge][outro] sections.\n\nOptional parameters:\nSet music style to set the style of the generated music - for example, rock and roll, hip-hop, etc.  ",
+  "tags": [
+    "audio",
+    "fal"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.403373+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1758018191524
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen3-vl-235b-a22b-i",
+  "display_name": "This generation delivers comprehensive upgrades across the board: superior text understanding & generation, deeper visual perception & reasoning, extended context length, enhanced spatial and video dy",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This generation delivers comprehensive upgrades across the board: superior text understanding & generation, deeper visual perception & reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.\n\nAvailable in Dense and MoE architectures that scale from edge to cloud, with Instruct and reasoning\u2011enhanced Thinking editions for flexible, on\u2011demand deployment.\n\nKey Enhancements:\nVisual Agent: Operates PC/mobile GUIs\u2014recognizes elements, understands functions, invokes tools, completes tasks.\n\nVisual Coding Boost: Generates Draw.io/HTML/CSS/JS from images/videos.\n\nAdvanced Spatial Perception: Judges object positions, viewpoints, and occlusions; provides stronger 2D grounding and enables 3D grounding for spatial reasoning and embodied AI.\n\nLong Context & Video Understanding: Native 256K context, expandable to 1M; handles books and hours-long video with full recall and second-level indexing.\n\nEnhanced Multimodal Reasoning: Excels in STEM/Math\u2014causal analysis and logical, evidence-based answers.\n\nUpgraded Visual Recognition: Broader, higher-quality pretraining is able to \"recognize everything\"\u2014celebrities, anime, products, landmarks, flora/fauna, etc.\n\nExpanded OCR: Supports 32 languages (up from 19); robust in low light, blur, and tilt; better with rare/ancient characters and jargon; improved long-document structure parsing.\n\nText Understanding on par with pure LLMs: Seamless text\u2013vision fusion for lossless, unified comprehension.\n\nTechnical Specifications\n\nFile Support: Image, Video, PDF and Markdown files\nContext window: 128k tokens",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.397271+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1758695977113
+  }
+}

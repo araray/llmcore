@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-1-schnell-fw",
+  "display_name": "FLUX.1 [schnell] is a 12 billion parameter rectified flow transformer capable of generating images from text descriptions.\n\nKey Features\n1. Cutting-edge output quality and competitive prompt following",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "Fireworks AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "FLUX.1 [schnell] is a 12 billion parameter rectified flow transformer capable of generating images from text descriptions.\n\nKey Features\n1. Cutting-edge output quality and competitive prompt following, matching the performance of closed source alternatives.\n2. Trained using latent adversarial diffusion distillation, FLUX.1 [schnell] can generate high-quality images in only 1 to 4 steps.\n3. Released under the apache-2.0 licence, the model can be used for personal, scientific, and commercial purposes.\nBot does not support attachments. ",
+  "tags": [
+    "fireworks ai",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.423711+00:00",
+  "provider_extension": {
+    "owned_by": "Fireworks AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1729619977045
+  }
+}

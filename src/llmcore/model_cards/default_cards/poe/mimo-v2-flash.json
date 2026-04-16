@@ -1,0 +1,58 @@
+{
+  "model_id": "mimo-v2-flash",
+  "display_name": "Xiaomi MiMo-V2-Flash is a proprietary MoE model developed by Xiaomi, designed for extreme inference efficiency with 309B total parameters (15B active). By incorporating an innovative Hybrid attention ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Xiaomi MiMo-V2-Flash is a proprietary MoE model developed by Xiaomi, designed for extreme inference efficiency with 309B total parameters (15B active). By incorporating an innovative Hybrid attention architecture and multi-layer MTP inference acceleration, it ranks among the top 2 global open-source models across multiple Agent benchmarks. Its coding capabilities surpass all open-source models and rival the industry-leading closed-source model, Claude 4.5 Sonnet\u2014yet at only 2.5% of the inference cost and with 2x the generation speed, successfully pushing the limits of both model performance and efficiency.\n\nContext window: 262k tokens\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.357128+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1773985456579
+  }
+}

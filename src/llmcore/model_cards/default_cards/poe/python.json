@@ -1,0 +1,51 @@
+{
+  "model_id": "python",
+  "display_name": "Executes Python code (version 3.11) from the user message and outputs the results. If there are code blocks in the user message (surrounded by triple backticks), then only the code blocks will be exec",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Poe"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Executes Python code (version 3.11) from the user message and outputs the results. If there are code blocks in the user message (surrounded by triple backticks), then only the code blocks will be executed. These libraries are imported into this bot's run-time automatically -- numpy, pandas, requests, matplotlib, scikit-learn, torch, PyYAML, tensorflow, scipy, pytest -- along with ~150 of the most widely used Python libraries.",
+  "tags": [
+    "poe"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.423312+00:00",
+  "provider_extension": {
+    "owned_by": "Poe",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1724756919380
+  }
+}

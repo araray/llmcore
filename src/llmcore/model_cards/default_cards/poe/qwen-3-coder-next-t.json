@@ -1,0 +1,52 @@
+{
+  "model_id": "qwen-3-coder-next-t",
+  "display_name": "Qwen3-Coder-Next-FP8 is an open-weight language model designed specifically for coding agents and local development. It features the following key enhancements:\n\nSuper Efficient with Significant Perfo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-Coder-Next-FP8 is an open-weight language model designed specifically for coding agents and local development. It features the following key enhancements:\n\nSuper Efficient with Significant Performance: With only 3B activated parameters (80B total parameters), it achieves performance comparable to models with 10\u201320x more active parameters, making it highly cost-effective for agent deployment.\nAdvanced Agentic Capabilities: Through an elaborate training recipe, it excels at long-horizon reasoning, complex tool usage, and recovery from execution failures, ensuring robust performance in dynamic coding tasks.\nVersatile Integration with Real-World IDE: Its 256k context length, combined with adaptability to various scaffold templates, enables seamless integration with different CLI/IDE platforms (e.g., Claude Code, Qwen Code, Qoder, Kilo, Trae, Cline, etc.), supporting diverse development environments.",
+  "tags": [
+    "code",
+    "together ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.396738+00:00",
+  "provider_extension": {
+    "owned_by": "Together AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1770340255128
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-5-pro",
+  "display_name": "OpenAI\u2019s latest flagship model with significantly improved coding skills, long context (400k tokens), and improved instruction following. Supports native vision, and generally has more intelligence th",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI\u2019s latest flagship model with significantly improved coding skills, long context (400k tokens), and improved instruction following. Supports native vision, and generally has more intelligence than GPT-4.1.\n\nNote: \nGPT-5-Pro thinks long and hard. When using this bot through the API, consider increasing your request timeouts.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.379438+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 14.0,
+      "output": 110.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1759789057270
+  }
+}

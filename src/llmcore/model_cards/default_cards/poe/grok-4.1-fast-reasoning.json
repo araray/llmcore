@@ -1,0 +1,61 @@
+{
+  "model_id": "grok-4.1-fast-reasoning",
+  "display_name": "Grok-4.1-Fast-Reasoning is a high-performance version of xAI\u2019s Grok\u202f4.1\u202fFast, the company\u2019s best agentic tool\u2011calling model. It works great in real-world use cases like customer support, deep research",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok-4.1-Fast-Reasoning is a high-performance version of xAI\u2019s Grok\u202f4.1\u202fFast, the company\u2019s best agentic tool\u2011calling model. It works great in real-world use cases like customer support, deep research, and advanced analytical reasoning. Equipped with 2M\u2011token context window, this model processes vast information seamlessly, delivering coherent, context\u2011aware, and deeply reasoned insights at exceptional speed.",
+  "tags": [
+    "reasoning",
+    "vision",
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.366353+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.51
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1763585722548
+  }
+}

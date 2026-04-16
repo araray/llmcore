@@ -1,0 +1,60 @@
+{
+  "model_id": "mistral-medium",
+  "display_name": "Mistral AI's medium-sized model. Supports a context window of 32k tokens (around 24,000 words) and is stronger than Mixtral-8x7b and Mistral-7b on benchmarks across the board.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Mistral"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral AI's medium-sized model. Supports a context window of 32k tokens (around 24,000 words) and is stronger than Mixtral-8x7b and Mistral-7b on benchmarks across the board.",
+  "tags": [
+    "mistral",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.400139+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.7,
+      "output": 8.2
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Mistral",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1703096777397
+  }
+}

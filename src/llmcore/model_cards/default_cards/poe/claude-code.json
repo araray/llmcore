@@ -1,0 +1,52 @@
+{
+  "model_id": "claude-code",
+  "display_name": "A powerful assistant that can read, write, and analyze files across many formats.  It can also delegate to other Poe bots to handle complex, multi-step tasks.\n\nBuilt on the Claude Agent SDK from Anthr",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Poe Tools"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "A powerful assistant that can read, write, and analyze files across many formats.  It can also delegate to other Poe bots to handle complex, multi-step tasks.\n\nBuilt on the Claude Agent SDK from Anthropic.",
+  "tags": [
+    "code",
+    "poe tools"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.371411+00:00",
+  "provider_extension": {
+    "owned_by": "Poe Tools",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1764280744155
+  }
+}

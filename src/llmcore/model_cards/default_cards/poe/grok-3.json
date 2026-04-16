@@ -1,0 +1,58 @@
+{
+  "model_id": "grok-3",
+  "display_name": "xAI's February 2025 flagship release representing nearly state-of-the-art performance in several reasoning/problem solving domains. The API doesn't yet support reasoning mode for Grok 3, but does for ",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "xAI's February 2025 flagship release representing nearly state-of-the-art performance in several reasoning/problem solving domains. The API doesn't yet support reasoning mode for Grok 3, but does for https://poe.com/Grok-3-Mini; this bot also doesn't have access to the X data feed. Supports 131k tokens of context, uses Grok 2 for native vision.",
+  "tags": [
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.392284+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 3.0,
+      "output": 15.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1744341886555
+  }
+}

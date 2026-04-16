@@ -1,0 +1,52 @@
+{
+  "model_id": "grok-imagine-video",
+  "display_name": "Create artistic and creative videos with Grok Imagine Video. Supports text to video, image to video (single jpeg/png/webp attachment), and video editing (single mp4 video attachment). Check parameter ",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Create artistic and creative videos with Grok Imagine Video. Supports text to video, image to video (single jpeg/png/webp attachment), and video editing (single mp4 video attachment). Check parameter controls for all supported controls (resolution, video duration, and aspect_ratio).",
+  "tags": [
+    "fal",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.367257+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1769805671349
+  }
+}

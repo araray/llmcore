@@ -1,0 +1,54 @@
+{
+  "model_id": "gpt-image-1",
+  "display_name": "OpenAI's model that powers image generation in ChatGPT, offering exceptional prompt adherence, level of detail, and quality. It supports editing, restyling, and combining images attached to the latest",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI's model that powers image generation in ChatGPT, offering exceptional prompt adherence, level of detail, and quality. It supports editing, restyling, and combining images attached to the latest user query. For a conversational editing experience, use https://poe.com/GPT-4o (all users) or https://poe.com/Assistant (subscribers) instead.\n\nOptional parameters:\n- Aspect Ration. Aspect ratio of the output image (Options: 1:1, 3:2, 2:3)\n- Quality: Image resolution (options: high, medium, low)\n- Mask.  Indicates that the last attached image is a mask for in-painting (editing specific regions). The mask must match the dimensions of the base image, with transparent (zero-alpha) areas showing which parts to edit.\n- High fidelity to false to disable high input fidelity. This option is enabled by default.",
+  "tags": [
+    "image-generation",
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.410623+00:00",
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text,image->image",
+    "poe_object_type": "model",
+    "created": 1743434309185
+  }
+}

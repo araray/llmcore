@@ -1,0 +1,61 @@
+{
+  "model_id": "o3-mini-high",
+  "display_name": "o3-mini-high is OpenAI's most recent reasoning model with reasoning_effort set to high, providing frontier intelligence on most tasks. Like other models in the o-series, it is designed to excel at sci",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "o3-mini-high is OpenAI's most recent reasoning model with reasoning_effort set to high, providing frontier intelligence on most tasks. Like other models in the o-series, it is designed to excel at science, math, and coding tasks. Supports 200k tokens of input context and 100k tokens of output context.",
+  "tags": [
+    "openai",
+    "reasoning",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.399487+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 4.0
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1738356365479
+  }
+}

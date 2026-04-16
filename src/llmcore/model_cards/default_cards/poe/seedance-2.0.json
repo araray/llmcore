@@ -1,0 +1,52 @@
+{
+  "model_id": "seedance-2.0",
+  "display_name": "Seedance 2.0 delivers high\u2011quality video generation across text and image inputs \u2014 built for cinematic scenes, consistent characters, and detailed motion control.\nCost estimate - $0.1442 per second at",
+  "provider": "poe",
+  "model_type": "audio",
+  "architecture": {
+    "family": "Bytedance"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seedance 2.0 delivers high\u2011quality video generation across text and image inputs \u2014 built for cinematic scenes, consistent characters, and detailed motion control.\nCost estimate - $0.1442 per second at 480p (10300 tokens per second), $0.3094 per second at 720p (22100 tokens per second) at a rate of $0.014 per 1000 tokens.",
+  "tags": [
+    "bytedance",
+    "video-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.361651+00:00",
+  "provider_extension": {
+    "owned_by": "Bytedance",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "video"
+    ],
+    "modality": "text->video",
+    "poe_object_type": "model",
+    "created": 1775769075017
+  }
+}

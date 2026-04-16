@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-dev-di",
+  "display_name": "High quality image generator using FLUX dev model. Top of the line prompt following, visual quality and output diversity. This model is a text to image generation only and does not accept attachments.",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "DeepInfra"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "High quality image generator using FLUX dev model. Top of the line prompt following, visual quality and output diversity. This model is a text to image generation only and does not accept attachments. To further customize the prompt, you can follow the parameters available:\n\nSet width. Valid pixel options from 128 up to 1920. Default value: 1024\nSet height. Valid pixel options from 128, up to 1920. Default value: 1024\nSet seed for reproducible result. Options from 1 up to 2**32. Default value: random\nSet inference.  Options from 1 up to 50. Default: 25",
+  "tags": [
+    "deepinfra",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.409413+00:00",
+  "provider_extension": {
+    "owned_by": "DeepInfra",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1750507284607
+  }
+}

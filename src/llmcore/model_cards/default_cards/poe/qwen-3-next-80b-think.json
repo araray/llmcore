@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen-3-next-80b-think",
+  "display_name": "The Qwen3-Next-80B-Think (with thinking mode enabled by default) is the next-generation foundation model released by Qwen, optimized for extreme context length and large-scale parameter efficiency, al",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Qwen3-Next-80B-Think (with thinking mode enabled by default) is the next-generation foundation model released by Qwen, optimized for extreme context length and large-scale parameter efficiency, also known as \"Qwen3-Next-80B-A3B-Thinking.\" Despite its ultra-efficiency, it outperforms Qwen3-32B on downstream tasks - while requiring less than 1/10 of the inference cost. Moreover, it delivers over 10x higher inference throughput than Qwen3-32B when handling contexts longer than 32k tokens. This is the thinking version of https://poe.com/Qwen3-Next-80B, supports 65k tokens of context. \n\nOptional Parameters:\nUse additional input beside attachment button to manage the optional parameters:\n1. Enable/Disable Thinking - This will cause the model to think about the response before giving a final answer.\n\nTechnical Specifications:\nFile Support: PDF, DOC and XLSX files\nFile Attachment Limitation: Audio, video and image files\nContext Window: 65k tokens",
+  "tags": [
+    "novita ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.383848+00:00",
+  "provider_extension": {
+    "owned_by": "Novita AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1757556610505
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model_id": "cartesia-ink-whisper",
+  "display_name": "Transcribe audio files using Speech-to-Text with the Cartesia Ink Whisper model.\n\nSelect the Language of your audio file. Default is English (en).\n\nSupported Languages:\nEnglish (en)\nChinese (zh)\nGerma",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Cartesia AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Transcribe audio files using Speech-to-Text with the Cartesia Ink Whisper model.\n\nSelect the Language of your audio file. Default is English (en).\n\nSupported Languages:\nEnglish (en)\nChinese (zh)\nGerman (de)\nSpanish (es)\nRussian (ru)\nKorean (ko)\nFrench (fr)\nJapanese (ja)\nPortuguese (pt)\nTurkish (tr)\nPolish (pl)\nCatalan (ca)\nDutch (nl)\nArabic (ar)\nSwedish (sv)\nItalian (it)\nIndonesian (id)\nHindi (hi)\nFinnish (fi)\nVietnamese (vi)\nHebrew (he)\nUkrainian (uk)\nGreek (el)\nMalay (ms)\nCzech (cs)\nRomanian (ro)\nDanish (da)\nHungarian (hu)\nTamil (ta)\nNorwegian (no)\nThai (th)\nUrdu (ur)\nCroatian (hr)\nBulgarian (bg)\nLithuanian (lt)\nLatin (la)\nMaori (mi)\nMalayalam (ml)\nWelsh (cy)\nSlovak (sk)\nTelugu (te)\nPersian (fa)\nLatvian (lv)\nBengali (bn)\nSerbian (sr)\nAzerbaijani (az)\nSlovenian (sl)\nKannada (kn)\nEstonian (et)\nMacedonian (mk)\nBreton (br)\nBasque (eu)\nIcelandic (is)\nArmenian (hy)\nNepali (ne)\nMongolian (mn)\nBosnian (bs)\nKazakh (kk)\nAlbanian (sq)\nSwahili (sw)\nGalician (gl)\nMarathi (mr)\nPunjabi (pa)\nSinhala (si)\nKhmer (km)\nShona (sn)\nYoruba (yo)\nSomali (so)\nAfrikaans (af)\nOccitan (oc)\nGeorgian (ka)\nBelarusian (be)\nTajik (tg)\nSindhi (sd)\nGujarati (gu)\nAmharic (am)\nYiddish (yi)\nLao (lo)\nUzbek (uz)\nFaroese (fo)\nHaitian Creole (ht)\nPashto (ps)\nTurkmen (tk)\nNynorsk (nn)\nMaltese (mt)\nSanskrit (sa)\nLuxembourgish (lb)\nMyanmar (my)\nTibetan (bo)\nTagalog (tl)\nMalagasy (mg)\nAssamese (as)\nTatar (tt)\nHawaiian (haw)\nLingala (ln)\nHausa (ha)\nBashkir (ba)\nJavanese (jw)\nSundanese (su)\nCantonese (yue)\n",
+  "tags": [
+    "cartesia ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.398930+00:00",
+  "provider_extension": {
+    "owned_by": "Cartesia AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1757628728993
+  }
+}

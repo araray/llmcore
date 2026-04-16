@@ -1,0 +1,58 @@
+{
+  "model_id": "qwen3-max-preview",
+  "display_name": "Qwen3-Max-Preview shows substantial gains over the 2.5 series in overall capability, with significant enhancements in Chinese-English text understanding, complex instruction following, handling of sub",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-Max-Preview shows substantial gains over the 2.5 series in overall capability, with significant enhancements in Chinese-English text understanding, complex instruction following, handling of subjective open-ended tasks, multilingual ability, and tool invocation; model knowledge hallucinations are reduced.\n\nParameter controls available:\n1. Thinking Mode\n   - Enable thinking about the response before giving a final answer: toggle it `on`, otherwise it is `off` by default.\n  \n2. Code Interpreter\n   - Toggle it `on` to enable code interpreter. It is `off` by default.\n   - Lets the model write and execute Python code for calculations, data analysis, and visualizations",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.399202+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.1,
+      "output": 4.8
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1763943732422
+  }
+}

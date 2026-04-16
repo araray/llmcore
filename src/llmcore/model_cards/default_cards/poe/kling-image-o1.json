@@ -1,0 +1,53 @@
+{
+  "model_id": "kling-image-o1",
+  "display_name": "Kling Image O1 image generation and image editing bot. Send up to 10 images to use as a reference, and refer to each image with $image1, $image2, etc. in the prompt to specify interactions. \n\nOptional",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kling Image O1 image generation and image editing bot. Send up to 10 images to use as a reference, and refer to each image with $image1, $image2, etc. in the prompt to specify interactions. \n\nOptional parameters:\nSet aspect ratio. Select from (21:9, 16:9, 4:3, 1:1, 3:4, 9:16). It is set to 16:9 aspect ratio as default.\nSet Resolution. Select from (1K, 2K). It is set to 1K resolution as default.\n\nNotes:\nSupports jpeg, png, heic, webp images.",
+  "tags": [
+    "fal",
+    "image-generation",
+    "reasoning"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.386169+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1764675160909
+  }
+}

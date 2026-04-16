@@ -1,0 +1,60 @@
+{
+  "model_id": "mistral-small-3",
+  "display_name": "Mistral Small 3 is a pre-trained and instructed model catered to the \u201880%\u2019 of generative AI tasks--those that require robust language and instruction following performance, with very low latency. Rele",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Mistral"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral Small 3 is a pre-trained and instructed model catered to the \u201880%\u2019 of generative AI tasks--those that require robust language and instruction following performance, with very low latency. Released under an Apache 2.0 license and comparable to Llama-3.3-70B and Qwen2.5-32B-Instruct.",
+  "tags": [
+    "mistral",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.419799+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "Mistral",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1738360161146
+  }
+}

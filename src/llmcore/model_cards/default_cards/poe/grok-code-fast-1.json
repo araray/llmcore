@@ -1,0 +1,59 @@
+{
+  "model_id": "grok-code-fast-1",
+  "display_name": "Grok-Code-Fast-1 from xAI is a high-performance, cost-efficient model designed for agentic coding. It offers visible reasoning traces, strong steerability, and supports a 256k context window.",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok-Code-Fast-1 from xAI is a high-performance, cost-efficient model designed for agentic coding. It offers visible reasoning traces, strong steerability, and supports a 256k context window.",
+  "tags": [
+    "code",
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.415758+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 1.5
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1755884835039
+  }
+}

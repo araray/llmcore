@@ -1,0 +1,52 @@
+{
+  "model_id": "gemini-3.1-flash-tts",
+  "display_name": "Gemini 3.1 Flash TTS is Google\u2019s most controllable text-to-speech model yet, designed to turn text into natural-sounding audio with precise control over style, tone, pace, and delivery. It uses new Au",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.1 Flash TTS is Google\u2019s most controllable text-to-speech model yet, designed to turn text into natural-sounding audio with precise control over style, tone, pace, and delivery. It uses new Audio Tags to make voices feel more expressive and customizable for narration, assistants, and other voice experiences.\n\nNotes:\n- Text and style prompt limited to 4,000 bytes each (8,000 bytes combined)\n- Max output duration: approximately 10 minutes\n- Multi-speaker requires SpeakerName: text format (example: Alice: Hi! Bob: Hello, must be on new lines)\n- The model auto-detects the input language. The Language setting is a hint to help choose the right voice/accent, the model may override it if the text is in a different language.\n\nExpressive Audio Tags:\n- Use inline in your text to control delivery\n- Emotion/tone: [whispers], [shouts], [laughs], [cries], [sighs], [gasps], [groans], [scoffs], [sarcasm], [deadpan], [cheerful], [sad], [angry], [fearful], [surprised], [disgusted], [confused], [nervous], [bored], [excited], [relieved], [hopeful], [proud], [shy], [sincere], [playful], [serious], [tender], [dramatic], [monotone], [warm], [cold]\n- Pace/speed: [slow], [fast], [extremely fast], [extremely slow], [normal pace]\n- Pauses: [short pause], [long pause], [pause], [breath]\n- Emphasis/delivery: [emphasis], [softly], [loudly], [high pitch], [low pitch], [rising tone], [falling tone]\n- Example: \"[whispers] I have a secret. [normal pace] But first, let me explain.\"\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "audio",
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.424882+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "modality": "text->audio",
+    "poe_object_type": "model",
+    "created": 1776295398177
+  }
+}

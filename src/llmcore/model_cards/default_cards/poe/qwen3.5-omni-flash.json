@@ -1,0 +1,53 @@
+{
+  "model_id": "qwen3.5-omni-flash",
+  "display_name": "Qwen3.5-Omni Flash is the cost-efficient variant of Qwen's latest omni-modal model, supporting text, image, audio, and video understanding and interaction. It handles up to 3 hours of audio and 1 hour",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3.5-Omni Flash is the cost-efficient variant of Qwen's latest omni-modal model, supporting text, image, audio, and video understanding and interaction. It handles up to 3 hours of audio and 1 hour of video input, with audio input in 90+ languages and speech output in 30+ languages across 55 voice timbres.\n\nNotes:\n- Context Window: 256K\n- Recommended: instruct the model to avoid markdown formatting in Text + Audio mode\n\nInput limits:\n- Images: up to 2,048 files, \u226420 MB each, min 10\u00d710 px, aspect ratio \u2264200:1\n- Audio: up to 2,048 files, \u22642 GB each, up to 3 hrs\n- Video: up to 512 files, \u22642 GB each, up to 1 hr\n- Formats \u2014 Image: JPG, JPEG, JPE, PNG, WebP, BMP, TIF, TIFF, HEIC, GIF | Audio: AMR, WAV, 3GP, 3GPP, AAC, MP3 | Video: MP4, AVI, MKV, MOV, FLV, WMV\n- Audio Input: 92 languages, 21 dialects\n\nOutput:\n- Modalities: text only, or text + audio (audio-only not available)\n- 55 voice timbres (default: Tina)\n- Audio output: 29 languages, 7 dialects\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.359827+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text",
+      "video",
+      "audio"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,video,audio->text",
+    "poe_object_type": "model",
+    "created": 1774908896258
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "model_id": "grok-4-fast-non-reasoning",
+  "display_name": "Grok 4 Fast Non-Reasoning is designed for fast, efficient tasks like content generation with a 2M token context window. Combining cutting-edge performance with cost-efficiency, it ensures high-quality",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok 4 Fast Non-Reasoning is designed for fast, efficient tasks like content generation with a 2M token context window. Combining cutting-edge performance with cost-efficiency, it ensures high-quality results for simpler, everyday applications.",
+  "tags": [
+    "reasoning",
+    "vision",
+    "xai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.383622+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.51
+    }
+  },
+  "provider_extension": {
+    "owned_by": "XAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1758058214655
+  }
+}

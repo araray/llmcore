@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-4.1",
+  "display_name": "OpenAI\u2019s GPT-4.1 significantly improves on past models in terms of its coding skills, long context (1M tokens), and improved instruction following. Supports native vision, and generally has more intel",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "OpenAI\u2019s GPT-4.1 significantly improves on past models in terms of its coding skills, long context (1M tokens), and improved instruction following. Supports native vision, and generally has more intelligence than GPT-4o. Provides a 75% chat history cache discount.",
+  "tags": [
+    "openai",
+    "vision"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.393716+00:00",
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.8,
+      "output": 7.3
+    }
+  },
+  "provider_extension": {
+    "owned_by": "OpenAI",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text,image->text",
+    "poe_object_type": "model",
+    "created": 1744675047923
+  }
+}

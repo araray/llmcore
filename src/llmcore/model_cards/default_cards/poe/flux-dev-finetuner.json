@@ -1,0 +1,52 @@
+{
+  "model_id": "flux-dev-finetuner",
+  "display_name": "Fine-tune the FLUX dev model with your own pictures! Upload 8-12 of them (same subject, only one subject in the picture, ideally from different poses and backgrounds) and wait ~2-5 minutes to create y",
+  "provider": "poe",
+  "model_type": "image-generation",
+  "architecture": {
+    "family": "fal"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": true,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Fine-tune the FLUX dev model with your own pictures! Upload 8-12 of them (same subject, only one subject in the picture, ideally from different poses and backgrounds) and wait ~2-5 minutes to create your own finetuned bot that will generate pictures of this subject in whatever setting you want.",
+  "tags": [
+    "fal",
+    "image-generation"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.418842+00:00",
+  "provider_extension": {
+    "owned_by": "fal",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "modality": "text->image",
+    "poe_object_type": "model",
+    "created": 1727479142160
+  }
+}

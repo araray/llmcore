@@ -1,0 +1,51 @@
+{
+  "model_id": "qwen3-max",
+  "display_name": "Qwen3-Max is a major update to the Qwen3 series, delivering significant improvements in reasoning, instruction following, and multilingual support. It provides higher accuracy in complex tasks like co",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Empirio Labs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "image_generation": false,
+    "web_search": false,
+    "reasoning": false,
+    "file_processing": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3-Max is a major update to the Qwen3 series, delivering significant improvements in reasoning, instruction following, and multilingual support. It provides higher accuracy in complex tasks like coding and math, along with reduced hallucinations and better performance on open-ended questions.\nThis model is served by Alibaba Cloud Int. from Singapore.",
+  "tags": [
+    "empirio labs ai"
+  ],
+  "source": "builtin",
+  "last_updated": "2026-04-16T21:55:50.395624+00:00",
+  "provider_extension": {
+    "owned_by": "Empirio Labs AI",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "modality": "text->text",
+    "poe_object_type": "model",
+    "created": 1758038838064
+  }
+}
