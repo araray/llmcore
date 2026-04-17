@@ -30,6 +30,7 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .openrouter_provider import OpenRouterProvider
 from .poe_provider import PoeProvider
+from .vllm_provider import VLLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "gemini": GeminiProvider,
     "openrouter": OpenRouterProvider,
     "poe": PoeProvider,
+    "vllm": VLLMProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers

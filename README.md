@@ -297,6 +297,12 @@ timeout = 60
 # host = "http://localhost:11434"
 default_model = "llama3.2:latest"
 
+[providers.vllm]
+# Self-hosted vLLM server. base_url is required (no default).
+# base_url = "http://localhost:8000/v1"
+default_model = "meta-llama/Llama-3.1-8B-Instruct"
+timeout = 240
+
 [storage.session]
 type = "sqlite"
 path = "~/.llmcore/sessions.db"
@@ -363,6 +369,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **Mistral** | Mistral Large 3 | Streaming, Tools |
 | **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
+| **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
 
 ### Switching Providers
 

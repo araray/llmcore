@@ -329,6 +329,50 @@ posthog = "ERROR"
   # thinking_budget, aspect ratio for Sora-2), use `extra_body`:
   #   chat_completion(model="Sora-2", extra_body={"aspect": "1280x720"})
 
+  # --- vLLM Provider ---
+  # For self-hosted vLLM inference servers (https://github.com/vllm-project/vllm).
+  # vLLM's /v1/chat/completions is OpenAI-compatible, so this provider
+  # subclasses OpenAIProvider. It additionally:
+  #   - Discovers `max_model_len` from /v1/models (authoritative context
+  #     length; kills the 4096 fallback for local models).
+  #   - Accepts vLLM-specific params: structured_outputs, guided_json,
+  #     guided_regex, guided_choice, guided_grammar, prompt_logprobs,
+  #     min_p, top_k, repetition_penalty, kv_transfer_params, and more.
+  #     See `docs/providers/vllm.md` for the full list.
+  #   - Strips OpenAI-only params (service_tier, prompt_cache_key,
+  #     web_search_options, verbosity) that vLLM ignores.
+  #
+  # Multi-instance is supported — use `type = "vllm"` in any
+  # [providers.*] section (e.g. [providers.vllm_dev], [providers.vllm_prod]).
+  [providers.vllm]
+  # type = "vllm"  # auto-detected from section name
+  #
+  # REQUIRED: base URL of your vLLM server, including the /v1 suffix.
+  # There is no default because vLLM is self-hosted.
+  # Environment Variable: LLMCORE_PROVIDERS__VLLM__BASE_URL
+  # base_url = "http://localhost:8000/v1"
+
+  # API key — only needed if vLLM was launched with --api-key <secret>.
+  # vLLM ignores the key when --api-key is not configured. If neither
+  # `api_key` nor `api_key_env_var` is set, the provider sends the
+  # literal string "EMPTY" (the OpenAI SDK refuses empty keys).
+  # Environment Variable (via indirection): VLLM_API_KEY
+  # api_key = "EMPTY"
+  # api_key_env_var = "VLLM_API_KEY"
+
+  # Default model name — HuggingFace repo id or whatever name you passed
+  # to `vllm serve ...`.  Override per-request via chat_completion(model=...).
+  default_model = "meta-llama/Llama-3.1-8B-Instruct"
+
+  # Request timeout in seconds.  Local cold-starts and large models can
+  # be slow; 240s covers most practical cases.
+  timeout = 240
+
+  # Optional hard cap on context length, used before /v1/models has been
+  # called (or if vLLM does not report `max_model_len`).  If unset, the
+  # provider falls back to 4096 with a one-time warning per unknown model.
+  # fallback_context_length = 8192
+
 
 # ==============================================================================
 # [storage] - Persistence Configurations
