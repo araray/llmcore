@@ -1,0 +1,14 @@
+# tools/cardctl/enrichments/deepseek.toml
+# Source: https://platform.deepseek.com/api-docs/pricing
+# Last updated: 2026-04-21
+
+[pricing]
+"deepseek-chat"      = { input = 0.14, output = 0.28 }
+"deepseek-reasoner"  = { input = 0.55, output = 2.19 }
+
+[architecture]
+"deepseek-chat"      = { family = "deepseek", type = "moe", parameter_count = "671B", active_parameters = "37B" }
+"deepseek-reasoner"  = { family = "deepseek", type = "moe", parameter_count = "671B", active_parameters = "37B" }
+
+[exclude]
+patterns = []

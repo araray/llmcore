@@ -1,0 +1,43 @@
+# tools/cardctl/enrichments/mistral.toml
+# Mistral AI model enrichments — migrated from generate_mistral_cards.py.
+# Source: https://docs.mistral.ai/getting-started/models/models_overview/
+# Last updated: 2026-04-21
+
+[pricing]
+"mistral-large-latest"      = { input = 2.00, output = 6.00 }
+"mistral-large-2512"        = { input = 2.00, output = 6.00 }
+"mistral-medium-latest"     = { input = 0.40, output = 2.00 }
+"mistral-medium-2508"       = { input = 0.40, output = 2.00 }
+"mistral-medium-2505"       = { input = 0.40, output = 2.00 }
+"mistral-small-latest"      = { input = 0.10, output = 0.30 }
+"mistral-small-2506"        = { input = 0.10, output = 0.30 }
+"mistral-small-2603"        = { input = 0.10, output = 0.30 }
+"magistral-medium-latest"   = { input = 0.40, output = 2.00 }
+"magistral-small-latest"    = { input = 0.10, output = 0.30 }
+"codestral-latest"          = { input = 0.30, output = 0.90 }
+"codestral-2508"            = { input = 0.30, output = 0.90 }
+"mistral-embed"             = { input = 0.10, output = 0.00 }
+"codestral-embed-2505"      = { input = 0.15, output = 0.00 }
+"mistral-ocr-latest"        = { input = 1.00, output = 1.00 }
+"open-mistral-nemo"         = { input = 0.15, output = 0.15 }
+"mistral-moderation-latest" = { input = 0.10, output = 0.10 }
+
+[architecture]
+"mistral-large"      = { family = "mistral", type = "moe", parameter_count = "675B", active_parameters = "41B" }
+"mistral-medium"     = { family = "mistral", type = "dense" }
+"mistral-small"      = { family = "mistral", type = "dense", parameter_count = "24B" }
+"magistral-medium"   = { family = "mistral", type = "dense" }
+"magistral-small"    = { family = "mistral", type = "dense", parameter_count = "24B" }
+"codestral"          = { family = "mistral", type = "dense" }
+"devstral"           = { family = "mistral", type = "dense" }
+"pixtral-large"      = { family = "mistral", type = "dense", parameter_count = "124B" }
+"pixtral-12b"        = { family = "mistral", type = "dense", parameter_count = "12B" }
+"voxtral-mini"       = { family = "mistral", type = "dense", parameter_count = "4B" }
+"voxtral-small"      = { family = "mistral", type = "dense", parameter_count = "24B" }
+"open-mistral-nemo"  = { family = "mistral", type = "dense", parameter_count = "12B" }
+"mistral-embed"      = { family = "mistral", type = "embedding" }
+"codestral-embed"    = { family = "mistral", type = "embedding" }
+"ministral"          = { family = "mistral", type = "dense" }
+
+[exclude]
+patterns = []

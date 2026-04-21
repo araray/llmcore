@@ -1,0 +1,14 @@
+# tools/cardctl/enrichments/xai.toml
+# Source: https://docs.x.ai/docs/models
+# Last updated: 2026-04-21
+
+[pricing]
+"grok-3"       = { input = 3.00, output = 15.00 }
+"grok-3-mini"  = { input = 0.30, output = 0.50 }
+"grok-2"       = { input = 2.00, output = 10.00 }
+
+[architecture]
+"grok"  = { family = "grok", type = "transformer" }
+
+[exclude]
+patterns = []

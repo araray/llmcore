@@ -1,0 +1,14 @@
+# tools/cardctl/enrichments/qwen.toml
+# Source: https://help.aliyun.com/zh/model-studio/
+# Last updated: 2026-04-21
+
+[pricing]
+"qwen-max"          = { input = 2.40, output = 9.60 }
+"qwen-plus"         = { input = 0.80, output = 2.00 }
+"qwen-turbo"        = { input = 0.30, output = 0.60 }
+
+[architecture]
+"qwen"  = { family = "qwen", type = "dense" }
+
+[exclude]
+patterns = []

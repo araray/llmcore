@@ -1,0 +1,12 @@
+# tools/cardctl/enrichments/openrouter.toml
+# OpenRouter pricing comes from the API itself.
+# Last updated: 2026-04-21
+
+[pricing]
+# Pricing is embedded in the API response — no manual overrides needed.
+
+[architecture]
+# Architecture varies by upstream provider.
+
+[exclude]
+patterns = []

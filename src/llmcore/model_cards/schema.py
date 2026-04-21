@@ -525,8 +525,8 @@ class ModelCard(BaseModel):
     # -------------------------------------------------------------------------
     # Source Tracking
     # -------------------------------------------------------------------------
-    source: Literal["builtin", "user", "api"] = Field(
-        "builtin", description="Where this card came from"
+    source: str = Field(
+        "builtin", description="Card provenance (builtin, user, api, generated, etc.)"
     )
     last_updated: datetime | None = Field(None, description="When card was last updated")
 

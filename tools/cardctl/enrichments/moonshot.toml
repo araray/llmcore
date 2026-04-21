@@ -1,0 +1,15 @@
+# tools/cardctl/enrichments/moonshot.toml
+# Source: https://platform.moonshot.cn/pricing
+# Last updated: 2026-04-21
+
+[pricing]
+"moonshot-v1-128k"  = { input = 0.84, output = 0.84 }
+"moonshot-v1-32k"   = { input = 0.34, output = 0.34 }
+"moonshot-v1-8k"    = { input = 0.17, output = 0.17 }
+
+[architecture]
+"moonshot"  = { family = "moonshot", type = "transformer" }
+"kimi"      = { family = "moonshot", type = "transformer" }
+
+[exclude]
+patterns = []

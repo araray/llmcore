@@ -1,0 +1,24 @@
+# tools/cardctl/enrichments/anthropic.toml
+# Anthropic model enrichments — manually maintained.
+# Source: https://docs.anthropic.com/en/docs/about-claude/models
+# Last updated: 2026-04-21
+
+[pricing]
+# USD per million tokens
+"claude-opus-4"             = { input = 15.00, output = 75.00 }
+"claude-sonnet-4"           = { input = 3.00, output = 15.00 }
+"claude-haiku-4"            = { input = 0.80, output = 4.00 }
+"claude-3.5-sonnet"         = { input = 3.00, output = 15.00 }
+"claude-3.5-haiku"          = { input = 0.80, output = 4.00 }
+"claude-3-opus"             = { input = 15.00, output = 75.00 }
+"claude-3-sonnet"           = { input = 3.00, output = 15.00 }
+"claude-3-haiku"            = { input = 0.25, output = 1.25 }
+
+[architecture]
+"claude-opus"    = { family = "claude", type = "transformer" }
+"claude-sonnet"  = { family = "claude", type = "transformer" }
+"claude-haiku"   = { family = "claude", type = "transformer" }
+"claude-3"       = { family = "claude", type = "transformer" }
+
+[exclude]
+patterns = []

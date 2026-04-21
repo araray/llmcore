@@ -1,0 +1,13 @@
+# tools/cardctl/enrichments/ollama.toml
+# Ollama models are local and free; no pricing.
+# Architecture info comes from /api/show.
+# Last updated: 2026-04-21
+
+[pricing]
+# All local models are free.
+
+[architecture]
+# Architecture is auto-detected from /api/show response.
+
+[exclude]
+patterns = []

@@ -1,0 +1,11 @@
+# tools/cardctl/enrichments/poe.toml
+# Last updated: 2026-04-21
+
+[pricing]
+# Poe uses points, not token pricing.
+
+[architecture]
+# Architecture varies by underlying model.
+
+[exclude]
+patterns = []
