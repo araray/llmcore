@@ -1,13 +1,12 @@
 {
-  "model_id": "mistral-large-latest",
-  "display_name": "mistral-large-2512",
+  "model_id": "mistral-small-latest",
+  "display_name": "mistral-small-2603",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "675B",
-    "active_parameters": "41B",
-    "architecture_type": "moe"
+    "parameter_count": "24B",
+    "architecture_type": "dense"
   },
   "context": {
     "max_input_tokens": 262144
@@ -26,8 +25,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 2.0,
-      "output": 6.0
+      "input": 0.1,
+      "output": 0.3
     }
   },
   "lifecycle": {
@@ -36,11 +35,13 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
-  "description": "Official mistral-large-2512 Mistral AI model",
+  "aliases": [
+    "mistral-small-2603",
+    "mistral-vibe-cli-fast"
+  ],
+  "description": "Mistral Small 4.",
   "tags": [
-    "multimodal",
-    "moe"
+    "multimodal"
   ],
   "provider_mistral": {
     "open_weights": false,

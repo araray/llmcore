@@ -1,33 +1,32 @@
 {
-  "model_id": "mistral-large-latest",
-  "display_name": "mistral-large-2512",
+  "model_id": "voxtral-mini-latest",
+  "display_name": "voxtral-mini-2602",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "675B",
-    "active_parameters": "41B",
-    "architecture_type": "moe"
+    "parameter_count": "4B",
+    "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 16384
   },
   "capabilities": {
-    "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
     "json_mode": false,
     "structured_output": false,
-    "vision": true,
-    "audio_input": false,
+    "vision": false,
+    "audio_input": true,
     "reasoning": false,
-    "multimodal": true
+    "multimodal": false
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 2.0,
-      "output": 6.0
+      "input": 0.07,
+      "output": 0.07
     }
   },
   "lifecycle": {
@@ -37,10 +36,9 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Official mistral-large-2512 Mistral AI model",
+  "description": "Official voxtral-mini-2602 Mistral AI model",
   "tags": [
-    "multimodal",
-    "moe"
+    "audio"
   ],
   "provider_mistral": {
     "open_weights": false,
@@ -49,7 +47,7 @@
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.3
+    "default_temperature": 0.0
   },
   "source": "generated"
 }

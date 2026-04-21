@@ -1,13 +1,10 @@
 {
-  "model_id": "mistral-large-latest",
-  "display_name": "mistral-large-2512",
+  "model_id": "ministral-8b-latest",
+  "display_name": "ministral-8b-2512",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
-    "family": "mistral",
-    "parameter_count": "675B",
-    "active_parameters": "41B",
-    "architecture_type": "moe"
+    "family": "mistral"
   },
   "context": {
     "max_input_tokens": 262144
@@ -23,24 +20,19 @@
     "reasoning": false,
     "multimodal": true
   },
-  "pricing": {
-    "currency": "USD",
-    "per_million_tokens": {
-      "input": 2.0,
-      "output": 6.0
-    }
-  },
+  "pricing": null,
   "lifecycle": {
     "status": "active",
     "release_date": "2026-04-20"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
-  "description": "Official mistral-large-2512 Mistral AI model",
+  "aliases": [
+    "ministral-8b-2512"
+  ],
+  "description": "Ministral 3 (a.k.a. Tinystral) 8B Instruct.",
   "tags": [
-    "multimodal",
-    "moe"
+    "multimodal"
   ],
   "provider_mistral": {
     "open_weights": false,

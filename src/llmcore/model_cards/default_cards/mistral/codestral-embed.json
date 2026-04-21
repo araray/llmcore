@@ -1,0 +1,46 @@
+{
+  "model_id": "codestral-embed",
+  "display_name": "codestral-embed",
+  "provider": "mistral",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "N/A",
+    "architecture_type": "embedding"
+  },
+  "context": {
+    "max_input_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-20"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "codestral-embed-2505"
+  ],
+  "description": "Official codestral-embed Mistral AI model",
+  "tags": [],
+  "provider_mistral": {
+    "open_weights": false,
+    "license_type": null,
+    "fill_in_middle": false,
+    "guardrails": {
+      "system_prompt": false
+    }
+  },
+  "source": "generated"
+}

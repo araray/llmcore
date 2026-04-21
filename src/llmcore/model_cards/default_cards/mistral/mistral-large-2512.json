@@ -1,5 +1,5 @@
 {
-  "model_id": "mistral-large-latest",
+  "model_id": "mistral-large-2512",
   "display_name": "mistral-large-2512",
   "provider": "mistral",
   "model_type": "chat",

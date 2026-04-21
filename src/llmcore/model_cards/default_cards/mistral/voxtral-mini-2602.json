@@ -1,0 +1,47 @@
+{
+  "model_id": "voxtral-mini-2602",
+  "display_name": "voxtral-mini-2602",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "parameter_count": "4B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-20"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Official voxtral-mini-2602 Mistral AI model",
+  "tags": [
+    "audio"
+  ],
+  "provider_mistral": {
+    "open_weights": false,
+    "license_type": null,
+    "fill_in_middle": false,
+    "guardrails": {
+      "system_prompt": false
+    },
+    "default_temperature": 0.0
+  },
+  "source": "generated"
+}
