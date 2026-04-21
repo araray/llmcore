@@ -105,11 +105,22 @@ class TestApiKeyAutoDetection:
 
     @patch.dict(os.environ, {"MISTRAL_API_KEY": "sk-mistral-test"}, clear=False)
     def test_mistral_api_key_from_env(self):
-        """[providers.mistral] picks up MISTRAL_API_KEY automatically."""
+        """[providers.mistral] picks up MISTRAL_API_KEY via api_key_env_var.
+
+        Mistral is now a native provider (MistralProvider), not an
+        OpenAI-compatible shim.  The manager resolves the key via the
+        ``api_key_env_var`` config field rather than
+        ``_OPENAI_COMPATIBLE_DEFAULTS``.
+        """
         mock_cls = _mock_provider_cls()
         with _patch_provider_map({"mistral": mock_cls}):
             cfg = _make_config(
-                {"mistral": {"default_model": "mistral-large-latest"}},
+                {
+                    "mistral": {
+                        "default_model": "mistral-large-latest",
+                        "api_key_env_var": "MISTRAL_API_KEY",
+                    }
+                },
                 default_provider="mistral",
             )
             mgr = ProviderManager(cfg)

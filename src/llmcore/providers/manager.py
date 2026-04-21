@@ -24,6 +24,7 @@ from ..exceptions import ConfigError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
 from .gemini_provider import GeminiProvider
+from .mistral_provider import MistralProvider
 
 # Import concrete implementations
 from .ollama_provider import OllamaProvider
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # --- Mapping from config provider name string to class ---
 # Native providers have dedicated implementations.  OpenAI-compatible
-# services (DeepSeek, Mistral, xAI, etc.) reuse OpenAIProvider with a
+# services (DeepSeek, xAI, etc.) reuse OpenAIProvider with a
 # custom ``base_url``.  The "google" alias maps to GeminiProvider for
 # configs that use ``[providers.google]`` instead of ``[providers.gemini]``.
 PROVIDER_MAP: dict[str, type[BaseProvider]] = {
@@ -48,11 +49,11 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "openrouter": OpenRouterProvider,
     "poe": PoeProvider,
     "vllm": VLLMProvider,
+    "mistral": MistralProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers
     "deepseek": OpenAIProvider,
-    "mistral": OpenAIProvider,
     "xai": OpenAIProvider,
     "groq": OpenAIProvider,
     "together": OpenAIProvider,
@@ -77,10 +78,6 @@ _OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
     "deepseek": {
         "env_var": "DEEPSEEK_API_KEY",
         "base_url": "https://api.deepseek.com",
-    },
-    "mistral": {
-        "env_var": "MISTRAL_API_KEY",
-        "base_url": "https://api.mistral.ai/v1",
     },
     "xai": {
         "env_var": "XAI_API_KEY",

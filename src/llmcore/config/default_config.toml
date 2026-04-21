@@ -373,6 +373,54 @@ posthog = "ERROR"
   # provider falls back to 4096 with a one-time warning per unknown model.
   # fallback_context_length = 8192
 
+  # --- Mistral AI Provider ---
+  # Native provider for the Mistral AI platform.  Supports chat completions,
+  # FIM (Codestral), embeddings, TTS, STT (Voxtral), OCR, classification,
+  # and moderation endpoints.
+  #
+  # Uses httpx.AsyncClient directly — no ``mistralai`` SDK dependency.
+  #
+  # Docs: https://docs.mistral.ai/
+  # Models: https://docs.mistral.ai/getting-started/models/models_overview/
+  [providers.mistral]
+  # type = "mistral"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: MISTRAL_API_KEY
+  # api_key = "..."
+  api_key_env_var = "MISTRAL_API_KEY"
+
+  # Default model.
+  # Current models (April 2026):
+  #   Frontier:   mistral-large-latest (→ mistral-large-2512)
+  #   Medium:     mistral-medium-latest (→ mistral-medium-2508)
+  #   Small:      mistral-small-latest (→ mistral-small-2506)
+  #   Reasoning:  magistral-medium-latest, magistral-small-latest
+  #   Code:       codestral-latest, devstral-2-latest
+  #   Ministral:  ministral-3-14b-latest, ministral-3-8b-latest,
+  #               ministral-3-3b-latest
+  #   Audio STT:  voxtral-mini-latest (transcription)
+  #   OCR:        mistral-ocr-latest
+  #   Embedding:  mistral-embed, codestral-embed-2505
+  default_model = "mistral-large-latest"
+
+  # Base URL (normally no need to change).
+  # base_url = "https://api.mistral.ai/v1"
+
+  # Request timeout in seconds.
+  timeout = 120
+
+  # --- Mistral-specific parameters ---
+  # safe_prompt: bool — inject Mistral's safety system prompt (default: false)
+  # random_seed: int — for deterministic outputs
+  # prediction: object — for predicted/speculative outputs
+  # guardrails: array — content guardrail configurations
+  # reasoning_effort: "low" | "medium" | "high" — for Magistral models
+  #
+  # These are passed as kwargs to chat_completion():
+  #   chat_completion(model="magistral-medium-latest", reasoning_effort="high")
+  #   chat_completion(safe_prompt=True)
+
 
 # ==============================================================================
 # [storage] - Persistence Configurations

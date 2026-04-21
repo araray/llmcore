@@ -154,3 +154,50 @@ class ImageGenerationResult(BaseModel):
         default_factory=dict,
         description="Provider-specific metadata.",
     )
+
+
+# ---------------------------------------------------------------------------
+# OCR (Optical Character Recognition) Result
+# ---------------------------------------------------------------------------
+
+
+class OCRResult(BaseModel):
+    """Result from an OCR / document intelligence request.
+
+    Designed to capture the structured output of document OCR services
+    such as Mistral OCR, which return page-level content with optional
+    images, tables, and structured annotations.
+
+    Attributes:
+        pages: List of page result dicts, each typically containing
+            ``index``, ``markdown`` (extracted text), and optionally
+            ``images`` (list of image dicts with ``id``, ``image_base64``).
+        model: OCR model used.
+        document_annotation: Structured annotation (JSON schema extraction)
+            if ``document_annotation_format`` was provided.
+        pages_processed: Number of pages processed.
+        doc_size_bytes: Original document size in bytes (if reported).
+        metadata: Provider-specific metadata (usage info, etc.).
+    """
+
+    pages: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per-page OCR results.",
+    )
+    model: str = Field(description="OCR model used.")
+    document_annotation: Any | None = Field(
+        default=None,
+        description="Structured annotation result (if schema provided).",
+    )
+    pages_processed: int = Field(
+        default=0,
+        description="Number of pages processed.",
+    )
+    doc_size_bytes: int | None = Field(
+        default=None,
+        description="Original document size in bytes.",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Provider-specific metadata.",
+    )

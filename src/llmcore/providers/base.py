@@ -341,6 +341,62 @@ class BaseProvider(abc.ABC):
             f"Provider '{self.get_name()}' does not support image generation."
         )
 
+    async def ocr(
+        self,
+        document: str | bytes | dict[str, Any],
+        *,
+        model: str | None = None,
+        pages: list[int] | None = None,
+        include_image_base64: bool | None = None,
+        image_limit: int | None = None,
+        image_min_size: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Process a document with OCR / document intelligence.
+
+        Args:
+            document: Can be a URL string, raw bytes, or a provider-specific
+                dict describing the document source.
+            model: OCR model to use.  If None, uses provider default.
+            pages: List of page indices to process (0-based).
+            include_image_base64: Include base64 image data in response.
+            image_limit: Maximum number of images to extract.
+            image_min_size: Minimum image dimension to extract.
+            **kwargs: Additional provider-specific parameters
+                (e.g. ``table_format``, ``document_annotation_format``).
+
+        Returns:
+            An ``OCRResult`` object (from ``models_multimodal``).
+
+        Raises:
+            NotImplementedError: If the provider does not support OCR.
+            ProviderError: On API errors.
+        """
+        raise NotImplementedError(f"Provider '{self.get_name()}' does not support OCR.")
+
+    async def create_embeddings(
+        self,
+        input_texts: str | list[str],
+        *,
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Create text embeddings.
+
+        Args:
+            input_texts: Single string or list of strings to embed.
+            model: Embedding model.  If None, uses provider default.
+            **kwargs: Additional provider-specific parameters.
+
+        Returns:
+            Raw API response dict with ``data``, ``model``, ``usage``.
+
+        Raises:
+            NotImplementedError: If the provider does not support embeddings.
+            ProviderError: On API errors.
+        """
+        raise NotImplementedError(f"Provider '{self.get_name()}' does not support embeddings.")
+
     # ============================================================================
     # NEW: Observability Instrumentation Methods
     # ============================================================================
