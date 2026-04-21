@@ -99,19 +99,32 @@ DEFAULT_MISTRAL_TOKEN_LIMITS: dict[str, int] = {
     # Devstral
     "devstral-2-latest": 262144,
     "devstral-small-latest": 262144,
+    "devstral-medium-latest": 262144,
     # Pixtral
     "pixtral-large-latest": 131072,
+    "pixtral-large-2411": 131072,
     "pixtral-12b-2409": 131072,
     # Voxtral (audio)
     "voxtral-mini-latest": 32768,
     "voxtral-small-latest": 32768,
     # OCR
     "mistral-ocr-latest": 0,  # OCR models don't use chat context
+    "mistral-ocr-2505": 0,
+    "mistral-ocr-2512": 0,
+    # Moderation
+    "mistral-moderation-latest": 8192,
+    "mistral-moderation-2411": 8192,
+    "mistral-moderation-2603": 8192,
     # Embedding
     "mistral-embed": 8192,
+    "mistral-embed-2312": 8192,
+    "mistral-embed-dim128-2510": 8192,
+    "mistral-embed-dim256-2510": 8192,
     "codestral-embed-2505": 32768,
+    "codestral-embed": 32768,
     # Nemo
     "open-mistral-nemo": 131072,
+    "open-mistral-nemo-2407": 131072,
 }
 
 # Prefix-based heuristic for future model snapshots not yet in the map.
@@ -119,15 +132,21 @@ _MISTRAL_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
     ("mistral-large", 262144),
     ("mistral-medium", 262144),
     ("mistral-small", 131072),
+    ("mistral-moderation", 8192),
+    ("mistral-ocr", 0),
+    ("mistral-embed", 8192),
     ("ministral-3", 262144),
     ("ministral", 131072),
     ("magistral-medium", 262144),
     ("magistral-small", 131072),
     ("magistral", 131072),
+    ("codestral-embed", 32768),
     ("codestral", 262144),
     ("devstral", 262144),
     ("pixtral", 131072),
     ("voxtral", 32768),
+    ("open-mistral", 131072),
+    ("labs-mistral", 131072),
 ]
 
 # Models that support extended reasoning / thinking mode.

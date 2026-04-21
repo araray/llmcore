@@ -42,18 +42,25 @@ class ModelType(str, Enum):
     COMPLETION = "completion"
     EMBEDDING = "embedding"
     RERANK = "rerank"
+    CODE = "code"  # Code-focused models (e.g. Codestral FIM)
     IMAGE_GENERATION = "image-generation"
     AUDIO = "audio"
     MULTIMODAL = "multimodal"
+    OCR = "ocr"  # Document OCR models (e.g. Mistral OCR)
+    MODERATION = "moderation"  # Content moderation/classification models
+    TTS = "tts"  # Text-to-speech models
+    STT = "stt"  # Speech-to-text models
 
 
 class ArchitectureType(str, Enum):
     """Model architecture type."""
 
     TRANSFORMER = "transformer"
+    DENSE = "dense"  # Dense transformer (non-MoE, e.g. Mistral Small/Medium)
     MOE = "moe"  # Mixture of Experts
     SSM = "ssm"  # State Space Model (e.g., Mamba)
     HYBRID = "hybrid"
+    EMBEDDING = "embedding"  # Embedding-optimised architecture
 
 
 class ModelStatus(str, Enum):
@@ -395,6 +402,9 @@ class MistralExtension(BaseModel):
     fill_in_middle: bool = Field(False, description="Codestral FIM support for code completion")
     guardrails: dict[str, bool] | None = Field(None, description="Available guardrail settings")
     fine_tuning: dict[str, Any] | None = Field(None, description="Fine-tuning capabilities")
+    default_temperature: float | None = Field(
+        None, description="Default sampling temperature recommended by Mistral for this model"
+    )
 
 
 class XAIExtension(BaseModel):

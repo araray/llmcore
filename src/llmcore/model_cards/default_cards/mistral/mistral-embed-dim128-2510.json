@@ -1,20 +1,20 @@
 {
-  "model_id": "voxtral-mini-tts-latest",
-  "display_name": "voxtral-mini-tts-2603",
+  "model_id": "mistral-embed-dim128-2510",
+  "display_name": "mistral-embed-dim128-2510",
   "provider": "mistral",
-  "model_type": "chat",
+  "model_type": "embedding",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "4B",
-    "architecture_type": "dense"
+    "parameter_count": "N/A",
+    "architecture_type": "embedding"
   },
   "context": {
-    "max_input_tokens": 4096
+    "max_input_tokens": 8192
   },
   "capabilities": {
     "streaming": false,
-    "function_calling": true,
-    "tool_use": true,
+    "function_calling": false,
+    "tool_use": false,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
@@ -29,10 +29,8 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": [
-    "voxtral-mini-tts-2603"
-  ],
-  "description": "TTS v1 final checkpoint",
+  "aliases": [],
+  "description": "Official mistral-embed-dim128-2510 Mistral AI model",
   "tags": [],
   "provider_mistral": {
     "open_weights": false,
@@ -40,8 +38,7 @@
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
-    },
-    "default_temperature": 0.3
+    }
   },
   "source": "generated"
 }
