@@ -70,6 +70,7 @@ except ImportError:
     get_bot_response = None  # type: ignore[assignment]
 
 from ..exceptions import ConfigError, ProviderError
+from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool
 from ..models import Role as LLMCoreRole
 from .base import BaseProvider, ContextPayload
@@ -195,7 +196,7 @@ class PoeProvider(OpenAIProvider):
         logger.info(
             "PoeProvider initialized (backend=%s, model=%s)",
             self._backend,
-            self.default_model,
+            openai_config["default_model"],
         )
 
     # ------------------------------------------------------------------
@@ -369,8 +370,6 @@ class PoeProvider(OpenAIProvider):
 
         # 1. Model card registry
         try:
-            from ..model_cards.registry import get_model_card_registry
-
             registry = get_model_card_registry()
             card = registry.get("poe", model_name)
             if card is not None:
