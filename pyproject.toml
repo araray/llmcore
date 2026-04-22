@@ -58,7 +58,7 @@ sentence_transformers = ["sentence-transformers>=5.2.0"]
 
 # Dependencies for specific storage backends
 sqlite = []  # sqlite3 is part of standard library
-postgres = ["psycopg[binary]>=3.2.0", "psycopg_pool>=3.3.0", "pgvector>=0.4.1"]
+postgres = ["psycopg[binary]>=3.0.0", "psycopg_pool>=3.0.0", "pgvector>=0.4.1"]
 chromadb = ["chromadb>=1.5.0"]
 
 # ============================================================================
