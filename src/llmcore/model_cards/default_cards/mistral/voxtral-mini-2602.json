@@ -5,8 +5,8 @@
   "model_type": "chat",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "4B",
-    "architecture_type": "dense"
+    "architecture_type": "dense",
+    "parameter_count": "4B"
   },
   "context": {
     "max_input_tokens": 16384
@@ -20,12 +20,12 @@
     "vision": false,
     "audio_input": true,
     "reasoning": false,
-    "multimodal": false
+    "multimodal": true
   },
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,14 +34,13 @@
   "tags": [
     "audio"
   ],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.0
-  },
-  "source": "generated"
+  }
 }

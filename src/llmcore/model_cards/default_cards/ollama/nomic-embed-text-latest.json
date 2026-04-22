@@ -1,0 +1,39 @@
+{
+  "model_id": "nomic-embed-text:latest",
+  "display_name": "Nomic Embed Text:latest",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "nomic-bert",
+    "parameter_count": "137M",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: nomic-embed-text:latest",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:F16"
+  ],
+  "source": "generated"
+}

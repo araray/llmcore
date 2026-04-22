@@ -2,11 +2,11 @@
   "model_id": "voxtral-mini-tts-2603",
   "display_name": "voxtral-mini-tts-2603",
   "provider": "mistral",
-  "model_type": "chat",
+  "model_type": "tts",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "4B",
-    "architecture_type": "dense"
+    "architecture_type": "dense",
+    "parameter_count": "4B"
   },
   "context": {
     "max_input_tokens": 4096
@@ -25,7 +25,7 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,14 +34,13 @@
   ],
   "description": "TTS v1 final checkpoint",
   "tags": [],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.3
-  },
-  "source": "generated"
+  }
 }

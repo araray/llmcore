@@ -2,11 +2,11 @@
   "model_id": "voxtral-mini-realtime-2602",
   "display_name": "voxtral-mini-transcribe-realtime-2602",
   "provider": "mistral",
-  "model_type": "chat",
+  "model_type": "stt",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "4B",
-    "architecture_type": "dense"
+    "architecture_type": "dense",
+    "parameter_count": "4B"
   },
   "context": {
     "max_input_tokens": 32768
@@ -25,7 +25,7 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -35,14 +35,13 @@
   ],
   "description": "A realtime transcription model released in January 2026",
   "tags": [],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.0
-  },
-  "source": "generated"
+  }
 }

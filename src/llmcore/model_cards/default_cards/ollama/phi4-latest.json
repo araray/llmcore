@@ -1,0 +1,39 @@
+{
+  "model_id": "phi4:latest",
+  "display_name": "Phi4:latest",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "phi3",
+    "parameter_count": "14.7B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: phi4:latest",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:Q4_K_M"
+  ],
+  "source": "generated"
+}

@@ -1,0 +1,39 @@
+{
+  "model_id": "deepseek-coder-v2:latest",
+  "display_name": "Deepseek Coder V2:latest",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek2",
+    "parameter_count": "15.7B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 163840
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: deepseek-coder-v2:latest",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:Q4_0"
+  ],
+  "source": "generated"
+}

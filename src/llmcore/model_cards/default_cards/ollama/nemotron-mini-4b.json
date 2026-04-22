@@ -1,0 +1,39 @@
+{
+  "model_id": "nemotron-mini:4b",
+  "display_name": "Nemotron Mini:4b",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "nemotron",
+    "parameter_count": "4.2B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: nemotron-mini:4b",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:Q4_K_M"
+  ],
+  "source": "generated"
+}

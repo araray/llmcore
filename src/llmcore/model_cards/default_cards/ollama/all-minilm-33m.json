@@ -1,0 +1,39 @@
+{
+  "model_id": "all-minilm:33m",
+  "display_name": "ALL Minilm:33m",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "bert",
+    "parameter_count": "33M",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 512
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: all-minilm:33m",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:F16"
+  ],
+  "source": "generated"
+}

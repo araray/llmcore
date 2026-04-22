@@ -5,7 +5,6 @@
   "model_type": "embedding",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "N/A",
     "architecture_type": "embedding"
   },
   "context": {
@@ -22,10 +21,16 @@
     "reasoning": false,
     "multimodal": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.0
+    }
+  },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,13 +39,12 @@
   ],
   "description": "Official mistral-embed-2312 Mistral AI model",
   "tags": [],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     }
-  },
-  "source": "generated"
+  }
 }

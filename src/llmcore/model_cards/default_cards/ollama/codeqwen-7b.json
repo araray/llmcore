@@ -1,0 +1,39 @@
+{
+  "model_id": "codeqwen:7b",
+  "display_name": "Codeqwen:7b",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "qwen2",
+    "parameter_count": "7.3B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: codeqwen:7b",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:Q4_0"
+  ],
+  "source": "generated"
+}

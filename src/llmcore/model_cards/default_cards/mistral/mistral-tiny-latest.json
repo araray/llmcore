@@ -23,7 +23,7 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,14 +34,13 @@
   ],
   "description": "Our best multilingual open source model released July 2024.",
   "tags": [],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.3
-  },
-  "source": "generated"
+  }
 }

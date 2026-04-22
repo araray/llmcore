@@ -1,0 +1,46 @@
+{
+  "model_id": "claude-opus-4-7",
+  "display_name": "Claude Opus 4.7",
+  "provider": "anthropic",
+  "model_type": "chat",
+  "architecture": {
+    "family": "claude",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 15.0,
+      "output": 75.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-14"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Anthropic model: claude-opus-4-7",
+  "tags": [],
+  "source": "generated",
+  "provider_anthropic": {
+    "batch_api": true,
+    "citations": true,
+    "pdf_input": true
+  }
+}

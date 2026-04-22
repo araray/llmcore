@@ -5,7 +5,6 @@
   "model_type": "chat",
   "architecture": {
     "family": "mistral",
-    "parameter_count": "N/A",
     "architecture_type": "dense"
   },
   "context": {
@@ -25,7 +24,7 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,14 +33,13 @@
   "tags": [
     "multimodal"
   ],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.7
-  },
-  "source": "generated"
+  }
 }

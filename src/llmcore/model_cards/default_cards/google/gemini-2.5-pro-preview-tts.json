@@ -1,0 +1,41 @@
+{
+  "model_id": "gemini-2.5-pro-preview-tts",
+  "display_name": "Gemini 2.5 Pro Preview TTS",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.25,
+      "output": 10.0
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 2.5 Pro Preview TTS",
+  "tags": [],
+  "source": "generated"
+}

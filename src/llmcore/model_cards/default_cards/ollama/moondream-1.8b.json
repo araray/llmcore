@@ -1,0 +1,40 @@
+{
+  "model_id": "moondream:1.8b",
+  "display_name": "Moondream:1.8b",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "phi2",
+    "parameter_count": "1B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: moondream:1.8b",
+  "tags": [
+    "local",
+    "open-source",
+    "vision",
+    "quant:Q4_0"
+  ],
+  "source": "generated"
+}

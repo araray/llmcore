@@ -4,7 +4,8 @@
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
-    "family": "mistral"
+    "family": "mistral",
+    "architecture_type": "dense"
   },
   "context": {
     "max_input_tokens": 262144
@@ -23,7 +24,7 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-21"
+    "release_date": "2026-04-22"
   },
   "license": null,
   "open_weights": false,
@@ -34,14 +35,13 @@
   "tags": [
     "multimodal"
   ],
+  "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "license_type": null,
     "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
     "default_temperature": 0.3
-  },
-  "source": "generated"
+  }
 }

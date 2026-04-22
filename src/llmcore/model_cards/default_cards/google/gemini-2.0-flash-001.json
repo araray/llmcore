@@ -1,0 +1,41 @@
+{
+  "model_id": "gemini-2.0-flash-001",
+  "display_name": "Gemini 2.0 Flash 001",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.4
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Stable version of Gemini 2.0 Flash, our fast and versatile multimodal model for scaling across diverse tasks, released in January of 2025.",
+  "tags": [],
+  "source": "generated"
+}

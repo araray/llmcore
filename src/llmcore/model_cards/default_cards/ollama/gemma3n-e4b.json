@@ -1,0 +1,39 @@
+{
+  "model_id": "gemma3n:e4b",
+  "display_name": "Gemma3n:e4b",
+  "provider": "ollama",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemma3n",
+    "parameter_count": "6.9B",
+    "architecture_type": "dense"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "reasoning": false,
+    "multimodal": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Ollama model: gemma3n:e4b",
+  "tags": [
+    "local",
+    "open-source",
+    "quant:Q4_K_M"
+  ],
+  "source": "generated"
+}
