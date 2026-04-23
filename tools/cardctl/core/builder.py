@@ -57,7 +57,7 @@ class CardBuilder:
             "provider": model.provider,
             "model_type": model.model_type,
             "architecture": self._build_architecture(model, enrichment),
-            "context": self._build_context(model),
+            "context": self._build_context(model, enrichment),
             "capabilities": self._build_capabilities(model),
             "pricing": self._build_pricing(enrichment),
             "lifecycle": self._build_lifecycle(model),
@@ -85,9 +85,7 @@ class CardBuilder:
     # Field builders
     # ------------------------------------------------------------------
 
-    def _resolve_display_name(
-        self, model: NormalizedModel, enrichment: ModelEnrichment
-    ) -> str:
+    def _resolve_display_name(self, model: NormalizedModel, enrichment: ModelEnrichment) -> str:
         if "display_name" in enrichment.overrides:
             return enrichment.overrides["display_name"]
         if model.display_name:
@@ -122,12 +120,22 @@ class CardBuilder:
 
         return arch if arch else None
 
-    def _build_context(self, model: NormalizedModel) -> dict[str, Any]:
+    def _build_context(self, model: NormalizedModel, enrichment: ModelEnrichment) -> dict[str, Any]:
+        # Enrichment overrides take priority, then adapter-discovered value,
+        # then a conservative 128K default.  The previous 4096 default was
+        # far too low and produced broken context budgets at runtime.
+        max_input = (
+            enrichment.overrides.get("max_input_tokens")
+            or enrichment.overrides.get("context_length")
+            or model.context_length
+            or 128_000
+        )
         ctx: dict[str, Any] = {
-            "max_input_tokens": model.context_length or 4096,
+            "max_input_tokens": max_input,
         }
-        if model.max_output_tokens:
-            ctx["max_output_tokens"] = model.max_output_tokens
+        max_output = enrichment.overrides.get("max_output_tokens") or model.max_output_tokens
+        if max_output:
+            ctx["max_output_tokens"] = max_output
         if model.default_output_tokens:
             ctx["default_output_tokens"] = model.default_output_tokens
         return ctx
@@ -170,9 +178,7 @@ class CardBuilder:
             lifecycle["deprecation_date"] = model.deprecation_date
         return lifecycle
 
-    def _merge_aliases(
-        self, model: NormalizedModel, enrichment: ModelEnrichment
-    ) -> list[str]:
+    def _merge_aliases(self, model: NormalizedModel, enrichment: ModelEnrichment) -> list[str]:
         seen: set[str] = set()
         result: list[str] = []
         for a in model.aliases + enrichment.extra_aliases:
@@ -181,9 +187,7 @@ class CardBuilder:
                 result.append(a)
         return result
 
-    def _merge_tags(
-        self, model: NormalizedModel, enrichment: ModelEnrichment
-    ) -> list[str]:
+    def _merge_tags(self, model: NormalizedModel, enrichment: ModelEnrichment) -> list[str]:
         seen: set[str] = set()
         result: list[str] = []
         for t in model.tags + enrichment.extra_tags:

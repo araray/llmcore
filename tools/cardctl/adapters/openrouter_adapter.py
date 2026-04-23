@@ -51,7 +51,7 @@ class OpenRouterAdapter(BaseAdapter):
             return None
 
         pricing = m.get("pricing", {}) or {}
-        ctx = m.get("context_length") or 4096
+        ctx = m.get("context_length") or 128_000
 
         # Parse pricing (OpenRouter returns per-token strings)
         input_price = _parse_price(pricing.get("prompt", "0"))
