@@ -1,13 +1,13 @@
 {
   "model_id": "qwen3.6-plus",
-  "display_name": "The Qwen3.6 native vision-language Plus series models demonstrate exceptional performance on par with the current state-of-the-art models, with a significant improvement in overall results compared to",
+  "display_name": "Qwen3.6 Plus",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Empirio Labs AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 1000000
   },
   "capabilities": {
     "streaming": true,
@@ -31,21 +31,13 @@
   "open_weights": false,
   "aliases": [],
   "description": "The Qwen3.6 native vision-language Plus series models demonstrate exceptional performance on par with the current state-of-the-art models, with a significant improvement in overall results compared to the 3.5 series. The models have been markedly enhanced in code-related capabilities such as agentic coding, front-end programming, and Vibe coding, as well as in multi-modal general object recognition, OCR, and object localization.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Context Window: 1,000,000\n- Text, Image, & Video input are supported\n- Built-in tool calls are not supported with video attachments\n\nThis bot supports optional parameters for additional customization.",
-  "tags": [
-    "empirio labs ai",
-    "vision"
-  ],
+  "tags": ["empirio labs ai", "vision"],
   "source": "builtin",
   "last_updated": "2026-04-16T21:55:50.356123+00:00",
   "provider_extension": {
     "owned_by": "Empirio Labs AI",
-    "input_modalities": [
-      "text",
-      "image"
-    ],
-    "output_modalities": [
-      "text"
-    ],
+    "input_modalities": ["text", "image"],
+    "output_modalities": ["text"],
     "modality": "text,image->text",
     "poe_object_type": "model",
     "created": 1775107805241

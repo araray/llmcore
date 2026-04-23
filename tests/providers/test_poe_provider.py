@@ -292,6 +292,53 @@ class TestPoeContextLength:
             result = provider.get_max_context_length("Claude-Sonnet-4.6")
             assert result == 200000
 
+    @pytest.mark.asyncio
+    async def test_get_models_details_uses_model_card_context_length(
+        self, provider, sample_poe_models_response
+    ):
+        """get_models_details() must use model card context length, not hardcoded 4096.
+
+        Regression test: previously, get_models_details() hardcoded
+        context_length=4096 for all Poe models because Poe's /v1/models API
+        doesn't expose context window sizes.  This caused
+        _get_precise_context_length() to short-circuit with 4096 and never
+        consult the model card registry, producing artificially tiny context
+        budgets (e.g. 3596 = 4096 − 500 reserved).
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = sample_poe_models_response
+
+        mock_registry = MagicMock()
+        mock_card = MagicMock()
+        mock_card.get_context_length.return_value = 202752
+        mock_registry.get.return_value = mock_card
+
+        with (
+            patch("llmcore.providers.poe_provider.httpx.AsyncClient") as mock_client_cls,
+            patch(
+                "llmcore.providers.poe_provider.get_model_card_registry",
+                return_value=mock_registry,
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            details = await provider.get_models_details()
+
+        # Every discovered model must have its context_length from model cards,
+        # NOT the old hardcoded 4096
+        for d in details:
+            assert d.context_length == 202752, (
+                f"Model '{d.id}' has context_length={d.context_length}, "
+                f"expected 202752 from model card (was 4096 before fix)"
+            )
+            assert d.context_length != 4096, f"Model '{d.id}' still using hardcoded 4096!"
+
 
 # ---------------------------------------------------------------------------
 # Tests: Balance Checking

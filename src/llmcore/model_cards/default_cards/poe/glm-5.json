@@ -1,13 +1,13 @@
 {
   "model_id": "glm-5",
-  "display_name": "GLM-5 is an open-source foundation model engineered for complex system engineering and long-horizon Agent tasks, delivering reliable productivity for top-tier programmers. Transcending the boundary fr",
+  "display_name": "GLM-5",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Novita AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 202752
   },
   "capabilities": {
     "streaming": true,
@@ -30,10 +30,8 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GLM-5 is an open-source foundation model engineered for complex system engineering and long-horizon Agent tasks, delivering reliable productivity for top-tier programmers. Transcending the boundary from \"writing code\" to \"building systems,\" it moves beyond traditional snippet generation to offer senior-architect-level planning and execution capabilities. By rejecting the \"frontend-heavy, logic-light\" approach, GLM-5 demonstrates exceptional reasoning and self-healing abilities in backend refactoring, complex algorithm implementation, and deep debugging\u2014autonomously analyzing logs and iteratively fixing persistent bugs until the system runs. As the first open-source model featuring Opus-class style and system engineering depth, GLM-5 provides extreme logic density alongside the freedom of local deployment and high cost-effectiveness, making it the ideal choice for large-scale backend development and automated Agent construction. Context window: 205k tokens\n\nThis bot supports optional parameters for additional customization.",
-  "tags": [
-    "novita ai"
-  ],
+  "description": "GLM-5 is an open-source foundation model engineered for complex system engineering and long-horizon Agent tasks, delivering reliable productivity for top-tier programmers. Transcending the boundary from \"writing code\" to \"building systems,\" it moves beyond traditional snippet generation to offer senior-architect-level planning and execution capabilities. By rejecting the \"frontend-heavy, logic-light\" approach, GLM-5 demonstrates exceptional reasoning and self-healing abilities in backend refactoring, complex algorithm implementation, and deep debugging—autonomously analyzing logs and iteratively fixing persistent bugs until the system runs. As the first open-source model featuring Opus-class style and system engineering depth, GLM-5 provides extreme logic density alongside the freedom of local deployment and high cost-effectiveness, making it the ideal choice for large-scale backend development and automated Agent construction. Context window: 205k tokens\n\nThis bot supports optional parameters for additional customization.",
+  "tags": ["novita ai"],
   "source": "builtin",
   "last_updated": "2026-04-16T21:55:50.365187+00:00",
   "pricing": {
@@ -45,12 +43,8 @@
   },
   "provider_extension": {
     "owned_by": "Novita AI",
-    "input_modalities": [
-      "text"
-    ],
-    "output_modalities": [
-      "text"
-    ],
+    "input_modalities": ["text"],
+    "output_modalities": ["text"],
     "modality": "text->text",
     "poe_object_type": "model",
     "created": 1770830055326

@@ -264,7 +264,7 @@ class PoeProvider(OpenAIProvider):
                 details = ModelDetails(
                     id=model_id,
                     display_name=model.get("description", model_id)[:120],
-                    context_length=4096,  # Poe doesn't expose ctx in /models
+                    context_length=self.get_max_context_length(model_id),
                     supports_streaming=True,
                     supports_tools=supports_tools,
                     supports_vision=supports_vision,
