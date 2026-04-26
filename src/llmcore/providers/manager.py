@@ -23,6 +23,7 @@ except ImportError:
 from ..exceptions import ConfigError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
+from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
 from .huggingface_provider import HuggingFaceProvider
 from .mistral_provider import MistralProvider
@@ -46,6 +47,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "ollama": OllamaProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
+    "deepseek": DeepSeekProvider,
     "gemini": GeminiProvider,
     "openrouter": OpenRouterProvider,
     "poe": PoeProvider,
@@ -55,7 +57,6 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers
-    "deepseek": OpenAIProvider,
     "xai": OpenAIProvider,
     "groq": OpenAIProvider,
     "together": OpenAIProvider,
@@ -77,10 +78,6 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
 # ``base_url`` – vendor API endpoint (required, since the default
 #                OpenAI base URL is wrong for these services)
 _OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
-    "deepseek": {
-        "env_var": "DEEPSEEK_API_KEY",
-        "base_url": "https://api.deepseek.com",
-    },
     "xai": {
         "env_var": "XAI_API_KEY",
         "base_url": "https://api.x.ai/v1",

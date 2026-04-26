@@ -1,14 +1,27 @@
 # tools/cardctl/enrichments/deepseek.toml
-# Source: https://platform.deepseek.com/api-docs/pricing
-# Last updated: 2026-04-21
+# Source: https://api-docs.deepseek.com/quick_start/pricing
+# Last updated: 2026-04-26
 
 [pricing]
+# V4 models (2026-04-24)
+"deepseek-v4-flash"  = { input = 0.14, output = 0.28, cached_input = 0.028 }
+"deepseek-v4-pro"    = { input = 1.74, output = 3.48, cached_input = 0.145, notes = "75% discount until 2026-05-05: input $0.435, output $0.87" }
+
+# Legacy (retiring 2026-07-24)
 "deepseek-chat"      = { input = 0.14, output = 0.28 }
 "deepseek-reasoner"  = { input = 0.55, output = 2.19 }
 
 [architecture]
+"deepseek-v4-flash"  = { family = "deepseek-v4", type = "moe", parameter_count = "284B", active_parameters = "13B" }
+"deepseek-v4-pro"    = { family = "deepseek-v4", type = "moe", parameter_count = "1.6T", active_parameters = "49B" }
 "deepseek-chat"      = { family = "deepseek", type = "moe", parameter_count = "671B", active_parameters = "37B" }
 "deepseek-reasoner"  = { family = "deepseek", type = "moe", parameter_count = "671B", active_parameters = "37B" }
+
+[context]
+"deepseek-v4-flash"  = { max_input_tokens = 1000000 }
+"deepseek-v4-pro"    = { max_input_tokens = 1000000 }
+"deepseek-chat"      = { max_input_tokens = 131072 }
+"deepseek-reasoner"  = { max_input_tokens = 131072 }
 
 [exclude]
 patterns = []

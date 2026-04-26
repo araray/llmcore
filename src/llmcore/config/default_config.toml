@@ -188,6 +188,56 @@ posthog = "ERROR"
   # JSON schema output via chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
   # Reasoning effort via chat_completion(output_config={"effort": "high"})
 
+  # --- DeepSeek Provider ---
+  # Native provider for DeepSeek V4 models with thinking mode support.
+  # Uses the OpenAI-compatible API at https://api.deepseek.com with
+  # DeepSeek-specific extensions (thinking mode, reasoning content,
+  # cache-aware token accounting, beta endpoints).
+  #
+  # Docs: https://api-docs.deepseek.com/
+  # V4 Paper: https://huggingface.co/collections/deepseek-ai/deepseek-v4
+  [providers.deepseek]
+  # API Key: Set via environment variable for security.
+  # Environment Variable: DEEPSEEK_API_KEY
+  # api_key = "sk-..."
+
+  # Default model for this provider instance.
+  # Current V4 models (April 2026):
+  #   deepseek-v4-pro    — 1.6T total / 49B active, flagship
+  #   deepseek-v4-flash  — 284B total / 13B active, cost-effective
+  # Legacy aliases (retiring 2026-07-24):
+  #   deepseek-chat      → deepseek-v4-flash (non-thinking)
+  #   deepseek-reasoner  → deepseek-v4-flash (thinking)
+  default_model = "deepseek-v4-pro"
+
+  # Request timeout in seconds.
+  # V4 models support 1M-token context and may take longer for large inputs.
+  timeout = 300
+
+  # --- Thinking Mode ---
+  # DeepSeek V4 models support a thinking mode where the model generates
+  # internal reasoning before producing the final answer.
+  #
+  # thinking: "enabled" or "disabled" (default: "enabled")
+  #   - "enabled": Model generates reasoning_content + content
+  #   - "disabled": Model generates content only (faster, cheaper)
+  #
+  # reasoning_effort: "high" or "max" (default: "high")
+  #   - "high": Standard reasoning depth
+  #   - "max": Maximum reasoning depth (longer, more thorough)
+  #
+  # Note: When thinking is enabled, temperature/top_p/penalties are ignored.
+  # These can be overridden per-request via chat_completion(thinking=...).
+  thinking = "enabled"
+  reasoning_effort = "high"
+
+  # --- Base URL ---
+  # Override the stable API URL.
+  # base_url = "https://api.deepseek.com"
+  #
+  # Beta endpoint (for prefix completion, FIM, strict tools):
+  # beta_base_url = "https://api.deepseek.com/beta"
+
   # --- Ollama Provider ---
   # For locally running models via Ollama.
   [providers.ollama]
