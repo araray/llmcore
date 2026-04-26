@@ -24,6 +24,7 @@ from ..exceptions import ConfigError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
 from .gemini_provider import GeminiProvider
+from .huggingface_provider import HuggingFaceProvider
 from .mistral_provider import MistralProvider
 
 # Import concrete implementations
@@ -50,6 +51,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "poe": PoeProvider,
     "vllm": VLLMProvider,
     "mistral": MistralProvider,
+    "huggingface": HuggingFaceProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers

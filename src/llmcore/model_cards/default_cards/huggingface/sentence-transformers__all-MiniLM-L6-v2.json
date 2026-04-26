@@ -1,0 +1,38 @@
+{
+  "model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "display_name": "all-MiniLM-L6-v2",
+  "provider": "huggingface",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert",
+    "architecture_type": "transformer",
+    "parameter_count": "22M"
+  },
+  "context": {
+    "max_input_tokens": 512
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "lifecycle": {
+    "release_date": "2022-03-01",
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "all-MiniLM-L6-v2: compact sentence embedding model (384 dimensions). Ideal for semantic search and similarity.",
+  "tags": ["open-weights", "embedding", "sentence-transformer"],
+  "provider_huggingface": {
+    "embedding_dimensions": 384
+  },
+  "source": "builtin"
+}

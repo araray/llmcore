@@ -1,0 +1,37 @@
+{
+  "model_id": "Qwen/Qwen2.5-72B-Instruct",
+  "display_name": "Qwen 2.5 72B Instruct",
+  "provider": "huggingface",
+  "model_type": "chat",
+  "architecture": {
+    "family": "qwen",
+    "architecture_type": "transformer",
+    "parameter_count": "72B"
+  },
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192,
+    "default_output_tokens": 2048
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "lifecycle": {
+    "release_date": "2024-09-19",
+    "status": "active"
+  },
+  "license": "apache-2.0",
+  "open_weights": true,
+  "aliases": [],
+  "description": "Qwen 2.5 72B Instruct: high-performance open-weight model by Alibaba with 128K context and strong tool-use support.",
+  "tags": ["open-weights", "instruct", "tool-calling"],
+  "source": "builtin"
+}

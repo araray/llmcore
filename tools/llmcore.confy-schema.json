@@ -134,6 +134,14 @@
       "on_failure": "default",
       "default": 0,
       "description": "Detect which port PostgreSQL is listening on (TCP, localhost)"
+    },
+    "hf_token_available": {
+      "command": "test -n \"${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}\" && echo true || echo false",
+      "parse": "raw",
+      "transform": "bool",
+      "on_failure": "default",
+      "default": false,
+      "description": "Check if a Hugging Face API token is set"
     }
   },
   "variables": {
@@ -159,6 +167,10 @@
     },
     "is_linux": {
       "expr": "discovery.os_type == 'Linux'",
+      "type": "bool"
+    },
+    "has_hf_token": {
+      "expr": "discovery.hf_token_available == true",
       "type": "bool"
     }
   },
@@ -209,6 +221,11 @@
               "description": "Mistral Large, Codestral, Magistral"
             },
             {
+              "value": "huggingface",
+              "label": "Hugging Face",
+              "description": "Open-weight models via HF Inference API"
+            },
+            {
               "value": "vllm",
               "label": "vLLM (self-hosted)",
               "description": "Self-hosted vLLM inference server"
@@ -222,7 +239,8 @@
           "see_also": [
             "providers.openai.default_model",
             "providers.anthropic.default_model",
-            "providers.ollama.default_model"
+            "providers.ollama.default_model",
+            "providers.huggingface.default_model"
           ]
         },
         {
@@ -1515,11 +1533,191 @@
       ]
     },
     {
+      "id": "provider_huggingface",
+      "title": "Provider: Hugging Face",
+      "description": "Open-weight models via the Hugging Face Inference API.  Supports chat, vision, embeddings, TTS, ASR, and image generation.  Requests can be routed through third-party providers (Together, SambaNova, Cerebras, etc.).",
+      "icon": "🤗",
+      "order": 11,
+      "fields": [
+        {
+          "key": "providers.huggingface.api_key",
+          "title": "API Key",
+          "type": "secret",
+          "description": "HuggingFace API token (starts with hf_...).  Strongly recommended to set via HF_TOKEN environment variable.",
+          "placeholder": "hf_...",
+          "recommendation": "Set via HF_TOKEN or LLMCORE_PROVIDERS__HUGGINGFACE__API_KEY environment variable.",
+          "tags": [
+            "security",
+            "credentials"
+          ],
+          "required": false
+        },
+        {
+          "key": "providers.huggingface.api_key_env_var",
+          "title": "API Key Env Var",
+          "type": "string",
+          "description": "Environment variable name to read the API key from.",
+          "default": "HF_TOKEN",
+          "required": false
+        },
+        {
+          "key": "providers.huggingface.default_model",
+          "title": "Default Model",
+          "type": "enum",
+          "description": "Default chat/instruct model.  Any model hosted on the Hugging Face Hub that is served by the Inference API can be used.",
+          "default": "meta-llama/Llama-3.3-70B-Instruct",
+          "required": false,
+          "options": [
+            {
+              "value": "meta-llama/Llama-3.3-70B-Instruct",
+              "label": "Llama 3.3 70B Instruct"
+            },
+            {
+              "value": "meta-llama/Llama-3.1-70B-Instruct",
+              "label": "Llama 3.1 70B Instruct"
+            },
+            {
+              "value": "meta-llama/Llama-3.1-8B-Instruct",
+              "label": "Llama 3.1 8B Instruct"
+            },
+            {
+              "value": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+              "label": "Llama 3.2 11B Vision"
+            },
+            {
+              "value": "meta-llama/Llama-3.2-3B-Instruct",
+              "label": "Llama 3.2 3B Instruct"
+            },
+            {
+              "value": "Qwen/Qwen2.5-72B-Instruct",
+              "label": "Qwen 2.5 72B Instruct"
+            },
+            {
+              "value": "Qwen/Qwen2.5-Coder-32B-Instruct",
+              "label": "Qwen 2.5 Coder 32B"
+            },
+            {
+              "value": "Qwen/QwQ-32B",
+              "label": "QwQ 32B (reasoning)"
+            },
+            {
+              "value": "mistralai/Mistral-Small-24B-Instruct-2501",
+              "label": "Mistral Small 24B"
+            },
+            {
+              "value": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+              "label": "Mixtral 8x7B"
+            },
+            {
+              "value": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+              "label": "DeepSeek R1 Distill 32B"
+            },
+            {
+              "value": "deepseek-ai/DeepSeek-V3-0324",
+              "label": "DeepSeek V3"
+            },
+            {
+              "value": "microsoft/phi-4",
+              "label": "Phi 4"
+            },
+            {
+              "value": "google/gemma-2-27b-it",
+              "label": "Gemma 2 27B"
+            },
+            {
+              "value": "google/gemma-2-9b-it",
+              "label": "Gemma 2 9B"
+            }
+          ],
+          "discover": {
+            "id": "huggingface_chat_cards",
+            "command": "python3 << 'PYEOF'\nimport json, os, sys\nP = 'huggingface'\ndirs = [os.path.join('src', 'llmcore')]\ndirs += [os.path.join(p, 'llmcore') for p in sys.path if os.path.isdir(os.path.join(p, 'llmcore', 'model_cards'))]\nfor b in [os.path.join(d, 'model_cards', 'default_cards', P) for d in dirs]:\n    if not os.path.isdir(b): continue\n    r = []\n    for f in sorted(os.listdir(b)):\n        if not f.endswith('.json'): continue\n        try:\n            d = json.load(open(os.path.join(b, f)))\n            if d.get('model_type') != 'chat': continue\n            if d.get('lifecycle', {}).get('status') in ('retired', 'deprecated'): continue\n            ctx = d.get('context', {}).get('max_input_tokens', '?')\n            pi = d.get('pricing', {}).get('per_million_tokens', {}).get('input', '?')\n            r.append({'value': d['model_id'], 'label': d.get('display_name', d['model_id']), 'description': f'{ctx} ctx, ${pi}/M in'})\n        except Exception: pass\n    print(json.dumps(r))\n    sys.exit()\nprint('[]')\nPYEOF",
+            "description": "Load available huggingface chat models from llmcore model cards",
+            "parse": "json",
+            "populate": "options",
+            "merge": "replace",
+            "on_failure": "use_static",
+            "cache": true,
+            "timeout": 5
+          }
+        },
+        {
+          "key": "providers.huggingface.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "description": "Request timeout in seconds.  Some HF-hosted models have cold-start latency; increase this if you see timeouts.",
+          "default": 120,
+          "required": false,
+          "validation": {
+            "min": 10,
+            "max": 600
+          }
+        },
+        {
+          "key": "providers.huggingface.provider",
+          "title": "Routing Provider",
+          "type": "enum",
+          "description": "Backend provider for request routing.  By default, requests go to HF's own Inference API.  Set to route through a third-party provider (billed to your HF account).",
+          "required": false,
+          "options": [
+            {
+              "value": "",
+              "label": "Auto (HF default)"
+            },
+            {
+              "value": "hf-inference",
+              "label": "HF Inference API"
+            },
+            {
+              "value": "together",
+              "label": "Together AI"
+            },
+            {
+              "value": "sambanova",
+              "label": "SambaNova"
+            },
+            {
+              "value": "replicate",
+              "label": "Replicate"
+            },
+            {
+              "value": "fireworks-ai",
+              "label": "Fireworks AI"
+            },
+            {
+              "value": "cerebras",
+              "label": "Cerebras"
+            },
+            {
+              "value": "nebius",
+              "label": "Nebius"
+            },
+            {
+              "value": "novita",
+              "label": "Novita AI"
+            },
+            {
+              "value": "hyperbolic",
+              "label": "Hyperbolic"
+            }
+          ]
+        },
+        {
+          "key": "providers.huggingface.bill_to",
+          "title": "Bill To (Organization)",
+          "type": "string",
+          "description": "HuggingFace organization namespace to bill Inference API usage to.  Leave empty for personal billing.",
+          "placeholder": "my-org",
+          "required": false
+        }
+      ]
+    },
+    {
       "id": "storage_core",
       "title": "Storage: Session & Vector",
       "description": "Persistence backends for conversation history and RAG documents.",
       "icon": "💾",
-      "order": 11,
+      "order": 12,
       "fields": [
         {
           "key": "storage.session.type",
@@ -1624,7 +1822,7 @@
       "title": "Storage: Observability",
       "description": "Instrumentation, metrics, event logging, and tracing for storage operations.",
       "icon": "📈",
-      "order": 12,
+      "order": 13,
       "fields": [
         {
           "key": "storage.observability.enabled",
@@ -1858,7 +2056,7 @@
       "title": "Model Card Library",
       "description": "Metadata for LLM models — context limits, capabilities, pricing, lifecycle.",
       "icon": "🃏",
-      "order": 13,
+      "order": 14,
       "fields": [
         {
           "key": "model_cards.user_cards_path",
@@ -1891,7 +2089,7 @@
       "title": "Embedding Providers",
       "description": "Provider-specific settings for embedding generation.",
       "icon": "📐",
-      "order": 14,
+      "order": 15,
       "fields": [
         {
           "key": "embedding.sentence_transformer.device",
@@ -2019,7 +2217,7 @@
       "title": "Embedding Cache",
       "description": "Two-tier caching (LRU memory + SQLite disk) for embedding vectors.",
       "icon": "🗄️",
-      "order": 15,
+      "order": 16,
       "fields": [
         {
           "key": "embedding.cache.enabled",
@@ -2102,7 +2300,7 @@
       "title": "Context Management & RAG",
       "description": "Prompt assembly, truncation strategy, RAG retrieval, and templates.",
       "icon": "📑",
-      "order": 16,
+      "order": 17,
       "fields": [
         {
           "key": "context_management.inclusion_priority",
@@ -2202,7 +2400,7 @@
       "title": "Observability & Cost Tracking",
       "description": "API usage tracking, cost estimation, and latency metrics.",
       "icon": "📊",
-      "order": 17,
+      "order": 18,
       "fields": [
         {
           "key": "observability.enabled",
@@ -2274,7 +2472,7 @@
       "title": "Autonomous: Core & Goals",
       "description": "Autonomous operation — goal management and decomposition.",
       "icon": "🎯",
-      "order": 18,
+      "order": 19,
       "fields": [
         {
           "key": "autonomous.enabled",
@@ -2383,7 +2581,7 @@
       "title": "Autonomous: Heartbeat",
       "description": "Periodic task scheduler for autonomous operation.",
       "icon": "💓",
-      "order": 19,
+      "order": 20,
       "fields": [
         {
           "key": "autonomous.heartbeat.enabled",
@@ -2428,7 +2626,7 @@
       "title": "Autonomous: Escalation",
       "description": "Human escalation framework — webhook and file notification channels.",
       "icon": "🚨",
-      "order": 20,
+      "order": 21,
       "fields": [
         {
           "key": "autonomous.escalation.enabled",
@@ -2535,7 +2733,7 @@
       "title": "Autonomous: Resource Monitoring",
       "description": "Hardware limits, API cost limits, and token budgets.",
       "icon": "📟",
-      "order": 21,
+      "order": 22,
       "fields": [
         {
           "key": "autonomous.resources.enabled",
@@ -2685,7 +2883,7 @@
       "title": "Autonomous: Context Synthesis",
       "description": "Adaptive context window management for autonomous sessions.",
       "icon": "🔄",
-      "order": 22,
+      "order": 23,
       "fields": [
         {
           "key": "autonomous.context.max_context_tokens",
@@ -2744,7 +2942,7 @@
       "title": "Agents: Core",
       "description": "Agent execution limits and sandbox mode selection.",
       "icon": "🤖",
-      "order": 23,
+      "order": 24,
       "fields": [
         {
           "key": "agents.max_iterations",
@@ -2815,7 +3013,7 @@
       "title": "Agents: Sandbox Docker",
       "description": "Docker container settings for isolated agent code execution.",
       "icon": "🐳",
-      "order": 24,
+      "order": 25,
       "fields": [
         {
           "key": "agents.sandbox.docker.enabled",
@@ -2951,7 +3149,7 @@
       "title": "Agents: Sandbox VM",
       "description": "SSH-based VM sandbox for high-security agent execution.",
       "icon": "🖥️",
-      "order": 25,
+      "order": 26,
       "fields": [
         {
           "key": "agents.sandbox.vm.enabled",
@@ -3042,7 +3240,7 @@
       "title": "Agents: Sandbox Volumes & Tools",
       "description": "Volume mounts, tool access control, and output tracking.",
       "icon": "📂",
-      "order": 26,
+      "order": 27,
       "fields": [
         {
           "key": "agents.sandbox.volumes.share_path",
@@ -3148,7 +3346,7 @@
       "title": "Agents: Circuit Breaker",
       "description": "Detect and interrupt failing agent loops.",
       "icon": "⚡",
-      "order": 27,
+      "order": 28,
       "fields": [
         {
           "key": "agents.circuit_breaker.enabled",
@@ -3259,7 +3457,7 @@
       "title": "Agents: Activity System",
       "description": "XML-based structured output for models without native tool/function calling.",
       "icon": "🎭",
-      "order": 28,
+      "order": 29,
       "fields": [
         {
           "key": "agents.activities.enabled",
@@ -3368,7 +3566,7 @@
       "title": "Agents: Capability Check",
       "description": "Pre-flight capability validation before agent execution.",
       "icon": "✅",
-      "order": 29,
+      "order": 30,
       "fields": [
         {
           "key": "agents.capability_check.enabled",
@@ -3421,7 +3619,7 @@
       "title": "Agents: Human-in-the-Loop",
       "description": "Human approval workflows for sensitive agent operations.",
       "icon": "👤",
-      "order": 30,
+      "order": 31,
       "fields": [
         {
           "key": "agents.hitl.enabled",
@@ -3541,7 +3739,7 @@
       "title": "Agents: Model Routing",
       "description": "Intelligent routing based on task complexity, cost, and capability.",
       "icon": "🔀",
-      "order": 31,
+      "order": 32,
       "fields": [
         {
           "key": "agents.routing.enabled",
@@ -3629,7 +3827,7 @@
       "title": "Agents: Goal Classification",
       "description": "Complexity classification for fast-path routing and iteration limits.",
       "icon": "🎯",
-      "order": 32,
+      "order": 33,
       "fields": [
         {
           "key": "agents.goals.classifier_enabled",
@@ -3717,7 +3915,7 @@
       "title": "Agents: Fast Path",
       "description": "Fast-path executor for trivial goals — bypasses full cognitive cycle.",
       "icon": "⚡",
-      "order": 33,
+      "order": 34,
       "fields": [
         {
           "key": "agents.fast_path.enabled",
@@ -3826,7 +4024,7 @@
       "title": "Agents: Darwin Enhancements",
       "description": "Failure learning, TDD support, and multi-attempt arbiter.",
       "icon": "🧬",
-      "order": 34,
+      "order": 35,
       "fields": [
         {
           "key": "agents.darwin.enabled",
@@ -4074,7 +4272,7 @@
       "title": "Agents: Observability",
       "description": "Structured event logging, metrics, replay, sinks, and performance.",
       "icon": "🔍",
-      "order": 35,
+      "order": 36,
       "fields": [
         {
           "key": "agents.observability.enabled",
@@ -4423,7 +4621,7 @@
       "title": "Semantiscan: Core & Database",
       "description": "RAG/ingestion engine — database and vector backend configuration.",
       "icon": "🔬",
-      "order": 36,
+      "order": 37,
       "fields": [
         {
           "key": "semantiscan.enabled",
@@ -4513,7 +4711,7 @@
       "title": "Semantiscan: Metadata Store",
       "description": "External metadata store for ingestion history and Git tracking.",
       "icon": "🗃️",
-      "order": 37,
+      "order": 38,
       "fields": [
         {
           "key": "semantiscan.metadata_store.enable",
@@ -4595,7 +4793,7 @@
       "title": "Semantiscan: Embeddings",
       "description": "Embedding model configurations for chunking ingestion.",
       "icon": "🧲",
-      "order": 38,
+      "order": 39,
       "fields": [
         {
           "key": "semantiscan.embeddings.default_model",
@@ -4916,7 +5114,7 @@
       "title": "Semantiscan: Chunking",
       "description": "File type parsing and chunking strategies for ingestion.",
       "icon": "✂️",
-      "order": 39,
+      "order": 40,
       "fields": [
         {
           "key": "semantiscan.chunking.default_strategy",
@@ -5606,7 +5804,7 @@
       "title": "Semantiscan: Ingestion",
       "description": "Ingestion pipeline behaviour and Git-aware modes.",
       "icon": "📥",
-      "order": 40,
+      "order": 41,
       "fields": [
         {
           "key": "semantiscan.ingestion.embedding_workers",
@@ -5726,7 +5924,7 @@
       "title": "Semantiscan: LLM",
       "description": "LLM configuration for query answering and advanced features.",
       "icon": "💬",
-      "order": 41,
+      "order": 42,
       "fields": [
         {
           "key": "semantiscan.llm.default_provider",
@@ -5972,7 +6170,7 @@
       "title": "Semantiscan: Retrieval",
       "description": "RAG retrieval parameters — top_k, hybrid search, BM25.",
       "icon": "🔎",
-      "order": 42,
+      "order": 43,
       "fields": [
         {
           "key": "semantiscan.retrieval.top_k",
@@ -6033,7 +6231,7 @@
       "title": "Semantiscan: File Discovery",
       "description": "File inclusion/exclusion rules during ingestion.",
       "icon": "📁",
-      "order": 43,
+      "order": 44,
       "fields": [
         {
           "key": "semantiscan.discovery.use_gitignore",
@@ -6087,7 +6285,7 @@
       "title": "Semantiscan: Logging",
       "description": "Semantiscan-specific logging (separate from unified logging).",
       "icon": "📝",
-      "order": 44,
+      "order": 45,
       "fields": [
         {
           "key": "semantiscan.logging.log_level_console",

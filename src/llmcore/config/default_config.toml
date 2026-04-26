@@ -422,6 +422,60 @@ posthog = "ERROR"
   #   chat_completion(safe_prompt=True)
 
 
+  [providers.huggingface]
+  # type = "huggingface"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: HF_TOKEN  (also accepts HUGGING_FACE_HUB_TOKEN)
+  # api_key = "hf_..."
+  api_key_env_var = "HF_TOKEN"
+
+  # Default model — any model hosted on the Hugging Face Hub.
+  # The Inference API supports thousands of models.  Popular choices:
+  #
+  #   Chat/Instruct:
+  #     meta-llama/Llama-3.3-70B-Instruct    (128K context)
+  #     meta-llama/Llama-3.1-8B-Instruct     (128K context)
+  #     Qwen/Qwen2.5-72B-Instruct            (128K context)
+  #     mistralai/Mistral-Small-24B-Instruct-2501  (32K context)
+  #     deepseek-ai/DeepSeek-V3-0324          (128K context)
+  #
+  #   Vision (multimodal):
+  #     meta-llama/Llama-3.2-11B-Vision-Instruct
+  #     Qwen/Qwen2-VL-7B-Instruct
+  #
+  #   Code:
+  #     Qwen/Qwen2.5-Coder-32B-Instruct
+  #     bigcode/starcoder2-15b
+  #
+  #   Embeddings:
+  #     sentence-transformers/all-MiniLM-L6-v2
+  #     BAAI/bge-large-en-v1.5
+  #
+  #   TTS:    facebook/mms-tts-eng, OuteAI/OuteTTS-0.3-500M
+  #   ASR:    openai/whisper-large-v3-turbo
+  #   Image:  black-forest-labs/FLUX.1-dev, stabilityai/stable-diffusion-xl-base-1.0
+  default_model = "meta-llama/Llama-3.3-70B-Instruct"
+
+  # Request timeout in seconds (some models can be slow to warm up).
+  timeout = 120
+
+  # --- HF Routing Provider ---
+  # By default, requests go to HF's own Inference API.
+  # Set to route through a third-party provider:
+  #   "hf-inference"  — HF Inference API (default)
+  #   "together"      — Together AI (billed to your HF account)
+  #   "sambanova"     — SambaNova
+  #   "replicate"     — Replicate
+  #   "fireworks-ai"  — Fireworks AI
+  #   "cerebras"      — Cerebras
+  # provider = "hf-inference"
+
+  # --- Billing ---
+  # bill_to: HF organization namespace to bill usage to.
+  # bill_to = "my-org"
+
+
 # ==============================================================================
 # [storage] - Persistence Configurations
 # ==============================================================================

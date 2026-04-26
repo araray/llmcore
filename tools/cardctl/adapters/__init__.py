@@ -21,6 +21,7 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "ollama": "ollama_adapter.OllamaAdapter",
     "openrouter": "openrouter_adapter.OpenRouterAdapter",
     "poe": "poe_adapter.PoeAdapter",
+    "huggingface": "huggingface_adapter.HuggingFaceAdapter",
 }
 
 
