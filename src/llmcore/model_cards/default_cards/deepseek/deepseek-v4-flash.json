@@ -1,0 +1,76 @@
+{
+  "model_id": "deepseek-v4-flash",
+  "display_name": "DeepSeek V4-Flash",
+  "provider": "deepseek",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek-v4",
+    "parameter_count": "284B",
+    "active_parameters": "13B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536,
+    "default_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.14,
+      "output": 0.28,
+      "cached_input": 0.028
+    }
+  },
+  "lifecycle": {
+    "release_date": "2026-04-24",
+    "knowledge_cutoff": "2025-11",
+    "status": "active"
+  },
+  "license": "DeepSeek License",
+  "open_weights": true,
+  "aliases": [
+    "DeepSeek-V4-Flash",
+    "deepseek-v4-flash"
+  ],
+  "description": "DeepSeek V4-Flash is a highly efficient MoE model (284B total, 13B active) with 1M token context. It combines Compressed Sparse Attention (CSA) and Heavily Compressed Attention (HCA) for 9.8x lower inference FLOPs vs V3.2 at 1M context. Supports thinking mode with three reasoning efforts: non-think, high, and max. Competitive with GPT-5.2 and Gemini-3.0-Pro on reasoning tasks.",
+  "tags": [
+    "v4",
+    "flash",
+    "reasoning",
+    "moe",
+    "cost-effective",
+    "million-context"
+  ],
+  "provider_deepseek": {
+    "thinking_mode": {
+      "supported": true,
+      "param": "thinking",
+      "default": true,
+      "reasoning_efforts": [
+        "non-think",
+        "high",
+        "max"
+      ]
+    },
+    "cache_hit_discount": 0.8,
+    "fill_in_middle": true,
+    "moe_architecture": {
+      "total_parameters": "284B",
+      "active_parameters": "13B"
+    }
+  },
+  "source": "builtin"
+}

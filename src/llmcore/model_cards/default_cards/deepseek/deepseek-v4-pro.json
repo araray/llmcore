@@ -1,0 +1,78 @@
+{
+  "model_id": "deepseek-v4-pro",
+  "display_name": "DeepSeek V4-Pro",
+  "provider": "deepseek",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek-v4",
+    "parameter_count": "1.6T",
+    "active_parameters": "49B",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536,
+    "default_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": true,
+    "file_processing": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.74,
+      "output": 3.48,
+      "cached_input": 0.145
+    },
+    "notes": "75% limited-time discount until 2026-05-05: input $0.435, output $0.87, cached $0.03625"
+  },
+  "lifecycle": {
+    "release_date": "2026-04-24",
+    "knowledge_cutoff": "2025-11",
+    "status": "active"
+  },
+  "license": "DeepSeek License",
+  "open_weights": true,
+  "aliases": [
+    "DeepSeek-V4-Pro",
+    "deepseek-v4-pro"
+  ],
+  "description": "DeepSeek V4-Pro is the flagship MoE model (1.6T total, 49B active) with 1M token context. V4-Pro-Max mode redefines SOTA for open models, outperforming predecessors on knowledge, reasoning, and agent tasks. Uses hybrid CSA+HCA attention achieving 3.7x lower FLOPs and 9.5x smaller KV cache vs V3.2 at 1M context. Supports FP4 quantization-aware training for efficient inference.",
+  "tags": [
+    "v4",
+    "pro",
+    "flagship",
+    "reasoning",
+    "agentic",
+    "moe",
+    "million-context"
+  ],
+  "provider_deepseek": {
+    "thinking_mode": {
+      "supported": true,
+      "param": "thinking",
+      "default": true,
+      "reasoning_efforts": [
+        "non-think",
+        "high",
+        "max"
+      ]
+    },
+    "cache_hit_discount": 0.917,
+    "fill_in_middle": true,
+    "moe_architecture": {
+      "total_parameters": "1.6T",
+      "active_parameters": "49B"
+    }
+  },
+  "source": "builtin"
+}
