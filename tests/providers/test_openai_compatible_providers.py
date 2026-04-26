@@ -90,7 +90,13 @@ class TestApiKeyAutoDetection:
 
     @patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-deep-test-123"}, clear=False)
     def test_deepseek_api_key_from_env(self):
-        """[providers.deepseek] picks up DEEPSEEK_API_KEY automatically."""
+        """[providers.deepseek] picks up DEEPSEEK_API_KEY automatically.
+
+        DeepSeek is now a native provider (DeepSeekProvider) that resolves
+        its own API key internally, not via ``_OPENAI_COMPATIBLE_DEFAULTS``.
+        The manager passes the config through; the provider reads the env
+        var in its own ``__init__``.
+        """
         mock_cls = _mock_provider_cls()
         with _patch_provider_map({"deepseek": mock_cls}):
             cfg = _make_config(
@@ -100,8 +106,10 @@ class TestApiKeyAutoDetection:
             mgr = ProviderManager(cfg)
 
         assert "deepseek" in mgr.get_available_providers()
+        # Native provider — manager does NOT inject api_key;
+        # DeepSeekProvider resolves it from DEEPSEEK_API_KEY itself.
         config_passed = mock_cls.call_args[0][0]
-        assert config_passed["api_key"] == "sk-deep-test-123"
+        assert "api_key" not in config_passed
 
     @patch.dict(os.environ, {"MISTRAL_API_KEY": "sk-mistral-test"}, clear=False)
     def test_mistral_api_key_from_env(self):
@@ -150,7 +158,11 @@ class TestBaseUrlAutoInjection:
 
     @patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-deep-test"}, clear=False)
     def test_deepseek_base_url_injected(self):
-        """base_url is auto-injected for deepseek when not in config."""
+        """DeepSeek is a native provider — base_url is NOT injected by the manager.
+
+        DeepSeekProvider handles its own base_url defaulting internally,
+        so the manager does not auto-inject it.
+        """
         mock_cls = _mock_provider_cls()
         with _patch_provider_map({"deepseek": mock_cls}):
             cfg = _make_config(
@@ -160,7 +172,8 @@ class TestBaseUrlAutoInjection:
             ProviderManager(cfg)
 
         config_passed = mock_cls.call_args[0][0]
-        assert config_passed["base_url"] == "https://api.deepseek.com"
+        # Native provider — manager does NOT inject base_url
+        assert "base_url" not in config_passed
 
     @patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-deep-test"}, clear=False)
     def test_explicit_base_url_not_overridden(self):
