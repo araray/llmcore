@@ -1,0 +1,48 @@
+# tools/cardctl/enrichments/kimi.toml
+# Manual enrichment overlay for the Kimi (Moonshot AI) provider.
+#
+# Provider API surface (GET /v1/models) exposes context_length and the
+# supports_image_in / supports_video_in / supports_reasoning flags, which the
+# KimiAdapter maps automatically.  It does NOT expose pricing or architecture
+# details — those live here and survive card regeneration.
+#
+# Canonical provider key: "kimi"  (Provider.KIMI; default_cards/kimi/).
+# Service docs:    https://platform.kimi.ai/docs
+# Pricing page:    https://platform.kimi.ai/docs/pricing/chat-k25
+# Last updated:    2026-05-29
+
+[pricing]
+# moonshot-v1 series — verified from platform.moonshot pricing (carried from the
+# prior moonshot.toml; USD per 1M tokens).  Vision-preview variants share the
+# same pricing as their base moonshot-v1 sibling.
+"moonshot-v1-128k"                 = { input = 0.84, output = 0.84 }
+"moonshot-v1-32k"                  = { input = 0.34, output = 0.34 }
+"moonshot-v1-8k"                   = { input = 0.17, output = 0.17 }
+"moonshot-v1-128k-vision-preview"  = { input = 0.84, output = 0.84 }
+"moonshot-v1-32k-vision-preview"   = { input = 0.34, output = 0.34 }
+"moonshot-v1-8k-vision-preview"    = { input = 0.17, output = 0.17 }
+# NOTE: kimi-k2.6 / kimi-k2.5 pricing intentionally omitted here — fill in from
+# https://platform.kimi.ai/docs/pricing/chat-k25 once confirmed for your region
+# (pricing differs between platform.kimi.ai and platform.kimi.com).
+
+[architecture]
+"kimi-k2"       = { family = "Kimi", type = "moe" }
+"moonshot-v1"   = { family = "Moonshot", type = "transformer" }
+
+[overrides]
+"kimi-k2.6"  = { display_name = "Kimi K2.6" }
+"kimi-k2.5"  = { display_name = "Kimi K2.5" }
+
+[provider_extension."kimi-k2.6"]
+thinking_mode = "toggle"          # thinking.type enabled|disabled
+preserved_thinking = true         # thinking.keep = "all"
+default_thinking = "enabled"
+
+[provider_extension."kimi-k2.5"]
+thinking_mode = "toggle"
+preserved_thinking = false
+default_thinking = "enabled"
+
+[exclude]
+# moonshot-v1-auto is a convenience router, not a distinct billable model.
+patterns = ["moonshot-v1-auto"]

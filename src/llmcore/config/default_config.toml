@@ -525,6 +525,64 @@ posthog = "ERROR"
   # bill_to: HF organization namespace to bill usage to.
   # bill_to = "my-org"
 
+  # --- Kimi (Moonshot AI) Provider ---
+  # Native provider for the Kimi Open Platform (Moonshot AI).  Uses the
+  # OpenAI-compatible Chat Completions endpoint plus Moonshot-specific
+  # extensions (thinking mode, Preserved Thinking, vision: image + video).
+  [providers.kimi]
+  # API Key: Set via environment variable for security.
+  # Environment Variable: MOONSHOT_API_KEY
+  # api_key = "sk-..."
+  #
+  # NOTE: Keys from platform.kimi.ai (api.moonshot.ai) and platform.kimi.com
+  # (api.moonshot.cn) are NOT interchangeable — mixing them yields a 401.
+  # api_key_env_var = "MOONSHOT_API_KEY"
+
+  # Default model for this provider instance.
+  # Current models (May 2026):
+  #   kimi-k2.6          — flagship; text+image+video, thinking by default, 256K
+  #   kimi-k2.5          — multimodal; thinking toggle, 256K
+  #   moonshot-v1-8k/32k/128k                 — text generation
+  #   moonshot-v1-8k/32k/128k-vision-preview  — image understanding
+  # Deprecated (retired 2026-05-25): kimi-k2-0905/0711-preview,
+  #   kimi-k2-turbo-preview, kimi-k2-thinking[-turbo].
+  default_model = "kimi-k2.6"
+
+  # Request timeout in seconds.  Thinking + multimodal responses can be large;
+  # 300s avoids network timeouts on long reasoning streams.
+  timeout = 300
+
+  # --- Thinking Mode (kimi-k2.5 / kimi-k2.6 only) ---
+  # Controls whether the model emits internal reasoning (reasoning_content)
+  # before the final answer.  Ignored for moonshot-v1 models.
+  #
+  # thinking: "enabled" or "disabled" (default: "enabled")
+  #   - "enabled":  Model returns reasoning_content + content.
+  #   - "disabled": Model returns content only (faster, cheaper).
+  thinking = "enabled"
+
+  # --- Preserved Thinking (kimi-k2.6 only) ---
+  # thinking_keep: "all" or empty/null (default: null)
+  #   - "all":  Historical reasoning_content is forwarded across turns, so the
+  #             model can continue a prior chain of thought.  Increases context
+  #             cost.  Only effective with thinking = "enabled".
+  #   - null:   Historical reasoning_content is ignored (shorter, cheaper).
+  # Per-request override via chat_completion(thinking=..., thinking_keep=...).
+  # thinking_keep = "all"
+
+  # --- Base URL ---
+  # Default: https://api.moonshot.ai/v1 (international platform).
+  # For the China platform use: https://api.moonshot.cn/v1 (separate key).
+  # base_url = "https://api.moonshot.ai/v1"
+  #
+  # --- Vision (image + video input) ---
+  # Supply media via Message.metadata on a user message:
+  #   metadata["inline_images"] = ["data:image/png;base64,...", "ms://<file_id>"]
+  #   metadata["inline_videos"] = ["ms://<file_id>"]
+  # Large videos should be uploaded first (provider.upload_file(...)) and
+  # referenced as ms://<file_id>.  kimi-k2.6 supports video; moonshot-v1
+  # *-vision-preview models support images only.
+
 
 # ==============================================================================
 # [storage] - Persistence Configurations

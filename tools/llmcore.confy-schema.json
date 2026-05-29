@@ -240,7 +240,8 @@
             "providers.openai.default_model",
             "providers.anthropic.default_model",
             "providers.ollama.default_model",
-            "providers.huggingface.default_model"
+            "providers.huggingface.default_model",
+            "providers.kimi.default_model"
           ]
         },
         {
@@ -1709,6 +1710,130 @@
           "description": "HuggingFace organization namespace to bill Inference API usage to.  Leave empty for personal billing.",
           "placeholder": "my-org",
           "required": false
+        }
+      ]
+    },
+    {
+      "id": "provider_kimi",
+      "title": "Provider: Kimi (Moonshot AI)",
+      "description": "Native provider for the Kimi Open Platform (Moonshot AI). OpenAI-compatible Chat Completions plus Moonshot extensions: thinking mode, Preserved Thinking, and vision (image + video). NOTE: keys from platform.kimi.ai (api.moonshot.ai) and platform.kimi.com (api.moonshot.cn) are NOT interchangeable.",
+      "icon": "🌙",
+      "order": 12,
+      "fields": [
+        {
+          "key": "providers.kimi.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "description": "Override for the Kimi/Moonshot endpoint. Leave empty for the international platform. Use https://api.moonshot.cn/v1 for the China platform (separate, non-interchangeable key).",
+          "placeholder": "https://api.moonshot.ai/v1",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.kimi.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the Moonshot API key. type = \"kimi\" (auto-detected from section name). API Key may also be set directly via providers.kimi.api_key.",
+          "default": "MOONSHOT_API_KEY"
+        },
+        {
+          "key": "providers.kimi.default_model",
+          "title": "Default Model",
+          "type": "enum",
+          "required": false,
+          "description": "Default model. Current models (May 2026): kimi-k2.6 (flagship; text+image+video, thinking by default, 256K), kimi-k2.5 (multimodal; thinking toggle, 256K), moonshot-v1-8k/32k/128k (text), moonshot-v1-8k/32k/128k-vision-preview (image). Deprecated (retired 2026-05-25): kimi-k2-0905/0711-preview, kimi-k2-turbo-preview, kimi-k2-thinking[-turbo].",
+          "default": "kimi-k2.6",
+          "options": [
+            {
+              "value": "kimi-k2.6",
+              "label": "Kimi K2.6 (multimodal + thinking)"
+            },
+            {
+              "value": "kimi-k2.5",
+              "label": "Kimi K2.5 (multimodal)"
+            },
+            {
+              "value": "moonshot-v1-128k",
+              "label": "Moonshot v1 128k (text)"
+            },
+            {
+              "value": "moonshot-v1-32k",
+              "label": "Moonshot v1 32k (text)"
+            },
+            {
+              "value": "moonshot-v1-8k",
+              "label": "Moonshot v1 8k (text)"
+            },
+            {
+              "value": "moonshot-v1-128k-vision-preview",
+              "label": "Moonshot v1 128k Vision"
+            }
+          ],
+          "discover": {
+            "id": "kimi_chat_cards",
+            "command": "python3 << 'PYEOF'\nimport json, os, sys\nP = 'kimi'\ndirs = [os.path.join('src', 'llmcore')]\ndirs += [os.path.join(p, 'llmcore') for p in sys.path if os.path.isdir(os.path.join(p, 'llmcore', 'model_cards'))]\nfor b in [os.path.join(d, 'model_cards', 'default_cards', P) for d in dirs]:\n    if not os.path.isdir(b): continue\n    r = []\n    for f in sorted(os.listdir(b)):\n        if not f.endswith('.json'): continue\n        try:\n            d = json.load(open(os.path.join(b, f)))\n            if d.get('model_type') != 'chat': continue\n            if d.get('lifecycle', {}).get('status') in ('retired', 'deprecated'): continue\n            ctx = d.get('context', {}).get('max_input_tokens', '?')\n            pi = d.get('pricing', {}).get('per_million_tokens', {}).get('input', '?')\n            r.append({'value': d['model_id'], 'label': d.get('display_name', d['model_id']), 'description': f'{ctx} ctx, ${pi}/M in'})\n        except Exception: pass\n    print(json.dumps(r))\n    sys.exit()\nprint('[]')\nPYEOF",
+            "description": "Load available kimi chat models from llmcore model cards",
+            "parse": "json",
+            "populate": "options",
+            "merge": "replace",
+            "on_failure": "use_static",
+            "cache": true,
+            "timeout": 5
+          }
+        },
+        {
+          "key": "providers.kimi.thinking",
+          "title": "Thinking Mode",
+          "type": "enum",
+          "required": false,
+          "description": "Default thinking mode for kimi-k2.5 / kimi-k2.6 (ignored for moonshot-v1). \"enabled\": model emits reasoning_content before the answer. \"disabled\": answer only (faster, cheaper). Per-request override via the API.",
+          "default": "enabled",
+          "options": [
+            {
+              "value": "enabled",
+              "label": "Enabled (emit reasoning_content)"
+            },
+            {
+              "value": "disabled",
+              "label": "Disabled (answer only)"
+            }
+          ]
+        },
+        {
+          "key": "providers.kimi.thinking_keep",
+          "title": "Preserved Thinking",
+          "type": "enum",
+          "required": false,
+          "description": "Preserved Thinking (kimi-k2.6 only). \"all\": historical reasoning_content is forwarded across turns so the model can continue a prior chain of thought (higher context cost; only with thinking=enabled). Leave empty to disable.",
+          "default": "",
+          "options": [
+            {
+              "value": "",
+              "label": "Off (default)"
+            },
+            {
+              "value": "all",
+              "label": "Keep all reasoning across turns"
+            }
+          ]
+        },
+        {
+          "key": "providers.kimi.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds. Thinking + multimodal responses can be large; 300s avoids timeouts on long reasoning streams.",
+          "default": 300,
+          "validation": {
+            "min": 10,
+            "max": 600
+          }
         }
       ]
     },

@@ -41,6 +41,7 @@ class NormalizedModel:
     supports_streaming: bool = False
     supports_tools: bool = False
     supports_vision: bool = False
+    supports_video_input: bool = False
     supports_audio_input: bool = False
     supports_audio_output: bool = False
     supports_json_mode: bool = False

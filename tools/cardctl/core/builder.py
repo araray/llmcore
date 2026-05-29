@@ -149,8 +149,9 @@ class CardBuilder:
             "structured_output": model.supports_structured_output,
             "vision": model.supports_vision,
             "audio_input": model.supports_audio_input,
+            "audio_output": model.supports_audio_output,
+            "video_input": model.supports_video_input,
             "reasoning": model.supports_reasoning,
-            "multimodal": model.supports_vision or model.supports_audio_input,
         }
 
     def _build_pricing(self, enrichment: ModelEnrichment) -> dict[str, Any] | None:

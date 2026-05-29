@@ -1,0 +1,32 @@
+{
+  "model_id": "kimi-k2-0711-preview",
+  "display_name": "kimi-k2-0711-preview",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": false
+  },
+  "lifecycle": {
+    "status": "deprecated",
+    "deprecation_date": "2026-05-25",
+    "successor_model": "kimi-k2.6"
+  },
+  "description": "DEPRECATED (retired 2026-05-25). kimi-k2-0711-preview is no longer maintained; use kimi-k2.6 instead.",
+  "tags": [
+    "deprecated"
+  ],
+  "source": "builtin"
+}

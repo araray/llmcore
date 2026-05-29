@@ -1,0 +1,45 @@
+{
+  "model_id": "kimi-k2.5",
+  "display_name": "Kimi K2.5",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "video_input": true,
+    "reasoning": true,
+    "file_processing": true
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "aliases": [
+    "Kimi-K2.5"
+  ],
+  "description": "Kimi K2.5 is a native-multimodal Moonshot AI model (text + image + video) with a thinking toggle (thinking.type). 256K context. Sampling parameters are fixed by the model family.",
+  "tags": [
+    "multimodal",
+    "vision",
+    "video",
+    "reasoning",
+    "moe"
+  ],
+  "provider_extension": {
+    "thinking_mode": "toggle",
+    "preserved_thinking": false,
+    "default_thinking": "enabled"
+  },
+  "source": "builtin"
+}

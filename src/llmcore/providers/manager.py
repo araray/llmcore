@@ -26,6 +26,7 @@ from .base import BaseProvider
 from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
 from .huggingface_provider import HuggingFaceProvider
+from .kimi_provider import KimiProvider
 from .mistral_provider import MistralProvider
 
 # Import concrete implementations
@@ -54,6 +55,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "vllm": VLLMProvider,
     "mistral": MistralProvider,
     "huggingface": HuggingFaceProvider,
+    "kimi": KimiProvider,
+    # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
+    "moonshot": KimiProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers
@@ -70,6 +74,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
 # selection during init.
 _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "google": "gemini",
+    "moonshot": "kimi",
 }
 
 # Well-known defaults for providers that reuse OpenAIProvider.

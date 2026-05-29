@@ -1,0 +1,35 @@
+{
+  "model_id": "moonshot-v1-32k",
+  "display_name": "Moonshot v1-32k",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Moonshot",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.34,
+      "output": 0.34
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "description": "Moonshot V1 text generation model (32K context).",
+  "tags": [
+    "text"
+  ],
+  "source": "builtin"
+}

@@ -17,7 +17,9 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "deepseek": "deepseek_adapter.DeepSeekAdapter",
     "xai": "xai_adapter.XAIAdapter",
     "qwen": "qwen_adapter.QwenAdapter",
-    "moonshot": "moonshot_adapter.MoonshotAdapter",
+    "kimi": "kimi_adapter.KimiAdapter",
+    # Back-compat alias: "moonshot" → Kimi adapter (canonical key is "kimi").
+    "moonshot": "kimi_adapter.KimiAdapter",
     "ollama": "ollama_adapter.OllamaAdapter",
     "openrouter": "openrouter_adapter.OpenRouterAdapter",
     "poe": "poe_adapter.PoeAdapter",
