@@ -24,6 +24,7 @@ except ImportError:
 from ..exceptions import ConfigError, EmbeddingError
 from ..storage.manager import StorageManager
 from .base import BaseEmbeddingModel
+from .deepinfra import DeepInfraEmbedding
 from .google import GoogleAIEmbedding
 from .ollama import OllamaEmbedding
 from .openai import OpenAIEmbedding
@@ -37,6 +38,7 @@ EMBEDDING_PROVIDER_CLASS_MAP: dict[str, type[BaseEmbeddingModel]] = {
     "openai": OpenAIEmbedding,
     "google": GoogleAIEmbedding,
     "ollama": OllamaEmbedding,
+    "deepinfra": DeepInfraEmbedding,
 }
 
 # Lazy-loaded providers that require optional dependencies.

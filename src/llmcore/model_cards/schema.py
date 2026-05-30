@@ -95,6 +95,7 @@ class Provider(str, Enum):
     GROQ = "groq"
     OPENROUTER = "openrouter"
     POE = "poe"
+    DEEPINFRA = "deepinfra"
     LOCAL = "local"
 
 

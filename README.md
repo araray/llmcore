@@ -31,7 +31,7 @@
 
 | Category | Features |
 |----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Mistral, Qwen, xAI |
+| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Mistral, Qwen, xAI, DeepInfra |
 | **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling |
 | **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
 | **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
@@ -370,6 +370,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
 | **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
+| **DeepInfra** | DeepSeek, Llama, Qwen, Mistral, FLUX, Whisper, Kokoro (100+ open models) | Streaming, Tools, Vision, Reasoning, TTS, STT, Image, Embeddings |
 
 ### Switching Providers
 
@@ -725,6 +726,7 @@ Built-in model cards for:
 - **Mistral**: Mistral Large 3
 - **Qwen**: Qwen 3 Max, Qwen3-Coder
 - **xAI**: Grok-4, Grok-4-Heavy
+- **DeepInfra**: DeepSeek-V3/R1, Llama 3.x, Qwen, Mistral, FLUX (image), Whisper (STT), Kokoro (TTS), embeddings
 
 ### Custom Model Cards
 

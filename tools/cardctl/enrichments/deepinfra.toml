@@ -1,0 +1,38 @@
+# tools/cardctl/enrichments/deepinfra.toml
+# DeepInfra enrichment overlay.
+#
+# DeepInfra's /openrouter/models endpoint exposes live pricing, modalities,
+# context length and capabilities, so the adapter populates almost everything
+# automatically. This file only carries manual corrections and exclusions that
+# survive `cardctl generate deepinfra` regeneration.
+#
+# Last updated: 2026-05-29
+
+[pricing]
+# Pricing is read live from the API (per-token prompt/completion/input_cache_read)
+# and converted to per-million USD by the adapter. Add overrides here only if a
+# specific model's API pricing is wrong or missing.
+
+[architecture]
+# Architecture (family / parameter_count / type) is not exposed by the catalog
+# endpoint. Add hints here for popular families if desired, e.g.:
+# ["deepseek-ai/DeepSeek-V3"]
+# family = "deepseek"
+# type = "moe"
+# parameter_count = "671B"
+# active_parameters = "37B"
+
+[overrides]
+# Per-model field overrides (display_name, description, max_input_tokens, tags).
+
+[aliases]
+# Alternative model identifiers, e.g.:
+# "deepseek-ai/DeepSeek-V3" = ["deepseek-v3"]
+
+[provider_extension]
+# Extra provider_extension fields merged on top of adapter-derived metadata
+# (hugging_face_id, quantization, modalities, supported_features, datacenters).
+
+[exclude]
+# Model-ID prefixes to skip during generation (e.g. private/fine-tune namespaces).
+patterns = []

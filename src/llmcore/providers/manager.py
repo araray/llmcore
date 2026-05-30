@@ -23,6 +23,7 @@ except ImportError:
 from ..exceptions import ConfigError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
+from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
 from .huggingface_provider import HuggingFaceProvider
@@ -56,6 +57,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "mistral": MistralProvider,
     "huggingface": HuggingFaceProvider,
     "kimi": KimiProvider,
+    "deepinfra": DeepInfraProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
     # Alias: google → gemini

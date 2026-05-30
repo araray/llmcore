@@ -59,7 +59,7 @@ class CardBuilder:
             "architecture": self._build_architecture(model, enrichment),
             "context": self._build_context(model, enrichment),
             "capabilities": self._build_capabilities(model),
-            "pricing": self._build_pricing(enrichment),
+            "pricing": self._build_pricing(model, enrichment),
             "lifecycle": self._build_lifecycle(model),
             "license": model.license,
             "open_weights": model.open_weights,
@@ -154,15 +154,39 @@ class CardBuilder:
             "reasoning": model.supports_reasoning,
         }
 
-    def _build_pricing(self, enrichment: ModelEnrichment) -> dict[str, Any] | None:
-        if not enrichment.pricing:
+    def _build_pricing(
+        self, model: NormalizedModel, enrichment: ModelEnrichment
+    ) -> dict[str, Any] | None:
+        """Build the pricing block for a card.
+
+        Resolution order:
+
+        1. Enrichment overlay (manually curated ``[pricing]`` TOML).
+        2. Live API pricing stashed by the adapter in
+           ``raw_api_data["_pricing"]`` (per-million USD).
+
+        Enrichment wins so curated corrections survive regeneration.
+
+        Args:
+            model: The normalized model (may carry ``_pricing``).
+            enrichment: The resolved enrichment overlay.
+
+        Returns:
+            A ``ModelPricing``-compatible dict, or ``None`` when no pricing is
+            available (e.g. local/free models).
+        """
+        source = enrichment.pricing or model.raw_api_data.get("_pricing")
+        if not source:
             return None
+        per_million: dict[str, Any] = {
+            "input": source.get("input", 0),
+            "output": source.get("output", 0),
+        }
+        if source.get("cached_input") is not None:
+            per_million["cached_input"] = source["cached_input"]
         return {
             "currency": "USD",
-            "per_million_tokens": {
-                "input": enrichment.pricing.get("input", 0),
-                "output": enrichment.pricing.get("output", 0),
-            },
+            "per_million_tokens": per_million,
         }
 
     def _build_lifecycle(self, model: NormalizedModel) -> dict[str, Any]:

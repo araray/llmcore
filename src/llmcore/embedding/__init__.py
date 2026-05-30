@@ -32,6 +32,7 @@ from .cache import (
     LRUCache,
     create_embedding_cache,
 )
+from .deepinfra import DeepInfraEmbedding
 from .manager import EmbeddingManager
 from .sentence_transformer import SentenceTransformerEmbedding
 
@@ -52,6 +53,7 @@ __all__ = [
     # Base classes
     "BaseEmbeddingModel",
     "SentenceTransformerEmbedding",
+    "DeepInfraEmbedding",
     # Manager
     "EmbeddingManager",
     # Cache

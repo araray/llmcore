@@ -334,10 +334,7 @@
             "condition": "value == true",
             "message": "Raw payload logging may include sensitive data (API keys, user content). Use only for debugging."
           },
-          "tags": [
-            "security",
-            "debugging"
-          ]
+          "tags": ["security", "debugging"]
         },
         {
           "key": "llmcore.admin_api_key",
@@ -346,9 +343,7 @@
           "required": false,
           "description": "Defines the secret key required for accessing administrative endpoints such as live configuration reloading. This provides a separate, high-privilege authentication layer independent of tenant API keys. Secures administrative operations that could impact the entire platform, ensuring only authorized administrators can perform sensitive actions like configuration reloads. This key should be treated as a high-privilege secret. In production, ALWAYS set this via the environment variable rather than in config files.",
           "recommendation": "Always set via the LLMCORE_ADMIN_API_KEY environment variable in production, not in config files.",
-          "tags": [
-            "security"
-          ]
+          "tags": ["security"]
         }
       ]
     },
@@ -889,10 +884,7 @@
             "https://api.together.xyz/v1"
           ],
           "validation": {
-            "schemes": [
-              "https",
-              "http"
-            ]
+            "schemes": ["https", "http"]
           },
           "required": false
         },
@@ -903,10 +895,7 @@
           "description": "OpenAI API key. Strongly recommended to set via OPENAI_API_KEY environment variable.",
           "placeholder": "sk-...",
           "recommendation": "Set via OPENAI_API_KEY or LLMCORE_PROVIDERS__OPENAI__API_KEY environment variable.",
-          "tags": [
-            "security",
-            "credentials"
-          ],
+          "tags": ["security", "credentials"],
           "required": false
         },
         {
@@ -998,10 +987,7 @@
           "description": "Anthropic API key. Strongly recommended to set via ANTHROPIC_API_KEY environment variable.",
           "placeholder": "sk-ant-...",
           "recommendation": "Set via ANTHROPIC_API_KEY or LLMCORE_PROVIDERS__ANTHROPIC__API_KEY environment variable.",
-          "tags": [
-            "security",
-            "credentials"
-          ],
+          "tags": ["security", "credentials"],
           "required": false
         },
         {
@@ -1085,10 +1071,7 @@
           "description": "URL of the running Ollama server.",
           "default": "http://localhost:11434",
           "validation": {
-            "schemes": [
-              "http",
-              "https"
-            ]
+            "schemes": ["http", "https"]
           },
           "required": false
         },
@@ -1169,10 +1152,7 @@
           "type": "secret",
           "description": "Google AI API key. Set via GOOGLE_API_KEY environment variable.",
           "recommendation": "Set via GOOGLE_API_KEY or LLMCORE_PROVIDERS__GEMINI__API_KEY environment variable.",
-          "tags": [
-            "security",
-            "credentials"
-          ],
+          "tags": ["security", "credentials"],
           "required": false
         },
         {
@@ -1394,10 +1374,7 @@
           "description": "Base URL of your vLLM server (including /v1). Required — no default because vLLM is self-hosted.",
           "placeholder": "http://localhost:8000/v1",
           "validation": {
-            "schemes": [
-              "http",
-              "https"
-            ]
+            "schemes": ["http", "https"]
           },
           "required": false
         },
@@ -1418,9 +1395,7 @@
             },
             "populate": "suggestions",
             "merge": "prepend",
-            "depends_on": [
-              "providers.vllm.base_url"
-            ],
+            "depends_on": ["providers.vllm.base_url"],
             "invalidate_on_change": true,
             "on_failure": "use_static",
             "cache": true,
@@ -1455,10 +1430,7 @@
           "description": "Override for custom Mistral endpoints. Leave empty for official API.",
           "placeholder": "https://api.mistral.ai/v1",
           "validation": {
-            "schemes": [
-              "https",
-              "http"
-            ]
+            "schemes": ["https", "http"]
           },
           "required": false
         },
@@ -1547,10 +1519,7 @@
           "description": "HuggingFace API token (starts with hf_...).  Strongly recommended to set via HF_TOKEN environment variable.",
           "placeholder": "hf_...",
           "recommendation": "Set via HF_TOKEN or LLMCORE_PROVIDERS__HUGGINGFACE__API_KEY environment variable.",
-          "tags": [
-            "security",
-            "credentials"
-          ],
+          "tags": ["security", "credentials"],
           "required": false
         },
         {
@@ -1727,10 +1696,7 @@
           "description": "Override for the Kimi/Moonshot endpoint. Leave empty for the international platform. Use https://api.moonshot.cn/v1 for the China platform (separate, non-interchangeable key).",
           "placeholder": "https://api.moonshot.ai/v1",
           "validation": {
-            "schemes": [
-              "https",
-              "http"
-            ]
+            "schemes": ["https", "http"]
           },
           "required": false
         },
@@ -1838,6 +1804,58 @@
       ]
     },
     {
+      "id": "provider_deepinfra",
+      "title": "Provider: DeepInfra",
+      "description": "Native provider for DeepInfra (https://deepinfra.com) — serverless inference for 100+ open-weight models behind an OpenAI-compatible API. Supports chat, vision, tool calling, structured output, embeddings, image generation, and speech (TTS / STT / translation). DeepInfra-specific request parameters (reasoning_effort, reasoning, service_tier, prompt_cache_key, top_k, min_p, repetition_penalty) are delivered via the OpenAI SDK extra_body mechanism.",
+      "icon": "🌊",
+      "order": 12,
+      "fields": [
+        {
+          "key": "providers.deepinfra.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "description": "OpenAI-compatible base URL (chat/embeddings/images). The native audio root (/v1/audio/*) is derived automatically by stripping the trailing /openai. Leave empty for the official endpoint.",
+          "placeholder": "https://api.deepinfra.com/v1/openai",
+          "validation": {
+            "schemes": ["https", "http"]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.deepinfra.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the DeepInfra token. DEEPINFRA_API_KEY is also accepted. type = \"deepinfra\" (auto-detected from section name). API key may also be set directly via providers.deepinfra.api_key.",
+          "default": "DEEPINFRA_TOKEN"
+        },
+        {
+          "key": "providers.deepinfra.default_model",
+          "title": "Default Model",
+          "type": "string",
+          "required": false,
+          "description": "Default chat model from https://deepinfra.com/models. Supports MODEL_NAME:VERSION and deploy_id:DEPLOY_ID addressing. Examples: deepseek-ai/DeepSeek-V3 (default), deepseek-ai/DeepSeek-R1 (reasoning), Qwen/Qwen2.5-VL-32B-Instruct (vision), meta-llama/Llama-3.3-70B-Instruct.",
+          "default": "deepseek-ai/DeepSeek-V3"
+        },
+        {
+          "key": "providers.deepinfra.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds. Large reasoning/vision responses can be slow.",
+          "default": 120
+        },
+        {
+          "key": "providers.deepinfra.default_context_length",
+          "title": "Default Context Length",
+          "type": "integer",
+          "required": false,
+          "description": "Fallback context window (tokens) for models with no model card and no live discovery data. cardctl-generated cards override per-model.",
+          "default": 32768
+        }
+      ]
+    },
+    {
       "id": "storage_core",
       "title": "Storage: Session & Vector",
       "description": "Persistence backends for conversation history and RAG documents.",
@@ -1866,10 +1884,7 @@
             }
           ],
           "recommendation": "SQLite for single-process/dev. PostgreSQL for production with multiple workers.",
-          "see_also": [
-            "storage.session.path",
-            "storage.session.db_url"
-          ]
+          "see_also": ["storage.session.path", "storage.session.db_url"]
         },
         {
           "key": "storage.session.path",
@@ -1910,10 +1925,7 @@
             }
           ],
           "recommendation": "ChromaDB for local dev. pgvector if you already run PostgreSQL in production.",
-          "see_also": [
-            "storage.vector.path",
-            "storage.vector.db_url"
-          ]
+          "see_also": ["storage.vector.path", "storage.vector.db_url"]
         },
         {
           "key": "storage.vector.default_collection",
@@ -2004,9 +2016,7 @@
             "condition": "value == true",
             "message": "Security risk — may expose sensitive data in logs."
           },
-          "tags": [
-            "security"
-          ]
+          "tags": ["security"]
         },
         {
           "key": "storage.observability.metrics_enabled",
@@ -2356,10 +2366,7 @@
             "embedding.cache.disk_enabled",
             "embedding.cache.memory_size"
           ],
-          "tags": [
-            "performance",
-            "cost"
-          ]
+          "tags": ["performance", "cost"]
         },
         {
           "key": "embedding.cache.memory_size",
@@ -2543,12 +2550,8 @@
           "description": "Enable recording of API usage and cost estimation. Budget monitoring and usage analytics.",
           "default": true,
           "condition": "observability.enabled == true",
-          "see_also": [
-            "observability.cost_tracking.db_path"
-          ],
-          "tags": [
-            "cost"
-          ]
+          "see_also": ["observability.cost_tracking.db_path"],
+          "tags": ["cost"]
         },
         {
           "key": "observability.cost_tracking.db_path",
@@ -2922,10 +2925,7 @@
             "condition": "value > 85",
             "message": "Temperature above 85°C may cause hardware damage. Critical for SBCs (e.g. Raspberry Pi)."
           },
-          "tags": [
-            "hardware",
-            "safety"
-          ]
+          "tags": ["hardware", "safety"]
         },
         {
           "key": "autonomous.resources.min_disk_free_gb",
@@ -2955,9 +2955,7 @@
             "autonomous.resources.max_daily_cost_usd",
             "agents.circuit_breaker.max_total_cost"
           ],
-          "tags": [
-            "cost"
-          ]
+          "tags": ["cost"]
         },
         {
           "key": "autonomous.resources.max_daily_cost_usd",
@@ -2971,9 +2969,7 @@
           },
           "condition": "autonomous.resources.enabled == true",
           "recommendation": "Set conservatively at first; monitor actual usage via cost tracking before increasing.",
-          "tags": [
-            "cost"
-          ]
+          "tags": ["cost"]
         },
         {
           "key": "autonomous.resources.max_hourly_tokens",
@@ -3080,9 +3076,7 @@
             "min": 1,
             "max": 200
           },
-          "see_also": [
-            "agents.circuit_breaker.max_iterations"
-          ]
+          "see_also": ["agents.circuit_breaker.max_iterations"]
         },
         {
           "key": "agents.default_timeout",
@@ -3202,9 +3196,7 @@
           "type": "list",
           "required": false,
           "description": "Container name patterns that grant FULL access (glob patterns).",
-          "default": [
-            "llmcore-trusted-*"
-          ],
+          "default": ["llmcore-trusted-*"],
           "condition": "agents.sandbox.mode != 'vm'",
           "item_type": "string"
         },
@@ -3217,9 +3209,7 @@
           "default": "1g",
           "condition": "agents.sandbox.mode != 'vm'",
           "recommendation": "1g is safe for most Python tasks. Increase for data processing or ML workloads.",
-          "tags": [
-            "resources"
-          ]
+          "tags": ["resources"]
         },
         {
           "key": "agents.sandbox.docker.cpu_limit",
@@ -3233,9 +3223,7 @@
             "max": 64.0
           },
           "condition": "agents.sandbox.mode != 'vm'",
-          "tags": [
-            "resources"
-          ]
+          "tags": ["resources"]
         },
         {
           "key": "agents.sandbox.docker.timeout_seconds",
@@ -3262,9 +3250,7 @@
             "condition": "value == true",
             "message": "Enabling network access reduces sandbox isolation security."
           },
-          "tags": [
-            "security"
-          ]
+          "tags": ["security"]
         }
       ],
       "condition": "agents.sandbox.mode != 'vm'"
@@ -3481,10 +3467,7 @@
           "description": "Enable circuit breaker protection",
           "default": true,
           "recommendation": "Keep enabled in all environments to prevent runaway costs.",
-          "tags": [
-            "safety",
-            "cost"
-          ]
+          "tags": ["safety", "cost"]
         },
         {
           "key": "agents.circuit_breaker.max_iterations",
@@ -3498,9 +3481,7 @@
             "max": 200
           },
           "condition": "agents.circuit_breaker.enabled == true",
-          "see_also": [
-            "agents.max_iterations"
-          ]
+          "see_also": ["agents.max_iterations"]
         },
         {
           "key": "agents.circuit_breaker.max_same_errors",
@@ -3544,10 +3525,7 @@
             "autonomous.resources.max_hourly_cost_usd",
             "autonomous.resources.max_daily_cost_usd"
           ],
-          "tags": [
-            "cost",
-            "safety"
-          ]
+          "tags": ["cost", "safety"]
         },
         {
           "key": "agents.circuit_breaker.progress_stall_threshold",
@@ -3754,10 +3732,7 @@
           "description": "Enable HITL approval system",
           "default": true,
           "recommendation": "Keep enabled for any agent that can execute code or make external requests.",
-          "tags": [
-            "security",
-            "safety"
-          ]
+          "tags": ["security", "safety"]
         },
         {
           "key": "agents.hitl.global_risk_threshold",
@@ -3785,10 +3760,7 @@
             }
           ],
           "condition": "agents.hitl.enabled == true",
-          "tags": [
-            "security",
-            "safety"
-          ]
+          "tags": ["security", "safety"]
         },
         {
           "key": "agents.hitl.default_timeout_seconds",
@@ -3911,11 +3883,7 @@
           "title": "Fast",
           "type": "list",
           "required": false,
-          "default": [
-            "gpt-4o-mini",
-            "claude-3-haiku-20240307",
-            "gemma3:1b"
-          ],
+          "default": ["gpt-4o-mini", "claude-3-haiku-20240307", "gemma3:1b"],
           "condition": "agents.routing.enabled == true",
           "item_type": "string"
         },
@@ -3924,11 +3892,7 @@
           "title": "Balanced",
           "type": "list",
           "required": false,
-          "default": [
-            "gpt-4o",
-            "claude-3-5-sonnet-20241022",
-            "llama3.3:70b"
-          ],
+          "default": ["gpt-4o", "claude-3-5-sonnet-20241022", "llama3.3:70b"],
           "condition": "agents.routing.enabled == true",
           "item_type": "string"
         },
@@ -3937,11 +3901,7 @@
           "title": "Capable",
           "type": "list",
           "required": false,
-          "default": [
-            "gpt-4-turbo",
-            "claude-3-opus-20240229",
-            "o1-preview"
-          ],
+          "default": ["gpt-4-turbo", "claude-3-opus-20240229", "o1-preview"],
           "condition": "agents.routing.enabled == true",
           "item_type": "string"
         }
@@ -4337,11 +4297,7 @@
           "type": "list",
           "required": false,
           "description": "Temperature values for candidate generation Different temperatures produce diverse solutions.",
-          "default": [
-            0.3,
-            0.7,
-            1.0
-          ],
+          "default": [0.3, 0.7, 1.0],
           "condition": "agents.darwin.arbiter.enabled == true",
           "item_type": "float"
         },
@@ -4611,12 +4567,7 @@
           "type": "list",
           "required": false,
           "description": "Percentiles to calculate for latency metrics. Understand latency distribution (p50, p95, p99).",
-          "default": [
-            50,
-            90,
-            95,
-            99
-          ],
+          "default": [50, 90, 95, 99],
           "condition": "agents.observability.metrics.enabled == true",
           "item_type": "integer"
         },
@@ -5263,10 +5214,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".py",
-            ".pyw"
-          ],
+          "default": [".py", ".pyw"],
           "item_type": "string"
         },
         {
@@ -5281,12 +5229,7 @@
           "title": "Entry Points",
           "type": "list",
           "required": false,
-          "default": [
-            "funcdef",
-            "async_funcdef",
-            "classdef",
-            "decorated"
-          ],
+          "default": ["funcdef", "async_funcdef", "classdef", "decorated"],
           "item_type": "string"
         },
         {
@@ -5319,9 +5262,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".java"
-          ],
+          "default": [".java"],
           "item_type": "string"
         },
         {
@@ -5373,14 +5314,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".cpp",
-            ".cc",
-            ".cxx",
-            ".hpp",
-            ".h",
-            ".hxx"
-          ],
+          "default": [".cpp", ".cc", ".cxx", ".hpp", ".h", ".hxx"],
           "item_type": "string"
         },
         {
@@ -5395,10 +5329,7 @@
           "title": "Entry Points",
           "type": "list",
           "required": false,
-          "default": [
-            "functionDefinition",
-            "classSpecifier"
-          ],
+          "default": ["functionDefinition", "classSpecifier"],
           "item_type": "string"
         },
         {
@@ -5431,9 +5362,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".go"
-          ],
+          "default": [".go"],
           "item_type": "string"
         },
         {
@@ -5448,11 +5377,7 @@
           "title": "Entry Points",
           "type": "list",
           "required": false,
-          "default": [
-            "functionDecl",
-            "methodDecl",
-            "typeSpec"
-          ],
+          "default": ["functionDecl", "methodDecl", "typeSpec"],
           "item_type": "string"
         },
         {
@@ -5485,10 +5410,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".yaml",
-            ".yml"
-          ],
+          "default": [".yaml", ".yml"],
           "item_type": "string"
         },
         {
@@ -5534,9 +5456,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".json"
-          ],
+          "default": [".json"],
           "item_type": "string"
         },
         {
@@ -5582,9 +5502,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".toml"
-          ],
+          "default": [".toml"],
           "item_type": "string"
         },
         {
@@ -5630,9 +5548,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".xml"
-          ],
+          "default": [".xml"],
           "item_type": "string"
         },
         {
@@ -5678,10 +5594,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".md",
-            ".markdown"
-          ],
+          "default": [".md", ".markdown"],
           "item_type": "string"
         },
         {
@@ -5727,9 +5640,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".txt"
-          ],
+          "default": [".txt"],
           "item_type": "string"
         },
         {
@@ -5775,9 +5686,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".log"
-          ],
+          "default": [".log"],
           "item_type": "string"
         },
         {
@@ -5823,9 +5732,7 @@
           "title": "Extensions",
           "type": "list",
           "required": false,
-          "default": [
-            ".rst"
-          ],
+          "default": [".rst"],
           "item_type": "string"
         },
         {
@@ -5959,9 +5866,7 @@
           "type": "boolean",
           "required": false,
           "default": false,
-          "see_also": [
-            "semantiscan.metadata_store.enable"
-          ]
+          "see_also": ["semantiscan.metadata_store.enable"]
         },
         {
           "key": "semantiscan.ingestion.git.default_ref",
@@ -6393,13 +6298,7 @@
           "title": "Excluded Files",
           "type": "list",
           "required": false,
-          "default": [
-            ".DS_Store",
-            "Thumbs.db",
-            "*.pyc",
-            "*.pyo",
-            "*.pyd"
-          ],
+          "default": [".DS_Store", "Thumbs.db", "*.pyc", "*.pyo", "*.pyd"],
           "item_type": "string"
         }
       ],
