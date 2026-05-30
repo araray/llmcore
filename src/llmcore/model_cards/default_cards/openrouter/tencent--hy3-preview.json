@@ -1,0 +1,39 @@
+{
+  "model_id": "tencent/hy3-preview",
+  "display_name": "Tencent: Hy3 preview",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.063,
+      "output": 0.21
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-22"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Hy3 preview is a high-efficiency Mixture-of-Experts model from Tencent designed for agentic workflows and production use. It supports configurable reasoning levels across disabled, low, and high modes, allowing it to...",
+  "tags": [],
+  "source": "generated"
+}

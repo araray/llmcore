@@ -19,8 +19,9 @@
     "structured_output": false,
     "vision": true,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": true
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": {
     "currency": "USD",
@@ -31,13 +32,14 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-22"
+    "release_date": "2026-05-30"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
     "mistral-small-latest",
-    "mistral-vibe-cli-fast"
+    "mistral-vibe-cli-fast",
+    "magistral-small-latest"
   ],
   "description": "Mistral Small 4.",
   "tags": [

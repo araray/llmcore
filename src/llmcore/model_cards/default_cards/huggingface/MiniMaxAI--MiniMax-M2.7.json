@@ -1,0 +1,34 @@
+{
+  "model_id": "MiniMaxAI/MiniMax-M2.7",
+  "display_name": "MiniMax-M2.7",
+  "provider": "huggingface",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: MiniMaxAI/MiniMax-M2.7",
+  "tags": [
+    "open-weights"
+  ],
+  "source": "generated"
+}

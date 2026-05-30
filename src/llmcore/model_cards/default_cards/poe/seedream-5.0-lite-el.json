@@ -3,20 +3,23 @@
   "display_name": "seedream-5.0-lite-el",
   "provider": "poe",
   "model_type": "chat",
-  "architecture": null,
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
   "context": {
     "max_input_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
@@ -25,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Poe model: seedream-5.0-lite-el",
+  "description": "Seedream 5.0 Lite is ByteDance’s unified multimodal image-generation model, designed to think through prompts before rendering and offering stronger understanding, reasoning, and image quality. It supports both text-to-image and image-to-image creation, with features like high-resolution output, and consistent results for detailed scenes, editing, and branded visuals.\nThis model is served from Malaysia.\n\nThis bot supports optional parameters for additional customization.",
   "tags": [],
   "source": "generated"
 }

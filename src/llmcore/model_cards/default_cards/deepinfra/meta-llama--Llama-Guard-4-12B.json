@@ -1,0 +1,60 @@
+{
+  "model_id": "meta-llama/Llama-Guard-4-12B",
+  "display_name": "Llama-Guard-4-12B",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 163840,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.18,
+      "output": 0.18
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Llama Guard 4 is a natively multimodal safety classifier with 12 billion parameters trained jointly on text and multiple images. Llama Guard 4 is a dense architecture pruned from the Llama 4 Scout pre-trained model and fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM inputs (prompt classification) and in LLM responses (response classification). It itself acts as an LLM: it generates text in its output that indicates whether a given prompt or response is safe or unsafe, and if unsafe, it also lists the content categories violated.",
+  "tags": [
+    "text",
+    "image",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "meta-llama/Llama-Guard-4-12B",
+    "quantization": "bfloat16",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

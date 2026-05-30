@@ -1,0 +1,34 @@
+{
+  "model_id": "deepseek/deepseek-v4-flash:free",
+  "display_name": "DeepSeek: DeepSeek V4 Flash (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 384000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-24"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,40 @@
+{
+  "model_id": "stepfun/step-3.7-flash",
+  "display_name": "StepFun: Step 3.7 Flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 256000,
+    "max_output_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 1.15
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-28"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Step 3.7 Flash is StepFun's latest high-efficiency multimodal Mixture-of-Experts model. It pairs a 196B-parameter language backbone with a vision encoder for native image and video understanding, activating roughly 11B parameters...",
+  "tags": [],
+  "source": "generated"
+}

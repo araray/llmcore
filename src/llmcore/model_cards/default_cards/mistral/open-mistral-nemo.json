@@ -19,8 +19,9 @@
     "structured_output": false,
     "vision": false,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": {
     "currency": "USD",
@@ -31,7 +32,7 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-22"
+    "release_date": "2026-05-30"
   },
   "license": null,
   "open_weights": false,

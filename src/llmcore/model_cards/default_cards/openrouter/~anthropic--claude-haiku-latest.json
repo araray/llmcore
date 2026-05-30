@@ -1,0 +1,40 @@
+{
+  "model_id": "~anthropic/claude-haiku-latest",
+  "display_name": "Anthropic Claude Haiku Latest",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 5.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model always redirects to the latest model in the Anthropic Claude Haiku family.",
+  "tags": [],
+  "source": "generated"
+}

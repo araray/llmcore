@@ -1,0 +1,38 @@
+{
+  "model_id": "openai/whisper-large-v3-turbo",
+  "display_name": "whisper-large-v3-turbo",
+  "provider": "huggingface",
+  "model_type": "stt",
+  "architecture": {
+    "family": "whisper"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "tags": [
+    "open-weights",
+    "audio",
+    "stt"
+  ],
+  "source": "generated"
+}

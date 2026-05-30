@@ -1,0 +1,39 @@
+{
+  "model_id": "mistralai/mistral-medium-3-5",
+  "display_name": "Mistral: Mistral Medium 3.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.5,
+      "output": 7.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,34 @@
+{
+  "model_id": "qwen3.5-4b-el",
+  "display_name": "qwen3.5-4b-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3.5 4B is a low-cost multimodal reasoning model with 256K context, image and video input, function tools, and structured output.\n\nWeight Precision: FP8\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

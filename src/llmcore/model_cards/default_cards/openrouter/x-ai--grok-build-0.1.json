@@ -1,0 +1,39 @@
+{
+  "model_id": "x-ai/grok-build-0.1",
+  "display_name": "xAI: Grok Build 0.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 2.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-20"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
+  "tags": [],
+  "source": "generated"
+}

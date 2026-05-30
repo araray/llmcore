@@ -1,0 +1,62 @@
+{
+  "model_id": "deepseek-ai/DeepSeek-V3-0324",
+  "display_name": "DeepSeek-V3-0324",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 163840,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.77,
+      "cached_input": 0.135
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "DeepSeek-V3-0324, a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token, an improved iteration over DeepSeek-V3.",
+  "tags": [
+    "text",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "deepseek-ai/DeepSeek-V3-0324",
+    "quantization": "fp4",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "tools",
+      "json_mode",
+      "structured_outputs",
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "model_id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+  "display_name": "Qwen3-VL-30B-A3B-Instruct",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.6
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Meet Qwen3-VL — the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding & generation, deeper visual perception & reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
+  "tags": [
+    "text",
+    "image",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+    "quantization": "fp8",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "tools",
+      "json_mode",
+      "structured_outputs",
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

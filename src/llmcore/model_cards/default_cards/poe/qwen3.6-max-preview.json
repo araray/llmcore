@@ -3,20 +3,23 @@
   "display_name": "qwen3.6-max-preview",
   "provider": "poe",
   "model_type": "chat",
-  "architecture": null,
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
   "context": {
-    "max_input_tokens": 4096
+    "max_input_tokens": 256000
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
@@ -25,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Poe model: qwen3.6-max-preview",
+  "description": "The Max model, the largest and most capable variant in the Qwen3.6 series, is now available in a preview version. At present, only its plain-text capabilities are open for experimentation. Compared with the previously released Qwen3-Max and Qwen3.6-Plus, this model features enhanced vibe coding abilities, more efficient coding agent execution, and significantly improved front-end development skills. Additionally, its long-tail knowledge retention has been further upgraded.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Pricing is ~1.5x when input tokens >128k\n- Context Window: 256k\n- Supported input modalities: Text, Image (non-native), Documents\n\nThis bot supports optional parameters for additional customization.",
   "tags": [],
   "source": "generated"
 }

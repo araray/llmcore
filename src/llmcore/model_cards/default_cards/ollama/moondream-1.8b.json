@@ -19,8 +19,9 @@
     "structured_output": false,
     "vision": true,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": true
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {

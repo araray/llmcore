@@ -1,0 +1,40 @@
+{
+  "model_id": "qwen/qwen3.6-flash",
+  "display_name": "Qwen: Qwen3.6 Flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1875,
+      "output": 1.125
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3.6 Flash is a fast, efficient language model from Alibaba's Qwen 3.6 series. It supports text, image, and video input with a 1M token context window. Tiered pricing kicks in...",
+  "tags": [],
+  "source": "generated"
+}

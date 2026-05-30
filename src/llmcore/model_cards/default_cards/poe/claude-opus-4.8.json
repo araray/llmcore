@@ -1,0 +1,34 @@
+{
+  "model_id": "claude-opus-4.8",
+  "display_name": "claude-opus-4.8",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Anthropic"
+  },
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Anthropic's flagship model for enterprise-grade knowledge work, now with sharper judgment and significantly improved honesty. Powered by Dynamic Workflows and effort control, Opus 4.8 excels at codebase-scale migrations, multi-agent coordination, and long-running autonomous tasks with hundreds of parallel subagents. It leverages a massive 1M-token context window and best-in-class computer-use capabilities to seamlessly execute intricate workflows with elite reasoning, safety, and reliability.\n\nThis bot supports optional parameters for advanced customization.",
+  "tags": [],
+  "source": "generated"
+}

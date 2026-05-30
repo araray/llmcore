@@ -1,0 +1,34 @@
+{
+  "model_id": "seed-2.0-code",
+  "display_name": "seed-2.0-code",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seed 2.0 Code is optimized for enterprise-grade coding scenarios. Building on the strong agentic and VLM capabilities of Seed 2.0, it further strengthens code generation and software engineering performance. It delivers particularly strong front-end results and is also optimized for multilingual coding needs commonly found in enterprise environments, making it well suited for integration with a wide range of AI coding tools.\n\nNotes:\n- Pricing is 2x when input tokens >128k\n- Context Window: 256k\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

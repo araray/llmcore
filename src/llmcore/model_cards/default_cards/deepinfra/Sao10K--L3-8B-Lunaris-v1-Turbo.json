@@ -1,0 +1,60 @@
+{
+  "model_id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
+  "display_name": "L3-8B-Lunaris-v1-Turbo",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.04,
+      "output": 0.05
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Deepinfra model: Sao10K/L3-8B-Lunaris-v1-Turbo",
+  "tags": [
+    "text",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
+    "quantization": "fp8",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "json_mode",
+      "structured_outputs",
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

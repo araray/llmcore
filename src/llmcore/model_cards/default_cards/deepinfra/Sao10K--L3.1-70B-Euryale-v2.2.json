@@ -1,0 +1,60 @@
+{
+  "model_id": "Sao10K/L3.1-70B-Euryale-v2.2",
+  "display_name": "L3.1-70B-Euryale-v2.2",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.85,
+      "output": 0.85
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Euryale 3.1 - 70B v2.2 is a model focused on creative roleplay from Sao10k",
+  "tags": [
+    "text",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Sao10K/L3.1-70B-Euryale-v2.2",
+    "quantization": "fp8",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "json_mode",
+      "structured_outputs",
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "model_id": "Qwen/Qwen3.5-9B",
+  "display_name": "Qwen3.5-9B",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 81920
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.04,
+      "output": 0.15
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Qwen3.5-9B is a high-performance model from Alibaba's Qwen3.5 series with a hybrid Gated Delta Networks and sparse MoE architecture. It features a 262K token context window, thinking/reasoning mode, tool calling, multi-token prediction, and support for 201 languages. Excels at reasoning, coding, instruction following, and long-context tasks.",
+  "tags": [
+    "text",
+    "image",
+    "output:text"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Qwen/Qwen3.5-9B",
+    "quantization": "bfloat16",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "supported_features": [
+      "tools",
+      "json_mode",
+      "structured_outputs",
+      "logprobs"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

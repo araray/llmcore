@@ -1,0 +1,36 @@
+{
+  "model_id": "gpt-image-2-2026-04-21",
+  "display_name": "GPT Image 2 2026 04 21",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-17"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Openai model: gpt-image-2-2026-04-21",
+  "tags": [],
+  "source": "generated"
+}

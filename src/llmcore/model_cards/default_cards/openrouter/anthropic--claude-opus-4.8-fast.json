@@ -1,0 +1,40 @@
+{
+  "model_id": "anthropic/claude-opus-4.8-fast",
+  "display_name": "Anthropic: Claude Opus 4.8 (Fast)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 10.0,
+      "output": 50.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Fast-mode variant of [Opus 4.8](/anthropic/claude-opus-4.8) - identical capabilities with higher output speed at 2x pricing relative to regular Opus 4.8.\n\nLearn more in Anthropic's docs: https://platform.claude.com/docs/en/build-with-claude/fast-mode",
+  "tags": [],
+  "source": "generated"
+}

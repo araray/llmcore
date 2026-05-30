@@ -1,0 +1,34 @@
+{
+  "model_id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "display_name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 256000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-28"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "NVIDIA Nemotron™ 3 Nano Omni is a 30B-A3B open multimodal model designed to function as a perception and context sub-agent in enterprise agent systems. It accepts text, image, video, and...",
+  "tags": [],
+  "source": "generated"
+}

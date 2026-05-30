@@ -1,0 +1,37 @@
+{
+  "model_id": "ai-forever/sbert_large_nlu_ru",
+  "display_name": "sbert_large_nlu_ru",
+  "provider": "huggingface",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "bert"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: ai-forever/sbert_large_nlu_ru",
+  "tags": [
+    "open-weights",
+    "embedding"
+  ],
+  "source": "generated"
+}

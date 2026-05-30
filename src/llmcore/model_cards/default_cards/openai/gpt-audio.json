@@ -1,0 +1,36 @@
+{
+  "model_id": "gpt-audio",
+  "display_name": "GPT Audio",
+  "provider": "openai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-08-28"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Openai model: gpt-audio",
+  "tags": [],
+  "source": "generated"
+}

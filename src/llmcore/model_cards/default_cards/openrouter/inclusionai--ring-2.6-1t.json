@@ -1,0 +1,40 @@
+{
+  "model_id": "inclusionai/ring-2.6-1t",
+  "display_name": "inclusionAI: Ring-2.6-1T",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.075,
+      "output": 0.625
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Ring-2.6-1T is a 1T-parameter-scale thinking model with 63B active parameters, built for real-world agent workflows that require both strong capability and operational efficiency. It is optimized for coding agents, tool...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,40 @@
+{
+  "model_id": "perceptron/perceptron-mk1",
+  "display_name": "Perceptron: Perceptron Mk1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 1.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Perceptron Mk1 (Mark One) is Perceptron's highest-quality vision-language model for video and embodied reasoning.** It accepts image and video inputs paired with natural language queries, and produces detailed visual understanding...",
+  "tags": [],
+  "source": "generated"
+}

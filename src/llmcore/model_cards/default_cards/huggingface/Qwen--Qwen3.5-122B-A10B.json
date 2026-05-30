@@ -1,0 +1,39 @@
+{
+  "model_id": "Qwen/Qwen3.5-122B-A10B",
+  "display_name": "Qwen3.5-122B-A10B",
+  "provider": "huggingface",
+  "model_type": "vision",
+  "architecture": {
+    "family": "qwen",
+    "parameter_count": "22B"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: Qwen/Qwen3.5-122B-A10B",
+  "tags": [
+    "open-weights",
+    "multimodal",
+    "vision"
+  ],
+  "source": "generated"
+}

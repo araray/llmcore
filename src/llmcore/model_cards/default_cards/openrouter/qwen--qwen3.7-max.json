@@ -1,0 +1,40 @@
+{
+  "model_id": "qwen/qwen3.7-max",
+  "display_name": "Qwen: Qwen3.7 Max",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.25,
+      "output": 3.75
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-05-21"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3.7-Max is the flagship model in Alibaba's Qwen3.7 series. It supports text input and output and is designed for agent-centric workloads, with particular strengths in coding, office and productivity tasks,...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,40 @@
+{
+  "model_id": "~google/gemini-pro-latest",
+  "display_name": "Google Gemini Pro Latest",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model always redirects to the latest model in the Google Gemini Pro family.",
+  "tags": [],
+  "source": "generated"
+}

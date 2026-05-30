@@ -1,0 +1,35 @@
+{
+  "model_id": "baidu/ERNIE-Image-Turbo",
+  "display_name": "ERNIE-Image-Turbo",
+  "provider": "huggingface",
+  "model_type": "image-generation",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: baidu/ERNIE-Image-Turbo",
+  "tags": [
+    "open-weights",
+    "image-generation"
+  ],
+  "source": "generated"
+}

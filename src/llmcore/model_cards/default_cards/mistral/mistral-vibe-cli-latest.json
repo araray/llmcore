@@ -1,6 +1,6 @@
 {
   "model_id": "mistral-vibe-cli-latest",
-  "display_name": "mistral-vibe-cli-latest",
+  "display_name": "mistral-medium-3-5",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
@@ -15,21 +15,24 @@
     "tool_use": true,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-22"
+    "release_date": "2026-05-30"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Devstral 2512 release model",
-  "tags": [],
+  "description": "Official mistral-medium-3-5 Mistral AI model",
+  "tags": [
+    "multimodal"
+  ],
   "source": "generated",
   "provider_mistral": {
     "open_weights": false,
@@ -37,6 +40,6 @@
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.2
+    "default_temperature": 1.0
   }
 }

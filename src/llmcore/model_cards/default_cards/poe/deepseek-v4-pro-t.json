@@ -1,0 +1,34 @@
+{
+  "model_id": "deepseek-v4-pro-t",
+  "display_name": "deepseek-v4-pro-t",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek V4 Pro is DeepSeek's 1.6T parameter (49B activated) MoE model supporting 1M token context. It introduces a hybrid attention architecture combining Compressed Sparse Attention and Heavily Compressed Attention, requiring only 27% of inference FLOPs and 10% of KV cache compared to V3.2 at million-token context. Pre-trained on 32T+ tokens with Muon optimizer and a two-stage post-training pipeline, V4 Pro delivers three configurable reasoning modes and strong performance across coding (93.5% LiveCodeBench), reasoning (90.1% GPQA Diamond), and agentic tasks (80.6% SWE-Bench Verified). MIT licensed.",
+  "tags": [],
+  "source": "generated"
+}

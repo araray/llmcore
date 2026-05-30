@@ -5,7 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 200000
+    "max_input_tokens": 2000000
   },
   "capabilities": {
     "streaming": true,
@@ -15,8 +15,9 @@
     "structured_output": false,
     "vision": false,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
@@ -26,7 +27,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "The Pareto Router is a way to have OpenRouter always pick a strong coding model for your needs without committing to a specific one. You express a single `min_coding_score` preference...",
+  "description": "The Pareto Router maintains a tiered shortlist of strong coding models, ranked by [Artificial Analysis](https://artificialanalysis.ai/) coding percentiles. Set min_coding_score between 0 and 1 on the [pareto-router plugin](https://openrouter.ai/docs/guides/routing/routers/pareto-router#the-min_coding_score-parameter) to control how...",
   "tags": [],
   "source": "generated"
 }

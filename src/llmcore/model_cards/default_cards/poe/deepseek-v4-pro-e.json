@@ -1,0 +1,34 @@
+{
+  "model_id": "deepseek-v4-pro-e",
+  "display_name": "deepseek-v4-pro-e",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek V4 Pro is a flagship Mixture-of-Experts large language model with 1.6 trillion total parameters and 49 billion active parameters, natively supporting context lengths of up to 1M tokens. Excels at advanced mathematical reasoning, complex logical inference, specialized coding, and deep analysis of long-form text, well suited for cutting-edge research, sophisticated office workflows, and advanced AI agents.\nThis model is served from Singapore.\n\nNotes:\n- Context Window: 1M\n- Supported input modalities: Text, Image (non-native), Documents\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

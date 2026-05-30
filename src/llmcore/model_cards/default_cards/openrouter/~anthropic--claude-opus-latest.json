@@ -16,10 +16,17 @@
     "structured_output": false,
     "vision": false,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 5.0,
+      "output": 25.0
+    }
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-04-21"

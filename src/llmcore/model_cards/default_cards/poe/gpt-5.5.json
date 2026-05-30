@@ -1,0 +1,34 @@
+{
+  "model_id": "gpt-5.5",
+  "display_name": "gpt-5.5",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "OpenAI"
+  },
+  "context": {
+    "max_input_tokens": 400000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-5.5 is OpenAI's smartest and most intuitive model, built for agentic coding, computer use, knowledge work, and early scientific research. It handles complex multi-step tasks with less guidance, figures out what needs to happen next on unclear problems, and matches GPT-5.4 per-token latency while delivering a much higher level of intelligence. Achieves state-of-the-art accuracy on Terminal-Bench 2.0 and SWE-Bench Pro, solving more tasks end-to-end in a single pass than previous models. Supports 400k tokens of input context and native vision.",
+  "tags": [],
+  "source": "generated"
+}

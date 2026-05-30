@@ -18,13 +18,14 @@
     "structured_output": false,
     "vision": true,
     "audio_input": false,
-    "reasoning": false,
-    "multimodal": true
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-22"
+    "release_date": "2026-05-30"
   },
   "license": null,
   "open_weights": false,
@@ -40,6 +41,6 @@
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.7
+    "default_temperature": 1.0
   }
 }

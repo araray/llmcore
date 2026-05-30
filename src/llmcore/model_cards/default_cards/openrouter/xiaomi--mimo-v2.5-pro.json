@@ -1,0 +1,40 @@
+{
+  "model_id": "xiaomi/mimo-v2.5-pro",
+  "display_name": "Xiaomi: MiMo-V2.5-Pro",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.435,
+      "output": 0.87
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-22"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiMo-V2.5-Pro is Xiaomi’s flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro....",
+  "tags": [],
+  "source": "generated"
+}

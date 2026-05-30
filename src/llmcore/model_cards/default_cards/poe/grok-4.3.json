@@ -1,0 +1,34 @@
+{
+  "model_id": "grok-4.3",
+  "display_name": "grok-4.3",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "XAI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok-4.3 is a reasoning model from xAI designed for agentic workflows, instruction-following tasks, and applications requiring high factual accuracy. It accepts text and image inputs with text output, and supports a large 1M-token context window, making it useful for long-document analysis, deep research, and multi-step problem solving.\n\nReasoning is always active and cannot be disabled or configured by effort level.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

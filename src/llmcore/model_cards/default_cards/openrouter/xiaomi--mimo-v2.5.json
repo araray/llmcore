@@ -1,0 +1,40 @@
+{
+  "model_id": "xiaomi/mimo-v2.5",
+  "display_name": "Xiaomi: MiMo-V2.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.14,
+      "output": 0.28
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-22"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiMo-V2.5 is a native omnimodal model by Xiaomi. It delivers Pro-level agentic performance at roughly half the inference cost, while surpassing MiMo-V2-Omni in multimodal perception across image and video understanding...",
+  "tags": [],
+  "source": "generated"
+}

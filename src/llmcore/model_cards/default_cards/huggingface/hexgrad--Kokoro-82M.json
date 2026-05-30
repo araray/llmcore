@@ -1,0 +1,38 @@
+{
+  "model_id": "hexgrad/Kokoro-82M",
+  "display_name": "Kokoro-82M",
+  "provider": "huggingface",
+  "model_type": "tts",
+  "architecture": {
+    "parameter_count": "82M"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: hexgrad/Kokoro-82M",
+  "tags": [
+    "open-weights",
+    "audio",
+    "tts"
+  ],
+  "source": "generated"
+}
