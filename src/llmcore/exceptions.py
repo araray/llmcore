@@ -66,6 +66,30 @@ class ProviderError(LLMCoreError):
         super().__init__(f"Error with provider '{provider_name}': {message}")
 
 
+class SearchProviderError(LLMCoreError):
+    """Raised for errors originating from a web/data **search** provider.
+
+    This is the search-side analogue of :class:`ProviderError`.  It is used by
+    :mod:`llmcore.search` providers (e.g. Bright Data) for transport faults,
+    authentication failures, or unexpected API responses.
+
+    Attributes:
+        provider_name: Name of the search provider instance that raised the error.
+        status_code: HTTP status code associated with the failure, if any.
+    """
+
+    def __init__(
+        self,
+        provider_name: str = "Unknown",
+        message: str = "Search provider error.",
+        status_code: int | None = None,
+    ):
+        self.provider_name = provider_name
+        self.status_code = status_code
+        detail = f" (HTTP {status_code})" if status_code is not None else ""
+        super().__init__(f"Error with search provider '{provider_name}': {message}{detail}")
+
+
 # =============================================================================
 # STORAGE EXCEPTIONS
 # =============================================================================

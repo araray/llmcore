@@ -52,6 +52,16 @@ from .models import (
 )
 from .providers.base import BaseProvider
 from .providers.manager import ProviderManager
+from .search.base import BaseSearchProvider
+from .search.manager import SearchProviderManager
+from .search.models import (
+    DatasetInfo,
+    DatasetMetadata,
+    DatasetSnapshot,
+    DiscoverResult,
+    ScrapeResult,
+    WebSearchResult,
+)
 from .sessions.manager import SessionManager
 from .storage.manager import StorageManager
 
@@ -169,6 +179,7 @@ class LLMCore:
     config: ConfyConfig
     _storage_manager: StorageManager
     _provider_manager: ProviderManager
+    _search_provider_manager: SearchProviderManager
     _session_manager: SessionManager
     _memory_manager: MemoryManager
     _embedding_manager: EmbeddingManager
@@ -355,6 +366,15 @@ class LLMCore:
             self._provider_manager = ProviderManager(self.config, self._log_raw_payloads_enabled)
             await self._provider_manager.initialize()
 
+            logger.debug("Initializing SearchProviderManager...")
+            # Search is an optional capability: the manager loads zero or more
+            # providers from [search_providers] and never fails when the section
+            # is absent, so existing configs are unaffected.
+            self._search_provider_manager = SearchProviderManager(
+                self.config, self._log_raw_payloads_enabled
+            )
+            await self._search_provider_manager.initialize()
+
             logger.debug("Initializing SessionManager...")
             self._session_manager = SessionManager(self._storage_manager.session_storage)
 
@@ -386,6 +406,10 @@ class LLMCore:
         logger.info("Closing LLMCore instance...")
         try:
             await self._provider_manager.close_all()
+            # Search manager may not exist if init failed very early; guard it.
+            search_mgr = getattr(self, "_search_provider_manager", None)
+            if search_mgr is not None:
+                await search_mgr.close_all()
             await self._storage_manager.close()
             logger.info("LLMCore instance closed and resources released")
         except Exception as e:
@@ -457,6 +481,260 @@ class LLMCore:
             List of provider names (e.g., ['openai', 'anthropic', 'ollama'])
         """
         return self._provider_manager.get_available_providers()
+
+    # ==========================================================================
+    # Web / Data Search Providers
+    # ==========================================================================
+    # These methods mirror the LLM-provider surface above, but route to the
+    # optional search subsystem (see ``llmcore.search``).  They let consuming
+    # applications run web searches, scrape URLs, perform AI-ranked discovery,
+    # and collect structured datasets "just like" they call LLM providers.
+    # All methods raise ``ConfigError`` when no search provider is configured.
+
+    def get_available_search_providers(self) -> list[str]:
+        """Return the names of configured, available search-provider instances.
+
+        Returns:
+            List of search-provider instance names (e.g. ``["brightdata"]``).
+            Empty when no ``[search_providers.*]`` section is configured.
+        """
+        return self._search_provider_manager.get_available_search_providers()
+
+    def get_search_provider(self, provider_name: str | None = None) -> BaseSearchProvider:
+        """Return a search-provider instance by name, or the default.
+
+        Args:
+            provider_name: Search-provider instance name.  If ``None``, returns
+                the configured default search provider.
+
+        Returns:
+            The requested :class:`~llmcore.search.base.BaseSearchProvider`.
+
+        Raises:
+            ConfigError: If the requested/default provider is not available.
+        """
+        return self._search_provider_manager.get_search_provider(provider_name)
+
+    async def web_search(
+        self,
+        query: str,
+        *,
+        provider: str | None = None,
+        count: int = 10,
+        country: str | None = None,
+        language: str = "en",
+        device: str = "desktop",
+        engine: str | None = None,
+        mode: str = "sync",
+        **kwargs: Any,
+    ) -> WebSearchResult:
+        """Run a web search (SERP) via a configured search provider.
+
+        Args:
+            query: The search query string.
+            provider: Search-provider instance name; ``None`` uses the default.
+            count: Desired number of organic results.
+            country: Two-letter ISO country code for geolocated results.
+            language: Two-letter language code (e.g. ``"en"``).
+            device: ``"desktop"`` or ``"mobile"``.
+            engine: Engine to use (provider-specific, e.g. ``"google"``).
+            mode: ``"sync"`` (blocking) or ``"async"`` (trigger + poll).
+            **kwargs: Provider-specific extras (e.g. ``safe_search``,
+                ``time_range``).
+
+        Returns:
+            A :class:`~llmcore.search.models.WebSearchResult`.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support web search.
+            SearchProviderError: On transport/configuration faults.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.web_search(
+            query,
+            count=count,
+            country=country,
+            language=language,
+            device=device,
+            engine=engine,
+            mode=mode,
+            **kwargs,
+        )
+
+    async def scrape_url(
+        self,
+        url: str,
+        *,
+        provider: str | None = None,
+        response_format: str = "raw",
+        country: str | None = None,
+        method: str = "GET",
+        mode: str = "sync",
+        **kwargs: Any,
+    ) -> ScrapeResult:
+        """Scrape a single URL through a search provider's unlocking proxy.
+
+        Args:
+            url: The target URL.
+            provider: Search-provider instance name; ``None`` uses the default.
+            response_format: ``"raw"`` (HTML/text) or ``"json"`` (structured).
+            country: Two-letter ISO country code for the exit node.
+            method: Upstream HTTP method.
+            mode: ``"sync"`` (blocking) or ``"async"`` (trigger + poll).
+            **kwargs: Provider-specific extras.
+
+        Returns:
+            A :class:`~llmcore.search.models.ScrapeResult`.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support scraping.
+            SearchProviderError: On transport/configuration faults.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.scrape(
+            url,
+            response_format=response_format,
+            country=country,
+            method=method,
+            mode=mode,
+            **kwargs,
+        )
+
+    async def discover(
+        self,
+        query: str,
+        *,
+        provider: str | None = None,
+        intent: str | None = None,
+        include_content: bool = False,
+        country: str | None = None,
+        city: str | None = None,
+        language: str | None = None,
+        filter_keywords: list[str] | None = None,
+        count: int | None = None,
+        timeout: int = 60,
+        poll_interval: int = 2,
+        **kwargs: Any,
+    ) -> DiscoverResult:
+        """Run an AI-relevance-ranked Discover search via a search provider.
+
+        Args:
+            query: The search query string.
+            provider: Search-provider instance name; ``None`` uses the default.
+            intent: Why you are searching — guides AI relevance ranking.
+            include_content: If ``True``, include full-page content (markdown).
+            country: Country code for localized results.
+            city: City for localized results.
+            language: Language code for localized results.
+            filter_keywords: Keywords used to filter results.
+            count: Number of results to return.
+            timeout: Maximum seconds to wait for the async task.
+            poll_interval: Seconds between status polls.
+            **kwargs: Provider-specific extras.
+
+        Returns:
+            A :class:`~llmcore.search.models.DiscoverResult`.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support discovery.
+            SearchProviderError: On transport/configuration faults.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.discover(
+            query,
+            intent=intent,
+            include_content=include_content,
+            country=country,
+            city=city,
+            language=language,
+            filter_keywords=filter_keywords,
+            count=count,
+            timeout=timeout,
+            poll_interval=poll_interval,
+            **kwargs,
+        )
+
+    async def list_datasets(self, *, provider: str | None = None) -> list[DatasetInfo]:
+        """List datasets available through a search provider.
+
+        Args:
+            provider: Search-provider instance name; ``None`` uses the default.
+
+        Returns:
+            A list of :class:`~llmcore.search.models.DatasetInfo`.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support datasets.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.list_datasets()
+
+    async def get_dataset_metadata(
+        self, dataset_id: str, *, provider: str | None = None
+    ) -> DatasetMetadata:
+        """Return the field schema for a dataset.
+
+        Args:
+            dataset_id: The dataset identifier.
+            provider: Search-provider instance name; ``None`` uses the default.
+
+        Returns:
+            A :class:`~llmcore.search.models.DatasetMetadata`.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support datasets.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.dataset_metadata(dataset_id)
+
+    async def dataset_search(
+        self,
+        dataset_id: str,
+        filter: dict[str, Any],
+        *,
+        provider: str | None = None,
+        records_limit: int | None = None,
+        format: str = "jsonl",
+        timeout: int = 300,
+        poll_interval: int = 5,
+        **kwargs: Any,
+    ) -> DatasetSnapshot:
+        """Filter a dataset, wait for the snapshot, and download records.
+
+        Args:
+            dataset_id: The dataset to filter.
+            filter: Filter criteria (provider-specific schema).
+            provider: Search-provider instance name; ``None`` uses the default.
+            records_limit: Maximum number of records to collect.
+            format: Download format (``"json"``, ``"jsonl"``, or ``"csv"``).
+            timeout: Maximum seconds to wait for the snapshot to be ready.
+            poll_interval: Seconds between status polls.
+            **kwargs: Provider-specific extras forwarded to the filter step.
+
+        Returns:
+            A :class:`~llmcore.search.models.DatasetSnapshot` with ``records``
+            populated.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support datasets.
+            SearchProviderError: On transport/configuration faults.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.dataset_search(
+            dataset_id,
+            filter,
+            records_limit=records_limit,
+            format=format,
+            timeout=timeout,
+            poll_interval=poll_interval,
+            **kwargs,
+        )
 
     def get_provider_details(self, provider_name: str | None = None) -> ModelDetails:
         """
@@ -4123,6 +4401,9 @@ class LLMCore:
         """
         self._log_raw_payloads_enabled = enable
         self._provider_manager.update_log_raw_payloads_setting(enable)
+        search_mgr = getattr(self, "_search_provider_manager", None)
+        if search_mgr is not None:
+            search_mgr.update_log_raw_payloads_setting(enable)
         logger.info(f"Raw payload logging {'enabled' if enable else 'disabled'}")
 
     def set_log_level(self, level: str) -> None:

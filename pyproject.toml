@@ -57,6 +57,13 @@ ollama = ["ollama>=0.6.0"]
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
 deepinfra = ["openai>=2.31.0", "httpx>=0.27.0"]
 
+# ----------------------------------------------------------------------------
+# Search providers (web / data search — optional, parallel to LLM providers)
+# ----------------------------------------------------------------------------
+# Bright Data search provider talks to the Bright Data REST API over httpx
+# directly (no vendor SDK). Install with: pip install llmcore[brightdata]
+brightdata = ["httpx>=0.27.0"]
+
 sentence_transformers = ["sentence-transformers>=5.2.0"]
 
 # Dependencies for specific storage backends
@@ -119,6 +126,7 @@ all = [
     "llmcore[gemini]",
     "llmcore[ollama]",
     "llmcore[deepinfra]",
+    "llmcore[brightdata]",
     "llmcore[sqlite]",
     "llmcore[postgres]",
     "llmcore[chromadb]",

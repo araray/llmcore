@@ -24,6 +24,21 @@
 # Environment Variable: LLMCORE_DEFAULT_PROVIDER
 default_provider = "ollama"
 
+# --- Default Web/Data Search Provider ---
+# What it does: Specifies which search provider instance (from [search_providers]
+#               below) to use by default when no provider is explicitly chosen for
+#               web_search() / scrape_url() / discover() / dataset_search().
+# Purpose: Lets you call the search subsystem without naming a provider each time.
+# Possible Values: The name of any configured search provider instance
+#                  (e.g., "brightdata"), or empty to leave unset.
+# Note: Search is OPTIONAL. If you do not configure any [search_providers.*]
+#       section, this is ignored and the search methods raise a clear error only
+#       if you actually call them. Existing setups are unaffected.
+# Default Value: "" (unset). If exactly one search provider is configured, it is
+#                adopted as the default automatically.
+# Environment Variable: LLMCORE_DEFAULT_SEARCH_PROVIDER
+default_search_provider = ""
+
 # --- Default Embedding Model ---
 # What it does: Specifies which embedding model to use for RAG operations.
 # Purpose: Required for generating vector embeddings of text chunks in RAG.
@@ -649,6 +664,69 @@ posthog = "ERROR"
   # Large videos should be uploaded first (provider.upload_file(...)) and
   # referenced as ms://<file_id>.  kimi-k2.6 supports video; moonshot-v1
   # *-vision-preview models support images only.
+
+
+# ==============================================================================
+# [search_providers] - Web / Data Search Provider Configurations
+# ==============================================================================
+# This section defines web/data SEARCH provider instances.  They are the
+# search-side analogue of [providers] above: a separate, pluggable family of
+# backends that LLMCore exposes through llm.web_search(), llm.scrape_url(),
+# llm.discover(), llm.list_datasets(), and llm.dataset_search().
+#
+# Search is OPTIONAL.  If this section is omitted entirely, LLMCore behaves
+# exactly as before and the search methods raise a clear, actionable error only
+# when actually called.  Define multiple instances of the same type by using
+# unique section names plus an explicit `type` key (e.g. [search_providers.bd2]
+# with type = "brightdata").
+[search_providers]
+
+  # --- Bright Data Provider ---
+  # Web infrastructure for AI: SERP (search), Web Unlocker (scrape), Discover
+  # (AI-ranked search), and the Dataset Marketplace (structured records).
+  # Docs: https://docs.brightdata.com/
+  [search_providers.brightdata]
+  # type = "brightdata"  # auto-detected from the section name
+
+  # API token (Bearer).  STRONGLY recommended to set via an environment variable.
+  # A single token authenticates every Bright Data endpoint.
+  # Environment Variable: BRIGHTDATA_API_TOKEN
+  #   (or LLMCORE_SEARCH_PROVIDERS__BRIGHTDATA__API_KEY)
+  # api_key = "..."
+  api_key_env_var = "BRIGHTDATA_API_TOKEN"
+
+  # Base API URL (normally no need to change).
+  # base_url = "https://api.brightdata.com"
+
+  # --- Zones ---
+  # SERP and Web Unlocker run against zones you create in the Bright Data
+  # control panel (https://brightdata.com/cp/zones).  Unlike the vendor SDK,
+  # this provider does NOT auto-create zones.  Set the zone names you want to
+  # use; dataset and discover operations do not require a zone.
+  #
+  # serp_zone:     zone used by web_search()  (a SERP API zone)
+  # unlocker_zone: zone used by scrape_url()  (a Web Unlocker zone)
+  # serp_zone = "my_serp_zone"
+  # unlocker_zone = "my_unlocker_zone"
+
+  # --- Default search engine for web_search() ---
+  # Possible Values: "google" (default), "bing", "yandex".
+  default_engine = "google"
+
+  # Request timeout in seconds (sync requests + each poll).
+  timeout = 60
+
+  # --- Async polling (mode="async") ---
+  # poll_interval: seconds between status polls.
+  # poll_timeout:  max seconds to wait for an async SERP/Unlocker result.
+  poll_interval = 2
+  poll_timeout = 60
+
+  # Max retry attempts for transient transport / 5xx errors.
+  max_retries = 3
+
+  # Verify TLS certificates. Set to false ONLY for sandbox/proxy environments.
+  ssl_verify = true
 
 
 # ==============================================================================

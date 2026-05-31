@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "app": {
     "name": "LLMCore",
-    "version": "0.49.6",
+    "version": "0.49.11",
     "description": "Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution",
     "url": "https://github.com/araray/llmcore",
     "maintainer": "araray"
@@ -243,6 +243,20 @@
             "providers.huggingface.default_model",
             "providers.kimi.default_model"
           ]
+        },
+        {
+          "key": "llmcore.default_search_provider",
+          "title": "Default Search Provider",
+          "type": "string",
+          "required": false,
+          "description": "Default web/data SEARCH provider instance (from [search_providers] below) used by web_search()/scrape_url()/discover()/dataset_search() when none is explicitly chosen. Search is OPTIONAL: leave empty if you do not use it. If exactly one search provider is configured it becomes the default automatically.",
+          "default": "",
+          "placeholder": "brightdata",
+          "examples": ["brightdata"],
+          "recommendation": "Leave empty unless you configure a [search_providers.*] section.",
+          "tags": ["search"],
+          "see_also": ["search_providers.brightdata.api_key"],
+          "since": "0.50.0"
         },
         {
           "key": "llmcore.default_embedding_model",
@@ -6404,6 +6418,132 @@
         }
       ],
       "condition": "semantiscan.enabled == true"
+    },
+    {
+      "id": "search_provider_brightdata",
+      "title": "Search Provider: Bright Data",
+      "description": "Web/data search via Bright Data: SERP (search), Web Unlocker (scrape), Discover (AI-ranked search), and the Dataset Marketplace. A single API token authenticates all endpoints. Search is OPTIONAL and parallel to the LLM providers.",
+      "icon": "🔎",
+      "order": 46,
+      "fields": [
+        {
+          "key": "search_providers.brightdata.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "required": false,
+          "description": "Bright Data API token (Bearer). Strongly recommended to set via the BRIGHTDATA_API_TOKEN environment variable.",
+          "placeholder": "bd_...",
+          "recommendation": "Set via BRIGHTDATA_API_TOKEN or LLMCORE_SEARCH_PROVIDERS__BRIGHTDATA__API_KEY.",
+          "tags": ["security", "credentials", "search"]
+        },
+        {
+          "key": "search_providers.brightdata.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "required": false,
+          "description": "Bright Data API base URL. Normally left at the default.",
+          "placeholder": "https://api.brightdata.com",
+          "default": "https://api.brightdata.com",
+          "validation": {
+            "schemes": ["https", "http"]
+          }
+        },
+        {
+          "key": "search_providers.brightdata.serp_zone",
+          "title": "SERP Zone",
+          "type": "string",
+          "required": false,
+          "description": "Bright Data SERP API zone name used by web_search(). Create it in the control panel (https://brightdata.com/cp/zones). Zones are NOT auto-created.",
+          "placeholder": "my_serp_zone",
+          "see_also": ["search_providers.brightdata.unlocker_zone"]
+        },
+        {
+          "key": "search_providers.brightdata.unlocker_zone",
+          "title": "Web Unlocker Zone",
+          "type": "string",
+          "required": false,
+          "description": "Bright Data Web Unlocker zone name used by scrape_url(). Create it in the control panel. Zones are NOT auto-created.",
+          "placeholder": "my_unlocker_zone"
+        },
+        {
+          "key": "search_providers.brightdata.default_engine",
+          "title": "Default Engine",
+          "type": "enum",
+          "required": false,
+          "description": "Default search engine for web_search().",
+          "default": "google",
+          "options": [
+            {
+              "value": "google",
+              "label": "Google"
+            },
+            {
+              "value": "bing",
+              "label": "Bing"
+            },
+            {
+              "value": "yandex",
+              "label": "Yandex"
+            }
+          ]
+        },
+        {
+          "key": "search_providers.brightdata.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds (sync requests and each poll).",
+          "default": 60,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.brightdata.poll_interval",
+          "title": "Poll Interval",
+          "type": "integer",
+          "required": false,
+          "description": "Seconds between status polls in async mode.",
+          "default": 2,
+          "validation": {
+            "min": 0,
+            "max": 60
+          }
+        },
+        {
+          "key": "search_providers.brightdata.poll_timeout",
+          "title": "Poll Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum seconds to wait for an async SERP/Unlocker result.",
+          "default": 60,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.brightdata.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "Retry attempts for transient transport / 5xx errors.",
+          "default": 3,
+          "validation": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        {
+          "key": "search_providers.brightdata.ssl_verify",
+          "title": "Ssl Verify",
+          "type": "boolean",
+          "required": false,
+          "description": "Verify TLS certificates. Disable ONLY for sandbox/proxy environments.",
+          "default": true
+        }
+      ]
     }
   ],
   "hooks": {

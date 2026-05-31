@@ -189,6 +189,7 @@ from .exceptions import (
     EmbeddingError,
     LLMCoreError,
     ProviderError,
+    SearchProviderError,
     SessionNotFoundError,
     SessionStorageError,
     StorageError,
@@ -303,6 +304,26 @@ from .providers.base import BaseProvider
 from .providers.manager import ProviderManager
 
 # =============================================================================
+# SEARCH PROVIDERS (web / data search — optional, parallel to LLM providers)
+# =============================================================================
+from .search import (
+    BaseSearchProvider,
+    BrightDataSearchProvider,
+    DatasetField,
+    DatasetInfo,
+    DatasetMetadata,
+    DatasetSnapshot,
+    DiscoverItem,
+    DiscoverResult,
+    ScrapeResult,
+    SearchCapability,
+    SearchItem,
+    SearchProviderManager,
+    SearchResultBase,
+    WebSearchResult,
+)
+
+# =============================================================================
 # SESSIONS
 # =============================================================================
 from .sessions.manager import SessionManager
@@ -332,6 +353,21 @@ __all__ = [
     # -- Providers --
     "BaseProvider",
     "ProviderManager",
+    # -- Search Providers (web / data search) --
+    "BaseSearchProvider",
+    "SearchCapability",
+    "SearchProviderManager",
+    "BrightDataSearchProvider",
+    "SearchResultBase",
+    "SearchItem",
+    "WebSearchResult",
+    "ScrapeResult",
+    "DiscoverItem",
+    "DiscoverResult",
+    "DatasetInfo",
+    "DatasetField",
+    "DatasetMetadata",
+    "DatasetSnapshot",
     # -- Data Models --
     "ChatSession",
     "Message",
@@ -359,6 +395,7 @@ __all__ = [
     "LLMCoreError",
     "ConfigError",
     "ProviderError",
+    "SearchProviderError",
     "StorageError",
     "SessionStorageError",
     "VectorStorageError",
