@@ -251,12 +251,119 @@ edits to `[search_providers.*]` take effect on reload.
 
 ---
 
-## 9. Validation / how to verify it works
+## 9. Serper.dev (web search, verticals, batch, scrape)
+
+Serper is a fast/cheap Google Search API. It authenticates with an `X-API-KEY`
+header, needs **no zones**, and supports search verticals plus batched array
+queries. Capabilities: `web_search`, `batch_search`, `scrape`.
+
+### Setup
+
+```bash
+pip install "llmcore[serper]"
+export SERPER_API_KEY="your-serper-key"
+```
+
+```toml
+# ~/.config/llmcore/config.toml
+[search_providers.serper]
+# api_key via SERPER_API_KEY (recommended)
+default_search_type = "search"   # search|news|images|videos|shopping|scholar|patents|maps|places|autocomplete
+```
+
+If Serper is your only configured search provider it is auto-adopted as the
+default and you can omit `provider="serper"`.
+
+### Web search + verticals
+
+The vertical is chosen with `search_type`; time filtering with `tbs` (raw, e.g.
+`"qdr:m"`) or `time_range` (shorthand: `"d"`/`"w"`/`"m"`/`"y"`). `device`,
+`engine`, and `mode` are accepted for cross-provider compatibility but ignored.
+
+```python
+# standard web search
+res = await llm.web_search("apple inc", provider="serper", count=10, country="us", language="en")
+for it in res.items:
+    print(it.position, it.title, it.url)
+
+# Google News for the past day
+news = await llm.web_search("apple inc", provider="serper", search_type="news", time_range="d")
+
+# Scholar / patents, paginated
+scholar = await llm.web_search("graph neural networks", provider="serper",
+                               search_type="scholar", page=2, tbs="qdr:m")
+```
+
+SERP extras Serper returns — `knowledgeGraph`, `peopleAlsoAsk`,
+`relatedSearches`, `sitelinks`, `attributes` — are preserved verbatim on
+`res.raw` (the normalized `items` carry title/url/snippet/position):
+
+```python
+kg = res.raw.get("knowledgeGraph", {})
+paa = res.raw.get("peopleAlsoAsk", [])
+```
+
+### Batched queries (one request, many searches)
+
+Serper accepts a JSON array of query objects; `batch_web_search` returns one
+`WebSearchResult` per input, in order.
+
+```python
+# list of strings (inherit count/country/language/time_range)
+results = await llm.batch_web_search(
+    ["apple inc", "tesla inc", "google inc"],
+    provider="serper", country="us", time_range="m",
+)
+
+# list of ready Serper query objects (full per-query control)
+results = await llm.batch_web_search(
+    [
+        {"q": "apple inc", "tbs": "qdr:m", "page": 2},
+        {"q": "tesla inc", "tbs": "qdr:d"},
+    ],
+    provider="serper", search_type="patents",
+)
+for r in results:
+    print(r.query, "->", len(r.items), "items")
+```
+
+### Scrape (markdown / json)
+
+Serper scraping uses the separate `scrape.serper.dev` host and returns
+structured JSON. `response_format="markdown"` (default) requests and extracts
+markdown into `content`; the full payload (text/markdown/metadata/jsonld) is
+always on `raw`.
+
+```python
+page = await llm.scrape_url("https://example.com/article", provider="serper")
+print(page.response_format, page.content_char_size)   # "markdown", <n>
+md = page.content                                      # extracted markdown
+meta = page.raw.get("metadata", {})                    # full payload preserved
+
+# full structured payload instead of extracted markdown
+raw = await llm.scrape_url("https://example.com", provider="serper", response_format="json")
+```
+
+> Note: Serper exposes no free health/balance endpoint, so
+> `provider.health_check()` issues a minimal `/search` (`num=1`) and consumes
+> **one credit**.
+
+### Direct provider access (verticals not on the unified API)
+
+```python
+serper = llm.get_search_provider("serper")
+res = await serper.web_search("nikon z9", search_type="shopping")
+batch = await serper.batch_search(["a", "b"], search_type="images")
+```
+
+---
+
+## 10. Validation / how to verify it works
 
 1. **Offline (no account):** run the unit tests — they intercept all HTTP with
    `respx` and assert exact endpoints/payloads:
    ```bash
-   pip install "llmcore[test,brightdata]"
+   pip install "llmcore[test,brightdata,serper]"
    pytest tests/search/ -q
    ```
 2. **Credential/connectivity smoke test:**
@@ -264,8 +371,8 @@ edits to `[search_providers.*]` take effect on reload.
    llm = await LLMCore.create()
    ok = await llm.get_search_provider().health_check()   # True ⇒ token valid & reachable
    ```
-3. **End‑to‑end:** run `examples/brightdata_search_example.py` with
-   `BRIGHTDATA_API_TOKEN`, `BRIGHTDATA_SERP_ZONE`, and `BRIGHTDATA_UNLOCKER_ZONE`
-   set. (Performs real, billable calls.)
-4. **Config wizard:** the confy‑curator schema exposes a "Search Provider:
-   Bright Data" section for guided setup.
+3. **End‑to‑end:** run `examples/brightdata_search_example.py` (with
+   `BRIGHTDATA_API_TOKEN` + zone env vars) or `examples/serper_search_example.py`
+   (with `SERPER_API_KEY`). Both perform real, billable calls.
+4. **Config wizard:** the confy‑curator schema exposes "Search Provider: Bright
+   Data" and "Search Provider: Serper.dev" sections for guided setup.

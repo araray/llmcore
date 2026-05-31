@@ -320,6 +320,7 @@ from .search import (
     SearchItem,
     SearchProviderManager,
     SearchResultBase,
+    SerperSearchProvider,
     WebSearchResult,
 )
 
@@ -358,6 +359,7 @@ __all__ = [
     "SearchCapability",
     "SearchProviderManager",
     "BrightDataSearchProvider",
+    "SerperSearchProvider",
     "SearchResultBase",
     "SearchItem",
     "WebSearchResult",

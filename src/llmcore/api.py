@@ -562,6 +562,51 @@ class LLMCore:
             **kwargs,
         )
 
+    async def batch_web_search(
+        self,
+        queries: list[Any],
+        *,
+        provider: str | None = None,
+        count: int = 10,
+        country: str | None = None,
+        language: str = "en",
+        search_type: str = "search",
+        **kwargs: Any,
+    ) -> list[WebSearchResult]:
+        """Run multiple web searches in a single batched call (provider-specific).
+
+        Only providers that advertise the ``batch_search`` capability support
+        this (e.g. Serper). For others it raises ``NotImplementedError``.
+
+        Args:
+            queries: A list of query strings, or a list of provider-specific
+                per-query parameter dicts.
+            provider: Search-provider instance name; ``None`` uses the default.
+            count: Default result count applied to string queries.
+            country: Default ISO country code applied to string queries.
+            language: Default ISO language code applied to string queries.
+            search_type: Search vertical for the batch (provider-specific).
+            **kwargs: Provider-specific extras applied to the batch.
+
+        Returns:
+            A list of :class:`~llmcore.search.models.WebSearchResult`, one per
+            input query, in order.
+
+        Raises:
+            ConfigError: If no search provider is configured.
+            NotImplementedError: If the provider does not support batch search.
+            SearchProviderError: On transport/configuration faults.
+        """
+        p = self._search_provider_manager.get_search_provider(provider)
+        return await p.batch_search(
+            queries,
+            count=count,
+            country=country,
+            language=language,
+            search_type=search_type,
+            **kwargs,
+        )
+
     async def scrape_url(
         self,
         url: str,

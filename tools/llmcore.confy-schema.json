@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "app": {
     "name": "LLMCore",
-    "version": "0.49.11",
+    "version": "0.49.6",
     "description": "Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution",
     "url": "https://github.com/araray/llmcore",
     "maintainer": "araray"
@@ -6537,6 +6537,131 @@
         },
         {
           "key": "search_providers.brightdata.ssl_verify",
+          "title": "Ssl Verify",
+          "type": "boolean",
+          "required": false,
+          "description": "Verify TLS certificates. Disable ONLY for sandbox/proxy environments.",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "search_provider_serper",
+      "title": "Search Provider: Serper.dev",
+      "description": "Fast, low-cost Google Search API (search/news/images/videos/shopping/scholar/patents/maps/places), batched array queries, and URL scraping. Authenticates with an X-API-KEY header. Search is OPTIONAL and parallel to the LLM providers.",
+      "icon": "🔎",
+      "order": 47,
+      "fields": [
+        {
+          "key": "search_providers.serper.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "required": false,
+          "description": "Serper.dev API key, sent as the X-API-KEY header (not a Bearer token). Strongly recommended to set via the SERPER_API_KEY environment variable.",
+          "placeholder": "your-serper-key",
+          "recommendation": "Set via SERPER_API_KEY or LLMCORE_SEARCH_PROVIDERS__SERPER__API_KEY.",
+          "tags": ["security", "credentials", "search"]
+        },
+        {
+          "key": "search_providers.serper.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "required": false,
+          "description": "Serper search API base URL. Normally left at the default.",
+          "placeholder": "https://google.serper.dev",
+          "default": "https://google.serper.dev",
+          "validation": {
+            "schemes": ["https", "http"]
+          }
+        },
+        {
+          "key": "search_providers.serper.scrape_base_url",
+          "title": "Scrape Base Url",
+          "type": "url",
+          "required": false,
+          "description": "Serper scrape API base URL (separate host). Normally left at the default.",
+          "placeholder": "https://scrape.serper.dev",
+          "default": "https://scrape.serper.dev",
+          "validation": {
+            "schemes": ["https", "http"]
+          }
+        },
+        {
+          "key": "search_providers.serper.default_search_type",
+          "title": "Default Search Type",
+          "type": "enum",
+          "required": false,
+          "description": "Default search vertical for web_search() when 'search_type' is not passed.",
+          "default": "search",
+          "options": [
+            {
+              "value": "search",
+              "label": "Web Search"
+            },
+            {
+              "value": "news",
+              "label": "News"
+            },
+            {
+              "value": "images",
+              "label": "Images"
+            },
+            {
+              "value": "videos",
+              "label": "Videos"
+            },
+            {
+              "value": "shopping",
+              "label": "Shopping"
+            },
+            {
+              "value": "scholar",
+              "label": "Scholar"
+            },
+            {
+              "value": "patents",
+              "label": "Patents"
+            },
+            {
+              "value": "maps",
+              "label": "Maps"
+            },
+            {
+              "value": "places",
+              "label": "Places"
+            },
+            {
+              "value": "autocomplete",
+              "label": "Autocomplete"
+            }
+          ]
+        },
+        {
+          "key": "search_providers.serper.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds (Serper typically responds in 1-2s).",
+          "default": 30,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.serper.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "Retry attempts for transient transport / 429 / 5xx errors.",
+          "default": 3,
+          "validation": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        {
+          "key": "search_providers.serper.ssl_verify",
           "title": "Ssl Verify",
           "type": "boolean",
           "required": false,

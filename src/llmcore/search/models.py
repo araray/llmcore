@@ -175,6 +175,10 @@ class ScrapeResult(SearchResultBase):
         status: Lifecycle status (``"ready"``, ``"error"``, ``"timeout"``).
         root_domain: Registered domain extracted from ``url``, when computed.
         content_char_size: Length of ``content`` when it is a string.
+        raw: The provider's untouched response payload, when the provider
+            returns structured data alongside the extracted ``content`` (e.g.
+            Serper's scrape returns JSON with ``metadata``/``jsonld``). ``None``
+            when the provider returns only the raw body.
     """
 
     url: str = ""
@@ -183,6 +187,7 @@ class ScrapeResult(SearchResultBase):
     status: str = "ready"
     root_domain: str | None = None
     content_char_size: int | None = None
+    raw: Any = None
 
 
 @dataclass

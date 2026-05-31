@@ -56,6 +56,9 @@ class SearchCapability(str, Enum):
     WEB_SEARCH = "web_search"
     """Search engine results (SERP) → :class:`~llmcore.search.models.WebSearchResult`."""
 
+    BATCH_SEARCH = "batch_search"
+    """Multiple web searches in a single batched call → ``list[WebSearchResult]``."""
+
     SCRAPE = "scrape"
     """Fetch a single URL through an unlocking proxy → ``ScrapeResult``."""
 
@@ -164,6 +167,43 @@ class BaseSearchProvider(abc.ABC):
         """
         raise NotImplementedError(
             f"Search provider '{self.get_name()}' does not support web search."
+        )
+
+    async def batch_search(
+        self,
+        queries: list[Any],
+        *,
+        count: int = 10,
+        country: str | None = None,
+        language: str = "en",
+        search_type: str = "search",
+        **kwargs: Any,
+    ) -> list["WebSearchResult"]:
+        """Run multiple web searches in a single batched request.
+
+        Optional capability. Providers that support server-side batching (e.g.
+        Serper) override this; the default raises :class:`NotImplementedError`.
+
+        Args:
+            queries: A list of query strings, or a list of provider-specific
+                per-query parameter dicts (e.g. ``{"q": ..., "tbs": ...}``).
+            count: Default result count applied to string queries.
+            country: Default ISO country code applied to string queries.
+            language: Default ISO language code applied to string queries.
+            search_type: Default search vertical applied to the batch
+                (provider-specific; e.g. ``"search"``, ``"news"``).
+            **kwargs: Provider-specific extras applied to the batch.
+
+        Returns:
+            A list of :class:`~llmcore.search.models.WebSearchResult`, one per
+            input query, in the same order.
+
+        Raises:
+            NotImplementedError: If the provider does not support batch search.
+            SearchProviderError: On configuration or transport faults.
+        """
+        raise NotImplementedError(
+            f"Search provider '{self.get_name()}' does not support batch search."
         )
 
     async def scrape(

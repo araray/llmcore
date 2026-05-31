@@ -7,7 +7,17 @@ alongside the existing LLM providers (`llmcore.providers`). Where an LLM provide
 turns a prompt into a completion, a **search provider** turns a query into search
 results, scraped pages, AI‑ranked discoveries, or structured dataset records.
 
-The first provider is **Bright Data**.
+The bundled providers are **Bright Data** and **Serper.dev**.
+
+### Providers at a glance
+
+| Provider       | Type key   | Capabilities                                   | Auth header     | Notable strengths                                  |
+| -------------- | ---------- | ---------------------------------------------- | --------------- | -------------------------------------------------- |
+| **Bright Data**| `brightdata` | `web_search`, `scrape`, `discover`, `dataset_search` | `Authorization: Bearer` | Web Unlocker, AI Discover, dataset marketplace, async SERP |
+| **Serper.dev** | `serper`   | `web_search`, `batch_search`, `scrape`         | `X-API-KEY`     | Fast/cheap Google SERP, verticals (news/scholar/patents/…), **batched** array queries |
+
+Both return the same provider-agnostic result types, so consumer code that calls
+`llm.web_search(...)` / `llm.scrape_url(...)` works against either backend.
 
 ---
 
@@ -53,7 +63,10 @@ can return the same `WebSearchResult` / `ScrapeResult` / `DiscoverResult` types.
 
 Capabilities are declared per provider via `get_capabilities()` and can be probed
 with `provider.supports("web_search")`. Unsupported operations raise
-`NotImplementedError`.
+`NotImplementedError`. The available capability values are `web_search`,
+`batch_search`, `scrape`, `discover`, `dataset_search`, and `crawl`.
+
+**Bright Data** (`brightdata`):
 
 | Capability        | `LLMCore` method            | Bright Data product      | Endpoint(s)                                                                   |
 | ----------------- | --------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
@@ -63,8 +76,23 @@ with `provider.supports("web_search")`. Unsupported operations raise
 | `dataset_search`  | `dataset_search()`, `list_datasets()`, `get_dataset_metadata()` | Dataset Marketplace | `POST /datasets/filter` · `GET /datasets/snapshots/{id}` · `…/download` · `GET /datasets/list` · `GET /datasets/{id}/metadata` |
 | `crawl`           | *(not implemented)*         | —                        | Reserved on the base class; raises `NotImplementedError`.                     |
 
-All endpoints authenticate with a single Bearer token. Health/connectivity is
-checked via `GET /zone/get_active_zones`.
+Bright Data authenticates with a Bearer token; health via `GET /zone/get_active_zones`.
+
+**Serper.dev** (`serper`):
+
+| Capability       | `LLMCore` method        | Serper surface              | Endpoint(s)                                                       |
+| ---------------- | ----------------------- | --------------------------- | ---------------------------------------------------------------- |
+| `web_search`     | `web_search()`          | Google SERP + verticals     | `POST /{type}` (`type` ∈ search/news/images/videos/shopping/scholar/patents/maps/places/autocomplete) |
+| `batch_search`   | `batch_web_search()`    | Batched array queries       | `POST /{type}` with a JSON **array** of query objects            |
+| `scrape`         | `scrape_url()`          | Scrape (markdown/text/json) | `POST https://scrape.serper.dev` `{url, includeMarkdown}`        |
+
+Serper authenticates with an `X-API-KEY` header. It has no Discover/dataset APIs,
+so those capabilities are not advertised. The select-a-vertical option is passed
+as `search_type=` to `web_search()`/`batch_web_search()`; time filtering via
+`tbs=` or `time_range=` (shorthand for `qdr:<x>`). Serper's full payload —
+`knowledgeGraph`, `peopleAlsoAsk`, `relatedSearches`, and vertical-specific
+fields — is preserved on `WebSearchResult.raw`. (Serper exposes no free health
+endpoint, so `health_check()` issues a minimal 1-credit search.)
 
 ---
 
@@ -78,7 +106,8 @@ Every result inherits `SearchResultBase` (`success`, `provider`, `error`, `cost`
   `total_results`, `raw`. Each `SearchItem` has `position`, `title`, `url`,
   `description`, `displayed_url`.
 - **`ScrapeResult`** — `url`, `content`, `response_format`, `status`,
-  `root_domain`, `content_char_size`.
+  `root_domain`, `content_char_size`, `raw` (full provider payload when the
+  provider returns structured data alongside the extracted content, e.g. Serper).
 - **`DiscoverResult`** — `query`, `intent`, `items: list[DiscoverItem]`
   (`relevance_score`, `content`), `task_id`, `duration_seconds`, `raw`.
 - **`DatasetInfo`**, **`DatasetMetadata`** (`fields: list[DatasetField]`),
@@ -115,10 +144,28 @@ await llm.close()
 ```
 
 A single configured provider is auto‑adopted as the default, so you can omit
-`provider=` and `llmcore.default_search_provider`.
+`provider=` and `llmcore.default_search_provider`. **If you enable more than one
+search provider** (e.g. both Bright Data and Serper), set
+`llmcore.default_search_provider` or pass `provider="serper"` per call.
 
-See **USAGE.md** for the full surface (scrape, discover, datasets, async mode,
-multiple instances, env‑var indirection, and validation steps).
+### Serper.dev variant
+
+```bash
+pip install "llmcore[serper]"
+export SERPER_API_KEY="your-serper-key"
+```
+
+```python
+llm = await LLMCore.create()
+# vertical + time filter via kwargs:
+news = await llm.web_search("apple inc", provider="serper", search_type="news", time_range="d")
+# batched queries in a single request (Serper strength):
+batch = await llm.batch_web_search(["apple inc", "tesla inc"], provider="serper")
+await llm.close()
+```
+
+See **USAGE.md** for the full surface (verticals, batch, scrape, discover,
+datasets, async mode, multiple instances, env‑var indirection, validation).
 
 ---
 
@@ -147,6 +194,23 @@ The packaged `default_config.toml` already includes a commented
 `[search_providers.brightdata]` block, and the confy‑curator schema
 (`tools/llmcore.confy-schema.json`) gains a "Search Provider: Bright Data"
 section so the configuration wizard can drive it.
+
+### `[search_providers.serper]`
+
+| Key                  | Type    | Default                      | Notes                                                          |
+| -------------------- | ------- | ---------------------------- | -------------------------------------------------------------- |
+| `api_key`            | secret  | —                            | Sent as `X-API-KEY`. Prefer the `SERPER_API_KEY` env var.      |
+| `api_key_env_var`    | string  | `SERPER_API_KEY`             | Name of the env var holding the key.                           |
+| `base_url`           | url     | `https://google.serper.dev`  | Rarely changed.                                                |
+| `scrape_base_url`    | url     | `https://scrape.serper.dev`  | Separate host for `scrape_url()`.                              |
+| `default_search_type`| enum    | `search`                     | search/news/images/videos/shopping/scholar/patents/maps/places/autocomplete. |
+| `timeout`            | integer | `30`                         | Seconds per request.                                           |
+| `max_retries`        | integer | `3`                          | Retries on transient transport / 429 / 5xx errors.            |
+| `ssl_verify`         | boolean | `true`                       | Disable only for sandbox/proxy environments.                   |
+
+The packaged `default_config.toml` includes a commented
+`[search_providers.serper]` block and the schema gains a "Search Provider:
+Serper.dev" section. Serper needs **no zones** (unlike Bright Data).
 
 ---
 

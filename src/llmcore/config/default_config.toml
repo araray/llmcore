@@ -729,6 +729,40 @@ posthog = "ERROR"
   ssl_verify = true
 
 
+  # --- Serper.dev Provider ---
+  # Fast, low-cost Google Search API returning structured JSON. Supports search
+  # verticals (search/news/images/videos/shopping/scholar/patents/maps/places),
+  # batched array queries, and URL scraping (separate host scrape.serper.dev).
+  # Docs: https://serper.dev/  |  Capabilities: web_search, batch_search, scrape.
+  [search_providers.serper]
+  # type = "serper"  # auto-detected from the section name
+
+  # API key (sent as the X-API-KEY header, NOT a Bearer token).
+  # STRONGLY recommended to set via an environment variable.
+  # Environment Variable: SERPER_API_KEY
+  #   (or LLMCORE_SEARCH_PROVIDERS__SERPER__API_KEY)
+  # api_key = "..."
+  api_key_env_var = "SERPER_API_KEY"
+
+  # Endpoints (normally no need to change).
+  # base_url = "https://google.serper.dev"
+  # scrape_base_url = "https://scrape.serper.dev"
+
+  # Default search vertical for web_search() when 'search_type' is not passed.
+  # Possible Values: search (default), news, images, videos, shopping, scholar,
+  #                  patents, maps, places, autocomplete.
+  default_search_type = "search"
+
+  # Request timeout in seconds (Serper typically responds in 1-2s).
+  timeout = 30
+
+  # Max retry attempts for transient transport / 429 / 5xx errors.
+  max_retries = 3
+
+  # Verify TLS certificates. Set to false ONLY for sandbox/proxy environments.
+  ssl_verify = true
+
+
 # ==============================================================================
 # [storage] - Persistence Configurations
 # ==============================================================================
