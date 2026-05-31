@@ -254,7 +254,7 @@ async def test_get_models_details_falls_back_on_http_error(provider, monkeypatch
 # ---------------------------------------------------------------------------
 def test_get_max_context_length_from_registry(provider):
     # Seed card deepseek-ai/DeepSeek-V3 ships in default_cards/deepinfra.
-    assert provider.get_max_context_length("deepseek-ai/DeepSeek-V3") == 131072
+    assert provider.get_max_context_length("deepseek-ai/DeepSeek-V3") == 163840
 
 
 def test_get_max_context_length_from_cache(provider):
