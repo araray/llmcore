@@ -6669,6 +6669,156 @@
           "default": true
         }
       ]
+    },
+    {
+      "id": "search_provider_serpapi",
+      "title": "Search Provider: SerpApi",
+      "description": "Real-time meta-SERP API: one endpoint scrapes 100+ search engines/verticals selected with the 'engine' parameter (google, bing, baidu, duckduckgo, yahoo, yandex, google_news, google_images, google_shopping, google_scholar, youtube, amazon, ebay, walmart, google_maps, ...). Authenticates with an 'api_key' QUERY PARAMETER (not a header). The Account API health check is free. Search is OPTIONAL and parallel to the LLM providers.",
+      "icon": "🔎",
+      "order": 48,
+      "fields": [
+        {
+          "key": "search_providers.serpapi.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "required": false,
+          "description": "SerpApi private key, sent as the 'api_key' query parameter (not a header). Strongly recommended to set via the SERPAPI_API_KEY environment variable (SERPAPI_KEY is also honored).",
+          "placeholder": "your-serpapi-key",
+          "recommendation": "Set via SERPAPI_API_KEY or LLMCORE_SEARCH_PROVIDERS__SERPAPI__API_KEY.",
+          "tags": ["security", "credentials", "search"]
+        },
+        {
+          "key": "search_providers.serpapi.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "required": false,
+          "description": "SerpApi base URL. Normally left at the default.",
+          "placeholder": "https://serpapi.com",
+          "default": "https://serpapi.com",
+          "validation": {
+            "schemes": ["https", "http"]
+          }
+        },
+        {
+          "key": "search_providers.serpapi.default_engine",
+          "title": "Default Engine",
+          "type": "string",
+          "required": false,
+          "description": "Default SerpApi engine for web_search() when 'engine' is not passed. Any SerpApi engine string is accepted (the list is not enumerated because SerpApi adds engines frequently). Common values: google, google_light, bing, baidu, duckduckgo, yahoo, yandex, google_news, google_images, google_videos, google_shopping, google_scholar, google_maps, google_jobs, youtube, amazon, ebay, walmart.",
+          "placeholder": "google",
+          "default": "google"
+        },
+        {
+          "key": "search_providers.serpapi.default_output",
+          "title": "Default Output",
+          "type": "enum",
+          "required": false,
+          "description": "Default output format. 'json' returns structured results; 'html' returns the raw HTML/text preserved on result.raw['raw_html'].",
+          "default": "json",
+          "options": [
+            {
+              "value": "json",
+              "label": "JSON"
+            },
+            {
+              "value": "html",
+              "label": "Raw HTML"
+            }
+          ]
+        },
+        {
+          "key": "search_providers.serpapi.no_cache",
+          "title": "No Cache",
+          "type": "boolean",
+          "required": false,
+          "description": "Force-fetch even if a cached result exists (cached searches are free and do not count toward quota). Mutually exclusive with async mode; dropped automatically when mode='async'.",
+          "default": false
+        },
+        {
+          "key": "search_providers.serpapi.zero_trace",
+          "title": "Zero Trace",
+          "type": "boolean",
+          "required": false,
+          "description": "Enterprise-only ZeroTrace mode: skip storing search params/files/metadata on SerpApi servers. Leave disabled unless your plan enables it.",
+          "default": false
+        },
+        {
+          "key": "search_providers.serpapi.json_restrictor",
+          "title": "Json Restrictor",
+          "type": "string",
+          "required": false,
+          "description": "Optional JSON Restrictor expression to trim responses for smaller/faster payloads (https://serpapi.com/json-restrictor). Empty returns the full response.",
+          "placeholder": "organic_results[].{title,link}"
+        },
+        {
+          "key": "search_providers.serpapi.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds (sync requests and each async poll).",
+          "default": 60,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.serpapi.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "Retry attempts for transient transport / 429 / 5xx errors.",
+          "default": 3,
+          "validation": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        {
+          "key": "search_providers.serpapi.poll_interval",
+          "title": "Poll Interval",
+          "type": "integer",
+          "required": false,
+          "description": "Seconds between Search Archive status polls in async mode.",
+          "default": 2,
+          "validation": {
+            "min": 0,
+            "max": 60
+          }
+        },
+        {
+          "key": "search_providers.serpapi.poll_timeout",
+          "title": "Poll Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum seconds to wait for an async result before timing out.",
+          "default": 60,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.serpapi.max_concurrency",
+          "title": "Max Concurrency",
+          "type": "integer",
+          "required": false,
+          "description": "Max concurrent requests for batch_search() (client-side fan-out; SerpApi has no server-side batch endpoint, so each query is one request and one credit).",
+          "default": 5,
+          "validation": {
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "key": "search_providers.serpapi.ssl_verify",
+          "title": "Ssl Verify",
+          "type": "boolean",
+          "required": false,
+          "description": "Verify TLS certificates. Disable ONLY for sandbox/proxy environments.",
+          "default": true
+        }
+      ]
     }
   ],
   "hooks": {

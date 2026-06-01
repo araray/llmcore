@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.49.11"
+version = "0.49.12"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -67,6 +67,10 @@ brightdata = ["httpx>=0.27.0"]
 # Serper.dev search provider talks to the Serper REST API over httpx directly
 # (no vendor SDK). Install with: pip install llmcore[serper]
 serper = ["httpx>=0.27.0"]
+
+# SerpApi search provider talks to the SerpApi REST API over httpx directly
+# (no vendor SDK). Install with: pip install llmcore[serpapi]
+serpapi = ["httpx>=0.27.0"]
 
 sentence_transformers = ["sentence-transformers>=5.2.0"]
 
@@ -132,6 +136,7 @@ all = [
     "llmcore[deepinfra]",
     "llmcore[brightdata]",
     "llmcore[serper]",
+    "llmcore[serpapi]",
     "llmcore[sqlite]",
     "llmcore[postgres]",
     "llmcore[chromadb]",

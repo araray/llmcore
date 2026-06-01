@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover
 from ..exceptions import ConfigError
 from .base import BaseSearchProvider
 from .providers.brightdata_provider import BrightDataSearchProvider
+from .providers.serpapi_provider import SerpApiSearchProvider
 from .providers.serper_provider import SerperSearchProvider
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,9 @@ SEARCH_PROVIDER_MAP: dict[str, type[BaseSearchProvider]] = {
     "serper": SerperSearchProvider,
     "serper_dev": SerperSearchProvider,
     "serperdev": SerperSearchProvider,
+    "serpapi": SerpApiSearchProvider,
+    "serp_api": SerpApiSearchProvider,
+    "serpapi_search": SerpApiSearchProvider,
 }
 
 # Conventional environment variables for known search-provider types.
@@ -70,6 +74,9 @@ _SEARCH_PROVIDER_ENV_DEFAULTS: dict[str, str] = {
     "serper": "SERPER_API_KEY",
     "serper_dev": "SERPER_API_KEY",
     "serperdev": "SERPER_API_KEY",
+    "serpapi": "SERPAPI_API_KEY",
+    "serp_api": "SERPAPI_API_KEY",
+    "serpapi_search": "SERPAPI_API_KEY",
 }
 
 

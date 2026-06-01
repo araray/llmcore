@@ -358,12 +358,143 @@ batch = await serper.batch_search(["a", "b"], search_type="images")
 
 ---
 
-## 10. Validation / how to verify it works
+## 10. SerpApi (100+ engines, async, archive, free health check)
+
+SerpApi is a real-time **meta-SERP** API: a single `GET /search` endpoint
+scrapes 100+ search engines/verticals selected with the `engine` parameter. It
+authenticates with an `api_key` **query parameter** (not a header), needs **no
+zones**, and exposes a **free** Account API used for health checks.
+Capabilities: `web_search`, `batch_search` (client-side fan-out).
+
+### Setup
+
+```bash
+pip install "llmcore[serpapi]"
+export SERPAPI_API_KEY="your-serpapi-key"   # SERPAPI_KEY is also honored
+```
+
+```toml
+# ~/.config/llmcore/config.toml
+[search_providers.serpapi]
+# api_key via SERPAPI_API_KEY (recommended)
+default_engine = "google"     # any SerpApi engine string (not enumerated; see docs)
+default_output = "json"       # json | html
+# no_cache = false            # force-fetch (cached reads are free); dropped in async mode
+# zero_trace = false          # Enterprise ZeroTrace mode
+# json_restrictor = "organic_results[].{title,link}"   # trim responses
+# poll_interval = 2           # async: seconds between Search-Archive polls
+# poll_timeout = 60           # async: max seconds to wait
+# max_concurrency = 5         # batch_search fan-out width
+```
+
+If SerpApi is your only configured search provider it is auto-adopted as the
+default and you can omit `provider="serpapi"`.
+
+### Web search across engines
+
+The engine/vertical is chosen with `engine`. Cross-provider arguments map onto
+SerpApi parameters: `query`→the engine's query param (`q`/`query`/`p`/`text`/
+`search_query`/`term`/`_nkw`/`find_desc`), `count`→`num` (best-effort — the
+standard `google` web engine ignores it, use `start`), `country`→`gl`,
+`language`→`hl`, `device`→`device`. Any other SerpApi parameter (e.g.
+`location`, `uule`, `lat`/`lon`, `google_domain`, `tbm`, `tbs`, `safe`, `start`,
+`no_cache`, `output`, `json_restrictor`) is passed through verbatim.
+
+```python
+# standard Google web search
+res = await llm.web_search("apple inc", provider="serpapi", count=10, country="us", language="en")
+for it in res.items:
+    print(it.position, it.title, it.url)
+
+# Google News
+news = await llm.web_search("apple inc", provider="serpapi", engine="google_news")
+
+# Bing, mobile, geolocated
+bing = await llm.web_search("coffee", provider="serpapi", engine="bing",
+                            device="mobile", location="Austin, TX")
+
+# Google Scholar, paginated (this engine DOES honor num)
+scholar = await llm.web_search("graph neural networks", provider="serpapi",
+                               engine="google_scholar", num=20, start=20)
+```
+
+The full SerpApi payload — `knowledge_graph`, `answer_box`, `related_questions`,
+`local_results`, `serpapi_pagination`, and every engine-specific block — is
+preserved verbatim on `res.raw`; normalized `items` carry
+title/url/snippet/position (resolved from the engine's primary result array:
+`organic_results`, `news_results`, `images_results`, `shopping_results`, …):
+
+```python
+kg  = res.raw.get("knowledge_graph", {})
+nxt = res.raw.get("serpapi_pagination", {}).get("next")
+```
+
+### Async (submit + poll the Search Archive)
+
+`mode="async"` submits the search (`async=true`), extracts
+`search_metadata.id`, then polls `GET /searches/{id}` until the status is
+`Success`/`Error`. (`async` and `no_cache` are mutually exclusive; `no_cache`
+is dropped automatically.)
+
+```python
+res = await llm.web_search("apple inc", provider="serpapi", mode="async")
+```
+
+### Batched queries (client-side fan-out)
+
+SerpApi has **no** server-side batch endpoint, so `batch_web_search` issues
+concurrent requests bounded by `max_concurrency` and returns one
+`WebSearchResult` per input, in order. Each query consumes one credit.
+
+```python
+# strings (inherit count/country/language; engine via search_type)
+results = await llm.batch_web_search(
+    ["apple inc", "tesla inc", "google inc"],
+    provider="serpapi", country="us", search_type="google_news",
+)
+
+# ready SerpApi parameter dicts (full per-query control, mixed engines)
+results = await llm.batch_web_search(
+    [
+        {"engine": "google", "q": "apple inc", "tbm": "nws"},
+        {"engine": "google_scholar", "q": "diffusion models", "num": 20},
+    ],
+    provider="serpapi",
+)
+for r in results:
+    print(r.query, "->", len(r.items), "items")
+```
+
+### Direct provider access (archive, account, locations, raw search)
+
+```python
+serpapi = llm.get_search_provider("serpapi")
+
+# Faithful low-level pass-through (engine-agnostic; mirrors the official SDK)
+res = await serpapi.search({"engine": "google_jobs", "q": "python developer", "location": "Remote"})
+
+# Re-fetch a past search by id (cached archive reads are free)
+again = await serpapi.search_archive("64e9...id...")
+
+# Plan / quota (FREE — does not consume a credit)
+acct = await serpapi.account()
+print(acct["plan_name"], acct["total_searches_left"])
+
+# Canonical locations for the `location` parameter
+locs = await serpapi.locations(q="Austin", limit=3)
+```
+
+> Note: unlike Serper, SerpApi exposes a **free** `/account.json` endpoint, so
+> `provider.health_check()` consumes **zero** credits.
+
+---
+
+## 11. Validation / how to verify it works
 
 1. **Offline (no account):** run the unit tests — they intercept all HTTP with
    `respx` and assert exact endpoints/payloads:
    ```bash
-   pip install "llmcore[test,brightdata,serper]"
+   pip install "llmcore[test,brightdata,serper,serpapi]"
    pytest tests/search/ -q
    ```
 2. **Credential/connectivity smoke test:**
@@ -372,7 +503,9 @@ batch = await serper.batch_search(["a", "b"], search_type="images")
    ok = await llm.get_search_provider().health_check()   # True ⇒ token valid & reachable
    ```
 3. **End‑to‑end:** run `examples/brightdata_search_example.py` (with
-   `BRIGHTDATA_API_TOKEN` + zone env vars) or `examples/serper_search_example.py`
-   (with `SERPER_API_KEY`). Both perform real, billable calls.
+   `BRIGHTDATA_API_TOKEN` + zone env vars), `examples/serper_search_example.py`
+   (with `SERPER_API_KEY`), or `examples/serpapi_search_example.py` (with
+   `SERPAPI_API_KEY`). All perform real, billable calls.
 4. **Config wizard:** the confy‑curator schema exposes "Search Provider: Bright
-   Data" and "Search Provider: Serper.dev" sections for guided setup.
+   Data", "Search Provider: Serper.dev" and "Search Provider: SerpApi" sections
+   for guided setup.

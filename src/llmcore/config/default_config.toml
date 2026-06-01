@@ -763,6 +763,74 @@ posthog = "ERROR"
   ssl_verify = true
 
 
+  # --- SerpApi Provider ---
+  # Real-time meta-SERP API: a single endpoint scrapes 100+ search engines /
+  # verticals selected with the `engine` parameter (google, bing, baidu,
+  # duckduckgo, yahoo, yandex, google_news, google_images, google_shopping,
+  # google_scholar, youtube, amazon, ebay, walmart, google_maps, ...).
+  # Authenticates with an `api_key` QUERY PARAMETER (not a header).
+  # Docs: https://serpapi.com/search-api  |  Capabilities: web_search, batch_search.
+  [search_providers.serpapi]
+  # type = "serpapi"  # auto-detected from the section name
+
+  # API key (sent as the `api_key` query parameter).
+  # STRONGLY recommended to set via an environment variable.
+  # Environment Variable: SERPAPI_API_KEY  (SERPAPI_KEY is also honored)
+  #   (or LLMCORE_SEARCH_PROVIDERS__SERPAPI__API_KEY)
+  # api_key = "..."
+  api_key_env_var = "SERPAPI_API_KEY"
+
+  # Base API URL (normally no need to change).
+  # base_url = "https://serpapi.com"
+
+  # Default SerpApi engine for web_search() when 'engine' is not passed.
+  # Any SerpApi engine string is accepted (the list is not enumerated here
+  # because SerpApi adds engines frequently). Common values: google, google_light,
+  # bing, baidu, duckduckgo, yahoo, yandex, google_news, google_images,
+  # google_videos, google_shopping, google_scholar, google_maps, google_jobs,
+  # youtube, amazon, ebay, walmart.
+  default_engine = "google"
+
+  # Default output format: "json" (default, structured) or "html" (raw HTML/text
+  # preserved on result.raw["raw_html"]).
+  default_output = "json"
+
+  # Force-fetch even if a cached result exists (cached searches are free and do
+  # not count toward quota). Cannot be combined with async mode (mode="async");
+  # it is dropped automatically when async is used.
+  no_cache = false
+
+  # Enterprise-only ZeroTrace mode: skip storing search params/files/metadata on
+  # SerpApi servers. Leave false unless your plan enables it.
+  zero_trace = false
+
+  # Optional JSON Restrictor expression to trim responses for smaller/faster
+  # payloads (see https://serpapi.com/json-restrictor). Empty = full response.
+  # json_restrictor = "organic_results[].{title,link}"
+
+  # Request timeout in seconds.
+  timeout = 60
+
+  # Max retry attempts for transient transport / 429 / 5xx errors.
+  max_retries = 3
+
+  # --- Async polling (mode="async") ---
+  # SerpApi async submits the search (async=true) and returns a search id; the
+  # provider then polls the Search Archive API until status is Success/Error.
+  # poll_interval: seconds between status polls.
+  # poll_timeout:  max seconds to wait for an async result.
+  poll_interval = 2
+  poll_timeout = 60
+
+  # Max concurrent requests for batch_search() (client-side fan-out; SerpApi has
+  # no server-side batch endpoint, so each query is one concurrent request and
+  # one search credit).
+  max_concurrency = 5
+
+  # Verify TLS certificates. Set to false ONLY for sandbox/proxy environments.
+  ssl_verify = true
+
+
 # ==============================================================================
 # [storage] - Persistence Configurations
 # ==============================================================================

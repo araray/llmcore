@@ -15,9 +15,10 @@ The bundled providers are **Bright Data** and **Serper.dev**.
 | -------------- | ---------- | ---------------------------------------------- | --------------- | -------------------------------------------------- |
 | **Bright Data**| `brightdata` | `web_search`, `scrape`, `discover`, `dataset_search` | `Authorization: Bearer` | Web Unlocker, AI Discover, dataset marketplace, async SERP |
 | **Serper.dev** | `serper`   | `web_search`, `batch_search`, `scrape`         | `X-API-KEY`     | Fast/cheap Google SERP, verticals (news/scholar/patents/…), **batched** array queries |
+| **SerpApi**    | `serpapi`  | `web_search`, `batch_search`                   | *(none — `api_key` **query param**)* | 100+ engines via one `engine` param, async + Search Archive, **free** Account-API health check |
 
-Both return the same provider-agnostic result types, so consumer code that calls
-`llm.web_search(...)` / `llm.scrape_url(...)` works against either backend.
+All three return the same provider-agnostic result types, so consumer code that
+calls `llm.web_search(...)` / `llm.scrape_url(...)` works against any backend.
 
 ---
 
@@ -93,6 +94,28 @@ as `search_type=` to `web_search()`/`batch_web_search()`; time filtering via
 `knowledgeGraph`, `peopleAlsoAsk`, `relatedSearches`, and vertical-specific
 fields — is preserved on `WebSearchResult.raw`. (Serper exposes no free health
 endpoint, so `health_check()` issues a minimal 1-credit search.)
+
+**SerpApi** (`serpapi`):
+
+| Capability       | `LLMCore` method        | SerpApi surface                 | Endpoint(s)                                                          |
+| ---------------- | ----------------------- | ------------------------------- | ------------------------------------------------------------------- |
+| `web_search`     | `web_search()`          | 100+ engines via `engine=`      | `GET /search` (sync) · `GET /search?async=true` + `GET /searches/{id}` (async) |
+| `batch_search`   | `batch_web_search()`    | Client-side concurrent fan-out  | N× `GET /search` bounded by `max_concurrency` (no server-side batch endpoint) |
+
+SerpApi authenticates with an `api_key` **query parameter** (not a header). The
+engine/vertical is selected with `engine=` (free-form string — 100+ engines:
+`google`, `bing`, `baidu`, `duckduckgo`, `yahoo`, `yandex`, `google_news`,
+`google_images`, `google_shopping`, `google_scholar`, `youtube`, `amazon`,
+`ebay`, `walmart`, `google_maps`, …), so it is **not** enumerated as an enum. It
+has no arbitrary-URL unlocker, AI-Discover, or dataset marketplace, so `scrape`,
+`discover` and `dataset_search` are not advertised. `count` maps to `num`
+(best-effort — the standard `google` web engine ignores it, use `start`);
+`country`→`gl`, `language`→`hl`. The full payload — `knowledge_graph`,
+`answer_box`, `related_questions`, the engine-specific result arrays, and
+`serpapi_pagination` — is preserved on `WebSearchResult.raw`. Provider-specific
+extras: `search()` (raw pass-through), `search_archive(id)`, `account()`,
+`locations()`. Because SerpApi's `/account.json` is **free**, `health_check()`
+consumes **zero** credits.
 
 ---
 
@@ -212,6 +235,29 @@ The packaged `default_config.toml` includes a commented
 `[search_providers.serper]` block and the schema gains a "Search Provider:
 Serper.dev" section. Serper needs **no zones** (unlike Bright Data).
 
+### `[search_providers.serpapi]`
+
+| Key                | Type    | Default                | Notes                                                                 |
+| ------------------ | ------- | ---------------------- | --------------------------------------------------------------------- |
+| `api_key`          | secret  | —                      | Sent as the `api_key` **query parameter**. Prefer `SERPAPI_API_KEY` (`SERPAPI_KEY` also honored). |
+| `api_key_env_var`  | string  | `SERPAPI_API_KEY`      | Name of the env var holding the key.                                  |
+| `base_url`         | url     | `https://serpapi.com`  | Rarely changed.                                                       |
+| `default_engine`   | string  | `google`               | Free-form SerpApi engine string (not an enum — 100+ engines).         |
+| `default_output`   | enum    | `json`                 | `json` (structured) or `html` (raw HTML on `raw["raw_html"]`).        |
+| `no_cache`         | boolean | `false`                | Force-fetch (cached reads are free). Dropped automatically in async mode. |
+| `zero_trace`       | boolean | `false`                | Enterprise-only ZeroTrace mode.                                       |
+| `json_restrictor`  | string  | —                      | Optional response-trimming expression.                                |
+| `timeout`          | integer | `60`                   | Seconds per request.                                                  |
+| `max_retries`      | integer | `3`                    | Retries on transient transport / 429 / 5xx errors.                    |
+| `poll_interval`    | integer | `2`                    | Seconds between Search-Archive polls (async mode).                    |
+| `poll_timeout`     | integer | `60`                   | Max seconds to wait for an async result.                              |
+| `max_concurrency`  | integer | `5`                    | Fan-out width for `batch_search()` (client-side concurrency).         |
+| `ssl_verify`       | boolean | `true`                 | Disable only for sandbox/proxy environments.                          |
+
+The packaged `default_config.toml` includes a commented
+`[search_providers.serpapi]` block and the schema gains a "Search Provider:
+SerpApi" section. SerpApi needs **no zones** and its health check is **free**.
+
 ---
 
 ## 6. Failure modes & edge cases
@@ -245,10 +291,27 @@ Serper.dev" section. Serper needs **no zones** (unlike Bright Data).
 - **No zone auto‑creation** — the vendor SDK will create `sdk_serp` / `sdk_unlocker`
   zones for you; llmcore deliberately does not, to avoid silently mutating your
   Bright Data account. Tradeoff: one‑time manual zone setup.
+- **SerpApi batch is client-side fan-out** — SerpApi has no server-side batch
+  endpoint (unlike Serper's array payload), so `batch_search()` issues N
+  concurrent `GET /search` calls bounded by `max_concurrency`. Tradeoff: N
+  queries cost N credits and open N connections, but it honors the unified
+  `batch_web_search` contract (one ordered result per input) and exploits
+  SerpApi's per-hour throughput.
+- **SerpApi `engine` is a free string, not an enum** — SerpApi supports 100+
+  engines and adds them frequently; enumerating them in config/schema would be
+  stale on arrival and would reject valid engines. A `KNOWN_ENGINES` set drives
+  only a soft debug warning, never rejection. Tradeoff: typos aren't hard-failed
+  (SerpApi ignores unknown params and returns an in-body error, surfaced as
+  `success=False`).
+- **SerpApi `count`→`num` is best-effort** — `num` is a real SerpApi parameter
+  honored by many engines (scholar/patents/naver/…) but the standard `google`
+  web engine ignores it (use `start` for pagination). We forward it because
+  SerpApi silently ignores unsupported params; the alternative (silently dropping
+  the unified `count`) would surprise callers more.
 - **cardctl is intentionally not extended** — `cardctl` manages *model cards*
-  (token pricing, context length, capabilities). Bright Data has no token‑priced
-  "models"; its products bill per request / per record. Adding it to the model‑card
-  registry would be a category error. See
+  (token pricing, context length, capabilities). Bright Data, Serper and SerpApi
+  have no token‑priced "models"; they bill per request / per record. Adding any
+  of them to the model‑card registry would be a category error. See
   `tools/cardctl/BRIGHTDATA_SKIP_RATIONALE.md`.
 
 ---
