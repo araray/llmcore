@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.49.12"
+version = "0.49.13"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -72,6 +72,10 @@ serper = ["httpx>=0.27.0"]
 # (no vendor SDK). Install with: pip install llmcore[serpapi]
 serpapi = ["httpx>=0.27.0"]
 
+# Semantic Scholar search provider talks to the Semantic Scholar REST APIs over
+# httpx directly (no vendor SDK). Install with: pip install llmcore[semanticscholar]
+semanticscholar = ["httpx>=0.27.0"]
+
 sentence_transformers = ["sentence-transformers>=5.2.0"]
 
 # Dependencies for specific storage backends
@@ -137,6 +141,7 @@ all = [
     "llmcore[brightdata]",
     "llmcore[serper]",
     "llmcore[serpapi]",
+    "llmcore[semanticscholar]",
     "llmcore[sqlite]",
     "llmcore[postgres]",
     "llmcore[chromadb]",

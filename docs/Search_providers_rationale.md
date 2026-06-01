@@ -16,8 +16,9 @@ The bundled providers are **Bright Data** and **Serper.dev**.
 | **Bright Data**| `brightdata` | `web_search`, `scrape`, `discover`, `dataset_search` | `Authorization: Bearer` | Web Unlocker, AI Discover, dataset marketplace, async SERP |
 | **Serper.dev** | `serper`   | `web_search`, `batch_search`, `scrape`         | `X-API-KEY`     | Fast/cheap Google SERP, verticals (news/scholar/patents/…), **batched** array queries |
 | **SerpApi**    | `serpapi`  | `web_search`, `batch_search`                   | *(none — `api_key` **query param**)* | 100+ engines via one `engine` param, async + Search Archive, **free** Account-API health check |
+| **Semantic Scholar** | `semanticscholar` | `web_search`, `batch_search` | *(optional — `x-api-key`)* | 200M+ papers; relevance/bulk/title/snippet search; **no key required**; recommendations, citation graph, batch lookups, bulk datasets |
 
-All three return the same provider-agnostic result types, so consumer code that
+All four return the same provider-agnostic result types, so consumer code that
 calls `llm.web_search(...)` / `llm.scrape_url(...)` works against any backend.
 
 ---
@@ -116,6 +117,40 @@ has no arbitrary-URL unlocker, AI-Discover, or dataset marketplace, so `scrape`,
 extras: `search()` (raw pass-through), `search_archive(id)`, `account()`,
 `locations()`. Because SerpApi's `/account.json` is **free**, `health_check()`
 consumes **zero** credits.
+
+**Semantic Scholar** (`semanticscholar`):
+
+| Capability       | `LLMCore` method        | S2 surface                       | Endpoint(s)                                                          |
+| ---------------- | ----------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `web_search`     | `web_search()`          | Academic Graph paper/snippet search | `GET /graph/v1/paper/search` (`search_type=relevance`, default) · `…/search/bulk` (`bulk`) · `…/search/match` (`match`) · `GET /graph/v1/snippet/search` (`snippet`) |
+| `batch_search`   | `batch_web_search()`    | Client-side concurrent fan-out   | N× `GET /graph/v1/paper/search` bounded by `max_concurrency` (no server-side batch endpoint) |
+
+Semantic Scholar authenticates with an **optional** `x-api-key` header — the
+provider runs **keyless** against the shared public pool, so unlike the other
+providers a missing key is not an error (it is the documented default mode). The
+S2 search flavor is chosen with `search_type` (`relevance` | `bulk` | `match` |
+`snippet`); `count`→`limit` (clamped: 100 relevance, 1000 bulk/snippet, 1 match)
+and every S2 filter (`year`, `publicationDateOrYear`, `venue`, `fieldsOfStudy`,
+`publicationTypes`, `minCitationCount`, `openAccessPdf`, `sort`, `token`, …)
+passes through verbatim; `country`/`language`/`device`/`engine`/`mode` are
+accepted but ignored (academic search is not geolocated and is always
+synchronous). The full payload is preserved on `WebSearchResult.raw`.
+
+S2's **Recommendations** API (paper → papers) is an item-to-item recommender,
+not a text-query "AI search", and its **Datasets** API is a bulk-corpus download
+workflow (pre-signed S3 URLs for 100M-record partitions) — neither matches the
+cross-provider `discover` (text-query) or `dataset_search` (filter → snapshot →
+inline records) contracts, so they are **not** advertised as those capabilities.
+Instead they are exposed as provider-specific methods, alongside the rest of the
+graph: `paper()`, `paper_batch()` (≤500 ids), `paper_citations()`,
+`paper_references()`, `paper_authors()`, `paper_match()`, `autocomplete()`,
+`snippet_search()`, `author()` / `author_batch()` / `author_papers()` /
+`author_search()`, `recommend_papers()` / `recommend_from_examples()`, and the
+Datasets helpers `list_releases()` / `get_release()` / `get_dataset()` /
+`get_dataset_diffs()`. S2 has no free quota endpoint, so `health_check()` issues
+a minimal autocomplete probe. S2 **requires** exponential backoff; the provider
+retries `429`/`5xx` automatically and offers optional proactive request spacing
+(`min_request_interval`).
 
 ---
 
@@ -258,6 +293,27 @@ The packaged `default_config.toml` includes a commented
 `[search_providers.serpapi]` block and the schema gains a "Search Provider:
 SerpApi" section. SerpApi needs **no zones** and its health check is **free**.
 
+### `[search_providers.semanticscholar]`
+
+| Key                    | Type    | Default                          | Notes                                                                          |
+| ---------------------- | ------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `api_key`              | secret  | —                                | **Optional.** Sent as `x-api-key`. Prefer `SEMANTIC_SCHOLAR_API_KEY` (`S2_API_KEY` also honored). Omit to use the public pool. |
+| `api_key_env_var`      | string  | `SEMANTIC_SCHOLAR_API_KEY`       | Name of the env var holding the key.                                           |
+| `base_url`             | url     | `https://api.semanticscholar.org`| Shared host for the Graph / Recommendations / Datasets APIs.                   |
+| `default_search_type`  | enum    | `relevance`                      | `relevance` · `bulk` · `match` · `snippet`.                                    |
+| `default_fields`       | string  | *(useful paper set)*             | Comma-separated paper fields applied when `fields` is omitted.                 |
+| `default_author_fields`| string  | *(useful author set)*            | Comma-separated author fields for the author endpoints.                        |
+| `timeout`              | integer | `30`                             | Seconds per request.                                                           |
+| `max_retries`          | integer | `3`                              | Retries on transient transport / 429 / 5xx (S2 **requires** backoff).          |
+| `max_concurrency`      | integer | `1`                              | `batch_search` fan-out width. Kept at 1 — S2 limits are strict.                |
+| `min_request_interval` | integer | `0`                              | Optional proactive request spacing (seconds); 0 disables. `1` ≈ 1 RPS.         |
+| `ssl_verify`           | boolean | `true`                           | Disable only for sandbox/proxy environments.                                   |
+
+The packaged `default_config.toml` ships the `[search_providers.semanticscholar]`
+block **commented out** (so search stays empty by default); uncomment the header
+to enable it — **no key required**. The schema gains a "Search Provider:
+Semantic Scholar" section. S2 needs **no zones**.
+
 ---
 
 ## 6. Failure modes & edge cases
@@ -308,10 +364,30 @@ SerpApi" section. SerpApi needs **no zones** and its health check is **free**.
   web engine ignores it (use `start` for pagination). We forward it because
   SerpApi silently ignores unsupported params; the alternative (silently dropping
   the unified `count`) would surprise callers more.
+- **Semantic Scholar loads keyless by default** — S2's API key is optional, so
+  the provider never raises on a missing key (it uses the shared public pool).
+  Tradeoff: to preserve the "search is empty unless configured" invariant, the
+  packaged `default_config.toml` ships the S2 block **commented out** (an
+  uncommented keyless block would otherwise auto-load and make S2 the default
+  provider on a fresh install). One-line opt-in; no key needed.
+- **S2 Recommendations are not `discover`; S2 Datasets are not `dataset_search`**
+  — Recommendations is an item-to-item recommender (paper → papers), not a
+  text-query AI search, and the Datasets API is a bulk-corpus download workflow
+  (pre-signed URLs for 100M-record partitions), not a filter → snapshot →
+  inline-records flow. Shoehorning either into the cross-provider contract would
+  misrepresent it, so both are exposed as provider-specific methods. Tradeoff:
+  they aren't reachable through the unified `llm.discover(...)` /
+  `llm.dataset_search(...)` surface (call them on the provider object instead).
+- **S2 `search_type` is a kwarg, `count→limit` is clamped per endpoint** — one
+  `web_search` entry point serves four S2 endpoints (relevance/bulk/match/
+  snippet) selected by `search_type`, mirroring Serper's vertical selector. The
+  documented per-endpoint `limit` caps (100/1000/1) are enforced client-side so
+  an over-large `count` is clamped rather than rejected by the API.
 - **cardctl is intentionally not extended** — `cardctl` manages *model cards*
-  (token pricing, context length, capabilities). Bright Data, Serper and SerpApi
-  have no token‑priced "models"; they bill per request / per record. Adding any
-  of them to the model‑card registry would be a category error. See
+  (token pricing, context length, capabilities). Bright Data, Serper, SerpApi
+  and Semantic Scholar have no token‑priced "models"; they bill per request /
+  per record / per credit (or are free). Adding any of them to the model‑card
+  registry would be a category error. See
   `tools/cardctl/BRIGHTDATA_SKIP_RATIONALE.md`.
 
 ---

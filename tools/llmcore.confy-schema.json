@@ -6819,6 +6819,127 @@
           "default": true
         }
       ]
+    },
+    {
+      "id": "search_provider_semanticscholar",
+      "title": "Search Provider: Semantic Scholar",
+      "description": "Free, AI-powered academic search over 200M+ papers (Academic Graph API), plus paper recommendations and bulk-corpus dataset download links. The API key is OPTIONAL — without one you share a rate-limited public pool; set SEMANTIC_SCHOLAR_API_KEY for a dedicated limit. Capabilities: web_search (relevance | bulk | match | snippet) and batch_search. Search is OPTIONAL and parallel to the LLM providers.",
+      "icon": "🔎",
+      "order": 49,
+      "fields": [
+        {
+          "key": "search_providers.semanticscholar.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "required": false,
+          "description": "Semantic Scholar API key, sent as the 'x-api-key' header. OPTIONAL — omit to use the public (rate-limited) pool. Recommended via the SEMANTIC_SCHOLAR_API_KEY environment variable (S2_API_KEY is also honored).",
+          "placeholder": "your-semantic-scholar-key",
+          "recommendation": "Optional. Set via SEMANTIC_SCHOLAR_API_KEY for a dedicated rate limit.",
+          "tags": ["security", "credentials", "search"]
+        },
+        {
+          "key": "search_providers.semanticscholar.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "required": false,
+          "description": "Semantic Scholar base URL. The Graph (/graph/v1), Recommendations (/recommendations/v1) and Datasets (/datasets/v1) APIs share this host. Normally left at the default.",
+          "placeholder": "https://api.semanticscholar.org",
+          "default": "https://api.semanticscholar.org",
+          "validation": {
+            "schemes": ["https", "http"]
+          }
+        },
+        {
+          "key": "search_providers.semanticscholar.default_search_type",
+          "title": "Default Search Type",
+          "type": "enum",
+          "required": false,
+          "description": "Default search flavor for web_search() when 'search_type' is not passed.",
+          "default": "relevance",
+          "options": [
+            {
+              "value": "relevance",
+              "label": "Relevance (paper search)"
+            },
+            {
+              "value": "bulk",
+              "label": "Bulk (large result sets)"
+            },
+            {
+              "value": "match",
+              "label": "Title Match (single best)"
+            },
+            {
+              "value": "snippet",
+              "label": "Snippet (text passages)"
+            }
+          ]
+        },
+        {
+          "key": "search_providers.semanticscholar.default_fields",
+          "title": "Default Fields",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated paper fields requested when 'fields' is omitted (S2 otherwise returns only paperId + title).",
+          "placeholder": "title,abstract,url,venue,year,authors,citationCount,externalIds,openAccessPdf"
+        },
+        {
+          "key": "search_providers.semanticscholar.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds.",
+          "default": 30,
+          "validation": {
+            "min": 5,
+            "max": 600
+          }
+        },
+        {
+          "key": "search_providers.semanticscholar.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "Retry attempts for transient transport / 429 / 5xx errors. Semantic Scholar requires exponential backoff, which this provider applies automatically.",
+          "default": 3,
+          "validation": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        {
+          "key": "search_providers.semanticscholar.max_concurrency",
+          "title": "Max Concurrency",
+          "type": "integer",
+          "required": false,
+          "description": "Max concurrent requests for batch_search() (client-side fan-out). Kept at 1 by default because S2 rate limits are strict; raise only with a higher-limit key.",
+          "default": 1,
+          "validation": {
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "key": "search_providers.semanticscholar.min_request_interval",
+          "title": "Min Request Interval (s)",
+          "type": "integer",
+          "required": false,
+          "description": "Optional proactive spacing (seconds) between request starts to avoid 429s. 0 disables spacing (rely on retry/backoff). Fractional values are accepted in TOML.",
+          "default": 0,
+          "validation": {
+            "min": 0,
+            "max": 60
+          }
+        },
+        {
+          "key": "search_providers.semanticscholar.ssl_verify",
+          "title": "Ssl Verify",
+          "type": "boolean",
+          "required": false,
+          "description": "Verify TLS certificates. Disable ONLY for sandbox/proxy environments.",
+          "default": true
+        }
+      ]
     }
   ],
   "hooks": {

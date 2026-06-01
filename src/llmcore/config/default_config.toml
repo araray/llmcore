@@ -831,6 +831,60 @@ posthog = "ERROR"
   ssl_verify = true
 
 
+  # --- Semantic Scholar Provider (academic papers; OPTIONAL API key) ---------
+  # Free, AI-powered academic search over 200M+ papers (Academic Graph API),
+  # plus paper recommendations and bulk-corpus dataset download links.
+  # Capabilities: web_search (relevance | bulk | match | snippet), batch_search.
+  # Docs: https://www.semanticscholar.org/product/api
+  #
+  # IMPORTANT: Semantic Scholar works WITHOUT an API key (shared, rate-limited
+  # public pool). This block is COMMENTED OUT so the search subsystem stays
+  # empty by default. To enable Semantic Scholar, uncomment the section header
+  # (and any settings you want to change) below. Optionally set
+  # SEMANTIC_SCHOLAR_API_KEY for a dedicated, higher rate limit.
+  #
+  # [search_providers.semanticscholar]
+  # # type = "semanticscholar"  # auto-detected from the section name
+  #
+  # # API key (sent as the `x-api-key` header). OPTIONAL — omit to use the
+  # # public pool. Environment Variable: SEMANTIC_SCHOLAR_API_KEY (S2_API_KEY
+  # # is also honored), or LLMCORE_SEARCH_PROVIDERS__SEMANTICSCHOLAR__API_KEY.
+  # # api_key = "..."
+  # api_key_env_var = "SEMANTIC_SCHOLAR_API_KEY"
+  #
+  # # Base API URL (normally no need to change). The Graph (/graph/v1),
+  # # Recommendations (/recommendations/v1) and Datasets (/datasets/v1) APIs all
+  # # share this host.
+  # # base_url = "https://api.semanticscholar.org"
+  #
+  # # Default search flavor for web_search() when 'search_type' is not passed:
+  # #   relevance (default) | bulk | match | snippet
+  # default_search_type = "relevance"
+  #
+  # # Default comma-separated paper fields requested when 'fields' is omitted
+  # # (S2 otherwise returns only paperId + title).
+  # # default_fields = "title,abstract,url,venue,year,authors,citationCount,externalIds,openAccessPdf"
+  #
+  # # Request timeout in seconds.
+  # timeout = 30
+  #
+  # # Max retry attempts for transient transport / 429 / 5xx errors. S2 REQUIRES
+  # # exponential backoff; this provider backs off automatically.
+  # max_retries = 3
+  #
+  # # Max concurrent requests for batch_search() (client-side fan-out). Kept at 1
+  # # by default because S2's public/key rate limits are strict; raise it only if
+  # # you hold a key with a higher limit.
+  # max_concurrency = 1
+  #
+  # # Optional proactive request spacing (seconds) between request starts, to
+  # # avoid 429s. 0 disables spacing (rely on retry/backoff). e.g. 1.0 ~= 1 RPS.
+  # min_request_interval = 0
+  #
+  # # Verify TLS certificates. Set to false ONLY for sandbox/proxy environments.
+  # ssl_verify = true
+
+
 # ==============================================================================
 # [storage] - Persistence Configurations
 # ==============================================================================

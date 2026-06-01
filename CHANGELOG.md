@@ -5,6 +5,86 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.49.13
+
+### Added — Semantic Scholar search provider (`llmcore.search`)
+
+Adds **Semantic Scholar** (https://www.semanticscholar.org/product/api) as a
+first-class **search provider**, joining Bright Data, Serper.dev and SerpApi in
+the optional `llmcore.search` subsystem. Semantic Scholar is a free, AI-powered
+academic search engine over 200M+ papers; the provider wraps all three public S2
+APIs (Academic Graph, Recommendations, Datasets), which share a host
+(`https://api.semanticscholar.org`) under different path prefixes.
+
+- **New provider `SemanticScholarSearchProvider`**
+  (`llmcore/search/providers/semanticscholar_provider.py`) — native `httpx`
+  client (no vendor SDK), advertising `web_search` and `batch_search`.
+  Highlights:
+  - **Optional API key / keyless by default.** The S2 key is optional; the
+    provider operates against the shared public pool when no key is set (a
+    missing key is **not** an error — unlike the other providers). When present,
+    the key is sent via the `x-api-key` header and resolved from `api_key` /
+    `token`, `api_key_env_var`, or `SEMANTIC_SCHOLAR_API_KEY` (with `S2_API_KEY`
+    fallback); never logged.
+  - **Four search flavors via `search_type`:** `relevance` (default,
+    `/paper/search`), `bulk` (`/paper/search/bulk`, with continuation `token`),
+    `match` (`/paper/search/match`, single best title match), and `snippet`
+    (`/snippet/search`, text passages for RAG — `item.description` is the
+    passage). `count` → `limit` (clamped per endpoint: 100 / 1000 / 1); all S2
+    filters (`year`, `publicationDateOrYear`, `venue`, `fieldsOfStudy`,
+    `publicationTypes`, `minCitationCount`, `openAccessPdf`, `sort`, `token`, …)
+    pass through verbatim (`openAccessPdf` handled as a valueless presence flag).
+    `country` / `language` / `device` / `engine` / `mode` are accepted but
+    ignored (academic search is not geolocated and is always synchronous). Full
+    payload preserved on `WebSearchResult.raw`.
+  - **Mandatory exponential backoff** on `429` / `5xx` (S2 requires it), plus an
+    optional proactive `min_request_interval` request spacer and a conservative
+    default batch concurrency of 1.
+  - **Client-side `batch_search`** fan-out (S2 has no multi-query endpoint),
+    returning one ordered result per input query.
+  - **Rich provider-specific methods** (not shoehorned into the cross-provider
+    `discover`/`dataset_search` contracts, which don't fit S2's item-to-item
+    recommender or bulk-corpus workflow): `paper`, `paper_batch` (≤500 ids),
+    `paper_citations`, `paper_references`, `paper_authors`, `paper_match`,
+    `autocomplete`, `snippet_search`, `author`, `author_batch`, `author_papers`,
+    `author_search`, `recommend_papers`, `recommend_from_examples`, and the
+    Datasets helpers `list_releases`, `get_release`, `get_dataset`,
+    `get_dataset_diffs`.
+  - **Free-ish `health_check()`** via a minimal autocomplete probe (S2 has no
+    quota endpoint).
+- **Registry & exports:** registered in `SEARCH_PROVIDER_MAP` and
+  `_SEARCH_PROVIDER_ENV_DEFAULTS` (`semanticscholar`, aliases `semantic_scholar`
+  / `semantic-scholar` / `s2` → `SEMANTIC_SCHOLAR_API_KEY`); exported from
+  `llmcore.search` and the top-level `llmcore` package.
+- **Configuration:** a `[search_providers.semanticscholar]` block added to
+  `default_config.toml` **commented out** — because the provider loads keyless,
+  an uncommented block would auto-load and break the "search is empty unless
+  configured" invariant; it is a one-line opt-in (no key required). Keys:
+  `api_key_env_var`, `base_url`, `default_search_type`, `default_fields`,
+  `timeout`, `max_retries`, `max_concurrency`, `min_request_interval`,
+  `ssl_verify`.
+- **confy-curator schema** (`tools/llmcore.confy-schema.json`): added a
+  "Search Provider: Semantic Scholar" section (order 49) for the wizard.
+- **Packaging:** new `semanticscholar` extra (`pip install
+  "llmcore[semanticscholar]"`); added to the `all` extra.
+- **Tests:** `tests/search/test_semanticscholar_provider.py` — 61 `respx`-based
+  unit tests (no network) covering keyless vs keyed auth (header presence), the
+  four search flavors and per-endpoint clamps, filter pass-through &
+  `openAccessPdf` flag, snippet/citation/reference/author normalization, POST
+  batch & recommendations bodies, the Datasets helpers, retry-on-429/5xx +
+  transport retry, 401/403 raises, the health check, client-side batch fan-out,
+  and manager wiring (keyless + `s2` alias + keyed). Full search suite: 199
+  passed, 0 regressions.
+- **Docs:** `docs/Search_providers_usage.md` (new §11 Semantic Scholar) and
+  `docs/Search_providers_rationale.md` (glance row, capability matrix, config
+  reference, tradeoffs) updated; new `examples/semanticscholar_search_example.py`.
+
+> `cardctl` is intentionally **not** extended for Semantic Scholar — it manages
+> *LLM model cards* (token pricing/context), which do not apply to a free,
+> per-request academic API. See `tools/cardctl/BRIGHTDATA_SKIP_RATIONALE.md`. No
+> public APIs, schemas, or existing provider behavior changed; the addition is
+> fully backward-compatible.
+
 ## v0.49.12
 
 ### Added — SerpApi search provider (`llmcore.search`)

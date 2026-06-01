@@ -489,12 +489,123 @@ locs = await serpapi.locations(q="Austin", limit=3)
 
 ---
 
-## 11. Validation / how to verify it works
+## 11. Semantic Scholar (academic papers; **no API key required**)
+
+[Semantic Scholar](https://www.semanticscholar.org/product/api) is a free,
+AI‑powered academic search engine over 200M+ papers. The provider wraps the
+**Academic Graph**, **Recommendations**, and **Datasets** APIs. It advertises
+`web_search` and `batch_search`; the recommendations/datasets/paper‑graph
+endpoints are exposed as provider‑specific methods.
+
+The S2 **API key is optional** — the provider works keyless against the shared
+public pool (rate‑limited; a few thousand requests per 5 minutes shared across
+all anonymous clients). Set `SEMANTIC_SCHOLAR_API_KEY` for a dedicated limit.
+
+### Setup
+
+```toml
+# ~/.config/llmcore/config.toml
+[search_providers.semanticscholar]
+# api_key via SEMANTIC_SCHOLAR_API_KEY (OPTIONAL; S2_API_KEY also honored)
+# default_search_type = "relevance"   # relevance | bulk | match | snippet
+# default_fields = "title,abstract,url,venue,year,authors,citationCount,externalIds,openAccessPdf"
+# timeout = 30
+# max_retries = 3                      # S2 requires exponential backoff (applied automatically)
+# max_concurrency = 1                  # batch_search fan-out; raise only with a key
+# min_request_interval = 0             # optional request spacing (seconds); 1 ≈ 1 RPS
+```
+
+> The packaged `default_config.toml` ships this block **commented out** so the
+> search subsystem stays empty by default. Uncomment the section header to
+> enable it (no key needed).
+
+### Paper search (relevance / bulk / match / snippet)
+
+```python
+s2 = llm.get_search_provider("semanticscholar")
+
+# relevance search (default) — rich filters pass straight through
+res = await llm.web_search(
+    "graph neural networks", provider="semanticscholar", count=20,
+    year="2018-2024", fieldsOfStudy="Computer Science", openAccessPdf=True,
+)
+for item in res.items:
+    print(item.title, "—", item.url)        # item.description = abstract or TLDR
+print("approx total:", res.total_results)
+
+# bulk search (large result sets; paginate via the continuation token)
+page1 = await llm.web_search("transformers", provider="semanticscholar",
+                             search_type="bulk", count=1000, sort="citationCount:desc")
+token = page1.raw.get("token")              # feed back as token=... for the next page
+
+# title match — resolve a free-text title/citation to one canonical paper
+match = await s2.paper_match("Attention is all you need")
+
+# snippet search — text passages ideal for RAG grounding (item.description = passage)
+snips = await s2.snippet_search("retrieval augmented generation", limit=10)
+```
+
+`count` maps to S2's `limit` (clamped per endpoint: 100 relevance, 1000
+bulk/snippet, 1 match). `country` / `language` / `device` / `engine` / `mode`
+are accepted for cross‑provider compatibility but ignored (academic search is
+not geolocated and is always synchronous).
+
+### Paper & citation graph, authors, autocomplete
+
+```python
+paper   = await s2.paper("ARXIV:1706.03762", fields="title,abstract,tldr,citationCount")
+papers  = await s2.paper_batch(["DOI:10.1038/nature14539", "CorpusId:215416146"])  # ≤500 ids
+citing  = await s2.paper_citations(paper["paperId"], limit=100)   # items ← citingPaper
+refs    = await s2.paper_references(paper["paperId"], limit=100)  # items ← citedPaper
+authors = await s2.paper_authors(paper["paperId"])
+
+who     = await s2.author("1741101", fields="name,affiliations,hIndex,paperCount")
+hits    = await s2.author_search("Yoshua Bengio")
+byauth  = await s2.author_papers("1741101", limit=50)
+sugg    = await s2.autocomplete("attention is all")   # [{id, title, authorsYear}, ...]
+```
+
+### Recommendations
+
+```python
+# from a single seed paper (pool: "recent" | "all-cs")
+recs = await s2.recommend_papers("ARXIV:1706.03762", limit=20, pool="recent")
+
+# from positive/negative example lists
+recs = await s2.recommend_from_examples(
+    positive_paper_ids=["CorpusId:215416146", "ARXIV:1810.04805"],
+    negative_paper_ids=["ARXIV:1805.02262"], limit=20,
+)
+```
+
+### Datasets (bulk‑corpus download links)
+
+```python
+releases = await s2.list_releases()                      # ["2023-03-14", ...]
+release  = await s2.get_release("latest")                # {release_id, README, datasets:[...]}
+abstracts = await s2.get_dataset("abstracts")            # {name, README, files:[presigned URLs]}
+diffs    = await s2.get_dataset_diffs("2023-08-01", "latest", "papers")
+```
+
+> The Datasets API returns pre‑signed S3 URLs for full‑corpus partitions (e.g.
+> "100M records in 30 × 1.8 GB files"); these helpers return that metadata/links,
+> they do not stream records in‑process. For local querying at higher throughput
+> than the API allows, download the partitions and load them yourself.
+
+### Connectivity check
+
+```python
+ok = await s2.health_check()   # tiny autocomplete probe; True ⇒ reachable
+```
+
+---
+
+## 12. Validation / how to verify it works
 
 1. **Offline (no account):** run the unit tests — they intercept all HTTP with
    `respx` and assert exact endpoints/payloads:
    ```bash
-   pip install "llmcore[test,brightdata,serper,serpapi]"
+   pip install "llmcore[test,brightdata,serper,serpapi,semanticscholar]"
    pytest tests/search/ -q
    ```
 2. **Credential/connectivity smoke test:**
@@ -504,8 +615,9 @@ locs = await serpapi.locations(q="Austin", limit=3)
    ```
 3. **End‑to‑end:** run `examples/brightdata_search_example.py` (with
    `BRIGHTDATA_API_TOKEN` + zone env vars), `examples/serper_search_example.py`
-   (with `SERPER_API_KEY`), or `examples/serpapi_search_example.py` (with
-   `SERPAPI_API_KEY`). All perform real, billable calls.
+   (with `SERPER_API_KEY`), `examples/serpapi_search_example.py` (with
+   `SERPAPI_API_KEY`), or `examples/semanticscholar_search_example.py` (which
+   runs **without** a key — `SEMANTIC_SCHOLAR_API_KEY` is optional).
 4. **Config wizard:** the confy‑curator schema exposes "Search Provider: Bright
-   Data", "Search Provider: Serper.dev" and "Search Provider: SerpApi" sections
-   for guided setup.
+   Data", "Search Provider: Serper.dev", "Search Provider: SerpApi" and "Search
+   Provider: Semantic Scholar" sections for guided setup.

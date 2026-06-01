@@ -40,6 +40,7 @@ from .models import (
     WebSearchResult,
 )
 from .providers.brightdata_provider import BrightDataSearchProvider
+from .providers.semanticscholar_provider import SemanticScholarSearchProvider
 from .providers.serpapi_provider import SerpApiSearchProvider
 from .providers.serper_provider import SerperSearchProvider
 
@@ -54,6 +55,7 @@ __all__ = [
     "BrightDataSearchProvider",
     "SerperSearchProvider",
     "SerpApiSearchProvider",
+    "SemanticScholarSearchProvider",
     # Result models
     "SearchResultBase",
     "SearchItem",

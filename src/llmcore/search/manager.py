@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover
 from ..exceptions import ConfigError
 from .base import BaseSearchProvider
 from .providers.brightdata_provider import BrightDataSearchProvider
+from .providers.semanticscholar_provider import SemanticScholarSearchProvider
 from .providers.serpapi_provider import SerpApiSearchProvider
 from .providers.serper_provider import SerperSearchProvider
 
@@ -63,6 +64,10 @@ SEARCH_PROVIDER_MAP: dict[str, type[BaseSearchProvider]] = {
     "serpapi": SerpApiSearchProvider,
     "serp_api": SerpApiSearchProvider,
     "serpapi_search": SerpApiSearchProvider,
+    "semanticscholar": SemanticScholarSearchProvider,
+    "semantic_scholar": SemanticScholarSearchProvider,
+    "semantic-scholar": SemanticScholarSearchProvider,
+    "s2": SemanticScholarSearchProvider,
 }
 
 # Conventional environment variables for known search-provider types.
@@ -77,6 +82,12 @@ _SEARCH_PROVIDER_ENV_DEFAULTS: dict[str, str] = {
     "serpapi": "SERPAPI_API_KEY",
     "serp_api": "SERPAPI_API_KEY",
     "serpapi_search": "SERPAPI_API_KEY",
+    # Semantic Scholar's key is OPTIONAL; if SEMANTIC_SCHOLAR_API_KEY is set it is
+    # used, otherwise the provider operates against the public (rate-limited) pool.
+    "semanticscholar": "SEMANTIC_SCHOLAR_API_KEY",
+    "semantic_scholar": "SEMANTIC_SCHOLAR_API_KEY",
+    "semantic-scholar": "SEMANTIC_SCHOLAR_API_KEY",
+    "s2": "SEMANTIC_SCHOLAR_API_KEY",
 }
 
 
