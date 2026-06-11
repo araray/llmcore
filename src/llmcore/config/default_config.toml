@@ -37,7 +37,7 @@ default_provider = "ollama"
 # Default Value: "" (unset). If exactly one search provider is configured, it is
 #                adopted as the default automatically.
 # Environment Variable: LLMCORE_DEFAULT_SEARCH_PROVIDER
-default_search_provider = ""
+default_search_provider = "brightdata"
 
 # --- Default Embedding Model ---
 # What it does: Specifies which embedding model to use for RAG operations.
@@ -843,14 +843,14 @@ posthog = "ERROR"
   # (and any settings you want to change) below. Optionally set
   # SEMANTIC_SCHOLAR_API_KEY for a dedicated, higher rate limit.
   #
-  # [search_providers.semanticscholar]
+  [search_providers.semanticscholar]
   # # type = "semanticscholar"  # auto-detected from the section name
   #
   # # API key (sent as the `x-api-key` header). OPTIONAL — omit to use the
   # # public pool. Environment Variable: SEMANTIC_SCHOLAR_API_KEY (S2_API_KEY
   # # is also honored), or LLMCORE_SEARCH_PROVIDERS__SEMANTICSCHOLAR__API_KEY.
   # # api_key = "..."
-  # api_key_env_var = "SEMANTIC_SCHOLAR_API_KEY"
+  api_key_env_var = "SEMANTIC_SCHOLAR_API_KEY"
   #
   # # Base API URL (normally no need to change). The Graph (/graph/v1),
   # # Recommendations (/recommendations/v1) and Datasets (/datasets/v1) APIs all

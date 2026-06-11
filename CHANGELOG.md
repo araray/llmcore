@@ -5,6 +5,42 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.49.14
+
+### Added — Per-call token usage surface (`LLMCore.chat_with_usage`)
+
+Adds a **usage-returning** companion to `chat()` so that *callers* can meter
+token consumption per call without enabling session persistence. This is the
+foundational dependency for external usage/quota systems built on top of
+llmcore (e.g. Convergence's metering bridge): previously the prompt/completion
+token counts llmcore computes internally were only persisted when
+`save_session=True`, and were never returned to the caller of a transient
+`chat()` call.
+
+- **New method `LLMCore.chat_with_usage(message, *, ...) -> tuple[str, ChatUsage]`**
+  (`llmcore/api.py`). Non-streaming only; mirrors `chat()`'s full keyword
+  signature. It runs the *exact* same code path as `chat()` (provider
+  resolution, context preparation, the provider call, and llmcore's own
+  prompt/completion token counting) and additionally returns the per-call
+  token usage. The existing `chat() -> str` contract is **unchanged** — this is
+  purely additive and opt-in.
+- **New public value object `ChatUsage`** (`llmcore/usage.py`, exported from
+  `llmcore`). A frozen dataclass carrying `prompt_tokens` / `completion_tokens`
+  / `total_tokens` / `provider` / `model`, with `tokens_in` / `tokens_out`
+  read-only aliases (so it is a drop-in for either naming convention) and an
+  `is_available` flag. When usage cannot be determined every count is `None`,
+  letting downstream meters degrade to a no-op rather than recording a
+  zero-token event.
+- **Concurrency-safe & residue-free.** Usage is read back via the existing
+  per-session introspection cache (`get_last_interaction_context_info`) under a
+  *call-local* session id, so concurrent calls never read each other's usage.
+  When the caller passes no `session_id`, an ephemeral one is synthesised and
+  its transient caches are dropped on return.
+- **Tests** (`tests/api/test_chat_with_usage.py`) — `ChatUsage` value
+  semantics, the signature/protocol contract, and offline end-to-end behaviour
+  against an injected fake provider (no network).
+- **Docs** — `docs/USAGE_chat_with_usage.md`.
+
 ## v0.49.13
 
 ### Added — Semantic Scholar search provider (`llmcore.search`)

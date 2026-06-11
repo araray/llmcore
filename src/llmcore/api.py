@@ -64,6 +64,7 @@ from .search.models import (
 )
 from .sessions.manager import SessionManager
 from .storage.manager import StorageManager
+from .usage import ChatUsage
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -1112,6 +1113,153 @@ class LLMCore:
             if save_session:
                 await self._session_manager.save_session(chat_session)
             return full_content
+
+    async def chat_with_usage(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        system_message: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        save_session: bool = True,
+        enable_rag: bool = False,
+        rag_retrieval_k: int | None = None,
+        rag_collection_name: str | None = None,
+        rag_metadata_filter: dict[str, Any] | None = None,
+        active_context_item_ids: list[str] | None = None,
+        explicitly_staged_items: list[Message | ContextItem] | None = None,
+        prompt_template_values: dict[str, str] | None = None,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
+        **provider_kwargs,
+    ) -> tuple[str, ChatUsage]:
+        """Send a message and return both the response text and its usage.
+
+        This is the **usage-returning** companion to :meth:`chat` (Part 3
+        §3.2.2, "Option A"). It is non-streaming only and additive: it runs
+        the *exact* same code path as :meth:`chat` (provider resolution,
+        context preparation, the provider call, and ``llmcore``'s own
+        prompt/completion token counting), then returns the per-call token
+        usage that ``chat()`` already computes and caches — without
+        requiring ``save_session=True``.
+
+        It is the surface that lets a *caller* (e.g. Convergence's metering
+        bridge) meter token consumption per call. Callers that do not need
+        usage keep using :meth:`chat`, whose ``-> str`` contract is
+        unchanged.
+
+        Implementation:
+            The method delegates to :meth:`chat` under a known
+            ``session_id`` so the resulting
+            :class:`~llmcore.models.ContextPreparationDetails` can be read
+            back deterministically via
+            :meth:`get_last_interaction_context_info` — the same per-session
+            introspection cache used by :meth:`get_last_raw_response`.
+            Because the key is *call-local* (a fresh ephemeral id when the
+            caller passes none), it is concurrency-safe: concurrent calls
+            never read each other's usage. When the caller supplies no
+            ``session_id`` an ephemeral one is synthesised and its transient
+            caches are dropped afterwards, leaving no residue.
+
+        Args:
+            message: The user's input message or fully-constructed prompt.
+            session_id: Optional session ID for conversation continuity. If
+                ``None``, an ephemeral throwaway session is used for this
+                call only (matching :meth:`chat`'s transient behaviour) and
+                its transient caches are cleaned up on return.
+            system_message: Optional system message to define LLM behaviour.
+            provider_name: Optional provider override. If ``None``, the
+                configured default provider is used.
+            model_name: Optional model override. If ``None``, the provider's
+                default model is used.
+            save_session: If ``True`` and a real ``session_id`` is provided,
+                persists the turn (as in :meth:`chat`). Defaults to ``True``
+                to mirror :meth:`chat`; metering callers typically pass
+                ``False``.
+            enable_rag: If ``True``, performs internal RAG retrieval. Set
+                ``False`` when using an external RAG engine.
+            rag_retrieval_k: Number of documents to retrieve (internal RAG).
+            rag_collection_name: Vector store collection (internal RAG).
+            rag_metadata_filter: Optional metadata filter (internal RAG).
+            active_context_item_ids: Workspace context item IDs to include.
+            explicitly_staged_items: High-priority context items/messages.
+            prompt_template_values: Custom RAG prompt template values.
+            tools: Optional tools available to the LLM for function calling.
+            tool_choice: Optional tool choice strategy.
+            **provider_kwargs: Additional provider-specific parameters
+                (e.g. ``temperature``). ``stream`` is not accepted here.
+
+        Returns:
+            A ``(text, usage)`` tuple where ``text`` is the complete
+            response string and ``usage`` is a :class:`ChatUsage`. When the
+            per-call details cannot be read, ``usage`` is an all-``None``
+            :class:`ChatUsage` so downstream metering degrades to a no-op.
+
+        Raises:
+            ValueError: If ``stream=True`` is passed (streaming is not
+                supported by this method), or if an unsupported
+                ``provider_kwargs`` key is passed (same validation as
+                :meth:`chat`).
+            ProviderError, ContextLengthError, SessionStorageError: As
+                raised by :meth:`chat`; these are *not* swallowed — only
+                missing usage degrades, not call failures.
+
+        Examples:
+            >>> text, usage = await llm.chat_with_usage(
+            ...     message="Summarise this.",
+            ...     provider_name="openai",
+            ...     save_session=False,
+            ... )
+            >>> usage.tokens_in, usage.tokens_out  # doctest: +SKIP
+            (1200, 400)
+        """
+        if provider_kwargs.pop("stream", False):
+            raise ValueError(
+                "chat_with_usage() does not support streaming; use "
+                "chat(stream=True) and get_session_usage_stats() instead."
+            )
+
+        ephemeral = session_id is None
+        effective_session_id = session_id or f"_usage_{uuid.uuid4().hex}"
+        try:
+            result = await self.chat(
+                message,
+                session_id=effective_session_id,
+                system_message=system_message,
+                provider_name=provider_name,
+                model_name=model_name,
+                stream=False,
+                save_session=save_session,
+                enable_rag=enable_rag,
+                rag_retrieval_k=rag_retrieval_k,
+                rag_collection_name=rag_collection_name,
+                rag_metadata_filter=rag_metadata_filter,
+                active_context_item_ids=active_context_item_ids,
+                explicitly_staged_items=explicitly_staged_items,
+                prompt_template_values=prompt_template_values,
+                tools=tools,
+                tool_choice=tool_choice,
+                **provider_kwargs,
+            )
+            # stream=False guarantees a str, but coerce defensively.
+            text = result if isinstance(result, str) else str(result)
+            details = self.get_last_interaction_context_info(effective_session_id)
+            return text, ChatUsage.from_context_details(details)
+        finally:
+            if ephemeral:
+                # The session id was synthesised for this call only; drop the
+                # per-call transient caches it populated so they do not
+                # accumulate. (A caller-supplied session id is left intact so
+                # get_last_interaction_context_info / get_last_raw_response
+                # keep working for it.)
+                self._transient_last_interaction_info_cache.pop(
+                    effective_session_id, None
+                )
+                self._transient_last_raw_response_cache.pop(
+                    effective_session_id, None
+                )
+                self._transient_sessions_cache.pop(effective_session_id, None)
 
     async def _stream_response_wrapper(
         self,

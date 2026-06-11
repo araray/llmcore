@@ -337,6 +337,11 @@ from .sessions.manager import SessionManager
 from .storage import StorageManager
 
 # =============================================================================
+# USAGE
+# =============================================================================
+from .usage import ChatUsage
+
+# =============================================================================
 # VERSION
 # =============================================================================
 try:
@@ -395,6 +400,7 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "ContextPreparationDetails",
+    "ChatUsage",
     "SessionTokenStats",
     "CostEstimate",
     # -- Exceptions --
