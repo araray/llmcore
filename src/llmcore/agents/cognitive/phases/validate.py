@@ -142,12 +142,23 @@ async def validate_phase(
                 Message(role=Role.USER, content=validation_prompt),
             ]
 
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                temperature=0.3,  # Lower temperature for consistent validation
-            )
+            if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+                response = await provider_manager.chat_completion_with_retry(
+                    provider,
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tracer=tracer,
+                    operation="cognitive.validate",
+                    temperature=0.3,  # Lower temperature for consistent validation
+                )
+            else:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    temperature=0.3,
+                )
 
             # Extract response content
             response_content = provider.extract_response_content(response)

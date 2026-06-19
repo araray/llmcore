@@ -69,6 +69,16 @@ class BaseProvider(abc.ABC):
         """
         pass
 
+    async def warm_up(self) -> None:
+        """Optionally prepare provider resources before the first real request.
+
+        Providers may override this to perform cheap readiness work such as
+        establishing a client session, loading a local model, or validating a
+        default model. The base implementation is intentionally a no-op so the
+        lifecycle is additive for all existing providers.
+        """
+        return None
+
     @abc.abstractmethod
     async def get_models_details(self) -> list[ModelDetails]:
         """

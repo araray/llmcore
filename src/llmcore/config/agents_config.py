@@ -15,6 +15,7 @@ The configuration hierarchy:
     ├── FastPathConfig       - Fast-path execution settings
     ├── CircuitBreakerConfig - Circuit breaker settings
     ├── ActivitiesConfig     - Activity system settings
+    ├── ToolInventoryConfig  - Lightweight tool inventory and schema selection
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -263,6 +264,45 @@ class ActivitiesConfig(BaseModel):
 
 
 # =============================================================================
+# TOOL INVENTORY CONFIG
+# =============================================================================
+
+
+class ToolInventoryConfig(BaseModel):
+    """
+    Configuration for lightweight tool inventory and native schema selection.
+
+    The inventory gives the model a compact capability list in the prompt while
+    keeping full provider-native tool schemas available for execution. Large
+    tool catalogs can optionally cap the number of full native schemas sent to a
+    provider request; the cap is disabled by default for compatibility.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Use lightweight tool inventories in cognitive prompts",
+    )
+    max_description_chars: int = Field(
+        default=180,
+        ge=20,
+        le=4000,
+        description="Maximum description length per inventory entry",
+    )
+    include_parameters: bool = Field(
+        default=False,
+        description="Include full parameter schemas in inventory prompt entries",
+    )
+    max_native_tool_schemas: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Maximum full native tool schemas to send to a provider request. "
+            "None means unrestricted; 0 disables native schemas."
+        ),
+    )
+
+
+# =============================================================================
 # CAPABILITY CHECK CONFIG
 # =============================================================================
 
@@ -443,6 +483,10 @@ class AgentsConfig(BaseModel):
     )
     activities: ActivitiesConfig = Field(
         default_factory=ActivitiesConfig, description="Activity system settings"
+    )
+    tool_inventory: ToolInventoryConfig = Field(
+        default_factory=ToolInventoryConfig,
+        description="Lightweight tool inventory and native schema selection",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -709,6 +753,7 @@ GoalsConfig.model_rebuild()
 FastPathConfig.model_rebuild()
 CircuitBreakerConfig.model_rebuild()
 ActivitiesConfig.model_rebuild()
+ToolInventoryConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -717,7 +762,7 @@ DarwinConfig.model_rebuild()
 AgentsConfig.model_rebuild()
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - keep grouped by public API category
     # Enums
     "TimeoutPolicy",
     "RoutingStrategy",
@@ -727,6 +772,7 @@ __all__ = [
     "FastPathConfig",
     "CircuitBreakerConfig",
     "ActivitiesConfig",
+    "ToolInventoryConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

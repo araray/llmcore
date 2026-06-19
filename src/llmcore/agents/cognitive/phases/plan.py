@@ -104,12 +104,23 @@ async def plan_phase(
                 Message(role=Role.USER, content=planning_prompt),
             ]
 
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                temperature=0.7,  # Some creativity in planning
-            )
+            if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+                response = await provider_manager.chat_completion_with_retry(
+                    provider,
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tracer=tracer,
+                    operation="cognitive.plan",
+                    temperature=0.7,  # Some creativity in planning
+                )
+            else:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    temperature=0.7,
+                )
 
             # Extract response content from provider-specific response format
             response_content = provider.extract_response_content(response)

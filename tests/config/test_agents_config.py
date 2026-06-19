@@ -31,6 +31,7 @@ from llmcore.config.agents_config import (
     RoutingConfig,
     RoutingStrategy,
     TimeoutPolicy,
+    ToolInventoryConfig,
     load_agents_config,
 )
 
@@ -104,6 +105,16 @@ class TestAgentsConfigDefaults:
         assert config.max_observation_length == 4000
         assert config.include_reasoning is True
 
+
+    def test_tool_inventory_config_defaults(self):
+        """Tool inventory config should preserve native schema compatibility by default."""
+        config = ToolInventoryConfig()
+
+        assert config.enabled is True
+        assert config.max_description_chars == 180
+        assert config.include_parameters is False
+        assert config.max_native_tool_schemas is None
+
     def test_capability_check_config_defaults(self):
         """Capability check config should have sensible defaults."""
         config = CapabilityCheckConfig()
@@ -146,6 +157,7 @@ class TestAgentsConfigDefaults:
         assert isinstance(config.fast_path, FastPathConfig)
         assert isinstance(config.circuit_breaker, CircuitBreakerConfig)
         assert isinstance(config.activities, ActivitiesConfig)
+        assert isinstance(config.tool_inventory, ToolInventoryConfig)
         assert isinstance(config.capability_check, CapabilityCheckConfig)
         assert isinstance(config.hitl, HITLConfig)
         assert isinstance(config.routing, RoutingConfig)

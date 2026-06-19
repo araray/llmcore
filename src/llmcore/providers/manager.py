@@ -11,6 +11,7 @@ UPDATED: Added async initialize() method for future async provider initializatio
 import asyncio
 import logging
 import os
+from collections.abc import AsyncGenerator
 from typing import Any
 
 # Assume ConfyConfig type for hinting
@@ -20,9 +21,9 @@ except ImportError:
     ConfyConfig = dict[str, Any]  # type: ignore
 
 
-from ..exceptions import ConfigError
+from ..exceptions import ConfigError, ProviderError
 from .anthropic_provider import AnthropicProvider
-from .base import BaseProvider
+from .base import BaseProvider, ContextPayload
 from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
@@ -81,8 +82,8 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
 
 # Well-known defaults for providers that reuse OpenAIProvider.
 # Keys must match the ``PROVIDER_MAP`` section names above.
-# ``env_var``  – conventional environment variable for the API key
-# ``base_url`` – vendor API endpoint (required, since the default
+# ``env_var``  - conventional environment variable for the API key
+# ``base_url`` - vendor API endpoint (required, since the default
 #                OpenAI base URL is wrong for these services)
 _OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
     "xai": {
@@ -136,6 +137,7 @@ class ProviderManager:
         self._providers = {}
         self._log_raw_payloads_override = log_raw_payloads
         self._initialized = False
+        self._warm_up_complete = False
         self._default_provider_name = self._config.get("llmcore.default_provider", "ollama").lower()
         logger.debug(
             f"ProviderManager initialized. Default provider set to '{self._default_provider_name}'."
@@ -152,25 +154,224 @@ class ProviderManager:
         self._initialized = True
 
     async def initialize(self) -> None:
-        """
-        Asynchronous initialization hook for providers that need async setup.
+        """Run optional async provider setup tasks.
 
-        Currently, providers are initialized synchronously in __init__.
-        This method is provided for:
-        1. API compatibility with LLMCore's async initialization pattern
-        2. Future support for providers that require async initialization
-        3. Post-construction async setup tasks
-
-        This method is idempotent - calling it multiple times is safe.
+        Providers are constructed synchronously in ``__init__``. This method is
+        reserved for additive async lifecycle work such as provider warm-up. It
+        is idempotent and safe to call multiple times.
         """
-        if self._initialized:
-            logger.debug("ProviderManager already initialized, skipping async initialize()")
+        if self._warm_up_complete:
+            logger.debug("ProviderManager async initialize() already complete")
             return
 
-        # Future: Add any async provider initialization here
-        # For example, some providers might need to fetch model lists asynchronously
+        warm_up_enabled = self._config.get("llmcore.provider_warm_up_enabled", False)
+        strict = self._config.get("llmcore.provider_warm_up_strict", False)
+        if not warm_up_enabled:
+            self._warm_up_complete = True
+            logger.debug("Provider warm-up disabled; async initialize() complete")
+            return
 
-        logger.debug("ProviderManager async initialize() complete (no-op for current providers)")
+        for provider_name, provider in self._providers.items():
+            try:
+                logger.debug("Warming up provider instance '%s'", provider_name)
+                await provider.warm_up()
+            except Exception as e:
+                message = f"Provider '{provider_name}' warm-up failed: {e}"
+                if strict:
+                    raise ProviderError(provider_name, message) from e
+                logger.warning(message)
+
+        self._warm_up_complete = True
+        logger.debug("ProviderManager async initialize() complete")
+
+    async def chat_completion_with_retry(
+        self,
+        provider: BaseProvider,
+        *,
+        context: ContextPayload,
+        model: str | None = None,
+        stream: bool = False,
+        tools: list[Any] | None = None,
+        tool_choice: str | None = None,
+        tracer: Any | None = None,
+        operation: str = "chat_completion",
+        **kwargs: Any,
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Call a provider with config-driven retry for transient failures.
+
+        ``ProviderError.retryable`` is the contract boundary: providers can set
+        it explicitly, while legacy providers benefit from the inference in
+        :class:`ProviderError`.  The default policy is deliberately small: one
+        retry for 429/5xx/timeout-like failures and no retry for auth, config,
+        context, or model errors.
+        """
+        from ..tracing import add_span_attributes, create_span, record_span_exception
+
+        retry_config = self._get_retry_policy()
+        target_model = model or getattr(provider, "default_model", None)
+        provider_name = provider.get_name()
+
+        with create_span(tracer, f"provider.{operation}") as span:
+            if span:
+                add_span_attributes(
+                    span,
+                    {
+                        "provider.name": provider_name,
+                        "provider.model": target_model,
+                        "provider.retry.enabled": retry_config["enabled"],
+                        "provider.retry.max_attempts": retry_config["max_attempts"],
+                    },
+                )
+
+            attempts = 0
+            last_error: ProviderError | None = None
+            while attempts < retry_config["max_attempts"]:
+                attempts += 1
+                try:
+                    response = await provider.chat_completion(
+                        context=context,
+                        model=target_model,
+                        stream=stream,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                        **kwargs,
+                    )
+                    if span:
+                        add_span_attributes(
+                            span,
+                            {
+                                "provider.retry.attempts": attempts,
+                                "provider.retry.succeeded_after_retry": attempts > 1,
+                            },
+                        )
+                    return response
+
+                except ProviderError as exc:
+                    error = exc
+                    self._complete_provider_error_context(error, provider_name, target_model)
+                except Exception as exc:
+                    error = ProviderError(
+                        provider_name,
+                        str(exc),
+                        model_name=target_model,
+                        original_exception=exc,
+                    )
+
+                last_error = error
+                if not self._should_retry_provider_error(error, attempts, retry_config):
+                    if span:
+                        add_span_attributes(
+                            span,
+                            {
+                                "provider.retry.attempts": attempts,
+                                "provider.retry.retryable": error.retryable,
+                                "provider.retry.exhausted": attempts >= retry_config["max_attempts"],
+                                "provider.error.status_code": error.status_code,
+                            },
+                        )
+                        record_span_exception(span, error)
+                    raise error
+
+                delay = self._retry_delay_seconds(error, attempts, retry_config)
+                logger.warning(
+                    "Provider %s model %s transient failure on attempt %s/%s; retrying in %.2fs: %s",
+                    provider_name,
+                    target_model,
+                    attempts,
+                    retry_config["max_attempts"],
+                    delay,
+                    error,
+                )
+                if span:
+                    add_span_attributes(
+                        span,
+                        {
+                            "provider.retry.last_delay_seconds": delay,
+                            "provider.retry.last_status_code": error.status_code,
+                            "provider.retry.retry_after_seconds": error.retry_after_seconds,
+                        },
+                    )
+                if delay > 0:
+                    await asyncio.sleep(delay)
+
+            if last_error is not None:
+                if span:
+                    record_span_exception(span, last_error)
+                raise last_error
+
+            raise ProviderError(provider_name, "Provider call failed before any attempt.")
+
+    def _get_retry_policy(self) -> dict[str, Any]:
+        enabled = bool(self._config.get("llmcore.provider_retry_enabled", True))
+        max_attempts = self._coerce_int(
+            self._config.get("llmcore.provider_retry_max_attempts", 2),
+            default=2,
+            minimum=1,
+        )
+        if not enabled:
+            max_attempts = 1
+
+        return {
+            "enabled": enabled,
+            "max_attempts": max_attempts,
+            "base_delay": self._coerce_float(
+                self._config.get("llmcore.provider_retry_base_delay_seconds", 0.5),
+                default=0.5,
+                minimum=0.0,
+            ),
+            "max_delay": self._coerce_float(
+                self._config.get("llmcore.provider_retry_max_delay_seconds", 30.0),
+                default=30.0,
+                minimum=0.0,
+            ),
+        }
+
+    @staticmethod
+    def _coerce_int(value: Any, *, default: int, minimum: int) -> int:
+        try:
+            coerced = int(value)
+        except (TypeError, ValueError):
+            coerced = default
+        return max(minimum, coerced)
+
+    @staticmethod
+    def _coerce_float(value: Any, *, default: float, minimum: float) -> float:
+        try:
+            coerced = float(value)
+        except (TypeError, ValueError):
+            coerced = default
+        return max(minimum, coerced)
+
+    @staticmethod
+    def _complete_provider_error_context(
+        error: ProviderError, provider_name: str, model_name: str | None
+    ) -> None:
+        if not getattr(error, "provider_name", None) or error.provider_name == "Unknown":
+            error.provider_name = provider_name
+            error.provider = provider_name
+        if getattr(error, "model_name", None) is None:
+            error.model_name = model_name
+            error.model = model_name
+
+    @staticmethod
+    def _should_retry_provider_error(
+        error: ProviderError, attempt: int, retry_config: dict[str, Any]
+    ) -> bool:
+        return (
+            bool(retry_config["enabled"])
+            and bool(error.retryable)
+            and attempt < int(retry_config["max_attempts"])
+        )
+
+    @staticmethod
+    def _retry_delay_seconds(
+        error: ProviderError, attempt: int, retry_config: dict[str, Any]
+    ) -> float:
+        max_delay = float(retry_config["max_delay"])
+        if error.retry_after_seconds is not None:
+            return min(float(error.retry_after_seconds), max_delay)
+        exponential = float(retry_config["base_delay"]) * (2 ** max(0, attempt - 1))
+        return min(exponential, max_delay)
 
     def _load_configured_providers(self) -> None:
         """
@@ -236,7 +437,7 @@ class ProviderManager:
             #
             # Original condition only triggered when section name !=
             # provider type key, but for providers like ``[providers.deepseek]``
-            # with no explicit ``type``, both equal "deepseek" – so the
+            # with no explicit ``type``, both equal "deepseek" - so the
             # check was skipped and OpenAIProvider fell back to
             # OPENAI_API_KEY which doesn't exist.
             #

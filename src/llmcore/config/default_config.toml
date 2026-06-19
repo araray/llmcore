@@ -72,6 +72,50 @@ log_level = "INFO"
 # Environment Variable: LLMCORE_LOG_RAW_PAYLOADS
 log_raw_payloads = false
 
+# --- Provider Warm-Up Lifecycle ---
+# What it does: If true, ProviderManager.initialize() calls each configured
+#               provider's async warm_up() hook before normal use. The default
+#               is false because some warm-up implementations may contact local
+#               or remote model services.
+# Possible Options: true, false
+# Default Value: false
+# Environment Variable: LLMCORE_PROVIDER_WARM_UP_ENABLED
+provider_warm_up_enabled = false
+
+# What it does: If true, provider warm-up failures abort initialization. When
+#               false, failures are logged and normal lazy first-use behavior
+#               is preserved.
+# Possible Options: true, false
+# Default Value: false
+# Environment Variable: LLMCORE_PROVIDER_WARM_UP_STRICT
+provider_warm_up_strict = false
+
+# --- Provider Retry Policy ---
+# What it does: Enables a conservative retry wrapper for transient chat
+#               completion failures surfaced as ProviderError.retryable. The
+#               default performs the initial request plus one retry for common
+#               429/5xx/timeout/connection failures.
+# Possible Options: true, false
+# Default Value: true
+# Environment Variable: LLMCORE_PROVIDER_RETRY_ENABLED
+provider_retry_enabled = true
+
+# Total attempts including the first request. Set to 1 to disable retries
+# without turning off the structured retry metadata path.
+# Default Value: 2
+# Environment Variable: LLMCORE_PROVIDER_RETRY_MAX_ATTEMPTS
+provider_retry_max_attempts = 2
+
+# Base exponential backoff delay in seconds when Retry-After is unavailable.
+# Default Value: 0.5
+# Environment Variable: LLMCORE_PROVIDER_RETRY_BASE_DELAY_SECONDS
+provider_retry_base_delay_seconds = 0.5
+
+# Upper bound for retry delays, including provider Retry-After values.
+# Default Value: 30.0
+# Environment Variable: LLMCORE_PROVIDER_RETRY_MAX_DELAY_SECONDS
+provider_retry_max_delay_seconds = 30.0
+
 # --- Administrative API Key ---
 # What it does: Defines the secret key required for accessing administrative endpoints
 #               such as live configuration reloading. This provides a separate,
@@ -2581,6 +2625,34 @@ posthog = "ERROR"
         # Maximum observation length in characters
         # Default Value: 4000
         max_observation_length = 4000
+
+        # ==============================================================================
+        # [agents.tool_inventory] - Lightweight Tool Inventory
+        # ==============================================================================
+        # Gives cognitive prompts compact tool summaries and optionally caps the
+        # number of full provider-native tool schemas sent with THINK requests.
+        # The native schema cap defaults to unrestricted for compatibility.
+
+        [agents.tool_inventory]
+
+        # Enable lightweight tool inventories in cognitive prompts
+        # Default Value: true
+        # Environment Variable: LLMCORE_AGENTS__TOOL_INVENTORY__ENABLED
+        enabled = true
+
+        # Maximum description length per inventory entry
+        # Default Value: 180
+        max_description_chars = 180
+
+        # Include full parameter schemas in inventory prompt entries
+        # Default Value: false
+        include_parameters = false
+
+        # Maximum full native schemas sent to provider THINK requests.
+        # Leave unset to send every loaded schema. Set to 0 to disable
+        # provider-native schemas and rely on textual ReAct/activity execution.
+        # Default Value: unset
+        # max_native_tool_schemas = 32
 
         # ==============================================================================
         # [agents.capability_check] - Pre-flight Capability Checking (G3 Phase 5)

@@ -121,8 +121,12 @@ async def think_phase(
                 think_input=think_input, agent_state=agent_state, prompt_registry=prompt_registry
             )
 
-            # 2. Build tool definitions
-            tool_definitions = tool_manager.get_tool_definitions()
+            # 2. Build provider-native tool definitions
+            tool_definitions = _select_native_tool_definitions(
+                tool_manager=tool_manager,
+                think_input=think_input,
+                agents_config=agents_config,
+            )
 
             # 3. Call LLM
             provider = provider_manager.get_provider(provider_name)
@@ -150,6 +154,7 @@ async def think_phase(
                 return await _think_phase_with_activities(
                     agent_state=agent_state,
                     think_input=think_input,
+                    provider_manager=provider_manager,
                     provider=provider,
                     target_model=target_model,
                     prompt_registry=prompt_registry,
@@ -166,13 +171,25 @@ async def think_phase(
             response_content = ""
 
             try:
-                response = await provider.chat_completion(
-                    context=messages,
-                    model=target_model,
-                    stream=False,
-                    tools=tools_param,
-                    temperature=0.7,
-                )
+                if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+                    response = await provider_manager.chat_completion_with_retry(
+                        provider,
+                        context=messages,
+                        model=target_model,
+                        stream=False,
+                        tools=tools_param,
+                        tracer=tracer,
+                        operation="cognitive.think",
+                        temperature=0.7,
+                    )
+                else:
+                    response = await provider.chat_completion(
+                        context=messages,
+                        model=target_model,
+                        stream=False,
+                        tools=tools_param,
+                        temperature=0.7,
+                    )
                 # Extract response content
                 response_content = provider.extract_response_content(response)
 
@@ -209,6 +226,7 @@ async def think_phase(
                 output = await _think_phase_with_activities(
                     agent_state=agent_state,
                     think_input=think_input,
+                    provider_manager=provider_manager,
                     provider=provider,
                     target_model=target_model,
                     prompt_registry=prompt_registry,
@@ -295,6 +313,7 @@ async def think_phase(
 async def _think_phase_with_activities(
     agent_state: EnhancedAgentState,
     think_input: ThinkInput,
+    provider_manager: "ProviderManager",
     provider: Any,
     target_model: str,
     prompt_registry: Any | None,
@@ -311,6 +330,7 @@ async def _think_phase_with_activities(
     Args:
         agent_state: Current agent state
         think_input: Think phase input
+        provider_manager: Provider manager for retry-aware LLM calls
         provider: LLM provider
         target_model: Target model name
         prompt_registry: Optional prompt registry
@@ -350,13 +370,24 @@ async def _think_phase_with_activities(
     ]
 
     # Call LLM without tools
-    response = await provider.chat_completion(
-        context=messages,
-        model=target_model,
-        stream=False,
-        temperature=0.7,
-        # No tools parameter - using activity system
-    )
+    if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+        response = await provider_manager.chat_completion_with_retry(
+            provider,
+            context=messages,
+            model=target_model,
+            stream=False,
+            tracer=tracer,
+            operation="cognitive.think.activity",
+            temperature=0.7,
+            # No tools parameter - using activity system
+        )
+    else:
+        response = await provider.chat_completion(
+            context=messages,
+            model=target_model,
+            stream=False,
+            temperature=0.7,
+        )
 
     response_content = provider.extract_response_content(response)
 
@@ -420,6 +451,123 @@ async def _think_phase_with_activities(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+
+def _select_native_tool_definitions(
+    tool_manager: "ToolManager",
+    think_input: ThinkInput,
+    agents_config: "AgentsConfig",
+) -> list[Any]:
+    """Select full native tool schemas for the provider request.
+
+    By default this returns every loaded tool definition to preserve historical
+    behavior. When ``agents.tool_inventory.max_native_tool_schemas`` is set, a
+    small lexical scorer chooses the tools most relevant to the current goal and
+    plan step. Prompt inventory remains separate from provider-native schemas.
+    """
+    tool_definitions = tool_manager.get_tool_definitions()
+    tool_inventory_config = getattr(agents_config, "tool_inventory", None)
+    if tool_inventory_config is None or not getattr(tool_inventory_config, "enabled", True):
+        return tool_definitions
+
+    max_native_tool_schemas = getattr(tool_inventory_config, "max_native_tool_schemas", None)
+    if max_native_tool_schemas is None:
+        return tool_definitions
+
+    limit = max(0, int(max_native_tool_schemas))
+    if limit >= len(tool_definitions):
+        return tool_definitions
+    if limit == 0:
+        logger.debug("Native provider tool schemas disabled by tool inventory config")
+        return []
+
+    ranked = sorted(
+        enumerate(tool_definitions),
+        key=lambda item: (-_score_tool_definition(item[1], think_input), item[0]),
+    )
+    selected_names = [name for _, tool in ranked[:limit] if (name := _tool_name(tool))]
+
+    try:
+        selected = tool_manager.get_tool_definitions(selected_names)
+    except TypeError:
+        selected_indexes = {index for index, _ in ranked[:limit]}
+        selected = [tool for index, tool in enumerate(tool_definitions) if index in selected_indexes]
+
+    logger.debug(
+        "Selected %d/%d native tool schemas for THINK provider call",
+        len(selected),
+        len(tool_definitions),
+    )
+    return selected
+
+
+def _score_tool_definition(tool: Any, think_input: ThinkInput) -> int:
+    """Score a tool against the active goal/current step for schema capping."""
+    query_text = f"{think_input.goal} {think_input.current_step}".lower()
+    query_tokens = _tokenize(query_text)
+    name = _tool_name(tool).lower()
+    description = _tool_description(tool).lower()
+    parameter_names = _tool_parameter_names(tool)
+    tool_tokens = _tokenize(f"{name} {description} {' '.join(parameter_names)}")
+
+    score = len(query_tokens & tool_tokens)
+    if name and name.replace("_", " ") in query_text:
+        score += 5
+    for token in query_tokens:
+        if token in name:
+            score += 2
+    if name in {"finish", "final_answer", "respond_to_user", "human_approval"}:
+        score += 1
+    return score
+
+
+def _tokenize(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for raw_token in re.findall(r"[a-z0-9_]+", text.lower()):
+        parts = raw_token.split("_")
+        for part in [*parts, raw_token]:
+            if len(part) >= 3:
+                tokens.add(part)
+    return tokens
+
+
+def _tool_name(tool: Any) -> str:
+    if isinstance(tool, dict):
+        function_def = tool.get("function")
+        if isinstance(function_def, dict):
+            return str(function_def.get("name") or "")
+        return str(tool.get("name") or "")
+    return str(getattr(tool, "name", "") or "")
+
+
+def _tool_description(tool: Any) -> str:
+    if isinstance(tool, dict):
+        function_def = tool.get("function")
+        if isinstance(function_def, dict):
+            return str(function_def.get("description") or "")
+        return str(tool.get("description") or "")
+    return str(getattr(tool, "description", "") or "")
+
+
+def _tool_parameter_names(tool: Any) -> list[str]:
+    parameters: Any = None
+    if isinstance(tool, dict):
+        function_def = tool.get("function")
+        if isinstance(function_def, dict):
+            parameters = function_def.get("parameters")
+        else:
+            parameters = tool.get("parameters")
+        if parameters is None and isinstance(tool.get("parameter_names"), list):
+            return [str(name) for name in tool["parameter_names"]]
+    else:
+        parameters = getattr(tool, "parameters", None)
+
+    if not isinstance(parameters, dict):
+        return []
+    properties = parameters.get("properties", {})
+    if not isinstance(properties, dict):
+        return []
+    return [str(name) for name in properties]
 
 
 def _generate_thinking_prompt(
@@ -527,12 +675,15 @@ def _format_tools(tool_definitions: list[dict[str, Any]]) -> str:
 
         # Build parameter summary if available
         param_summary = ""
+        param_names = []
         if params and isinstance(params, dict):
             properties = params.get("properties", {})
             if properties:
-                param_names = list(properties.keys())[:5]  # Limit to first 5 params
-                if param_names:
-                    param_summary = f" (params: {', '.join(param_names)})"
+                param_names = list(properties.keys())[:5]
+        elif isinstance(tool.get("parameter_names"), list):
+            param_names = [str(name) for name in tool["parameter_names"][:5]]
+        if param_names:
+            param_summary = f" (params: {', '.join(param_names)})"
 
         lines.append(f"- {name}: {desc}{param_summary}")
 
@@ -573,49 +724,54 @@ def _parse_think_response(
     if thought_match:
         thought = thought_match.group(1).strip()
 
-    # Check for Final Answer
-    final_answer_match = re.search(
-        r"Final Answer:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
-    )
-
-    if final_answer_match:
-        is_final_answer = True
-        final_answer = final_answer_match.group(1).strip()
-        confidence = ConfidenceLevel.HIGH
+    native_tool_call = _extract_native_tool_call(response_dict)
+    if native_tool_call is not None:
+        proposed_action = native_tool_call
+        confidence = _determine_confidence(thought, response_text)
     else:
-        # Extract Action
-        action_match = re.search(r"Action:\s*(.+?)(?=\n|$)", response_text, re.IGNORECASE)
-
-        action_input_match = re.search(
-            r"Action Input:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
+        # Check for Final Answer
+        final_answer_match = re.search(
+            r"Final Answer:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
         )
 
-        if action_match:
-            action_name = action_match.group(1).strip()
-            action_input = ""
+        if final_answer_match:
+            is_final_answer = True
+            final_answer = final_answer_match.group(1).strip()
+            confidence = ConfidenceLevel.HIGH
+        else:
+            # Extract Action
+            action_match = re.search(r"Action:\s*(.+?)(?=\n|$)", response_text, re.IGNORECASE)
 
-            if action_input_match:
-                action_input = action_input_match.group(1).strip()
-                # Try to parse as JSON
-                try:
-                    action_args = json.loads(action_input)
-                except json.JSONDecodeError:
-                    # Use as plain string
-                    action_args = {"input": action_input}
-            else:
-                action_args = {}
-
-            # Create ToolCall
-            from ....models import ToolCall
-
-            proposed_action = ToolCall(
-                id=f"call_{len(thought)}",  # Simple ID generation
-                name=action_name,
-                arguments=action_args,
+            action_input_match = re.search(
+                r"Action Input:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
             )
 
-        # Determine confidence from thought content
-        confidence = _determine_confidence(thought, response_text)
+            if action_match:
+                action_name = action_match.group(1).strip()
+                action_input = ""
+
+                if action_input_match:
+                    action_input = action_input_match.group(1).strip()
+                    # Try to parse as JSON
+                    try:
+                        action_args = json.loads(action_input)
+                    except json.JSONDecodeError:
+                        # Use as plain string
+                        action_args = {"input": action_input}
+                else:
+                    action_args = {}
+
+                # Create ToolCall
+                from ....models import ToolCall
+
+                proposed_action = ToolCall(
+                    id=f"call_{len(thought)}",  # Simple ID generation
+                    name=action_name,
+                    arguments=action_args,
+                )
+
+            # Determine confidence from thought content
+            confidence = _determine_confidence(thought, response_text)
 
     # Get token count if available from response dict
     reasoning_tokens = None
@@ -632,6 +788,86 @@ def _parse_think_response(
         confidence=confidence,
         reasoning_tokens=reasoning_tokens,
     )
+
+
+def _extract_native_tool_call(response_dict: dict[str, Any] | None) -> Any | None:
+    """Extract the first provider-native tool call from a chat response."""
+    if not isinstance(response_dict, dict):
+        return None
+
+    for index, raw_tool_call in enumerate(_iter_native_tool_calls(response_dict)):
+        tool_call = _native_tool_call_to_model(raw_tool_call, index=index)
+        if tool_call is not None:
+            return tool_call
+
+    return None
+
+
+def _iter_native_tool_calls(response_dict: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return native tool-call dictionaries from common provider response shapes."""
+    tool_calls: list[dict[str, Any]] = []
+
+    direct_calls = response_dict.get("tool_calls")
+    if isinstance(direct_calls, list):
+        tool_calls.extend(call for call in direct_calls if isinstance(call, dict))
+
+    message = response_dict.get("message")
+    if isinstance(message, dict) and isinstance(message.get("tool_calls"), list):
+        tool_calls.extend(call for call in message["tool_calls"] if isinstance(call, dict))
+
+    choices = response_dict.get("choices")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            choice_message = choice.get("message") or choice.get("delta")
+            if isinstance(choice_message, dict) and isinstance(
+                choice_message.get("tool_calls"), list
+            ):
+                tool_calls.extend(
+                    call for call in choice_message["tool_calls"] if isinstance(call, dict)
+                )
+
+    return tool_calls
+
+
+def _native_tool_call_to_model(raw_tool_call: dict[str, Any], *, index: int) -> Any | None:
+    """Convert one provider-native tool-call dict into llmcore's ToolCall model."""
+    function = raw_tool_call.get("function")
+    if not isinstance(function, dict):
+        function = {}
+
+    name = function.get("name") or raw_tool_call.get("name")
+    if not name:
+        return None
+
+    raw_arguments = function.get("arguments", raw_tool_call.get("arguments", {}))
+    arguments = _coerce_tool_arguments(raw_arguments)
+
+    from ....models import ToolCall
+
+    return ToolCall(
+        id=str(raw_tool_call.get("id") or f"call_native_{index}"),
+        name=str(name),
+        arguments=arguments,
+    )
+
+
+def _coerce_tool_arguments(raw_arguments: Any) -> dict[str, Any]:
+    """Normalize provider-native tool arguments into a dictionary."""
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    if raw_arguments in (None, ""):
+        return {}
+    if isinstance(raw_arguments, str):
+        try:
+            parsed = json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            return {"input": raw_arguments}
+        if isinstance(parsed, dict):
+            return parsed
+        return {"input": parsed}
+    return {"input": raw_arguments}
 
 
 def _determine_confidence(thought: str, full_text: str) -> ConfidenceLevel:

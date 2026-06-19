@@ -25,6 +25,7 @@ References:
     - G3_COMPLETE_IMPLEMENTATION_PLAN.md
 """
 
+import inspect
 import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -67,6 +68,33 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # SINGLE AGENT MODE
 # =============================================================================
+
+
+def _build_memory_context_synthesizer(memory_backend: Any | None) -> Any | None:
+    """Build a semantic-only context synthesizer for an external memory backend."""
+    if memory_backend is None:
+        return None
+
+    from ..context import ContextSynthesizer
+    from ..context.sources import SemanticContextSource
+
+    retrieval_factory = getattr(memory_backend, "as_retrieval_fn", None)
+    if callable(retrieval_factory):
+        retrieval_fn = retrieval_factory()
+    else:
+
+        async def retrieval_fn(query: str, top_k: int = 10, **kwargs: Any):
+            records = memory_backend.retrieve(query, top_k=top_k, **kwargs)
+            if inspect.isawaitable(records):
+                records = await records
+            return [
+                record.to_context_dict() if hasattr(record, "to_context_dict") else record
+                for record in records
+            ]
+
+    synthesizer = ContextSynthesizer()
+    synthesizer.add_source("semantic", SemanticContextSource(retrieval_fn), priority=60)
+    return synthesizer
 
 
 class SingleAgentMode:
@@ -132,6 +160,8 @@ class SingleAgentMode:
         prompt_registry: Optional["PromptRegistry"] = None,
         tracer: Any | None = None,
         agents_config: Optional["AgentsConfig"] = None,
+        context_synthesizer: Any | None = None,
+        memory_backend: Any | None = None,
     ):
         """
         Initialize SingleAgentMode.
@@ -144,6 +174,9 @@ class SingleAgentMode:
             prompt_registry: Optional prompt registry
             tracer: Optional OpenTelemetry tracer
             agents_config: Optional agents configuration (uses defaults if not provided)
+            context_synthesizer: Optional context synthesizer for PERCEIVE
+            memory_backend: Optional external memory backend used to create a
+                semantic context source when ``context_synthesizer`` is absent
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -151,6 +184,10 @@ class SingleAgentMode:
         self.tool_manager = tool_manager
         self.prompt_registry = prompt_registry
         self.tracer = tracer
+        self.memory_backend = memory_backend
+        self.context_synthesizer = context_synthesizer or _build_memory_context_synthesizer(
+            memory_backend
+        )
 
         # Load agents config (G3)
         # If not provided, try to load from environment/defaults
@@ -195,6 +232,8 @@ class SingleAgentMode:
             tool_manager=tool_manager,
             prompt_registry=prompt_registry,
             tracer=tracer,
+            context_synthesizer=self.context_synthesizer,
+            agents_config=self._agents_config,
         )
 
         logger.info("SingleAgentMode initialized with G3 components")
@@ -215,6 +254,7 @@ class SingleAgentMode:
         session_id: str | None = None,
         skip_validation: bool = False,
         skip_goal_classification: bool = False,
+        agent_state: EnhancedAgentState | None = None,
         approval_callback: Callable[[str], bool] | None = None,
     ) -> "AgentResult":
         """
@@ -237,6 +277,7 @@ class SingleAgentMode:
             session_id: Optional session ID (generated if not provided)
             skip_validation: If True, auto-approve all actions (bypass HITL)
             skip_goal_classification: If True, skip goal classification (use provided max_iterations)
+            agent_state: Optional restored EnhancedAgentState to continue from.
             approval_callback: Optional callback for HITL approval prompts.
                 Signature: (prompt: str) -> bool. Returns True to approve, False to reject.
                 If None and HITL approval is required, activities will be rejected.
@@ -326,7 +367,7 @@ class SingleAgentMode:
                 if classification:
                     requires_tools = classification.requires_tools
 
-                # Get the target model
+                # Get the target provider/model
                 actual_provider = provider_name or self.provider_manager.get_default_provider_name()
                 actual_model = model_name or self.provider_manager.get_default_model()
 
@@ -380,10 +421,16 @@ class SingleAgentMode:
             # Resolve persona
             agent_persona = self._resolve_persona(persona)
 
-            # Create enhanced agent state
-            agent_state = EnhancedAgentState(
-                goal=goal, session_id=session_id, context=context or ""
-            )
+            # Create or reuse enhanced agent state
+            if agent_state is None:
+                agent_state = EnhancedAgentState(
+                    goal=goal, session_id=session_id, context=context or ""
+                )
+            else:
+                agent_state.goal = goal or agent_state.goal
+                agent_state.session_id = session_id
+                if context is not None:
+                    agent_state.context = context
 
             # Store classification in working memory for cognitive cycle
             if classification:
@@ -751,7 +798,6 @@ class SingleAgentMode:
                 if classification:
                     requires_tools = classification.requires_tools
 
-                actual_provider = provider_name or self.provider_manager.get_default_provider_name()
                 actual_model = model_name or self.provider_manager.get_default_model()
 
                 compat_result = self.capability_checker.check_compatibility(
@@ -1094,6 +1140,9 @@ class AgentResult:
                 "intent": self.classification.intent.value,
                 "confidence": self.classification.confidence,
             }
+
+        if self.agent_state is not None and hasattr(self.agent_state, "to_resume_snapshot"):
+            result["agent_state_snapshot"] = self.agent_state.to_resume_snapshot()
 
         return result
 

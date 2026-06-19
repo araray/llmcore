@@ -19,6 +19,7 @@ References:
     - Dossier: Step 2.4 (Cognitive Cycle Models)
 """
 
+import math
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -28,6 +29,88 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 # Import existing models from llmcore
 from ...models import AgentState, ToolCall, ToolResult
+
+STATE_SNAPSHOT_VERSION = "llmcore.enhanced_agent_state.v1"
+_CONTEXT_COMPRESSION_KEY = "_context_compression"
+
+
+def _truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
+    text = "" if value is None else str(value)
+    if max_chars < 1 or len(text) <= max_chars:
+        return text, False
+    suffix = "...[truncated]"
+    keep = max(0, max_chars - len(suffix))
+    return f"{text[:keep]}{suffix}", True
+
+
+def _json_safe(
+    value: Any,
+    *,
+    max_string_chars: int = 2000,
+    max_items: int = 50,
+    _depth: int = 0,
+    _max_depth: int = 5,
+) -> Any:
+    if _depth >= _max_depth:
+        return _truncate_text(value, max_string_chars)[0]
+
+    if value is None or isinstance(value, bool | int | str):
+        if isinstance(value, str):
+            return _truncate_text(value, max_string_chars)[0]
+        return value
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, Enum):
+        return value.value
+
+    if isinstance(value, BaseModel):
+        return _json_safe(
+            value.model_dump(mode="json"),
+            max_string_chars=max_string_chars,
+            max_items=max_items,
+            _depth=_depth + 1,
+            _max_depth=_max_depth,
+        )
+
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        items = list(value.items())
+        for index, (key, item) in enumerate(items):
+            if index >= max_items:
+                safe["__truncated_items__"] = len(items) - max_items
+                break
+            safe[str(key)] = _json_safe(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+                _depth=_depth + 1,
+                _max_depth=_max_depth,
+            )
+        return safe
+
+    if isinstance(value, list | tuple | set):
+        values = list(value)
+        safe_list = [
+            _json_safe(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+                _depth=_depth + 1,
+                _max_depth=_max_depth,
+            )
+            for item in values[:max_items]
+        ]
+        if len(values) > max_items:
+            safe_list.append({"__truncated_items__": len(values) - max_items})
+        return safe_list
+
+    return _truncate_text(value, max_string_chars)[0]
+
 
 # =============================================================================
 # ENUMERATIONS
@@ -364,6 +447,85 @@ class CycleIteration(BaseModel):
             completed.add(CognitivePhase.UPDATE)
         return completed
 
+    def to_history_summary(
+        self,
+        *,
+        max_observation_chars: int = 1000,
+        max_tool_result_chars: int = 1000,
+        max_argument_chars: int = 1000,
+    ) -> dict[str, Any]:
+        """Return a compact, JSON-safe summary suitable for future prompts."""
+        action_payload = None
+        if self.think_output and self.think_output.proposed_action:
+            action = self.think_output.proposed_action
+            action_payload = {
+                "id": action.id,
+                "name": action.name,
+                "arguments": _json_safe(
+                    action.arguments,
+                    max_string_chars=max_argument_chars,
+                    max_items=20,
+                ),
+            }
+
+        observation_payload = None
+        if self.observe_output:
+            content, truncated = _truncate_text(
+                self.observe_output.observation,
+                max_observation_chars,
+            )
+            observation_payload = {
+                "content": content,
+                "truncated": truncated,
+                "matches_expectation": self.observe_output.matches_expectation,
+                "follow_up_needed": self.observe_output.follow_up_needed,
+                "insights": _json_safe(
+                    self.observe_output.insights,
+                    max_string_chars=300,
+                    max_items=10,
+                ),
+            }
+
+        tool_result_payload = None
+        if self.act_output and self.act_output.tool_result:
+            result = self.act_output.tool_result
+            content, truncated = _truncate_text(result.content, max_tool_result_chars)
+            tool_result_payload = {
+                "tool_call_id": result.tool_call_id,
+                "content": content,
+                "truncated": truncated,
+                "is_error": result.is_error,
+                "execution_success": self.act_output.success,
+                "execution_time_ms": self.act_output.execution_time_ms,
+            }
+
+        reflect_payload = None
+        if self.reflect_output:
+            reflect_payload = {
+                "progress_estimate": self.reflect_output.progress_estimate,
+                "step_completed": self.reflect_output.step_completed,
+                "plan_needs_update": self.reflect_output.plan_needs_update,
+                "next_focus": self.reflect_output.next_focus,
+            }
+
+        return {
+            "iteration_number": self.iteration_number,
+            "status": self.status.value,
+            "phases_completed": sorted(phase.value for phase in self.phases_completed),
+            "action": action_payload,
+            "observation": observation_payload,
+            "tool_result": tool_result_payload,
+            "reflection": reflect_payload,
+            "phase_tokens": {
+                "think": self.think_output.reasoning_tokens
+                if self.think_output and self.think_output.reasoning_tokens is not None
+                else None,
+            },
+            "total_tokens_used": self.total_tokens_used,
+            "duration_ms": self.duration_ms,
+            "error": self.error,
+        }
+
 
 # =============================================================================
 # ENHANCED AGENT STATE
@@ -497,6 +659,162 @@ class EnhancedAgentState(AgentState):
         """Allow explicit setting of finished state (P0 Fix #3)."""
         object.__setattr__(self, "_is_finished_override", value)
 
+    def to_resume_snapshot(
+        self,
+        *,
+        max_iterations: int = 5,
+        max_string_chars: int = 2000,
+        max_observation_chars: int = 1000,
+        max_items: int = 50,
+    ) -> dict[str, Any]:
+        """Return a bounded, JSON-safe snapshot for checkpoint/resume surfaces."""
+        plan = [_truncate_text(step, max_string_chars)[0] for step in self.plan[:max_items]]
+        statuses = [str(status) for status in self.plan_steps_status[:max_items]]
+        current_index = self.current_plan_step_index
+        current_step = plan[current_index] if 0 <= current_index < len(plan) else ""
+        recent_iterations = self.iterations[-max(0, max_iterations) :]
+
+        return {
+            "schema_version": STATE_SNAPSHOT_VERSION,
+            "session_id": self.session_id,
+            "goal": _truncate_text(self.goal, max_string_chars)[0],
+            "context": _truncate_text(self.context, max_string_chars)[0],
+            "plan": plan,
+            "plan_steps_status": statuses,
+            "current_plan_step_index": current_index,
+            "current_plan_step": current_step,
+            "plan_version": self.plan_version,
+            "progress_estimate": self.progress_estimate,
+            "overall_confidence": self.overall_confidence.value,
+            "is_finished": self.is_finished,
+            "final_answer": _truncate_text(self.final_answer, max_string_chars)[0]
+            if self.final_answer
+            else None,
+            "awaiting_human_approval": self.awaiting_human_approval,
+            "pending_approval_prompt": _truncate_text(
+                self.pending_approval_prompt,
+                max_string_chars,
+            )[0]
+            if self.pending_approval_prompt
+            else None,
+            "pending_tool_call": _json_safe(
+                self.pending_tool_call,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "pending_validation": _json_safe(
+                self.pending_validation,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "working_memory": _json_safe(
+                self.working_memory,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "metadata": _json_safe(
+                self.metadata,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "history_of_thoughts": _json_safe(
+                self.history_of_thoughts[-max_items:],
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "observations": _json_safe(
+                self.observations,
+                max_string_chars=max_observation_chars,
+                max_items=max_items,
+            ),
+            "iterations": [
+                iteration.to_history_summary(max_observation_chars=max_observation_chars)
+                for iteration in recent_iterations
+            ],
+            "current_iteration": self.current_iteration.to_history_summary(
+                max_observation_chars=max_observation_chars
+            )
+            if self.current_iteration
+            else None,
+            "metrics": {
+                "iteration_count": self.iteration_count,
+                "successful_iterations": self.successful_iterations,
+                "failed_iterations": self.failed_iterations,
+                "total_tokens_used": self.total_tokens_used,
+                "total_tool_calls": self.total_tool_calls,
+                "average_iteration_time_ms": self.average_iteration_time_ms,
+            },
+        }
+
+    @classmethod
+    def from_resume_snapshot(cls, snapshot: dict[str, Any]) -> "EnhancedAgentState":
+        """Rehydrate core resumable state from ``to_resume_snapshot`` output."""
+        state = cls(
+            goal=str(snapshot.get("goal") or ""),
+            session_id=str(snapshot.get("session_id") or ""),
+            context=str(snapshot.get("context") or ""),
+        )
+        state.plan = [str(item) for item in snapshot.get("plan") or []]
+        state.plan_steps_status = [str(item) for item in snapshot.get("plan_steps_status") or []]
+        state.current_plan_step_index = int(snapshot.get("current_plan_step_index") or 0)
+        state.plan_version = int(snapshot.get("plan_version") or 0)
+        state.progress_estimate = float(snapshot.get("progress_estimate") or 0.0)
+        try:
+            state.overall_confidence = ConfidenceLevel(
+                snapshot.get("overall_confidence") or ConfidenceLevel.MEDIUM.value
+            )
+        except ValueError:
+            state.overall_confidence = ConfidenceLevel.MEDIUM
+
+        state.final_answer = snapshot.get("final_answer")
+        state.awaiting_human_approval = bool(snapshot.get("awaiting_human_approval", False))
+        state.pending_approval_prompt = snapshot.get("pending_approval_prompt")
+        state.working_memory = dict(snapshot.get("working_memory") or {})
+        state.metadata = dict(snapshot.get("metadata") or {})
+        state.history_of_thoughts = [str(item) for item in snapshot.get("history_of_thoughts") or []]
+        observations = snapshot.get("observations") or {}
+        state.observations = observations if isinstance(observations, dict) else {}
+        metrics = snapshot.get("metrics") or {}
+        state.total_tokens_used = int(metrics.get("total_tokens_used") or 0)
+        state.total_tool_calls = int(metrics.get("total_tool_calls") or 0)
+        state.metadata["_resume_snapshot_schema_version"] = snapshot.get("schema_version")
+        state.metadata["_resume_snapshot_iterations"] = snapshot.get("iterations") or []
+        state.is_finished = bool(snapshot.get("is_finished", False))
+        return state
+
+    def mark_context_compressed(
+        self,
+        *,
+        reason: str,
+        tokens_before: int | None = None,
+        tokens_after: int | None = None,
+    ) -> dict[str, Any]:
+        """Record a context compression event and cooldown marker."""
+        previous = self.working_memory.get(_CONTEXT_COMPRESSION_KEY)
+        if not isinstance(previous, dict):
+            previous = {}
+        metadata = {
+            "compression_count": int(previous.get("compression_count") or 0) + 1,
+            "last_iteration_count": self.iteration_count,
+            "last_reason": reason,
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "last_compressed_at": datetime.utcnow().isoformat(),
+        }
+        self.working_memory[_CONTEXT_COMPRESSION_KEY] = metadata
+        return metadata
+
+    def should_compress_context(self, *, min_iterations_between: int = 2) -> bool:
+        """Return False during the compression cooldown window."""
+        marker = self.working_memory.get(_CONTEXT_COMPRESSION_KEY)
+        if not isinstance(marker, dict):
+            return True
+        try:
+            last_iteration = int(marker.get("last_iteration_count", -min_iterations_between))
+        except (TypeError, ValueError):
+            return True
+        return (self.iteration_count - last_iteration) >= max(0, min_iterations_between)
+
     def add_iteration(self, iteration: CycleIteration) -> None:
         """
         Add a completed iteration to history.
@@ -593,30 +911,26 @@ class EnhancedAgentState(AgentState):
 # =============================================================================
 
 __all__ = [
-    # Enums
+    "ActInput",
+    "ActOutput",
     "CognitivePhase",
-    "IterationStatus",
-    "ValidationResult",
     "ConfidenceLevel",
-    # Phase I/O Models
+    "CycleIteration",
+    "EnhancedAgentState",
+    "IterationStatus",
+    "ObserveInput",
+    "ObserveOutput",
     "PerceiveInput",
     "PerceiveOutput",
     "PlanInput",
     "PlanOutput",
-    "ThinkInput",
-    "ThinkOutput",
-    "ValidateInput",
-    "ValidateOutput",
-    "ActInput",
-    "ActOutput",
-    "ObserveInput",
-    "ObserveOutput",
     "ReflectInput",
     "ReflectOutput",
+    "ThinkInput",
+    "ThinkOutput",
     "UpdateInput",
     "UpdateOutput",
-    # Iteration Tracking
-    "CycleIteration",
-    # Enhanced State
-    "EnhancedAgentState",
+    "ValidateInput",
+    "ValidateOutput",
+    "ValidationResult",
 ]

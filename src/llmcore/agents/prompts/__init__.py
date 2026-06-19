@@ -11,6 +11,11 @@ from .composer import (
     MissingVariableError,
     PromptComposer,
 )
+from .grimoire_adapter import (
+    GrimoirePromptRegistryAdapter,
+    GrimoirePromptTemplate,
+    GrimoirePromptVersion,
+)
 from .models import (
     PromptCategory,
     PromptMetrics,
@@ -30,26 +35,25 @@ from .registry import (
 from .template_loader import TemplateLoader, load_default_templates
 
 __all__ = [
-    # Models
+    "CircularInclusionError",
+    "GrimoirePromptRegistryAdapter",
+    "GrimoirePromptTemplate",
+    "GrimoirePromptVersion",
+    "MissingSnippetError",
+    "MissingVariableError",
     "PromptCategory",
+    "PromptComposer",
     "PromptMetrics",
+    "PromptRegistry",
     "PromptSnippet",
     "PromptTemplate",
     "PromptVariable",
     "PromptVersion",
-    "VersionStatus",
-    # Registry
-    "PromptRegistry",
     "RegistryError",
-    "TemplateNotFoundError",
     "SnippetNotFoundError",
     "TemplateExistsError",
-    # Composer
-    "PromptComposer",
-    "MissingVariableError",
-    "MissingSnippetError",
-    "CircularInclusionError",
-    # Loader
     "TemplateLoader",
+    "TemplateNotFoundError",
+    "VersionStatus",
     "load_default_templates",
 ]

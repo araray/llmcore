@@ -236,6 +236,68 @@ class LLMCore:
         await instance._initialize_from_config(config_overrides, config_file_path, env_prefix)
         return instance
 
+    def create_enhanced_agent_manager(
+        self,
+        *,
+        prompt_registry: Any | None = None,
+        tracer: Any | None = None,
+        default_mode: Any | None = None,
+        observability: Any | None = None,
+        agents_config: Any | None = None,
+        context_synthesizer: Any | None = None,
+        memory_backend: Any | None = None,
+    ) -> Any:
+        """Create an ``EnhancedAgentManager`` backed by this LLMCore instance.
+
+        ``LLMCore`` owns the provider, memory, and storage managers required by
+        Darwin Layer 2. This factory exposes the supported construction path
+        without making callers reach into private attributes.
+
+        Args:
+            prompt_registry: Optional prompt registry for Darwin prompt lookup.
+            tracer: Optional tracer passed to the agent manager.
+            default_mode: Optional ``AgentMode``. Defaults to ``AgentMode.SINGLE``.
+            observability: Optional observability components.
+            agents_config: Optional agents configuration object.
+            context_synthesizer: Optional context synthesizer for Darwin PERCEIVE.
+            memory_backend: Optional external memory backend. When provided without
+                ``context_synthesizer``, llmcore creates a semantic context source
+                from the backend.
+
+        Returns:
+            A configured ``EnhancedAgentManager``.
+
+        Raises:
+            RuntimeError: If this instance was not initialized via ``LLMCore.create()``.
+        """
+        required_managers = {
+            "provider_manager": getattr(self, "_provider_manager", None),
+            "memory_manager": getattr(self, "_memory_manager", None),
+            "storage_manager": getattr(self, "_storage_manager", None),
+        }
+        missing = [name for name, value in required_managers.items() if value is None]
+        if missing:
+            missing_text = ", ".join(missing)
+            raise RuntimeError(
+                "LLMCore is not initialized; call LLMCore.create() before "
+                f"create_enhanced_agent_manager(). Missing: {missing_text}."
+            )
+
+        from .agents import AgentMode, EnhancedAgentManager
+
+        return EnhancedAgentManager(
+            provider_manager=required_managers["provider_manager"],
+            memory_manager=required_managers["memory_manager"],
+            storage_manager=required_managers["storage_manager"],
+            prompt_registry=prompt_registry,
+            tracer=tracer,
+            default_mode=default_mode or AgentMode.SINGLE,
+            observability=observability,
+            agents_config=agents_config,
+            context_synthesizer=context_synthesizer,
+            memory_backend=memory_backend,
+        )
+
     async def __aenter__(self) -> "LLMCore":
         """Context manager entry - instance is already initialized."""
         return self

@@ -111,12 +111,23 @@ async def reflect_phase(
                 Message(role=Role.USER, content=reflection_prompt),
             ]
 
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                temperature=0.7,  # Some creativity in reflection
-            )
+            if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+                response = await provider_manager.chat_completion_with_retry(
+                    provider,
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tracer=tracer,
+                    operation="cognitive.reflect",
+                    temperature=0.7,  # Some creativity in reflection
+                )
+            else:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    temperature=0.7,
+                )
 
             # Extract response content
             response_content = provider.extract_response_content(response)

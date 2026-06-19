@@ -20,6 +20,7 @@ import asyncio
 import logging
 import math
 from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -278,6 +279,7 @@ class ToolManager:
         _storage_manager: StorageManager for storage-related tools
         _tool_definitions: List of loaded tool definitions
         _implementation_map: Maps tool names to implementation keys
+        _tool_metadata: Host/runtime metadata keyed by tool name
     """
 
     def __init__(self, memory_manager: MemoryManager, storage_manager: StorageManager):
@@ -294,8 +296,57 @@ class ToolManager:
         # These will be populated dynamically per run
         self._tool_definitions: list[Tool] = []
         self._implementation_map: dict[str, str] = {}  # tool_name -> implementation_key
+        self._tool_metadata: dict[str, dict[str, Any]] = {}
 
         logger.info("ToolManager initialized for dynamic tool loading")
+
+    def register_runtime_tool(
+        self,
+        tool: Tool,
+        implementation_key: str,
+        implementation: Callable,
+        *,
+        replace: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Register an in-memory tool implementation for the current process.
+
+        Runtime tools are useful for host applications that already own a
+        callable tool registry, such as Wairu plugins. They do not require
+        database-backed toolkit rows, but they still use ToolManager's normal
+        execution path and the secure implementation registry.
+
+        Args:
+            tool: Provider-agnostic tool schema exposed to the agent.
+            implementation_key: Unique key for the callable implementation.
+            implementation: Callable executed for this tool.
+            replace: Whether to replace an existing tool/key mapping.
+            metadata: Optional host/runtime metadata for inventories. This
+                is not included in provider-native tool schemas.
+
+        Raises:
+            ValueError: If a duplicate key or tool exists and replace is False.
+        """
+        if not replace and implementation_key in _IMPLEMENTATION_REGISTRY:
+            raise ValueError(f"Implementation key '{implementation_key}' already registered")
+        if not replace and tool.name in self._implementation_map:
+            raise ValueError(f"Tool '{tool.name}' already registered")
+
+        _IMPLEMENTATION_REGISTRY[implementation_key] = implementation
+
+        for index, existing in enumerate(self._tool_definitions):
+            if existing.name == tool.name:
+                self._tool_definitions[index] = tool
+                break
+        else:
+            self._tool_definitions.append(tool)
+
+        self._implementation_map[tool.name] = implementation_key
+        if metadata:
+            self._tool_metadata[tool.name] = dict(metadata)
+        else:
+            self._tool_metadata.pop(tool.name, None)
+        logger.debug("Registered runtime tool: %s -> %s", tool.name, implementation_key)
 
     async def load_tools_for_run(
         self, db_session: AsyncSession, enabled_toolkits: list[str] | None = None
@@ -319,6 +370,7 @@ class ToolManager:
             # Clear any existing tool definitions
             self._tool_definitions.clear()
             self._implementation_map.clear()
+            self._tool_metadata.clear()
 
             # Build query based on whether toolkits are specified
             if enabled_toolkits:
@@ -373,7 +425,7 @@ class ToolManager:
 
         except Exception as e:
             logger.error(f"Error loading tools for run: {e}", exc_info=True)
-            raise LLMCoreError(f"Failed to load tools: {e!s}")
+            raise LLMCoreError(f"Failed to load tools: {e!s}") from e
 
     def load_default_tools(self) -> None:
         """
@@ -383,6 +435,7 @@ class ToolManager:
         """
         self._tool_definitions.clear()
         self._implementation_map.clear()
+        self._tool_metadata.clear()
 
         default_tools = [
             (
@@ -416,14 +469,62 @@ class ToolManager:
 
         logger.info(f"Loaded {len(self._tool_definitions)} default tools")
 
-    def get_tool_definitions(self) -> list[Tool]:
+    def get_tool_definitions(self, tool_names: list[str] | None = None) -> list[Tool]:
         """
-        Get all loaded tool definitions for the current run.
+        Get loaded tool definitions for the current run.
+
+        Args:
+            tool_names: Optional subset of tool names. When provided, only full
+                schemas for matching tools are returned, preserving loaded order.
 
         Returns:
             List of Tool definitions available for agent use.
         """
-        return self._tool_definitions.copy()
+        if tool_names is None:
+            return self._tool_definitions.copy()
+
+        selected = set(tool_names)
+        return [tool for tool in self._tool_definitions if tool.name in selected]
+
+    def get_tool_inventory(
+        self,
+        *,
+        max_description_chars: int = 180,
+        include_parameters: bool = False,
+    ) -> list[dict[str, object]]:
+        """Return lightweight tool summaries for prompt/tool selection.
+
+        Inventory entries are intentionally smaller than full JSON schemas so an
+        agent can inspect available capabilities before choosing which tool
+        definitions to load into a provider call.
+        """
+        inventory = []
+        max_chars = max(20, max_description_chars)
+        for tool in self._tool_definitions:
+            description = tool.description or ""
+            if len(description) > max_chars:
+                description = f"{description[: max_chars - 14]}...[truncated]"
+
+            parameters = tool.parameters or {}
+            properties = parameters.get("properties", {}) if isinstance(parameters, dict) else {}
+            required = parameters.get("required", []) if isinstance(parameters, dict) else []
+            entry: dict[str, object] = {
+                "name": tool.name,
+                "description": description,
+                "implementation_key": self._implementation_map.get(tool.name),
+                "parameter_names": list(properties.keys()) if isinstance(properties, dict) else [],
+                "required_parameters": list(required) if isinstance(required, list) else [],
+            }
+            metadata = self._tool_metadata.get(tool.name, {})
+            if metadata:
+                entry["metadata"] = dict(metadata)
+                for key in ("requires_approval", "risk_level", "owasp"):
+                    if key in metadata:
+                        entry[key] = metadata[key]
+            if include_parameters:
+                entry["parameters"] = parameters
+            inventory.append(entry)
+        return inventory
 
     async def execute_tool(self, tool_call: ToolCall, session_id: str | None = None) -> ToolResult:
         """

@@ -726,6 +726,8 @@ class EnhancedAgentManager(AgentManager):
         default_mode: AgentMode = AgentMode.SINGLE,
         observability: ObservabilityComponents | None = None,
         agents_config: Any | None = None,  # G3: AgentsConfig for capability/activity settings
+        context_synthesizer: Any | None = None,
+        memory_backend: Any | None = None,
     ):
         """
         Initialize the enhanced agent manager.
@@ -738,6 +740,9 @@ class EnhancedAgentManager(AgentManager):
             tracer: Optional OpenTelemetry tracer
             default_mode: Default mode for run() method
             observability: Optional observability components (Phase 8)
+            context_synthesizer: Optional context synthesizer for Darwin PERCEIVE
+            memory_backend: Optional external memory backend used to build a
+                semantic context source when ``context_synthesizer`` is absent
         """
         # Initialize parent class (original AgentManager)
         super().__init__(
@@ -776,6 +781,8 @@ class EnhancedAgentManager(AgentManager):
                 prompt_registry=prompt_registry,
                 tracer=self._tracer,
                 agents_config=self._agents_config,  # G3: Pass config for capability/activity settings
+                context_synthesizer=context_synthesizer,
+                memory_backend=memory_backend,
             )
 
             logger.info(f"EnhancedAgentManager initialized (default_mode={default_mode.value})")
