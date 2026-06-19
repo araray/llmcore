@@ -51,7 +51,7 @@ from typing import (
     Protocol,
 )
 
-from confy.tokens import EstimateCounter as _ConfyEstimateCounter
+from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
 
 try:
     from pydantic import BaseModel, Field
@@ -112,9 +112,9 @@ class TokenCounter(Protocol):
         ...
 
 
-class SimpleTokenCounter(_ConfyEstimateCounter):
+class SimpleTokenCounter(_LLMCoreEstimateCounter):
     """
-    Simple token counter using the shared Confy character estimator.
+    Simple token counter using LLMCore's character estimator.
 
     For production, use tiktoken or model-specific tokenizers.
     """

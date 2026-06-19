@@ -193,13 +193,13 @@ class TestEstimateCounter:
         counter = EstimateCounter()
         assert counter.count("a") == 1
 
-    def test_matches_shared_confy_estimator(self):
-        """llmcore's compatibility wrapper uses Confy's canonical estimate."""
-        from confy.tokens import EstimateCounter as ConfyEstimateCounter
+    def test_matches_llmcore_estimator(self):
+        """Context wrapper uses LLMCore's canonical estimate."""
+        from llmcore.tokens import EstimateCounter as LLMCoreEstimateCounter
 
         text = "abcde"
 
-        assert EstimateCounter().count(text) == ConfyEstimateCounter().count(text)
+        assert EstimateCounter().count(text) == LLMCoreEstimateCounter().count(text)
 
 
 class TestTiktokenCounter:

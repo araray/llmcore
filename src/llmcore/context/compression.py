@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from confy.tokens import EstimateCounter as _ConfyEstimateCounter
+from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
 
 logger = logging.getLogger(__name__)
 
@@ -395,8 +395,8 @@ class ContextCompressor:
 # =============================================================================
 
 
-class _EstimateCounter(_ConfyEstimateCounter):
-    """Fallback token counter using the shared Confy estimator."""
+class _EstimateCounter(_LLMCoreEstimateCounter):
+    """Fallback token counter using LLMCore's estimator."""
 
 
 def _split_sections(content: str) -> list[str]:

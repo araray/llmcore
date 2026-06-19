@@ -40,9 +40,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from confy.tokens import EstimateCounter as _ConfyEstimateCounter
-from confy.tokens import TiktokenCounter as _ConfyTiktokenCounter
-from confy.tokens import get_counter as _get_shared_counter
+from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
+from llmcore.tokens import TiktokenCounter as _LLMCoreTiktokenCounter
+from llmcore.tokens import get_counter as _get_llmcore_counter
 
 logger = logging.getLogger(__name__)
 
@@ -174,22 +174,22 @@ class SynthesizedContext:
 # =============================================================================
 
 
-class TiktokenCounter(_ConfyTiktokenCounter):
-    """Token counter using the shared Confy tiktoken implementation."""
+class TiktokenCounter(_LLMCoreTiktokenCounter):
+    """Token counter using LLMCore's tiktoken implementation."""
 
 
-class EstimateCounter(_ConfyEstimateCounter):
-    """Fallback token counter using the shared Confy character estimator."""
+class EstimateCounter(_LLMCoreEstimateCounter):
+    """Fallback token counter using LLMCore's character estimator."""
 
 
 def _make_default_counter() -> TokenCounter:
     """
     Create the best available token counter.
 
-    Delegates to :func:`confy.tokens.get_counter`, which tries tiktoken first
+    Delegates to :func:`llmcore.tokens.get_counter`, which tries tiktoken first
     and falls back to character estimation if unavailable.
     """
-    return _get_shared_counter()
+    return _get_llmcore_counter()
 
 
 # =============================================================================
