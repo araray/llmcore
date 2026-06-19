@@ -40,6 +40,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from confy.tokens import EstimateCounter as _ConfyEstimateCounter
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +66,7 @@ class CompressionStrategy(Enum):
 class TokenCounter(Protocol):
     """Protocol for counting tokens in text."""
 
-    def count(self, text: str) -> int: ...
+    def count(self, text: str | None) -> int: ...
 
 
 class LLMSummarizer(Protocol):
@@ -393,11 +395,8 @@ class ContextCompressor:
 # =============================================================================
 
 
-class _EstimateCounter:
-    """Fallback token counter using character-based estimation."""
-
-    def count(self, text: str) -> int:
-        return max(1, len(text) // 4) if text else 0
+class _EstimateCounter(_ConfyEstimateCounter):
+    """Fallback token counter using the shared Confy estimator."""
 
 
 def _split_sections(content: str) -> list[str]:

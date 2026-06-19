@@ -42,6 +42,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
@@ -49,6 +50,8 @@ from typing import (
     Any,
     Protocol,
 )
+
+from confy.tokens import EstimateCounter as _ConfyEstimateCounter
 
 try:
     from pydantic import BaseModel, Field
@@ -104,26 +107,28 @@ class ContentType(str, Enum):
 class TokenCounter(Protocol):
     """Protocol for token counting."""
 
-    def count(self, text: str) -> int:
+    def count(self, text: str | None) -> int:
         """Count tokens in text."""
         ...
 
 
-class SimpleTokenCounter:
+class SimpleTokenCounter(_ConfyEstimateCounter):
     """
-    Simple token counter using word/character estimation.
+    Simple token counter using the shared Confy character estimator.
 
     For production, use tiktoken or model-specific tokenizers.
     """
 
     def __init__(self, chars_per_token: float = 4.0):
+        if chars_per_token <= 0:
+            raise ValueError("chars_per_token must be greater than zero")
         self.chars_per_token = chars_per_token
 
-    def count(self, text: str) -> int:
+    def count(self, text: str | None) -> int:
         """Estimate token count."""
         if not text:
             return 0
-        return int(len(text) / self.chars_per_token)
+        return math.ceil(len(text) / self.chars_per_token)
 
 
 # =============================================================================

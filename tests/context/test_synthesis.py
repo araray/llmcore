@@ -193,6 +193,14 @@ class TestEstimateCounter:
         counter = EstimateCounter()
         assert counter.count("a") == 1
 
+    def test_matches_shared_confy_estimator(self):
+        """llmcore's compatibility wrapper uses Confy's canonical estimate."""
+        from confy.tokens import EstimateCounter as ConfyEstimateCounter
+
+        text = "abcde"
+
+        assert EstimateCounter().count(text) == ConfyEstimateCounter().count(text)
+
 
 class TestTiktokenCounter:
     """Tests for the tiktoken-based token counter.

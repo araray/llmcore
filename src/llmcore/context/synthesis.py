@@ -40,6 +40,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from confy.tokens import EstimateCounter as _ConfyEstimateCounter
+from confy.tokens import TiktokenCounter as _ConfyTiktokenCounter
+from confy.tokens import get_counter as _get_shared_counter
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +83,7 @@ class ContextSource(Protocol):
 class TokenCounter(Protocol):
     """Protocol for counting tokens in text."""
 
-    def count(self, text: str) -> int:
+    def count(self, text: str | None) -> int:
         """
         Count tokens in the given text.
 
@@ -170,45 +174,22 @@ class SynthesizedContext:
 # =============================================================================
 
 
-class TiktokenCounter:
-    """Token counter using tiktoken (``cl100k_base`` encoding)."""
-
-    def __init__(self) -> None:
-        import tiktoken
-
-        self._encoding = tiktoken.get_encoding("cl100k_base")
-
-    def count(self, text: str) -> int:
-        """Count tokens via tiktoken."""
-        return len(self._encoding.encode(text))
+class TiktokenCounter(_ConfyTiktokenCounter):
+    """Token counter using the shared Confy tiktoken implementation."""
 
 
-class EstimateCounter:
-    """
-    Fallback token counter using character-based estimation.
-
-    Uses ~4 characters per token as a rough heuristic.
-    """
-
-    def __init__(self, chars_per_token: int = 4) -> None:
-        self._chars_per_token = chars_per_token
-
-    def count(self, text: str) -> int:
-        """Estimate tokens from character count."""
-        return max(1, len(text) // self._chars_per_token) if text else 0
+class EstimateCounter(_ConfyEstimateCounter):
+    """Fallback token counter using the shared Confy character estimator."""
 
 
 def _make_default_counter() -> TokenCounter:
     """
     Create the best available token counter.
 
-    Tries tiktoken first; falls back to estimation if unavailable.
+    Delegates to :func:`confy.tokens.get_counter`, which tries tiktoken first
+    and falls back to character estimation if unavailable.
     """
-    try:
-        return TiktokenCounter()
-    except (ImportError, Exception):
-        logger.warning("tiktoken not available — using character-based token estimation")
-        return EstimateCounter()
+    return _get_shared_counter()
 
 
 # =============================================================================
