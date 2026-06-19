@@ -24,7 +24,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import ConfidenceLevel, EnhancedAgentState, ThinkInput, ThinkOutput
+from ..models import ConfidenceLevel, EnhancedAgentState, PlanStepSpec, ThinkInput, ThinkOutput
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
@@ -115,6 +115,27 @@ async def think_phase(
     with create_span(tracer, "cognitive.think") as span:
         try:
             logger.debug("Starting THINK phase")
+
+            structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
+            if structured_action is not None:
+                output = ThinkOutput(
+                    thought=(
+                        "Using the structured tool intent supplied by the current plan step."
+                    ),
+                    proposed_action=structured_action,
+                    confidence=ConfidenceLevel.HIGH,
+                )
+                agent_state.pending_tool_call = structured_action
+                agent_state.overall_confidence = output.confidence
+                if span:
+                    add_span_attributes(
+                        span,
+                        {
+                            "think.structured_plan_step": True,
+                            "think.proposed_tool": structured_action.name,
+                        },
+                    )
+                return output
 
             # 1. Generate thinking prompt
             thinking_prompt = _generate_thinking_prompt(
@@ -568,6 +589,21 @@ def _tool_parameter_names(tool: Any) -> list[str]:
     if not isinstance(properties, dict):
         return []
     return [str(name) for name in properties]
+
+
+def _tool_call_from_plan_step(step_spec: PlanStepSpec | None):
+    """Convert a structured plan step into a direct tool call when possible."""
+    if step_spec is None or not step_spec.tool_name:
+        return None
+
+    from ....models import ToolCall
+
+    arguments = step_spec.input if isinstance(step_spec.input, dict) else {}
+    return ToolCall(
+        id=f"plan_step_{step_spec.index}_{step_spec.tool_name}",
+        name=step_spec.tool_name,
+        arguments=dict(arguments),
+    )
 
 
 def _generate_thinking_prompt(

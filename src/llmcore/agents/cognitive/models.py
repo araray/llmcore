@@ -283,6 +283,9 @@ class ThinkInput(BaseModel):
 
     goal: str = Field(..., description="Current objective")
     current_step: str = Field(..., description="Current plan step")
+    current_step_spec: PlanStepSpec | None = Field(
+        default=None, description="Structured plan step when the planner provided one"
+    )
     history: str = Field(default="", description="Recent actions and observations")
     context: str = Field(default="", description="Relevant context from memory")
     available_tools: list[dict[str, Any]] = Field(

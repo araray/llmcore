@@ -130,6 +130,9 @@ async def plan_phase(
 
             # 4. Update agent state
             agent_state.plan = output.step_descriptions
+            agent_state.metadata["plan_step_specs"] = [
+                step.model_dump(exclude_none=True) for step in output.plan_steps
+            ]
             agent_state.plan_steps_status = ["pending"] * len(output.plan_steps)
             agent_state.current_plan_step_index = 0
             agent_state.plan_created_at = output.created_at

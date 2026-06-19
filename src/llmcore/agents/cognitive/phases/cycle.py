@@ -30,6 +30,7 @@ from ..models import (
     # Phase inputs
     PerceiveInput,
     PlanInput,
+    PlanStepSpec,
     ReflectInput,
     ThinkInput,
     UpdateInput,
@@ -329,6 +330,7 @@ class CognitiveCycle:
                     if agent_state.current_plan_step_index < len(agent_state.plan)
                     else "Complete the goal"
                 )
+                current_step_spec = _current_plan_step_spec(agent_state)
 
                 tool_inventory_config = self.agents_config.tool_inventory
                 if (
@@ -348,6 +350,7 @@ class CognitiveCycle:
                 think_input = ThinkInput(
                     goal=agent_state.goal,
                     current_step=current_step,
+                    current_step_spec=current_step_spec,
                     history=self._build_history(agent_state),
                     context="\n".join(iteration.perceive_output.retrieved_context),
                     available_tools=available_tools,
@@ -1015,6 +1018,24 @@ class CognitiveCycle:
             for iteration in recent_iterations
         ]
         return json.dumps({"recent_iterations": summaries}, ensure_ascii=False)
+
+
+def _current_plan_step_spec(agent_state: EnhancedAgentState) -> PlanStepSpec | None:
+    """Return the structured spec for the current plan step when available."""
+    raw_specs = agent_state.metadata.get("plan_step_specs")
+    if not isinstance(raw_specs, list):
+        return None
+
+    step_index = agent_state.current_plan_step_index
+    if step_index < 0 or step_index >= len(raw_specs):
+        return None
+
+    raw_spec = raw_specs[step_index]
+    try:
+        return PlanStepSpec.model_validate(raw_spec)
+    except Exception:
+        logger.debug("Ignoring invalid structured plan step at index %s", step_index)
+        return None
 
 
 # =============================================================================

@@ -445,11 +445,46 @@ RISKS:
         assert "methodical" in output.reasoning.lower()
         assert len(output.risks_identified) == 2
         assert state.plan == output.step_descriptions
+        assert state.metadata["plan_step_specs"][0]["description"] == output.plan_steps[0].description
         assert state.plan_version == 1
 
 
 class TestThinkPhase:
     """Tests for enhanced THINK phase implementation."""
+
+    @pytest.mark.asyncio
+    async def test_think_phase_uses_structured_plan_step_tool(self):
+        """THINK uses a typed plan step tool intent without another LLM call."""
+        provider_manager = Mock()
+        memory_manager = Mock()
+        tool_manager = Mock()
+        state = EnhancedAgentState(goal="Inspect file")
+        think_input = ThinkInput(
+            goal="Inspect file",
+            current_step="Inspect target file",
+            current_step_spec=PlanStepSpec(
+                index=0,
+                description="Inspect target file",
+                tool_name="read_file",
+                input={"path": "src/app.py"},
+            ),
+            available_tools=[],
+        )
+
+        output = await think_phase(
+            agent_state=state,
+            think_input=think_input,
+            provider_manager=provider_manager,
+            memory_manager=memory_manager,
+            tool_manager=tool_manager,
+        )
+
+        assert output.proposed_action is not None
+        assert output.proposed_action.name == "read_file"
+        assert output.proposed_action.arguments == {"path": "src/app.py"}
+        assert output.confidence == ConfidenceLevel.HIGH
+        assert state.pending_tool_call == output.proposed_action
+        provider_manager.get_provider.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_think_phase_with_action(self):
