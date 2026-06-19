@@ -129,7 +129,7 @@ async def plan_phase(
             output = _parse_plan_response(response_text=response_content, plan_input=plan_input)
 
             # 4. Update agent state
-            agent_state.plan = output.plan_steps
+            agent_state.plan = output.step_descriptions
             agent_state.plan_steps_status = ["pending"] * len(output.plan_steps)
             agent_state.current_plan_step_index = 0
             agent_state.plan_created_at = output.created_at

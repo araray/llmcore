@@ -25,7 +25,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 # Import existing models from llmcore
 from ...models import AgentState, ToolCall, ToolResult
@@ -198,11 +198,39 @@ class PlanInput(BaseModel):
     existing_plan: list[str] | None = Field(default=None, description="Existing plan to refine")
 
 
+class PlanStepSpec(BaseModel):
+    """A structured plan step with optional tool intent.
+
+    Legacy prose-only plans are represented by setting only ``description``.
+    ``tool_name`` and ``input`` let future planners pre-commit a tool call
+    without forcing the rest of the cognitive cycle to change shape.
+    """
+
+    index: int = Field(default=0, ge=0, description="0-based step index within the plan")
+    description: str = Field(default="", description="Human-readable step description")
+    tool_name: str | None = Field(default=None, description="Optional intended tool name")
+    input: dict[str, Any] | None = Field(
+        default=None, description="Optional structured tool input arguments"
+    )
+    depends_on: list[int] = Field(
+        default_factory=list, description="Prior step indices this step depends on"
+    )
+    estimated_cost: float | None = Field(default=None, description="Optional planner cost estimate")
+
+    def __str__(self) -> str:
+        """Return the prose description for backward-compatible string use."""
+        return self.description
+
+    def __contains__(self, item: str) -> bool:
+        """Allow legacy tests/callers to use substring checks on a step."""
+        return item in self.description
+
+
 class PlanOutput(BaseModel):
     """Output from the PLAN phase."""
 
-    plan_steps: list[str] = Field(
-        default_factory=list, description="Ordered list of actionable steps"
+    plan_steps: list[PlanStepSpec] = Field(
+        default_factory=list, description="Ordered list of structured actionable steps"
     )
     reasoning: str = Field(default="", description="Strategic reasoning behind the plan")
     estimated_iterations: int | None = Field(
@@ -212,6 +240,42 @@ class PlanOutput(BaseModel):
         default_factory=list, description="Potential risks or challenges identified"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_legacy_plan_steps(cls, data: Any) -> Any:
+        """Accept legacy ``list[str]`` plans and structured dictionaries."""
+        if not isinstance(data, dict):
+            return data
+        raw_steps = data.get("plan_steps")
+        if raw_steps is None:
+            return data
+        if not isinstance(raw_steps, list):
+            return data
+
+        normalized_steps: list[Any] = []
+        for index, step in enumerate(raw_steps):
+            if isinstance(step, PlanStepSpec):
+                normalized_steps.append(step)
+            elif isinstance(step, str):
+                normalized_steps.append({"index": index, "description": step})
+            elif isinstance(step, dict):
+                step_data = dict(step)
+                step_data.setdefault("index", index)
+                if "description" not in step_data and "step" in step_data:
+                    step_data["description"] = str(step_data["step"])
+                normalized_steps.append(step_data)
+            else:
+                normalized_steps.append({"index": index, "description": str(step)})
+
+        output_data = dict(data)
+        output_data["plan_steps"] = normalized_steps
+        return output_data
+
+    @property
+    def step_descriptions(self) -> list[str]:
+        """Return plan steps as plain descriptions for legacy state storage."""
+        return [step.description for step in self.plan_steps]
 
 
 class ThinkInput(BaseModel):
@@ -924,6 +988,7 @@ __all__ = [
     "PerceiveOutput",
     "PlanInput",
     "PlanOutput",
+    "PlanStepSpec",
     "ReflectInput",
     "ReflectOutput",
     "ThinkInput",

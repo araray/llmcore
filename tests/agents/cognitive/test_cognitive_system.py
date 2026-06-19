@@ -31,6 +31,7 @@ from llmcore.agents.cognitive import (
     PerceiveOutput,
     PlanInput,
     PlanOutput,
+    PlanStepSpec,
     ThinkInput,
     ThinkOutput,
     ValidateOutput,
@@ -125,9 +126,36 @@ class TestPhaseInputOutputModels:
         )
 
         assert len(output.plan_steps) == 3
+        assert isinstance(output.plan_steps[0], PlanStepSpec)
+        assert output.step_descriptions == ["Step 1", "Step 2", "Step 3"]
         assert output.reasoning == "Strategic approach"
         assert output.estimated_iterations == 6
         assert len(output.risks_identified) == 2
+
+    def test_plan_output_accepts_structured_steps(self):
+        """PlanOutput accepts typed step dictionaries for forward compatibility."""
+        output = PlanOutput(
+            plan_steps=[
+                {
+                    "description": "Inspect target files",
+                    "tool_name": "read_file",
+                    "input": {"path": "src/app.py"},
+                    "depends_on": [],
+                    "estimated_cost": 1.5,
+                }
+            ]
+        )
+
+        step = output.plan_steps[0]
+
+        assert step.index == 0
+        assert step.description == "Inspect target files"
+        assert step.tool_name == "read_file"
+        assert step.input == {"path": "src/app.py"}
+        assert step.depends_on == []
+        assert step.estimated_cost == 1.5
+        assert str(step) == "Inspect target files"
+        assert "target files" in step
 
     def test_think_output(self):
         """Test ThinkOutput model."""
@@ -416,6 +444,7 @@ RISKS:
         assert "Understand the problem" in output.plan_steps[0]
         assert "methodical" in output.reasoning.lower()
         assert len(output.risks_identified) == 2
+        assert state.plan == output.step_descriptions
         assert state.plan_version == 1
 
 
