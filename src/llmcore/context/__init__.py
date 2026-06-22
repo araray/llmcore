@@ -25,8 +25,8 @@ Example::
     synthesizer.add_source("recent", RecentContextSource(max_turns=20), priority=80)
 
     context = await synthesizer.synthesize(current_task=my_goal)
-    # context.content → assembled string
-    # context.utilization → 0.0–1.0
+    # context.content -> assembled string
+    # context.utilization -> 0.0-1.0
 
 References:
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §12 (Adaptive Context Synthesis)
@@ -38,6 +38,8 @@ from .compression import (
     CompressionResult,
     CompressionStrategy,
     ContextCompressor,
+    ObjectiveAwareLLMSummarizer,
+    SummaryObjective,
 )
 
 # Prioritization (Phase 3)
@@ -57,23 +59,19 @@ from .synthesis import (
 )
 
 __all__ = [
-    # Core synthesizer
-    "ContextSynthesizer",
-    # Data models
-    "ContextChunk",
-    "SynthesizedContext",
-    # Protocols
-    "ContextSource",
-    "TokenCounter",
-    # Token counter implementations
-    "TiktokenCounter",
-    "EstimateCounter",
-    # Compression
     "CompressionResult",
     "CompressionStrategy",
-    "ContextCompressor",
-    # Prioritization
     "ContentPrioritizer",
+    "ContextChunk",
+    "ContextCompressor",
+    "ContextSource",
+    "ContextSynthesizer",
+    "EstimateCounter",
+    "ObjectiveAwareLLMSummarizer",
     "PriorityWeights",
     "ScoredChunk",
+    "SummaryObjective",
+    "SynthesizedContext",
+    "TiktokenCounter",
+    "TokenCounter",
 ]

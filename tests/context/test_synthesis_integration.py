@@ -17,6 +17,7 @@ import pytest
 from llmcore.context.compression import (
     CompressionResult,
     ContextCompressor,
+    SummaryObjective,
 )
 from llmcore.context.prioritization import (
     ContentPrioritizer,
@@ -173,6 +174,37 @@ class TestCompressorWiring:
         assert call_kwargs.kwargs["target_tokens"] == 375  # 500 * 0.75
         assert call_kwargs.kwargs["current_tokens"] > 0
         assert isinstance(call_kwargs.kwargs["content"], str)
+
+    @pytest.mark.asyncio
+    async def test_compressor_receives_task_summary_objective(self, counter):
+        """Current task is passed as the compression objective when supported."""
+        compressor = MagicMock()
+        compressor.compress = AsyncMock(
+            return_value=CompressionResult(
+                content="compressed",
+                original_tokens=400,
+                compressed_tokens=100,
+                strategy_used="truncation",
+            )
+        )
+
+        synth = ContextSynthesizer(
+            max_tokens=500,
+            compression_threshold=0.75,
+            token_counter=counter,
+            compressor=compressor,
+        )
+
+        big_content = "C" * 1600
+        source = MockContextSource(content=big_content, tokens=400)
+        synth.add_source("big", source, priority=100)
+
+        await synth.synthesize(current_task="identify auth vulnerabilities")
+
+        objective = compressor.compress.call_args.kwargs["summary_objective"]
+        assert isinstance(objective, SummaryObjective)
+        assert objective.purpose == "identify auth vulnerabilities"
+        assert objective.target_audience == "context-synthesis"
 
     @pytest.mark.asyncio
     async def test_no_compressor_uses_builtin_truncation(self, counter):
