@@ -401,6 +401,7 @@ class CognitiveCycle:
                             agent_state=agent_state,
                             validate_input=validate_input,
                             provider_manager=self.provider_manager,
+                            tool_manager=self.tool_manager,
                             prompt_registry=self.prompt_registry,
                             tracer=self.tracer,
                             provider_name=provider_name,

@@ -61,6 +61,7 @@ async def validate_phase(
     tracer: Any | None = None,
     provider_name: str | None = None,
     model_name: str | None = None,
+    tool_manager: Any | None = None,
 ) -> ValidateOutput:
     """
     Execute the VALIDATE phase of the cognitive cycle.
@@ -81,6 +82,7 @@ async def validate_phase(
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
+        tool_manager: Optional concrete tool registry for pre-execution membership checks
 
     Returns:
         ValidateOutput with validation decision
@@ -111,7 +113,23 @@ async def validate_phase(
                 f"Starting VALIDATE phase for action: {validate_input.proposed_action.name}"
             )
 
-            # 1. Check for dangerous patterns first
+            # 1. Ensure the proposed tool is available for this run before
+            # asking the model or a human to judge safety.
+            registry_check = _check_tool_registry(
+                validate_input.proposed_action,
+                tool_manager,
+            )
+            if registry_check:
+                logger.warning("Tool registry validation failed: %s", registry_check)
+                return ValidateOutput(
+                    result=ValidationResult.REJECTED,
+                    confidence=ConfidenceLevel.HIGH,
+                    concerns=[registry_check],
+                    suggestions=["Choose a loaded tool before validation and execution."],
+                    requires_human_approval=False,
+                )
+
+            # 2. Check for dangerous patterns.
             dangerous_check = _check_dangerous_patterns(validate_input.proposed_action)
             if dangerous_check:
                 logger.warning(f"Dangerous pattern detected: {dangerous_check}")
@@ -124,12 +142,12 @@ async def validate_phase(
                     approval_prompt=_generate_approval_prompt(validate_input, dangerous_check),
                 )
 
-            # 2. Generate validation prompt
+            # 3. Generate validation prompt
             validation_prompt = _generate_validation_prompt(
                 validate_input=validate_input, prompt_registry=prompt_registry
             )
 
-            # 3. Call LLM for validation
+            # 4. Call LLM for validation
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
 
@@ -163,12 +181,12 @@ async def validate_phase(
             # Extract response content
             response_content = provider.extract_response_content(response)
 
-            # 4. Parse validation response
+            # 5. Parse validation response
             output = _parse_validation_response(
                 response_text=response_content, validate_input=validate_input
             )
 
-            # 5. Update agent state
+            # 6. Update agent state
             agent_state.pending_validation = validate_input
             agent_state.validation_history.append(output)
 
@@ -176,7 +194,7 @@ async def validate_phase(
                 agent_state.awaiting_human_approval = True
                 agent_state.pending_approval_prompt = output.approval_prompt
 
-            # 6. Record metrics
+            # 7. Record metrics
             if prompt_registry and hasattr(prompt_registry, "record_use"):
                 try:
                     template = prompt_registry.get_template("validation_prompt")
@@ -192,7 +210,7 @@ async def validate_phase(
                 except Exception as e:
                     logger.warning(f"Failed to record prompt metrics: {e}")
 
-            # 7. Add tracing
+            # 8. Add tracing
             if span:
                 add_span_attributes(
                     span,
@@ -253,6 +271,82 @@ def _check_dangerous_patterns(tool_call: Any) -> str | None:
             return pattern
 
     return None
+
+
+def _check_tool_registry(tool_call: Any, tool_manager: Any | None) -> str | None:
+    """Return a validation error when a concrete tool registry rejects the call."""
+    if tool_manager is None:
+        return None
+
+    tool_name = str(getattr(tool_call, "name", "") or "").strip()
+    if not tool_name:
+        return "Tool call has no tool name."
+
+    is_tool_loaded = getattr(tool_manager, "is_tool_loaded", None)
+    if callable(is_tool_loaded):
+        try:
+            loaded = is_tool_loaded(tool_name)
+        except Exception as exc:
+            logger.debug("Tool registry check failed via is_tool_loaded(): %s", exc)
+        else:
+            if loaded is True:
+                return None
+            if loaded is False:
+                return _unknown_tool_message(tool_name, _available_tool_names(tool_manager))
+
+    available_tool_names = _available_tool_names(tool_manager)
+    if available_tool_names is None:
+        return None
+    if tool_name in available_tool_names:
+        return None
+    return _unknown_tool_message(tool_name, available_tool_names)
+
+
+def _available_tool_names(tool_manager: Any) -> set[str] | None:
+    """Inspect loaded tool names when the manager exposes a concrete list."""
+    get_tool_names = getattr(tool_manager, "get_tool_names", None)
+    if callable(get_tool_names):
+        try:
+            names = get_tool_names()
+        except Exception as exc:
+            logger.debug("Tool registry check failed via get_tool_names(): %s", exc)
+        else:
+            if isinstance(names, (list, tuple, set)):
+                return {str(name) for name in names}
+
+    get_tool_definitions = getattr(tool_manager, "get_tool_definitions", None)
+    if callable(get_tool_definitions):
+        try:
+            definitions = get_tool_definitions()
+        except Exception as exc:
+            logger.debug("Tool registry check failed via get_tool_definitions(): %s", exc)
+        else:
+            if isinstance(definitions, (list, tuple, set)):
+                return {
+                    name
+                    for name in (_tool_definition_name(definition) for definition in definitions)
+                    if name
+                }
+
+    return None
+
+
+def _tool_definition_name(definition: Any) -> str:
+    """Extract a tool name from llmcore Tool objects or provider schemas."""
+    if isinstance(definition, dict):
+        function_def = definition.get("function")
+        if isinstance(function_def, dict):
+            return str(function_def.get("name") or "")
+        return str(definition.get("name") or "")
+    return str(getattr(definition, "name", "") or "")
+
+
+def _unknown_tool_message(tool_name: str, available_tool_names: set[str] | None) -> str:
+    """Build a bounded unknown-tool validation message."""
+    if available_tool_names:
+        available = ", ".join(sorted(available_tool_names)[:20])
+        return f"Tool '{tool_name}' is not loaded for this run. Available tools: {available}"
+    return f"Tool '{tool_name}' is not loaded for this run."
 
 
 def _generate_validation_prompt(validate_input: ValidateInput, prompt_registry: Any | None) -> str:
