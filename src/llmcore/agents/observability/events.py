@@ -169,6 +169,7 @@ class ErrorEventType(str, Enum):
 
     EXCEPTION = "exception"
     VALIDATION_ERROR = "validation_error"
+    CONTEXT_FAILURE = "context_failure"
     TIMEOUT_ERROR = "timeout_error"
     RATE_LIMIT_ERROR = "rate_limit_error"
     API_ERROR = "api_error"
@@ -1019,7 +1020,7 @@ def create_sandbox_event(
 # EXPORTS
 # =============================================================================
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - grouped by event category.
     # Enums
     "EventCategory",
     "EventSeverity",
