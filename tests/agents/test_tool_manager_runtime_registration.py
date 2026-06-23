@@ -128,9 +128,13 @@ def test_tool_inventory_includes_runtime_metadata_without_changing_tool_schema()
         "tests.runtime.inventory.metadata",
         lambda: "ok",
         metadata={
+            "source": "wairu.plugin",
             "requires_approval": True,
             "risk_level": "high",
             "owasp": ["A01:2021-Broken Access Control"],
+            "permissions": ["write_fs"],
+            "execution_target": "local",
+            "tags": ["filesystem"],
         },
     )
 
@@ -140,4 +144,8 @@ def test_tool_inventory_includes_runtime_metadata_without_changing_tool_schema()
     assert inventory[0]["requires_approval"] is True
     assert inventory[0]["risk_level"] == "high"
     assert inventory[0]["owasp"] == ["A01:2021-Broken Access Control"]
+    assert inventory[0]["permissions"] == ["write_fs"]
+    assert inventory[0]["execution_target"] == "local"
+    assert inventory[0]["source"] == "wairu.plugin"
+    assert inventory[0]["tags"] == ["filesystem"]
     assert inventory[0]["metadata"]["requires_approval"] is True

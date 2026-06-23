@@ -518,7 +518,15 @@ class ToolManager:
             metadata = self._tool_metadata.get(tool.name, {})
             if metadata:
                 entry["metadata"] = dict(metadata)
-                for key in ("requires_approval", "risk_level", "owasp"):
+                for key in (
+                    "requires_approval",
+                    "risk_level",
+                    "owasp",
+                    "permissions",
+                    "execution_target",
+                    "source",
+                    "tags",
+                ):
                     if key in metadata:
                         entry[key] = metadata[key]
             if include_parameters:
