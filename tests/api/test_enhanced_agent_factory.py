@@ -55,6 +55,28 @@ def test_create_enhanced_agent_manager_passes_optional_components() -> None:
     assert manager._agents_config is agents_config
 
 
+def test_create_enhanced_agent_manager_loads_agents_config_from_llmcore_config() -> None:
+    llm = _initialized_llmcore()
+    llm.config = SimpleNamespace(
+        get=lambda key, default=None: {
+            "tool_inventory": {
+                "enabled": True,
+                "max_description_chars": 64,
+                "max_native_tool_schemas": 2,
+            }
+        }
+        if key == "agents"
+        else default
+    )
+
+    manager = llm.create_enhanced_agent_manager()
+
+    assert manager._agents_config is not None
+    assert manager._agents_config.tool_inventory.max_description_chars == 64
+    assert manager._agents_config.tool_inventory.max_native_tool_schemas == 2
+    assert manager.single_agent._agents_config is manager._agents_config
+
+
 def test_create_enhanced_agent_manager_passes_context_synthesizer() -> None:
     llm = _initialized_llmcore()
     context_synthesizer = Mock()

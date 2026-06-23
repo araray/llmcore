@@ -283,6 +283,17 @@ class LLMCore:
                 f"create_enhanced_agent_manager(). Missing: {missing_text}."
             )
 
+        effective_agents_config = agents_config
+        if effective_agents_config is None:
+            config = getattr(self, "config", None)
+            if config is not None:
+                try:
+                    from .config.agents_config import load_agents_config
+
+                    effective_agents_config = load_agents_config(config=config)
+                except Exception as exc:
+                    logger.debug("Falling back to default agent config loading: %s", exc)
+
         from .agents import AgentMode, EnhancedAgentManager
 
         return EnhancedAgentManager(
@@ -293,7 +304,7 @@ class LLMCore:
             tracer=tracer,
             default_mode=default_mode or AgentMode.SINGLE,
             observability=observability,
-            agents_config=agents_config,
+            agents_config=effective_agents_config,
             context_synthesizer=context_synthesizer,
             memory_backend=memory_backend,
         )
