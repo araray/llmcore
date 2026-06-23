@@ -90,6 +90,31 @@ provider_warm_up_enabled = false
 # Environment Variable: LLMCORE_PROVIDER_WARM_UP_STRICT
 provider_warm_up_strict = false
 
+# --- Embedding Warm-Up Lifecycle ---
+# What it does: If true, EmbeddingManager.initialize() eagerly resolves and
+#               warms configured embedding models. This is disabled by default
+#               because local model loading and remote embedding readiness checks
+#               can be expensive.
+# Possible Options: true, false
+# Default Value: false
+# Environment Variable: LLMCORE_EMBEDDING_WARM_UP_ENABLED
+embedding_warm_up_enabled = false
+
+# What it does: Optional list of embedding identifiers to warm when embedding
+#               warm-up is enabled. When empty, the manager warms
+#               llmcore.default_embedding_model.
+# Example Values: ["openai:text-embedding-3-small", "ollama:mxbai-embed-large"]
+# Environment Variable: LLMCORE_EMBEDDING_WARM_UP_MODELS
+embedding_warm_up_models = []
+
+# What it does: If true, embedding warm-up failures abort initialization. When
+#               false, failures are logged and normal lazy first-use behavior is
+#               preserved.
+# Possible Options: true, false
+# Default Value: false
+# Environment Variable: LLMCORE_EMBEDDING_WARM_UP_STRICT
+embedding_warm_up_strict = false
+
 # --- Provider Retry Policy ---
 # What it does: Enables a conservative retry wrapper for transient chat
 #               completion failures surfaced as ProviderError.retryable. The

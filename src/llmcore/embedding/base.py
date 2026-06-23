@@ -41,6 +41,16 @@ class BaseEmbeddingModel(abc.ABC):
         """
         pass
 
+    async def warm_up(self) -> None:
+        """
+        Optional lifecycle hook for eager readiness checks.
+
+        The base implementation is intentionally a no-op so existing embedding
+        implementations keep their lazy first-use behavior unless they override
+        this method with a cheap provider-specific check.
+        """
+        return None
+
     @abc.abstractmethod
     async def generate_embedding(self, text: str) -> list[float]:
         """
