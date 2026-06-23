@@ -19,6 +19,14 @@ Usage:
     results = client.query(query_embedding, top_k=10)
 """
 
+from .grimoire_runes import (
+    RuneCommandTool,
+    register_rune_tools,
+    rune_command_metadata,
+    rune_command_to_tool,
+    rune_command_tool_name,
+    rune_commands_to_tools,
+)
 from .vector_client import (
     LLMCoreVectorClient,
     LLMCoreVectorClientConfig,
@@ -28,5 +36,11 @@ from .vector_client import (
 __all__ = [
     "LLMCoreVectorClient",
     "LLMCoreVectorClientConfig",
+    "RuneCommandTool",
     "VectorClientProtocol",
+    "register_rune_tools",
+    "rune_command_metadata",
+    "rune_command_to_tool",
+    "rune_command_tool_name",
+    "rune_commands_to_tools",
 ]
