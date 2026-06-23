@@ -371,6 +371,15 @@ class TestSemanticContextSource:
                     "source": "data.csv",
                     "score": 0.9,
                     "metadata": {"document_id": "doc-data"},
+                    "citations": [
+                        {
+                            "path": "data.csv",
+                            "chunk_id": "chunk-data",
+                            "start_line": 4,
+                            "end_line": 6,
+                            "metastore_pid": "pid-data",
+                        }
+                    ],
                 },
                 {"content": "Code.", "source": "utils.py", "score": 0.7},
             ]
@@ -395,6 +404,15 @@ class TestSemanticContextSource:
         assert event.top_score == 0.9
         assert event.avg_score == pytest.approx(0.8)
         assert event.documents_used == ["doc-data", "utils.py"]
+        assert event.data["citations"] == [
+            {
+                "source": "data.csv",
+                "chunk_id": "chunk-data",
+                "start_line": 4,
+                "end_line": 6,
+                "metastore_pid": "pid-data",
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_no_task_returns_empty(self, mock_retrieval_fn):
@@ -522,6 +540,42 @@ class TestSemanticContextSource:
 
         assert "### data.csv" in chunk.content
         assert "### utils.py" in chunk.content
+
+    @pytest.mark.asyncio
+    async def test_citation_labels_from_chunks(self, sample_task):
+        """Typed citation dicts appear as compact provenance labels."""
+        from llmcore.context.sources.semantic import SemanticContextSource
+
+        async def cited_chunks(query, top_k=10):
+            return [
+                {
+                    "content": "Use the typed MetaStore citation.",
+                    "source": "typed.py",
+                    "citations": [
+                        {
+                            "path": "pkg/typed.py",
+                            "chunk_id": "chunk-typed",
+                            "start_line": "10",
+                            "end_line": 12,
+                            "metastore_entity_id": "entity-typed",
+                        }
+                    ],
+                },
+                {
+                    "content": "Use metadata fallback citation.",
+                    "source": "fallback.py",
+                    "metadata": {
+                        "file_path": "pkg/fallback.py",
+                        "start_line": 3,
+                    },
+                },
+            ]
+
+        source = SemanticContextSource(cited_chunks)
+        chunk = await source.get_context(task=sample_task)
+
+        assert "Citation: pkg/typed.py:10-12" in chunk.content
+        assert "Citation: pkg/fallback.py:3" in chunk.content
 
 
 # =============================================================================

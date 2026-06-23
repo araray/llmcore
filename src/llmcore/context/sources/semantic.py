@@ -129,6 +129,9 @@ class SemanticContextSource:
             content_text = chunk.get("content", "")
             if content_text:
                 lines.append(f"### {source_label}")
+                citation_label = self._citation_label(chunk)
+                if citation_label and citation_label != source_label:
+                    lines.append(f"Citation: {citation_label}")
                 lines.append(content_text)
                 lines.append("")
 
@@ -170,6 +173,11 @@ class SemanticContextSource:
                 for chunk in chunks
                 if isinstance(chunk, dict) and chunk.get("score") is not None
             ]
+            event_data = dict(data or {})
+            citation_summaries = self._citation_summaries(chunks)
+            if citation_summaries:
+                event_data.setdefault("citations", citation_summaries)
+
             event = RAGEvent(
                 session_id=getattr(logger_obj, "session_id", "semantic"),
                 event_type=RAGEventType(event_type),
@@ -181,11 +189,106 @@ class SemanticContextSource:
                 top_score=max(scores) if scores else None,
                 avg_score=(sum(scores) / len(scores)) if scores else None,
                 documents_used=self._documents_used(chunks),
-                data=data or {},
+                data=event_data,
             )
             await logger_obj.log(event)
         except Exception as exc:
             logger.debug("Semantic RAG observability event skipped: %s", exc)
+
+    @classmethod
+    def _citation_label(cls, chunk: dict[str, Any]) -> str:
+        """Return a compact source label from a retrieval chunk citation."""
+        citation = cls._first_citation(chunk)
+        if citation is None:
+            citation = cls._metadata_citation(chunk)
+        if citation is None:
+            return ""
+
+        source = cls._citation_source(citation)
+        start_line = cls._int_or_none(citation.get("start_line"))
+        end_line = cls._int_or_none(citation.get("end_line"))
+        if source:
+            if start_line is not None and end_line is not None and end_line != start_line:
+                return f"{source}:{start_line}-{end_line}"
+            if start_line is not None:
+                return f"{source}:{start_line}"
+            return source
+
+        chunk_id = citation.get("chunk_id")
+        return str(chunk_id)[:200] if chunk_id else ""
+
+    @classmethod
+    def _citation_summaries(cls, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return bounded citation metadata for observability event payloads."""
+        summaries: list[dict[str, Any]] = []
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            citation = cls._first_citation(chunk) or cls._metadata_citation(chunk)
+            if citation is None:
+                continue
+            summary = {
+                "source": cls._citation_source(citation),
+                "chunk_id": cls._string_or_none(citation.get("chunk_id")),
+                "document_id": cls._string_or_none(citation.get("document_id")),
+                "start_line": cls._int_or_none(citation.get("start_line")),
+                "end_line": cls._int_or_none(citation.get("end_line")),
+                "metastore_pid": cls._string_or_none(citation.get("metastore_pid")),
+                "metastore_entity_id": cls._string_or_none(
+                    citation.get("metastore_entity_id")
+                ),
+            }
+            summary = {key: value for key, value in summary.items() if value not in (None, "")}
+            if summary:
+                summaries.append(summary)
+            if len(summaries) >= 20:
+                break
+        return summaries
+
+    @classmethod
+    def _first_citation(cls, chunk: dict[str, Any]) -> dict[str, Any] | None:
+        citation = chunk.get("citation")
+        if isinstance(citation, dict):
+            return citation
+
+        citations = chunk.get("citations")
+        if isinstance(citations, list):
+            for citation in citations:
+                if isinstance(citation, dict):
+                    return citation
+        return None
+
+    @classmethod
+    def _metadata_citation(cls, chunk: dict[str, Any]) -> dict[str, Any] | None:
+        metadata = chunk.get("metadata")
+        if not isinstance(metadata, dict):
+            return None
+
+        citation_keys = {
+            "chunk_id",
+            "document_id",
+            "source_id",
+            "source_file",
+            "path",
+            "file_path",
+            "uri",
+            "url",
+            "start_line",
+            "end_line",
+            "metastore_pid",
+            "metastore_entity_id",
+        }
+        if not any(key in metadata for key in citation_keys):
+            return None
+        return metadata
+
+    @classmethod
+    def _citation_source(cls, citation: dict[str, Any]) -> str:
+        for key in ("path", "source_file", "file_path", "source_id", "document_id", "uri", "url"):
+            value = citation.get(key)
+            if value:
+                return str(value)[:200]
+        return ""
 
     @classmethod
     def _documents_used(cls, chunks: list[dict[str, Any]]) -> list[str]:
@@ -225,3 +328,18 @@ class SemanticContextSource:
             if value:
                 return str(value)
         return ""
+
+    @staticmethod
+    def _int_or_none(value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _string_or_none(value: Any) -> str | None:
+        if value is None or value == "":
+            return None
+        return str(value)[:200]
