@@ -90,13 +90,15 @@ async def test_create_enhanced_agent_manager_builds_semantic_source_from_memory_
         logger=EventLogger(session_id="factory-session", sinks=[sink]),
     )
 
+    memory_backend = FakeMemoryBackend()
     manager = llm.create_enhanced_agent_manager(
-        memory_backend=FakeMemoryBackend(),
+        memory_backend=memory_backend,
         observability=observability,
     )
     synthesizer = manager.single_agent.cognitive_cycle.context_synthesizer
 
     assert synthesizer is not None
+    assert manager.memory_integrator.memory_backend is memory_backend
 
     context = await synthesizer.synthesize(current_task=SimpleNamespace(description="adapter"))
 

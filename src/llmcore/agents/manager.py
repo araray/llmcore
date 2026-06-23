@@ -771,7 +771,9 @@ class EnhancedAgentManager(AgentManager):
 
             self.persona_manager = PersonaManager()
             self.memory_integrator = CognitiveMemoryIntegrator(
-                memory_manager=memory_manager, storage_manager=storage_manager
+                memory_manager=memory_manager,
+                storage_manager=storage_manager,
+                memory_backend=memory_backend,
             )
             self.single_agent = SingleAgentMode(
                 provider_manager=provider_manager,

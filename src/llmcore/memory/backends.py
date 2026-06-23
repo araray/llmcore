@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -78,6 +79,137 @@ class MemoryRecord:
         }
 
 
+@dataclass(frozen=True)
+class ConsolidationReport:
+    """Backend-neutral result for a long-term memory consolidation pass."""
+
+    backend: str
+    run_id: str | None = None
+    started_at: str = ""
+    finished_at: str | None = None
+    duration_ms: float = 0.0
+    items_scanned: int = 0
+    items_decayed: int = 0
+    items_expired: int = 0
+    items_distilled: int = 0
+    items_archived: int = 0
+    summaries_created: int = 0
+    clusters_formed: int = 0
+    contradictions_found: int = 0
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the report using plain JSON-compatible values."""
+        return {
+            "backend": self.backend,
+            "run_id": self.run_id,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_ms": self.duration_ms,
+            "items_scanned": self.items_scanned,
+            "items_decayed": self.items_decayed,
+            "items_expired": self.items_expired,
+            "items_distilled": self.items_distilled,
+            "items_archived": self.items_archived,
+            "summaries_created": self.summaries_created,
+            "clusters_formed": self.clusters_formed,
+            "contradictions_found": self.contradictions_found,
+            "diagnostics": dict(self.diagnostics),
+            "warnings": list(self.warnings),
+        }
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Pydantic-compatible serialization shim for downstream callers."""
+        return self.to_dict()
+
+    @classmethod
+    def from_result(
+        cls,
+        result: Any,
+        *,
+        backend: str,
+        started_at: datetime | str | None = None,
+        duration_ms: float | None = None,
+        warnings: list[str] | None = None,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> "ConsolidationReport":
+        """Normalize a backend-specific consolidation result into a report."""
+        if isinstance(result, cls):
+            return result
+
+        data = _plain_mapping(result)
+        backend_warnings = list(warnings or [])
+        errors = data.get("errors", [])
+        if isinstance(errors, list):
+            backend_warnings.extend(str(error) for error in errors)
+        elif errors:
+            backend_warnings.append(str(errors))
+
+        report_started_at = data.get("started_at", started_at)
+        report_finished_at = data.get("finished_at", None)
+        observed_duration = _float_or_none(data.get("duration_ms"))
+        if observed_duration is None:
+            observed_duration = duration_ms if duration_ms is not None else 0.0
+
+        summaries_created = _int_value(data.get("summaries_created"))
+        return cls(
+            backend=str(data.get("backend") or backend),
+            run_id=_string_or_none(data.get("run_id")),
+            started_at=_iso_datetime(report_started_at),
+            finished_at=_iso_datetime(report_finished_at) if report_finished_at else None,
+            duration_ms=max(0.0, observed_duration),
+            items_scanned=_int_value(data.get("items_scanned")),
+            items_decayed=_int_value(data.get("items_decayed", data.get("decayed"))),
+            items_expired=_int_value(data.get("items_expired", data.get("expired"))),
+            items_distilled=_int_value(data.get("items_distilled", summaries_created)),
+            items_archived=_int_value(data.get("items_archived", data.get("removed"))),
+            summaries_created=summaries_created,
+            clusters_formed=_int_value(data.get("clusters_formed")),
+            contradictions_found=_int_value(data.get("contradictions_found")),
+            diagnostics=dict(diagnostics or {}),
+            warnings=backend_warnings,
+        )
+
+    @classmethod
+    def no_op(
+        cls,
+        *,
+        backend: str,
+        started_at: datetime | str | None = None,
+        duration_ms: float = 0.0,
+        items_scanned: int = 0,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> "ConsolidationReport":
+        """Build a report for an intentionally no-op consolidation pass."""
+        return cls(
+            backend=backend,
+            started_at=_iso_datetime(started_at),
+            duration_ms=max(0.0, float(duration_ms)),
+            items_scanned=max(0, int(items_scanned)),
+            diagnostics=dict(diagnostics or {}),
+        )
+
+    @classmethod
+    def warning(
+        cls,
+        *,
+        backend: str,
+        warning: str,
+        started_at: datetime | str | None = None,
+        duration_ms: float = 0.0,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> "ConsolidationReport":
+        """Build a non-fatal warning report for unavailable or failed backends."""
+        return cls(
+            backend=backend,
+            started_at=_iso_datetime(started_at),
+            duration_ms=max(0.0, float(duration_ms)),
+            diagnostics=dict(diagnostics or {}),
+            warnings=[warning],
+        )
+
+
 @runtime_checkable
 class MemoryBackendProtocol(Protocol):
     """Protocol for external memory/RAG backends.
@@ -99,7 +231,17 @@ class MemoryBackendProtocol(Protocol):
         ...
 
 
+@runtime_checkable
+class MemoryConsolidationBackendProtocol(Protocol):
+    """Optional protocol for memory backends that can consolidate long-term state."""
+
+    async def consolidate(self) -> ConsolidationReport:
+        """Run a backend-owned consolidation pass."""
+        ...
+
+
 RetrieveFn = Callable[..., Awaitable[Any] | Any]
+ConsolidateFn = Callable[..., Awaitable[Any] | Any]
 
 
 class SemantiscanMemoryBackend:
@@ -114,6 +256,8 @@ class SemantiscanMemoryBackend:
         self,
         *,
         retrieve_fn: RetrieveFn | None = None,
+        consolidate_fn: ConsolidateFn | None = None,
+        memory_service: Any | None = None,
         collection: str | None = None,
         storage: Any | None = None,
         embedder: Any | None = None,
@@ -124,6 +268,8 @@ class SemantiscanMemoryBackend:
         default_kwargs: Mapping[str, Any] | None = None,
     ) -> None:
         self._retrieve_fn = retrieve_fn
+        self._consolidate_fn = consolidate_fn
+        self.memory_service = memory_service
         self.collection = collection
         self.storage = storage
         self.embedder = embedder
@@ -149,6 +295,44 @@ class SemantiscanMemoryBackend:
             batch = await batch
         return self._records_from_batch(batch)
 
+    async def consolidate(self) -> ConsolidationReport:
+        """Delegate memory consolidation to a configured semantiscan service."""
+        started = datetime.now(UTC)
+        consolidate_fn = self._resolve_consolidate_fn()
+        if consolidate_fn is None:
+            return ConsolidationReport.warning(
+                backend="semantiscan",
+                started_at=started,
+                warning=(
+                    "semantiscan consolidation unavailable; provide consolidate_fn "
+                    "or memory_service= with consolidate()"
+                ),
+                diagnostics={"configured": False},
+            )
+
+        try:
+            result = consolidate_fn()
+            if inspect.isawaitable(result):
+                result = await result
+        except Exception as exc:
+            duration_ms = (datetime.now(UTC) - started).total_seconds() * 1000
+            return ConsolidationReport.warning(
+                backend="semantiscan",
+                started_at=started,
+                duration_ms=duration_ms,
+                warning=f"semantiscan consolidation failed: {exc}",
+                diagnostics={"configured": True, "error_type": type(exc).__name__},
+            )
+
+        duration_ms = (datetime.now(UTC) - started).total_seconds() * 1000
+        return ConsolidationReport.from_result(
+            result,
+            backend="semantiscan",
+            started_at=started,
+            duration_ms=duration_ms,
+            diagnostics={"configured": True},
+        )
+
     def as_retrieval_fn(self) -> RetrieveFn:
         """Expose this backend as a ``SemanticContextSource`` retrieval function."""
 
@@ -171,6 +355,15 @@ class SemantiscanMemoryBackend:
 
         self._retrieve_fn = semantiscan_retrieve
         return semantiscan_retrieve
+
+    def _resolve_consolidate_fn(self) -> ConsolidateFn | None:
+        if self._consolidate_fn is not None:
+            return self._consolidate_fn
+        if self.memory_service is not None:
+            consolidate = getattr(self.memory_service, "consolidate", None)
+            if callable(consolidate):
+                return consolidate
+        return None
 
     def _build_retrieve_kwargs(
         self,
@@ -332,9 +525,91 @@ class SemantiscanMemoryBackend:
         return getattr(value, key, default)
 
 
+def _plain_mapping(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, Mapping):
+        return dict(value)
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        for kwargs in ({"mode": "json"}, {}):
+            try:
+                dumped = model_dump(**kwargs)
+            except TypeError:
+                continue
+            if isinstance(dumped, Mapping):
+                return dict(dumped)
+    dict_method = getattr(value, "dict", None)
+    if callable(dict_method):
+        dumped = dict_method()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+    if is_dataclass(value):
+        return asdict(value)
+
+    fields = (
+        "backend",
+        "run_id",
+        "started_at",
+        "finished_at",
+        "duration_ms",
+        "items_scanned",
+        "items_decayed",
+        "items_expired",
+        "items_distilled",
+        "items_archived",
+        "summaries_created",
+        "clusters_formed",
+        "contradictions_found",
+        "errors",
+        "decayed",
+        "expired",
+        "removed",
+    )
+    return {
+        field_name: getattr(value, field_name)
+        for field_name in fields
+        if getattr(value, field_name, None) is not None
+    }
+
+
+def _iso_datetime(value: datetime | str | Any | None) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value:
+        return str(value)
+    return datetime.now(UTC).isoformat()
+
+
+def _string_or_none(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
+def _int_value(value: Any) -> int:
+    if value is None or value == "":
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 __all__ = [
     "Citation",
+    "ConsolidationReport",
     "MemoryBackendProtocol",
+    "MemoryConsolidationBackendProtocol",
     "MemoryRecord",
     "SemantiscanMemoryBackend",
 ]

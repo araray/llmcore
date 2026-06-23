@@ -93,7 +93,7 @@ class TestModelRouter:
             model_id = (
                 first_model.model_id if hasattr(first_model, "model_id") else str(first_model)
             )
-            info = router.get_model_info(model_id)
+            router.get_model_info(model_id)
             # May return None or info depending on model
 
     def test_statistics(self):
@@ -151,7 +151,7 @@ class TestSemanticCache:
         )
 
         # Retrieve
-        result = await cache.get("What is the capital of France?")
+        await cache.get("What is the capital of France?")
         # Result may be CacheHit or None
 
     @pytest.mark.asyncio
@@ -240,7 +240,7 @@ class TestPlanCache:
         )
 
         # Find similar
-        result = await cache.find_similar_plan("Find files in folder")
+        await cache.find_similar_plan("Find files in folder")
         # May or may not find depending on similarity
 
     @pytest.mark.asyncio
@@ -565,6 +565,46 @@ class TestMemoryManager:
 
         stats = await manager.get_statistics()
         assert stats is not None
+
+    @pytest.mark.asyncio
+    async def test_consolidate_without_backend_reports_noop(self):
+        """Default consolidation reports local counts without mutating stores."""
+        from llmcore.agents.memory import MemoryManager
+        from llmcore.agents.memory.memory_store import MemoryType
+
+        manager = MemoryManager()
+        await manager.remember("Long-term fact", memory_type=MemoryType.SEMANTIC)
+
+        report = await manager.consolidate()
+
+        assert report.backend == "in_process"
+        assert report.items_scanned == 1
+        assert report.items_archived == 0
+        assert report.diagnostics["mode"] == "noop"
+        assert report.diagnostics["counts"]["semantic"] == 1
+
+    @pytest.mark.asyncio
+    async def test_consolidate_delegates_to_backend(self):
+        """External backend owns real consolidation when configured."""
+        from llmcore.agents.memory import MemoryManager
+
+        class FakeBackend:
+            async def consolidate(self):
+                return {
+                    "backend": "semantiscan",
+                    "run_id": "run-7",
+                    "items_scanned": 9,
+                    "items_archived": 2,
+                }
+
+        manager = MemoryManager(backend=FakeBackend())
+
+        report = await manager.consolidate()
+
+        assert report.backend == "semantiscan"
+        assert report.run_id == "run-7"
+        assert report.items_scanned == 9
+        assert report.items_archived == 2
 
     def test_memory_stores_access(self):
         """Test accessing different memory stores."""

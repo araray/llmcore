@@ -44,17 +44,23 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
 )
+
+if TYPE_CHECKING:
+    from ...memory.backends import ConsolidationReport
 
 try:
     from pydantic import BaseModel, Field
@@ -269,7 +275,7 @@ class WorkingMemory:
         """Get all items in working memory."""
         return list(self._items.values())
 
-    def get_context(self, max_items: int = None) -> str:
+    def get_context(self, max_items: int | None = None) -> str:
         """
         Get formatted context string for prompt inclusion.
 
@@ -655,9 +661,11 @@ class MemoryManager:
         self,
         working_memory_capacity: int = 10,
         persist_path: Path | None = None,
+        backend: Any | None = None,
     ):
         # Working memory
         self.working = WorkingMemory(capacity=working_memory_capacity)
+        self._backend = backend
 
         # Long-term stores
         if persist_path:
@@ -808,7 +816,7 @@ class MemoryManager:
         """Convenience method to add to working memory."""
         return self.working.add(content, importance=importance, pinned=pinned)
 
-    def get_working_context(self, max_items: int = None) -> str:
+    def get_working_context(self, max_items: int | None = None) -> str:
         """Get working memory context for prompts."""
         return self.working.get_context(max_items)
 
@@ -858,6 +866,58 @@ class MemoryManager:
             },
         }
 
+    async def consolidate(self) -> "ConsolidationReport":
+        """Run long-term memory consolidation.
+
+        When an external backend is registered, consolidation is delegated to it.
+        Otherwise this returns a no-op report with current local store counts;
+        local in-process memory is not mutated.
+        """
+        from ...memory.backends import ConsolidationReport
+
+        started = datetime.now(UTC)
+        monotonic_start = time.monotonic()
+        backend_consolidate = getattr(self._backend, "consolidate", None)
+        if callable(backend_consolidate):
+            try:
+                report = backend_consolidate()
+                if inspect.isawaitable(report):
+                    report = await report
+                duration_ms = (time.monotonic() - monotonic_start) * 1000
+                return ConsolidationReport.from_result(
+                    report,
+                    backend=type(self._backend).__name__,
+                    started_at=started,
+                    duration_ms=duration_ms,
+                )
+            except Exception as exc:
+                duration_ms = (time.monotonic() - monotonic_start) * 1000
+                return ConsolidationReport.warning(
+                    backend=type(self._backend).__name__,
+                    started_at=started,
+                    duration_ms=duration_ms,
+                    warning=f"memory backend consolidation failed: {exc}",
+                    diagnostics={"error_type": type(exc).__name__},
+                )
+
+        counts = {
+            "semantic": await self.semantic.count(),
+            "episodic": await self.episodic.count(),
+            "procedural": await self.procedural.count(),
+        }
+        duration_ms = (time.monotonic() - monotonic_start) * 1000
+        return ConsolidationReport.no_op(
+            backend="in_process",
+            started_at=started,
+            duration_ms=duration_ms,
+            items_scanned=sum(counts.values()),
+            diagnostics={
+                "mode": "noop",
+                "reason": "no external consolidation backend registered",
+                "counts": counts,
+            },
+        )
+
 
 # =============================================================================
 # Convenience Functions
@@ -867,30 +927,26 @@ class MemoryManager:
 def create_memory_manager(
     working_capacity: int = 10,
     persist_path: str | None = None,
+    backend: Any | None = None,
 ) -> MemoryManager:
     """Create a memory manager with default settings."""
     path = Path(persist_path) if persist_path else None
     return MemoryManager(
         working_memory_capacity=working_capacity,
         persist_path=path,
+        backend=backend,
     )
 
 
 __all__ = [
-    # Enums
-    "MemoryType",
-    "MemoryImportance",
-    # Data models
-    "MemoryItem",
-    "RecallResult",
-    # Working memory
-    "WorkingMemory",
-    # Long-term stores
-    "LongTermMemoryStore",
     "InMemoryStore",
-    "PersistentMemoryStore",
-    # Manager
+    "LongTermMemoryStore",
+    "MemoryImportance",
+    "MemoryItem",
     "MemoryManager",
-    # Convenience
+    "MemoryType",
+    "PersistentMemoryStore",
+    "RecallResult",
+    "WorkingMemory",
     "create_memory_manager",
 ]

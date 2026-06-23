@@ -14,6 +14,7 @@ References:
     - Integration Audit: INTEGRATION_AUDIT.md
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -163,6 +164,34 @@ class TestCognitiveMemoryIntegrator:
         metadata = call_args[1]["metadata"]
         assert metadata["type"] == "session_learning"
         assert metadata["session_id"] == "session-123"
+
+    @pytest.mark.asyncio
+    async def test_consolidate_session_memory_runs_backend_consolidation(self, mock_managers):
+        """Session consolidation runs an optional long-term backend pass."""
+        from llmcore.memory import ConsolidationReport
+
+        memory_manager, storage_manager = mock_managers
+        memory_backend = SimpleNamespace(
+            consolidate=AsyncMock(
+                return_value=ConsolidationReport(
+                    backend="semantiscan",
+                    started_at="2026-06-22T00:00:00+00:00",
+                    items_scanned=5,
+                    items_archived=1,
+                )
+            )
+        )
+        integrator = CognitiveMemoryIntegrator(
+            memory_manager=memory_manager,
+            storage_manager=storage_manager,
+            memory_backend=memory_backend,
+        )
+        state = EnhancedAgentState(goal="Test goal", session_id="session-123")
+
+        await integrator.consolidate_session_memory(session_id="session-123", agent_state=state)
+
+        memory_backend.consolidate.assert_awaited_once()
+        memory_manager.store_memory.assert_not_called()
 
 
 # =============================================================================

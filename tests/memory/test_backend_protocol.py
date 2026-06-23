@@ -27,6 +27,23 @@ def test_memory_backends_do_not_import_semantiscan_at_module_import():
         sys.modules.update(removed)
 
 
+def test_consolidation_report_serializes_like_pydantic_model():
+    from llmcore.memory import ConsolidationReport
+
+    report = ConsolidationReport(
+        backend="semantiscan",
+        run_id="run-1",
+        started_at="2026-06-22T00:00:00+00:00",
+        duration_ms=4.5,
+        items_scanned=3,
+        warnings=["low confidence"],
+    )
+
+    assert report.to_dict()["backend"] == "semantiscan"
+    assert report.model_dump()["run_id"] == "run-1"
+    assert report.model_dump()["warnings"] == ["low confidence"]
+
+
 @pytest.mark.asyncio
 async def test_semantiscan_backend_maps_retrieval_batch_to_memory_records():
     from llmcore.memory import SemantiscanMemoryBackend
@@ -150,3 +167,79 @@ async def test_semantiscan_backend_can_feed_semantic_context_source():
 
     assert "answer for adapter" in context.content
     assert "docs/spec.md" in context.content
+
+
+@pytest.mark.asyncio
+async def test_semantiscan_backend_delegates_consolidation_function():
+    from llmcore.memory import SemantiscanMemoryBackend
+
+    calls = []
+
+    async def fake_consolidate():
+        calls.append("called")
+        return SimpleNamespace(
+            run_id="mem-run-1",
+            items_scanned=11,
+            clusters_formed=2,
+            summaries_created=1,
+            items_archived=3,
+            contradictions_found=1,
+        )
+
+    report = await SemantiscanMemoryBackend(consolidate_fn=fake_consolidate).consolidate()
+
+    assert calls == ["called"]
+    assert report.backend == "semantiscan"
+    assert report.run_id == "mem-run-1"
+    assert report.items_scanned == 11
+    assert report.clusters_formed == 2
+    assert report.items_distilled == 1
+    assert report.summaries_created == 1
+    assert report.items_archived == 3
+    assert report.contradictions_found == 1
+    assert report.warnings == []
+
+
+@pytest.mark.asyncio
+async def test_semantiscan_backend_delegates_memory_service_consolidation():
+    from llmcore.memory import SemantiscanMemoryBackend
+
+    class FakeMemoryService:
+        async def consolidate(self):
+            return {
+                "run_id": "service-run",
+                "items_scanned": 4,
+                "items_decayed": 2,
+            }
+
+    report = await SemantiscanMemoryBackend(memory_service=FakeMemoryService()).consolidate()
+
+    assert report.run_id == "service-run"
+    assert report.items_scanned == 4
+    assert report.items_decayed == 2
+
+
+@pytest.mark.asyncio
+async def test_semantiscan_backend_consolidation_degrades_without_target():
+    from llmcore.memory import SemantiscanMemoryBackend
+
+    report = await SemantiscanMemoryBackend().consolidate()
+
+    assert report.backend == "semantiscan"
+    assert report.items_scanned == 0
+    assert report.warnings
+    assert "consolidation unavailable" in report.warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_semantiscan_backend_consolidation_degrades_on_exception():
+    from llmcore.memory import SemantiscanMemoryBackend
+
+    async def failing_consolidate():
+        raise RuntimeError("database offline")
+
+    report = await SemantiscanMemoryBackend(consolidate_fn=failing_consolidate).consolidate()
+
+    assert report.backend == "semantiscan"
+    assert report.warnings == ["semantiscan consolidation failed: database offline"]
+    assert report.diagnostics["error_type"] == "RuntimeError"
