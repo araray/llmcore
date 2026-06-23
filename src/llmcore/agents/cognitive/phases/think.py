@@ -179,6 +179,7 @@ async def think_phase(
                     provider=provider,
                     target_model=target_model,
                     prompt_registry=prompt_registry,
+                    tool_manager=tool_manager,
                     agents_config=agents_config,
                     tracer=tracer,
                     span=span,
@@ -251,6 +252,7 @@ async def think_phase(
                     provider=provider,
                     target_model=target_model,
                     prompt_registry=prompt_registry,
+                    tool_manager=tool_manager,
                     agents_config=agents_config,
                     tracer=tracer,
                     span=span,
@@ -338,6 +340,7 @@ async def _think_phase_with_activities(
     provider: Any,
     target_model: str,
     prompt_registry: Any | None,
+    tool_manager: "ToolManager",
     agents_config: "AgentsConfig",
     tracer: Any | None,
     span: Any | None,
@@ -364,13 +367,10 @@ async def _think_phase_with_activities(
     """
     from ....models import Message, Role
     from ....tracing import add_span_attributes
-    from ...activities.registry import ActivityRegistry
-
     logger.info("Using activity fallback for think phase")
 
-    # Get available activity names from registry
-    registry = ActivityRegistry()
-    available_activities = registry.list_names()
+    # Get built-in activity names plus runtime tools registered for this run.
+    available_activities = _activity_protocol_names(tool_manager)
 
     # Generate activity-aware prompt with available activities
     activity_prompt = generate_activity_prompt(
@@ -416,11 +416,6 @@ async def _think_phase_with_activities(
     parser = ActivityRequestParser()
     parse_result = parser.parse(response_content)
 
-    # Store activity state in working memory for act_phase
-    agent_state.set_working_memory("using_activity_fallback", True)
-    agent_state.set_working_memory("pending_activities_text", response_content)
-    agent_state.set_working_memory("parsed_activity_requests", parse_result.requests)
-
     # Determine output
     is_final = parser.is_final_answer(response_content)
     final_answer_text = None
@@ -430,17 +425,33 @@ async def _think_phase_with_activities(
         agent_state.is_finished = True
         agent_state.final_answer = final_answer_text
 
-    # Create a pseudo-ToolCall for the first activity (for compatibility)
+    # Runtime tools can use the same XML protocol, then execute through the
+    # normal ToolManager ACT path.
     proposed_action = None
-    if parse_result.has_requests and not is_final:
-        first_activity = parse_result.requests[0]
-        from ....models import ToolCall
+    protocol_tool_call = _tool_call_from_activity_request(parse_result.requests, tool_manager)
+    if protocol_tool_call is not None and not is_final:
+        agent_state.set_working_memory("using_activity_fallback", False)
+        agent_state.set_working_memory("pending_activities_text", None)
+        agent_state.set_working_memory("parsed_activity_requests", None)
+        proposed_action = protocol_tool_call
+    else:
+        # Store built-in activity state in working memory for act_phase.
+        agent_state.set_working_memory("using_activity_fallback", True)
+        agent_state.set_working_memory("pending_activities_text", response_content)
+        agent_state.set_working_memory("parsed_activity_requests", parse_result.requests)
 
-        proposed_action = ToolCall(
-            id=f"activity_{first_activity.activity}",
-            name=f"activity:{first_activity.activity}",
-            arguments=first_activity.parameters,
-        )
+        # Create a pseudo-ToolCall for the first activity (for compatibility).
+        if parse_result.has_requests and not is_final:
+            first_activity = parse_result.requests[0]
+            from ....models import ToolCall
+
+            proposed_action = ToolCall(
+                id=f"activity_{first_activity.activity}",
+                name=f"activity:{first_activity.activity}",
+                arguments=first_activity.parameters,
+            )
+
+    if proposed_action is not None:
         agent_state.pending_tool_call = proposed_action
 
     # Add tracing
@@ -589,6 +600,73 @@ def _tool_parameter_names(tool: Any) -> list[str]:
     if not isinstance(properties, dict):
         return []
     return [str(name) for name in properties]
+
+
+def _activity_protocol_names(tool_manager: "ToolManager") -> list[str]:
+    """Return built-in activity names plus loaded ToolManager tool names."""
+    names: list[str] = []
+    seen: set[str] = set()
+
+    for name in _built_in_activity_names():
+        if name not in seen:
+            names.append(name)
+            seen.add(name)
+
+    for name in _loaded_tool_names(tool_manager):
+        if name not in seen:
+            names.append(name)
+            seen.add(name)
+
+    return names
+
+
+def _tool_call_from_activity_request(requests: list[Any], tool_manager: "ToolManager"):
+    """Convert a fallback XML request into a real ToolCall when it names a loaded tool."""
+    loaded_tools = set(_loaded_tool_names(tool_manager))
+    if not loaded_tools:
+        return None
+    built_in_activities = set(_built_in_activity_names())
+
+    for request in requests:
+        activity_name = str(getattr(request, "activity", "") or "")
+        if activity_name in built_in_activities or activity_name not in loaded_tools:
+            continue
+
+        from ....models import ToolCall
+
+        parameters = getattr(request, "parameters", {})
+        return ToolCall(
+            id=f"activity_tool_{activity_name}",
+            name=activity_name,
+            arguments=dict(parameters) if isinstance(parameters, dict) else {},
+        )
+
+    return None
+
+
+def _built_in_activity_names() -> list[str]:
+    from ...activities.registry import ActivityRegistry
+
+    return ActivityRegistry().list_names()
+
+
+def _loaded_tool_names(tool_manager: "ToolManager") -> list[str]:
+    """Return loaded ToolManager tool names without requiring a concrete implementation."""
+    try:
+        if callable(getattr(type(tool_manager), "get_tool_inventory", None)):
+            inventory = tool_manager.get_tool_inventory()
+            names = [str(item.get("name") or "") for item in inventory if isinstance(item, dict)]
+            return [name for name in names if name]
+    except Exception:
+        logger.debug("Unable to read tool inventory for activity protocol", exc_info=True)
+
+    try:
+        tool_definitions = tool_manager.get_tool_definitions()
+    except Exception:
+        logger.debug("Unable to read tool definitions for activity protocol", exc_info=True)
+        return []
+
+    return [name for tool in tool_definitions if (name := _tool_name(tool))]
 
 
 def _tool_call_from_plan_step(step_spec: PlanStepSpec | None):
