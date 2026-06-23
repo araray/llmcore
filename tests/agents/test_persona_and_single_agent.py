@@ -426,6 +426,7 @@ class TestSingleAgentMode:
         assert result.iteration_count == 5
         assert result.total_tokens == 1000
         assert result.total_time_seconds == 10.5
+        assert result.iteration_summaries == []
 
         # Test string representation
         str_repr = str(result)
@@ -437,6 +438,7 @@ class TestSingleAgentMode:
         assert result_dict["goal"] == "Test goal"
         assert result_dict["success"] is True
         assert result_dict["persona_used"] == "Analyst"
+        assert result_dict["iteration_summaries"] == []
 
 
 # =============================================================================

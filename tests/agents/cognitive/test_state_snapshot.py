@@ -117,6 +117,7 @@ def test_cognitive_cycle_history_is_valid_bounded_json() -> None:
 
 def test_agent_result_to_dict_includes_state_snapshot() -> None:
     state = EnhancedAgentState(goal="Result", session_id="session-3")
+    state.add_iteration(_iteration("observed"))
     result = AgentResult(
         goal="Result",
         final_answer="done",
@@ -132,6 +133,8 @@ def test_agent_result_to_dict_includes_state_snapshot() -> None:
 
     assert data["agent_state_snapshot"]["session_id"] == "session-3"
     assert data["agent_state_snapshot"]["schema_version"] == "llmcore.enhanced_agent_state.v1"
+    assert data["iteration_summaries"][0]["action"]["name"] == "inspect"
+    assert data["iteration_summaries"][0]["tool_result"]["execution_success"] is True
 
 
 @pytest.mark.asyncio

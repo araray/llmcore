@@ -1077,6 +1077,7 @@ class AgentResult:
         session_id: Session identifier
         persona_used: Persona name used
         agent_state: Complete agent state
+        iteration_summaries: Bounded, JSON-safe recent iteration summaries.
         error: Error message if failed
         classification: Goal classification result (G3)
         fast_path: Whether fast-path was used (G3)
@@ -1093,6 +1094,7 @@ class AgentResult:
         session_id: str,
         persona_used: str | None = None,
         agent_state: EnhancedAgentState | None = None,
+        iteration_summaries: list[dict[str, Any]] | None = None,
         error: str | None = None,
         classification: GoalClassification | None = None,
         fast_path: bool = False,
@@ -1106,6 +1108,11 @@ class AgentResult:
         self.session_id = session_id
         self.persona_used = persona_used
         self.agent_state = agent_state
+        self.iteration_summaries = (
+            list(iteration_summaries)
+            if iteration_summaries is not None
+            else _agent_state_iteration_summaries(agent_state)
+        )
         self.error = error
         self.classification = classification  # G3
         self.fast_path = fast_path  # G3
@@ -1131,6 +1138,7 @@ class AgentResult:
             "persona_used": self.persona_used,
             "error": self.error,
             "fast_path": self.fast_path,
+            "iteration_summaries": self.iteration_summaries,
         }
 
         # Add classification if available
@@ -1145,6 +1153,39 @@ class AgentResult:
             result["agent_state_snapshot"] = self.agent_state.to_resume_snapshot()
 
         return result
+
+
+def _agent_state_iteration_summaries(
+    agent_state: EnhancedAgentState | None,
+    *,
+    max_iterations: int = 5,
+) -> list[dict[str, Any]]:
+    """Extract bounded recent iteration summaries from an agent state."""
+    if agent_state is None:
+        return []
+    iterations = getattr(agent_state, "iterations", None)
+    if not iterations:
+        return []
+
+    summaries: list[dict[str, Any]] = []
+    try:
+        recent_iterations = list(iterations)[-max(0, max_iterations) :]
+    except TypeError:
+        return []
+
+    for iteration in recent_iterations:
+        summary: Any = None
+        to_history_summary = getattr(iteration, "to_history_summary", None)
+        if callable(to_history_summary):
+            summary = to_history_summary(
+                max_observation_chars=1000,
+                max_tool_result_chars=1000,
+            )
+        elif isinstance(iteration, dict):
+            summary = dict(iteration)
+        if isinstance(summary, dict):
+            summaries.append(summary)
+    return summaries
 
 
 class IterationUpdate:
