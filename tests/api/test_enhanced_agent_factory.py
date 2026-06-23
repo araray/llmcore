@@ -68,6 +68,8 @@ def test_create_enhanced_agent_manager_passes_context_synthesizer() -> None:
 @pytest.mark.asyncio
 async def test_create_enhanced_agent_manager_builds_semantic_source_from_memory_backend() -> None:
     llm = _initialized_llmcore()
+    from llmcore.agents.observability import EventLogger, InMemorySink
+    from llmcore.agents.observability_factory import ObservabilityComponents
 
     class FakeMemoryBackend:
         def as_retrieval_fn(self):
@@ -82,7 +84,16 @@ async def test_create_enhanced_agent_manager_builds_semantic_source_from_memory_
 
             return retrieve
 
-    manager = llm.create_enhanced_agent_manager(memory_backend=FakeMemoryBackend())
+    sink = InMemorySink()
+    observability = ObservabilityComponents(
+        enabled=True,
+        logger=EventLogger(session_id="factory-session", sinks=[sink]),
+    )
+
+    manager = llm.create_enhanced_agent_manager(
+        memory_backend=FakeMemoryBackend(),
+        observability=observability,
+    )
     synthesizer = manager.single_agent.cognitive_cycle.context_synthesizer
 
     assert synthesizer is not None
@@ -91,6 +102,10 @@ async def test_create_enhanced_agent_manager_builds_semantic_source_from_memory_
 
     assert "semantiscan memory for adapter" in context.content
     assert "semantiscan://repo/chunk-1" in context.content
+    events = sink.get_events(event_type="documents_retrieved")
+    assert len(events) == 1
+    assert events[0].query == "adapter"
+    assert events[0].num_results == 1
 
 
 def test_create_enhanced_agent_manager_requires_initialized_instance() -> None:

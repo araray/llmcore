@@ -70,7 +70,11 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def _build_memory_context_synthesizer(memory_backend: Any | None) -> Any | None:
+def _build_memory_context_synthesizer(
+    memory_backend: Any | None,
+    *,
+    observability: Any | None = None,
+) -> Any | None:
     """Build a semantic-only context synthesizer for an external memory backend."""
     if memory_backend is None:
         return None
@@ -93,7 +97,11 @@ def _build_memory_context_synthesizer(memory_backend: Any | None) -> Any | None:
             ]
 
     synthesizer = ContextSynthesizer()
-    synthesizer.add_source("semantic", SemanticContextSource(retrieval_fn), priority=60)
+    synthesizer.add_source(
+        "semantic",
+        SemanticContextSource(retrieval_fn, observability=observability),
+        priority=60,
+    )
     return synthesizer
 
 
@@ -162,6 +170,7 @@ class SingleAgentMode:
         agents_config: Optional["AgentsConfig"] = None,
         context_synthesizer: Any | None = None,
         memory_backend: Any | None = None,
+        observability: Any | None = None,
     ):
         """
         Initialize SingleAgentMode.
@@ -177,6 +186,8 @@ class SingleAgentMode:
             context_synthesizer: Optional context synthesizer for PERCEIVE
             memory_backend: Optional external memory backend used to create a
                 semantic context source when ``context_synthesizer`` is absent
+            observability: Optional observability components passed to the
+                semantic context source when llmcore creates one.
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -185,8 +196,10 @@ class SingleAgentMode:
         self.prompt_registry = prompt_registry
         self.tracer = tracer
         self.memory_backend = memory_backend
+        self.observability = observability
         self.context_synthesizer = context_synthesizer or _build_memory_context_synthesizer(
-            memory_backend
+            memory_backend,
+            observability=observability,
         )
 
         # Load agents config (G3)

@@ -358,6 +358,45 @@ class TestSemanticContextSource:
         assert chunk.tokens > 0
 
     @pytest.mark.asyncio
+    async def test_retrieval_emits_rag_observability_event(self, sample_task):
+        """Successful semantic retrieval emits bounded llmcore RAG telemetry."""
+        from llmcore.agents.observability import EventLogger, InMemorySink
+        from llmcore.agents.observability_factory import ObservabilityComponents
+        from llmcore.context.sources.semantic import SemanticContextSource
+
+        async def retrieve(_query: str, top_k: int = 10):
+            return [
+                {
+                    "content": "Data.",
+                    "source": "data.csv",
+                    "score": 0.9,
+                    "metadata": {"document_id": "doc-data"},
+                },
+                {"content": "Code.", "source": "utils.py", "score": 0.7},
+            ]
+
+        sink = InMemorySink()
+        observability = ObservabilityComponents(
+            enabled=True,
+            logger=EventLogger(session_id="semantic-session", sinks=[sink]),
+        )
+        source = SemanticContextSource(retrieve, observability=observability)
+
+        chunk = await source.get_context(task=sample_task)
+
+        assert "Data." in chunk.content
+        events = sink.get_events(event_type="documents_retrieved")
+        assert len(events) == 1
+        event = events[0]
+        assert event.category == "rag"
+        assert event.query_type == "semantic"
+        assert event.source == "semantic"
+        assert event.num_results == 2
+        assert event.top_score == 0.9
+        assert event.avg_score == pytest.approx(0.8)
+        assert event.documents_used == ["doc-data", "utils.py"]
+
+    @pytest.mark.asyncio
     async def test_no_task_returns_empty(self, mock_retrieval_fn):
         """No task → empty chunk."""
         from llmcore.context.sources.semantic import SemanticContextSource
@@ -418,6 +457,37 @@ class TestSemanticContextSource:
         assert chunk.source == "semantic"
         assert chunk.content == ""
         assert chunk.tokens == 0
+
+    @pytest.mark.asyncio
+    async def test_failing_retrieval_emits_warning_rag_event(
+        self,
+        mock_retrieval_fn_failing,
+        sample_task,
+    ):
+        """Failed semantic retrievals emit a warning event before degrading."""
+        from llmcore.agents.observability import EventLogger, InMemorySink
+        from llmcore.agents.observability_factory import ObservabilityComponents
+        from llmcore.context.sources.semantic import SemanticContextSource
+
+        sink = InMemorySink()
+        observability = ObservabilityComponents(
+            enabled=True,
+            logger=EventLogger(session_id="semantic-session", sinks=[sink]),
+        )
+        source = SemanticContextSource(
+            mock_retrieval_fn_failing,
+            observability=observability,
+        )
+
+        chunk = await source.get_context(task=sample_task)
+
+        assert chunk.content == ""
+        events = sink.get_events(event_type="query_completed")
+        assert len(events) == 1
+        assert events[0].category == "rag"
+        assert events[0].severity == "warning"
+        assert events[0].num_results == 0
+        assert "error" in events[0].data
 
     @pytest.mark.asyncio
     async def test_chunks_with_missing_content(self, sample_task):
@@ -730,7 +800,7 @@ class TestSkillContextSource:
 
         # Object with no description → getattr falls back to str()
         task = "create a presentation"
-        chunk = await source.get_context(task=task)
+        await source.get_context(task=task)
 
         loader.load_for_task.assert_called_once()
 

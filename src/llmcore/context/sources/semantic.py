@@ -52,12 +52,15 @@ class SemanticContextSource:
         chunk = await semantic.get_context(task=my_goal)
     """
 
-    def __init__(self, retrieval_fn: RetrievalFn) -> None:
+    def __init__(self, retrieval_fn: RetrievalFn, observability: Any | None = None) -> None:
         """
         Args:
             retrieval_fn: Async callable ``(query, top_k) → list[dict]``.
+            observability: Optional llmcore observability components used to
+                emit bounded RAG retrieval events.
         """
         self.retrieval_fn = retrieval_fn
+        self.observability = observability
 
     async def get_context(
         self,
@@ -100,12 +103,25 @@ class SemanticContextSource:
             chunks = await self.retrieval_fn(query, top_k=10)
         except Exception as exc:
             logger.warning("Semantic retrieval failed: %s", exc)
+            await self._log_rag_event(
+                event_type="query_completed",
+                query=query,
+                chunks=[],
+                severity="warning",
+                data={"error": str(exc)[:1000]},
+            )
             return ContextChunk(
                 source="semantic",
                 content="",
                 tokens=0,
                 priority=60,
             )
+
+        await self._log_rag_event(
+            event_type="documents_retrieved",
+            query=query,
+            chunks=chunks,
+        )
 
         lines = ["# Relevant Knowledge\n"]
         for chunk in chunks:
@@ -127,3 +143,85 @@ class SemanticContextSource:
             relevance=0.8,
             recency=0.5,
         )
+
+    async def _log_rag_event(
+        self,
+        *,
+        event_type: str,
+        query: str,
+        chunks: list[dict[str, Any]],
+        severity: str = "info",
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit a best-effort RAG event without coupling retrieval to logging."""
+        logger_obj = getattr(self.observability, "logger", None)
+        if logger_obj is None:
+            return
+
+        try:
+            from llmcore.agents.observability import (
+                EventSeverity,
+                RAGEvent,
+                RAGEventType,
+            )
+
+            scores = [
+                float(chunk.get("score"))
+                for chunk in chunks
+                if isinstance(chunk, dict) and chunk.get("score") is not None
+            ]
+            event = RAGEvent(
+                session_id=getattr(logger_obj, "session_id", "semantic"),
+                event_type=RAGEventType(event_type),
+                severity=EventSeverity(severity),
+                query=str(query)[:1000],
+                query_type="semantic",
+                source="semantic",
+                num_results=len(chunks),
+                top_score=max(scores) if scores else None,
+                avg_score=(sum(scores) / len(scores)) if scores else None,
+                documents_used=self._documents_used(chunks),
+                data=data or {},
+            )
+            await logger_obj.log(event)
+        except Exception as exc:
+            logger.debug("Semantic RAG observability event skipped: %s", exc)
+
+    @classmethod
+    def _documents_used(cls, chunks: list[dict[str, Any]]) -> list[str]:
+        """Return bounded document/source IDs from retrieval chunks."""
+        documents: list[str] = []
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            document = cls._chunk_document_id(chunk)
+            if document and document not in documents:
+                documents.append(document[:200])
+            if len(documents) >= 20:
+                break
+        return documents
+
+    @classmethod
+    def _chunk_document_id(cls, chunk: dict[str, Any]) -> str:
+        metadata = chunk.get("metadata")
+        if isinstance(metadata, dict):
+            for key in ("document_id", "source_id", "chunk_id", "path", "uri"):
+                value = metadata.get(key)
+                if value:
+                    return str(value)
+
+        citations = chunk.get("citations")
+        if isinstance(citations, list):
+            for citation in citations:
+                if not isinstance(citation, dict):
+                    continue
+                for key in ("document_id", "source_id", "chunk_id", "path", "uri"):
+                    value = citation.get(key)
+                    if value:
+                        return str(value)
+
+        for key in ("source", "chunk_id", "id"):
+            value = chunk.get(key)
+            if value:
+                return str(value)
+        return ""

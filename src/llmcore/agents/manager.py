@@ -783,6 +783,7 @@ class EnhancedAgentManager(AgentManager):
                 agents_config=self._agents_config,  # G3: Pass config for capability/activity settings
                 context_synthesizer=context_synthesizer,
                 memory_backend=memory_backend,
+                observability=observability,
             )
 
             logger.info(f"EnhancedAgentManager initialized (default_mode={default_mode.value})")
