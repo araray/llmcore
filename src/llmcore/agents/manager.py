@@ -163,7 +163,7 @@ class AgentManager:
 
         except Exception as e:
             logger.error(f"Failed to initialize sandbox: {e}")
-            raise SandboxError(f"Sandbox initialization failed: {e}")
+            raise SandboxError(f"Sandbox initialization failed: {e}") from e
 
     async def shutdown_sandbox(self) -> None:
         """
@@ -624,7 +624,7 @@ class AgentManager:
                     except Exception as log_e:
                         logger.debug(f"Failed to log lifecycle failure: {log_e}")
 
-                raise LLMCoreError(f"Agent execution failed: {e!s}")
+                raise LLMCoreError(f"Agent execution failed: {e!s}") from e
 
     # =========================================================================
     # UTILITY METHODS
@@ -859,9 +859,11 @@ class EnhancedAgentManager(AgentManager):
 
         # Route to appropriate mode
         if execution_mode == AgentMode.SINGLE:
-            return await self.single_agent.run(
+            result = await self.single_agent.run(
                 goal=goal, persona=persona, context=context, max_iterations=max_iterations, **kwargs
             )
+            await self._log_context_failure_diagnostics(result)
+            return result
 
         elif execution_mode == AgentMode.LEGACY:
             # Use original AgentManager cognitive loop
@@ -889,6 +891,79 @@ class EnhancedAgentManager(AgentManager):
 
         else:
             raise ValueError(f"Unknown agent mode: {execution_mode}")
+
+    async def _log_context_failure_diagnostics(self, result: Any) -> None:
+        """Emit context failure diagnostics for completed Darwin runs."""
+        if not self._observability or not self._observability.logger:
+            return
+
+        agent_state = getattr(result, "agent_state", None)
+        if agent_state is None:
+            return
+
+        try:
+            from .observability import detect_context_failures
+
+            diagnostics = detect_context_failures(
+                compression_events=self._context_compression_events(agent_state),
+                current_iteration=getattr(agent_state, "iteration_count", None),
+                tool_failures=self._tool_failure_events(agent_state),
+            )
+            for diagnostic in diagnostics:
+                event = diagnostic.to_event(
+                    session_id=getattr(result, "session_id", None)
+                    or getattr(agent_state, "session_id", "")
+                    or "unknown",
+                )
+                await self._observability.logger.log(event)
+        except Exception as e:
+            logger.debug("Failed to log context failure diagnostics: %s", e)
+
+    @staticmethod
+    def _context_compression_events(agent_state: Any) -> list[dict[str, Any]]:
+        """Extract context compression markers from an enhanced agent state."""
+        working_memory = getattr(agent_state, "working_memory", {})
+        if not isinstance(working_memory, dict):
+            return []
+        marker = working_memory.get("_context_compression")
+        if not isinstance(marker, dict):
+            return []
+        return [
+            {
+                "iteration": marker.get("last_iteration_count"),
+                "summary": marker.get("last_reason"),
+                "compression_count": marker.get("compression_count"),
+                "tokens_before": marker.get("tokens_before"),
+                "tokens_after": marker.get("tokens_after"),
+            }
+        ]
+
+    @staticmethod
+    def _tool_failure_events(agent_state: Any) -> list[dict[str, Any]]:
+        """Extract chronological tool execution outcomes from iteration history."""
+        events: list[dict[str, Any]] = []
+        for iteration in getattr(agent_state, "iterations", []) or []:
+            act_output = getattr(iteration, "act_output", None)
+            if act_output is None:
+                continue
+            tool_result = getattr(act_output, "tool_result", None)
+            if tool_result is None:
+                continue
+            think_output = getattr(iteration, "think_output", None)
+            tool_call = getattr(think_output, "proposed_action", None) if think_output else None
+            success = bool(getattr(act_output, "success", False)) and not bool(
+                getattr(tool_result, "is_error", False)
+            )
+            events.append(
+                {
+                    "iteration": getattr(iteration, "iteration_number", None),
+                    "tool_name": getattr(tool_call, "name", None) or "unknown",
+                    "tool_call_id": getattr(tool_result, "tool_call_id", None),
+                    "success": success,
+                    "error": None if success else getattr(tool_result, "content", None),
+                }
+            )
+        return events
 
     # =========================================================================
     # PERSONA MANAGEMENT (Darwin Layer 2)
