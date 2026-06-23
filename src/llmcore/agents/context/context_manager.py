@@ -41,6 +41,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import re
@@ -296,7 +297,7 @@ class TextCompressor:
         selected = []
         total_len = 0
 
-        for score, sentence in scored:
+        for _score, sentence in scored:
             if total_len + len(sentence) + 1 > max_length:
                 break
             selected.append(sentence)
@@ -458,6 +459,9 @@ class ContextManagerConfig:
         history_preserve_count: int = 6,
         max_rag_chunks: int = 5,
         max_observations: int = 10,
+        max_tool_results: int = 5,
+        max_tool_result_chars: int = 1000,
+        max_tool_result_items: int = 20,
     ):
         self.max_tokens = max_tokens
         self.reserve_for_output = reserve_for_output
@@ -466,6 +470,9 @@ class ContextManagerConfig:
         self.history_preserve_count = history_preserve_count
         self.max_rag_chunks = max_rag_chunks
         self.max_observations = max_observations
+        self.max_tool_results = max_tool_results
+        self.max_tool_result_chars = max_tool_result_chars
+        self.max_tool_result_items = max_tool_result_items
 
 
 class ContextManager:
@@ -619,14 +626,15 @@ class ContextManager:
 
         # Tool results (critical)
         if tool_results:
-            for result in tool_results[-5:]:  # Last 5 results
-                tool_name = result.get("tool", "unknown")
-                output = str(result.get("output", ""))[:1000]
+            max_tool_results = max(0, self.config.max_tool_results)
+            recent_tool_results = tool_results[-max_tool_results:] if max_tool_results else []
+            for result in recent_tool_results:
                 components.append(
                     ContextComponent(
-                        content=f"[Tool: {tool_name}]\n{output}",
+                        content=self._format_tool_result(result),
                         content_type=ContentType.TOOL_RESULT,
                         priority=Priority.CRITICAL,
+                        compressible=False,
                     )
                 )
 
@@ -793,6 +801,34 @@ class ContextManager:
 
         return messages
 
+    def _format_tool_result(self, result: dict[str, Any]) -> str:
+        """Build a bounded JSON-safe summary for one tool result."""
+        if not isinstance(result, dict):
+            result = {"output": result}
+        tool_name = str(result.get("tool") or result.get("name") or "unknown")
+        raw_output = result.get("output", result.get("content", ""))
+        output, truncated = _bounded_json_value(
+            raw_output,
+            max_string_chars=self.config.max_tool_result_chars,
+            max_items=self.config.max_tool_result_items,
+        )
+        payload: dict[str, Any] = {
+            "tool": tool_name,
+            "output": output,
+            "truncated": truncated,
+        }
+        for key in ("tool_call_id", "is_error", "error"):
+            if key in result:
+                value, value_truncated = _bounded_json_value(
+                    result[key],
+                    max_string_chars=self.config.max_tool_result_chars,
+                    max_items=self.config.max_tool_result_items,
+                )
+                payload[key] = value
+                truncated = truncated or value_truncated
+        payload["truncated"] = truncated
+        return f"## Tool Result\n{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
         return self.token_counter.count(text)
@@ -819,6 +855,94 @@ def create_context_manager(
     return ContextManager(config=config)
 
 
+def _bounded_json_value(
+    value: Any,
+    *,
+    max_string_chars: int,
+    max_items: int,
+) -> tuple[Any, bool]:
+    """Return a JSON-serializable bounded representation and truncation flag."""
+    if max_string_chars < 0:
+        max_string_chars = 0
+    if max_items < 0:
+        max_items = 0
+
+    if hasattr(value, "model_dump"):
+        try:
+            value = value.model_dump()
+        except Exception:
+            pass
+
+    if value is None or isinstance(value, (bool, int, float)):
+        return value, False
+
+    if isinstance(value, str):
+        parsed, parsed_truncated = _parse_json_string(value, max_string_chars, max_items)
+        if parsed is not None:
+            return parsed, parsed_truncated
+        if len(value) <= max_string_chars:
+            return value, False
+        return value[:max_string_chars], True
+
+    if isinstance(value, dict):
+        bounded: dict[str, Any] = {}
+        truncated = len(value) > max_items
+        for index, (key, item) in enumerate(value.items()):
+            if index >= max_items:
+                break
+            bounded_value, value_truncated = _bounded_json_value(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            )
+            bounded[str(key)] = bounded_value
+            truncated = truncated or value_truncated
+        if len(value) > max_items:
+            bounded["_truncated_items"] = len(value) - max_items
+        return bounded, truncated
+
+    if isinstance(value, (list, tuple, set)):
+        sequence = list(value)
+        bounded_list = []
+        truncated = len(sequence) > max_items
+        for item in sequence[:max_items]:
+            bounded_value, value_truncated = _bounded_json_value(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            )
+            bounded_list.append(bounded_value)
+            truncated = truncated or value_truncated
+        if len(sequence) > max_items:
+            bounded_list.append({"_truncated_items": len(sequence) - max_items})
+        return bounded_list, truncated
+
+    fallback = repr(value)
+    if len(fallback) <= max_string_chars:
+        return fallback, False
+    return fallback[:max_string_chars], True
+
+
+def _parse_json_string(
+    value: str,
+    max_string_chars: int,
+    max_items: int,
+) -> tuple[Any | None, bool]:
+    """Parse JSON strings before bounding so object structure stays valid."""
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "[{":
+        return None, False
+    try:
+        parsed = json.loads(stripped)
+    except (TypeError, ValueError):
+        return None, False
+    return _bounded_json_value(
+        parsed,
+        max_string_chars=max_string_chars,
+        max_items=max_items,
+    )
+
+
 def estimate_conversation_tokens(
     messages: list[dict[str, Any]],
     chars_per_token: float = 4.0,
@@ -832,24 +956,17 @@ def estimate_conversation_tokens(
 
 
 __all__ = [
-    # Enums
-    "Priority",
-    "ContentType",
-    # Token counting
-    "TokenCounter",
-    "SimpleTokenCounter",
-    # Data models
-    "ContextComponent",
-    "Message",
     "BuiltContext",
-    # Compression
-    "TextCompressor",
-    "ConversationSummarizer",
-    # Config
-    "ContextManagerConfig",
-    # Main class
+    "ContentType",
+    "ContextComponent",
     "ContextManager",
-    # Convenience
+    "ContextManagerConfig",
+    "ConversationSummarizer",
+    "Message",
+    "Priority",
+    "SimpleTokenCounter",
+    "TextCompressor",
+    "TokenCounter",
     "create_context_manager",
     "estimate_conversation_tokens",
 ]
