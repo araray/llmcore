@@ -146,6 +146,33 @@ async def test_semantiscan_backend_prefers_typed_citation_when_available():
 
 
 @pytest.mark.asyncio
+async def test_semantiscan_backend_record_source_prefers_typed_citation():
+    from llmcore.memory import SemantiscanMemoryBackend
+
+    typed_citation = SimpleNamespace(
+        chunk_id="chunk-typed",
+        source_file="typed.py",
+        start_line=3,
+        end_line=9,
+    )
+
+    async def fake_retrieve(query: str, **kwargs):
+        return [
+            SimpleNamespace(
+                chunk_id="chunk-raw",
+                content="typed citation content",
+                score=0.77,
+                citation=typed_citation,
+                metadata={"file_path": "legacy.py"},
+            )
+        ]
+
+    records = await SemantiscanMemoryBackend(retrieve_fn=fake_retrieve).retrieve("query")
+
+    assert records[0].source == "typed.py"
+
+
+@pytest.mark.asyncio
 async def test_semantiscan_backend_can_feed_semantic_context_source():
     from llmcore.context.sources.semantic import SemanticContextSource
     from llmcore.memory import SemantiscanMemoryBackend

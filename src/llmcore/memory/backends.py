@@ -484,10 +484,23 @@ class SemantiscanMemoryBackend:
         )
 
     def _source_from(self, result: Any, metadata: dict[str, Any], chunk_id: str) -> str:
+        typed_citation = self._get(result, "citation", None)
+        if typed_citation is not None:
+            citation_source = self._source_from_typed_citation(typed_citation)
+            if citation_source:
+                return citation_source
+
         source = self._first(metadata, "source", "file_path", "source_file", "path", "uri", "url")
         if source:
             return source
         return str(self._get(result, "source", chunk_id) or chunk_id)
+
+    def _source_from_typed_citation(self, value: Any) -> str | None:
+        for key in ("source_file", "source", "path", "source_id", "document_id", "uri", "url"):
+            source = self._get(value, key, None)
+            if source:
+                return str(source)
+        return None
 
     def _metadata_from(self, value: Any) -> dict[str, Any]:
         metadata = self._get(value, "metadata", {})
