@@ -372,6 +372,7 @@ class CognitiveCycle:
                 # If final answer, skip remaining phases
                 if iteration.think_output.is_final_answer:
                     logger.info("Final answer provided, completing iteration")
+                    iteration.update_token_totals_from_phases()
                     agent_state.complete_iteration(success=True)
                     return iteration
 
@@ -482,6 +483,7 @@ class CognitiveCycle:
                 # ============================================================
                 # Complete iteration
                 # ============================================================
+                iteration.update_token_totals_from_phases()
                 agent_state.complete_iteration(success=True)
 
                 if span:
@@ -605,10 +607,6 @@ class CognitiveCycle:
                 # Track cost if available
                 if hasattr(iteration, "total_cost") and iteration.total_cost:
                     accumulated_cost += iteration.total_cost
-
-                # Accumulate tokens from think phase if available
-                if iteration.think_output and iteration.think_output.reasoning_tokens:
-                    iteration.total_tokens_used += iteration.think_output.reasoning_tokens
 
                 # =================================================================
                 # G3 Phase 5: Circuit Breaker Check After Successful Iteration

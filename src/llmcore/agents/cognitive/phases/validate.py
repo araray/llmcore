@@ -180,11 +180,14 @@ async def validate_phase(
 
             # Extract response content
             response_content = provider.extract_response_content(response)
+            usage = response.get("usage", {}) if isinstance(response, dict) else None
+            total_tokens = usage.get("total_tokens") if usage else None
 
             # 5. Parse validation response
             output = _parse_validation_response(
                 response_text=response_content, validate_input=validate_input
             )
+            output.tokens_used = total_tokens
 
             # 6. Update agent state
             agent_state.pending_validation = validate_input
@@ -199,9 +202,6 @@ async def validate_phase(
                 try:
                     template = prompt_registry.get_template("validation_prompt")
                     if template.active_version:
-                        # Extract token usage from response dict
-                        usage = response.get("usage", {}) if isinstance(response, dict) else None
-                        total_tokens = usage.get("total_tokens") if usage else None
                         prompt_registry.record_use(
                             version_id=template.active_version.id,
                             success=output.result != ValidationResult.REJECTED,

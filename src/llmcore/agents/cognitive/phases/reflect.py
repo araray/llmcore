@@ -131,11 +131,14 @@ async def reflect_phase(
 
             # Extract response content
             response_content = provider.extract_response_content(response)
+            usage = response.get("usage", {}) if isinstance(response, dict) else None
+            total_tokens = usage.get("total_tokens") if usage else None
 
             # 3. Parse reflection response
             output = _parse_reflection_response(
                 response_text=response_content, reflect_input=reflect_input
             )
+            output.tokens_used = total_tokens
 
             # 4. Update agent state progress
             agent_state.progress_estimate = output.progress_estimate
@@ -145,9 +148,6 @@ async def reflect_phase(
                 try:
                     template = prompt_registry.get_template("reflection_prompt")
                     if template.active_version:
-                        # Extract token usage from response dict
-                        usage = response.get("usage", {}) if isinstance(response, dict) else None
-                        total_tokens = usage.get("total_tokens") if usage else None
                         prompt_registry.record_use(
                             version_id=template.active_version.id,
                             success=True,  # Reflection always "succeeds"

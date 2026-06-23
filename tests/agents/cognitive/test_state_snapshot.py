@@ -12,8 +12,12 @@ from llmcore.agents.cognitive.models import (
     EnhancedAgentState,
     ObserveOutput,
     PerceiveOutput,
+    PlanOutput,
+    ReflectOutput,
     ThinkInput,
     ThinkOutput,
+    ValidateOutput,
+    ValidationResult,
 )
 from llmcore.agents.cognitive.phases.cycle import CognitiveCycle
 from llmcore.agents.single_agent import AgentResult
@@ -25,10 +29,20 @@ from llmcore.models import Tool, ToolCall, ToolResult
 def _iteration(observation: str = "observed") -> CycleIteration:
     tool_call = ToolCall(id="call-1", name="inspect", arguments={"path": "/tmp/data"})
     iteration = CycleIteration(iteration_number=1)
+    iteration.plan_output = PlanOutput(
+        plan_steps=["Inspect the file"],
+        reasoning="Need a file read",
+        tokens_used=11,
+    )
     iteration.think_output = ThinkOutput(
         thought="Need to inspect the file",
         proposed_action=tool_call,
         reasoning_tokens=17,
+    )
+    iteration.validate_output = ValidateOutput(
+        result=ValidationResult.APPROVED,
+        confidence=ConfidenceLevel.HIGH,
+        tokens_used=5,
     )
     iteration.act_output = ActOutput(
         tool_result=ToolResult(tool_call_id="call-1", content="result" * 40),
@@ -36,7 +50,13 @@ def _iteration(observation: str = "observed") -> CycleIteration:
         success=True,
     )
     iteration.observe_output = ObserveOutput(observation=observation)
-    iteration.total_tokens_used = 17
+    iteration.reflect_output = ReflectOutput(
+        evaluation="Worked",
+        progress_estimate=0.5,
+        step_completed=True,
+        tokens_used=7,
+    )
+    iteration.update_token_totals_from_phases()
     iteration.mark_completed(success=True)
     return iteration
 
@@ -135,6 +155,13 @@ def test_agent_result_to_dict_includes_state_snapshot() -> None:
     assert data["agent_state_snapshot"]["schema_version"] == "llmcore.enhanced_agent_state.v1"
     assert data["iteration_summaries"][0]["action"]["name"] == "inspect"
     assert data["iteration_summaries"][0]["tool_result"]["execution_success"] is True
+    assert data["iteration_summaries"][0]["phase_tokens"] == {
+        "plan": 11,
+        "think": 17,
+        "validate": 5,
+        "reflect": 7,
+    }
+    assert data["iteration_summaries"][0]["total_tokens_used"] == 40
 
 
 @pytest.mark.asyncio

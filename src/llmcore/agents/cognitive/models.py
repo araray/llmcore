@@ -239,6 +239,7 @@ class PlanOutput(BaseModel):
     risks_identified: list[str] = Field(
         default_factory=list, description="Potential risks or challenges identified"
     )
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     @model_validator(mode="before")
@@ -333,6 +334,7 @@ class ValidateOutput(BaseModel):
     approval_prompt: str | None = Field(
         default=None, description="Prompt to show to human if approval needed"
     )
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
 
 
 class ActInput(BaseModel):
@@ -400,6 +402,7 @@ class ReflectOutput(BaseModel):
     )
     step_completed: bool = Field(default=False, description="Whether current step is complete")
     next_focus: str | None = Field(default=None, description="What to prioritize next")
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
 
 
 class UpdateInput(BaseModel):
@@ -514,6 +517,21 @@ class CycleIteration(BaseModel):
             completed.add(CognitivePhase.UPDATE)
         return completed
 
+    def update_token_totals_from_phases(self) -> int:
+        """Set and return total provider tokens captured by phase outputs."""
+        total = sum(
+            token_count
+            for token_count in (
+                self.plan_output.tokens_used if self.plan_output else None,
+                self.think_output.reasoning_tokens if self.think_output else None,
+                self.validate_output.tokens_used if self.validate_output else None,
+                self.reflect_output.tokens_used if self.reflect_output else None,
+            )
+            if token_count is not None
+        )
+        self.total_tokens_used = total
+        return total
+
     def to_history_summary(
         self,
         *,
@@ -584,8 +602,17 @@ class CycleIteration(BaseModel):
             "tool_result": tool_result_payload,
             "reflection": reflect_payload,
             "phase_tokens": {
+                "plan": self.plan_output.tokens_used
+                if self.plan_output and self.plan_output.tokens_used is not None
+                else None,
                 "think": self.think_output.reasoning_tokens
                 if self.think_output and self.think_output.reasoning_tokens is not None
+                else None,
+                "validate": self.validate_output.tokens_used
+                if self.validate_output and self.validate_output.tokens_used is not None
+                else None,
+                "reflect": self.reflect_output.tokens_used
+                if self.reflect_output and self.reflect_output.tokens_used is not None
                 else None,
             },
             "total_tokens_used": self.total_tokens_used,
