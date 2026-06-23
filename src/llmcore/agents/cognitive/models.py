@@ -863,8 +863,28 @@ class EnhancedAgentState(AgentState):
         state.final_answer = snapshot.get("final_answer")
         state.awaiting_human_approval = bool(snapshot.get("awaiting_human_approval", False))
         state.pending_approval_prompt = snapshot.get("pending_approval_prompt")
+        pending_tool_call = snapshot.get("pending_tool_call")
+        pending_tool_call_fallback = None
+        if isinstance(pending_tool_call, dict):
+            try:
+                state.pending_tool_call = ToolCall.model_validate(pending_tool_call)
+            except Exception:
+                pending_tool_call_fallback = pending_tool_call
+
+        pending_validation = snapshot.get("pending_validation")
+        pending_validation_fallback = None
+        if isinstance(pending_validation, dict):
+            try:
+                state.pending_validation = ValidateInput.model_validate(pending_validation)
+            except Exception:
+                pending_validation_fallback = pending_validation
+
         state.working_memory = dict(snapshot.get("working_memory") or {})
         state.metadata = dict(snapshot.get("metadata") or {})
+        if pending_tool_call_fallback is not None:
+            state.metadata["_resume_pending_tool_call"] = pending_tool_call_fallback
+        if pending_validation_fallback is not None:
+            state.metadata["_resume_pending_validation"] = pending_validation_fallback
         state.history_of_thoughts = [str(item) for item in snapshot.get("history_of_thoughts") or []]
         observations = snapshot.get("observations") or {}
         state.observations = observations if isinstance(observations, dict) else {}

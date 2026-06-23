@@ -16,6 +16,7 @@ from llmcore.agents.cognitive.models import (
     ReflectOutput,
     ThinkInput,
     ThinkOutput,
+    ValidateInput,
     ValidateOutput,
     ValidationResult,
 )
@@ -101,6 +102,31 @@ def test_resume_snapshot_rehydrates_core_state() -> None:
     assert restored.progress_estimate == 0.25
     assert restored.is_finished is True
     assert restored.metadata["_resume_snapshot_iterations"]
+
+
+def test_resume_snapshot_rehydrates_pending_action_state() -> None:
+    tool_call = ToolCall(id="call-approve", name="delete_file", arguments={"path": "/tmp/x"})
+    state = EnhancedAgentState(goal="Do work", session_id="session-approval")
+    state.pending_tool_call = tool_call
+    state.pending_validation = ValidateInput(
+        goal="Do work",
+        proposed_action=tool_call,
+        reasoning="Need to remove a stale file",
+        risk_tolerance="low",
+    )
+    state.awaiting_human_approval = True
+    state.pending_approval_prompt = "Approve delete_file?"
+
+    restored = EnhancedAgentState.from_resume_snapshot(state.to_resume_snapshot())
+
+    assert restored.awaiting_human_approval is True
+    assert restored.pending_approval_prompt == "Approve delete_file?"
+    assert restored.pending_tool_call is not None
+    assert restored.pending_tool_call.name == "delete_file"
+    assert restored.pending_tool_call.arguments == {"path": "/tmp/x"}
+    assert restored.pending_validation is not None
+    assert restored.pending_validation.proposed_action.id == "call-approve"
+    assert restored.pending_validation.risk_tolerance == "low"
 
 
 def test_context_compression_cooldown_prevents_thrashing() -> None:
