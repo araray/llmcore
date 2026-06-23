@@ -101,7 +101,57 @@ def test_resume_snapshot_rehydrates_core_state() -> None:
     assert restored.current_plan_step_index == 1
     assert restored.progress_estimate == 0.25
     assert restored.is_finished is True
+    assert restored.iteration_count == 1
     assert restored.metadata["_resume_snapshot_iterations"]
+
+
+def test_resume_snapshot_preserves_compressed_history_across_checkpoints() -> None:
+    state = EnhancedAgentState(goal="Do resumable work", session_id="session-resume")
+    state.add_iteration(_iteration("prior " + "A" * 200))
+    state.mark_context_compressed(reason="history_budget", tokens_before=3000, tokens_after=900)
+
+    restored = EnhancedAgentState.from_resume_snapshot(
+        state.to_resume_snapshot(max_iterations=2, max_observation_chars=60)
+    )
+
+    compression = restored.working_memory["_context_compression"]
+    assert compression["last_reason"] == "history_budget"
+    assert compression["tokens_before"] == 3000
+    assert compression["tokens_after"] == 900
+    assert restored.iteration_count == 1
+    assert restored.should_compress_context(min_iterations_between=2) is False
+
+    cycle = CognitiveCycle(
+        provider_manager=MagicMock(),
+        memory_manager=MagicMock(),
+        storage_manager=MagicMock(),
+        tool_manager=MagicMock(),
+        max_history_iterations=2,
+        max_history_observation_chars=60,
+    )
+    first_history = json.loads(cycle._build_history(restored))
+    assert first_history["recent_iterations"][0]["observation"]["content"].startswith("prior")
+    assert first_history["recent_iterations"][0]["tool_result"]["truncated"] is True
+
+    next_iteration = _iteration("next " + "B" * 200)
+    next_iteration.iteration_number = 2
+    restored.add_iteration(next_iteration)
+    assert restored.iteration_count == 2
+
+    second_restored = EnhancedAgentState.from_resume_snapshot(
+        restored.to_resume_snapshot(max_iterations=2, max_observation_chars=60)
+    )
+    assert second_restored.iteration_count == 2
+    second_history = json.loads(cycle._build_history(second_restored))
+
+    observations = [
+        summary["observation"]["content"]
+        for summary in second_history["recent_iterations"]
+        if summary["observation"]
+    ]
+    assert len(observations) == 2
+    assert observations[0].startswith("prior")
+    assert observations[1].startswith("next")
 
 
 def test_resume_snapshot_rehydrates_pending_action_state() -> None:
@@ -188,6 +238,28 @@ def test_agent_result_to_dict_includes_state_snapshot() -> None:
         "reflect": 7,
     }
     assert data["iteration_summaries"][0]["total_tokens_used"] == 40
+
+
+def test_agent_result_iteration_summaries_include_restored_history() -> None:
+    state = EnhancedAgentState(goal="Result", session_id="session-restored-result")
+    state.add_iteration(_iteration("restored history"))
+    restored = EnhancedAgentState.from_resume_snapshot(state.to_resume_snapshot())
+    result = AgentResult(
+        goal="Result",
+        final_answer="done",
+        success=True,
+        iteration_count=0,
+        total_tokens=0,
+        total_time_seconds=0.1,
+        session_id="session-restored-result",
+        agent_state=restored,
+    )
+
+    data = result.to_dict()
+
+    assert data["iteration_summaries"][0]["action"]["name"] == "inspect"
+    assert data["iteration_summaries"][0]["observation"]["content"] == "restored history"
+    assert data["agent_state_snapshot"]["iterations"][0]["action"]["name"] == "inspect"
 
 
 @pytest.mark.asyncio

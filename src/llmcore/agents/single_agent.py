@@ -1176,6 +1176,14 @@ def _agent_state_iteration_summaries(
     """Extract bounded recent iteration summaries from an agent state."""
     if agent_state is None:
         return []
+    recent_history_summaries = getattr(agent_state, "recent_history_summaries", None)
+    if callable(recent_history_summaries):
+        return recent_history_summaries(
+            max_iterations=max_iterations,
+            max_observation_chars=1000,
+            max_tool_result_chars=1000,
+        )
+
     iterations = getattr(agent_state, "iterations", None)
     if not iterations:
         return []

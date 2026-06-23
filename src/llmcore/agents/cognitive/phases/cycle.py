@@ -1005,17 +1005,14 @@ class CognitiveCycle:
         Tool results and observations are truncated before serialization, so the
         returned value remains valid JSON and can be parsed by downstream callers.
         """
-        if not agent_state.iterations:
+        summaries = agent_state.recent_history_summaries(
+            max_iterations=self.max_history_iterations,
+            max_observation_chars=self.max_history_observation_chars,
+            max_tool_result_chars=self.max_history_observation_chars,
+        )
+        if not summaries:
             return "No previous actions"
 
-        recent_iterations = agent_state.iterations[-self.max_history_iterations :]
-        summaries = [
-            iteration.to_history_summary(
-                max_observation_chars=self.max_history_observation_chars,
-                max_tool_result_chars=self.max_history_observation_chars,
-            )
-            for iteration in recent_iterations
-        ]
         return json.dumps({"recent_iterations": summaries}, ensure_ascii=False)
 
 

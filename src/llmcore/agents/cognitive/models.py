@@ -19,6 +19,7 @@ References:
     - Dossier: Step 2.4 (Cognitive Cycle Models)
 """
 
+import json
 import math
 import uuid
 from datetime import datetime
@@ -41,6 +42,21 @@ def _truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
     suffix = "...[truncated]"
     keep = max(0, max_chars - len(suffix))
     return f"{text[:keep]}{suffix}", True
+
+
+def _coerce_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _coerce_nonnegative_float(value: Any) -> float:
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return number if math.isfinite(number) and number >= 0.0 else 0.0
 
 
 def _json_safe(
@@ -110,6 +126,41 @@ def _json_safe(
         return safe_list
 
     return _truncate_text(value, max_string_chars)[0]
+
+
+def _merge_history_summaries(
+    *summary_lists: Any,
+    max_iterations: int = 5,
+    max_string_chars: int = 1000,
+    max_items: int = 50,
+) -> list[dict[str, Any]]:
+    """Merge bounded iteration summaries without duplicating restored history."""
+    max_iterations = max(0, max_iterations)
+    if max_iterations == 0:
+        return []
+
+    summaries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_summaries in summary_lists:
+        if not isinstance(raw_summaries, list):
+            continue
+        for raw_summary in raw_summaries[-max_iterations:]:
+            if not isinstance(raw_summary, dict):
+                continue
+            safe_summary = _json_safe(
+                raw_summary,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            )
+            if not isinstance(safe_summary, dict):
+                continue
+            fingerprint = json.dumps(safe_summary, ensure_ascii=False, sort_keys=True)
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            summaries.append(safe_summary)
+
+    return summaries[-max_iterations:]
 
 
 # =============================================================================
@@ -718,6 +769,10 @@ class EnhancedAgentState(AgentState):
 
     # Fix #3: Private field for explicit is_finished setting
     _is_finished_override: bool = PrivateAttr(default=False)
+    _resume_iteration_count_offset: int = PrivateAttr(default=0)
+    _resume_successful_iterations_offset: int = PrivateAttr(default=0)
+    _resume_failed_iterations_offset: int = PrivateAttr(default=0)
+    _resume_iteration_time_ms_total: float = PrivateAttr(default=0.0)
     # === END P0 FIX ===
 
     @property
@@ -766,7 +821,15 @@ class EnhancedAgentState(AgentState):
         statuses = [str(status) for status in self.plan_steps_status[:max_items]]
         current_index = self.current_plan_step_index
         current_step = plan[current_index] if 0 <= current_index < len(plan) else ""
-        recent_iterations = self.iterations[-max(0, max_iterations) :]
+        recent_iteration_summaries = self.recent_history_summaries(
+            max_iterations=max_iterations,
+            max_observation_chars=max_observation_chars,
+            max_tool_result_chars=max_observation_chars,
+            max_items=max_items,
+        )
+        metadata = dict(self.metadata)
+        metadata.pop("_resume_snapshot_iterations", None)
+        metadata.pop("_resume_snapshot_schema_version", None)
 
         return {
             "schema_version": STATE_SNAPSHOT_VERSION,
@@ -807,7 +870,7 @@ class EnhancedAgentState(AgentState):
                 max_items=max_items,
             ),
             "metadata": _json_safe(
-                self.metadata,
+                metadata,
                 max_string_chars=max_string_chars,
                 max_items=max_items,
             ),
@@ -821,10 +884,7 @@ class EnhancedAgentState(AgentState):
                 max_string_chars=max_observation_chars,
                 max_items=max_items,
             ),
-            "iterations": [
-                iteration.to_history_summary(max_observation_chars=max_observation_chars)
-                for iteration in recent_iterations
-            ],
+            "iterations": recent_iteration_summaries,
             "current_iteration": self.current_iteration.to_history_summary(
                 max_observation_chars=max_observation_chars
             )
@@ -889,12 +949,59 @@ class EnhancedAgentState(AgentState):
         observations = snapshot.get("observations") or {}
         state.observations = observations if isinstance(observations, dict) else {}
         metrics = snapshot.get("metrics") or {}
+        state._resume_iteration_count_offset = _coerce_nonnegative_int(
+            metrics.get("iteration_count")
+        )
+        state._resume_successful_iterations_offset = _coerce_nonnegative_int(
+            metrics.get("successful_iterations")
+        )
+        state._resume_failed_iterations_offset = _coerce_nonnegative_int(
+            metrics.get("failed_iterations")
+        )
+        state._resume_iteration_time_ms_total = (
+            _coerce_nonnegative_float(metrics.get("average_iteration_time_ms"))
+            * state._resume_iteration_count_offset
+        )
         state.total_tokens_used = int(metrics.get("total_tokens_used") or 0)
         state.total_tool_calls = int(metrics.get("total_tool_calls") or 0)
+        prior_resume_iterations = state.metadata.get("_resume_snapshot_iterations")
         state.metadata["_resume_snapshot_schema_version"] = snapshot.get("schema_version")
-        state.metadata["_resume_snapshot_iterations"] = snapshot.get("iterations") or []
+        state.metadata["_resume_snapshot_iterations"] = _merge_history_summaries(
+            prior_resume_iterations,
+            snapshot.get("iterations"),
+        )
         state.is_finished = bool(snapshot.get("is_finished", False))
         return state
+
+    def recent_history_summaries(
+        self,
+        *,
+        max_iterations: int = 5,
+        max_observation_chars: int = 1000,
+        max_tool_result_chars: int = 1000,
+        max_argument_chars: int = 1000,
+        max_items: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return bounded history summaries from restored and in-memory iterations."""
+        max_iterations = max(0, max_iterations)
+        if max_iterations == 0:
+            return []
+
+        summaries = _merge_history_summaries(
+            self.metadata.get("_resume_snapshot_iterations"),
+            [
+                iteration.to_history_summary(
+                    max_observation_chars=max_observation_chars,
+                    max_tool_result_chars=max_tool_result_chars,
+                    max_argument_chars=max_argument_chars,
+                )
+                for iteration in self.iterations[-max_iterations:]
+            ],
+            max_iterations=max_iterations,
+            max_string_chars=max(max_observation_chars, max_tool_result_chars, max_argument_chars),
+            max_items=max_items,
+        )
+        return summaries[-max_iterations:]
 
     def mark_context_compressed(
         self,
@@ -986,26 +1093,32 @@ class EnhancedAgentState(AgentState):
     @property
     def iteration_count(self) -> int:
         """Get total number of iterations."""
-        return len(self.iterations)
+        return self._resume_iteration_count_offset + len(self.iterations)
 
     @property
     def successful_iterations(self) -> int:
         """Get count of successful iterations."""
-        return sum(1 for it in self.iterations if it.status == IterationStatus.COMPLETED)
+        return self._resume_successful_iterations_offset + sum(
+            1 for it in self.iterations if it.status == IterationStatus.COMPLETED
+        )
 
     @property
     def failed_iterations(self) -> int:
         """Get count of failed iterations."""
-        return sum(1 for it in self.iterations if it.status == IterationStatus.FAILED)
+        return self._resume_failed_iterations_offset + sum(
+            1 for it in self.iterations if it.status == IterationStatus.FAILED
+        )
 
     @property
     def average_iteration_time_ms(self) -> float:
         """Get average iteration time in milliseconds."""
-        if not self.iterations:
+        if self.iteration_count == 0:
             return 0.0
 
-        total_time = sum(it.duration_ms for it in self.iterations)
-        return total_time / len(self.iterations)
+        total_time = self._resume_iteration_time_ms_total + sum(
+            it.duration_ms for it in self.iterations
+        )
+        return total_time / self.iteration_count
 
     def get_working_memory(self, key: str, default: Any = None) -> Any:
         """Get value from working memory."""
