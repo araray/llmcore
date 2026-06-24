@@ -198,6 +198,7 @@ class LLMCore:
     _config_file_path: str | None
     _runtime_config_dirty: bool
     _original_config_dict: dict[str, Any]
+    _observability: Any | None
 
     def __init__(self):
         """
@@ -210,6 +211,7 @@ class LLMCore:
         self._config_file_path = None
         self._runtime_config_dirty = False
         self._original_config_dict = {}
+        self._observability = None
 
     @classmethod
     async def create(
@@ -217,6 +219,7 @@ class LLMCore:
         config_overrides: dict[str, Any] | None = None,
         config_file_path: str | None = None,
         env_prefix: str | None = "LLMCORE",
+        observability: Any | None = None,
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -229,6 +232,9 @@ class LLMCore:
             config_overrides: Optional dictionary of configuration overrides
             config_file_path: Optional path to a TOML configuration file
             env_prefix: Environment variable prefix (default: "LLMCORE")
+            observability: Optional observability object. If it or its ``logger``
+                exposes ``log_event()``, provider and embedding lifecycle events
+                are emitted through that logger.
 
         Returns:
             Fully initialized LLMCore instance
@@ -238,7 +244,12 @@ class LLMCore:
             StorageError: If storage backends cannot be initialized
         """
         instance = cls()
-        await instance._initialize_from_config(config_overrides, config_file_path, env_prefix)
+        await instance._initialize_from_config(
+            config_overrides,
+            config_file_path,
+            env_prefix,
+            observability=observability,
+        )
         return instance
 
     def create_enhanced_agent_manager(
@@ -349,6 +360,7 @@ class LLMCore:
         config_overrides: dict[str, Any] | None,
         config_file_path: str | None,
         env_prefix: str | None,
+        observability: Any | None = None,
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -372,6 +384,7 @@ class LLMCore:
             config_overrides: Optional configuration overrides
             config_file_path: Optional path to config file
             env_prefix: Environment variable prefix
+            observability: Optional observability object for lifecycle telemetry
         """
         logger.debug("Initializing LLMCore components from configuration...")
         try:
@@ -436,13 +449,21 @@ class LLMCore:
             if self._log_raw_payloads_enabled:
                 logger.info("Raw payload logging is ENABLED for this LLMCore instance")
 
+            if observability is not None:
+                self._observability = observability
+            event_logger = self._resolve_observability_event_logger(self._observability)
+
             # Initialize managers
             logger.debug("Initializing StorageManager...")
             self._storage_manager = StorageManager(self.config)
             await self._storage_manager.initialize_storages()
 
             logger.debug("Initializing ProviderManager...")
-            self._provider_manager = ProviderManager(self.config, self._log_raw_payloads_enabled)
+            self._provider_manager = ProviderManager(
+                self.config,
+                self._log_raw_payloads_enabled,
+                event_logger=event_logger,
+            )
             await self._provider_manager.initialize()
 
             logger.debug("Initializing SearchProviderManager...")
@@ -458,7 +479,11 @@ class LLMCore:
             self._session_manager = SessionManager(self._storage_manager.session_storage)
 
             logger.debug("Initializing EmbeddingManager...")
-            self._embedding_manager = EmbeddingManager(self.config, self._storage_manager)
+            self._embedding_manager = EmbeddingManager(
+                self.config,
+                self._storage_manager,
+                event_logger=event_logger,
+            )
             await self._embedding_manager.initialize()
 
             logger.debug("Initializing MemoryManager...")
@@ -474,6 +499,24 @@ class LLMCore:
         except Exception as e:
             logger.error(f"Failed to initialize LLMCore: {e}", exc_info=True)
             raise ConfigError(f"Initialization failed: {e}")
+
+    @staticmethod
+    def _resolve_observability_event_logger(observability: Any | None) -> Any | None:
+        """Return a sync log_event-capable logger from an observability object."""
+
+        if observability is None:
+            return None
+
+        log_event = getattr(observability, "log_event", None)
+        if callable(log_event):
+            return observability
+
+        logger_obj = getattr(observability, "logger", None)
+        log_event = getattr(logger_obj, "log_event", None)
+        if callable(log_event):
+            return logger_obj
+
+        return None
 
     async def close(self) -> None:
         """
