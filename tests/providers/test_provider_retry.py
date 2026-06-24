@@ -8,6 +8,8 @@ import pytest
 
 from llmcore.exceptions import ProviderError
 from llmcore.models import Message, ModelDetails, Role, Tool
+from llmcore.observability.events import Event
+from llmcore.observability.federation import federate_llmcore_event
 from llmcore.providers.base import BaseProvider
 from llmcore.providers.manager import ProviderManager
 
@@ -25,6 +27,32 @@ class SimpleConfig:
                 return default
             current = current[part]
         return current
+
+
+class CapturingEventLogger:
+    def __init__(self) -> None:
+        self.events: list[Event] = []
+
+    def log_event(
+        self,
+        *,
+        category: str,
+        event_type: str,
+        data: dict[str, Any],
+        severity: str = "info",
+        source: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Event:
+        event = Event(
+            category=category,
+            event_type=event_type,
+            data=data,
+            severity=severity,
+            source=source,
+            tags=tags or [],
+        )
+        self.events.append(event)
+        return event
 
 
 class FlakyProvider(BaseProvider):
@@ -117,7 +145,11 @@ def test_provider_error_infers_retry_metadata_from_status_and_headers() -> None:
 @pytest.mark.asyncio
 async def test_chat_completion_with_retry_retries_retryable_provider_error() -> None:
     FlakyProvider.errors = [ProviderError("flaky", "API Error (500): temporary outage")]
-    manager = ProviderManager(_config(provider_retry_max_attempts=2))
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(
+        _config(provider_retry_max_attempts=2),
+        event_logger=event_logger,
+    )
     provider = manager.get_provider()
 
     response = await manager.chat_completion_with_retry(
@@ -127,6 +159,30 @@ async def test_chat_completion_with_retry_retries_retryable_provider_error() -> 
 
     assert response["choices"][0]["message"]["content"] == "ok"
     assert FlakyProvider.calls == 2
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_retry_scheduled",
+        "provider_retry_succeeded",
+    ]
+
+    scheduled = event_logger.events[0]
+    assert scheduled.category == "llm"
+    assert scheduled.severity == "warning"
+    assert scheduled.source == "providers.manager"
+    assert scheduled.tags == ["provider", "retry"]
+    assert scheduled.data["provider_name"] == "flaky"
+    assert scheduled.data["component"] == "providers.flaky"
+    assert scheduled.data["attempt"] == 1
+    assert scheduled.data["max_attempts"] == 2
+    assert scheduled.data["status_code"] == 500
+    assert scheduled.data["retryable"] is True
+    assert scheduled.data["duration_ms"] >= 0
+
+    federated = federate_llmcore_event(scheduled)
+    assert federated.source_component == "providers.manager"
+    assert federated.category == "llm"
+    assert federated.event_type == "provider_retry_scheduled"
+    assert federated.duration_ms is not None
+    assert federated.payload["component"] == "providers.flaky"
 
 
 @pytest.mark.asyncio
@@ -134,7 +190,11 @@ async def test_chat_completion_with_retry_fails_fast_for_non_retryable_error() -
     FlakyProvider.errors = [
         ProviderError("flaky", "Authentication failed", status_code=401)
     ]
-    manager = ProviderManager(_config(provider_retry_max_attempts=3))
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(
+        _config(provider_retry_max_attempts=3),
+        event_logger=event_logger,
+    )
     provider = manager.get_provider()
 
     with pytest.raises(ProviderError) as exc_info:
@@ -145,6 +205,14 @@ async def test_chat_completion_with_retry_fails_fast_for_non_retryable_error() -
 
     assert exc_info.value.retryable is False
     assert FlakyProvider.calls == 1
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_retry_not_attempted"
+    ]
+    failure = event_logger.events[0]
+    assert failure.severity == "error"
+    assert failure.data["retryable"] is False
+    assert failure.data["exhausted"] is False
+    assert failure.data["status_code"] == 401
 
 
 @pytest.mark.asyncio
@@ -170,3 +238,34 @@ async def test_chat_completion_with_retry_uses_retry_after(monkeypatch) -> None:
 
     sleep.assert_awaited_once_with(4.0)
     assert FlakyProvider.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_with_retry_logs_exhaustion() -> None:
+    FlakyProvider.errors = [
+        ProviderError("flaky", "API Error (503): temporary outage"),
+        ProviderError("flaky", "API Error (503): still down"),
+    ]
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(
+        _config(provider_retry_base_delay_seconds=0.0, provider_retry_max_attempts=2),
+        event_logger=event_logger,
+    )
+    provider = manager.get_provider()
+
+    with pytest.raises(ProviderError):
+        await manager.chat_completion_with_retry(
+            provider,
+            context=[Message(role=Role.USER, content="hello")],
+        )
+
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_retry_scheduled",
+        "provider_retry_exhausted",
+    ]
+    exhausted = event_logger.events[-1]
+    assert exhausted.severity == "error"
+    assert exhausted.data["retryable"] is True
+    assert exhausted.data["exhausted"] is True
+    assert exhausted.data["attempt"] == 2
+    assert exhausted.data["max_attempts"] == 2

@@ -7,6 +7,8 @@ import pytest
 
 from llmcore.exceptions import ProviderError
 from llmcore.models import Message, ModelDetails, Tool
+from llmcore.observability.events import Event
+from llmcore.observability.federation import federate_llmcore_event
 from llmcore.providers.base import BaseProvider
 from llmcore.providers.manager import ProviderManager
 
@@ -24,6 +26,32 @@ class SimpleConfig:
                 return default
             current = current[part]
         return current
+
+
+class CapturingEventLogger:
+    def __init__(self) -> None:
+        self.events: list[Event] = []
+
+    def log_event(
+        self,
+        *,
+        category: str,
+        event_type: str,
+        data: dict[str, Any],
+        severity: str = "info",
+        source: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Event:
+        event = Event(
+            category=category,
+            event_type=event_type,
+            data=data,
+            severity=severity,
+            source=source,
+            tags=tags or [],
+        )
+        self.events.append(event)
+        return event
 
 
 class WarmProvider(BaseProvider):
@@ -98,37 +126,95 @@ def reset_provider(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_provider_warm_up_disabled_by_default() -> None:
-    manager = ProviderManager(_config())
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(_config(), event_logger=event_logger)
 
     await manager.initialize()
 
     assert WarmProvider.warm_up_calls == 0
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_warm_up_skipped"
+    ]
+    skipped = event_logger.events[0]
+    assert skipped.category == "lifecycle"
+    assert skipped.severity == "debug"
+    assert skipped.data["component"] == "providers.manager"
+    assert skipped.data["enabled"] is False
 
 
 @pytest.mark.asyncio
 async def test_provider_warm_up_enabled_is_idempotent() -> None:
-    manager = ProviderManager(_config(warm_up=True))
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(_config(warm_up=True), event_logger=event_logger)
 
     await manager.initialize()
     await manager.initialize()
 
     assert WarmProvider.warm_up_calls == 1
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_warm_up_started",
+        "provider_warm_up_completed",
+    ]
+    completed = event_logger.events[-1]
+    assert completed.category == "lifecycle"
+    assert completed.severity == "info"
+    assert completed.source == "providers.manager"
+    assert completed.tags == ["provider", "warm_up"]
+    assert completed.data["provider_name"] == "warm"
+    assert completed.data["component"] == "providers.warm"
+    assert completed.data["success"] is True
+    assert completed.data["duration_ms"] >= 0
+
+    federated = federate_llmcore_event(completed)
+    assert federated.source_component == "providers.manager"
+    assert federated.category == "lifecycle"
+    assert federated.event_type == "provider_warm_up_completed"
+    assert federated.duration_ms is not None
+    assert federated.payload["component"] == "providers.warm"
 
 
 @pytest.mark.asyncio
 async def test_provider_warm_up_failure_non_strict_logs_and_continues() -> None:
     WarmProvider.fail_warm_up = True
-    manager = ProviderManager(_config(warm_up=True, strict=False))
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(
+        _config(warm_up=True, strict=False),
+        event_logger=event_logger,
+    )
 
     await manager.initialize()
 
     assert WarmProvider.warm_up_calls == 1
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_warm_up_started",
+        "provider_warm_up_failed",
+    ]
+    failed = event_logger.events[-1]
+    assert failed.severity == "warning"
+    assert failed.data["provider_name"] == "warm"
+    assert failed.data["component"] == "providers.warm"
+    assert failed.data["strict"] is False
+    assert failed.data["success"] is False
+    assert failed.data["error_type"] == "RuntimeError"
+    assert failed.data["error_message"] == "boom"
+    assert failed.data["duration_ms"] >= 0
 
 
 @pytest.mark.asyncio
 async def test_provider_warm_up_failure_strict_raises() -> None:
     WarmProvider.fail_warm_up = True
-    manager = ProviderManager(_config(warm_up=True, strict=True))
+    event_logger = CapturingEventLogger()
+    manager = ProviderManager(
+        _config(warm_up=True, strict=True),
+        event_logger=event_logger,
+    )
 
     with pytest.raises(ProviderError, match="warm-up failed"):
         await manager.initialize()
+
+    assert [event.event_type for event in event_logger.events] == [
+        "provider_warm_up_started",
+        "provider_warm_up_failed",
+    ]
+    assert event_logger.events[-1].severity == "error"
+    assert event_logger.events[-1].data["strict"] is True

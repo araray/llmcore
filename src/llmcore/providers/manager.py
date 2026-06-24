@@ -11,6 +11,7 @@ UPDATED: Added async initialize() method for future async provider initializatio
 import asyncio
 import logging
 import os
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -116,10 +117,16 @@ class ProviderManager:
     _providers: dict[str, BaseProvider]
     _config: ConfyConfig
     _default_provider_name: str
+    _event_logger: Any | None
     _log_raw_payloads_override: bool | None
     _initialized: bool
 
-    def __init__(self, config: ConfyConfig, log_raw_payloads: bool = False):
+    def __init__(
+        self,
+        config: ConfyConfig,
+        log_raw_payloads: bool = False,
+        event_logger: Any | None = None,
+    ):
         """
         Initializes the ProviderManager and loads configured providers.
 
@@ -128,6 +135,9 @@ class ProviderManager:
             log_raw_payloads: Optional flag to enable raw payload logging for all
                              providers. This parameter takes precedence over the
                              config value 'llmcore.log_raw_payloads'. Default is False.
+            event_logger: Optional structured event logger with a log_event()
+                          method. When provided, provider retry and warm-up
+                          lifecycle events are emitted.
 
         Raises:
             ConfigError: If the default provider is not configured or supported.
@@ -136,6 +146,7 @@ class ProviderManager:
         self._config = config
         self._providers = {}
         self._log_raw_payloads_override = log_raw_payloads
+        self._event_logger = event_logger
         self._initialized = False
         self._warm_up_complete = False
         self._default_provider_name = self._config.get("llmcore.default_provider", "ollama").lower()
@@ -168,18 +179,74 @@ class ProviderManager:
         strict = self._config.get("llmcore.provider_warm_up_strict", False)
         if not warm_up_enabled:
             self._warm_up_complete = True
+            self._log_provider_event(
+                category="lifecycle",
+                event_type="provider_warm_up_skipped",
+                data={
+                    "component": "providers.manager",
+                    "enabled": False,
+                    "strict": bool(strict),
+                    "provider_count": len(self._providers),
+                },
+                severity="debug",
+                tags=["provider", "warm_up"],
+            )
             logger.debug("Provider warm-up disabled; async initialize() complete")
             return
 
         for provider_name, provider in self._providers.items():
+            started_at = time.perf_counter()
+            component = f"providers.{provider_name}"
+            self._log_provider_event(
+                category="lifecycle",
+                event_type="provider_warm_up_started",
+                data={
+                    "provider_name": provider_name,
+                    "component": component,
+                    "strict": bool(strict),
+                },
+                severity="debug",
+                tags=["provider", "warm_up"],
+            )
             try:
                 logger.debug("Warming up provider instance '%s'", provider_name)
                 await provider.warm_up()
             except Exception as e:
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                self._log_provider_event(
+                    category="lifecycle",
+                    event_type="provider_warm_up_failed",
+                    data={
+                        "provider_name": provider_name,
+                        "component": component,
+                        "strict": bool(strict),
+                        "success": False,
+                        "duration_ms": duration_ms,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    severity="error" if strict else "warning",
+                    tags=["provider", "warm_up"],
+                )
                 message = f"Provider '{provider_name}' warm-up failed: {e}"
                 if strict:
                     raise ProviderError(provider_name, message) from e
                 logger.warning(message)
+            else:
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                self._log_provider_event(
+                    category="lifecycle",
+                    event_type="provider_warm_up_completed",
+                    data={
+                        "provider_name": provider_name,
+                        "component": component,
+                        "strict": bool(strict),
+                        "success": True,
+                        "duration_ms": duration_ms,
+                    },
+                    severity="info",
+                    tags=["provider", "warm_up"],
+                )
 
         self._warm_up_complete = True
         logger.debug("ProviderManager async initialize() complete")
@@ -210,6 +277,7 @@ class ProviderManager:
         retry_config = self._get_retry_policy()
         target_model = model or getattr(provider, "default_model", None)
         provider_name = provider.get_name()
+        call_started_at = time.perf_counter()
 
         with create_span(tracer, f"provider.{operation}") as span:
             if span:
@@ -244,6 +312,22 @@ class ProviderManager:
                                 "provider.retry.succeeded_after_retry": attempts > 1,
                             },
                         )
+                    if attempts > 1:
+                        self._log_provider_event(
+                            category="llm",
+                            event_type="provider_retry_succeeded",
+                            data=self._provider_retry_event_data(
+                                provider_name=provider_name,
+                                model_name=target_model,
+                                operation=operation,
+                                attempt=attempts,
+                                retry_config=retry_config,
+                                duration_ms=(time.perf_counter() - call_started_at) * 1000.0,
+                                stream=stream,
+                            ),
+                            severity="info",
+                            tags=["provider", "retry"],
+                        )
                     return response
 
                 except ProviderError as exc:
@@ -259,6 +343,28 @@ class ProviderManager:
 
                 last_error = error
                 if not self._should_retry_provider_error(error, attempts, retry_config):
+                    exhausted = attempts >= retry_config["max_attempts"]
+                    self._log_provider_event(
+                        category="llm",
+                        event_type=(
+                            "provider_retry_exhausted"
+                            if exhausted and error.retryable
+                            else "provider_retry_not_attempted"
+                        ),
+                        data=self._provider_retry_event_data(
+                            provider_name=provider_name,
+                            model_name=target_model,
+                            operation=operation,
+                            attempt=attempts,
+                            retry_config=retry_config,
+                            error=error,
+                            exhausted=exhausted,
+                            duration_ms=(time.perf_counter() - call_started_at) * 1000.0,
+                            stream=stream,
+                        ),
+                        severity="error",
+                        tags=["provider", "retry"],
+                    )
                     if span:
                         add_span_attributes(
                             span,
@@ -273,6 +379,23 @@ class ProviderManager:
                     raise error
 
                 delay = self._retry_delay_seconds(error, attempts, retry_config)
+                self._log_provider_event(
+                    category="llm",
+                    event_type="provider_retry_scheduled",
+                    data=self._provider_retry_event_data(
+                        provider_name=provider_name,
+                        model_name=target_model,
+                        operation=operation,
+                        attempt=attempts,
+                        retry_config=retry_config,
+                        error=error,
+                        delay_seconds=delay,
+                        duration_ms=(time.perf_counter() - call_started_at) * 1000.0,
+                        stream=stream,
+                    ),
+                    severity="warning",
+                    tags=["provider", "retry"],
+                )
                 logger.warning(
                     "Provider %s model %s transient failure on attempt %s/%s; retrying in %.2fs: %s",
                     provider_name,
@@ -300,6 +423,70 @@ class ProviderManager:
                 raise last_error
 
             raise ProviderError(provider_name, "Provider call failed before any attempt.")
+
+    def _log_provider_event(
+        self,
+        *,
+        category: str,
+        event_type: str,
+        data: dict[str, Any],
+        severity: str = "info",
+        tags: list[str] | None = None,
+    ) -> None:
+        """Emit an optional structured provider event without affecting provider flow."""
+
+        if self._event_logger is None:
+            return
+
+        try:
+            self._event_logger.log_event(
+                category=category,
+                event_type=event_type,
+                data=data,
+                severity=severity,
+                source="providers.manager",
+                tags=tags or [],
+            )
+        except Exception as exc:
+            logger.debug("ProviderManager event logging failed: %s", exc, exc_info=True)
+
+    @staticmethod
+    def _provider_retry_event_data(
+        *,
+        provider_name: str,
+        model_name: str | None,
+        operation: str,
+        attempt: int,
+        retry_config: dict[str, Any],
+        error: ProviderError | None = None,
+        delay_seconds: float | None = None,
+        exhausted: bool | None = None,
+        duration_ms: float | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "provider_name": provider_name,
+            "component": f"providers.{provider_name}",
+            "model": model_name,
+            "operation": operation,
+            "stream": stream,
+            "attempt": attempt,
+            "attempts": attempt,
+            "max_attempts": retry_config["max_attempts"],
+            "retry_enabled": retry_config["enabled"],
+        }
+        if delay_seconds is not None:
+            data["delay_seconds"] = delay_seconds
+        if exhausted is not None:
+            data["exhausted"] = exhausted
+        if duration_ms is not None:
+            data["duration_ms"] = duration_ms
+        if error is not None:
+            data["retryable"] = error.retryable
+            data["status_code"] = error.status_code
+            data["retry_after_seconds"] = error.retry_after_seconds
+            data["error"] = error.to_dict()
+        return data
 
     def _get_retry_policy(self) -> dict[str, Any]:
         enabled = bool(self._config.get("llmcore.provider_retry_enabled", True))

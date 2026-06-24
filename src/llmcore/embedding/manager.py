@@ -12,6 +12,7 @@ UPDATED: Added async initialize() method for future async initialization needs.
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 # Assume ConfyConfig type for hinting
@@ -66,11 +67,17 @@ class EmbeddingManager:
 
     _global_config: ConfyConfig
     _storage_manager: StorageManager | None
+    _event_logger: Any | None
     _initialized_models: dict[str, BaseEmbeddingModel]
     _model_init_locks: dict[str, asyncio.Lock]
     _initialized: bool
 
-    def __init__(self, global_config: ConfyConfig, storage_manager: StorageManager | None = None):
+    def __init__(
+        self,
+        global_config: ConfyConfig,
+        storage_manager: StorageManager | None = None,
+        event_logger: Any | None = None,
+    ):
         """
         Initializes the EmbeddingManager.
 
@@ -79,14 +86,19 @@ class EmbeddingManager:
             storage_manager: Optional StorageManager instance. Currently stored for
                            potential future use (e.g., caching embeddings to vector store).
                            This parameter is accepted for API compatibility with LLMCore.
+            event_logger: Optional structured event logger with a log_event()
+                          method. When provided, embedding warm-up lifecycle
+                          events are emitted.
         """
         self._global_config = global_config
         self._storage_manager = storage_manager
+        self._event_logger = event_logger
         self._initialized_models = {}
         self._model_init_locks = {}
         self._initialized = False
         self._warm_up_complete = False
         self._warmed_models: set[str] = set()
+        self._warm_up_failures_logged: set[str] = set()
         logger.info(
             "EmbeddingManager initialized. Models will be loaded on demand via get_model()."
         )
@@ -269,14 +281,41 @@ class EmbeddingManager:
 
         if not self._embedding_warm_up_enabled():
             self._warm_up_complete = True
+            self._log_embedding_event(
+                event_type="embedding_warm_up_skipped",
+                data={
+                    "component": "embedding.manager",
+                    "enabled": False,
+                    "strict": self._embedding_warm_up_strict(),
+                    "configured_model_count": len(self._configured_warm_up_models()),
+                },
+                severity="debug",
+            )
             logger.debug("Embedding warm-up disabled; async initialize() complete")
             return
 
         strict = self._embedding_warm_up_strict()
         for model_identifier in self._configured_warm_up_models():
+            started_at = time.perf_counter()
             try:
                 await self.get_model(model_identifier)
             except Exception as exc:
+                if model_identifier not in self._warm_up_failures_logged:
+                    self._log_embedding_event(
+                        event_type="embedding_warm_up_failed",
+                        data={
+                            "model_identifier": model_identifier,
+                            "component": self._embedding_component(model_identifier),
+                            "strict": strict,
+                            "success": False,
+                            "stage": "initialize",
+                            "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        },
+                        severity="error" if strict else "warning",
+                    )
+                    self._warm_up_failures_logged.add(model_identifier)
                 message = (
                     f"Embedding warm-up failed for model '{model_identifier}': {exc}"
                 )
@@ -301,11 +340,48 @@ class EmbeddingManager:
         ):
             return
 
+        started_at = time.perf_counter()
+        strict = self._embedding_warm_up_strict()
+        self._log_embedding_event(
+            event_type="embedding_warm_up_started",
+            data={
+                "model_identifier": model_identifier,
+                "component": self._embedding_component(model_identifier),
+                "strict": strict,
+            },
+            severity="debug",
+        )
         try:
             await model_instance.warm_up()
             self._warmed_models.add(model_identifier)
+            self._log_embedding_event(
+                event_type="embedding_warm_up_completed",
+                data={
+                    "model_identifier": model_identifier,
+                    "component": self._embedding_component(model_identifier),
+                    "strict": strict,
+                    "success": True,
+                    "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                },
+                severity="info",
+            )
             logger.debug("Embedding model '%s' warm-up complete", model_identifier)
         except Exception as exc:
+            self._log_embedding_event(
+                event_type="embedding_warm_up_failed",
+                data={
+                    "model_identifier": model_identifier,
+                    "component": self._embedding_component(model_identifier),
+                    "strict": strict,
+                    "success": False,
+                    "stage": "warm_up",
+                    "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+                severity="error" if strict else "warning",
+            )
+            self._warm_up_failures_logged.add(model_identifier)
             message = f"Embedding warm-up failed for model '{model_identifier}': {exc}"
             if self._embedding_warm_up_strict():
                 raise EmbeddingError(
@@ -313,6 +389,35 @@ class EmbeddingManager:
                     message=message,
                 ) from exc
             logger.warning(message, exc_info=True)
+
+    def _log_embedding_event(
+        self,
+        *,
+        event_type: str,
+        data: dict[str, Any],
+        severity: str = "info",
+    ) -> None:
+        """Emit an optional structured embedding event without affecting flow."""
+
+        if self._event_logger is None:
+            return
+
+        try:
+            self._event_logger.log_event(
+                category="lifecycle",
+                event_type=event_type,
+                data=data,
+                severity=severity,
+                source="embedding.manager",
+                tags=["embedding", "warm_up"],
+            )
+        except Exception as exc:
+            logger.debug("EmbeddingManager event logging failed: %s", exc, exc_info=True)
+
+    @staticmethod
+    def _embedding_component(model_identifier: str) -> str:
+        provider = model_identifier.split(":", 1)[0] if ":" in model_identifier else "default"
+        return f"embedding.{provider}"
 
     @staticmethod
     def _resolve_lazy_provider(provider_type: str) -> type[BaseEmbeddingModel] | None:
@@ -427,6 +532,7 @@ class EmbeddingManager:
                 logger.error(f"Error closing embedding model '{model_id}': {e}", exc_info=True)
         self._initialized_models.clear()
         self._warmed_models.clear()
+        self._warm_up_failures_logged.clear()
         self._initialized = False
         self._warm_up_complete = False
         logger.info("EmbeddingManager closed.")
