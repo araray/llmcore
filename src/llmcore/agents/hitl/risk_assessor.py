@@ -32,6 +32,7 @@ from .models import (
     RiskAssessment,
     RiskFactor,
 )
+from .owasp import OwaspLlmRisk
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class DangerousPattern:
     description: str
     risk_level: RiskLevel = RiskLevel.HIGH
     parameter_name: str = "command"  # Which parameter to check
+    owasp_categories: list[OwaspLlmRisk | str] = field(default_factory=list)
     compiled: Pattern | None = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -97,6 +99,22 @@ class DangerousPattern:
             return False
         return bool(self.compiled.search(value))
 
+    def owasp_values(self) -> list[str]:
+        """Return OWASP category values as stable strings."""
+        return [
+            category.value if isinstance(category, OwaspLlmRisk) else str(category)
+            for category in self.owasp_categories
+        ]
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return structured metadata for audit/reporting consumers."""
+        return {
+            "description": self.description,
+            "risk_level": self.risk_level.value,
+            "parameter_name": self.parameter_name,
+            "owasp_categories": self.owasp_values(),
+        }
+
 
 # Default dangerous patterns
 DEFAULT_DANGEROUS_PATTERNS = [
@@ -106,54 +124,69 @@ DEFAULT_DANGEROUS_PATTERNS = [
         description="Recursive delete from root",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"rm\s+-rf\s+\*",
         description="Recursive delete all",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r">\s*/dev/sd[a-z]",
         description="Direct disk write",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"dd\s+if=.*of=/dev/",
         description="Direct disk write with dd",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"mkfs\.",
         description="Filesystem format",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"chmod\s+777",
         description="Overly permissive chmod",
         risk_level=RiskLevel.HIGH,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"chown\s+.*:.*\s+/",
         description="Chown system files",
         risk_level=RiskLevel.HIGH,
         parameter_name="command",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"curl.*\|\s*(ba)?sh",
         description="Remote code execution via pipe",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[
+            OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES,
+            OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY,
+        ],
     ),
     DangerousPattern(
         pattern=r"wget.*\|\s*(ba)?sh",
         description="Remote code execution via pipe",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="command",
+        owasp_categories=[
+            OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES,
+            OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY,
+        ],
     ),
     # SQL dangers
     DangerousPattern(
@@ -161,24 +194,28 @@ DEFAULT_DANGEROUS_PATTERNS = [
         description="Database deletion",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="code",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"DROP\s+TABLE",
         description="Table deletion",
         risk_level=RiskLevel.HIGH,
         parameter_name="code",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"TRUNCATE\s+TABLE",
         description="Table truncation",
         risk_level=RiskLevel.HIGH,
         parameter_name="code",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"DELETE\s+FROM\s+\w+\s*($|;)",
         description="Delete without WHERE clause",
         risk_level=RiskLevel.HIGH,
         parameter_name="code",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     # Path dangers
     DangerousPattern(
@@ -186,42 +223,58 @@ DEFAULT_DANGEROUS_PATTERNS = [
         description="System configuration access",
         risk_level=RiskLevel.HIGH,
         parameter_name="path",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"^/root/",
         description="Root home access",
         risk_level=RiskLevel.HIGH,
         parameter_name="path",
+        owasp_categories=[OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY],
     ),
     DangerousPattern(
         pattern=r"^/var/log/",
         description="System log access",
         risk_level=RiskLevel.MEDIUM,
         parameter_name="path",
+        owasp_categories=[OwaspLlmRisk.LLM02_INSECURE_OUTPUT],
     ),
     DangerousPattern(
         pattern=r"\.ssh/",
         description="SSH key access",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="path",
+        owasp_categories=[
+            OwaspLlmRisk.LLM02_INSECURE_OUTPUT,
+            OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY,
+        ],
     ),
     DangerousPattern(
         pattern=r"\.aws/",
         description="AWS credentials access",
         risk_level=RiskLevel.CRITICAL,
         parameter_name="path",
+        owasp_categories=[
+            OwaspLlmRisk.LLM02_INSECURE_OUTPUT,
+            OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY,
+        ],
     ),
     DangerousPattern(
         pattern=r"\.env",
         description="Environment file access",
         risk_level=RiskLevel.HIGH,
         parameter_name="path",
+        owasp_categories=[
+            OwaspLlmRisk.LLM02_INSECURE_OUTPUT,
+            OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY,
+        ],
     ),
     DangerousPattern(
         pattern=r"password|secret|token|key|credential",
         description="Sensitive data pattern",
         risk_level=RiskLevel.MEDIUM,
         parameter_name="path",
+        owasp_categories=[OwaspLlmRisk.LLM02_INSECURE_OUTPUT],
     ),
 ]
 
@@ -357,6 +410,7 @@ class RiskAssessor:
         """
         factors: list[RiskFactor] = []
         dangerous_patterns: list[str] = []
+        dangerous_pattern_metadata: list[dict[str, Any]] = []
         context = context or {}
 
         # 1. Check tool-based risk
@@ -395,7 +449,9 @@ class RiskAssessor:
             )
 
         # 4. Check dangerous patterns
-        pattern_risk, matched_patterns = self._check_dangerous_patterns(activity_type, parameters)
+        pattern_risk, matched_patterns, matched_metadata = self._check_dangerous_patterns(
+            activity_type, parameters
+        )
         if pattern_risk > RiskLevel.NONE:
             factors.append(
                 RiskFactor(
@@ -406,6 +462,7 @@ class RiskAssessor:
                 )
             )
             dangerous_patterns.extend(matched_patterns)
+            dangerous_pattern_metadata.extend(matched_metadata)
 
         # 5. Check custom assessors
         if activity_type in self._custom_assessors:
@@ -441,6 +498,8 @@ class RiskAssessor:
             requires_approval=requires_approval,
             reason=reason,
             dangerous_patterns=dangerous_patterns,
+            owasp_categories=_unique_owasp_categories(dangerous_pattern_metadata),
+            dangerous_pattern_metadata=dangerous_pattern_metadata,
         )
 
     def _assess_tool_risk(self, activity_type: str) -> RiskLevel:
@@ -498,10 +557,11 @@ class RiskAssessor:
 
     def _check_dangerous_patterns(
         self, activity_type: str, parameters: dict[str, Any]
-    ) -> tuple[RiskLevel, list[str]]:
+    ) -> tuple[RiskLevel, list[str], list[dict[str, Any]]]:
         """Check for dangerous patterns in parameters."""
         max_risk = RiskLevel.NONE
         matched: list[str] = []
+        metadata: list[dict[str, Any]] = []
 
         for pattern in self._patterns:
             param_name = pattern.parameter_name
@@ -519,10 +579,11 @@ class RiskAssessor:
             for value in values_to_check:
                 if pattern.matches(value):
                     matched.append(pattern.description)
+                    metadata.append(pattern.to_metadata())
                     max_risk = max(max_risk, pattern.risk_level)
                     logger.warning(f"Dangerous pattern detected: {pattern.description}")
 
-        return max_risk, matched
+        return max_risk, matched, metadata
 
     def _calculate_overall_risk(self, factors: list[RiskFactor]) -> RiskLevel:
         """Calculate overall risk from factors."""
@@ -592,6 +653,19 @@ class RiskAssessor:
         return (
             tool_name in self.config.safe_tools or self._tool_risks.get(tool_name) == RiskLevel.NONE
         )
+
+
+def _unique_owasp_categories(pattern_metadata: list[dict[str, Any]]) -> list[str]:
+    """Return OWASP category values in first-seen order."""
+    categories: list[str] = []
+    seen: set[str] = set()
+    for metadata in pattern_metadata:
+        for category in metadata.get("owasp_categories", []):
+            category_value = str(category)
+            if category_value not in seen:
+                categories.append(category_value)
+                seen.add(category_value)
+    return categories
 
 
 # =============================================================================

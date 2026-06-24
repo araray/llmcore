@@ -125,11 +125,22 @@ class TestRiskAssessment:
             factors=[factor],
             requires_approval=True,
             dangerous_patterns=["rm -rf"],
+            owasp_categories=["LLM06_excessive_agency"],
+            dangerous_pattern_metadata=[
+                {
+                    "description": "Recursive delete from root",
+                    "risk_level": "critical",
+                    "parameter_name": "command",
+                    "owasp_categories": ["LLM06_excessive_agency"],
+                }
+            ],
         )
         assert assessment.overall_level == "medium"
         assert len(assessment.factors) == 1
         assert assessment.requires_approval
         assert "rm -rf" in assessment.dangerous_patterns
+        assert assessment.owasp_categories == ["LLM06_excessive_agency"]
+        assert assessment.dangerous_pattern_metadata[0]["parameter_name"] == "command"
 
     def test_risk_assessment_defaults(self):
         """Should use default values."""
@@ -137,6 +148,8 @@ class TestRiskAssessment:
         assert assessment.factors == []
         assert not assessment.requires_approval
         assert assessment.dangerous_patterns == []
+        assert assessment.owasp_categories == []
+        assert assessment.dangerous_pattern_metadata == []
 
     def test_risk_assessment_serialization(self):
         """Should round-trip through serialization."""
@@ -146,6 +159,15 @@ class TestRiskAssessment:
             factors=[factor],
             requires_approval=True,
             dangerous_patterns=["pattern1", "pattern2"],
+            owasp_categories=["LLM06_excessive_agency"],
+            dangerous_pattern_metadata=[
+                {
+                    "description": "pattern1",
+                    "risk_level": "high",
+                    "parameter_name": "command",
+                    "owasp_categories": ["LLM06_excessive_agency"],
+                }
+            ],
         )
         data = original.model_dump()
         restored = RiskAssessment(**data)
@@ -154,6 +176,8 @@ class TestRiskAssessment:
         assert restored.requires_approval == original.requires_approval
         assert len(restored.factors) == len(original.factors)
         assert restored.dangerous_patterns == original.dangerous_patterns
+        assert restored.owasp_categories == original.owasp_categories
+        assert restored.dangerous_pattern_metadata == original.dangerous_pattern_metadata
 
 
 # =============================================================================

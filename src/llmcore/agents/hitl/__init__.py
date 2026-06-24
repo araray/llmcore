@@ -68,6 +68,7 @@ from .models import (
     TimeoutPolicy,
     ToolScope,
 )
+from .owasp import OWASP_LLM_RISK_VALUES, OwaspLlmRisk
 
 # Risk Assessor
 from .risk_assessor import (
@@ -152,6 +153,8 @@ __all__ = [
     "ApprovalStatus",
     "HITLEventType",
     "RiskLevel",
+    "OwaspLlmRisk",
+    "OWASP_LLM_RISK_VALUES",
     "TimeoutPolicy",
     # Risk Assessment
     "RiskAssessor",
