@@ -12,6 +12,7 @@ Tests:
 import pytest
 
 from llmcore.agents.hitl import (
+    OWASP_AUDIT_SCHEMA,
     OWASP_LLM_RISK_VALUES,
     DangerousPattern,
     HITLConfig,
@@ -19,6 +20,7 @@ from llmcore.agents.hitl import (
     ResourceScope,
     RiskAssessor,
     RiskLevel,
+    audit_dangerous_patterns,
 )
 from llmcore.agents.hitl.risk_assessor import DEFAULT_DANGEROUS_PATTERNS
 
@@ -190,6 +192,66 @@ class TestOwaspMetadata:
         assert metadata["parameter_name"] == "command"
         categories = metadata["owasp_categories"]
         assert OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES.value in categories
+
+    def test_default_catalog_audit_reports_owasp_coverage(self):
+        """Default dangerous patterns should produce a JSON-compatible OWASP audit report."""
+        report = audit_dangerous_patterns()
+
+        assert report["schema"] == OWASP_AUDIT_SCHEMA
+        assert report["total_patterns"] == len(DEFAULT_DANGEROUS_PATTERNS)
+        assert report["reported_patterns"] == len(DEFAULT_DANGEROUS_PATTERNS)
+        assert report["ok"] is True
+        assert report["missing_high_risk"] == []
+        assert report["histogram"][OwaspLlmRisk.LLM06_EXCESSIVE_AGENCY.value] > 0
+        assert all("pattern" in entry for entry in report["patterns"])
+
+    def test_catalog_audit_filters_by_owasp_category(self):
+        """Audit reports can be narrowed to a single OWASP category."""
+        report = audit_dangerous_patterns(
+            filter_owasp=OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES
+        )
+
+        assert report["filter_owasp"] == OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES.value
+        assert report["reported_patterns"] > 0
+        assert all(
+            OwaspLlmRisk.LLM05_SUPPLY_CHAIN_VULNERABILITIES.value in entry["owasp_categories"]
+            for entry in report["patterns"]
+        )
+
+    def test_catalog_audit_flags_uncategorized_high_risk_patterns(self):
+        """Reports should fail when high-risk custom patterns lack OWASP metadata."""
+        report = audit_dangerous_patterns(
+            [
+                DangerousPattern(
+                    pattern=r"CUSTOM_DANGEROUS",
+                    description="Custom dangerous command",
+                    risk_level=RiskLevel.HIGH,
+                    parameter_name="command",
+                )
+            ],
+            require_owasp=True,
+        )
+
+        assert report["ok"] is False
+        assert report["missing_high_risk"][0]["description"] == "Custom dangerous command"
+
+    def test_risk_assessor_audits_configured_custom_patterns(self):
+        """Assessor-level audits should include custom configured patterns."""
+        custom_pattern = DangerousPattern(
+            pattern=r"RUNAWAY_LOOP",
+            description="Unbounded loop",
+            risk_level=RiskLevel.HIGH,
+            parameter_name="code",
+            owasp_categories=[OwaspLlmRisk.LLM10_UNBOUNDED_CONSUMPTION],
+        )
+        assessor = RiskAssessor(custom_patterns=[custom_pattern])
+
+        report = assessor.audit_dangerous_patterns(
+            filter_owasp=OwaspLlmRisk.LLM10_UNBOUNDED_CONSUMPTION.value
+        )
+
+        assert report["reported_patterns"] == 1
+        assert report["patterns"][0]["description"] == "Unbounded loop"
 
 
 # =============================================================================

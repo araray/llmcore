@@ -115,6 +115,7 @@ from .agents.hitl import (
     HITLManager,
     RiskAssessor,
     RiskLevel,
+    audit_dangerous_patterns,
 )
 
 # =============================================================================
@@ -448,6 +449,7 @@ __all__ = [
     "HITLConfig",
     "RiskAssessor",
     "RiskLevel",
+    "audit_dangerous_patterns",
     # -- Sandbox --
     "SandboxRegistry",
     "SandboxRegistryConfig",

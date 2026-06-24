@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from re import Pattern
@@ -35,6 +35,9 @@ from .models import (
 from .owasp import OwaspLlmRisk
 
 logger = logging.getLogger(__name__)
+
+
+OWASP_AUDIT_SCHEMA = "llmcore.hitl_owasp_audit.v1"
 
 
 # =============================================================================
@@ -633,6 +636,19 @@ class RiskAssessor:
         self._patterns.append(pattern)
         logger.info(f"Added dangerous pattern: {pattern.description}")
 
+    def audit_dangerous_patterns(
+        self,
+        *,
+        filter_owasp: OwaspLlmRisk | str | None = None,
+        require_owasp: bool = False,
+    ) -> dict[str, Any]:
+        """Return an OWASP coverage report for configured dangerous patterns."""
+        return audit_dangerous_patterns(
+            self._patterns,
+            filter_owasp=filter_owasp,
+            require_owasp=require_owasp,
+        )
+
     def register_custom_assessor(
         self,
         activity_type: str,
@@ -666,6 +682,67 @@ def _unique_owasp_categories(pattern_metadata: list[dict[str, Any]]) -> list[str
                 categories.append(category_value)
                 seen.add(category_value)
     return categories
+
+
+def _owasp_category_value(category: OwaspLlmRisk | str) -> str:
+    """Return a stable OWASP category string."""
+    return category.value if isinstance(category, OwaspLlmRisk) else str(category)
+
+
+def _pattern_audit_entry(pattern: DangerousPattern, index: int) -> dict[str, Any]:
+    """Return a serializable audit row for a dangerous pattern."""
+    return {
+        "index": index,
+        "pattern": pattern.pattern,
+        "description": pattern.description,
+        "risk_level": pattern.risk_level.value,
+        "parameter_name": pattern.parameter_name,
+        "owasp_categories": pattern.owasp_values(),
+    }
+
+
+def audit_dangerous_patterns(
+    patterns: Iterable[DangerousPattern] | None = None,
+    *,
+    filter_owasp: OwaspLlmRisk | str | None = None,
+    require_owasp: bool = False,
+) -> dict[str, Any]:
+    """Return an OWASP coverage report for HITL dangerous-pattern metadata.
+
+    The report is intentionally plain JSON-compatible data so CLIs, dashboards,
+    and CI checks can consume it without depending on HITL runtime objects.
+    """
+    inspected_patterns = list(DEFAULT_DANGEROUS_PATTERNS if patterns is None else patterns)
+    filter_value = _owasp_category_value(filter_owasp) if filter_owasp is not None else None
+
+    histogram: dict[str, int] = {}
+    missing_high_risk: list[dict[str, Any]] = []
+    reported_patterns: list[dict[str, Any]] = []
+
+    for index, pattern in enumerate(inspected_patterns):
+        entry = _pattern_audit_entry(pattern, index)
+        categories = entry["owasp_categories"]
+
+        for category in categories:
+            histogram[category] = histogram.get(category, 0) + 1
+
+        if pattern.risk_level >= RiskLevel.HIGH and not categories:
+            missing_high_risk.append(entry)
+
+        if filter_value is None or filter_value in categories:
+            reported_patterns.append(entry)
+
+    return {
+        "schema": OWASP_AUDIT_SCHEMA,
+        "filter_owasp": filter_value,
+        "require_owasp": require_owasp,
+        "ok": not (require_owasp and missing_high_risk),
+        "total_patterns": len(inspected_patterns),
+        "reported_patterns": len(reported_patterns),
+        "histogram": dict(sorted(histogram.items())),
+        "missing_high_risk": missing_high_risk,
+        "patterns": reported_patterns,
+    }
 
 
 # =============================================================================
@@ -706,6 +783,7 @@ def quick_assess(
 __all__ = [
     # Main class
     "RiskAssessor",
+    "OWASP_AUDIT_SCHEMA",
     # Support classes
     "RiskLevel",
     "DangerousPattern",
@@ -713,6 +791,7 @@ __all__ = [
     # Defaults
     "DEFAULT_DANGEROUS_PATTERNS",
     # Functions
+    "audit_dangerous_patterns",
     "create_risk_assessor",
     "quick_assess",
 ]
