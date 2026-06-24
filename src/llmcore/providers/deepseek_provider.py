@@ -77,6 +77,7 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -755,11 +756,10 @@ class DeepSeekProvider(BaseProvider):
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Count tokens using tiktoken cl100k_base (approximate for DeepSeek)."""
-        if not self._encoding:
-            # Rough heuristic: ~0.3 tokens per character (English)
-            return max(1, int(len(text) * 0.3))
         if not text:
             return 0
+        if not self._encoding:
+            return _EstimateCounter().count(text)
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))
 
     async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
@@ -769,11 +769,13 @@ class DeepSeekProvider(BaseProvider):
         official DeepSeek tokenizer.
         """
         if not self._encoding:
+            counter = _EstimateCounter()
             total = sum(
-                len(m.content) + len(m.role.value if hasattr(m.role, "value") else str(m.role))
+                counter.count(m.content)
+                + counter.count(m.role.value if hasattr(m.role, "value") else str(m.role))
                 for m in messages
             )
-            return max(1, int(total * 0.3) + len(messages) * 4)
+            return total + len(messages) * 4
 
         n = 0
         for m in messages:
