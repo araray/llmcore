@@ -52,6 +52,8 @@ from typing import (
     Protocol,
 )
 
+from llmcore.context.budgeting import build_context_budget
+from llmcore.context.messages import sanitize_tool_message_pairs
 from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
 
 try:
@@ -462,9 +464,13 @@ class ContextManagerConfig:
         max_tool_results: int = 5,
         max_tool_result_chars: int = 1000,
         max_tool_result_items: int = 20,
+        tool_schema_tokens: int = 0,
+        safety_margin_tokens: int = 0,
     ):
         self.max_tokens = max_tokens
         self.reserve_for_output = reserve_for_output
+        self.tool_schema_tokens = _nonnegative_int(tool_schema_tokens)
+        self.safety_margin_tokens = _nonnegative_int(safety_margin_tokens)
         self.compression_threshold = compression_threshold
         self.auto_summarize_history = auto_summarize_history
         self.history_preserve_count = history_preserve_count
@@ -543,7 +549,13 @@ class ContextManager:
         Returns:
             BuiltContext ready for LLM call
         """
-        budget = self.config.max_tokens - self.config.reserve_for_output
+        context_budget = build_context_budget(
+            context_window_tokens=self.config.max_tokens,
+            reserved_output_tokens=self.config.reserve_for_output,
+            tool_schema_tokens=self.config.tool_schema_tokens,
+            safety_margin_tokens=self.config.safety_margin_tokens,
+        )
+        budget = context_budget.prompt_tokens_available
         warnings: list[str] = []
         compression_applied = False
 
@@ -669,6 +681,8 @@ class ContextManager:
         # Add recent history messages
         for msg in self._recent_history:
             messages.append(msg)
+
+        messages = sanitize_tool_message_pairs(messages)
 
         # Final token count
         final_tokens = sum(self.token_counter.count(str(m)) for m in messages)
@@ -941,6 +955,13 @@ def _parse_json_string(
         max_string_chars=max_string_chars,
         max_items=max_items,
     )
+
+
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def estimate_conversation_tokens(

@@ -41,6 +41,7 @@ from datetime import UTC, datetime
 from inspect import Parameter, signature
 from typing import Any, Protocol
 
+from llmcore.context.budgeting import should_compress_prompt
 from llmcore.context.compression import SummaryObjective
 from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
 from llmcore.tokens import TiktokenCounter as _LLMCoreTiktokenCounter
@@ -391,10 +392,10 @@ class ContextSynthesizer:
 
         # Compress if over threshold
         compression_applied = False
-        if (
-            total_tokens > 0
-            and self.max_tokens > 0
-            and total_tokens > self.max_tokens * self.compression_threshold
+        if should_compress_prompt(
+            prompt_tokens=total_tokens,
+            prompt_budget_tokens=self.max_tokens,
+            threshold=self.compression_threshold,
         ):
             content = await self._compress(content, current_task)
             total_tokens = self.token_counter.count(content)

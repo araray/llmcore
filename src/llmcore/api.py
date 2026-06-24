@@ -17,6 +17,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
 from typing import (
+    TYPE_CHECKING,
     Any,
     Literal,
     Optional,
@@ -24,6 +25,7 @@ from typing import (
     runtime_checkable,
 )
 
+from .context.budgeting import build_context_budget, estimate_tool_schema_tokens
 from .embedding.manager import EmbeddingManager
 from .exceptions import (
     ConfigError,
@@ -65,6 +67,9 @@ from .search.models import (
 from .sessions.manager import SessionManager
 from .storage.manager import StorageManager
 from .usage import ChatUsage
+
+if TYPE_CHECKING:
+    from .model_cards import ModelCard, ModelCardSummary
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -1091,6 +1096,8 @@ class LLMCore:
         # Add user message to session with metadata
         chat_session.add_message(message, Role.USER, metadata=user_message_metadata)
 
+        tool_schema_tokens = estimate_tool_schema_tokens(tools, model=actual_model)
+
         # Prepare context (includes history, RAG, context management)
         context_details = await self._memory_manager.prepare_context(
             session=chat_session,
@@ -1103,15 +1110,20 @@ class LLMCore:
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
             prompt_template_values=prompt_template_values,
+            tool_schema_tokens=tool_schema_tokens,
         )
         context_payload = context_details.prepared_messages
 
         # Pre-populate introspection fields that are known before the LLM call
         context_details.provider = active_provider.get_name()
         context_details.model = actual_model
-        context_details.prompt_tokens = context_details.final_token_count
         context_details.rag_used = enable_rag
-        context_details.max_context_length = active_provider.get_max_context_length(actual_model)
+        context_details.max_context_length = (
+            context_details.max_tokens_for_model
+            or active_provider.get_max_context_length(actual_model)
+        )
+        context_details.tool_schema_tokens = tool_schema_tokens
+        context_details.prompt_tokens = context_details.final_token_count + tool_schema_tokens
 
         # Determine if truncation was applied
         context_details.context_truncation_applied = bool(
@@ -1125,13 +1137,22 @@ class LLMCore:
             context_details.rag_documents_retrieved = 0 if enable_rag else None
 
         # Calculate available context tokens
-        reserved_tokens = self.config.get("context_management", {}).get(
+        cm_config = self.config.get("context_management", {})
+        reserved_tokens = context_details.reserved_response_tokens or cm_config.get(
             "reserved_response_tokens", 500
         )
-        context_details.reserved_response_tokens = reserved_tokens
-        context_details.available_context_tokens = (
-            context_details.max_context_length - reserved_tokens
+        safety_margin_tokens = context_details.safety_margin_tokens or cm_config.get(
+            "safety_margin_tokens", 0
         )
+        budget = build_context_budget(
+            context_window_tokens=context_details.max_context_length,
+            reserved_output_tokens=reserved_tokens,
+            tool_schema_tokens=tool_schema_tokens,
+            safety_margin_tokens=safety_margin_tokens,
+        )
+        context_details.reserved_response_tokens = budget.reserved_output_tokens
+        context_details.safety_margin_tokens = budget.safety_margin_tokens
+        context_details.available_context_tokens = budget.prompt_tokens_available
 
         # Call provider
         response_data = await active_provider.chat_completion(

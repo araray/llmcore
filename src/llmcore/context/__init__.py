@@ -33,7 +33,12 @@ References:
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §13 (Skill Loading System)
 """
 
-# Compression (Phase 3)
+from .budgeting import (
+    ContextBudget,
+    build_context_budget,
+    estimate_tool_schema_tokens,
+    should_compress_prompt,
+)
 from .compression import (
     CompressionResult,
     CompressionStrategy,
@@ -41,6 +46,7 @@ from .compression import (
     ObjectiveAwareLLMSummarizer,
     SummaryObjective,
 )
+from .messages import sanitize_tool_message_pairs
 
 # Prioritization (Phase 3)
 from .prioritization import (
@@ -62,6 +68,7 @@ __all__ = [
     "CompressionResult",
     "CompressionStrategy",
     "ContentPrioritizer",
+    "ContextBudget",
     "ContextChunk",
     "ContextCompressor",
     "ContextSource",
@@ -74,4 +81,8 @@ __all__ = [
     "SynthesizedContext",
     "TiktokenCounter",
     "TokenCounter",
+    "build_context_budget",
+    "estimate_tool_schema_tokens",
+    "sanitize_tool_message_pairs",
+    "should_compress_prompt",
 ]

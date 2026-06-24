@@ -428,6 +428,12 @@ class ContextPreparationDetails(BaseModel):
     reserved_response_tokens: int = Field(
         default=0, description="Tokens reserved for the LLM response"
     )
+    tool_schema_tokens: int = Field(
+        default=0, description="Estimated tokens consumed by active tool schemas"
+    )
+    safety_margin_tokens: int = Field(
+        default=0, description="Additional guard tokens reserved from the prompt budget"
+    )
     available_context_tokens: int = Field(
         default=0, description="Tokens available for context after reserving response space"
     )

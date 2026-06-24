@@ -12,6 +12,8 @@ payload exceeds the model's token limit.
 import logging
 from typing import Any
 
+from ..context.budgeting import build_context_budget
+from ..context.messages import sanitize_tool_message_pairs
 from ..models import ChatSession, ContextItem, ContextItemType, ContextPreparationDetails, Message
 from ..models import Role as LLMCoreRole
 from ..providers.base import BaseProvider
@@ -53,11 +55,24 @@ async def build_context_payload(
         token counts, and truncation details.
     """
     reserved_response_tokens = config.get("reserved_response_tokens", 500)
+    tool_schema_tokens = config.get("tool_schema_tokens", 0)
+    safety_margin_tokens = config.get("safety_margin_tokens", 0)
     inclusion_priority = config.get("inclusion_priority_order", [])
     truncation_priority = config.get("truncation_priority_order", [])
 
-    available_tokens_for_prompt = max_model_tokens - reserved_response_tokens
-    truncation_actions: dict[str, Any] = {"details": []}
+    budget = build_context_budget(
+        context_window_tokens=max_model_tokens,
+        reserved_output_tokens=reserved_response_tokens,
+        tool_schema_tokens=tool_schema_tokens,
+        safety_margin_tokens=safety_margin_tokens,
+    )
+    available_tokens_for_prompt = budget.prompt_tokens_available
+    truncation_actions: dict[str, Any] = {"details": [], "budget": budget.to_dict()}
+    if budget.reserve_overflows_context:
+        truncation_actions["details"].append(
+            "Context reserves exceed the model window by "
+            f"{budget.reserve_overflow_tokens} token(s)."
+        )
 
     all_categories = set(inclusion_priority) | set(truncation_priority)
     components: dict[str, list[Message]] = {cat: [] for cat in all_categories}
@@ -142,7 +157,9 @@ async def build_context_payload(
     # 4. Truncation if Over Budget
     if current_tokens > available_tokens_for_prompt:
         logger.info(
-            f"Context over budget ({current_tokens}/{available_tokens_for_prompt}). Applying truncation."
+            "Context over budget (%s/%s). Applying truncation.",
+            current_tokens,
+            available_tokens_for_prompt,
         )
         for category_to_truncate in truncation_priority:
             if current_tokens <= available_tokens_for_prompt:
@@ -157,7 +174,8 @@ async def build_context_payload(
             if freed_tokens > 0:
                 removed_count = original_count - len(truncated_list)
                 truncation_actions["details"].append(
-                    f"Truncated '{category_to_truncate}': removed {removed_count} item(s), freed {freed_tokens} tokens."
+                    f"Truncated '{category_to_truncate}': removed "
+                    f"{removed_count} item(s), freed {freed_tokens} tokens."
                 )
                 components[category_to_truncate] = truncated_list
                 current_tokens -= freed_tokens
@@ -170,11 +188,21 @@ async def build_context_payload(
                 final_payload_messages.append(msg)
                 current_tokens += msg.tokens or 0
 
+    sanitized_payload_messages = sanitize_tool_message_pairs(final_payload_messages)
+    if len(sanitized_payload_messages) != len(final_payload_messages):
+        truncation_actions["details"].append(
+            "Removed orphan tool result message(s) after context pruning."
+        )
+    final_payload_messages = sanitized_payload_messages
+    current_tokens = sum(msg.tokens or 0 for msg in final_payload_messages)
+
     # Final check
     if current_tokens > available_tokens_for_prompt:
         # This should be a rare case, but as a safeguard
         logger.error(
-            f"Context still too long ({current_tokens}/{available_tokens_for_prompt}) after all truncation."
+            "Context still too long (%s/%s) after all truncation.",
+            current_tokens,
+            available_tokens_for_prompt,
         )
         # We might need a final, more aggressive truncation here, or raise an error.
         # For now, we'll let the caller handle the oversized payload.
@@ -185,6 +213,10 @@ async def build_context_payload(
         prepared_messages=final_payload_messages,
         final_token_count=final_token_count,
         max_tokens_for_model=max_model_tokens,
+        reserved_response_tokens=budget.reserved_output_tokens,
+        tool_schema_tokens=budget.tool_schema_tokens,
+        safety_margin_tokens=budget.safety_margin_tokens,
+        available_context_tokens=budget.prompt_tokens_available,
         truncation_actions_taken=truncation_actions,
     )
 

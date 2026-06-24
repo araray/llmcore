@@ -532,7 +532,7 @@ class OllamaProvider(BaseProvider):
             response_or_stream = await self._client.chat(**call_kwargs)
 
             if stream:
-                return self._wrap_stream(response_or_stream)
+                return await self._wrap_stream(response_or_stream)
             else:
                 return self._normalize_response(response_or_stream)
 
