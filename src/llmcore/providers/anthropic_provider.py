@@ -70,6 +70,7 @@ except ImportError:
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 # ---------------------------------------------------------------------------
@@ -1197,7 +1198,7 @@ class AnthropicProvider(BaseProvider):
         """
         if not self._client:
             logger.warning("Anthropic client not available. Approximating token count.")
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
 
         if not text:
             return 0
@@ -1214,7 +1215,7 @@ class AnthropicProvider(BaseProvider):
             logger.warning(
                 f"Anthropic count_tokens API failed ({e}). Using character-based approximation."
             )
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
 
     async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Count tokens for a list of messages using the Anthropic API.
@@ -1224,7 +1225,8 @@ class AnthropicProvider(BaseProvider):
         """
         if not self._client:
             logger.warning("Anthropic client not available. Approximating token count.")
-            return sum((len(m.content) + 3) // 4 for m in messages)
+            counter = _EstimateCounter()
+            return sum(counter.count(m.content) for m in messages)
 
         model_name = model or self.default_model
         system_prompt, anthropic_msgs = self._convert_llmcore_msgs_to_anthropic(messages)
@@ -1249,10 +1251,8 @@ class AnthropicProvider(BaseProvider):
                 f"Anthropic count_message_tokens API failed ({e}). "
                 f"Using character-based approximation."
             )
-            total = 0
-            for m in messages:
-                total += (len(m.content) + 3) // 4
-            return total
+            counter = _EstimateCounter()
+            return sum(counter.count(m.content) for m in messages)
 
     # ------------------------------------------------------------------
     # Cleanup

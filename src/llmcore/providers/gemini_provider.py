@@ -45,6 +45,7 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 # Updated for current-generation Gemini models (April 2026).
@@ -914,7 +915,7 @@ class GeminiProvider(BaseProvider):
             logger.warning(
                 "Gemini client not available. Approximating token count."
             )
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
         if not text:
             return 0
 
@@ -930,7 +931,7 @@ class GeminiProvider(BaseProvider):
                 f"'{target_model}': {e}",
                 exc_info=True,
             )
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
 
     async def count_message_tokens(
         self, messages: list[Message], model: str | None = None
@@ -940,8 +941,8 @@ class GeminiProvider(BaseProvider):
             logger.warning(
                 "Gemini client not available. Approximating message token count."
             )
-            total_chars = sum(len(msg.content) for msg in messages)
-            return (total_chars + 3 * len(messages)) // 4
+            counter = _EstimateCounter()
+            return sum(counter.count(msg.content) for msg in messages) + len(messages)
         if not messages:
             return 0
 
@@ -966,13 +967,14 @@ class GeminiProvider(BaseProvider):
                 f"'{target_model}': {e}",
                 exc_info=True,
             )
-            total_chars = sum(
-                len(part.get("text", ""))
+            counter = _EstimateCounter()
+            total = sum(
+                counter.count(part.get("text", ""))
                 for content_dict in genai_contents
                 for part in content_dict.get("parts", [])
                 if "text" in part
             )
-            return (total_chars + 3 * len(genai_contents)) // 4
+            return total + len(genai_contents)
 
     # ------------------------------------------------------------------
     # Response Content Extraction

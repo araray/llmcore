@@ -108,6 +108,32 @@ class TestDefaults:
 
 
 # ---------------------------------------------------------------------------
+# Test: Token counting fallbacks
+# ---------------------------------------------------------------------------
+
+
+class TestTokenCounting:
+    @pytest.mark.asyncio
+    async def test_count_tokens_falls_back_to_shared_estimator(self, provider):
+        """API failures should use LLMCore's shared token estimator."""
+        provider._client.aio.models.count_tokens = AsyncMock(side_effect=Exception("boom"))
+
+        count = await provider.count_tokens("abcd")
+
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_count_message_tokens_falls_back_to_shared_estimator(self, provider):
+        """Message count API failures should use LLMCore's shared token estimator."""
+        provider._client.aio.models.count_tokens = AsyncMock(side_effect=Exception("boom"))
+        messages = [Message(role=LLMCoreRole.USER, content="abcd")]
+
+        count = await provider.count_message_tokens(messages)
+
+        assert count == 2
+
+
+# ---------------------------------------------------------------------------
 # Test: Multimodal content building
 # ---------------------------------------------------------------------------
 
