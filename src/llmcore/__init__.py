@@ -338,6 +338,12 @@ from .sessions.manager import SessionManager
 from .storage import StorageManager
 
 # =============================================================================
+# TOKENS
+# =============================================================================
+from .tokens import count_tokens
+from .tokens import get_counter as get_token_counter
+
+# =============================================================================
 # USAGE
 # =============================================================================
 from .usage import ChatUsage
@@ -521,6 +527,8 @@ __all__ = [
     "TokenCounter",
     "TiktokenCounter",
     "EstimateCounter",
+    "count_tokens",
+    "get_token_counter",
     "ContextCompressor",
     "ContentPrioritizer",
     # -- Ingestion --

@@ -54,6 +54,13 @@ class TestEstimateCounter:
 
 
 class TestCountTokens:
+    def test_package_root_exports_count_tokens(self, monkeypatch) -> None:
+        monkeypatch.setitem(sys.modules, "tiktoken", None)
+
+        import llmcore
+
+        assert llmcore.count_tokens("abcd") == 1
+
     def test_missing_tiktoken_falls_back_to_estimate(self, monkeypatch, caplog) -> None:
         monkeypatch.setitem(sys.modules, "tiktoken", None)
 

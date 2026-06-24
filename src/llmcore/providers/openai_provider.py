@@ -74,6 +74,8 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import count_tokens as _count_tokens
+from ..tokens import get_counter as _get_token_counter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -660,28 +662,22 @@ class OpenAIProvider(BaseProvider):
         return result
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
-        if not self._encoding:
-            return (len(text) + 3) // 4
         if not text:
             return 0
-        return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))
+        model_name = model or self.default_model
+        return await asyncio.to_thread(lambda: _count_tokens(text, model_name))
 
     async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
-        if not self._encoding:
-            total = sum(
-                len(m.content) + len(m.role.value if hasattr(m.role, "value") else str(m.role))
-                for m in messages
-            )
-            return (total + len(messages) * 15) // 4
         model_name = model or self.default_model
+        counter = _get_token_counter(model_name)
         tpm = 4 if "gpt-3.5-turbo-0301" in model_name else 3
         n = 0
         for m in messages:
             n += tpm
             try:
                 rv = m.role.value if hasattr(m.role, "value") else str(m.role)
-                n += len(self._encoding.encode(rv))
-                n += len(self._encoding.encode(m.content))
+                n += counter.count(rv)
+                n += counter.count(m.content)
                 if m.role == LLMCoreRole.TOOL:
                     n += 5
             except Exception:
