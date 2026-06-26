@@ -734,6 +734,162 @@ posthog = "ERROR"
   # referenced as ms://<file_id>.  kimi-k2.6 supports video; moonshot-v1
   # *-vision-preview models support images only.
 
+  # --- Deepgram Provider (speech / audio) ---
+  # Deepgram is a real-time VOICE/AUDIO provider, not a text-completion provider.
+  # It covers speech-to-text (batch + streaming), text-to-speech (batch +
+  # streaming), Flux conversational STT, the Voice Agent (bidirectional
+  # STT->LLM->TTS over one WebSocket), text intelligence, token auth, and
+  # account management.  `chat_completion()` is intentionally unsupported on this
+  # provider; use transcribe_audio()/generate_speech()/transcribe_stream()/
+  # stream_speech()/open_voice_agent() instead.
+  #
+  # Requires the optional dependency group:  pip install llmcore[deepgram]
+  # Docs: https://developers.deepgram.com/  (append `.md` to any page for Markdown)
+  [providers.deepgram]
+  # type = "deepgram"  # auto-detected from the section name
+
+  # --- Authentication (choose ONE; environment variable strongly preferred) ---
+  # API key:   env LLMCORE_PROVIDERS__DEEPGRAM__API_KEY or DEEPGRAM_API_KEY (auto-detected)
+  # api_key = "..."
+  # api_key_env_var = "DEEPGRAM_API_KEY"
+  # Bearer access token (takes precedence over api_key when set):
+  # access_token = "..."
+  # Session id sent as the x-deepgram-session-id header (auto-UUID if unset):
+  # session_id = "..."
+
+  # --- Transport / client ---
+  timeout = 60
+  max_retries = 2
+  # Global Model Improvement Program opt-out default (per-call overridable):
+  mip_opt_out = false
+  # Nominal "context length" reported by get_max_context_length(); Deepgram is a
+  # media provider with no token context window, so this defaults to the
+  # documented REST text-to-speech input character cap.  Capability-dependent.
+  fallback_context_length = 2000
+  # Self-hosted / regional endpoint overrides (any omitted URL defaults to prod):
+  # base_url       = "https://api.deepgram.com"     # REST
+  # ws_url         = "wss://api.deepgram.com"        # STT / TTS WebSockets
+  # agent_ws_url   = "wss://agent.deepgram.com"      # Voice Agent WebSocket
+  # agent_rest_url = "https://agent.deepgram.com"    # Agent configuration REST
+
+  # --- Nominal default models per capability (per-call overridable) ---
+  default_stt_model  = "nova-3"
+  default_flux_model = "flux-general-en"
+  default_tts_model  = "aura-2-thalia-en"
+
+  # --- Speech-to-Text: batch + streaming shared defaults ---
+  [providers.deepgram.stt]
+  model        = "nova-3"
+  language     = "en"          # use "multi" for multilingual code-switching (nova-3)
+  smart_format = true
+  punctuate    = true
+  # diarize = false
+  # numerals = false
+  # paragraphs = false
+  # utterances = false
+  # profanity_filter = false
+  # filler_words = false
+  # measurements = false
+  # dictation = false
+  # detect_entities = false
+  # detect_language = false
+  # redact   = ["pci", "ssn"]
+  # keyterm  = ["Deepgram", "Nova"]   # nova-3 keyterm prompting (Keyword Recall boost)
+  # keywords = ["KubeCon:2"]          # legacy keyword boosting
+  # replace  = ["foo:bar"]
+  # search   = ["hello"]
+  # encoding = "linear16"             # REQUIRED when sending raw (un-containerised) audio
+  # sample_rate = 16000
+  # channels = 1
+  # multichannel = false
+  # version = "latest"
+  # tag = ["myapp"]
+  # --- Audio-intelligence add-ons (batch only) ---
+  # summarize = "v2"
+  # topics = false
+  # intents = false
+  # sentiment = false
+  # custom_topic = ["finance"]
+  # custom_topic_mode = "extended"
+  # custom_intent = ["schedule_meeting"]
+  # custom_intent_mode = "extended"
+
+  # --- Streaming-STT-specific defaults ---
+  [providers.deepgram.stt.streaming]
+  interim_results = true
+  vad_events      = true
+  # endpointing = 10                  # milliseconds of silence; or false to disable
+  # utterance_end_ms = 1000
+  keepalive_interval = 8.0            # seconds; hold the socket open during silence (0/false disables)
+  finalize_on_close  = true          # send Finalize to flush the last partial before CloseStream
+
+  # --- Flux conversational STT (v2) ---
+  [providers.deepgram.flux]
+  model = "flux-general-en"
+  # encoding = "linear16"
+  # sample_rate = 16000
+  # eot_threshold = 0.7               # end-of-turn confidence threshold
+  # eager_eot_threshold = 0.3         # eager (early) end-of-turn threshold
+  # eot_timeout_ms = 5000
+  # keyterm = ["Deepgram"]
+  # language_hint = "en"
+  keepalive_interval = 8.0
+
+  # --- Text-to-Speech: batch + streaming shared defaults ---
+  [providers.deepgram.tts]
+  model    = "aura-2-thalia-en"       # voice is encoded in the model id
+  encoding = "mp3"                    # linear16 | mp3 | opus | flac | aac | mulaw | alaw
+  # container = "none"
+  # sample_rate = 24000
+  # bit_rate = 48000
+  # speed = 1.0
+  # tag = ["myapp"]
+
+  # --- Streaming-TTS-specific defaults ---
+  [providers.deepgram.tts.streaming]
+  flush_on_close = true              # drain buffered audio with Flush before Close
+
+  # --- Voice Agent (bidirectional STT -> LLM -> TTS over one socket) ---
+  [providers.deepgram.agent]
+  # greeting = "Hello! How can I help you today?"
+  keepalive_interval = 8.0
+  # experimental = false
+
+  [providers.deepgram.agent.audio.input]
+  encoding    = "linear16"
+  sample_rate = 24000
+
+  [providers.deepgram.agent.audio.output]
+  encoding    = "linear16"
+  sample_rate = 24000
+  # container = "none"
+
+  # STT leg of the agent (Deepgram).  ``listen.provider`` is required by the SDK.
+  [providers.deepgram.agent.listen.provider]
+  type  = "deepgram"
+  model = "nova-3"
+  # keyterms = ["Deepgram"]
+
+  # LLM leg of the agent.  May be Deepgram-hosted or a Bring-Your-Own endpoint.
+  # ``think.provider`` is required; ``think.prompt`` / ``think.functions`` /
+  # ``think.endpoint`` are siblings of ``provider``.
+  # NOTE: no system prompt is hardcoded here by default; inject it at call time
+  # (e.g. from grimoire) or set `prompt` explicitly below.
+  [providers.deepgram.agent.think.provider]
+  type  = "open_ai"                  # deepgram | open_ai | anthropic | groq | ...
+  model = "gpt-4o-mini"
+  # temperature = 0.7
+
+  # [providers.deepgram.agent.think.endpoint]                # BYO LLM endpoint
+  # url     = "https://api.openai.com/v1/chat/completions"
+  # headers = { authorization = "Bearer ${OPENAI_API_KEY}" }
+  # (think.prompt is intentionally omitted; usually injected upstream)
+
+  # TTS leg of the agent (Deepgram or BYO).  ``speak.provider`` is required.
+  [providers.deepgram.agent.speak.provider]
+  type  = "deepgram"
+  model = "aura-2-thalia-en"
+
 
 # ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations

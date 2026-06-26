@@ -1,0 +1,46 @@
+{
+  "model_id": "aura-2-thalia-en",
+  "display_name": "Aura-2 Thalia (English)",
+  "provider": "deepgram",
+  "model_type": "tts",
+  "architecture": {
+    "family": "aura",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 2000
+  },
+  "capabilities": {
+    "streaming": true,
+    "audio_input": false,
+    "audio_output": true
+  },
+  "pricing": null,
+  "provider_extension": {
+    "pricing": {
+      "currency": "USD",
+      "unit": "1k_characters",
+      "billing_tier": "pay-as-you-go",
+      "source": "https://deepgram.com/pricing",
+      "as_of": "2026-06-25",
+      "status": "published",
+      "rate_per_1k_characters": 0.03,
+      "rate_per_million_characters": 30.0,
+      "growth_rate_per_1k_characters": 0.027,
+      "note": "Aura-2 voice. Billed per character."
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram Aura-2 text-to-speech voice 'Thalia' (English). Batch + streaming synthesis. Billed per character.",
+  "tags": [
+    "streaming",
+    "batch",
+    "aura-2"
+  ],
+  "source": "generated"
+}

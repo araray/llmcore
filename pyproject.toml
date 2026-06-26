@@ -56,6 +56,10 @@ ollama = ["ollama>=0.6.0"]
 # DeepInfra reuses the OpenAI SDK (OpenAI-compatible API) plus httpx for the
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
 deepinfra = ["openai>=2.31.0", "httpx>=0.27.0"]
+# Deepgram is a real-time voice/audio provider.  The official deepgram-sdk is
+# WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
+# and the Voice Agent.  Install with: pip install llmcore[deepgram]
+deepgram = ["deepgram-sdk>=7.0.0", "websockets>=12.0"]
 
 # ----------------------------------------------------------------------------
 # Search providers (web / data search — optional, parallel to LLM providers)
@@ -138,6 +142,7 @@ all = [
     "llmcore[gemini]",
     "llmcore[ollama]",
     "llmcore[deepinfra]",
+    "llmcore[deepgram]",
     "llmcore[brightdata]",
     "llmcore[serper]",
     "llmcore[serpapi]",

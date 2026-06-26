@@ -167,6 +167,9 @@ pip install llmcore[gemini]
 
 # Local Ollama support
 pip install llmcore[ollama]
+
+# Deepgram voice/audio support (STT, TTS, Voice Agent)
+pip install llmcore[deepgram]
 ```
 
 ### With Storage Backends
@@ -371,6 +374,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
 | **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
 | **DeepInfra** | DeepSeek, Llama, Qwen, Mistral, FLUX, Whisper, Kokoro (100+ open models) | Streaming, Tools, Vision, Reasoning, TTS, STT, Image, Embeddings |
+| **Deepgram** | Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent | Streaming STT/TTS, Flux turn-taking, Voice Agent, Text Intelligence |
 
 ### Switching Providers
 
@@ -394,6 +398,47 @@ response = await llm.chat(
     max_tokens=500
 )
 ```
+
+### Voice & Audio (Deepgram)
+
+The **Deepgram** provider adds real-time **voice/audio** — speech-to-text (STT),
+text-to-speech (TTS), conversational **Flux** STT, a bidirectional **Voice
+Agent** (STT → LLM → TTS over one socket), and **text intelligence**. Deepgram
+is not a chat-completion provider, so its media methods are called **directly on
+the provider instance** (the `LLMCore` facade has no audio methods):
+
+```python
+from llmcore.providers.deepgram_provider import DeepgramProvider
+
+dg = DeepgramProvider({"api_key": "dg_...", "_instance_name": "deepgram"})
+
+# Pre-recorded STT
+result = await dg.transcribe_audio(open("call.wav", "rb").read(),
+                                   model="nova-3", smart_format=True, diarize=True)
+print(result.text)
+
+# TTS
+speech = await dg.generate_speech("Hello from Aura.", voice="aura-2-thalia-en")
+open("out.mp3", "wb").write(speech.audio_data)
+
+# Live STT (async byte source -> streamed events)
+async for ev in dg.transcribe_stream(mic_frames(), model="nova-3",
+                                      encoding="linear16", sample_rate=16000,
+                                      interim_results=True):
+    print(ev.is_final, ev.text)
+
+# Voice Agent (auto-answers client-side tool calls; prompt is never defaulted)
+async for event in dg.run_voice_agent(mic_audio(), function_handler=handle,
+                                       functions=[weather_fn],
+                                       prompt="You are a concise assistant."):
+    ...   # CONVERSATION_TEXT / AUDIO / FUNCTION_CALL_REQUEST events
+
+await dg.close()
+```
+
+See **[`docs/Deepgram_provider_usage.md`](docs/Deepgram_provider_usage.md)** for
+the full guide (config, streaming, Flux, Voice Agent settings shape, token auth)
+and the runnable scripts in [`examples/`](examples) (`deepgram_*.py`).
 
 ---
 

@@ -1,0 +1,55 @@
+{
+  "model_id": "flux-general-en",
+  "display_name": "Flux General (English)",
+  "provider": "deepgram",
+  "model_type": "stt",
+  "architecture": {
+    "family": "flux",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "audio_input": true,
+    "audio_output": false
+  },
+  "pricing": null,
+  "provider_extension": {
+    "pricing": {
+      "currency": "USD",
+      "unit": "audio_minute",
+      "billing_tier": "pay-as-you-go",
+      "model_improvement_program": true,
+      "source": "https://deepgram.com/pricing",
+      "as_of": "2026-06-25",
+      "status": "published",
+      "rate_per_minute": 0.0077,
+      "note": "Flux English. The page shows two pay-as-you-go values; the lower is the current limited-time promotional streaming rate and the higher is the standard rate. Growth (prepaid) tier shown as a [min, max] range. Flux Multilingual is a single $0.0078/min PAYG.",
+      "promotional_streaming_rate_per_minute": 0.0065,
+      "observed_rates_per_minute": [
+        0.0065,
+        0.0077
+      ],
+      "growth_rate_per_minute": [
+        0.0057,
+        0.0065
+      ]
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram Flux conversational speech recognition with native end-of-turn detection, purpose-built for voice agents (v2 streaming). Billed per audio-minute.",
+  "tags": [
+    "streaming",
+    "realtime",
+    "turn-detection",
+    "voice-agent"
+  ],
+  "source": "generated"
+}

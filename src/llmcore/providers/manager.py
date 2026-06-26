@@ -25,6 +25,7 @@ except ImportError:
 from ..exceptions import ConfigError, ProviderError
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider, ContextPayload
+from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
@@ -60,6 +61,8 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "huggingface": HuggingFaceProvider,
     "kimi": KimiProvider,
     "deepinfra": DeepInfraProvider,
+    # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
+    "deepgram": DeepgramProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
     # Alias: google → gemini

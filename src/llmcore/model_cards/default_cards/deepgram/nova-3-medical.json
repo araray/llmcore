@@ -1,0 +1,55 @@
+{
+  "model_id": "nova-3-medical",
+  "display_name": "Nova-3 Medical",
+  "provider": "deepgram",
+  "model_type": "stt",
+  "architecture": {
+    "family": "nova",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "audio_input": true,
+    "audio_output": false
+  },
+  "pricing": null,
+  "provider_extension": {
+    "pricing": {
+      "currency": "USD",
+      "unit": "audio_minute",
+      "billing_tier": "pay-as-you-go",
+      "model_improvement_program": true,
+      "source": "https://deepgram.com/pricing",
+      "as_of": "2026-06-25",
+      "status": "inferred",
+      "rate_per_minute": 0.0077,
+      "note": "The pricing page does not list a separate Nova-3 Medical rate; this record assumes Nova-3 monolingual pricing. Verify before relying on it for billing.",
+      "promotional_streaming_rate_per_minute": 0.0048,
+      "observed_rates_per_minute": [
+        0.0048,
+        0.0077
+      ],
+      "growth_rate_per_minute": [
+        0.0042,
+        0.0065
+      ],
+      "assumption": "priced_as_nova_3_monolingual"
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram Nova-3 tuned for medical terminology. Billed per audio-minute.",
+  "tags": [
+    "streaming",
+    "batch",
+    "medical"
+  ],
+  "source": "generated"
+}
