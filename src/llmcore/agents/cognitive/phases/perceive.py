@@ -29,7 +29,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, PerceiveInput, PerceiveOutput
@@ -145,7 +145,7 @@ async def perceive_phase(
             retrieved_context=retrieved_context,
             working_memory_snapshot=working_memory_snapshot,
             environmental_state=environmental_state,
-            perceived_at=datetime.utcnow(),
+            perceived_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
         # 5. Add tracing attributes

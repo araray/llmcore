@@ -299,7 +299,8 @@ class TestLoadAgentsConfig:
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         assert config.max_iterations == 20
         assert config.goals.classifier_enabled is False
@@ -321,7 +322,8 @@ max_execution_time_seconds = 600
             config_file = Path(f.name)
 
         try:
-            config = load_agents_config(config_path=config_file)
+            with pytest.warns(DeprecationWarning):
+                config = load_agents_config(config_path=config_file)
 
             assert config.max_iterations == 25
             assert config.circuit_breaker.max_same_errors == 5
@@ -333,7 +335,8 @@ max_execution_time_seconds = 600
 
     def test_load_nonexistent_file_falls_back_to_defaults(self):
         """Loading from nonexistent file should fall back to defaults."""
-        config = load_agents_config(config_path=Path("/nonexistent/path/config.toml"))
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_path=Path("/nonexistent/path/config.toml"))
 
         assert config.max_iterations == 10
         assert config.goals.classifier_enabled is True
@@ -352,7 +355,8 @@ max_execution_time_seconds = 600
             },
         }
 
-        config = load_agents_config(config_dict=config_dict, overrides=overrides)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict, overrides=overrides)
 
         assert config.max_iterations == 30
         assert config.goals.classifier_enabled is False
@@ -366,7 +370,8 @@ max_execution_time_seconds = 600
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         # Should use defaults when validation fails
         assert config.max_iterations == 10
@@ -428,7 +433,8 @@ class TestEnvVarOverrides:
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         # Env var wins
         assert config.goals.classifier_enabled is True
@@ -559,7 +565,8 @@ strategy = "quality_optimized"
             config_file = Path(f.name)
 
         try:
-            config = load_agents_config(config_path=config_file)
+            with pytest.warns(DeprecationWarning):
+                config = load_agents_config(config_path=config_file)
 
             # Root values
             assert config.max_iterations == 15

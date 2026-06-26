@@ -20,7 +20,7 @@ References:
 
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -98,8 +98,8 @@ class PromptSnippet(BaseModel):
         default=None, description="Human-readable description of the snippet's purpose"
     )
     tags: list[str] = Field(default_factory=list, description="Tags for filtering and discovery")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @property
     def content_hash(self) -> str:
@@ -223,8 +223,8 @@ class PromptMetrics(BaseModel):
 
     # Timestamps
     last_used_at: datetime | None = Field(default=None, description="Timestamp of last use")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @model_validator(mode="after")
     def validate_counts(self) -> "PromptMetrics":
@@ -302,8 +302,8 @@ class PromptMetrics(BaseModel):
 
         # Update derived metrics
         self.calculate_success_rate()
-        self.last_used_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # =============================================================================
@@ -352,7 +352,7 @@ class PromptVersion(BaseModel):
     status: VersionStatus = Field(default=VersionStatus.DRAFT, description="Current status")
     change_description: str | None = Field(default=None, description="What changed in this version")
     created_by: str | None = Field(default=None, description="Who created this version")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     activated_at: datetime | None = Field(
         default=None, description="When this version became active"
     )
@@ -376,7 +376,7 @@ class PromptVersion(BaseModel):
         """Mark this version as active."""
         self.status = VersionStatus.ACTIVE
         if self.activated_at is None:
-            self.activated_at = datetime.utcnow()
+            self.activated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def archive(self) -> None:
         """Archive this version."""
@@ -439,8 +439,8 @@ class PromptTemplate(BaseModel):
     versions: list[PromptVersion] = Field(
         default_factory=list, description="All versions of this template"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @property
     def version_count(self) -> int:
@@ -488,7 +488,7 @@ class PromptTemplate(BaseModel):
                 version.version_number = expected_number
 
         self.versions.append(version)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def set_active_version(self, version_id: str) -> None:
         """
@@ -517,7 +517,7 @@ class PromptTemplate(BaseModel):
         # Activate new version
         version.activate()
         self.active_version_id = version_id
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def get_version(self, version_id: str) -> PromptVersion | None:
         """Get a specific version by ID."""

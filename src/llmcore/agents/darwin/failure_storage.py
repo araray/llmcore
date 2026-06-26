@@ -47,7 +47,7 @@ from __future__ import annotations
 import abc
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -129,9 +129,9 @@ class FailureLog(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class FailurePattern(BaseModel):
@@ -161,7 +161,7 @@ class FailurePattern(BaseModel):
     common_error_messages: list[str] = Field(default_factory=list)
     suggested_avoidance: str = ""
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class FailureContext(BaseModel):
@@ -510,7 +510,7 @@ class FailureLearningManager:
         # Generate ID if not set
         if not failure.id:
             # Use microseconds for uniqueness (prevents collisions within same second)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[
+            timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[
                 :18
             ]  # YYYYMMDDHHMMSSuuuuuu -> 18 chars
             failure.id = f"fail_{timestamp}_{failure.task_id[:8]}"

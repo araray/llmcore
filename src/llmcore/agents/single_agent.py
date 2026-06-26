@@ -29,7 +29,7 @@ import inspect
 import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from .cognitive import (
@@ -317,7 +317,7 @@ class SingleAgentMode:
             if not session_id:
                 session_id = f"session-{uuid.uuid4()}"
 
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # =================================================================
             # G3 Phase 1: Goal Classification
@@ -397,7 +397,7 @@ class SingleAgentMode:
                         error_msg = self._format_capability_error(compat_result)
                         logger.error(f"Model capability check failed: {error_msg}")
 
-                        end_time = datetime.utcnow()
+                        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                         duration = (end_time - start_time).total_seconds()
 
                         return AgentResult(
@@ -485,7 +485,7 @@ class SingleAgentMode:
                     approval_callback=approval_callback,
                 )
 
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                 duration = (end_time - start_time).total_seconds()
 
                 # Create result
@@ -531,7 +531,7 @@ class SingleAgentMode:
                 logger.error(f"Agent execution failed: {e}", exc_info=True)
 
                 # Create failure result
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                 duration = (end_time - start_time).total_seconds()
 
                 return AgentResult(
@@ -591,7 +591,7 @@ class SingleAgentMode:
                 context=context,
             )
 
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
             duration = (end_time - start_time).total_seconds()
 
             # Resolve persona for result
@@ -634,7 +634,7 @@ class SingleAgentMode:
         except Exception as e:
             logger.error(f"Fast-path execution failed: {e}", exc_info=True)
 
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
             duration = (end_time - start_time).total_seconds()
 
             return AgentResult(
@@ -770,7 +770,7 @@ class SingleAgentMode:
                         and self._agents_config.fast_path.enabled
                     ):
                         # Execute fast-path and yield single update
-                        start_time = datetime.utcnow()
+                        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
                         result = await self._execute_fast_path(
                             goal=goal,
                             classification=classification,

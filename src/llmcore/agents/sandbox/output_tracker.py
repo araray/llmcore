@@ -33,7 +33,7 @@ import json
 import logging
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -240,7 +240,7 @@ class OutputTracker:
         # Create metadata
         run_metadata = RunMetadata(
             run_id=run_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
             sandbox_type=sandbox_type,
             access_level=access_level,
             status="running",
@@ -284,7 +284,7 @@ class OutputTracker:
 
         # Create log entry
         entry = ExecutionLog(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             tool_name=tool_name,
             input_summary=input_data[: self._input_preview_length],
             exit_code=result.exit_code,
@@ -350,7 +350,7 @@ class OutputTracker:
             data: Optional additional data
         """
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "level": level.upper(),
             "message": message,
             "data": data,
@@ -388,7 +388,7 @@ class OutputTracker:
                 "path": file_path,
                 "size_bytes": size_bytes,
                 "description": description,
-                "tracked_at": datetime.utcnow().isoformat(),
+                "tracked_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             }
         )
 
@@ -495,7 +495,7 @@ class OutputTracker:
         """
         if run_id in self._active_runs:
             metadata = self._active_runs[run_id]
-            metadata.completed_at = datetime.utcnow()
+            metadata.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             metadata.status = "completed" if success else "failed"
             metadata.success = success
             metadata.error_message = error_message
@@ -663,7 +663,7 @@ class OutputTracker:
         Returns:
             Number of runs deleted
         """
-        cutoff = datetime.utcnow().timestamp() - (max_age_days * 86400)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None).timestamp() - (max_age_days * 86400)
 
         runs = []
         for run_dir in self._base_path.iterdir():
@@ -678,7 +678,7 @@ class OutputTracker:
                 with open(metadata_path) as f:
                     metadata = json.load(f)
                 created_at = datetime.fromisoformat(
-                    metadata.get("created_at", datetime.utcnow().isoformat())
+                    metadata.get("created_at", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
                 ).timestamp()
                 runs.append((created_at, run_dir.name))
             except Exception:

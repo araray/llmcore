@@ -12,7 +12,7 @@ Covers:
 
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -240,7 +240,7 @@ class TestGoal:
         """Test that goals in cooldown are not actionable."""
         goal = Goal.create("test")
         goal.status = GoalStatus.ACTIVE
-        goal.cooldown_until = datetime.utcnow() + timedelta(minutes=5)
+        goal.cooldown_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5)
         assert goal.is_actionable() is False
 
     def test_is_leaf(self):

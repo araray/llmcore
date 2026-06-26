@@ -15,7 +15,7 @@ Covers:
 import asyncio
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -60,7 +60,7 @@ class TestEscalation:
             reason=EscalationReason.GOAL_COMPLETED,
             title="Done",
             message="Goal complete",
-            resolved_at=datetime.utcnow(),
+            resolved_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         assert esc.is_pending() is False
 
@@ -72,7 +72,7 @@ class TestEscalation:
             reason=EscalationReason.GOAL_COMPLETED,
             title="Done",
             message="Goal complete",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),
         )
         assert esc.is_pending() is False
 
@@ -102,7 +102,7 @@ class TestEscalation:
 
     def test_serialization_with_dates(self):
         """Test serialization preserves datetime fields."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         esc = Escalation(
             id="esc_dates",
             level=EscalationLevel.ACTION,
@@ -309,7 +309,7 @@ class TestEscalationManager:
         )
 
         esc = escalation_manager.get_all()[0]
-        esc.resolved_at = datetime.utcnow() - timedelta(hours=48)
+        esc.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
 
         cleared = escalation_manager.clear_resolved(older_than_hours=24)
         assert cleared == 1
@@ -326,7 +326,7 @@ class TestEscalationManager:
         )
 
         esc = escalation_manager.get_all()[0]
-        esc.resolved_at = datetime.utcnow() - timedelta(hours=1)
+        esc.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
 
         cleared = escalation_manager.clear_resolved(older_than_hours=24)
         assert cleared == 0

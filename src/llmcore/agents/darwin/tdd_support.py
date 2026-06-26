@@ -58,7 +58,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -94,6 +94,7 @@ class TestSpecification(BaseModel):
         tags: Categorization tags for filtering
         created_at: When this spec was created
     """
+    __test__ = False  # domain model, not a pytest test class
 
     id: str | None = None
     name: str
@@ -105,9 +106,9 @@ class TestSpecification(BaseModel):
     expected_exception: str | None = None
     priority: int = Field(default=2, ge=1, le=3)
     tags: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class TestSuite(BaseModel):
@@ -130,6 +131,7 @@ class TestSuite(BaseModel):
         created_at: When this suite was created
         updated_at: Last update timestamp
     """
+    __test__ = False  # domain model, not a pytest test class
 
     id: str | None = None
     task_id: str
@@ -141,10 +143,10 @@ class TestSuite(BaseModel):
     teardown_code: str | None = None
     fixture_code: str | None = None
     import_statements: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     @property
     def spec_count(self) -> int:
@@ -186,9 +188,9 @@ class GeneratedTest(BaseModel):
     fixtures: str | None = None
     validation_status: Literal["pending", "valid", "invalid"] = "pending"
     validation_errors: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class TestExecutionResult(BaseModel):
@@ -208,6 +210,7 @@ class TestExecutionResult(BaseModel):
         stderr: Standard error captured during test
         metadata: Additional execution metadata
     """
+    __test__ = False  # domain model, not a pytest test class
 
     test_name: str
     passed: bool
@@ -262,9 +265,9 @@ class TDDCycleResult(BaseModel):
     failure_analysis: str | None = None
     suggestions: list[str] = Field(default_factory=list)
     total_time_ms: float = 0.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     @property
     def pass_rate(self) -> float:
@@ -307,10 +310,10 @@ class TDDSession(BaseModel):
     status: Literal["pending", "in_progress", "success", "failed", "abandoned"] = "pending"
     best_pass_rate: float = 0.0
     final_implementation: str | None = None
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     completed_at: datetime | None = None
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 # Rebuild models for Pydantic v2 with future annotations
@@ -533,6 +536,7 @@ class TestGenerator:
         # Generate executable tests
         tests = await generator.generate_tests(suite)
     """
+    __test__ = False  # not a pytest test class
 
     SPEC_GENERATION_PROMPT = """You are an expert test engineer. Generate comprehensive test specifications for the following requirements.
 
@@ -668,7 +672,7 @@ Output only the implementation code, no explanations or markdown backticks.
 
         framework = framework or self.default_framework
         min_tests = min_tests or self.min_tests
-        task_id = task_id or f"task_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')[:18]}"
+        task_id = task_id or f"task_{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d%H%M%S%f')[:18]}"
 
         prompt = self.SPEC_GENERATION_PROMPT.format(
             requirements=requirements,
@@ -728,7 +732,7 @@ Output only the implementation code, no explanations or markdown backticks.
                 )
 
             # Include timestamp for unique suite IDs even with same task_id
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
+            timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[:18]
             suite_id = f"suite_{task_id}_{timestamp}"
             return TestSuite(
                 id=suite_id,
@@ -815,7 +819,7 @@ Output only the implementation code, no explanations or markdown backticks.
                 test_id = (
                     f"gen_{spec.id}"
                     if spec.id
-                    else f"gen_{spec.name}_{datetime.utcnow().strftime('%H%M%S')}"
+                    else f"gen_{spec.name}_{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%H%M%S')}"
                 )
 
                 tests.append(
@@ -1004,6 +1008,7 @@ class TestFileBuilder:
 
     Combines imports, fixtures, and test functions into a single executable file.
     """
+    __test__ = False  # not a pytest test class
 
     def build_test_file(
         self,

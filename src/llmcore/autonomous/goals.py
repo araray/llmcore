@@ -50,7 +50,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import (
@@ -308,7 +308,7 @@ class Goal:
     progress: float = 0.0
 
     # Temporal
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     started_at: datetime | None = None
     deadline: datetime | None = None
     completed_at: datetime | None = None
@@ -368,7 +368,7 @@ class Goal:
         if self.status not in (GoalStatus.PENDING, GoalStatus.ACTIVE):
             return False
 
-        if self.cooldown_until and datetime.utcnow() < self.cooldown_until:
+        if self.cooldown_until and datetime.now(timezone.utc).replace(tzinfo=None) < self.cooldown_until:
             return False
 
         if self.attempts >= self.max_attempts:
@@ -391,7 +391,7 @@ class Goal:
             base_seconds: Base cooldown duration.
         """
         cooldown = base_seconds * self.cooldown_multiplier
-        self.cooldown_until = datetime.utcnow() + timedelta(seconds=cooldown)
+        self.cooldown_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=cooldown)
         self.cooldown_multiplier = min(self.cooldown_multiplier * 2, 3600)
 
         logger.debug(
@@ -422,7 +422,7 @@ class Goal:
         all_met = all(c.is_met() for c in self.success_criteria)
         if all_met and self.status == GoalStatus.ACTIVE:
             self.status = GoalStatus.COMPLETED
-            self.completed_at = datetime.utcnow()
+            self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             logger.info("Goal completed: %s", self.description)
 
     def to_dict(self) -> dict[str, Any]:
@@ -465,7 +465,7 @@ class Goal:
                 SuccessCriterion.from_dict(c) for c in data.get("success_criteria", [])
             ],
             progress=data.get("progress", 0.0),
-            created_at=_parse_datetime(data.get("created_at")) or datetime.utcnow(),
+            created_at=_parse_datetime(data.get("created_at")) or datetime.now(timezone.utc).replace(tzinfo=None),
             started_at=_parse_datetime(data.get("started_at")),
             deadline=_parse_datetime(data.get("deadline")),
             completed_at=_parse_datetime(data.get("completed_at")),
@@ -754,7 +754,7 @@ class GoalManager:
             context=context or {},
         )
         goal.status = GoalStatus.ACTIVE
-        goal.started_at = datetime.utcnow()
+        goal.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
         goal.max_attempts = self._default_max_attempts
 
         async with self._lock:
@@ -936,12 +936,12 @@ class GoalManager:
                 return
 
             goal.progress = min(1.0, goal.progress + progress_delta)
-            goal.last_attempt_at = datetime.utcnow()
+            goal.last_attempt_at = datetime.now(timezone.utc).replace(tzinfo=None)
             goal.attempts += 1
             goal.reset_cooldown()
 
             if notes:
-                goal.learned_strategies.append(f"{datetime.utcnow().isoformat()}: {notes}")
+                goal.learned_strategies.append(f"{datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}: {notes}")
 
             goal.update_progress()
             await self.storage.save_goal(goal)
@@ -976,8 +976,8 @@ class GoalManager:
                 logger.warning("Goal not found: %s", goal_id)
                 return
 
-            goal.failure_reasons.append(f"{datetime.utcnow().isoformat()}: {reason}")
-            goal.last_attempt_at = datetime.utcnow()
+            goal.failure_reasons.append(f"{datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}: {reason}")
+            goal.last_attempt_at = datetime.now(timezone.utc).replace(tzinfo=None)
             goal.attempts += 1
 
             if not recoverable:
@@ -1052,7 +1052,7 @@ class GoalManager:
 
             if all_completed:
                 parent.status = GoalStatus.COMPLETED
-                parent.completed_at = datetime.utcnow()
+                parent.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             await self.storage.save_goal(parent)
 

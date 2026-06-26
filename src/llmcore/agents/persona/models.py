@@ -20,7 +20,7 @@ References:
     - Dossier: Step 2.8 (Persona System)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -218,7 +218,7 @@ class AgentPersona(BaseModel):
 
     # Metadata
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="When persona was created"
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), description="When persona was created"
     )
 
     updated_at: datetime | None = Field(default=None, description="When persona was last updated")

@@ -31,7 +31,7 @@ import base64
 import fnmatch
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -375,7 +375,7 @@ class DockerSandboxProvider(SandboxProvider):
         labels = {
             "llmcore.sandbox.id": config.sandbox_id,
             "llmcore.sandbox.access_level": self._access_level.value,
-            "llmcore.sandbox.created_at": datetime.utcnow().isoformat(),
+            "llmcore.sandbox.created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         labels.update(config.labels)
 

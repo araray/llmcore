@@ -22,7 +22,7 @@ References:
 import json
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -236,7 +236,7 @@ class PerceiveOutput(BaseModel):
         default_factory=dict, description="Current environmental state (sandbox, tools, etc.)"
     )
     perceived_at: datetime = Field(
-        default_factory=datetime.utcnow, description="When perception occurred"
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), description="When perception occurred"
     )
 
 
@@ -291,7 +291,7 @@ class PlanOutput(BaseModel):
         default_factory=list, description="Potential risks or challenges identified"
     )
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @model_validator(mode="before")
     @classmethod
@@ -504,7 +504,7 @@ class CycleIteration(BaseModel):
     )
 
     # Timestamps
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     completed_at: datetime | None = Field(default=None)
 
     # Phase outputs (populated as phases complete)
@@ -524,7 +524,7 @@ class CycleIteration(BaseModel):
 
     def mark_completed(self, success: bool = True) -> None:
         """Mark iteration as completed."""
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.status = IterationStatus.COMPLETED if success else IterationStatus.FAILED
 
         # Calculate total time
@@ -535,7 +535,7 @@ class CycleIteration(BaseModel):
     def mark_interrupted(self, reason: str) -> None:
         """Mark iteration as interrupted."""
         self.status = IterationStatus.INTERRUPTED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.error = f"Interrupted: {reason}"
 
     @property
@@ -1020,7 +1020,7 @@ class EnhancedAgentState(AgentState):
             "last_reason": reason,
             "tokens_before": tokens_before,
             "tokens_after": tokens_after,
-            "last_compressed_at": datetime.utcnow().isoformat(),
+            "last_compressed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         self.working_memory[_CONTEXT_COMPRESSION_KEY] = metadata
         return metadata
@@ -1088,7 +1088,7 @@ class EnhancedAgentState(AgentState):
         self.plan_steps_status = ["pending"] * len(new_plan)
         self.current_plan_step_index = 0
         self.plan_version += 1
-        self.plan_updated_at = datetime.utcnow()
+        self.plan_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     @property
     def iteration_count(self) -> int:

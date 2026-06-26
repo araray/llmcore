@@ -18,7 +18,7 @@ References:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -531,7 +531,7 @@ class TestPerceivePhaseIntegration:
         self, agent_state, perceive_input, mock_memory_manager
     ):
         """Output should have perceived_at timestamp."""
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc).replace(tzinfo=None)
 
         output = await perceive_phase(
             agent_state=agent_state,
@@ -539,7 +539,7 @@ class TestPerceivePhaseIntegration:
             memory_manager=mock_memory_manager,
         )
 
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc).replace(tzinfo=None)
 
         assert output.perceived_at >= before
         assert output.perceived_at <= after

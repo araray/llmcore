@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 try:
@@ -232,11 +232,11 @@ class SqliteTDDStorage(BaseTDDStorage):
         try:
             # Generate ID if not set
             if not suite.id:
-                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
+                timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[:18]
                 suite.id = f"suite_{timestamp}_{suite.task_id[:8]}"
 
-            now = datetime.utcnow().isoformat()
-            suite.updated_at = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+            suite.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Insert or replace suite
             await self._conn.execute(
@@ -375,7 +375,7 @@ class SqliteTDDStorage(BaseTDDStorage):
         try:
             # Generate ID if not set
             if not test.id:
-                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
+                timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[:18]
                 test.id = f"gen_{timestamp}"
 
             # Determine suite_id from spec if available
@@ -456,7 +456,7 @@ class SqliteTDDStorage(BaseTDDStorage):
         try:
             # Generate ID if not set
             if not result.id:
-                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
+                timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[:18]
                 result.id = f"cycle_{timestamp}"
 
             # Serialize execution results (mode='json' converts datetime to ISO strings)
@@ -544,7 +544,7 @@ class SqliteTDDStorage(BaseTDDStorage):
         try:
             # Generate ID if not set
             if not session.id:
-                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
+                timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d%H%M%S%f")[:18]
                 session.id = f"sess_{timestamp}"
 
             # Serialize cycles (mode='json' converts datetime to ISO strings)
@@ -635,7 +635,7 @@ class SqliteTDDStorage(BaseTDDStorage):
         if not self._conn:
             raise RuntimeError("Storage not initialized")
 
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
 
         # Total suites
         cursor = await self._conn.execute(

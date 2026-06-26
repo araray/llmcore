@@ -158,6 +158,7 @@ async def test_create_wires_observability_to_provider_and_embedding_warm_up(
             event
             for event in event_logger.events
             if event.event_type == "provider_warm_up_completed"
+            and event.data.get("component") == "providers.fake"
         )
         embedding_event = next(
             event
