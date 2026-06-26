@@ -40,6 +40,8 @@ small calls and skip providers whose required environment is incomplete.
 
 - `ollama_example.py` - local Ollama chat, streaming, sessions, and RAG.
 - `gemini_example.py` - Gemini chat, streaming, sessions, and RAG.
+- `hosted_providers_example.py` - Poe, OpenRouter, DeepSeek, Kimi, DeepInfra,
+  and Mistral from one LLMCore instance.
 
 ## Search Provider Examples
 
@@ -83,6 +85,12 @@ ollama pull llama3.2
 export OPENAI_API_KEY="..."
 export GOOGLE_API_KEY="..."
 export ANTHROPIC_API_KEY="..."
+export POE_API_KEY="..."
+export OPENROUTER_API_KEY="..."
+export DEEPSEEK_API_KEY="..."
+export MOONSHOT_API_KEY="..."   # Kimi/Moonshot; KIMI_API_KEY also works in examples
+export DEEPINFRA_TOKEN="..."    # DEEPINFRA_API_KEY also works
+export MISTRAL_API_KEY="..."
 
 # Search providers
 export BRIGHTDATA_API_TOKEN="..."

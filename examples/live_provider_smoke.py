@@ -32,7 +32,35 @@ for noisy_logger in ("google.genai", "google_genai", "httpx", "httpcore", "llmco
 MODEL_BY_PROVIDER = {
     "openai": ("LLMCORE_EXAMPLE_OPENAI_MODEL", "gpt-4o-mini"),
     "gemini": ("LLMCORE_EXAMPLE_GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+    "poe": ("LLMCORE_EXAMPLE_POE_MODEL", "GPT-4o-Mini"),
+    "openrouter": ("LLMCORE_EXAMPLE_OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+    "deepseek": ("LLMCORE_EXAMPLE_DEEPSEEK_MODEL", "deepseek-v4-flash"),
+    "kimi": ("LLMCORE_EXAMPLE_KIMI_MODEL", "kimi-k2.6"),
+    "deepinfra": ("LLMCORE_EXAMPLE_DEEPINFRA_MODEL", "deepseek-ai/DeepSeek-V3"),
+    "mistral": ("LLMCORE_EXAMPLE_MISTRAL_MODEL", "mistral-small-latest"),
     "ollama": ("LLMCORE_EXAMPLE_OLLAMA_MODEL", "llama3"),
+}
+
+KEY_ENVS_BY_PROVIDER = {
+    "openai": ("OPENAI_API_KEY", "LLMCORE_PROVIDERS__OPENAI__API_KEY"),
+    "gemini": ("GOOGLE_API_KEY", "GEMINI_API_KEY", "LLMCORE_PROVIDERS__GEMINI__API_KEY"),
+    "poe": ("POE_API_KEY",),
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "deepseek": ("DEEPSEEK_API_KEY",),
+    "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
+    "deepinfra": ("DEEPINFRA_TOKEN", "DEEPINFRA_API_KEY"),
+    "mistral": ("MISTRAL_API_KEY",),
+}
+
+PROVIDER_KWARGS = {
+    "openai": {"max_tokens": 40},
+    "poe": {"max_tokens": 40},
+    "openrouter": {"max_tokens": 40},
+    "deepseek": {"max_tokens": 40, "thinking": {"type": "disabled"}},
+    "kimi": {"max_tokens": 40, "thinking": {"type": "disabled"}},
+    "deepinfra": {"max_tokens": 40},
+    "mistral": {"max_tokens": 40},
+    "gemini": {"max_output_tokens": 40},
 }
 
 
@@ -42,14 +70,9 @@ def _configured_provider_names() -> list[str]:
         return [name.strip().lower() for name in requested.split(",") if name.strip()]
 
     names: list[str] = []
-    if os.environ.get("OPENAI_API_KEY") or os.environ.get("LLMCORE_PROVIDERS__OPENAI__API_KEY"):
-        names.append("openai")
-    if (
-        os.environ.get("GOOGLE_API_KEY")
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("LLMCORE_PROVIDERS__GEMINI__API_KEY")
-    ):
-        names.append("gemini")
+    for provider_name, env_names in KEY_ENVS_BY_PROVIDER.items():
+        if any(os.environ.get(env_name) for env_name in env_names):
+            names.append(provider_name)
     if os.environ.get("LLMCORE_RUN_OLLAMA") == "1":
         names.append("ollama")
     return names
@@ -58,6 +81,19 @@ def _configured_provider_names() -> list[str]:
 def _model_for(provider_name: str) -> str | None:
     env_name, fallback = MODEL_BY_PROVIDER.get(provider_name, ("", ""))
     return os.environ.get(env_name, fallback) or None
+
+
+def _config_overrides() -> dict[str, object]:
+    providers: dict[str, dict[str, str]] = {}
+    if os.environ.get("KIMI_API_KEY") and not os.environ.get("MOONSHOT_API_KEY"):
+        providers["kimi"] = {"api_key_env_var": "KIMI_API_KEY"}
+    if os.environ.get("DEEPINFRA_API_KEY") and not os.environ.get("DEEPINFRA_TOKEN"):
+        providers["deepinfra"] = {"api_key_env_var": "DEEPINFRA_API_KEY"}
+
+    overrides: dict[str, object] = {"llmcore": {"log_level": "ERROR"}}
+    if providers:
+        overrides["providers"] = providers
+    return overrides
 
 
 async def _consume_stream(chunks: AsyncIterable[str]) -> str:
@@ -71,14 +107,13 @@ async def _consume_stream(chunks: AsyncIterable[str]) -> str:
 async def main() -> None:
     provider_names = _configured_provider_names()
     if not provider_names:
-        logger.error("No live provider keys found. Set OPENAI_API_KEY or GOOGLE_API_KEY.")
+        logger.error("No live provider keys found. Set provider API keys and try again.")
         raise SystemExit(1)
 
-    overrides = {"llmcore": {"log_level": "ERROR"}}
     failures: list[str] = []
 
     try:
-        async with await LLMCore.create(config_overrides=overrides) as llm:
+        async with await LLMCore.create(config_overrides=_config_overrides()) as llm:
             available = set(llm.get_available_providers())
             logger.info("Available providers: %s", sorted(available))
 
@@ -96,6 +131,7 @@ async def main() -> None:
                             model_name=model_name,
                             save_session=False,
                             system_message="You answer tersely.",
+                            **PROVIDER_KWARGS.get(provider_name, {}),
                         )
                     logger.info("OK %s/%s: %s", provider_name, model_name, response.strip())
                 except (ProviderError, ConfigError, LLMCoreError, TimeoutError) as exc:
