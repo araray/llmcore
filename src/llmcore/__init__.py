@@ -8,8 +8,8 @@ supporting hierarchical memory (including episodic memory for agent experiences)
 and orchestrating autonomous agents via the Darwin cognitive cycle.
 
 Key subsystems:
-    - **Providers**: OpenAI, Anthropic, Google/Gemini, Ollama + OpenAI-compatible
-      (DeepSeek, Mistral, xAI, Groq, Together)
+    - **Providers**: OpenAI, Anthropic, Google/Gemini, Ollama, DeepInfra,
+      Deepgram voice/audio, and OpenAI-compatible providers
     - **Agents**: 8-phase Darwin cognitive cycle, personas, HITL, sandboxing
     - **Memory**: Volatile / Session / Semantic / Episodic tiers
     - **Storage**: SQLite, PostgreSQL, ChromaDB, pgvector backends
@@ -34,7 +34,7 @@ For advanced or less-common types, import from sub-packages::
     from llmcore.agents.hitl import HITLManager
     from llmcore.autonomous import AutonomousScheduler
 
-Version: 0.41.1
+Version: 0.50.0
 """
 
 from importlib.metadata import PackageNotFoundError, version

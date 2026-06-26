@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "app": {
     "name": "LLMCore",
-    "version": "0.49.6",
+    "version": "0.50.0",
     "description": "Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution",
     "url": "https://github.com/araray/llmcore",
     "maintainer": "araray"

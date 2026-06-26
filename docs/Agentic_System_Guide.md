@@ -2702,5 +2702,5 @@ max_runs = 100
 ---
 
 *Document Version: 1.0.0*
-*Last Updated: 2024*
-*LLMCore Version: 0.26.0+*
+*Last Updated: 2026*
+*LLMCore Version: 0.50.0*

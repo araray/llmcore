@@ -23,30 +23,22 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-# --- Granular import checks for google-genai and its dependencies ---
-google_genai_available = False
-try:
-    from google import genai
-    from google.api_core.exceptions import InvalidArgument, PermissionDenied
-    from google.genai import types
-    from google.genai.errors import APIError
-
-    google_genai_available = True
-except ImportError:
-    genai = None  # type: ignore
-    types = None  # type: ignore
-    APIError = Exception  # type: ignore
-    PermissionDenied = Exception  # type: ignore
-    InvalidArgument = Exception  # type: ignore
-
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
+
+google_genai_available = False
+genai: Any | None = None
+types: Any | None = None
+APIError: type[Exception] = Exception
+PermissionDenied: type[Exception] = Exception
+InvalidArgument: type[Exception] = Exception
+_google_genai_import_attempted = False
+
+logger = logging.getLogger(__name__)
 
 # Updated for current-generation Gemini models (April 2026).
 # Used as last-resort fallback when neither the model card registry
@@ -76,6 +68,41 @@ LLMCORE_TO_GEMINI_ROLE_MAP = {
 
 # Cache for dynamically discovered context lengths, shared across instances.
 _discovered_context_lengths: dict[str, int] = {}
+
+
+def _ensure_google_genai_imported() -> bool:
+    """Import google-genai only when the Gemini provider is instantiated."""
+    global _google_genai_import_attempted
+    global APIError, InvalidArgument, PermissionDenied, genai, google_genai_available, types
+
+    if google_genai_available and genai is not None:
+        return True
+    if _google_genai_import_attempted and not google_genai_available:
+        return False
+
+    _google_genai_import_attempted = True
+    try:
+        from google import genai as _genai
+        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
+        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
+        from google.genai import types as _types
+        from google.genai.errors import APIError as _APIError
+    except ImportError:
+        google_genai_available = False
+        genai = None
+        types = None
+        APIError = Exception
+        PermissionDenied = Exception
+        InvalidArgument = Exception
+        return False
+
+    genai = _genai
+    types = _types
+    APIError = _APIError
+    PermissionDenied = _PermissionDenied
+    InvalidArgument = _InvalidArgument
+    google_genai_available = True
+    return True
 
 
 class GeminiProvider(BaseProvider):
@@ -113,7 +140,7 @@ class GeminiProvider(BaseProvider):
             log_raw_payloads: Whether to log raw request/response payloads.
         """
         super().__init__(config, log_raw_payloads)
-        if not google_genai_available:
+        if not _ensure_google_genai_imported():
             raise ImportError(
                 "Google Gen AI library (`google-genai`) not installed. "
                 "Install with 'pip install llmcore[gemini]'."

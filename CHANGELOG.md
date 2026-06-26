@@ -5,6 +5,44 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.50.0
+
+### Added — June 2026 agent, context, provider, and observability rollup
+
+- **Deepgram voice/audio provider**: native SDK integration for speech-to-text,
+  text-to-speech, Flux streaming, Voice Agent, text intelligence, token grants,
+  Deepgram model cards, docs, examples, and offline tests.
+- **Per-call usage accounting**: `LLMCore.chat_with_usage()` and `ChatUsage`
+  expose prompt/completion/total token counts for transient calls without
+  requiring session persistence.
+- **Search providers**: the optional `llmcore.search` subsystem now includes
+  Bright Data, Serper.dev, SerpApi, and Semantic Scholar, with provider-neutral
+  result models and manager/facade wiring.
+- **Token counting**: native provider fallback paths and OpenAI token counting
+  now route through llmcore's shared model-aware token counters.
+- **Agent execution**: typed plan-step specs, structured plan-step tool
+  execution, loaded-tool validation, activity-protocol routing to loaded tools,
+  runtime permission metadata, and preserved resumed history/pending action
+  snapshots.
+- **Context and memory**: objective-aware compression, semantic citation
+  provenance, structured tool-result summaries, typed citation source handling,
+  and external backend consolidation hooks.
+- **Observability**: semantic retrieval events, context diagnostics after agent
+  runs, context failure diagnostics, phase token summaries, iteration summaries,
+  and ecosystem federation telemetry.
+- **HITL auditability**: OWASP metadata and audit reporting for dangerous action
+  patterns.
+
+### Changed
+
+- Bumped package and documentation metadata to `0.50.0`.
+- Removed noisy import-time optional SDK warnings by lazy-loading
+  `sentence-transformers` and `google-genai` only when their providers are
+  instantiated.
+- Updated `SingleAgent` environment config loading to use the current unified
+  `confy.Config` path instead of the deprecated `load_agents_config(config_path=...)`
+  compatibility path.
+
 ## v0.49.14
 
 ### Added — Deepgram voice/audio provider (STT, TTS, Flux, Voice Agent, Text Intelligence)

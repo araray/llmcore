@@ -17,7 +17,7 @@ Exception Hierarchy:
     ├── ContextError - Context management errors
     │   └── ContextLengthError - Context exceeds model limits
     ├── EmbeddingError - Embedding generation errors
-    └── SandboxError - Sandbox execution errors (NEW in v0.26.0)
+    └── SandboxError - Sandbox execution errors (introduced in v0.26.0)
         ├── SandboxInitializationError - Failed to create/start sandbox
         ├── SandboxExecutionError - Command/code execution failed
         ├── SandboxTimeoutError - Operation exceeded time limit
@@ -419,7 +419,7 @@ class EmbeddingError(LLMCoreError):
 
 
 # =============================================================================
-# SANDBOX EXCEPTIONS (NEW in v0.26.0)
+# SANDBOX EXCEPTIONS (introduced in v0.26.0)
 # =============================================================================
 # These exceptions are re-exported from llmcore.agents.sandbox.exceptions
 # for convenience. The canonical definitions are in the sandbox module.

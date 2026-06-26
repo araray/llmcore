@@ -8,22 +8,39 @@ Uses the sentence-transformers library to generate embeddings locally.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 from typing import Any
-
-# Import sentence-transformers library
-try:
-    from sentence_transformers import SentenceTransformer
-
-    sentence_transformers_available = True
-except ImportError:
-    sentence_transformers_available = False
-    SentenceTransformer = None  # type: ignore
 
 from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
 
+sentence_transformers_available = importlib.util.find_spec("sentence_transformers") is not None
+SentenceTransformer: Any | None = None
+
 logger = logging.getLogger(__name__)
+
+
+def _load_sentence_transformer_class() -> Any:
+    """Import sentence-transformers only when a local embedding model is used."""
+    global SentenceTransformer, sentence_transformers_available
+
+    if SentenceTransformer is not None:
+        return SentenceTransformer
+
+    try:
+        from sentence_transformers import SentenceTransformer as _SentenceTransformer
+    except ImportError as exc:
+        sentence_transformers_available = False
+        raise ImportError(
+            "Sentence Transformers library not found. "
+            "Please install `sentence-transformers` "
+            "(e.g., `pip install llmcore[sentence_transformers]`)."
+        ) from exc
+
+    SentenceTransformer = _SentenceTransformer
+    sentence_transformers_available = True
+    return _SentenceTransformer
 
 
 class SentenceTransformerEmbedding(BaseEmbeddingModel):
@@ -111,7 +128,8 @@ class SentenceTransformerEmbedding(BaseEmbeddingModel):
     def _load_model_sync(self, model_name_or_path: str, device: str | None) -> SentenceTransformer:
         """Synchronous helper function to load the model."""
         # This function will run in a separate thread via asyncio.to_thread
-        return SentenceTransformer(model_name_or_path, device=device)
+        sentence_transformer_cls = _load_sentence_transformer_class()
+        return sentence_transformer_cls(model_name_or_path, device=device)
 
     def _encode_sync(self, texts: list[str]) -> list[list[float]]:
         """Synchronous helper function for encoding."""

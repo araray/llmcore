@@ -214,7 +214,14 @@ class SingleAgentMode:
             if config_path:
                 from pathlib import Path
 
-                self._agents_config = load_agents_config(config_path=Path(config_path))
+                from confy.loader import Config as ConfyConfig
+
+                config = ConfyConfig(
+                    file_path=str(Path(config_path)),
+                    load_dotenv_file=False,
+                    prefix="LLMCORE",
+                )
+                self._agents_config = load_agents_config(config=config)
                 logger.debug(f"Loaded agents config from {config_path}")
             else:
                 # Will use defaults + environment variable overrides

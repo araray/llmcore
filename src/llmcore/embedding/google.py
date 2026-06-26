@@ -16,21 +16,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-# --- google-genai library imports ---
-try:
-    import google.genai as genai
-    from google.genai import errors as genai_errors
-    from google.genai import types as genai_types
-
-    google_genai_available = True
-except ImportError:
-    google_genai_available = False
-    genai = None  # type: ignore
-    genai_types = None  # type: ignore
-    genai_errors = None  # type: ignore
-
 from ..exceptions import ConfigError, EmbeddingError
 from .base import BaseEmbeddingModel
+
+google_genai_available = False
+genai: Any | None = None
+genai_types: Any | None = None
+genai_errors: Any | None = None
+_google_genai_import_attempted = False
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +41,35 @@ VALID_TASK_TYPES = [
     "QUESTION_ANSWERING",
     "FACT_VERIFICATION",
 ]
+
+
+def _ensure_google_genai_imported() -> bool:
+    """Import google-genai only when the Google embedding provider is used."""
+    global _google_genai_import_attempted
+    global genai, genai_errors, genai_types, google_genai_available
+
+    if google_genai_available and genai is not None:
+        return True
+    if _google_genai_import_attempted and not google_genai_available:
+        return False
+
+    _google_genai_import_attempted = True
+    try:
+        import google.genai as _genai
+        from google.genai import errors as _genai_errors
+        from google.genai import types as _genai_types
+    except ImportError:
+        google_genai_available = False
+        genai = None
+        genai_types = None
+        genai_errors = None
+        return False
+
+    genai = _genai
+    genai_types = _genai_types
+    genai_errors = _genai_errors
+    google_genai_available = True
+    return True
 
 
 class GoogleAIEmbedding(BaseEmbeddingModel):
@@ -85,7 +107,7 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
                 'output_dimensionality' (optional): Reduce output embedding
                     dimension. Supported by newer models (not embedding-001).
         """
-        if not google_genai_available:
+        if not _ensure_google_genai_imported():
             raise ImportError(
                 "Google Gen AI library (`google-genai`) not found. "
                 "Please install `google-genai` (e.g., `pip install llmcore[gemini]`)."
@@ -132,6 +154,11 @@ class GoogleAIEmbedding(BaseEmbeddingModel):
         config_kwargs: dict[str, Any] = {"task_type": self._task_type}
         if self._output_dimensionality is not None:
             config_kwargs["output_dimensionality"] = self._output_dimensionality
+        if not _ensure_google_genai_imported() or genai_types is None:
+            raise EmbeddingError(
+                model_name=self._model_name,
+                message="Google Gen AI types are not available.",
+            )
         return genai_types.EmbedContentConfig(**config_kwargs)
 
     async def initialize(self) -> None:

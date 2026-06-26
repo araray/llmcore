@@ -3,7 +3,7 @@
 Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution
 
 **Schema version**: 1.0.0  
-**App version**: 0.49.6  
+**App version**: 0.50.0
 **Output format**: toml
 
 ---
