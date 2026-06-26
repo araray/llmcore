@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
-dir_llmcore="."
-dir_venv="${dir_llmcore}/venv"
+dir_llmcore_repo="${LLMCORE_REPO_DIR:-.}"
+dir_venv="${dir_llmcore_repo}/venv"
+dotenv_file="${LLMCORE_DOTENV_FILE:-.env}"
 
-cd "${dir_llmcore}"
+cd "${dir_llmcore_repo}" || exit 1
 
 source "${dir_venv}/bin/activate"
+if [[ -f "${dotenv_file}" ]]; then
+    source "${dotenv_file}"
+fi
 
 export TEST_POSTGRES_URL="postgresql://tester:tester@localhost:5432/postgres"
 export LLMCORE_TEST_PG_HOST=127.0.0.1
