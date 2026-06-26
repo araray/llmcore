@@ -25,7 +25,16 @@ from llmcore.exceptions import ConfigError, ProviderError
 from llmcore.models import Message
 from llmcore.models_multimodal import SpeechResult, TranscriptionResult
 from llmcore.providers import deepgram_provider as dgmod
-from llmcore.providers.deepgram_provider import DeepgramProvider
+from llmcore.providers.deepgram_provider import DeepgramProvider, deepgram_available
+
+# The Deepgram SDK is an optional extra (``pip install llmcore[deepgram]``).
+# When it is not installed the SDK symbols the provider wraps are ``None``, so
+# these unit tests (which exercise real SDK types via fakes) cannot run; skip the
+# whole module rather than fail, mirroring the other optional-dependency suites.
+pytestmark = pytest.mark.skipif(
+    not deepgram_available,
+    reason="deepgram-sdk not installed (optional extra: pip install llmcore[deepgram])",
+)
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -113,9 +122,7 @@ def test_init_with_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_init_api_key_from_custom_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MY_DG_KEY", "from-env")
-    p = _make_provider(
-        monkeypatch, {"api_key": None, "api_key_env_var": "MY_DG_KEY"}
-    )
+    p = _make_provider(monkeypatch, {"api_key": None, "api_key_env_var": "MY_DG_KEY"})
     assert p.api_key == "from-env"
 
 
@@ -300,16 +307,8 @@ def _sample_stt_response() -> dict[str, Any]:
             "models": ["nova-3"],
         },
         "results": {
-            "channels": [
-                {
-                    "alternatives": [
-                        {"transcript": "hello world", "confidence": 0.987}
-                    ]
-                }
-            ],
-            "utterances": [
-                {"transcript": "hello world", "start": 0.0, "end": 1.2, "speaker": 0}
-            ],
+            "channels": [{"alternatives": [{"transcript": "hello world", "confidence": 0.987}]}],
+            "utterances": [{"transcript": "hello world", "start": 0.0, "end": 1.2, "speaker": 0}],
             "summary": {"short": "a greeting"},
         },
     }

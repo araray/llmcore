@@ -23,10 +23,17 @@ import pytest
 
 from llmcore.exceptions import ProviderError
 from llmcore.models_multimodal import StreamEventType
-from llmcore.providers.deepgram_provider import DeepgramProvider
+from llmcore.providers.deepgram_provider import DeepgramProvider, deepgram_available
 
 # Reuse the fake-client install helper from the core test module.
 from .test_deepgram_provider import _install_fake_client
+
+# Optional extra: skip the whole module when ``deepgram-sdk`` is not installed
+# (the streaming paths construct real SDK message types via fakes).
+pytestmark = pytest.mark.skipif(
+    not deepgram_available,
+    reason="deepgram-sdk not installed (optional extra: pip install llmcore[deepgram])",
+)
 
 
 def _make_provider(
@@ -289,9 +296,7 @@ async def test_transcribe_stream_keepalive_fires(
 
     _ = [
         e
-        async for e in p.transcribe_stream(
-            _slow_audio(), model="nova-3", keepalive_interval=0.005
-        )
+        async for e in p.transcribe_stream(_slow_audio(), model="nova-3", keepalive_interval=0.005)
     ]
     assert socket.keepalives >= 1
     assert socket.closed is True
@@ -405,7 +410,11 @@ async def test_transcribe_stream_flux_maps_turns(
     events = [
         e
         async for e in p.transcribe_stream_flux(
-            _audio(), model="flux-general-en", eot_threshold=0.7, encoding="linear16", sample_rate=16000
+            _audio(),
+            model="flux-general-en",
+            eot_threshold=0.7,
+            encoding="linear16",
+            sample_rate=16000,
         )
     ]
     types = [e.type for e in events]
@@ -476,7 +485,12 @@ async def test_stream_speech_ws_iterable(monkeypatch: pytest.MonkeyPatch) -> Non
         yield "Hello "
         yield "world"
 
-    chunks = [c async for c in p.stream_speech(_text(), model="aura-2-thalia-en", response_format="linear16")]
+    chunks = [
+        c
+        async for c in p.stream_speech(
+            _text(), model="aura-2-thalia-en", response_format="linear16"
+        )
+    ]
     assert b"".join(chunks) == b"AUDIO"
     assert socket.texts == ["Hello ", "world"]
     assert socket.flushed is True

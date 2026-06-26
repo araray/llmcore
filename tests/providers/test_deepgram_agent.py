@@ -23,10 +23,17 @@ import pytest
 
 from llmcore.exceptions import ProviderError
 from llmcore.models_multimodal import VoiceAgentEventType
-from llmcore.providers.deepgram_provider import DeepgramProvider
+from llmcore.providers.deepgram_provider import DeepgramProvider, deepgram_available
 
 from .test_deepgram_provider import _install_fake_client
 from .test_deepgram_streaming import _bind_connect, _Holder
+
+# Optional extra: skip the whole module when ``deepgram-sdk`` is not installed
+# (the agent paths build/validate real ``AgentV1Settings`` and message types).
+pytestmark = pytest.mark.skipif(
+    not deepgram_available,
+    reason="deepgram-sdk not installed (optional extra: pip install llmcore[deepgram])",
+)
 
 # Minimal but complete agent config so AgentV1Settings.model_validate succeeds
 # (``audio`` and ``agent`` are required by the SDK model).
@@ -188,9 +195,7 @@ async def test_voice_agent_session_steering_methods(
         await session.inject_agent_message("Welcome aboard.")
         await session.update_prompt("new system prompt")
         await session.update_think({"provider": {"type": "open_ai", "model": "gpt-4o"}})
-        await session.update_speak(
-            {"provider": {"type": "deepgram", "model": "aura-asteria-en"}}
-        )
+        await session.update_speak({"provider": {"type": "deepgram", "model": "aura-asteria-en"}})
         await session.respond_to_function_call("f1", "get_weather", "sunny")
         await session.keepalive()
 
@@ -199,9 +204,7 @@ async def test_voice_agent_session_steering_methods(
     assert socket.injected_agent == ["Welcome aboard."]
     assert socket.prompts == ["new system prompt"]
     assert socket.thinks[0].model_dump()["think"]["provider"]["model"] == "gpt-4o"
-    assert (
-        socket.speaks[0].model_dump()["speak"]["provider"]["model"] == "aura-asteria-en"
-    )
+    assert socket.speaks[0].model_dump()["speak"]["provider"]["model"] == "aura-asteria-en"
     assert socket.function_responses == [("f1", "get_weather", "sunny")]
     assert socket.keepalives == 1
 
@@ -324,7 +327,9 @@ async def test_analyze_text_with_text(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["request"] == {"text": "How's the weather?"}
     assert captured["summarize"] is True
     assert result.summary == "A short summary."
-    assert result.topics == [{"text": "weather", "topics": [{"topic": "weather", "confidence": 0.9}]}]
+    assert result.topics == [
+        {"text": "weather", "topics": [{"topic": "weather", "confidence": 0.9}]}
+    ]
     assert result.intents == [{"intents": [{"intent": "ask_weather"}]}]
     assert result.sentiments == {"average": {"sentiment": "positive"}}
     assert result.request_id == "rid"
