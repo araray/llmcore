@@ -13,13 +13,12 @@ Unit tests for the GeminiProvider covering:
 All tests use mocking — no live API calls.
 """
 
+import inspect
 import json
 
 # We need to mock the google imports before importing the provider
 import sys
-import uuid
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -43,8 +42,6 @@ with patch.dict(
     },
 ):
     # Now set the module-level flags
-    import importlib
-
     # We need a fresh import
     from llmcore.providers import gemini_provider as gp
 
@@ -55,8 +52,8 @@ with patch.dict(
     gp.PermissionDenied = PermissionError
     gp.InvalidArgument = ValueError
 
-from llmcore.models import Message, ModelDetails, Tool, ToolCall
-from llmcore.models import Role as LLMCoreRole
+from llmcore.models import Message  # noqa: E402
+from llmcore.models import Role as LLMCoreRole  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -227,7 +224,7 @@ class TestConvertMessages:
             Message(role=LLMCoreRole.SYSTEM, content="Rule 2"),
             Message(role=LLMCoreRole.USER, content="Hi"),
         ]
-        contents, sys_text = provider._convert_llmcore_msgs_to_genai_contents(msgs)
+        _, sys_text = provider._convert_llmcore_msgs_to_genai_contents(msgs)
         assert sys_text == "Rule 1\nRule 2"
 
     def test_role_mapping(self, provider):
@@ -338,7 +335,7 @@ class TestExtractToolCalls:
         }
         calls = provider.extract_tool_calls(response)
         assert len(calls) == 1
-        assert isinstance(calls[0], ToolCall)
+        assert isinstance(calls[0], gp.ToolCall)
         assert calls[0].name == "search"
         assert calls[0].arguments == {"query": "hello"}
 
@@ -418,6 +415,53 @@ class TestExtractDeltaContent:
     def test_empty_chunk(self, provider):
         """Empty chunk returns empty string."""
         assert provider.extract_delta_content({}) == ""
+
+
+class TestStreamingChatCompletion:
+    @pytest.mark.asyncio
+    async def test_streaming_returns_async_iterator_not_coroutine(self, provider):
+        """chat_completion(stream=True) should return the async chunk iterator."""
+
+        class FakeStream:
+            def __aiter__(self):
+                self._chunks = iter(
+                    [
+                        SimpleNamespace(
+                            candidates=[
+                                SimpleNamespace(
+                                    content=SimpleNamespace(
+                                        parts=[SimpleNamespace(text="hello", thought=False)]
+                                    )
+                                )
+                            ]
+                        )
+                    ]
+                )
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._chunks)
+                except StopIteration as exc:
+                    raise StopAsyncIteration from exc
+
+        provider._client.aio.models.generate_content_stream = AsyncMock(
+            return_value=FakeStream()
+        )
+
+        result = await provider.chat_completion(
+            [gp.Message(role=gp.LLMCoreRole.USER, content="Hi")],
+            stream=True,
+        )
+
+        assert hasattr(result, "__aiter__")
+        assert not inspect.iscoroutine(result)
+
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+
+        assert chunks == [{"choices": [{"delta": {"content": "hello"}}]}]
 
 
 # ---------------------------------------------------------------------------

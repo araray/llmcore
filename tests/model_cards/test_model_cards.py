@@ -677,7 +677,7 @@ class TestModuleFunctions:
 
     def test_clear_cache(self, fresh_registry):
         """Should clear the lookup cache."""
-        card1 = get_model_card("openai", "gpt-4o")
+        assert get_model_card("openai", "gpt-4o") is not None
         clear_model_card_cache()
 
         # Info about cache
@@ -777,9 +777,6 @@ class TestRegistryConfig:
         """Without config, should use default path."""
         ModelCardRegistry.reset_instance()
         registry = ModelCardRegistry.get_instance()
-
-        # Don't configure - should use default
-        default = ModelCardRegistry.get_default_user_path()
 
         # _get_configured_user_path should return None
         configured = registry._get_configured_user_path()

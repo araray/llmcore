@@ -25,6 +25,10 @@ import pytest
 from llmcore import LLMCore
 from llmcore.models import ContextDocument, ContextPreparationDetails
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:`torch\\.jit\\.script` is deprecated.*:DeprecationWarning"
+)
+
 
 class TestContextInfoIntrospectionBasic:
     """Test basic context info retrieval functionality."""
@@ -36,7 +40,7 @@ class TestContextInfoIntrospectionBasic:
 
         try:
             # Make a chat call
-            response = await llm.chat(message="Test message", session_id="test_session")
+            await llm.chat(message="Test message", session_id="test_session")
 
             # Retrieve context info
             context_info = llm.get_last_interaction_context_info("test_session")
@@ -370,8 +374,6 @@ class TestCacheOverwriting:
 
             # First chat
             await llm.chat(message="First message", session_id=session_id)
-            info_1 = llm.get_last_interaction_context_info(session_id)
-            tokens_1 = info_1.total_tokens if info_1 else 0
 
             # Second chat with different message
             await llm.chat(

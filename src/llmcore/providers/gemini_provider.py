@@ -187,7 +187,7 @@ class GeminiProvider(BaseProvider):
             self._client = genai.Client(**client_kwargs)
             logger.debug("Google Gen AI client initialized successfully.")
         except Exception as e:
-            raise ConfigError(f"Google Gen AI configuration failed: {e}")
+            raise ConfigError(f"Google Gen AI configuration failed: {e}") from e
 
     def _parse_safety_settings(
         self, settings_config: dict[str, str] | None
@@ -313,11 +313,7 @@ class GeminiProvider(BaseProvider):
                         model_type = model_type_val.value
 
                     metadata["from_model_card"] = True
-                    metadata["lifecycle_status"] = (
-                        card.lifecycle.status
-                        if isinstance(card.lifecycle.status, str)
-                        else card.lifecycle.status
-                    )
+                    metadata["lifecycle_status"] = card.lifecycle.status
 
                 details = ModelDetails(
                     id=model_id,
@@ -340,7 +336,7 @@ class GeminiProvider(BaseProvider):
             logger.error(
                 f"Failed to list models from Google AI: {e}", exc_info=True
             )
-            raise ProviderError(self.get_name(), f"Failed to list models: {e}")
+            raise ProviderError(self.get_name(), f"Failed to list models: {e}") from e
         return details_list
 
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
@@ -708,7 +704,7 @@ class GeminiProvider(BaseProvider):
 
         try:
             if stream:
-                return self._handle_streaming(
+                return await self._handle_streaming(
                     model_name, genai_contents, config
                 )
             else:
@@ -721,13 +717,13 @@ class GeminiProvider(BaseProvider):
             if "context length" in err_str or "token" in err_str:
                 raise ContextLengthError(
                     model_name=model_name, message=str(e)
-                )
-            raise ProviderError(self.get_name(), f"Google AI API Error: {e}")
+                ) from e
+            raise ProviderError(self.get_name(), f"Google AI API Error: {e}") from e
         except PermissionDenied as e:
             logger.error(
                 f"Permission denied during Gemini chat: {e}", exc_info=True
             )
-            raise ProviderError(self.get_name(), f"Permission denied: {e}")
+            raise ProviderError(self.get_name(), f"Permission denied: {e}") from e
         except (ContextLengthError, ProviderError):
             raise
         except Exception as e:
@@ -736,7 +732,7 @@ class GeminiProvider(BaseProvider):
             )
             raise ProviderError(
                 self.get_name(), f"An unexpected error occurred: {e}"
-            )
+            ) from e
 
     async def _handle_non_streaming(
         self,
