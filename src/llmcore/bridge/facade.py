@@ -79,6 +79,12 @@ class LLMCoreFacade(Protocol):
     def get_models_for_provider(self, provider_name: str) -> list[str]:
         ...
 
+    def get_provider(self, provider_name: str | None = ...) -> Any:
+        # Tier-2: returns a provider instance exposing live-audio / multimodal
+        # methods (transcribe_stream / stream_speech / run_voice_agent, and the
+        # one-shot generate_speech / transcribe_audio / generate_image / ocr).
+        ...
+
     async def reload_config(self) -> None:
         ...
 

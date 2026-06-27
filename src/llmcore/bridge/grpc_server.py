@@ -142,9 +142,30 @@ class AudioServicer(audio_pb2_grpc.AudioServiceServicer):
         await self._unimpl(context)
 
     async def TranscribeStream(self, request_iterator, context):
-        await self._unimpl(context)
-        if False:  # pragma: no cover - make this an async generator
-            yield
+        if not self._core.audio_enabled:
+            # Drain inbound frames so the client's sends complete before we
+            # close with a terminal status. Otherwise grpc.aio surfaces the
+            # client-side send race ("Failed execute_batch: SendMessageOperation")
+            # as INTERNAL, masking the real UNIMPLEMENTED. A response-streaming
+            # handler that yields nothing also cannot use context.abort() cleanly,
+            # so we set the status and end the stream.
+            try:
+                async for _frame in request_iterator:
+                    pass
+            except Exception:
+                pass
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+            context.set_details(_AUDIO_UNIMPLEMENTED)
+            return
+        try:
+            async for ev in self._core.transcribe_stream(request_iterator):
+                yield ev
+        except BridgeError as be:
+            await _abort(context, be)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await _abort(context, map_exception(exc))
 
     async def SynthesizeStream(self, request_iterator, context):
         await self._unimpl(context)

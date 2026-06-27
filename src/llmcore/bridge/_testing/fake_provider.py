@@ -113,3 +113,58 @@ def register_fake_provider() -> None:
     from llmcore.providers import manager
 
     manager.PROVIDER_MAP["fake"] = FakeProvider
+
+
+class FakeAudioProvider:
+    """Deterministic Tier-2 audio surface for bridge conformance tests (B3).
+
+    Intentionally **not** a :class:`BaseProvider` subclass: it implements only
+    the audio methods the bridge ``AudioService`` actually calls, so it can be
+    returned by ``FakeFacade.get_provider()`` and drive the gRPC/WebSocket audio
+    handlers fully offline. Crucially, it yields the *real*
+    ``llmcore.models_multimodal`` pydantic events, so the bridge's
+    ``event -> proto`` mapping is exercised identically to a real provider.
+
+    ``transcribe_stream`` consumes the inbound audio iterable and, for each
+    non-empty chunk, treats the decoded bytes as one "word": it emits an
+    ``INTERIM`` event per chunk, then a single ``FINAL`` event whose ``text`` is
+    the space-joined words, then an ``UTTERANCE_END``. This is fully
+    deterministic and lets the e2e assert ``final.text == " ".join(words)``.
+    """
+
+    def get_name(self) -> str:
+        return "fake"
+
+    async def transcribe_stream(
+        self, audio: Any = None, **kwargs: Any
+    ) -> "AsyncGenerator[Any, None]":
+        from llmcore.models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+        words: list[str] = []
+        if audio is not None:
+            async for chunk in audio:
+                if not chunk:
+                    continue
+                if isinstance(chunk, (bytes, bytearray)):
+                    word = bytes(chunk).decode("utf-8", "replace")
+                else:
+                    word = str(chunk)
+                words.append(word)
+                yield TranscriptionStreamEvent(
+                    type=StreamEventType.INTERIM,
+                    text=word,
+                    is_final=False,
+                    provider="fake",
+                )
+        yield TranscriptionStreamEvent(
+            type=StreamEventType.FINAL,
+            text=" ".join(words),
+            is_final=True,
+            speech_final=True,
+            provider="fake",
+        )
+        yield TranscriptionStreamEvent(
+            type=StreamEventType.UTTERANCE_END,
+            text="",
+            provider="fake",
+        )

@@ -15,6 +15,12 @@ suite. They are NOT part of the public bridge surface and add no dependency to
 from __future__ import annotations
 
 from .fake_facade import FakeFacade, fake_count_tokens
-from .fake_provider import FakeProvider, register_fake_provider
+from .fake_provider import FakeAudioProvider, FakeProvider, register_fake_provider
 
-__all__ = ["FakeFacade", "FakeProvider", "fake_count_tokens", "register_fake_provider"]
+__all__ = [
+    "FakeFacade",
+    "FakeProvider",
+    "FakeAudioProvider",
+    "fake_count_tokens",
+    "register_fake_provider",
+]

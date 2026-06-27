@@ -56,6 +56,13 @@ symbols:
     name: get_models_for_provider
     params_include: [provider_name]
     returns_contains: "list"
+  - id: LLMCore.get_provider
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_provider
+    params_include: [provider_name]
+    returns_contains: "BaseProvider"
   - id: LLMCore.reload_config
     file: src/llmcore/api.py
     kind: method

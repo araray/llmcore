@@ -604,6 +604,32 @@ class LLMCore:
         """
         return self._provider_manager.get_available_providers()
 
+    def get_provider(self, provider_name: str | None = None) -> BaseProvider:
+        """Return an LLM-provider instance by name, or the default.
+
+        Public accessor mirroring :meth:`get_search_provider`. It exposes the
+        configured provider object so callers (e.g. the llmcore bridge's Tier-2
+        AudioService) can invoke provider-level multimodal / live-audio methods
+        such as ``transcribe_stream`` / ``stream_speech`` / ``run_voice_agent``
+        and the one-shot ``generate_speech`` / ``transcribe_audio`` without
+        reaching into provider-manager internals.
+
+        Supports the same alias resolution as the underlying manager (e.g.
+        ``"google"`` resolves to a configured ``"gemini"`` instance).
+
+        Args:
+            provider_name: Provider instance (config section) name. If ``None``,
+                returns the configured default provider.
+
+        Returns:
+            The requested :class:`~llmcore.providers.base.BaseProvider`.
+
+        Raises:
+            ConfigError: If the requested/default provider is not configured or
+                failed to load.
+        """
+        return self._provider_manager.get_provider(provider_name)
+
     # ==========================================================================
     # Web / Data Search Providers
     # ==========================================================================

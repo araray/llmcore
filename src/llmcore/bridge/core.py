@@ -18,14 +18,15 @@ from typing import Any, AsyncIterator, Iterable
 from google.protobuf import struct_pb2
 
 from ._generated.llmcore.v1 import (
+    audio_pb2,
     catalog_pb2,
     common_pb2,
     control_pb2,
     inference_pb2,
 )
-from .errors import map_exception, unsupported
+from .errors import BridgeError, map_exception, unsupported
 from .facade import LLMCoreFacade
-from .info import build_server_info
+from .info import audio_capable, build_server_info
 
 __all__ = ["BridgeCore"]
 
@@ -144,6 +145,81 @@ def _model_details_to_proto(m: Any) -> catalog_pb2.ModelDetails:
             # Metadata held a non-JSON value; skip rather than fail the call.
             pass
     return p
+
+
+# -- AudioService (Tier 2) helpers ------------------------------------------ #
+# models_multimodal.StreamEventType (str-enum) -> audio.proto StreamEventType.
+_STREAM_EVENT_TYPE_TO_PROTO: dict[str, int] = {
+    "interim": audio_pb2.STREAM_EVENT_TYPE_INTERIM,
+    "final": audio_pb2.STREAM_EVENT_TYPE_FINAL,
+    "utterance_end": audio_pb2.STREAM_EVENT_TYPE_UTTERANCE_END,
+    "speech_started": audio_pb2.STREAM_EVENT_TYPE_SPEECH_STARTED,
+    "metadata": audio_pb2.STREAM_EVENT_TYPE_METADATA,
+    "start_of_turn": audio_pb2.STREAM_EVENT_TYPE_START_OF_TURN,
+    "eager_end_of_turn": audio_pb2.STREAM_EVENT_TYPE_EAGER_END_OF_TURN,
+    "turn_resumed": audio_pb2.STREAM_EVENT_TYPE_TURN_RESUMED,
+    "end_of_turn": audio_pb2.STREAM_EVENT_TYPE_END_OF_TURN,
+    "update": audio_pb2.STREAM_EVENT_TYPE_UPDATE,
+    "open": audio_pb2.STREAM_EVENT_TYPE_OPEN,
+    "close": audio_pb2.STREAM_EVENT_TYPE_CLOSE,
+    "error": audio_pb2.STREAM_EVENT_TYPE_ERROR,
+    "other": audio_pb2.STREAM_EVENT_TYPE_OTHER,
+}
+
+
+def _json_safe(value: Any) -> Any:
+    """Coerce a value to something ``google.protobuf.Struct.update`` accepts."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
+def _transcription_event_to_proto(ev: Any) -> audio_pb2.TranscriptionStreamEvent:
+    """Map a ``models_multimodal.TranscriptionStreamEvent`` to its proto."""
+    et = getattr(ev, "type", None)
+    et_str = getattr(et, "value", et)  # str-enum -> its string value
+    out = audio_pb2.TranscriptionStreamEvent(
+        type=_STREAM_EVENT_TYPE_TO_PROTO.get(str(et_str), audio_pb2.STREAM_EVENT_TYPE_OTHER),
+        text=getattr(ev, "text", "") or "",
+        provider=getattr(ev, "provider", "") or "",
+    )
+    is_final = getattr(ev, "is_final", None)
+    if is_final is not None:
+        out.is_final = bool(is_final)
+    speech_final = getattr(ev, "speech_final", None)
+    if speech_final is not None:
+        out.speech_final = bool(speech_final)
+    start = getattr(ev, "start", None)
+    if start is not None:
+        out.start = float(start)
+    end = getattr(ev, "end", None)
+    if end is not None:
+        out.end = float(end)
+    confidence = getattr(ev, "confidence", None)
+    if confidence is not None:
+        out.confidence = float(confidence)
+    speaker = getattr(ev, "speaker", None)
+    if speaker is not None:
+        out.speaker = str(speaker)
+    channel_index = getattr(ev, "channel_index", None)
+    if channel_index:
+        out.channel_index.extend(int(c) for c in channel_index)
+    words = getattr(ev, "words", None)
+    if words:
+        for word in words:
+            if isinstance(word, dict):
+                out.words.add().update(_json_safe(word))
+    raw = getattr(ev, "raw", None)
+    if raw:
+        try:
+            out.raw.update(_json_safe(raw))
+        except (TypeError, ValueError):
+            pass
+    return out
 
 
 class BridgeCore:
@@ -320,6 +396,86 @@ class BridgeCore:
         except Exception as exc:
             raise map_exception(exc) from exc
         return control_pb2.ReloadConfigResponse(ok=True)
+
+    # -- AudioService (Tier 2) -------------------------------------------- #
+    @property
+    def audio_enabled(self) -> bool:
+        """Whether Tier-2 audio is enabled for the underlying facade."""
+        return audio_capable(self._facade)
+
+    async def transcribe_stream(
+        self, request_iter: Any
+    ) -> AsyncIterator[audio_pb2.TranscriptionStreamEvent]:
+        """Bidi: consume ``AudioIn`` frames, yield ``TranscriptionStreamEvent``.
+
+        The leading ``open`` frame (``OpenStt``) carries model/language and may
+        carry ``provider_name`` in its options; subsequent frames are audio
+        bytes or control (``CLOSE`` ends the inbound audio). The resolved
+        provider's public ``transcribe_stream`` is driven and each event mapped
+        to proto. Providers lacking live transcription yield ``UNSUPPORTED``.
+        """
+        agen = request_iter.__aiter__()
+
+        async def _next() -> Any:
+            try:
+                return await agen.__anext__()
+            except StopAsyncIteration:
+                return None
+
+        first = await _next()
+        model = language = provider_name = None
+        if first is not None and first.WhichOneof("frame") == "open":
+            op = first.open
+            if op.HasField("model"):
+                model = op.model
+            if op.HasField("language"):
+                language = op.language
+            if len(op.options.fields):
+                pn = _struct_to_dict(op.options).get("provider_name")
+                provider_name = str(pn) if pn else None
+            pending = None
+        else:
+            pending = first  # no leading open frame; first frame was audio/control
+
+        try:
+            provider = self._facade.get_provider(provider_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if not hasattr(provider, "transcribe_stream"):
+            raise unsupported(
+                "provider '%s' does not support live transcription "
+                "(transcribe_stream)" % (provider_name or "default")
+            )
+
+        async def _audio() -> AsyncIterator[bytes]:
+            frame = pending if pending is not None else await _next()
+            while frame is not None:
+                which = frame.WhichOneof("frame")
+                if which == "audio":
+                    if frame.audio:
+                        yield frame.audio
+                elif which == "control":
+                    if frame.control == audio_pb2.STT_CONTROL_CLOSE:
+                        return
+                    # FINALIZE / KEEPALIVE: no-op for this passthrough adapter.
+                # a repeated 'open' frame is ignored
+                frame = await _next()
+
+        kwargs: dict[str, Any] = {}
+        if model is not None:
+            kwargs["model"] = model
+        if language is not None:
+            kwargs["language"] = language
+
+        try:
+            async for ev in provider.transcribe_stream(audio=_audio(), **kwargs):
+                yield _transcription_event_to_proto(ev)
+        except asyncio.CancelledError:
+            raise
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
 
     async def close(self) -> None:
         """Close the underlying facade (best-effort)."""

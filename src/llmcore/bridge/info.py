@@ -14,7 +14,48 @@ from . import BRIDGE_VERSION, CONTRACT_VERSION
 from ._generated.llmcore.v1 import control_pb2
 from .facade import LLMCoreFacade
 
-__all__ = ["build_server_info", "capabilities_for"]
+__all__ = ["build_server_info", "capabilities_for", "audio_capable"]
+
+# The live-audio surface is Deepgram-specific; the one-shot methods live on
+# BaseProvider and so cannot distinguish an audio-capable deployment.
+_AUDIO_STREAMING_METHODS = ("transcribe_stream", "stream_speech", "run_voice_agent")
+
+
+def audio_capable(facade: LLMCoreFacade) -> bool:
+    """Whether the bridge should advertise / enable Tier-2 audio for ``facade``.
+
+    Resolution order:
+
+    1. If the facade exposes a ``supports_audio()`` hook (the test ``FakeFacade``
+       does), use it verbatim — this is the explicit, deterministic gate.
+    2. Otherwise (a real ``LLMCore``), probe configured providers and report
+       ``True`` iff at least one exposes the live-audio surface
+       (``transcribe_stream`` / ``stream_speech`` / ``run_voice_agent``).
+
+    Any failure is treated as "not capable": capability detection must never
+    break ``GetInfo``.
+    """
+    hook = getattr(facade, "supports_audio", None)
+    if callable(hook):
+        try:
+            return bool(hook())
+        except Exception:
+            return False
+    get = getattr(facade, "get_provider", None)
+    if get is None:
+        return False
+    try:
+        names = list(facade.get_available_providers())
+    except Exception:
+        names = []
+    for name in names or [None]:
+        try:
+            provider = get(name)
+        except Exception:
+            continue
+        if any(hasattr(provider, m) for m in _AUDIO_STREAMING_METHODS):
+            return True
+    return False
 
 
 def _llmcore_version() -> str:
@@ -26,17 +67,22 @@ def _llmcore_version() -> str:
         return "unknown"
 
 
-def capabilities_for(transports: Iterable[str]) -> list[str]:
+def capabilities_for(transports: Iterable[str], *, audio: bool = False) -> list[str]:
     """Return the capability flag list advertised for ``transports``.
 
     Tier-0 is always present. ``chat.tool_calls`` is intentionally *omitted*
     (provisional until pinned against the real provider response, spec §5.2).
-    Tier-2 (``tier2.*``) flags are omitted until phase B3.
+    Tier-2 (``tier2.*``) flags are appended only when ``audio`` is enabled.
     """
     caps = ["tier0", "inference.chat", "inference.chat_stream", "inference.count_tokens",
             "inference.estimate_cost", "catalog.providers", "catalog.models", "control.info"]
     for t in transports:
         caps.append(f"transport.{t}")
+    if audio:
+        # Tier-2 umbrella + the live-audio RPCs implemented so far (B3). Further
+        # sub-capabilities (audio.synthesize_stream, audio.voice_agent, and the
+        # one-shot audio.* RPCs) are appended as those handlers land.
+        caps.extend(["tier2.audio", "audio.transcribe_stream"])
     return caps
 
 
@@ -53,13 +99,14 @@ def build_server_info(
         A populated ``llmcore.v1.ServerInfo``.
     """
     transports = list(transports)
+    audio = audio_capable(facade)
     info = control_pb2.ServerInfo(
         llmcore_version=_llmcore_version(),
         bridge_version=BRIDGE_VERSION,
         contract_version=CONTRACT_VERSION,
         transports=transports,
-        capabilities=capabilities_for(transports),
-        tiers=["T0"],
+        capabilities=capabilities_for(transports, audio=audio),
+        tiers=["T0", "T2"] if audio else ["T0"],
     )
     try:
         providers = facade.get_available_providers() or []

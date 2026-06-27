@@ -18,6 +18,7 @@ Supported ``<key>`` values: ``provider_rate_limited``, ``provider_unauthorized``
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, AsyncGenerator
 
 from llmcore.exceptions import (
@@ -168,6 +169,28 @@ class FakeFacade:
         if provider_name in (self.PROVIDER, "", None):
             return ["fake-1", "fake-2"]
         return []
+
+    # -- providers / audio (Tier-2) -------------------------------------- #
+    def get_provider(self, provider_name: str | None = None) -> Any:
+        """Return a deterministic, offline audio-capable provider.
+
+        See :class:`FakeAudioProvider`. Returned regardless of audio mode; the
+        Tier-2 *capability* (and the handler's UNIMPLEMENTED short-circuit) is
+        gated separately by :meth:`supports_audio`.
+        """
+        from .fake_provider import FakeAudioProvider
+
+        return FakeAudioProvider()
+
+    def supports_audio(self) -> bool:
+        """Tier-2 enablement gate for the fake bridge.
+
+        Read dynamically from ``LLMCORE_BRIDGE_FAKE_AUDIO`` so a test can toggle
+        audio on/off against an already-constructed server/fixture. Off by
+        default, which keeps the Tier-0 capability set byte-identical and the
+        five Tier-0 language clients' "tier2.audio rejected" assertions valid.
+        """
+        return os.getenv("LLMCORE_BRIDGE_FAKE_AUDIO") == "1"
 
     # -- lifecycle -------------------------------------------------------- #
     async def reload_config(self) -> None:
