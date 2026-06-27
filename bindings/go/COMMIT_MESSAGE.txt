@@ -1,0 +1,43 @@
+feat(bindings): add Go Tier-0 client (llmcore-go) over gRPC — B2 (Go)
+
+Second foreign-language client of phase B2, generated from the frozen
+`llmcore.v1` contract. gRPC-only (the bridge's primary transport); depends only
+on the contract, never on Python.
+
+Contents (bindings/go/)
+- client.go    - Client: Dial (insecure default / TLS via options), control
+                 (GetInfo/Health/ReloadConfig/EnsureCompatible), inference
+                 (Chat/ChatStream/CountTokens/EstimateCost/Embed), catalog
+                 (ListProviders/ListModels/GetProviderDetails), Close.
+- errors.go    - BridgeError + decoder: reads the binary trailing metadata
+                 `llmcore-error-bin`, unmarshals llmcore.v1.LlmcoreError, exposes
+                 Category/Code/HTTPStatus/Retryable/RetryAfterMs/Provider/Model/
+                 GRPCCode.
+- options.go   - WithTransportCredentials / WithDialOption.
+- doc.go       - package overview.
+- buf.gen.go.yaml + scripts/gen.sh - codegen via buf managed mode (no .proto
+                 edits) + protoc-gen-go / protoc-gen-go-grpc.
+- Makefile, go.mod, .gitignore, examples/quickstart, README.md, USAGE.md.
+
+Tests (harness_test.go + client_test.go)
+- harness spawns a real `llmcore-bridge` (FakeFacade) over localhost; the suite
+  drives chat/streaming (concatenation == unary), count/cost, catalog/control,
+  capability negotiation (accept + reject), Embed UNSUPPORTED, structured error
+  decode (incl. RetryAfterMs), and stream cancellation — matching the fixtures
+  proven by the TypeScript client.
+
+Design
+- ChatStream is decoupled from the protoc-gen-go-grpc stream type (named type in
+  <v1.5, generics in >=v1.5) via a local `chatStreamRecv` interface, so the
+  client compiles against either generator version.
+- Optional proto fields are pointers; struct kwargs use structpb (see USAGE).
+- Pure addition under bindings/go/; no changes to the bridge, contract, or other
+  packages.
+
+Build/verification note
+- The generated `gen/` and a compiled build were NOT produced in the authoring
+  sandbox (no Go toolchain; Go module proxy not reachable). The client is written
+  against the stable grpc-go / protoc-gen-go APIs; buf 1.71 validated
+  buf.gen.go.yaml (parsed; failed only on the absent protoc-gen-go binary). Run
+  `make gen tidy build vet test` in a Go environment to generate, compile, and
+  run the e2e suite.
