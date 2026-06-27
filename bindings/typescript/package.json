@@ -1,0 +1,26 @@
+{
+  "name": "@llmcore/client",
+  "version": "0.1.0",
+  "description": "TypeScript/Node client for the llmcore bridge (gRPC + HTTP/SSE), generated from the llmcore.v1 contract.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src", "README.md", "USAGE.md"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "gen": "sh scripts/gen.sh",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/grpc.test.ts test/http.test.ts"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "protobufjs": "^7.2.0"
+  },
+  "devDependencies": {
+    "ts-proto": "^2.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+# Generate typed TS message/client code from llmcore.v1 using the local
+# ts-proto plugin (buf bundles protoc; no standalone protoc/grpc-tools needed).
+version: v2
+plugins:
+  - local: protoc-gen-ts_proto
+    out: src/gen
+    opt:
+      - outputServices=grpc-js
+      - esModuleInterop=true
+      - forceLong=number
+      - useOptionals=messages
+      - snakeToCamel=true
