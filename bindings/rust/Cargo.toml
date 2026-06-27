@@ -1,0 +1,25 @@
+# Cargo workspace for the llmcore Rust bindings.
+#
+# Build status: the authoring sandbox had no cargo/rustc and no reachable Rust
+# toolchain source, so this was NOT compiled there. It is written against tonic
+# 0.12 / prost 0.13. Build it with `cargo build` (needs `protoc` on PATH for the
+# llmcore-proto build script). See README.md.
+[workspace]
+resolver = "2"
+members = ["llmcore-proto", "llmcore-client"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/araray/llmcore-bindings"
+
+[workspace.dependencies]
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+tonic-build = "0.12"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"] }
+tokio-stream = "0.1"
+thiserror = "1"
+bytes = "1"
