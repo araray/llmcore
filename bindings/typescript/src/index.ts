@@ -27,8 +27,10 @@ export {
 } from "./errors";
 export type { LlmcoreErrorFields, HttpErrorBody } from "./errors";
 
-export { LlmcoreGrpcClient, ChatStream } from "./grpcClient";
+export { LlmcoreGrpcClient, ChatStream, AudioDuplexStream } from "./grpcClient";
 export type { GrpcClientOptions } from "./grpcClient";
+
+export { LlmcoreWsAudioClient, WsAudioStream } from "./wsClient";
 
 export { LlmcoreHttpClient } from "./httpClient";
 export type {
@@ -59,3 +61,31 @@ export type {
 export type { ServerInfo, HealthStatus, ProviderInfo } from "./gen/llmcore/v1/control";
 export type { ModelDetails, ListModelsResponse, ListProvidersResponse } from "./gen/llmcore/v1/catalog";
 export type { Message, Tool, ToolCall, ToolResult, Usage, Role } from "./gen/llmcore/v1/common";
+
+// Audio (Tier 2) message types + control enums.
+export type {
+  AudioIn,
+  AudioOut,
+  OpenStt,
+  OpenTts,
+  SynthControl,
+  VoiceAgentClientEvent,
+  TranscriptionStreamEvent,
+  VoiceAgentEvent,
+  SpeechResult,
+  TranscriptionResult,
+  ImageGenerationResult,
+  OCRResult,
+  TextAnalysisResult,
+  SynthesizeRequest,
+  TranscribeRequest,
+  GenerateImageRequest,
+  OcrRequest,
+  AnalyzeTextRequest,
+} from "./gen/llmcore/v1/audio";
+export {
+  SttControl,
+  TtsControl,
+  StreamEventType,
+  VoiceAgentEventType,
+} from "./gen/llmcore/v1/audio";

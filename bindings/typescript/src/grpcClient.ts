@@ -7,6 +7,7 @@
  */
 import {
   ChannelCredentials,
+  type ClientDuplexStream,
   type ClientReadableStream,
   type ServiceError,
 } from "@grpc/grpc-js";
@@ -41,6 +42,26 @@ import {
 } from "./gen/llmcore/v1/inference";
 import { BridgeError, bridgeErrorFromGrpc, ErrorCategory } from "./errors";
 import { errorCategoryToJSON } from "./gen/llmcore/v1/errors";
+import {
+  AnalyzeTextRequest,
+  AudioIn,
+  type AudioOut,
+  AudioServiceClient,
+  type DeepPartial,
+  GenerateImageRequest,
+  type ImageGenerationResult,
+  OcrRequest,
+  type OCRResult,
+  type SpeechResult,
+  SynthControl,
+  SynthesizeRequest,
+  type TextAnalysisResult,
+  TranscribeRequest,
+  type TranscriptionResult,
+  type TranscriptionStreamEvent,
+  VoiceAgentClientEvent,
+  type VoiceAgentEvent,
+} from "./gen/llmcore/v1/audio";
 
 export interface GrpcClientOptions {
   /** Channel credentials. Defaults to insecure (localhost/dev). */
@@ -67,16 +88,56 @@ export class ChatStream implements AsyncIterable<ChatChunk> {
   }
 }
 
+/**
+ * A bidirectional-streaming wrapper: write request frames with {@link write},
+ * half-close with {@link end}, and async-iterate the server's response frames.
+ * Errors surface as {@link BridgeError} when iterating.
+ */
+export class AudioDuplexStream<Req, Res> implements AsyncIterable<Res> {
+  constructor(
+    private readonly call: ClientDuplexStream<Req, Res>,
+    private readonly encode: (req: DeepPartial<Req>) => Req,
+  ) {}
+
+  /** Send one request frame (partial; filled via the message's `fromPartial`). */
+  write(req: DeepPartial<Req>): this {
+    this.call.write(this.encode(req));
+    return this;
+  }
+
+  /** Half-close the request stream (no more frames will be sent). */
+  end(): void {
+    this.call.end();
+  }
+
+  /** Cancel the in-flight stream (maps to gRPC CANCELLED). */
+  cancel(): void {
+    this.call.cancel();
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<Res> {
+    try {
+      for await (const msg of this.call as AsyncIterable<Res>) {
+        yield msg;
+      }
+    } catch (err) {
+      throw bridgeErrorFromGrpc(err as ServiceError);
+    }
+  }
+}
+
 export class LlmcoreGrpcClient {
   private readonly inference: InferenceServiceClient;
   private readonly catalog: CatalogServiceClient;
   private readonly control: ControlServiceClient;
+  private readonly audio: AudioServiceClient;
 
   constructor(address: string, options: GrpcClientOptions = {}) {
     const creds = options.credentials ?? ChannelCredentials.createInsecure();
     this.inference = new InferenceServiceClient(address, creds);
     this.catalog = new CatalogServiceClient(address, creds);
     this.control = new ControlServiceClient(address, creds);
+    this.audio = new AudioServiceClient(address, creds);
   }
 
   private call<Res>(
@@ -177,10 +238,56 @@ export class LlmcoreGrpcClient {
     );
   }
 
+  // -- audio: live duplex (Tier 2) ------------------------------------- //
+  /** Bidi speech-to-text. Write `AudioIn` frames; iterate `TranscriptionStreamEvent`s. */
+  transcribeStream(): AudioDuplexStream<AudioIn, TranscriptionStreamEvent> {
+    return new AudioDuplexStream(this.audio.transcribeStream(), AudioIn.fromPartial);
+  }
+
+  /** Bidi text-to-speech. Write `SynthControl` frames; iterate `AudioOut` chunks. */
+  synthesizeStream(): AudioDuplexStream<SynthControl, AudioOut> {
+    return new AudioDuplexStream(this.audio.synthesizeStream(), SynthControl.fromPartial);
+  }
+
+  /** Bidi voice agent. Write `VoiceAgentClientEvent`s; iterate `VoiceAgentEvent`s. */
+  voiceAgent(): AudioDuplexStream<VoiceAgentClientEvent, VoiceAgentEvent> {
+    return new AudioDuplexStream(this.audio.voiceAgent(), VoiceAgentClientEvent.fromPartial);
+  }
+
+  // -- audio: one-shot (Tier 2) ---------------------------------------- //
+  synthesize(req: DeepPartial<SynthesizeRequest>): Promise<SpeechResult> {
+    return this.call<SpeechResult>((cb) =>
+      this.audio.synthesize(SynthesizeRequest.fromPartial(req), cb),
+    );
+  }
+
+  transcribe(req: DeepPartial<TranscribeRequest>): Promise<TranscriptionResult> {
+    return this.call<TranscriptionResult>((cb) =>
+      this.audio.transcribe(TranscribeRequest.fromPartial(req), cb),
+    );
+  }
+
+  generateImage(req: DeepPartial<GenerateImageRequest>): Promise<ImageGenerationResult> {
+    return this.call<ImageGenerationResult>((cb) =>
+      this.audio.generateImage(GenerateImageRequest.fromPartial(req), cb),
+    );
+  }
+
+  ocr(req: DeepPartial<OcrRequest>): Promise<OCRResult> {
+    return this.call<OCRResult>((cb) => this.audio.ocr(OcrRequest.fromPartial(req), cb));
+  }
+
+  analyzeText(req: DeepPartial<AnalyzeTextRequest>): Promise<TextAnalysisResult> {
+    return this.call<TextAnalysisResult>((cb) =>
+      this.audio.analyzeText(AnalyzeTextRequest.fromPartial(req), cb),
+    );
+  }
+
   /** Close all underlying channels. */
   close(): void {
     this.inference.close();
     this.catalog.close();
     this.control.close();
+    this.audio.close();
   }
 }

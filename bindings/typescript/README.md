@@ -52,7 +52,38 @@ See **USAGE.md** for the full API, error handling, and cancellation.
 `chat`, `chatStream`, `countTokens`, `estimateCost`, `listProviders`,
 `listModels`, `getProviderDetails`, `getInfo`/`ensureCompatible`, `health`,
 `reloadConfig`. `embed(...)` throws a `BridgeError` (UNSUPPORTED) — Embed is
-UNIMPLEMENTED in `llmcore.v1`. AudioService is not yet surfaced (Tier 2 / B3).
+UNIMPLEMENTED in `llmcore.v1`.
+
+## Audio (Tier 2)
+
+Surfaced on both transports when the bridge advertises `tier2.audio`. **One-shot
+(unary)** RPCs on `LlmcoreGrpcClient`: `synthesize`, `transcribe`,
+`generateImage`, `ocr`, `analyzeText`. **Live duplex** RPCs return an
+async-iterable stream you `write()` frames to and `end()`:
+
+- gRPC bidi — `client.transcribeStream()`, `client.synthesizeStream()`,
+  `client.voiceAgent()` (each an `AudioDuplexStream<Req, Res>`).
+- WebSocket — `new LlmcoreWsAudioClient(httpBase).{transcribeStream,
+  synthesizeStream, voiceAgent}()` (each a `WsAudioStream<Req, Res>`; the bridge
+  HTTP base `http(s)://` is rewritten to `ws(s)://`). WebSocket has no
+  half-close, so `end()` sends a `{}` end-of-input sentinel.
+
+```ts
+import { LlmcoreGrpcClient, SttControl, StreamEventType } from "@llmcore/client";
+const client = new LlmcoreGrpcClient("127.0.0.1:50151");
+
+const stt = client.transcribeStream();
+stt.write({ open: { model: "nova-3" } });
+stt.write({ audio: pcmChunk });          // Uint8Array
+stt.write({ control: SttControl.STT_CONTROL_CLOSE });
+stt.end();
+for await (const ev of stt) {
+  if (ev.type === StreamEventType.STREAM_EVENT_TYPE_FINAL) console.log(ev.text);
+}
+
+const speech = await client.synthesize({ text: "hello", voice: "nova" });
+process.stdout.write(speech.audioData); // Uint8Array
+```
 
 ## Errors
 
@@ -97,7 +128,10 @@ npm test
 Coverage: chat / streaming (concatenation == unary) / count / cost / catalog /
 control, capability negotiation (accept + reject), `Embed` UNIMPLEMENTED,
 structured error decode (incl. `retryAfterMs`), mid-stream error, and
-cancellation — **18 tests, all green**.
+cancellation; plus the **Tier-2 audio** surface — 5 unary RPCs + 3 live duplex
+RPCs over gRPC, the 3 duplex RPCs over WebSocket, and the disabled-audio close
+path — **31 tests, all green** (audio enabled on its own bridge via
+`LLMCORE_BRIDGE_FAKE_AUDIO=1`).
 
 ## Distribution (planned)
 

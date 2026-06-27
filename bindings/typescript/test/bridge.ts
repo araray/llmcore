@@ -71,12 +71,20 @@ async function waitGrpcReady(grpcAddress: string, timeoutMs = 25_000): Promise<v
   throw new Error(`gRPC bridge not ready at ${grpcAddress}: ${String(lastErr)}`);
 }
 
-export async function startBridge(): Promise<BridgeHandle> {
+export interface StartBridgeOptions {
+  /** Enable the Tier-2 fake audio surface (advertises tier2.audio + audio.*). */
+  audio?: boolean;
+}
+
+export async function startBridge(opts: StartBridgeOptions = {}): Promise<BridgeHandle> {
   const grpcPort = await freePort();
   const httpPort = await freePort();
   const grpcAddress = `127.0.0.1:${grpcPort}`;
   const httpBase = `http://127.0.0.1:${httpPort}`;
   const python = process.env.LLMCORE_BRIDGE_PYTHON ?? "python3";
+
+  const env: NodeJS.ProcessEnv = { ...process.env, LLMCORE_BRIDGE_FAKE: "1" };
+  if (opts.audio) env.LLMCORE_BRIDGE_FAKE_AUDIO = "1";
 
   const proc: ChildProcess = spawn(
     python,
@@ -87,10 +95,7 @@ export async function startBridge(): Promise<BridgeHandle> {
       "--http-address", `127.0.0.1:${httpPort}`,
       "--insecure", "--log-level", "WARNING",
     ],
-    {
-      env: { ...process.env, LLMCORE_BRIDGE_FAKE: "1" },
-      stdio: "ignore",
-    },
+    { env, stdio: "ignore" },
   );
 
   const exited = new Promise<void>((resolve) => proc.once("exit", () => resolve()));

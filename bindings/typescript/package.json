@@ -11,7 +11,7 @@
   "scripts": {
     "gen": "sh scripts/gen.sh",
     "build": "tsc -p tsconfig.json",
-    "test": "node --import tsx --test test/grpc.test.ts test/http.test.ts"
+    "test": "node --import tsx --test test/grpc.test.ts test/http.test.ts test/audio.grpc.test.ts test/audio.ws.test.ts"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.0",

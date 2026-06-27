@@ -117,6 +117,83 @@ await http.health();                                   // { ok: true }
 HTTP request/response fields are **snake_case** (`provider_name`, `total_tokens`,
 …), matching the bridge's JSON projection.
 
+## Audio (Tier 2) — `LlmcoreGrpcClient` + `LlmcoreWsAudioClient`
+
+Available when the bridge advertises `tier2.audio` (e.g. a fake bridge started
+with `LLMCORE_BRIDGE_FAKE_AUDIO=1`). Negotiate with
+`ensureCompatible(["tier2.audio"])`.
+
+### One-shot (unary), over gRPC
+
+```ts
+const speech = await client.synthesize({ text: "hello", voice: "nova", responseFormat: "wav" });
+//   speech.audioData: Uint8Array, speech.format, speech.model, speech.voice
+const tr = await client.transcribe({ audioData: bytes, language: "en" });
+//   tr.text, tr.language, tr.segments[].{text,start,end,speaker}
+const img = await client.generateImage({ prompt: "a cat", n: 2 });
+//   img.images[].data is base64 (b64_json): Buffer.from(data, "base64")
+const doc = await client.ocr({ data: pdfBytes });           // or { url: "https://…" }
+//   doc.pages[], doc.documentAnnotation, doc.pagesProcessed, doc.docSizeBytes
+const an = await client.analyzeText({ text: "…", features: { summarize: true, topics: true } });
+//   an.summary, an.topics[], an.intents[], an.sentiments
+```
+
+### Live duplex, over gRPC
+
+```ts
+import { SttControl, TtsControl, StreamEventType, VoiceAgentEventType } from "@llmcore/client";
+
+// STT: write AudioIn frames, iterate TranscriptionStreamEvents
+const stt = client.transcribeStream();
+stt.write({ open: { model: "nova-3", language: "en" } });
+stt.write({ audio: pcmChunk });                       // Uint8Array; repeat as needed
+stt.write({ control: SttControl.STT_CONTROL_CLOSE }); // optional; end() also half-closes
+stt.end();
+for await (const ev of stt) {
+  if (ev.type === StreamEventType.STREAM_EVENT_TYPE_FINAL) console.log(ev.text);
+}
+
+// TTS: write SynthControl frames, iterate AudioOut chunks (ordered by .seq)
+const tts = client.synthesizeStream();
+tts.write({ open: { voice: "nova", format: "linear16" } });
+tts.write({ text: "hello world" });
+tts.write({ control: TtsControl.TTS_CONTROL_CLOSE });
+tts.end();
+for await (const out of tts) sink.write(out.audio);   // out.audio: Uint8Array, out.seq: number
+
+// Voice agent: write VoiceAgentClientEvents, iterate VoiceAgentEvents
+const va = client.voiceAgent();
+va.write({ settings: { provider_name: "deepgram" } }); // leading settings opens the session
+va.write({ injectUserMessage: "what's the weather?" });
+va.write({ audio: micChunk });
+va.end();
+for await (const ev of va) {
+  if (ev.type === VoiceAgentEventType.VOICE_AGENT_EVENT_TYPE_AUDIO) play(ev.audio);
+}
+```
+
+`AudioDuplexStream` also exposes `cancel()` (maps to gRPC CANCELLED).
+
+### Live duplex, over WebSocket
+
+Same three streams, transport-swapped. `write()`/`end()` are async (they await
+the socket open); `end()` sends the `{}` end-of-input sentinel (WebSocket has no
+half-close), letting the server finish streaming (e.g. the voice-agent `CLOSE`).
+
+```ts
+import { LlmcoreWsAudioClient } from "@llmcore/client";
+
+const wsAudio = new LlmcoreWsAudioClient("http://127.0.0.1:50152"); // http(s) -> ws(s)
+const stt = wsAudio.transcribeStream();
+await stt.write({ open: { model: "nova-3" } });
+await stt.write({ audio: pcmChunk });
+await stt.end();
+for await (const ev of stt) console.log(ev.type, ev.text);
+```
+
+When audio is disabled the socket is accepted then closed `1011`; iterating the
+stream throws a `BridgeError` (UNSUPPORTED).
+
 ## Error handling
 
 ```ts
