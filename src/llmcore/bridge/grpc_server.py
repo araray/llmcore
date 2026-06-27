@@ -123,23 +123,20 @@ class AudioServicer(audio_pb2_grpc.AudioServiceServicer):
     def __init__(self, core: BridgeCore) -> None:
         self._core = core
 
-    async def _unimpl(self, context: grpc.aio.ServicerContext) -> None:
-        await context.abort(grpc.StatusCode.UNIMPLEMENTED, _AUDIO_UNIMPLEMENTED)
-
     async def Synthesize(self, request, context):
-        await self._unimpl(context)
+        return await _unary(lambda: self._core.synthesize(request), context)
 
     async def Transcribe(self, request, context):
-        await self._unimpl(context)
+        return await _unary(lambda: self._core.transcribe(request), context)
 
     async def GenerateImage(self, request, context):
-        await self._unimpl(context)
+        return await _unary(lambda: self._core.generate_image(request), context)
 
     async def Ocr(self, request, context):
-        await self._unimpl(context)
+        return await _unary(lambda: self._core.ocr(request), context)
 
     async def AnalyzeText(self, request, context):
-        await self._unimpl(context)
+        return await _unary(lambda: self._core.analyze_text(request), context)
 
     async def TranscribeStream(self, request_iterator, context):
         if not self._core.audio_enabled:

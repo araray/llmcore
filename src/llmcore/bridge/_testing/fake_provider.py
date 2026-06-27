@@ -12,6 +12,7 @@ own ``extract_*`` methods consume, so ``LLMCore.chat`` works end-to-end.
 from __future__ import annotations
 
 import asyncio
+import base64
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
@@ -210,6 +211,142 @@ class FakeAudioProvider:
             yield session
         finally:
             session.close()
+
+    # -- one-shot (unary) audio --------------------------------------------- #
+    async def generate_speech(
+        self,
+        text: str,
+        *,
+        voice: str = "alloy",
+        model: str | None = None,
+        response_format: str = "mp3",
+        speed: float = 1.0,
+        instructions: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from llmcore.models_multimodal import SpeechResult
+
+        return SpeechResult(
+            audio_data=b"tts:" + text.encode("utf-8"),
+            format=response_format,
+            model=model or "fake-tts",
+            voice=voice,
+            duration_seconds=len(text) / 10.0,
+            metadata={"speed": speed},
+        )
+
+    async def transcribe_audio(
+        self,
+        audio_data: bytes | str,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        prompt: str | None = None,
+        response_format: str = "json",
+        temperature: float | None = None,
+        timestamp_granularities: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from llmcore.models_multimodal import (
+            TranscriptionResult,
+            TranscriptionSegment,
+        )
+
+        if isinstance(audio_data, (bytes, bytearray)):
+            text = bytes(audio_data).decode("utf-8", "replace")
+        else:
+            text = str(audio_data)
+        return TranscriptionResult(
+            text=text,
+            language=language or "en",
+            duration_seconds=1.0,
+            segments=[
+                TranscriptionSegment(text=text, start=0.0, end=1.0, speaker="spk_0")
+            ],
+            model=model or "fake-stt",
+            metadata={},
+        )
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        quality: str | None = None,
+        response_format: str = "b64_json",
+        style: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from llmcore.models_multimodal import GeneratedImage, ImageGenerationResult
+
+        payload = base64.b64encode(b"img:" + prompt.encode("utf-8")).decode("ascii")
+        images = [
+            GeneratedImage(
+                data=payload, url=None, revised_prompt=prompt, format="png"
+            )
+            for _ in range(max(int(n), 1))
+        ]
+        return ImageGenerationResult(
+            images=images,
+            model=model or "fake-img",
+            metadata={"size": size or "1024x1024"},
+        )
+
+    async def ocr(
+        self,
+        document: Any,
+        *,
+        model: str | None = None,
+        pages: list[int] | None = None,
+        include_image_base64: bool | None = None,
+        image_limit: int | None = None,
+        image_min_size: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from llmcore.models_multimodal import OCRResult
+
+        if isinstance(document, (bytes, bytearray)):
+            size = len(document)
+            text = "ocr-bytes"
+        else:
+            size = len(str(document))
+            text = f"ocr:{document}"
+        return OCRResult(
+            pages=[{"index": 0, "text": text}],
+            model=model or "fake-ocr",
+            document_annotation={"title": "fake-document"},
+            pages_processed=1,
+            doc_size_bytes=size,
+            metadata={},
+        )
+
+    async def analyze_text(
+        self,
+        text: str | None = None,
+        *,
+        url: str | None = None,
+        summarize: Any = None,
+        topics: bool | None = None,
+        sentiment: bool | None = None,
+        intents: bool | None = None,
+        language: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from llmcore.models_multimodal import TextAnalysisResult
+
+        return TextAnalysisResult(
+            summary=f"summary:{text}" if summarize else None,
+            topics=[{"topic": "fake-topic", "confidence": 0.9}] if topics else [],
+            intents=[{"intent": "fake-intent"}] if intents else [],
+            sentiments={"overall": "positive"} if sentiment else None,
+            language=language or "en",
+            model="fake-analyze",
+            request_id="fake-req-1",
+            metadata={},
+            raw={},
+        )
 
 
 #: Sentinel enqueued by :meth:`FakeVoiceAgentSession.close` to end iteration.

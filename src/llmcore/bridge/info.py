@@ -79,13 +79,18 @@ def capabilities_for(transports: Iterable[str], *, audio: bool = False) -> list[
     for t in transports:
         caps.append(f"transport.{t}")
     if audio:
-        # Tier-2 umbrella + the live-audio RPCs implemented so far (B3). The
-        # one-shot audio.* RPCs are appended as those handlers land.
+        # Tier-2 umbrella + the live streaming RPCs and the one-shot (unary)
+        # RPCs, all gated on facade.supports_audio() / LLMCORE_BRIDGE_FAKE_AUDIO.
         caps.extend([
             "tier2.audio",
             "audio.transcribe_stream",
             "audio.synthesize_stream",
             "audio.voice_agent",
+            "audio.synthesize",
+            "audio.transcribe",
+            "audio.generate_image",
+            "audio.ocr",
+            "audio.analyze_text",
         ])
     return caps
 

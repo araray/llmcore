@@ -25,6 +25,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from ._generated.llmcore.v1 import (
+    audio_pb2,
     catalog_pb2,
     common_pb2,
     control_pb2,
@@ -35,13 +36,6 @@ from .errors import BridgeError, http_status_for, invalid_argument, map_exceptio
 from .ws_app import create_ws_routes
 
 __all__ = ["create_http_app"]
-
-_AUDIO_UNIMPLEMENTED = (
-    "AudioService is part of the llmcore.v1 contract but is not implemented in "
-    "this release (Tier 2 / phase B3). Live duplex audio uses WebSocket; one-shot "
-    "audio is enabled in B3."
-)
-
 
 def _to_dict(msg: Any) -> dict[str, Any]:
     return json_format.MessageToDict(msg, preserving_proto_field_name=True)
@@ -116,17 +110,6 @@ def _make_chat_stream(core: BridgeCore) -> Callable[[Request], Awaitable[Respons
     return handler
 
 
-def _audio_501(request: Request) -> Response:
-    err = invalid_argument(_AUDIO_UNIMPLEMENTED)
-    # Force 501 to mirror gRPC UNIMPLEMENTED rather than 400.
-    err.proto.http_status = 501
-    err.proto.code = "unsupported.capability"
-    from ._generated.llmcore.v1 import errors_pb2
-
-    err.proto.category = errors_pb2.ErrorCategory.ERROR_CATEGORY_UNSUPPORTED
-    return _error_response(err)
-
-
 def create_http_app(core: BridgeCore) -> Starlette:
     """Build the Starlette ASGI app exposing the bridge over HTTP/SSE.
 
@@ -151,9 +134,23 @@ def create_http_app(core: BridgeCore) -> Starlette:
         Route(f"{P}/ControlService/ReloadConfig", _make_unary(core.reload_config, control_pb2.ReloadConfigRequest), methods=["POST"]),
         Route("/healthz", _make_unary(core.health, common_pb2.Empty), methods=["GET", "POST"]),
     ]
-    # One-shot AudioService paths mirror gRPC UNIMPLEMENTED (501) until B3.
-    for m in ("Synthesize", "Transcribe", "GenerateImage", "Ocr", "AnalyzeText"):
-        routes.append(Route(f"{P}/AudioService/{m}", _audio_501, methods=["POST"]))
+    # One-shot (unary) AudioService RPCs; gated at runtime on core.audio_enabled
+    # (a disabled deployment yields UNSUPPORTED -> HTTP 501 via the error path).
+    _audio_unary = (
+        ("Synthesize", core.synthesize, audio_pb2.SynthesizeRequest),
+        ("Transcribe", core.transcribe, audio_pb2.TranscribeRequest),
+        ("GenerateImage", core.generate_image, audio_pb2.GenerateImageRequest),
+        ("Ocr", core.ocr, audio_pb2.OcrRequest),
+        ("AnalyzeText", core.analyze_text, audio_pb2.AnalyzeTextRequest),
+    )
+    for name, method, req_type in _audio_unary:
+        routes.append(
+            Route(
+                f"{P}/AudioService/{name}",
+                _make_unary(method, req_type),
+                methods=["POST"],
+            )
+        )
 
     # Live duplex audio (TranscribeStream/SynthesizeStream/VoiceAgent) over
     # WebSocket; gated at runtime on core.audio_enabled (closes 1011 when off).

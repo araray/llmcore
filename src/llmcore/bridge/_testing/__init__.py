@@ -18,9 +18,9 @@ from .fake_facade import FakeFacade, fake_count_tokens
 from .fake_provider import FakeAudioProvider, FakeProvider, register_fake_provider
 
 __all__ = [
+    "FakeAudioProvider",
     "FakeFacade",
     "FakeProvider",
-    "FakeAudioProvider",
     "fake_count_tokens",
     "register_fake_provider",
 ]

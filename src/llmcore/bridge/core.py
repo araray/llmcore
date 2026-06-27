@@ -24,7 +24,7 @@ from ._generated.llmcore.v1 import (
     control_pb2,
     inference_pb2,
 )
-from .errors import BridgeError, map_exception, unsupported
+from .errors import BridgeError, invalid_argument, map_exception, unsupported
 from .facade import LLMCoreFacade
 from .info import audio_capable, build_server_info
 
@@ -295,6 +295,143 @@ def _voice_agent_event_to_proto(ev: Any) -> audio_pb2.VoiceAgentEvent:
             out.raw.update(_json_safe(raw))
         except (TypeError, ValueError):
             pass
+    return out
+
+
+def _struct_update(target: struct_pb2.Struct, value: Any) -> None:
+    """Best-effort populate a ``Struct`` field from a Python mapping."""
+    if value:
+        try:
+            target.update(_json_safe(value))
+        except (TypeError, ValueError):
+            pass
+
+
+def _repeated_struct(target: Any, items: Any) -> None:
+    """Append each mapping in ``items`` to a ``repeated Struct`` proto field."""
+    for item in items or []:
+        s = target.add()
+        if item:
+            try:
+                s.update(_json_safe(item))
+            except (TypeError, ValueError):
+                pass
+
+
+def _value_from_py(value: Any) -> struct_pb2.Value:
+    """Convert an arbitrary JSON-able Python value to a protobuf ``Value``."""
+    holder = struct_pb2.Struct()
+    holder.update({"v": _json_safe(value)})
+    return holder.fields["v"]
+
+
+def _speech_result_to_proto(result: Any) -> audio_pb2.SpeechResult:
+    """Map a ``models_multimodal.SpeechResult`` to its proto."""
+    out = audio_pb2.SpeechResult(
+        audio_data=bytes(getattr(result, "audio_data", b"") or b""),
+        format=getattr(result, "format", "") or "",
+        model=getattr(result, "model", "") or "",
+        voice=getattr(result, "voice", "") or "",
+    )
+    dur = getattr(result, "duration_seconds", None)
+    if dur is not None:
+        out.duration_seconds = dur
+    _struct_update(out.metadata, getattr(result, "metadata", None))
+    return out
+
+
+def _transcription_segment_to_proto(seg: Any) -> audio_pb2.TranscriptionSegment:
+    """Map a ``models_multimodal.TranscriptionSegment`` to its proto."""
+    out = audio_pb2.TranscriptionSegment(
+        text=getattr(seg, "text", "") or "",
+        start=float(getattr(seg, "start", 0.0) or 0.0),
+        end=float(getattr(seg, "end", 0.0) or 0.0),
+    )
+    speaker = getattr(seg, "speaker", None)
+    if speaker is not None:
+        out.speaker = speaker
+    return out
+
+
+def _transcription_result_to_proto(result: Any) -> audio_pb2.TranscriptionResult:
+    """Map a ``models_multimodal.TranscriptionResult`` to its proto."""
+    out = audio_pb2.TranscriptionResult(
+        text=getattr(result, "text", "") or "",
+        model=getattr(result, "model", "") or "",
+    )
+    language = getattr(result, "language", None)
+    if language is not None:
+        out.language = language
+    dur = getattr(result, "duration_seconds", None)
+    if dur is not None:
+        out.duration_seconds = dur
+    for seg in getattr(result, "segments", None) or []:
+        out.segments.append(_transcription_segment_to_proto(seg))
+    _struct_update(out.metadata, getattr(result, "metadata", None))
+    return out
+
+
+def _generated_image_to_proto(img: Any) -> audio_pb2.GeneratedImage:
+    """Map a ``models_multimodal.GeneratedImage`` to its proto."""
+    out = audio_pb2.GeneratedImage(format=getattr(img, "format", "") or "")
+    data = getattr(img, "data", None)
+    if data is not None:
+        out.data = data
+    url = getattr(img, "url", None)
+    if url is not None:
+        out.url = url
+    revised = getattr(img, "revised_prompt", None)
+    if revised is not None:
+        out.revised_prompt = revised
+    return out
+
+
+def _image_result_to_proto(result: Any) -> audio_pb2.ImageGenerationResult:
+    """Map a ``models_multimodal.ImageGenerationResult`` to its proto."""
+    out = audio_pb2.ImageGenerationResult(model=getattr(result, "model", "") or "")
+    for img in getattr(result, "images", None) or []:
+        out.images.append(_generated_image_to_proto(img))
+    _struct_update(out.metadata, getattr(result, "metadata", None))
+    return out
+
+
+def _ocr_result_to_proto(result: Any) -> audio_pb2.OCRResult:
+    """Map a ``models_multimodal.OCRResult`` to its proto."""
+    out = audio_pb2.OCRResult(
+        model=getattr(result, "model", "") or "",
+        pages_processed=int(getattr(result, "pages_processed", 0) or 0),
+    )
+    _repeated_struct(out.pages, getattr(result, "pages", None))
+    annotation = getattr(result, "document_annotation", None)
+    if annotation is not None:
+        out.document_annotation.CopyFrom(_value_from_py(annotation))
+    size = getattr(result, "doc_size_bytes", None)
+    if size is not None:
+        out.doc_size_bytes = int(size)
+    _struct_update(out.metadata, getattr(result, "metadata", None))
+    return out
+
+
+def _text_analysis_result_to_proto(result: Any) -> audio_pb2.TextAnalysisResult:
+    """Map a ``models_multimodal.TextAnalysisResult`` to its proto."""
+    out = audio_pb2.TextAnalysisResult()
+    summary = getattr(result, "summary", None)
+    if summary is not None:
+        out.summary = summary
+    _repeated_struct(out.topics, getattr(result, "topics", None))
+    _repeated_struct(out.intents, getattr(result, "intents", None))
+    _struct_update(out.sentiments, getattr(result, "sentiments", None))
+    language = getattr(result, "language", None)
+    if language is not None:
+        out.language = language
+    model = getattr(result, "model", None)
+    if model is not None:
+        out.model = model
+    request_id = getattr(result, "request_id", None)
+    if request_id is not None:
+        out.request_id = request_id
+    _struct_update(out.metadata, getattr(result, "metadata", None))
+    _struct_update(out.raw, getattr(result, "raw", None))
     return out
 
 
@@ -732,6 +869,131 @@ class BridgeCore:
                 await cm.__aexit__(None, None, None)
             except Exception:
                 pass
+
+    # -- AudioService: one-shot (unary) RPCs ------------------------------ #
+    def _audio_provider(
+        self, provider_name: str | None, method: str, label: str
+    ) -> Any:
+        """Resolve the provider for an audio RPC.
+
+        Gates on ``audio_enabled`` (raising ``UNSUPPORTED`` -> gRPC
+        UNIMPLEMENTED / HTTP 501 when audio is off) and feature-detects the
+        required ``BaseProvider`` method.
+        """
+        if not self.audio_enabled:
+            raise unsupported(
+                "AudioService is disabled in this deployment (Tier 2 / audio "
+                "off); enable audio support to use audio RPCs."
+            )
+        try:
+            provider = self._facade.get_provider(provider_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if not hasattr(provider, method):
+            raise unsupported(
+                "provider '%s' does not support %s (%s)"
+                % (provider_name or "default", label, method)
+            )
+        return provider
+
+    async def synthesize(self, request: Any) -> audio_pb2.SpeechResult:
+        """Unary text-to-speech: ``generate_speech`` -> ``SpeechResult``."""
+        provider = self._audio_provider(
+            _opt(request, "provider_name"), "generate_speech", "synthesis"
+        )
+        kwargs: dict[str, Any] = {}
+        for fld in ("voice", "model", "response_format", "speed"):
+            val = _opt(request, fld)
+            if val is not None:
+                kwargs[fld] = val
+        try:
+            result = await provider.generate_speech(request.text, **kwargs)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _speech_result_to_proto(result)
+
+    async def transcribe(self, request: Any) -> audio_pb2.TranscriptionResult:
+        """Unary speech-to-text: ``transcribe_audio`` -> ``TranscriptionResult``."""
+        provider = self._audio_provider(
+            _opt(request, "provider_name"), "transcribe_audio", "transcription"
+        )
+        kwargs: dict[str, Any] = {}
+        for fld in ("model", "language", "response_format"):
+            val = _opt(request, fld)
+            if val is not None:
+                kwargs[fld] = val
+        try:
+            result = await provider.transcribe_audio(request.audio_data, **kwargs)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _transcription_result_to_proto(result)
+
+    async def generate_image(self, request: Any) -> audio_pb2.ImageGenerationResult:
+        """Unary image generation: ``generate_image`` -> ``ImageGenerationResult``."""
+        provider = self._audio_provider(
+            _opt(request, "provider_name"), "generate_image", "image generation"
+        )
+        kwargs: dict[str, Any] = {"n": request.n or 1}
+        for fld in ("model", "size", "quality"):
+            val = _opt(request, fld)
+            if val is not None:
+                kwargs[fld] = val
+        try:
+            result = await provider.generate_image(request.prompt, **kwargs)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _image_result_to_proto(result)
+
+    async def ocr(self, request: Any) -> audio_pb2.OCRResult:
+        """Unary OCR: ``ocr`` -> ``OCRResult``."""
+        provider = self._audio_provider(_opt(request, "provider_name"), "ocr", "OCR")
+        which = request.WhichOneof("source")
+        if which == "url":
+            document: Any = request.url
+        elif which == "data":
+            document = request.data
+        else:
+            raise invalid_argument("OcrRequest requires a 'url' or 'data' source")
+        kwargs: dict[str, Any] = {}
+        model = _opt(request, "model")
+        if model is not None:
+            kwargs["model"] = model
+        try:
+            result = await provider.ocr(document, **kwargs)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _ocr_result_to_proto(result)
+
+    async def analyze_text(self, request: Any) -> audio_pb2.TextAnalysisResult:
+        """Unary text analysis: ``analyze_text`` -> ``TextAnalysisResult``.
+
+        The proto ``features`` Struct is unpacked into ``analyze_text``'s flags
+        (``summarize`` / ``topics`` / ``sentiment`` / ``intents`` /
+        ``language``); other keys pass through as kwargs. ``model`` is accepted
+        in the proto for forward-compatibility but not forwarded (the Deepgram
+        ``read`` endpoint takes no model).
+        """
+        provider = self._audio_provider(
+            _opt(request, "provider_name"), "analyze_text", "text analysis"
+        )
+        kwargs: dict[str, Any] = {}
+        if len(request.features.fields):
+            kwargs.update(_struct_to_dict(request.features))
+        try:
+            result = await provider.analyze_text(request.text, **kwargs)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _text_analysis_result_to_proto(result)
 
     async def close(self) -> None:
         """Close the underlying facade (best-effort)."""
