@@ -32,6 +32,7 @@ from ._generated.llmcore.v1 import (
 )
 from .core import BridgeCore
 from .errors import BridgeError, http_status_for, invalid_argument, map_exception
+from .ws_app import create_ws_routes
 
 __all__ = ["create_http_app"]
 
@@ -153,5 +154,9 @@ def create_http_app(core: BridgeCore) -> Starlette:
     # One-shot AudioService paths mirror gRPC UNIMPLEMENTED (501) until B3.
     for m in ("Synthesize", "Transcribe", "GenerateImage", "Ocr", "AnalyzeText"):
         routes.append(Route(f"{P}/AudioService/{m}", _audio_501, methods=["POST"]))
+
+    # Live duplex audio (TranscribeStream/SynthesizeStream/VoiceAgent) over
+    # WebSocket; gated at runtime on core.audio_enabled (closes 1011 when off).
+    routes.extend(create_ws_routes(core))
 
     return Starlette(routes=routes)
