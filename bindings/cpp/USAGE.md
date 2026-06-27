@@ -81,6 +81,67 @@ client->ListModels("openai");         // .models(i)
 client->GetProviderDetails("openai"); // llmcore::v1::ModelDetails
 ```
 
+## Audio (Tier 2)
+
+Available when the bridge advertises `tier2.audio`; negotiate with
+`client->EnsureCompatible({"tier2.audio"})`.
+
+### One-shot
+
+```cpp
+llmcore::v1::SynthesizeRequest sreq; sreq.set_text("hello");
+auto sp = client->Synthesize(sreq);              // sp.audio_data(), sp.model(), sp.voice()
+
+llmcore::v1::TranscribeRequest treq; treq.set_audio_data(pcm);
+auto tr = client->Transcribe(treq);              // tr.text(), tr.language(), tr.segments(i)
+
+llmcore::v1::GenerateImageRequest ireq; ireq.set_prompt("a cat"); ireq.set_n(2);
+auto img = client->GenerateImage(ireq);          // img.images(i).data() is base64 (b64_json)
+
+llmcore::v1::OcrRequest oreq; oreq.set_data(pdf); // or oreq.set_url(url)
+auto doc = client->Ocr(oreq);                    // doc.pages(i), doc.pages_processed(), doc.doc_size_bytes()
+
+llmcore::v1::AnalyzeTextRequest areq; areq.set_text("…");
+// areq.mutable_features() -> google::protobuf::Struct to set summarize/topics/...
+auto an = client->AnalyzeText(areq);             // an.summary(), an.topics(i), an.intents(i)
+```
+
+### Live duplex (bidi)
+
+Each call returns a stream: `Write` frames, `WritesDone` to half-close, then
+`Read` until it returns false (`Read` throws `BridgeError` on a non-OK terminal
+status). `Cancel()` aborts (gRPC CANCELLED).
+
+```cpp
+// STT — AudioIn frames -> TranscriptionStreamEvent
+auto s = client->TranscribeStreamCall();
+llmcore::v1::AudioIn f; f.set_audio(pcm_chunk); s.Write(f);
+llmcore::v1::AudioIn c; c.set_control(llmcore::v1::STT_CONTROL_CLOSE); s.Write(c);
+s.WritesDone();
+llmcore::v1::TranscriptionStreamEvent ev;
+while (s.Read(&ev)) {
+  if (ev.type() == llmcore::v1::STREAM_EVENT_TYPE_FINAL) std::cout << ev.text();
+}
+
+// TTS — SynthControl frames -> AudioOut (ordered by .seq())
+auto t = client->SynthesizeStreamCall();
+llmcore::v1::SynthControl tf; tf.set_text("hello world"); t.Write(tf);
+llmcore::v1::SynthControl tc; tc.set_control(llmcore::v1::TTS_CONTROL_CLOSE); t.Write(tc);
+t.WritesDone();
+llmcore::v1::AudioOut out;
+while (t.Read(&out)) sink.write(out.audio());
+
+// Voice agent — VoiceAgentClientEvent -> VoiceAgentEvent
+// (a leading event with mutable_settings() selects the provider; omit for default)
+auto v = client->VoiceAgentCall();
+llmcore::v1::VoiceAgentClientEvent ie; ie.set_inject_user_message("hi"); v.Write(ie);
+v.WritesDone();
+llmcore::v1::VoiceAgentEvent vev;
+while (v.Read(&vev)) {
+  if (vev.type() == llmcore::v1::VOICE_AGENT_EVENT_TYPE_AUDIO) play(vev.audio());
+}
+```
+
 ## Error handling
 
 ```cpp

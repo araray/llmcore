@@ -54,7 +54,7 @@ struct Bridge {
   }
 };
 
-std::unique_ptr<Bridge> StartBridge() {
+std::unique_ptr<Bridge> StartBridge(bool with_audio = false) {
   auto b = std::make_unique<Bridge>();
   const std::string grpc_addr = "127.0.0.1:" + std::to_string(FreePort());
   const std::string http_addr = "127.0.0.1:" + std::to_string(FreePort());
@@ -64,6 +64,7 @@ std::unique_ptr<Bridge> StartBridge() {
   pid_t pid = ::fork();
   if (pid == 0) {
     ::setenv("LLMCORE_BRIDGE_FAKE", "1", 1);
+    if (with_audio) ::setenv("LLMCORE_BRIDGE_FAKE_AUDIO", "1", 1);
     std::vector<std::string> args = {py,
                                      "-m",
                                      "llmcore.bridge.cli",
@@ -225,6 +226,163 @@ int main() {
       while (s.Read(&ch)) {
       }
     } catch (const llmcore::BridgeError&) {
+    }
+  }
+
+  // ---- audio (Tier 2): a second, audio-enabled bridge ----
+  {
+    auto abridge = StartBridge(/*with_audio=*/true);
+    auto ac = llmcore::Client::Create(abridge->target);
+
+    // capabilities advertised
+    {
+      auto info = ac->GetInfo();
+      const char* caps[] = {"tier2.audio",         "audio.transcribe_stream",
+                            "audio.synthesize_stream", "audio.voice_agent",
+                            "audio.synthesize",    "audio.transcribe",
+                            "audio.generate_image", "audio.ocr",
+                            "audio.analyze_text"};
+      for (const char* want : caps) {
+        bool found = false;
+        for (const auto& have : info.capabilities()) {
+          if (have == want) {
+            found = true;
+            break;
+          }
+        }
+        CHECK(found);
+      }
+    }
+
+    // transcribe stream: INTERIM, INTERIM, FINAL "hello world", UTTERANCE_END
+    {
+      auto s = ac->TranscribeStreamCall();
+      llmcore::v1::AudioIn f1;
+      f1.set_audio("hello");
+      llmcore::v1::AudioIn f2;
+      f2.set_audio("world");
+      llmcore::v1::AudioIn f3;
+      f3.set_control(llmcore::v1::STT_CONTROL_CLOSE);
+      CHECK(s.Write(f1));
+      CHECK(s.Write(f2));
+      CHECK(s.Write(f3));
+      s.WritesDone();
+      std::vector<llmcore::v1::StreamEventType> types;
+      std::string final_text;
+      llmcore::v1::TranscriptionStreamEvent ev;
+      while (s.Read(&ev)) {
+        types.push_back(ev.type());
+        if (ev.type() == llmcore::v1::STREAM_EVENT_TYPE_FINAL) final_text = ev.text();
+      }
+      CHECK(types.size() == 4);
+      if (types.size() == 4) {
+        CHECK(types[0] == llmcore::v1::STREAM_EVENT_TYPE_INTERIM);
+        CHECK(types[1] == llmcore::v1::STREAM_EVENT_TYPE_INTERIM);
+        CHECK(types[2] == llmcore::v1::STREAM_EVENT_TYPE_FINAL);
+        CHECK(types[3] == llmcore::v1::STREAM_EVENT_TYPE_UTTERANCE_END);
+      }
+      CHECK(final_text == "hello world");
+    }
+
+    // synthesize stream: chunks foo/bar/baz with seq 0/1/2
+    {
+      auto s = ac->SynthesizeStreamCall();
+      const char* pieces[] = {"foo", "bar", "baz"};
+      for (const char* p : pieces) {
+        llmcore::v1::SynthControl f;
+        f.set_text(p);
+        CHECK(s.Write(f));
+      }
+      llmcore::v1::SynthControl fc;
+      fc.set_control(llmcore::v1::TTS_CONTROL_CLOSE);
+      CHECK(s.Write(fc));
+      s.WritesDone();
+      std::vector<std::string> chunks;
+      std::vector<long long> seqs;
+      llmcore::v1::AudioOut out;
+      while (s.Read(&out)) {
+        chunks.push_back(out.audio());
+        seqs.push_back(static_cast<long long>(out.seq()));
+      }
+      CHECK(chunks.size() == 3);
+      if (chunks.size() == 3) {
+        CHECK(chunks[0] == "foo" && chunks[1] == "bar" && chunks[2] == "baz");
+        CHECK(seqs[0] == 0 && seqs[1] == 1 && seqs[2] == 2);
+      }
+    }
+
+    // voice agent: non-settings leading frame -> default provider
+    {
+      auto s = ac->VoiceAgentCall();
+      llmcore::v1::VoiceAgentClientEvent e1;
+      e1.set_inject_user_message("hi there");
+      llmcore::v1::VoiceAgentClientEvent e2;
+      e2.set_audio(std::string("\x01\x02", 2));
+      CHECK(s.Write(e1));
+      CHECK(s.Write(e2));
+      s.WritesDone();
+      std::vector<llmcore::v1::VoiceAgentEvent> events;
+      llmcore::v1::VoiceAgentEvent ev;
+      while (s.Read(&ev)) events.push_back(ev);
+      CHECK(!events.empty());
+      if (!events.empty()) {
+        CHECK(events.front().type() == llmcore::v1::VOICE_AGENT_EVENT_TYPE_WELCOME);
+        CHECK(events.back().type() == llmcore::v1::VOICE_AGENT_EVENT_TYPE_CLOSE);
+      }
+      bool saw_conv = false, saw_audio = false;
+      for (const auto& e : events) {
+        if (e.type() == llmcore::v1::VOICE_AGENT_EVENT_TYPE_CONVERSATION_TEXT &&
+            e.role() == "user" && e.content() == "hi there")
+          saw_conv = true;
+        if (e.type() == llmcore::v1::VOICE_AGENT_EVENT_TYPE_AUDIO &&
+            e.audio() == std::string("agent:\x01\x02", 8))
+          saw_audio = true;
+      }
+      CHECK(saw_conv);
+      CHECK(saw_audio);
+    }
+
+    // unary: synthesize / transcribe / generate_image / ocr / analyze_text
+    {
+      llmcore::v1::SynthesizeRequest req;
+      req.set_text("hello");
+      auto r = ac->Synthesize(req);
+      CHECK(r.audio_data() == "tts:hello");
+      CHECK(r.model() == "fake-tts");
+    }
+    {
+      llmcore::v1::TranscribeRequest req;
+      req.set_audio_data("hello world");
+      auto r = ac->Transcribe(req);
+      CHECK(r.text() == "hello world");
+      CHECK(r.language() == "en");
+      CHECK(r.segments_size() == 1);
+      if (r.segments_size() == 1) CHECK(r.segments(0).speaker() == "spk_0");
+    }
+    {
+      llmcore::v1::GenerateImageRequest req;
+      req.set_prompt("a cat");
+      req.set_n(2);
+      auto r = ac->GenerateImage(req);
+      CHECK(r.images_size() == 2);
+      if (r.images_size() >= 1) CHECK(r.images(0).data() == "aW1nOmEgY2F0");  // base64("img:a cat")
+    }
+    {
+      llmcore::v1::OcrRequest req;
+      req.set_data("PDFBYTES");
+      auto r = ac->Ocr(req);
+      CHECK(r.model() == "fake-ocr");
+      CHECK(r.pages_processed() == 1);
+      CHECK(r.doc_size_bytes() == 8);
+      CHECK(r.pages_size() == 1);
+    }
+    {
+      llmcore::v1::AnalyzeTextRequest req;
+      req.set_text("some text");
+      auto r = ac->AnalyzeText(req);  // no features
+      CHECK(r.model() == "fake-analyze");
+      CHECK(!r.has_summary());
+      CHECK(r.topics_size() == 0);
     }
   }
 

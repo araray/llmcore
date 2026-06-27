@@ -63,7 +63,28 @@ fields, and cancellation.
 `ListProviders`, `ListModels`, `GetProviderDetails`, `GetInfo` /
 `EnsureCompatible`, `Health`, `ReloadConfig`. `Embed(...)` throws
 `BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
-AudioService (Tier 2) is generated but not wrapped (B3).
+
+## Surface (Tier 2 — audio)
+
+Available when the bridge advertises `tier2.audio`. One-shot: `Synthesize`,
+`Transcribe`, `GenerateImage`, `Ocr`, `AnalyzeText` (return generated result
+types by value, throw `BridgeError`). Live duplex — each returns a cancellable
+stream (`Write` frames, `WritesDone`, then `Read` until false; throws on a non-OK
+terminal status): `TranscribeStreamCall`, `SynthesizeStreamCall`,
+`VoiceAgentCall`.
+
+```cpp
+auto s = client->TranscribeStreamCall();
+llmcore::v1::AudioIn f; f.set_audio(pcm);
+s.Write(f);
+llmcore::v1::AudioIn c; c.set_control(llmcore::v1::STT_CONTROL_CLOSE);
+s.Write(c);
+s.WritesDone();
+llmcore::v1::TranscriptionStreamEvent ev;
+while (s.Read(&ev)) {
+  if (ev.type() == llmcore::v1::STREAM_EVENT_TYPE_FINAL) std::cout << ev.text();
+}
+```
 
 ## Errors
 

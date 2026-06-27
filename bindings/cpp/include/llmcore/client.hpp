@@ -16,6 +16,7 @@
 #include <vector>
 
 // Generated protobuf message types (produced into the build's generated/ dir).
+#include "llmcore/v1/audio.pb.h"
 #include "llmcore/v1/catalog.pb.h"
 #include "llmcore/v1/common.pb.h"
 #include "llmcore/v1/control.pb.h"
@@ -66,6 +67,90 @@ class ChatStream {
   std::unique_ptr<Impl> impl_;
 };
 
+/// A cancellable bidi STT stream: Write AudioIn frames, Read
+/// TranscriptionStreamEvents. (Tier 2 — audio.)
+class TranscribeStream {
+ public:
+  ~TranscribeStream();
+  TranscribeStream(TranscribeStream&&) noexcept;
+  TranscribeStream& operator=(TranscribeStream&&) noexcept;
+  TranscribeStream(const TranscribeStream&) = delete;
+  TranscribeStream& operator=(const TranscribeStream&) = delete;
+
+  /// Sends one AudioIn frame (open / audio / control). Returns false if the
+  /// stream is already half-closed or broken.
+  bool Write(const llmcore::v1::AudioIn& frame);
+  /// Half-closes the request stream (no more Writes will be sent).
+  void WritesDone();
+  /// Reads the next event into *out. Returns true if a frame was read, false at
+  /// the clean end. Throws BridgeError on a non-OK terminal status.
+  bool Read(llmcore::v1::TranscriptionStreamEvent* out);
+  /// Cancels the stream (maps to gRPC CANCELLED).
+  void Cancel();
+
+ private:
+  friend class Client;
+  TranscribeStream();
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
+/// A cancellable bidi TTS stream: Write SynthControl frames, Read AudioOut
+/// chunks. (Tier 2 — audio.)
+class SynthesizeStream {
+ public:
+  ~SynthesizeStream();
+  SynthesizeStream(SynthesizeStream&&) noexcept;
+  SynthesizeStream& operator=(SynthesizeStream&&) noexcept;
+  SynthesizeStream(const SynthesizeStream&) = delete;
+  SynthesizeStream& operator=(const SynthesizeStream&) = delete;
+
+  /// Sends one SynthControl frame (open / text / control). Returns false if the
+  /// stream is already half-closed or broken.
+  bool Write(const llmcore::v1::SynthControl& frame);
+  /// Half-closes the request stream.
+  void WritesDone();
+  /// Reads the next AudioOut into *out. Returns true if read, false at the clean
+  /// end. Throws BridgeError on a non-OK terminal status.
+  bool Read(llmcore::v1::AudioOut* out);
+  /// Cancels the stream (maps to gRPC CANCELLED).
+  void Cancel();
+
+ private:
+  friend class Client;
+  SynthesizeStream();
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
+/// A cancellable bidi voice-agent stream: Write VoiceAgentClientEvents, Read
+/// VoiceAgentEvents. (Tier 2 — audio.)
+class VoiceAgentStream {
+ public:
+  ~VoiceAgentStream();
+  VoiceAgentStream(VoiceAgentStream&&) noexcept;
+  VoiceAgentStream& operator=(VoiceAgentStream&&) noexcept;
+  VoiceAgentStream(const VoiceAgentStream&) = delete;
+  VoiceAgentStream& operator=(const VoiceAgentStream&) = delete;
+
+  /// Sends one VoiceAgentClientEvent (settings / audio / inject / ...). Returns
+  /// false if the stream is already half-closed or broken.
+  bool Write(const llmcore::v1::VoiceAgentClientEvent& event);
+  /// Half-closes the request stream.
+  void WritesDone();
+  /// Reads the next VoiceAgentEvent into *out. Returns true if read, false at the
+  /// clean end. Throws BridgeError on a non-OK terminal status.
+  bool Read(llmcore::v1::VoiceAgentEvent* out);
+  /// Cancels the stream (maps to gRPC CANCELLED).
+  void Cancel();
+
+ private:
+  friend class Client;
+  VoiceAgentStream();
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
 /// gRPC client. Construct with Create(); methods throw BridgeError on failure.
 class Client {
  public:
@@ -96,6 +181,18 @@ class Client {
   llmcore::v1::ListProvidersResponse ListProviders();
   llmcore::v1::ListModelsResponse ListModels(const std::string& provider_name);
   llmcore::v1::ModelDetails GetProviderDetails(const std::string& provider_name);
+
+  // audio (Tier 2) — available when the bridge advertises "tier2.audio".
+  // One-shot:
+  llmcore::v1::SpeechResult Synthesize(const llmcore::v1::SynthesizeRequest& req);
+  llmcore::v1::TranscriptionResult Transcribe(const llmcore::v1::TranscribeRequest& req);
+  llmcore::v1::ImageGenerationResult GenerateImage(const llmcore::v1::GenerateImageRequest& req);
+  llmcore::v1::OCRResult Ocr(const llmcore::v1::OcrRequest& req);
+  llmcore::v1::TextAnalysisResult AnalyzeText(const llmcore::v1::AnalyzeTextRequest& req);
+  // Live duplex (Write frames, WritesDone, then Read until false):
+  TranscribeStream TranscribeStreamCall();
+  SynthesizeStream SynthesizeStreamCall();
+  VoiceAgentStream VoiceAgentCall();
 
  private:
   Client();
