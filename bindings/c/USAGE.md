@@ -85,6 +85,45 @@ llmcore_list_models(c, "openai", &items, &count);
 llmcore_string_array_free(items, count);
 ```
 
+## Audio (Tier 2)
+
+Available when the bridge advertises `tier2.audio`; negotiate with
+`llmcore_ensure_compatible(c, (const char*[]){"tier2.audio"}, 1)`. Each call fills
+an `*_result` struct freed with its `*_result_free`. Proto `bytes` cross the wire
+base64-encoded; the client handles that for you. The duplex RPCs are WebSocket
+(out of scope here — see **D6**).
+
+```c
+/* text-to-speech: sp.audio holds the decoded bytes */
+llmcore_speech_result sp;
+llmcore_error *e = llmcore_synthesize(c, "hello", &sp);
+if (!e) { fwrite(sp.audio, 1, sp.audio_len, out); llmcore_speech_result_free(&sp); }
+else llmcore_error_free(e);
+
+/* speech-to-text: pass the raw audio bytes */
+llmcore_transcription_result tr;
+e = llmcore_transcribe(c, pcm, pcm_len, &tr);
+if (!e) { puts(tr.text); llmcore_transcription_result_free(&tr); } else llmcore_error_free(e);
+
+/* image generation: images[i] are base64 (b64_json) strings */
+llmcore_image_result img;
+e = llmcore_generate_image(c, "a cat", 2, &img);
+if (!e) { for (size_t i = 0; i < img.n_images; i++) puts(img.images[i]); llmcore_image_result_free(&img); }
+else llmcore_error_free(e);
+
+/* OCR: pass bytes (data,len) or a URL (NULL bytes); pages_json is raw JSON */
+llmcore_ocr_result doc;
+e = llmcore_ocr(c, pdf, pdf_len, /*url=*/NULL, &doc);
+if (!e) { printf("%d pages, model=%s\n", doc.pages_processed, doc.model); llmcore_ocr_result_free(&doc); }
+else llmcore_error_free(e);
+
+/* text analysis: summary valid only if has_summary; topics_json is raw JSON */
+llmcore_text_analysis_result an;
+e = llmcore_analyze_text(c, "…", &an);
+if (!e) { if (an.has_summary) puts(an.summary); llmcore_text_analysis_result_free(&an); }
+else llmcore_error_free(e);
+```
+
 ## Error handling & retries
 
 ```c

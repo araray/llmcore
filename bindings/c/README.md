@@ -1,8 +1,9 @@
 # llmcore C client
 
 C client for the **llmcore bridge** over its **HTTP + SSE** transport (JSON wire),
-built on **libcurl** + **cJSON**. Tier 0 only — per decision **D6**, the gRPC path
-in C is reserved for duplex audio in a later phase. Depends only on the contract.
+built on **libcurl** + **cJSON**. Tier 0 plus the **Tier-2 audio one-shot (unary)
+RPCs** — per decision **D6**, the duplex audio path in C (WebSocket/gRPC) is
+reserved for a later phase. Depends only on the contract.
 
 > **Build status / sandbox note.** The C source is complete and passes
 > `gcc -std=c11 -Wall -Wextra -fsyntax-only` against minimal stub headers, but it
@@ -68,8 +69,28 @@ ownership rules, error fields, and TLS guidance.
 `llmcore_chat`, `llmcore_chat_stream` (cancellable), `llmcore_count_tokens`,
 `llmcore_estimate_cost`, `llmcore_list_providers`, `llmcore_list_models`,
 `llmcore_ensure_compatible`, `llmcore_health`. `llmcore_embed` always returns an
-UNSUPPORTED error (Embed is UNIMPLEMENTED in `llmcore.v1`). Audio (Tier 2) is out
-of scope here (B3).
+UNSUPPORTED error (Embed is UNIMPLEMENTED in `llmcore.v1`).
+
+## Surface (Tier 2 — audio, unary)
+
+Available when the bridge advertises `tier2.audio`: `llmcore_synthesize`,
+`llmcore_transcribe`, `llmcore_generate_image`, `llmcore_ocr`,
+`llmcore_analyze_text` (each fills an `*_result` struct freed with its
+`*_result_free`). Proto `bytes` fields cross the JSON wire base64-encoded; the
+client decodes/encodes transparently. The **live duplex** RPCs
+(`transcribe_stream`, `synthesize_stream`, `voice_agent`) are WebSocket-based and
+intentionally **not** wrapped here — per **D6**, C's duplex-audio path is gRPC, a
+later phase.
+
+```c
+llmcore_speech_result sp;
+llmcore_error *e = llmcore_synthesize(c, "hello", &sp);   /* sp.audio (bytes), sp.model */
+if (!e) llmcore_speech_result_free(&sp);
+
+llmcore_transcription_result tr;
+e = llmcore_transcribe(c, pcm, pcm_len, &tr);             /* tr.text, tr.language */
+if (!e) llmcore_transcription_result_free(&tr);
+```
 
 ## Errors
 

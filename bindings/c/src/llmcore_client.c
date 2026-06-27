@@ -579,3 +579,281 @@ llmcore_error *llmcore_chat_stream(llmcore_client *c, const char *message,
   free(s.accum.p);
   return err;
 }
+
+/* ===================== Audio (Tier 2) — unary RPCs ===================== */
+
+static const char B64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/* base64-encode `n` bytes; returns a malloc'd NUL-terminated string. */
+static char *b64_encode(const unsigned char *data, size_t n) {
+  size_t out_len = 4 * ((n + 2) / 3);
+  char *out = (char *)malloc(out_len + 1);
+  if (!out) return NULL;
+  size_t i = 0, j = 0;
+  for (; i + 2 < n; i += 3) {
+    unsigned int v = ((unsigned int)data[i] << 16) | ((unsigned int)data[i + 1] << 8) |
+                     (unsigned int)data[i + 2];
+    out[j++] = B64[(v >> 18) & 0x3F];
+    out[j++] = B64[(v >> 12) & 0x3F];
+    out[j++] = B64[(v >> 6) & 0x3F];
+    out[j++] = B64[v & 0x3F];
+  }
+  if (i < n) {
+    int rem = (int)(n - i); /* 1 or 2 */
+    unsigned int v = (unsigned int)data[i] << 16;
+    if (rem == 2) v |= (unsigned int)data[i + 1] << 8;
+    out[j++] = B64[(v >> 18) & 0x3F];
+    out[j++] = B64[(v >> 12) & 0x3F];
+    out[j++] = (rem == 2) ? B64[(v >> 6) & 0x3F] : '=';
+    out[j++] = '=';
+  }
+  out[j] = '\0';
+  return out;
+}
+
+static int b64val(char ch) {
+  if (ch == '\0' || ch == '=') return -1;
+  const char *p = strchr(B64, ch);
+  return p ? (int)(p - B64) : -1;
+}
+
+/* base64-decode a NUL-terminated string; sets *out_len. Returns malloc'd bytes
+ * (NULL on allocation failure). Non-base64 chars (e.g. newlines) are skipped. */
+static unsigned char *b64_decode(const char *s, size_t *out_len) {
+  size_t slen = strlen(s);
+  unsigned char *out = (unsigned char *)malloc(slen / 4 * 3 + 3);
+  if (!out) {
+    *out_len = 0;
+    return NULL;
+  }
+  size_t o = 0;
+  int buf = 0, bits = 0;
+  for (size_t i = 0; i < slen; i++) {
+    if (s[i] == '=') break;
+    int v = b64val(s[i]);
+    if (v < 0) continue;
+    buf = (buf << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[o++] = (unsigned char)((buf >> bits) & 0xFF);
+    }
+  }
+  *out_len = o;
+  return out;
+}
+
+/* Parse the leading status checks shared by the audio unary calls: post, map an
+ * HTTP error, then parse the JSON body. On success returns NULL and sets *root
+ * (caller cJSON_Delete). On failure returns the error (and *root is NULL). */
+static llmcore_error *audio_post(llmcore_client *c, const char *path, char *body,
+                                 cJSON **root) {
+  *root = NULL;
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, path, body, &resp, &code);
+  free(body);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  *root = cJSON_Parse(resp);
+  free(resp);
+  if (!*root) return err_local("ERROR_CATEGORY_INTERNAL", "parse.error", "invalid JSON");
+  return NULL;
+}
+
+void llmcore_speech_result_free(llmcore_speech_result *r) {
+  if (!r) return;
+  free(r->audio);
+  free(r->format);
+  free(r->model);
+  free(r->voice);
+}
+
+llmcore_error *llmcore_synthesize(llmcore_client *c, const char *text,
+                                  llmcore_speech_result *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "text", text);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  cJSON *root = NULL;
+  llmcore_error *e =
+      audio_post(c, "/llmcore.v1/AudioService/Synthesize", body, &root);
+  if (e) return e;
+
+  memset(out, 0, sizeof(*out));
+  const cJSON *a = cJSON_GetObjectItemCaseSensitive(root, "audio_data");
+  if (cJSON_IsString(a)) out->audio = b64_decode(a->valuestring, &out->audio_len);
+  const cJSON *f = cJSON_GetObjectItemCaseSensitive(root, "format");
+  out->format = jstrdup(cJSON_IsString(f) ? f->valuestring : "");
+  const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "model");
+  out->model = jstrdup(cJSON_IsString(m) ? m->valuestring : "");
+  const cJSON *v = cJSON_GetObjectItemCaseSensitive(root, "voice");
+  out->voice = jstrdup(cJSON_IsString(v) ? v->valuestring : "");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+void llmcore_transcription_result_free(llmcore_transcription_result *r) {
+  if (!r) return;
+  free(r->text);
+  free(r->language);
+  free(r->model);
+}
+
+llmcore_error *llmcore_transcribe(llmcore_client *c, const unsigned char *audio,
+                                  size_t audio_len, llmcore_transcription_result *out) {
+  char *b64 = b64_encode(audio, audio_len);
+  if (!b64) return err_local("ERROR_CATEGORY_INTERNAL", "oom", "out of memory");
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "audio_data", b64);
+  free(b64);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  cJSON *root = NULL;
+  llmcore_error *e =
+      audio_post(c, "/llmcore.v1/AudioService/Transcribe", body, &root);
+  if (e) return e;
+
+  memset(out, 0, sizeof(*out));
+  const cJSON *t = cJSON_GetObjectItemCaseSensitive(root, "text");
+  out->text = jstrdup(cJSON_IsString(t) ? t->valuestring : "");
+  const cJSON *l = cJSON_GetObjectItemCaseSensitive(root, "language");
+  out->language = jstrdup(cJSON_IsString(l) ? l->valuestring : "");
+  const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "model");
+  out->model = jstrdup(cJSON_IsString(m) ? m->valuestring : "");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+void llmcore_image_result_free(llmcore_image_result *r) {
+  if (!r) return;
+  if (r->images) {
+    for (size_t i = 0; i < r->n_images; i++) free(r->images[i]);
+    free(r->images);
+  }
+  free(r->model);
+}
+
+llmcore_error *llmcore_generate_image(llmcore_client *c, const char *prompt, int n,
+                                      llmcore_image_result *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "prompt", prompt);
+  cJSON_AddNumberToObject(req, "n", n);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  cJSON *root = NULL;
+  llmcore_error *e =
+      audio_post(c, "/llmcore.v1/AudioService/GenerateImage", body, &root);
+  if (e) return e;
+
+  memset(out, 0, sizeof(*out));
+  const cJSON *imgs = cJSON_GetObjectItemCaseSensitive(root, "images");
+  if (cJSON_IsArray(imgs)) {
+    size_t n_imgs = (size_t)cJSON_GetArraySize(imgs);
+    if (n_imgs > 0) {
+      out->images = (char **)calloc(n_imgs, sizeof(char *));
+      if (!out->images) {
+        cJSON_Delete(root);
+        return err_local("ERROR_CATEGORY_INTERNAL", "oom", "out of memory");
+      }
+      size_t k = 0;
+      const cJSON *it;
+      cJSON_ArrayForEach(it, imgs) {
+        const cJSON *d = cJSON_GetObjectItemCaseSensitive(it, "data");
+        out->images[k++] = jstrdup(cJSON_IsString(d) ? d->valuestring : "");
+      }
+      out->n_images = k;
+    }
+  }
+  const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "model");
+  out->model = jstrdup(cJSON_IsString(m) ? m->valuestring : "");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+void llmcore_ocr_result_free(llmcore_ocr_result *r) {
+  if (!r) return;
+  free(r->model);
+  free(r->pages_json);
+}
+
+llmcore_error *llmcore_ocr(llmcore_client *c, const unsigned char *data, size_t data_len,
+                           const char *url, llmcore_ocr_result *out) {
+  cJSON *req = cJSON_CreateObject();
+  if (url) {
+    cJSON_AddStringToObject(req, "url", url);
+  } else {
+    char *b64 = b64_encode(data, data_len);
+    if (!b64) {
+      cJSON_Delete(req);
+      return err_local("ERROR_CATEGORY_INTERNAL", "oom", "out of memory");
+    }
+    cJSON_AddStringToObject(req, "data", b64);
+    free(b64);
+  }
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  cJSON *root = NULL;
+  llmcore_error *e = audio_post(c, "/llmcore.v1/AudioService/Ocr", body, &root);
+  if (e) return e;
+
+  memset(out, 0, sizeof(*out));
+  const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "model");
+  out->model = jstrdup(cJSON_IsString(m) ? m->valuestring : "");
+  const cJSON *pp = cJSON_GetObjectItemCaseSensitive(root, "pages_processed");
+  if (cJSON_IsNumber(pp)) out->pages_processed = pp->valueint;
+  const cJSON *ds = cJSON_GetObjectItemCaseSensitive(root, "doc_size_bytes");
+  if (cJSON_IsNumber(ds)) {
+    out->doc_size_bytes = (long)ds->valuedouble;
+    out->has_doc_size_bytes = 1;
+  }
+  const cJSON *pages = cJSON_GetObjectItemCaseSensitive(root, "pages");
+  out->pages_json = cJSON_IsArray(pages) ? cJSON_PrintUnformatted(pages) : jstrdup("[]");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+void llmcore_text_analysis_result_free(llmcore_text_analysis_result *r) {
+  if (!r) return;
+  free(r->summary);
+  free(r->language);
+  free(r->model);
+  free(r->topics_json);
+}
+
+llmcore_error *llmcore_analyze_text(llmcore_client *c, const char *text,
+                                    llmcore_text_analysis_result *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "text", text);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  cJSON *root = NULL;
+  llmcore_error *e =
+      audio_post(c, "/llmcore.v1/AudioService/AnalyzeText", body, &root);
+  if (e) return e;
+
+  memset(out, 0, sizeof(*out));
+  const cJSON *s = cJSON_GetObjectItemCaseSensitive(root, "summary");
+  if (cJSON_IsString(s)) {
+    out->summary = jstrdup(s->valuestring);
+    out->has_summary = 1;
+  }
+  const cJSON *l = cJSON_GetObjectItemCaseSensitive(root, "language");
+  out->language = jstrdup(cJSON_IsString(l) ? l->valuestring : "");
+  const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "model");
+  out->model = jstrdup(cJSON_IsString(m) ? m->valuestring : "");
+  const cJSON *topics = cJSON_GetObjectItemCaseSensitive(root, "topics");
+  out->topics_json = cJSON_IsArray(topics) ? cJSON_PrintUnformatted(topics) : jstrdup("[]");
+  cJSON_Delete(root);
+  return NULL;
+}

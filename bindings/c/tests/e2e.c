@@ -77,7 +77,7 @@ struct bridge {
   char base[64];
 };
 
-static struct bridge start_bridge(void) {
+static struct bridge start_bridge(int with_audio) {
   struct bridge b;
   b.pid = -1;
   int hport = free_port();
@@ -91,6 +91,7 @@ static struct bridge start_bridge(void) {
   pid_t pid = fork();
   if (pid == 0) {
     setenv("LLMCORE_BRIDGE_FAKE", "1", 1);
+    if (with_audio) setenv("LLMCORE_BRIDGE_FAKE_AUDIO", "1", 1);
     char *argv[] = {(char *)py,
                     "-m",
                     "llmcore.bridge.cli",
@@ -127,7 +128,7 @@ static struct bridge start_bridge(void) {
 }
 
 int main(void) {
-  struct bridge b = start_bridge();
+  struct bridge b = start_bridge(0);
   llmcore_client *c = llmcore_client_new(b.base);
 
   /* ensure_compatible accept */
@@ -243,6 +244,87 @@ int main(void) {
     CHECK(e == NULL); /* user cancel reported as success */
     if (e) llmcore_error_free(e);
     CHECK(cnt >= 1);
+  }
+
+  /* ---- audio (Tier 2): a second, audio-enabled bridge ---- */
+  {
+    struct bridge ab = start_bridge(1);
+    llmcore_client *ac = llmcore_client_new(ab.base);
+
+    /* synthesize: audio_data decodes to "tts:hello" */
+    {
+      llmcore_speech_result r;
+      llmcore_error *e = llmcore_synthesize(ac, "hello", &r);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(r.audio_len == 9 && memcmp(r.audio, "tts:hello", 9) == 0);
+        CHECK(strcmp(r.model, "fake-tts") == 0);
+        llmcore_speech_result_free(&r);
+      }
+    }
+    /* transcribe: audio bytes round-trip to text */
+    {
+      llmcore_transcription_result r;
+      llmcore_error *e =
+          llmcore_transcribe(ac, (const unsigned char *)"hello world", 11, &r);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(strcmp(r.text, "hello world") == 0);
+        CHECK(strcmp(r.language, "en") == 0);
+        llmcore_transcription_result_free(&r);
+      }
+    }
+    /* generate_image: n=2, data[0] == base64("img:a cat") */
+    {
+      llmcore_image_result r;
+      llmcore_error *e = llmcore_generate_image(ac, "a cat", 2, &r);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(r.n_images == 2);
+        if (r.n_images >= 1) CHECK(strcmp(r.images[0], "aW1nOmEgY2F0") == 0);
+        CHECK(strcmp(r.model, "fake-img") == 0);
+        llmcore_image_result_free(&r);
+      }
+    }
+    /* ocr: bytes -> model/pages_processed/doc_size_bytes */
+    {
+      llmcore_ocr_result r;
+      llmcore_error *e =
+          llmcore_ocr(ac, (const unsigned char *)"PDFBYTES", 8, NULL, &r);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(strcmp(r.model, "fake-ocr") == 0);
+        CHECK(r.pages_processed == 1);
+        CHECK(r.has_doc_size_bytes && r.doc_size_bytes == 8);
+        llmcore_ocr_result_free(&r);
+      }
+    }
+    /* analyze_text (no features): model set, no summary */
+    {
+      llmcore_text_analysis_result r;
+      llmcore_error *e = llmcore_analyze_text(ac, "some text", &r);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(r.has_summary == 0);
+        CHECK(strcmp(r.model, "fake-analyze") == 0);
+        llmcore_text_analysis_result_free(&r);
+      }
+    }
+
+    llmcore_client_free(ac);
+    kill(ab.pid, SIGTERM);
+    int ast;
+    waitpid(ab.pid, &ast, 0);
   }
 
   llmcore_client_free(c);

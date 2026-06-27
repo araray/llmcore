@@ -90,6 +90,79 @@ void llmcore_string_array_free(char **items, size_t n);
 
 llmcore_error *llmcore_health(llmcore_client *c, int *out_ok);
 
+/* ===================== Audio (Tier 2) — unary RPCs ========================
+ * Available when the bridge advertises "tier2.audio"; otherwise these return an
+ * UNSUPPORTED error (HTTP 501). The live duplex RPCs (transcribe_stream,
+ * synthesize_stream, voice_agent) are WebSocket-based and intentionally out of
+ * scope for this HTTP/SSE client (per D6, C's duplex audio path is gRPC, a later
+ * phase). Proto "bytes" fields cross the JSON wire base64-encoded; this client
+ * handles that transparently (decoding audio out, encoding audio/data in). */
+
+/* Text-to-speech result. Free with llmcore_speech_result_free.
+ * `audio` holds the decoded audio bytes (`audio_len` long; may be NULL/0). */
+typedef struct {
+  unsigned char *audio; /* malloc'd, base64-decoded (caller frees) */
+  size_t audio_len;
+  char *format;         /* malloc'd ("" if absent) */
+  char *model;          /* malloc'd ("" if absent) */
+  char *voice;          /* malloc'd ("" if absent) */
+} llmcore_speech_result;
+void llmcore_speech_result_free(llmcore_speech_result *r);
+
+llmcore_error *llmcore_synthesize(llmcore_client *c, const char *text,
+                                  llmcore_speech_result *out);
+
+/* Speech-to-text. `audio`/`audio_len` is the raw audio to transcribe. */
+typedef struct {
+  char *text;           /* malloc'd */
+  char *language;       /* malloc'd ("" if absent) */
+  char *model;          /* malloc'd ("" if absent) */
+} llmcore_transcription_result;
+void llmcore_transcription_result_free(llmcore_transcription_result *r);
+
+llmcore_error *llmcore_transcribe(llmcore_client *c, const unsigned char *audio,
+                                  size_t audio_len, llmcore_transcription_result *out);
+
+/* Image generation. `images` is an array of `n_images` base64 (b64_json) strings. */
+typedef struct {
+  char **images;        /* malloc'd array of malloc'd base64 strings */
+  size_t n_images;
+  char *model;          /* malloc'd ("" if absent) */
+} llmcore_image_result;
+void llmcore_image_result_free(llmcore_image_result *r);
+
+llmcore_error *llmcore_generate_image(llmcore_client *c, const char *prompt, int n,
+                                      llmcore_image_result *out);
+
+/* Document OCR. Provide either `data`/`data_len` (bytes) or `url` (pass NULL for
+ * url to use the bytes). `pages_json` is the raw JSON array of pages. */
+typedef struct {
+  char *model;             /* malloc'd ("" if absent) */
+  int pages_processed;
+  long doc_size_bytes;     /* valid only when has_doc_size_bytes */
+  int has_doc_size_bytes;
+  char *pages_json;        /* malloc'd raw JSON array (e.g. "[]") */
+} llmcore_ocr_result;
+void llmcore_ocr_result_free(llmcore_ocr_result *r);
+
+llmcore_error *llmcore_ocr(llmcore_client *c, const unsigned char *data, size_t data_len,
+                           const char *url, llmcore_ocr_result *out);
+
+/* Text analysis. `summary` is valid only when has_summary; `topics_json` is the
+ * raw JSON array of topic objects. (Analysis feature flags are not exposed by
+ * this convenience wrapper; the no-features result is returned.) */
+typedef struct {
+  char *summary;        /* malloc'd; valid only when has_summary */
+  int has_summary;
+  char *language;       /* malloc'd ("" if absent) */
+  char *model;          /* malloc'd ("" if absent) */
+  char *topics_json;    /* malloc'd raw JSON array (e.g. "[]") */
+} llmcore_text_analysis_result;
+void llmcore_text_analysis_result_free(llmcore_text_analysis_result *r);
+
+llmcore_error *llmcore_analyze_text(llmcore_client *c, const char *text,
+                                    llmcore_text_analysis_result *out);
+
 #ifdef __cplusplus
 }
 #endif
