@@ -1,0 +1,581 @@
+/* llmcore C client implementation (libcurl + cJSON, HTTP/SSE). */
+#include "llmcore_client.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#include <curl/curl.h>
+
+#if defined(__has_include)
+#  if __has_include(<cjson/cJSON.h>)
+#    include <cjson/cJSON.h>
+#  else
+#    include <cJSON.h>
+#  endif
+#else
+#  include <cjson/cJSON.h>
+#endif
+
+/* ------------------------- small utilities ------------------------- */
+
+struct buf {
+  char *p;
+  size_t n;
+  size_t cap;
+};
+
+static int buf_append(struct buf *b, const char *data, size_t n) {
+  if (b->n + n > b->cap) {
+    size_t cap = b->cap ? b->cap * 2 : 256;
+    while (cap < b->n + n) cap *= 2;
+    char *q = (char *)realloc(b->p, cap);
+    if (!q) return -1;
+    b->p = q;
+    b->cap = cap;
+  }
+  memcpy(b->p + b->n, data, n);
+  b->n += n;
+  return 0;
+}
+
+static char *jstrdup(const char *s) {
+  if (!s) return NULL;
+  size_t n = strlen(s);
+  char *q = (char *)malloc(n + 1);
+  if (q) memcpy(q, s, n + 1);
+  return q;
+}
+
+static char *join_url(const char *base, const char *path) {
+  size_t a = strlen(base), b = strlen(path);
+  char *u = (char *)malloc(a + b + 1);
+  if (!u) return NULL;
+  memcpy(u, base, a);
+  memcpy(u + a, path, b + 1);
+  return u;
+}
+
+struct llmcore_client {
+  char *base;
+  CURL *curl;
+};
+
+static int g_curl_inited = 0;
+
+/* ------------------------- error helpers --------------------------- */
+
+void llmcore_error_free(llmcore_error *err) {
+  if (!err) return;
+  free(err->category);
+  free(err->code);
+  free(err->message);
+  free(err->provider);
+  free(err->model);
+  free(err);
+}
+
+static llmcore_error *err_local(const char *category, const char *code, const char *message) {
+  llmcore_error *e = (llmcore_error *)calloc(1, sizeof(*e));
+  if (!e) return NULL;
+  e->category = jstrdup(category);
+  e->code = jstrdup(code);
+  e->message = jstrdup(message ? message : "");
+  return e;
+}
+
+static llmcore_error *parse_error_object(const cJSON *eo, long fallback_code) {
+  llmcore_error *e = (llmcore_error *)calloc(1, sizeof(*e));
+  if (!e) return NULL;
+  if (!eo) {
+    e->category = jstrdup("ERROR_CATEGORY_INTERNAL");
+    e->code = jstrdup("http.error");
+    e->message = jstrdup("request failed");
+    e->http_status = (int)fallback_code;
+    return e;
+  }
+  const cJSON *c;
+  c = cJSON_GetObjectItemCaseSensitive(eo, "category");
+  e->category = jstrdup(cJSON_IsString(c) ? c->valuestring : "ERROR_CATEGORY_INTERNAL");
+  c = cJSON_GetObjectItemCaseSensitive(eo, "code");
+  e->code = jstrdup(cJSON_IsString(c) ? c->valuestring : "internal");
+  c = cJSON_GetObjectItemCaseSensitive(eo, "message");
+  e->message = jstrdup(cJSON_IsString(c) ? c->valuestring : "");
+  c = cJSON_GetObjectItemCaseSensitive(eo, "http_status");
+  if (cJSON_IsNumber(c)) e->http_status = c->valueint;
+  c = cJSON_GetObjectItemCaseSensitive(eo, "retryable");
+  e->retryable = cJSON_IsTrue(c) ? 1 : 0;
+  c = cJSON_GetObjectItemCaseSensitive(eo, "retry_after_ms");
+  if (cJSON_IsNumber(c)) e->retry_after_ms = c->valuedouble;
+  c = cJSON_GetObjectItemCaseSensitive(eo, "provider");
+  if (cJSON_IsString(c)) e->provider = jstrdup(c->valuestring);
+  c = cJSON_GetObjectItemCaseSensitive(eo, "model");
+  if (cJSON_IsString(c)) e->model = jstrdup(c->valuestring);
+  if (!e->http_status) e->http_status = (int)fallback_code;
+  return e;
+}
+
+/* Build an error from an HTTP error body of the form {"error": {...}}. */
+static llmcore_error *http_error(const char *body, long code) {
+  cJSON *root = body ? cJSON_Parse(body) : NULL;
+  const cJSON *eo = root ? cJSON_GetObjectItemCaseSensitive(root, "error") : NULL;
+  llmcore_error *e = parse_error_object(eo, code);
+  cJSON_Delete(root);
+  return e;
+}
+
+/* ------------------------- HTTP plumbing --------------------------- */
+
+static size_t write_buf(char *ptr, size_t size, size_t nmemb, void *userdata) {
+  struct buf *b = (struct buf *)userdata;
+  size_t n = size * nmemb;
+  if (buf_append(b, ptr, n) != 0) return 0;
+  return n;
+}
+
+/* POST `body` (JSON) to base+path. On transport failure returns an error;
+ * otherwise sets *out_body (NUL-terminated, caller frees) and *out_code. */
+static llmcore_error *post_json(llmcore_client *c, const char *path, const char *body,
+                                char **out_body, long *out_code) {
+  CURL *curl = c->curl;
+  curl_easy_reset(curl);
+  char *url = join_url(c->base, path);
+  if (!url) return err_local("ERROR_CATEGORY_INTERNAL", "oom", "out of memory");
+  const char *payload = body ? body : "{}";
+
+  struct buf b;
+  memset(&b, 0, sizeof(b));
+  struct curl_slist *hdr = NULL;
+  hdr = curl_slist_append(hdr, "Content-Type: application/json");
+
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_POST, 1L);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(payload));
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdr);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_buf);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &b);
+
+  CURLcode rc = curl_easy_perform(curl);
+  curl_slist_free_all(hdr);
+  free(url);
+
+  if (rc != CURLE_OK) {
+    free(b.p);
+    return err_local("ERROR_CATEGORY_INTERNAL", "transport.error", curl_easy_strerror(rc));
+  }
+  long code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+  if (buf_append(&b, "", 1) != 0) { /* NUL-terminate */
+    free(b.p);
+    return err_local("ERROR_CATEGORY_INTERNAL", "oom", "out of memory");
+  }
+  *out_body = b.p;
+  *out_code = code;
+  return NULL;
+}
+
+/* --------------------------- lifecycle ----------------------------- */
+
+llmcore_client *llmcore_client_new(const char *base_url) {
+  if (!base_url) return NULL;
+  if (!g_curl_inited) {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    g_curl_inited = 1;
+  }
+  llmcore_client *c = (llmcore_client *)calloc(1, sizeof(*c));
+  if (!c) return NULL;
+  size_t L = strlen(base_url);
+  while (L > 0 && base_url[L - 1] == '/') L--;
+  c->base = (char *)malloc(L + 1);
+  if (!c->base) {
+    free(c);
+    return NULL;
+  }
+  memcpy(c->base, base_url, L);
+  c->base[L] = '\0';
+  c->curl = curl_easy_init();
+  if (!c->curl) {
+    free(c->base);
+    free(c);
+    return NULL;
+  }
+  return c;
+}
+
+void llmcore_client_free(llmcore_client *c) {
+  if (!c) return;
+  if (c->curl) curl_easy_cleanup(c->curl);
+  free(c->base);
+  free(c);
+}
+
+void llmcore_chat_result_free(llmcore_chat_result *r) {
+  if (!r) return;
+  free(r->text);
+  r->text = NULL;
+}
+
+void llmcore_string_array_free(char **items, size_t n) {
+  if (!items) return;
+  for (size_t i = 0; i < n; i++) free(items[i]);
+  free(items);
+}
+
+/* --------------------------- endpoints ----------------------------- */
+
+llmcore_error *llmcore_ensure_compatible(llmcore_client *c, const char *const *required_caps,
+                                         size_t n_caps) {
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/llmcore.v1/ControlService/GetInfo", "{}", &resp, &code);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  if (!root) return err_local("ERROR_CATEGORY_INTERNAL", "parse.error", "invalid JSON");
+
+  const cJSON *cv = cJSON_GetObjectItemCaseSensitive(root, "contract_version");
+  if (!cJSON_IsString(cv) || strcmp(cv->valuestring, "llmcore.v1") != 0) {
+    e = err_local("ERROR_CATEGORY_INVALID_ARGUMENT", "contract.mismatch",
+                  "server contract != llmcore.v1");
+    cJSON_Delete(root);
+    return e;
+  }
+  const cJSON *caps = cJSON_GetObjectItemCaseSensitive(root, "capabilities");
+  for (size_t i = 0; i < n_caps; i++) {
+    int found = 0;
+    if (cJSON_IsArray(caps)) {
+      const cJSON *it = NULL;
+      cJSON_ArrayForEach(it, caps) {
+        if (cJSON_IsString(it) && strcmp(it->valuestring, required_caps[i]) == 0) {
+          found = 1;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      e = err_local("ERROR_CATEGORY_UNSUPPORTED", "capability.missing", required_caps[i]);
+      cJSON_Delete(root);
+      return e;
+    }
+  }
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_chat(llmcore_client *c, const char *message, llmcore_chat_result *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "message", message);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/llmcore.v1/InferenceService/Chat", body, &resp, &code);
+  free(body);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  if (!root) return err_local("ERROR_CATEGORY_INTERNAL", "parse.error", "invalid JSON");
+
+  memset(out, 0, sizeof(*out));
+  out->prompt_tokens = out->completion_tokens = out->total_tokens = -1;
+  const cJSON *t = cJSON_GetObjectItemCaseSensitive(root, "text");
+  out->text = jstrdup(cJSON_IsString(t) ? t->valuestring : "");
+  const cJSON *u = cJSON_GetObjectItemCaseSensitive(root, "usage");
+  if (cJSON_IsObject(u)) {
+    const cJSON *x;
+    x = cJSON_GetObjectItemCaseSensitive(u, "prompt_tokens");
+    if (cJSON_IsNumber(x)) out->prompt_tokens = x->valueint;
+    x = cJSON_GetObjectItemCaseSensitive(u, "completion_tokens");
+    if (cJSON_IsNumber(x)) out->completion_tokens = x->valueint;
+    x = cJSON_GetObjectItemCaseSensitive(u, "total_tokens");
+    if (cJSON_IsNumber(x)) out->total_tokens = x->valueint;
+  }
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_count_tokens(llmcore_client *c, const char *text, int *out_tokens) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "text", text);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/llmcore.v1/InferenceService/CountTokens", body, &resp, &code);
+  free(body);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  const cJSON *t = root ? cJSON_GetObjectItemCaseSensitive(root, "tokens") : NULL;
+  *out_tokens = cJSON_IsNumber(t) ? t->valueint : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_estimate_cost(llmcore_client *c, const char *provider, const char *model,
+                                     int prompt_tokens, int completion_tokens,
+                                     double *out_total_cost, char **out_currency) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "provider_name", provider);
+  cJSON_AddStringToObject(req, "model_name", model);
+  cJSON_AddNumberToObject(req, "prompt_tokens", prompt_tokens);
+  cJSON_AddNumberToObject(req, "completion_tokens", completion_tokens);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/llmcore.v1/InferenceService/EstimateCost", body, &resp, &code);
+  free(body);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  const cJSON *tc = root ? cJSON_GetObjectItemCaseSensitive(root, "total_cost") : NULL;
+  const cJSON *cu = root ? cJSON_GetObjectItemCaseSensitive(root, "currency") : NULL;
+  if (out_total_cost) *out_total_cost = cJSON_IsNumber(tc) ? tc->valuedouble : 0.0;
+  if (out_currency) *out_currency = jstrdup(cJSON_IsString(cu) ? cu->valuestring : "");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_embed(llmcore_client *c, const char *const *inputs, size_t n_inputs) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON *arr = cJSON_AddArrayToObject(req, "input");
+  for (size_t i = 0; i < n_inputs; i++)
+    cJSON_AddItemToArray(arr, cJSON_CreateString(inputs[i]));
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/llmcore.v1/InferenceService/Embed", body, &resp, &code);
+  free(body);
+  if (e) return e;
+  if (code >= 400) { /* expected: 501 UNSUPPORTED */
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  free(resp);
+  return err_local("ERROR_CATEGORY_INTERNAL", "unexpected", "embed unexpectedly succeeded");
+}
+
+static llmcore_error *get_string_array(llmcore_client *c, const char *path, const char *body,
+                                       const char *field, char ***out_items, size_t *out_n) {
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, path, body, &resp, &code);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  const cJSON *arr = root ? cJSON_GetObjectItemCaseSensitive(root, field) : NULL;
+  size_t n = cJSON_IsArray(arr) ? (size_t)cJSON_GetArraySize(arr) : 0;
+  char **items = n ? (char **)calloc(n, sizeof(char *)) : NULL;
+  for (size_t i = 0; i < n; i++) {
+    const cJSON *it = cJSON_GetArrayItem(arr, (int)i);
+    items[i] = jstrdup(cJSON_IsString(it) ? it->valuestring : "");
+  }
+  *out_items = items;
+  *out_n = n;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_list_providers(llmcore_client *c, char ***out_items, size_t *out_n) {
+  return get_string_array(c, "/llmcore.v1/CatalogService/ListProviders", "{}", "providers",
+                          out_items, out_n);
+}
+
+llmcore_error *llmcore_list_models(llmcore_client *c, const char *provider, char ***out_items,
+                                   size_t *out_n) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "provider_name", provider);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  llmcore_error *e =
+      get_string_array(c, "/llmcore.v1/CatalogService/ListModels", body, "models", out_items, out_n);
+  free(body);
+  return e;
+}
+
+llmcore_error *llmcore_health(llmcore_client *c, int *out_ok) {
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, "/healthz", "{}", &resp, &code);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  const cJSON *ok = root ? cJSON_GetObjectItemCaseSensitive(root, "ok") : NULL;
+  if (out_ok) *out_ok = cJSON_IsTrue(ok) ? 1 : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+/* --------------------------- SSE stream ---------------------------- */
+
+struct sse_ctx {
+  struct buf accum;
+  llmcore_chunk_cb cb;
+  void *user;
+  int cancelled;
+  llmcore_error *err;
+};
+
+/* Process one SSE block [0,blen) (no trailing "\n\n"). Returns 1 to abort. */
+static int sse_handle_block(struct sse_ctx *s, const char *base, size_t blen) {
+  char event[32] = "message";
+  struct buf data;
+  memset(&data, 0, sizeof(data));
+
+  size_t p = 0;
+  while (p < blen) {
+    size_t q = p;
+    while (q < blen && base[q] != '\n') q++;
+    size_t linelen = q - p;
+    if (linelen >= 6 && strncmp(base + p, "event:", 6) == 0) {
+      size_t s0 = p + 6;
+      while (s0 < q && base[s0] == ' ') s0++;
+      size_t el = q - s0;
+      if (el > sizeof(event) - 1) el = sizeof(event) - 1;
+      memcpy(event, base + s0, el);
+      event[el] = '\0';
+    } else if (linelen >= 5 && strncmp(base + p, "data:", 5) == 0) {
+      size_t s0 = p + 5;
+      while (s0 < q && base[s0] == ' ') s0++;
+      buf_append(&data, base + s0, q - s0);
+    }
+    p = q + 1;
+  }
+
+  int abort_now = 0;
+  if (data.n > 0) {
+    buf_append(&data, "", 1); /* NUL */
+    cJSON *obj = cJSON_Parse(data.p);
+    if (strcmp(event, "error") == 0) {
+      long fb = 500;
+      const cJSON *hs = obj ? cJSON_GetObjectItemCaseSensitive(obj, "http_status") : NULL;
+      if (cJSON_IsNumber(hs)) fb = hs->valueint;
+      s->err = parse_error_object(obj, fb);
+      abort_now = 1;
+    } else {
+      const cJSON *t = obj ? cJSON_GetObjectItemCaseSensitive(obj, "text") : NULL;
+      int done = (strcmp(event, "done") == 0) ? 1 : 0;
+      int rc = s->cb(cJSON_IsString(t) ? t->valuestring : "", done, s->user);
+      if (rc != 0) {
+        s->cancelled = 1;
+        abort_now = 1;
+      }
+    }
+    cJSON_Delete(obj);
+  }
+  free(data.p);
+  return abort_now;
+}
+
+static size_t write_sse(char *ptr, size_t size, size_t nmemb, void *userdata) {
+  struct sse_ctx *s = (struct sse_ctx *)userdata;
+  size_t n = size * nmemb;
+  if (buf_append(&s->accum, ptr, n) != 0) return 0;
+
+  for (;;) {
+    char *base = s->accum.p;
+    size_t L = s->accum.n;
+    long sep = -1;
+    for (size_t i = 0; i + 1 < L; i++) {
+      if (base[i] == '\n' && base[i + 1] == '\n') {
+        sep = (long)i;
+        break;
+      }
+    }
+    if (sep < 0) break;
+    size_t blen = (size_t)sep;
+    int do_abort = sse_handle_block(s, base, blen);
+    size_t consume = blen + 2;
+    memmove(s->accum.p, s->accum.p + consume, s->accum.n - consume);
+    s->accum.n -= consume;
+    if (do_abort) return 0; /* signal CURLE_WRITE_ERROR */
+  }
+  return n;
+}
+
+llmcore_error *llmcore_chat_stream(llmcore_client *c, const char *message,
+                                   llmcore_chunk_cb cb, void *user) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "message", message);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+
+  CURL *curl = c->curl;
+  curl_easy_reset(curl);
+  char *url = join_url(c->base, "/llmcore.v1/InferenceService/ChatStream");
+  struct curl_slist *hdr = curl_slist_append(NULL, "Content-Type: application/json");
+
+  struct sse_ctx s;
+  memset(&s, 0, sizeof(s));
+  s.cb = cb;
+  s.user = user;
+
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_POST, 1L);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(body));
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdr);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_sse);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+  CURLcode rc = curl_easy_perform(curl);
+  curl_slist_free_all(hdr);
+  free(url);
+  free(body);
+
+  long code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+
+  llmcore_error *err = NULL;
+  if (s.err) {
+    err = s.err; /* mid-stream error event */
+  } else if (rc == CURLE_WRITE_ERROR && s.cancelled) {
+    err = NULL; /* user-requested cancel -> success */
+  } else if (code >= 400) {
+    buf_append(&s.accum, "", 1);
+    err = http_error(s.accum.p, code);
+  } else if (rc == CURLE_WRITE_ERROR) {
+    err = err_local("ERROR_CATEGORY_INTERNAL", "stream.parse", "SSE parse/write error");
+  } else if (rc != CURLE_OK) {
+    err = err_local("ERROR_CATEGORY_INTERNAL", "transport.error", curl_easy_strerror(rc));
+  }
+  free(s.accum.p);
+  return err;
+}
