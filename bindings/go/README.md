@@ -72,7 +72,28 @@ and `examples/quickstart` for a runnable program.
 `ListProviders`, `ListModels`, `GetProviderDetails`, `GetInfo` /
 `EnsureCompatible`, `Health`, `ReloadConfig`, `Close`. `Embed(...)` returns a
 `*BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
-AudioService (Tier 2) is not surfaced yet (B3).
+
+## Surface (Tier 2 — audio)
+
+Available when the bridge advertises `tier2.audio`. One-shot: `Synthesize`,
+`Transcribe`, `GenerateImage`, `OCR`, `AnalyzeText`. Live duplex (each a
+cancellable `Send`/`Recv`/`CloseSend` stream, `io.EOF` at the clean end):
+`TranscribeStream`, `SynthesizeStream`, `VoiceAgent`.
+
+```go
+stt, _ := c.TranscribeStream(ctx)
+_ = stt.Send(&llmcorev1.AudioIn{Frame: &llmcorev1.AudioIn_Audio{Audio: pcm}})
+_ = stt.Send(&llmcorev1.AudioIn{Frame: &llmcorev1.AudioIn_Control{Control: llmcorev1.SttControl_STT_CONTROL_CLOSE}})
+_ = stt.CloseSend()
+for {
+	ev, err := stt.Recv()
+	if err == io.EOF { break }
+	if ev.GetType() == llmcorev1.StreamEventType_STREAM_EVENT_TYPE_FINAL { fmt.Println(ev.GetText()) }
+}
+
+sp, _ := c.Synthesize(ctx, &llmcorev1.SynthesizeRequest{Text: "hello"})
+_ = sp.GetAudioData() // []byte
+```
 
 ## Errors
 
@@ -96,8 +117,10 @@ make test
 `harness_test.go` spawns a real `llmcore-bridge` (FakeFacade) over localhost and
 the suite drives the client end to end (chat / streaming / count / cost /
 catalog / control, capability negotiation, Embed UNSUPPORTED, structured error
-decode incl. `RetryAfterMs`, and cancellation). The assertions match the same
-fixtures proven by the TypeScript client. *(Unix-only harness: it uses SIGTERM.)*
+decode incl. `RetryAfterMs`, and cancellation; plus the **Tier-2 audio** surface
+— 5 unary RPCs + 3 live duplex RPCs — on a separate audio-enabled bridge via
+`startBridgeAudio`). The assertions match the same fixtures proven by the
+TypeScript client. *(Unix-only harness: it uses SIGTERM.)*
 
 ## Distribution
 

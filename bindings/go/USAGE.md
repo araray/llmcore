@@ -95,6 +95,66 @@ c.ListModels(ctx, "openai")          // GetModels()    []string
 c.GetProviderDetails(ctx, "openai")  // *llmcorev1.ModelDetails
 ```
 
+## Audio (Tier 2)
+
+Available when the bridge advertises `tier2.audio`; negotiate with
+`c.EnsureCompatible(ctx, "tier2.audio")`.
+
+### One-shot
+
+```go
+sp, _ := c.Synthesize(ctx, &llmcorev1.SynthesizeRequest{Text: "hello"}) // sp.GetAudioData() []byte
+tr, _ := c.Transcribe(ctx, &llmcorev1.TranscribeRequest{AudioData: pcm}) // tr.GetText(), tr.GetSegments()
+img, _ := c.GenerateImage(ctx, &llmcorev1.GenerateImageRequest{Prompt: "a cat", N: 2})
+//   img.GetImages()[0].GetData() is base64 (b64_json): base64.StdEncoding.DecodeString(...)
+doc, _ := c.OCR(ctx, &llmcorev1.OcrRequest{Source: &llmcorev1.OcrRequest_Data{Data: pdf}}) // or _Url{Url: ...}
+//   doc.GetPages() []*structpb.Struct, doc.GetDocumentAnnotation() *structpb.Value
+feat, _ := structpb.NewStruct(map[string]any{"summarize": true, "topics": true})
+an, _ := c.AnalyzeText(ctx, &llmcorev1.AnalyzeTextRequest{Text: "…", Features: feat})
+//   an.GetSummary(), an.GetTopics(), an.GetIntents(), an.GetSentiments()
+```
+
+### Live duplex (bidi)
+
+Each stream is `Send` / `Recv` / `CloseSend`, with `io.EOF` at the clean end and
+`Close()` to cancel (gRPC CANCELLED). Send all frames then `CloseSend()`, then
+drain with `Recv()`:
+
+```go
+// STT
+stt, _ := c.TranscribeStream(ctx)
+_ = stt.Send(&llmcorev1.AudioIn{Frame: &llmcorev1.AudioIn_Audio{Audio: pcmChunk}})
+_ = stt.Send(&llmcorev1.AudioIn{Frame: &llmcorev1.AudioIn_Control{Control: llmcorev1.SttControl_STT_CONTROL_CLOSE}})
+_ = stt.CloseSend()
+for {
+	ev, err := stt.Recv()
+	if err == io.EOF { break }
+	if err != nil { /* *BridgeError */ }
+	if ev.GetType() == llmcorev1.StreamEventType_STREAM_EVENT_TYPE_FINAL { fmt.Println(ev.GetText()) }
+}
+
+// TTS
+tts, _ := c.SynthesizeStream(ctx)
+_ = tts.Send(&llmcorev1.SynthControl{Frame: &llmcorev1.SynthControl_Text{Text: "hello world"}})
+_ = tts.Send(&llmcorev1.SynthControl{Frame: &llmcorev1.SynthControl_Control{Control: llmcorev1.TtsControl_TTS_CONTROL_CLOSE}})
+_ = tts.CloseSend()
+for { out, err := tts.Recv(); if err == io.EOF { break }; sink.Write(out.GetAudio()) } // out.GetSeq() int64
+
+// Voice agent (leading settings Struct selects the provider)
+settings, _ := structpb.NewStruct(map[string]any{"provider_name": "deepgram"})
+va, _ := c.VoiceAgent(ctx)
+_ = va.Send(&llmcorev1.VoiceAgentClientEvent{Event: &llmcorev1.VoiceAgentClientEvent_Settings{Settings: settings}})
+_ = va.Send(&llmcorev1.VoiceAgentClientEvent{Event: &llmcorev1.VoiceAgentClientEvent_InjectUserMessage{InjectUserMessage: "hi"}})
+_ = va.CloseSend()
+for {
+	ev, err := va.Recv()
+	if err == io.EOF { break }
+	if ev.GetType() == llmcorev1.VoiceAgentEventType_VOICE_AGENT_EVENT_TYPE_AUDIO { play(ev.GetAudio()) }
+}
+```
+
+`structpb` is `google.golang.org/protobuf/types/known/structpb`.
+
 ## Error handling
 
 ```go

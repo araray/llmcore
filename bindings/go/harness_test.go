@@ -35,7 +35,15 @@ type bridge struct {
 // deterministic fake backend and waits until it answers Health. The Python
 // interpreter is $LLMCORE_BRIDGE_PYTHON (default "python3") and must have
 // llmcore[bridge] importable. (Unix-only: uses SIGTERM for graceful stop.)
-func startBridge(t *testing.T) *bridge {
+func startBridge(t *testing.T) *bridge { return startBridgeEnv(t) }
+
+// startBridgeAudio is startBridge with the Tier-2 fake audio surface enabled
+// (advertises tier2.audio + audio.*).
+func startBridgeAudio(t *testing.T) *bridge {
+	return startBridgeEnv(t, "LLMCORE_BRIDGE_FAKE_AUDIO=1")
+}
+
+func startBridgeEnv(t *testing.T, extraEnv ...string) *bridge {
 	t.Helper()
 	grpcPort := freePort(t)
 	httpPort := freePort(t)
@@ -54,7 +62,7 @@ func startBridge(t *testing.T) *bridge {
 		"--http-address", fmt.Sprintf("127.0.0.1:%d", httpPort),
 		"--insecure", "--log-level", "WARNING",
 	)
-	b.cmd.Env = append(os.Environ(), "LLMCORE_BRIDGE_FAKE=1")
+	b.cmd.Env = append(append(os.Environ(), "LLMCORE_BRIDGE_FAKE=1"), extraEnv...)
 	if err := b.cmd.Start(); err != nil {
 		t.Fatalf("start bridge (%s): %v", py, err)
 	}
