@@ -2,6 +2,7 @@
 
 use llmcore_proto::v1 as pb;
 use llmcore_proto::v1::{
+    audio_service_client::AudioServiceClient,
     catalog_service_client::CatalogServiceClient,
     control_service_client::ControlServiceClient,
     inference_service_client::InferenceServiceClient,
@@ -17,6 +18,7 @@ pub struct LlmcoreClient {
     inference: InferenceServiceClient<Channel>,
     catalog: CatalogServiceClient<Channel>,
     control: ControlServiceClient<Channel>,
+    audio: AudioServiceClient<Channel>,
 }
 
 /// A cancellable server stream of [`pb::ChatChunk`] frames.
@@ -36,6 +38,29 @@ impl ChatStream {
 
     /// Cancel the stream. Dropping the inner stream resets the HTTP/2 stream,
     /// which the server observes as CANCELLED.
+    pub fn cancel(&mut self) {
+        self.inner = None;
+    }
+}
+
+/// A response stream of audio events (`message()` yields the next item,
+/// `Ok(None)` at the clean end of the stream or after [`cancel`](Self::cancel)).
+/// Used by the live duplex audio RPCs; the request side is the
+/// `impl Stream<Item = ...>` passed to the opening call.
+pub struct AudioStream<T> {
+    inner: Option<tonic::Streaming<T>>,
+}
+
+impl<T> AudioStream<T> {
+    /// Returns the next event, `Ok(None)` at the clean end, or a [`BridgeError`].
+    pub async fn message(&mut self) -> Result<Option<T>, BridgeError> {
+        match self.inner.as_mut() {
+            Some(s) => s.message().await.map_err(BridgeError::from_status),
+            None => Ok(None),
+        }
+    }
+
+    /// Cancel the stream (drops the inner stream; the server observes CANCELLED).
     pub fn cancel(&mut self) {
         self.inner = None;
     }
@@ -64,7 +89,8 @@ impl LlmcoreClient {
         Self {
             inference: InferenceServiceClient::new(channel.clone()),
             catalog: CatalogServiceClient::new(channel.clone()),
-            control: ControlServiceClient::new(channel),
+            control: ControlServiceClient::new(channel.clone()),
+            audio: AudioServiceClient::new(channel),
         }
     }
 
@@ -211,5 +237,111 @@ impl LlmcoreClient {
             .await
             .map(|r| r.into_inner())
             .map_err(BridgeError::from_status)
+    }
+
+    // ---- audio: one-shot (Tier 2) -------------------------------------- //
+
+    pub async fn synthesize(
+        &mut self,
+        req: pb::SynthesizeRequest,
+    ) -> Result<pb::SpeechResult, BridgeError> {
+        self.audio
+            .synthesize(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn transcribe(
+        &mut self,
+        req: pb::TranscribeRequest,
+    ) -> Result<pb::TranscriptionResult, BridgeError> {
+        self.audio
+            .transcribe(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn generate_image(
+        &mut self,
+        req: pb::GenerateImageRequest,
+    ) -> Result<pb::ImageGenerationResult, BridgeError> {
+        self.audio
+            .generate_image(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn ocr(&mut self, req: pb::OcrRequest) -> Result<pb::OcrResult, BridgeError> {
+        self.audio
+            .ocr(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn analyze_text(
+        &mut self,
+        req: pb::AnalyzeTextRequest,
+    ) -> Result<pb::TextAnalysisResult, BridgeError> {
+        self.audio
+            .analyze_text(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    // ---- audio: live duplex (Tier 2) ----------------------------------- //
+    //
+    // Each method takes the request side as an `impl Stream<Item = ...>` (any
+    // tokio/futures stream; e.g. `tokio_stream::iter(frames)` or a channel-backed
+    // stream for dynamic sending) and returns an [`AudioStream`] of responses.
+    // The request stream ending half-closes the call.
+
+    pub async fn transcribe_stream(
+        &mut self,
+        requests: impl tokio_stream::Stream<Item = pb::AudioIn> + Send + 'static,
+    ) -> Result<AudioStream<pb::TranscriptionStreamEvent>, BridgeError> {
+        let streaming = self
+            .audio
+            .transcribe_stream(requests)
+            .await
+            .map_err(BridgeError::from_status)?
+            .into_inner();
+        Ok(AudioStream {
+            inner: Some(streaming),
+        })
+    }
+
+    pub async fn synthesize_stream(
+        &mut self,
+        requests: impl tokio_stream::Stream<Item = pb::SynthControl> + Send + 'static,
+    ) -> Result<AudioStream<pb::AudioOut>, BridgeError> {
+        let streaming = self
+            .audio
+            .synthesize_stream(requests)
+            .await
+            .map_err(BridgeError::from_status)?
+            .into_inner();
+        Ok(AudioStream {
+            inner: Some(streaming),
+        })
+    }
+
+    pub async fn voice_agent(
+        &mut self,
+        requests: impl tokio_stream::Stream<Item = pb::VoiceAgentClientEvent> + Send + 'static,
+    ) -> Result<AudioStream<pb::VoiceAgentEvent>, BridgeError> {
+        let streaming = self
+            .audio
+            .voice_agent(requests)
+            .await
+            .map_err(BridgeError::from_status)?
+            .into_inner();
+        Ok(AudioStream {
+            inner: Some(streaming),
+        })
     }
 }

@@ -25,30 +25,41 @@ struct Bridge {
 
 impl Bridge {
     async fn start() -> Bridge {
+        Self::start_env(&[]).await
+    }
+
+    /// Start with the Tier-2 fake audio surface enabled (advertises tier2.audio).
+    async fn start_audio() -> Bridge {
+        Self::start_env(&[("LLMCORE_BRIDGE_FAKE_AUDIO", "1")]).await
+    }
+
+    async fn start_env(extra_env: &[(&str, &str)]) -> Bridge {
         let grpc_port = free_port();
         let http_port = free_port();
         let grpc_addr = format!("127.0.0.1:{}", grpc_port);
         let http_addr = format!("127.0.0.1:{}", http_port);
         let py = std::env::var("LLMCORE_BRIDGE_PYTHON").unwrap_or_else(|_| "python3".to_string());
 
-        let child = Command::new(py)
-            .args([
-                "-m",
-                "llmcore.bridge.cli",
-                "serve",
-                "--transport",
-                "grpc,http",
-                "--grpc-address",
-                &grpc_addr,
-                "--http-address",
-                &http_addr,
-                "--insecure",
-                "--log-level",
-                "WARNING",
-            ])
-            .env("LLMCORE_BRIDGE_FAKE", "1")
-            .spawn()
-            .expect("spawn bridge");
+        let mut cmd = Command::new(py);
+        cmd.args([
+            "-m",
+            "llmcore.bridge.cli",
+            "serve",
+            "--transport",
+            "grpc,http",
+            "--grpc-address",
+            &grpc_addr,
+            "--http-address",
+            &http_addr,
+            "--insecure",
+            "--log-level",
+            "WARNING",
+        ])
+        .env("LLMCORE_BRIDGE_FAKE", "1");
+        for (k, v) in extra_env {
+            cmd.env(k, v);
+        }
+        let child = cmd.spawn().expect("spawn bridge");
 
         let endpoint = format!("http://{}", grpc_addr);
         let deadline = Instant::now() + Duration::from_secs(25);
@@ -211,4 +222,206 @@ async fn stream_cancel() {
     assert!(first.is_some());
     s.cancel();
     assert!(s.message().await.unwrap().is_none());
+}
+
+// ---- audio (Tier 2) ---------------------------------------------------- //
+//
+// Enum fields are compared by their verified numeric proto values (noted inline)
+// to stay robust to prost's enum-variant naming. Oneof frames use the generated
+// oneof modules (`audio_in::Frame`, `synth_control::Frame`,
+// `voice_agent_client_event::Event`, `ocr_request::Source`) with single-word
+// variant names derived from the oneof field names.
+
+async fn connected_audio() -> (LlmcoreClient, Bridge) {
+    let b = Bridge::start_audio().await;
+    let c = LlmcoreClient::connect(b.endpoint.clone()).await.unwrap();
+    (c, b)
+}
+
+#[tokio::test]
+async fn audio_capabilities_advertised() {
+    let (mut c, _b) = connected_audio().await;
+    let info = c.get_info().await.unwrap();
+    for cap in [
+        "tier2.audio",
+        "audio.transcribe_stream",
+        "audio.synthesize_stream",
+        "audio.voice_agent",
+        "audio.synthesize",
+        "audio.transcribe",
+        "audio.generate_image",
+        "audio.ocr",
+        "audio.analyze_text",
+    ] {
+        assert!(
+            info.capabilities.iter().any(|x| x == cap),
+            "missing capability {cap}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn transcribe_stream() {
+    let (mut c, _b) = connected_audio().await;
+    let reqs = tokio_stream::iter(vec![
+        v1::AudioIn {
+            frame: Some(v1::audio_in::Frame::Audio(b"hello".to_vec())),
+        },
+        v1::AudioIn {
+            frame: Some(v1::audio_in::Frame::Audio(b"world".to_vec())),
+        },
+        v1::AudioIn {
+            frame: Some(v1::audio_in::Frame::Control(3)), // STT_CONTROL_CLOSE
+        },
+    ]);
+    let mut s = c.transcribe_stream(reqs).await.unwrap();
+    let mut types: Vec<i32> = Vec::new();
+    let mut final_text = String::new();
+    while let Some(ev) = s.message().await.unwrap() {
+        types.push(ev.r#type);
+        if ev.r#type == 2 {
+            // FINAL
+            final_text = ev.text.clone();
+        }
+    }
+    // INTERIM, INTERIM, FINAL, UTTERANCE_END
+    assert_eq!(types, vec![1, 1, 2, 3]);
+    assert_eq!(final_text, "hello world");
+}
+
+#[tokio::test]
+async fn synthesize_stream() {
+    let (mut c, _b) = connected_audio().await;
+    let pieces = ["foo", "bar", "baz"];
+    let mut frames: Vec<v1::SynthControl> = pieces
+        .iter()
+        .map(|p| v1::SynthControl {
+            frame: Some(v1::synth_control::Frame::Text((*p).to_string())),
+        })
+        .collect();
+    frames.push(v1::SynthControl {
+        frame: Some(v1::synth_control::Frame::Control(3)), // TTS_CONTROL_CLOSE
+    });
+    let mut s = c.synthesize_stream(tokio_stream::iter(frames)).await.unwrap();
+    let mut chunks: Vec<String> = Vec::new();
+    let mut seqs: Vec<i64> = Vec::new();
+    while let Some(out) = s.message().await.unwrap() {
+        chunks.push(String::from_utf8(out.audio).unwrap());
+        seqs.push(out.seq);
+    }
+    assert_eq!(chunks, vec!["foo", "bar", "baz"]);
+    assert_eq!(seqs, vec![0, 1, 2]);
+}
+
+#[tokio::test]
+async fn voice_agent_duplex() {
+    let (mut c, _b) = connected_audio().await;
+    // A non-settings leading frame -> the default provider (the fake).
+    let reqs = tokio_stream::iter(vec![
+        v1::VoiceAgentClientEvent {
+            event: Some(v1::voice_agent_client_event::Event::InjectUserMessage(
+                "hi there".into(),
+            )),
+        },
+        v1::VoiceAgentClientEvent {
+            event: Some(v1::voice_agent_client_event::Event::Audio(vec![1, 2])),
+        },
+    ]);
+    let mut s = c.voice_agent(reqs).await.unwrap();
+    let mut events = Vec::new();
+    while let Some(ev) = s.message().await.unwrap() {
+        events.push(ev);
+    }
+    assert!(!events.is_empty());
+    assert_eq!(events.first().unwrap().r#type, 1); // WELCOME
+    assert_eq!(events.last().unwrap().r#type, 17); // CLOSE
+    let conv = events
+        .iter()
+        .find(|e| e.r#type == 3) // CONVERSATION_TEXT
+        .expect("conversation-text event");
+    assert_eq!(conv.role.as_deref(), Some("user"));
+    assert_eq!(conv.content.as_deref(), Some("hi there"));
+    let audio = events
+        .iter()
+        .find(|e| e.r#type == 8) // AUDIO
+        .expect("audio event");
+    assert_eq!(audio.audio.as_deref(), Some(&b"agent:\x01\x02"[..]));
+}
+
+#[tokio::test]
+async fn synthesize_unary() {
+    let (mut c, _b) = connected_audio().await;
+    let r = c
+        .synthesize(v1::SynthesizeRequest {
+            text: "hello".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(r.audio_data, b"tts:hello");
+    assert_eq!(r.model, "fake-tts");
+}
+
+#[tokio::test]
+async fn transcribe_unary() {
+    let (mut c, _b) = connected_audio().await;
+    let r = c
+        .transcribe(v1::TranscribeRequest {
+            audio_data: b"hello world".to_vec(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(r.text, "hello world");
+    assert_eq!(r.language.as_deref(), Some("en"));
+    assert_eq!(r.segments.len(), 1);
+    assert_eq!(r.segments[0].speaker.as_deref(), Some("spk_0"));
+}
+
+#[tokio::test]
+async fn generate_image_unary() {
+    let (mut c, _b) = connected_audio().await;
+    let r = c
+        .generate_image(v1::GenerateImageRequest {
+            prompt: "a cat".into(),
+            n: 2,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(r.images.len(), 2);
+    // base64("img:a cat") == "aW1nOmEgY2F0"
+    assert_eq!(r.images[0].data.as_deref(), Some("aW1nOmEgY2F0"));
+}
+
+#[tokio::test]
+async fn ocr_unary() {
+    let (mut c, _b) = connected_audio().await;
+    let r = c
+        .ocr(v1::OcrRequest {
+            source: Some(v1::ocr_request::Source::Data(b"PDFBYTES".to_vec())),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(r.model, "fake-ocr");
+    assert_eq!(r.pages_processed, 1);
+    assert_eq!(r.doc_size_bytes, Some(8));
+    assert_eq!(r.pages.len(), 1);
+}
+
+#[tokio::test]
+async fn analyze_text_unary() {
+    let (mut c, _b) = connected_audio().await;
+    // No features -> the fake returns model "fake-analyze", no summary/topics.
+    let r = c
+        .analyze_text(v1::AnalyzeTextRequest {
+            text: "some text".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(r.model.as_deref(), Some("fake-analyze"));
+    assert!(r.summary.is_none());
+    assert!(r.topics.is_empty());
 }

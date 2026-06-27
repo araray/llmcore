@@ -69,8 +69,30 @@ See **USAGE.md** for the full API, TLS, error handling, and cancellation.
 `list_providers`, `list_models`, `get_provider_details`,
 `get_info`/`ensure_compatible`, `health`, `reload_config`. `embed(...)` returns a
 `BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
-AudioService (Tier 2) types/clients are generated in `llmcore-proto` but not yet
-wrapped (B3).
+
+## Surface (Tier 2 — audio)
+
+Available when the bridge advertises `tier2.audio`. One-shot: `synthesize`,
+`transcribe`, `generate_image`, `ocr`, `analyze_text`. Live duplex — each takes
+the request side as an `impl Stream<Item = …>` and returns an
+[`AudioStream`]`<T>` (`message()` yields events, `cancel()` aborts):
+`transcribe_stream`, `synthesize_stream`, `voice_agent`.
+
+```rust
+use llmcore_client::{v1, LlmcoreClient};
+# async fn run(mut client: LlmcoreClient) -> Result<(), Box<dyn std::error::Error>> {
+let reqs = tokio_stream::iter(vec![
+    v1::AudioIn { frame: Some(v1::audio_in::Frame::Audio(pcm)) },
+    v1::AudioIn { frame: Some(v1::audio_in::Frame::Control(/* STT_CONTROL_CLOSE */ 3)) },
+]);
+let mut s = client.transcribe_stream(reqs).await?;
+while let Some(ev) = s.message().await? {
+    if ev.r#type == /* STREAM_EVENT_TYPE_FINAL */ 2 { println!("{}", ev.text); }
+}
+let sp = client.synthesize(v1::SynthesizeRequest { text: "hello".into(), ..Default::default() }).await?;
+let _ = sp.audio_data; // Vec<u8>
+# Ok(()) }
+```
 
 ## Errors
 

@@ -26,7 +26,7 @@
 mod client;
 mod error;
 
-pub use client::{ChatStream, LlmcoreClient};
+pub use client::{AudioStream, ChatStream, LlmcoreClient};
 pub use error::{BridgeError, ERROR_METADATA_KEY};
 
 /// The generated protobuf crate (messages, enums, tonic clients).
