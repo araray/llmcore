@@ -168,14 +168,44 @@ class AudioServicer(audio_pb2_grpc.AudioServiceServicer):
             await _abort(context, map_exception(exc))
 
     async def SynthesizeStream(self, request_iterator, context):
-        await self._unimpl(context)
-        if False:  # pragma: no cover
-            yield
+        if not self._core.audio_enabled:
+            try:
+                async for _frame in request_iterator:
+                    pass
+            except Exception:
+                pass
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+            context.set_details(_AUDIO_UNIMPLEMENTED)
+            return
+        try:
+            async for out in self._core.synthesize_stream(request_iterator):
+                yield out
+        except BridgeError as be:
+            await _abort(context, be)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await _abort(context, map_exception(exc))
 
     async def VoiceAgent(self, request_iterator, context):
-        await self._unimpl(context)
-        if False:  # pragma: no cover
-            yield
+        if not self._core.audio_enabled:
+            try:
+                async for _frame in request_iterator:
+                    pass
+            except Exception:
+                pass
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+            context.set_details(_AUDIO_UNIMPLEMENTED)
+            return
+        try:
+            async for ev in self._core.voice_agent(request_iterator):
+                yield ev
+        except BridgeError as be:
+            await _abort(context, be)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await _abort(context, map_exception(exc))
 
 
 def create_grpc_server(

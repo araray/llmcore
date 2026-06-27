@@ -11,6 +11,8 @@ own ``extract_*`` methods consume, so ``LLMCore.chat`` works end-to-end.
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
 from llmcore.models import Message, ModelDetails
@@ -168,3 +170,125 @@ class FakeAudioProvider:
             text="",
             provider="fake",
         )
+
+    async def stream_speech(
+        self, text: Any, **kwargs: Any
+    ) -> "AsyncGenerator[bytes, None]":
+        """Deterministic streaming TTS: emit each text piece as UTF-8 bytes.
+
+        Mirrors ``DeepgramProvider.stream_speech``'s dual-mode signature: a plain
+        ``str`` yields a single chunk; an async iterable of text pieces yields
+        one chunk per non-empty piece. Lets the SynthesizeStream e2e assert
+        ``b"".join(out) == "".join(pieces).encode()``.
+        """
+        if isinstance(text, str):
+            if text:
+                yield text.encode("utf-8")
+            return
+        async for piece in text:
+            if piece:
+                yield piece.encode("utf-8")
+
+    @asynccontextmanager
+    async def open_voice_agent(
+        self,
+        *,
+        settings: Any = None,
+        prompt: str | None = None,
+        functions: list[Any] | None = None,
+        greeting: str | None = None,
+        **kwargs: Any,
+    ) -> "AsyncGenerator[FakeVoiceAgentSession, None]":
+        """Open a deterministic voice-agent session (offline).
+
+        Mirrors ``DeepgramProvider.open_voice_agent`` (an async context manager
+        yielding a session). The session reacts to inbound calls by enqueueing
+        mapped :class:`~llmcore.models_multimodal.VoiceAgentEvent`s.
+        """
+        session = FakeVoiceAgentSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+
+#: Sentinel enqueued by :meth:`FakeVoiceAgentSession.close` to end iteration.
+_CLOSE_SENTINEL = object()
+
+
+def _va_event(type_name: str, **fields: Any) -> Any:
+    """Build a fake ``VoiceAgentEvent`` of the named type (``provider='fake'``)."""
+    from llmcore.models_multimodal import VoiceAgentEvent, VoiceAgentEventType
+
+    return VoiceAgentEvent(type=VoiceAgentEventType(type_name), provider="fake", **fields)
+
+
+class FakeVoiceAgentSession:
+    """Deterministic, offline analogue of ``DeepgramVoiceAgentSession``.
+
+    Exposes the public surface the bridge drives (``send_audio`` / ``inject_*``
+    / ``update_*`` / ``respond_to_function_call`` / ``keepalive`` / ``__aiter__``)
+    plus a fake-only :meth:`close` the bridge calls to end the event stream
+    (real sessions have no close frame). Inbound calls enqueue mapped
+    ``VoiceAgentEvent``s; iteration drains the queue (FIFO) until close, so the
+    duplex e2e sees a deterministic sequence regardless of task interleaving.
+    """
+
+    def __init__(self) -> None:
+        self._queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._closed = False
+        # Lifecycle: a WELCOME is available immediately on open.
+        self._queue.put_nowait(_va_event("welcome"))
+
+    # -- inbound (driven by the bridge pump) ------------------------------ #
+    async def send_audio(self, chunk: bytes) -> None:
+        if chunk:
+            self._queue.put_nowait(_va_event("audio", audio=b"agent:" + bytes(chunk)))
+
+    async def inject_user_message(self, content: str) -> None:
+        self._queue.put_nowait(
+            _va_event("conversation_text", role="user", content=content)
+        )
+
+    async def inject_agent_message(self, message: str) -> None:
+        self._queue.put_nowait(
+            _va_event("conversation_text", role="assistant", content=message)
+        )
+
+    async def update_prompt(self, prompt: str) -> None:
+        self._queue.put_nowait(_va_event("prompt_updated"))
+
+    async def update_think(self, think: dict) -> None:
+        self._queue.put_nowait(_va_event("think_updated"))
+
+    async def update_speak(self, speak: dict) -> None:
+        self._queue.put_nowait(_va_event("speak_updated"))
+
+    async def respond_to_function_call(
+        self, function_id: str, name: str, content: str
+    ) -> None:
+        self._queue.put_nowait(
+            _va_event(
+                "conversation_text",
+                role="assistant",
+                content=f"fn-result:{function_id}={content}",
+            )
+        )
+
+    async def keepalive(self) -> None:
+        return None
+
+    def close(self) -> None:
+        """End the event stream (fake-only affordance for the bridge)."""
+        if not self._closed:
+            self._closed = True
+            self._queue.put_nowait(_CLOSE_SENTINEL)
+
+    # -- outbound --------------------------------------------------------- #
+    async def __aiter__(self):
+        while True:
+            event = await self._queue.get()
+            if event is _CLOSE_SENTINEL:
+                yield _va_event("close")
+                return
+            yield event

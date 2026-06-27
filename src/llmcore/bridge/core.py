@@ -222,6 +222,82 @@ def _transcription_event_to_proto(ev: Any) -> audio_pb2.TranscriptionStreamEvent
     return out
 
 
+# models_multimodal.VoiceAgentEventType -> audio.proto VoiceAgentEventType.
+_VOICE_AGENT_EVENT_TYPE_TO_PROTO: dict[str, int] = {
+    "welcome": audio_pb2.VOICE_AGENT_EVENT_TYPE_WELCOME,
+    "settings_applied": audio_pb2.VOICE_AGENT_EVENT_TYPE_SETTINGS_APPLIED,
+    "conversation_text": audio_pb2.VOICE_AGENT_EVENT_TYPE_CONVERSATION_TEXT,
+    "user_started_speaking": audio_pb2.VOICE_AGENT_EVENT_TYPE_USER_STARTED_SPEAKING,
+    "agent_thinking": audio_pb2.VOICE_AGENT_EVENT_TYPE_AGENT_THINKING,
+    "agent_started_speaking": audio_pb2.VOICE_AGENT_EVENT_TYPE_AGENT_STARTED_SPEAKING,
+    "agent_audio_done": audio_pb2.VOICE_AGENT_EVENT_TYPE_AGENT_AUDIO_DONE,
+    "audio": audio_pb2.VOICE_AGENT_EVENT_TYPE_AUDIO,
+    "function_call_request": audio_pb2.VOICE_AGENT_EVENT_TYPE_FUNCTION_CALL_REQUEST,
+    "prompt_updated": audio_pb2.VOICE_AGENT_EVENT_TYPE_PROMPT_UPDATED,
+    "think_updated": audio_pb2.VOICE_AGENT_EVENT_TYPE_THINK_UPDATED,
+    "speak_updated": audio_pb2.VOICE_AGENT_EVENT_TYPE_SPEAK_UPDATED,
+    "injection_refused": audio_pb2.VOICE_AGENT_EVENT_TYPE_INJECTION_REFUSED,
+    "error": audio_pb2.VOICE_AGENT_EVENT_TYPE_ERROR,
+    "warning": audio_pb2.VOICE_AGENT_EVENT_TYPE_WARNING,
+    "open": audio_pb2.VOICE_AGENT_EVENT_TYPE_OPEN,
+    "close": audio_pb2.VOICE_AGENT_EVENT_TYPE_CLOSE,
+    "other": audio_pb2.VOICE_AGENT_EVENT_TYPE_OTHER,
+}
+
+
+def _voice_agent_function_call_to_proto(fc: Any) -> audio_pb2.VoiceAgentFunctionCall:
+    """Map a ``models_multimodal.VoiceAgentFunctionCall`` to its proto."""
+    out = audio_pb2.VoiceAgentFunctionCall(
+        id=getattr(fc, "id", "") or "",
+        name=getattr(fc, "name", "") or "",
+        client_side=bool(getattr(fc, "client_side", True)),
+    )
+    arguments = getattr(fc, "arguments", None)
+    if arguments:
+        try:
+            out.arguments.update(_json_safe(arguments))
+        except (TypeError, ValueError):
+            pass
+    raw = getattr(fc, "raw", None)
+    if raw:
+        try:
+            out.raw.update(_json_safe(raw))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _voice_agent_event_to_proto(ev: Any) -> audio_pb2.VoiceAgentEvent:
+    """Map a ``models_multimodal.VoiceAgentEvent`` to its proto."""
+    et = getattr(ev, "type", None)
+    et_str = getattr(et, "value", et)
+    out = audio_pb2.VoiceAgentEvent(
+        type=_VOICE_AGENT_EVENT_TYPE_TO_PROTO.get(
+            str(et_str), audio_pb2.VOICE_AGENT_EVENT_TYPE_OTHER
+        ),
+        provider=getattr(ev, "provider", "") or "",
+    )
+    role = getattr(ev, "role", None)
+    if role is not None:
+        out.role = role
+    content = getattr(ev, "content", None)
+    if content is not None:
+        out.content = content
+    audio = getattr(ev, "audio", None)
+    if audio is not None:
+        out.audio = bytes(audio)
+    fc = getattr(ev, "function_call", None)
+    if fc is not None:
+        out.function_call.CopyFrom(_voice_agent_function_call_to_proto(fc))
+    raw = getattr(ev, "raw", None)
+    if raw:
+        try:
+            out.raw.update(_json_safe(raw))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
 class BridgeCore:
     """Adapter from ``llmcore.v1`` protos to the ``LLMCore`` facade.
 
@@ -476,6 +552,186 @@ class BridgeCore:
             raise
         except Exception as exc:
             raise map_exception(exc) from exc
+
+    async def synthesize_stream(
+        self, request_iter: Any
+    ) -> AsyncIterator[audio_pb2.AudioOut]:
+        """Bidi: consume ``SynthControl`` frames, yield ``AudioOut`` chunks.
+
+        The leading ``open`` frame (``OpenTts``) carries voice/model/format;
+        subsequent ``text`` frames are streamed into the provider's
+        ``stream_speech`` (WebSocket incremental mode) and each produced audio
+        chunk is emitted as ``AudioOut(audio=..., seq=i)``. ``CLOSE`` ends the
+        inbound text. Providers lacking streaming TTS yield ``UNSUPPORTED``.
+        """
+        agen = request_iter.__aiter__()
+
+        async def _next() -> Any:
+            try:
+                return await agen.__anext__()
+            except StopAsyncIteration:
+                return None
+
+        first = await _next()
+        model = response_format = provider_name = None
+        if first is not None and first.WhichOneof("frame") == "open":
+            op = first.open
+            if op.HasField("model"):
+                model = op.model
+            elif op.HasField("voice"):
+                model = op.voice
+            if op.HasField("format"):
+                response_format = op.format
+            pending = None
+        else:
+            pending = first  # no leading open frame; first frame was text/control
+
+        try:
+            provider = self._facade.get_provider(provider_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if not hasattr(provider, "stream_speech"):
+            raise unsupported(
+                "provider '%s' does not support streaming synthesis "
+                "(stream_speech)" % (provider_name or "default")
+            )
+
+        async def _text() -> AsyncIterator[str]:
+            frame = pending if pending is not None else await _next()
+            while frame is not None:
+                which = frame.WhichOneof("frame")
+                if which == "text":
+                    if frame.text:
+                        yield frame.text
+                elif which == "control":
+                    if frame.control == audio_pb2.TTS_CONTROL_CLOSE:
+                        return
+                    # FLUSH / CLEAR: no-op for this passthrough adapter.
+                frame = await _next()
+
+        kwargs: dict[str, Any] = {}
+        if model is not None:
+            kwargs["model"] = model
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+
+        seq = 0
+        try:
+            async for chunk in provider.stream_speech(_text(), **kwargs):
+                if not chunk:
+                    continue
+                out = audio_pb2.AudioOut(audio=bytes(chunk), seq=seq)
+                seq += 1
+                yield out
+        except asyncio.CancelledError:
+            raise
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+
+    async def voice_agent(
+        self, request_iter: Any
+    ) -> AsyncIterator[audio_pb2.VoiceAgentEvent]:
+        """Duplex: bridge ``VoiceAgentClientEvent`` frames to a provider voice
+        agent session and stream ``VoiceAgentEvent`` back.
+
+        A leading ``settings`` frame (if present) opens the session; its optional
+        ``provider_name`` selects the provider. A background pump dispatches
+        inbound frames to the session (audio / inject / update / respond /
+        keepalive) while the session's events are mapped to proto and yielded.
+        Providers without ``open_voice_agent`` yield ``UNSUPPORTED``.
+        """
+        agen = request_iter.__aiter__()
+
+        async def _next() -> Any:
+            try:
+                return await agen.__anext__()
+            except StopAsyncIteration:
+                return None
+
+        first = await _next()
+        open_settings: dict[str, Any] | None = None
+        provider_name = None
+        pending = first
+        if first is not None and first.WhichOneof("event") == "settings":
+            open_settings = _struct_to_dict(first.settings)
+            pn = open_settings.pop("provider_name", None)
+            provider_name = str(pn) if pn else None
+            pending = None
+
+        try:
+            provider = self._facade.get_provider(provider_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if not hasattr(provider, "open_voice_agent"):
+            raise unsupported(
+                "provider '%s' does not support voice agent "
+                "(open_voice_agent)" % (provider_name or "default")
+            )
+
+        cm = provider.open_voice_agent(settings=open_settings or None)
+        session = await cm.__aenter__()
+
+        async def _pump() -> None:
+            try:
+                frame = pending if pending is not None else await _next()
+                while frame is not None:
+                    which = frame.WhichOneof("event")
+                    if which == "audio":
+                        if frame.audio:
+                            await session.send_audio(frame.audio)
+                    elif which == "inject_user_message":
+                        await session.inject_user_message(frame.inject_user_message)
+                    elif which == "inject_agent_message":
+                        await session.inject_agent_message(frame.inject_agent_message)
+                    elif which == "update_prompt":
+                        await session.update_prompt(frame.update_prompt)
+                    elif which == "update_think":
+                        if hasattr(session, "update_think"):
+                            await session.update_think(_struct_to_dict(frame.update_think))
+                    elif which == "update_speak":
+                        if hasattr(session, "update_speak"):
+                            await session.update_speak(_struct_to_dict(frame.update_speak))
+                    elif which == "respond_to_function_call":
+                        fcr = frame.respond_to_function_call
+                        await session.respond_to_function_call(fcr.id, "", fcr.output)
+                    elif which == "keepalive":
+                        if frame.keepalive and hasattr(session, "keepalive"):
+                            await session.keepalive()
+                    # a mid-stream 'settings' frame has no session method; ignore.
+                    frame = await _next()
+            finally:
+                # Deterministic fakes expose close() to end their event stream;
+                # real provider sessions have no close frame (teardown on exit).
+                close = getattr(session, "close", None)
+                if close is not None:
+                    try:
+                        close()
+                    except Exception:
+                        pass
+
+        pump_task = asyncio.ensure_future(_pump())
+        try:
+            async for ev in session:
+                yield _voice_agent_event_to_proto(ev)
+        except asyncio.CancelledError:
+            raise
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        finally:
+            if not pump_task.done():
+                pump_task.cancel()
+                try:
+                    await pump_task
+                except asyncio.CancelledError:
+                    pass
+            try:
+                await cm.__aexit__(None, None, None)
+            except Exception:
+                pass
 
     async def close(self) -> None:
         """Close the underlying facade (best-effort)."""

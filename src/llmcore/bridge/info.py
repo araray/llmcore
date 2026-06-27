@@ -14,7 +14,7 @@ from . import BRIDGE_VERSION, CONTRACT_VERSION
 from ._generated.llmcore.v1 import control_pb2
 from .facade import LLMCoreFacade
 
-__all__ = ["build_server_info", "capabilities_for", "audio_capable"]
+__all__ = ["audio_capable", "build_server_info", "capabilities_for"]
 
 # The live-audio surface is Deepgram-specific; the one-shot methods live on
 # BaseProvider and so cannot distinguish an audio-capable deployment.
@@ -79,10 +79,14 @@ def capabilities_for(transports: Iterable[str], *, audio: bool = False) -> list[
     for t in transports:
         caps.append(f"transport.{t}")
     if audio:
-        # Tier-2 umbrella + the live-audio RPCs implemented so far (B3). Further
-        # sub-capabilities (audio.synthesize_stream, audio.voice_agent, and the
-        # one-shot audio.* RPCs) are appended as those handlers land.
-        caps.extend(["tier2.audio", "audio.transcribe_stream"])
+        # Tier-2 umbrella + the live-audio RPCs implemented so far (B3). The
+        # one-shot audio.* RPCs are appended as those handlers land.
+        caps.extend([
+            "tier2.audio",
+            "audio.transcribe_stream",
+            "audio.synthesize_stream",
+            "audio.voice_agent",
+        ])
     return caps
 
 
