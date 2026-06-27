@@ -110,6 +110,28 @@ sandbox = [
 ]
 
 # ============================================================================
+# BRIDGE DEPENDENCIES (language bindings — gRPC + HTTP sidecar)
+# ============================================================================
+# Out-of-process bridge exposing the LLMCore facade to non-Python clients
+# (C/C++/Rust/Go/TS). gRPC is the primary transport; HTTP+SSE is the secondary.
+# Install with: pip install llmcore[bridge]   then: llmcore-bridge serve
+bridge = [
+    "grpcio>=1.60.0",
+    "protobuf>=4.25.0",
+    "starlette>=0.37.0",
+    "uvicorn>=0.30.0",
+    "websockets>=12.0",
+]
+
+# Bridge development/codegen tooling (stubs + contract guard). NOTE: `buf` is a
+# standalone binary (https://buf.build) installed separately, not via pip.
+bridge-dev = [
+    "llmcore[bridge]",
+    "grpcio-tools>=1.60.0",
+    "PyYAML>=6.0",
+]
+
+# ============================================================================
 # Testing dependencies
 # ============================================================================
 test = [
@@ -151,6 +173,7 @@ all = [
     "llmcore[postgres]",
     "llmcore[chromadb]",
     "llmcore[sandbox]",
+    "llmcore[bridge]",
 ]
 
 [project.urls]
@@ -162,6 +185,7 @@ Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 
 [project.scripts]
 llmcore-storage = "llmcore.storage.cli:main"
+llmcore-bridge = "llmcore.bridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -183,6 +207,8 @@ exclude = [
 ]
 line-length = 100
 indent-width = 4
+# Generated protobuf/gRPC stubs are machine-generated; do not lint them.
+extend-exclude = ["src/llmcore/bridge/_generated"]
 
 [tool.ruff.lint]
 select = [

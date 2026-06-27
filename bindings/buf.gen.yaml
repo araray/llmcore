@@ -1,0 +1,22 @@
+# Buf codegen config (v2). Used for the B2 multi-language clients.
+# For the B1 Python bridge stubs, bindings/scripts/gen_proto.sh uses grpc_tools.protoc
+# (no protoc install required); buf is used in the llmcore CI / B2 client toolchains.
+version: v2
+plugins:
+  # Go (B2)
+  - remote: buf.build/protocolbuffers/go
+    out: go/gen
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go
+    out: go/gen
+    opt: paths=source_relative
+  # TypeScript (B2, Connect-ES)
+  - remote: buf.build/bufbuild/es
+    out: typescript/src/gen
+  - remote: buf.build/connectrpc/es
+    out: typescript/src/gen
+  # Python (reference / parity with the bridge stubs)
+  - remote: buf.build/protocolbuffers/python
+    out: ../src/llmcore/bridge/_generated
+  - remote: buf.build/grpc/python
+    out: ../src/llmcore/bridge/_generated

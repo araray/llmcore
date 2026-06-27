@@ -1,0 +1,41 @@
+// llmcore.v1 — canonical error model.
+//
+// Mirrors the llmcore exception hierarchy (exceptions.py) and the rich
+// ProviderError attributes (exceptions.py:64 / ctor :77). Carried as a
+// google.rpc.Status detail on gRPC and as the `error` object on HTTP/JSON.
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "google/protobuf/struct.proto";
+
+// Coarse error category. Maps to a gRPC status code and a default HTTP status
+// at the transport edge (see spec §9.4 + bridge errors.py).
+enum ErrorCategory {
+  ERROR_CATEGORY_UNSPECIFIED = 0;
+  ERROR_CATEGORY_PROVIDER = 1;          // ProviderError (exceptions.py:64)
+  ERROR_CATEGORY_CONFIG = 2;            // ConfigError (:52)
+  ERROR_CATEGORY_CONTEXT_LENGTH = 3;    // ContextLengthError (:390)
+  ERROR_CATEGORY_CONTEXT = 4;           // ContextError (:383)
+  ERROR_CATEGORY_EMBEDDING = 5;         // EmbeddingError (:413)
+  ERROR_CATEGORY_STORAGE = 6;           // StorageError + subtypes (:276)
+  ERROR_CATEGORY_NOT_FOUND = 7;         // SessionNotFoundError (:297)
+  ERROR_CATEGORY_SEARCH = 8;            // SearchProviderError (:247)
+  ERROR_CATEGORY_UNSUPPORTED = 9;       // NotImplementedError (capability absent)
+  ERROR_CATEGORY_CANCELLED = 10;        // client cancel / asyncio.CancelledError
+  ERROR_CATEGORY_INTERNAL = 11;         // LLMCoreError (:40) / uncaught
+  ERROR_CATEGORY_INVALID_ARGUMENT = 12; // request validation at the bridge edge
+}
+
+// Structured error payload. `message` MUST be secret-redacted (spec §13.4).
+message LlmcoreError {
+  ErrorCategory category = 1;
+  string code = 2;                       // stable dotted token, e.g. "provider.rate_limited"
+  string message = 3;
+  optional string provider = 4;          // ProviderError.provider_name
+  optional string model = 5;             // ProviderError.model_name
+  optional int32 http_status = 6;        // ProviderError.status_code
+  bool retryable = 7;                    // ProviderError.retryable
+  optional double retry_after_ms = 8;    // ProviderError.retry_after_seconds * 1000
+  google.protobuf.Struct details = 9;    // optional structured extras (never secrets)
+}

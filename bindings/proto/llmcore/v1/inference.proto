@@ -1,0 +1,97 @@
+// llmcore.v1 — core inference (Tier 0).
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "google/protobuf/struct.proto";
+import "llmcore/v1/common.proto";
+
+// CostEstimate — mirrors llmcore.models.CostEstimate (models.py:708).
+message CostEstimate {
+  double input_cost = 1;
+  double output_cost = 2;
+  double cached_discount = 3;
+  double reasoning_cost = 4;
+  double total_cost = 5;
+  string currency = 6;
+  string pricing_source = 7;             // "model_card" | "estimated" | "unavailable"
+  int32 prompt_tokens = 8;
+  int32 completion_tokens = 9;
+  int32 cached_tokens = 10;
+  int32 reasoning_tokens = 11;
+  optional double input_price_per_million = 12;
+  optional double output_price_per_million = 13;
+  optional double cached_price_per_million = 14;
+  optional string model_id = 15;
+  optional string provider = 16;
+}
+
+// ChatRequest — maps to LLMCore.chat / chat_with_usage (api.py:928 / :1254).
+// RAG toggles default to enable_rag=false (External-RAG pattern); structured
+// context staging arrives with Tier 1 (sessions, phase B4).
+message ChatRequest {
+  string message = 1;
+  optional string session_id = 2;
+  optional string system_message = 3;
+  optional string provider_name = 4;
+  optional string model_name = 5;
+  bool save_session = 6;                  // bridge default: false unless set
+  repeated Tool tools = 7;
+  optional string tool_choice = 8;
+  google.protobuf.Struct provider_kwargs = 9;  // temperature/top_p/... (non-secret)
+}
+
+// ChatResponse — unary; text + usage. tool_calls/finish_reason are PROVISIONAL
+// in v1 (B1 pin against the real provider response; capability `chat.tool_calls`).
+message ChatResponse {
+  string text = 1;
+  Usage usage = 2;
+  repeated ToolCall tool_calls = 3;       // PROVISIONAL
+  optional string finish_reason = 4;      // PROVISIONAL
+}
+
+// ChatChunk — one server-streaming token frame. Terminal frame sets done=true;
+// an error terminates the RPC with a non-OK status carrying LlmcoreError.
+message ChatChunk {
+  string text = 1;
+  bool done = 2;
+}
+
+message EmbedRequest {
+  repeated string input = 1;
+  optional string provider_name = 2;
+  optional string model_name = 3;
+}
+
+message EmbedResponse {
+  repeated FloatVector vectors = 1;
+  string model = 2;
+  Usage usage = 3;
+}
+
+message CountTokensRequest {
+  string text = 1;
+  optional string provider_name = 2;
+  optional string model_name = 3;
+}
+
+message CountTokensResponse {
+  int32 tokens = 1;
+}
+
+message EstimateCostRequest {
+  string provider_name = 1;
+  string model_name = 2;
+  int32 prompt_tokens = 3;
+  int32 completion_tokens = 4;
+  int32 cached_tokens = 5;
+  int32 reasoning_tokens = 6;
+}
+
+service InferenceService {
+  rpc Chat (ChatRequest) returns (ChatResponse);
+  rpc ChatStream (ChatRequest) returns (stream ChatChunk);
+  rpc Embed (EmbedRequest) returns (EmbedResponse);                  // UNIMPLEMENTED in v1 (no public facade path)
+  rpc CountTokens (CountTokensRequest) returns (CountTokensResponse);
+  rpc EstimateCost (EstimateCostRequest) returns (CostEstimate);
+}

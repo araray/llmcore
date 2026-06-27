@@ -1,0 +1,187 @@
+# Contract map: every llmcore symbol the bridge relies on, with the shape the
+# bridge assumes. Consumed by bindings/scripts/contract_guard.py (AST-only; no
+# import, so it runs without confy/heavy deps). If llmcore drifts, the guard
+# fails in CI before a release can ship a stale contract.
+#
+# kind:
+#   function    - module-level def (params_include / returns_contains)
+#   method      - def inside `class` (params_include / returns_contains)
+#   class       - class def (fields_include = annotated class attributes)
+#   enum_class  - class def (members_include = class-level names)
+#
+# params_include / fields_include / members_include are *subsets* (additive
+# evolution is allowed). returns_contains is a substring of the unparsed return
+# annotation (omitted where the base annotation is intentionally `Any`).
+
+symbols:
+  # ---- Tier-0 facade (api.py) ----
+  - id: LLMCore.chat
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: chat
+    params_include: [message, stream, tools, tool_choice, session_id]
+    returns_contains: "AsyncGenerator"
+  - id: LLMCore.chat_with_usage
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: chat_with_usage
+    params_include: [message, session_id, system_message, provider_name, model_name, save_session, enable_rag, tools, tool_choice]
+    returns_contains: "ChatUsage"
+  - id: LLMCore.estimate_cost
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: estimate_cost
+    params_include: [provider_name, model_name, prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens]
+    returns_contains: "CostEstimate"
+  - id: LLMCore.get_provider_details
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_provider_details
+    params_include: [provider_name]
+    returns_contains: "ModelDetails"
+  - id: LLMCore.get_available_providers
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_available_providers
+    returns_contains: "list"
+  - id: LLMCore.get_models_for_provider
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_models_for_provider
+    params_include: [provider_name]
+    returns_contains: "list"
+  - id: LLMCore.reload_config
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: reload_config
+    returns_contains: "None"
+
+  # ---- Token counting (tokens.py) ----
+  - id: tokens.count_tokens
+    file: src/llmcore/tokens.py
+    kind: function
+    name: count_tokens
+    params_include: [text, model]
+    returns_contains: "int"
+
+  # ---- Canonical models (models.py) ----
+  - id: models.Message
+    file: src/llmcore/models.py
+    kind: class
+    name: Message
+    fields_include: [id, session_id, role, content, timestamp, tool_call_id, tokens, metadata]
+  - id: models.Tool
+    file: src/llmcore/models.py
+    kind: class
+    name: Tool
+    fields_include: [name, description, parameters]
+  - id: models.ToolCall
+    file: src/llmcore/models.py
+    kind: class
+    name: ToolCall
+    fields_include: [id, name, arguments]
+  - id: models.ToolResult
+    file: src/llmcore/models.py
+    kind: class
+    name: ToolResult
+    fields_include: [tool_call_id, content, is_error]
+  - id: models.ModelDetails
+    file: src/llmcore/models.py
+    kind: class
+    name: ModelDetails
+    fields_include: [id, provider_name, display_name, context_length, max_output_tokens, supports_streaming, supports_tools, supports_vision, supports_reasoning, metadata]
+  - id: models.CostEstimate
+    file: src/llmcore/models.py
+    kind: class
+    name: CostEstimate
+    fields_include: [input_cost, output_cost, total_cost, currency, pricing_source, prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens]
+  - id: models.Role
+    file: src/llmcore/models.py
+    kind: enum_class
+    name: Role
+    members_include: [SYSTEM, USER, ASSISTANT, TOOL]
+
+  # ---- Usage (usage.py) ----
+  - id: usage.ChatUsage
+    file: src/llmcore/usage.py
+    kind: class
+    name: ChatUsage
+    fields_include: [prompt_tokens, completion_tokens, total_tokens, provider, model]
+
+  # ---- Errors (exceptions.py) ----
+  - id: exceptions.ProviderError.__init__
+    file: src/llmcore/exceptions.py
+    kind: method
+    class: ProviderError
+    name: __init__
+    params_include: [provider_name, message, model_name, status_code, retryable, retry_after_seconds]
+
+  # ---- Provider base (providers/base.py) — Tier-2 surface (designed) ----
+  - id: BaseProvider.create_embeddings
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: create_embeddings
+    params_include: [input_texts, model]
+    returns_contains: "dict"
+  - id: BaseProvider.generate_speech
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: generate_speech
+    params_include: [text, voice, model, response_format, speed]
+  - id: BaseProvider.transcribe_audio
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: transcribe_audio
+    params_include: [audio_data, model, language, prompt, response_format]
+
+  # ---- Deepgram duplex (providers/deepgram_provider.py) — Tier-2 (designed) ----
+  - id: DeepgramProvider.transcribe_stream
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: transcribe_stream
+    returns_contains: "TranscriptionStreamEvent"
+  - id: DeepgramProvider.stream_speech
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: stream_speech
+    returns_contains: "bytes"
+  - id: DeepgramProvider.run_voice_agent
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: run_voice_agent
+    returns_contains: "VoiceAgentEvent"
+
+  # ---- Multimodal models (models_multimodal.py) — Tier-2 (designed) ----
+  - id: models_multimodal.SpeechResult
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: SpeechResult
+    fields_include: [audio_data, format, model, voice]
+  - id: models_multimodal.TranscriptionResult
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: TranscriptionResult
+    fields_include: [text, segments, model]
+  - id: models_multimodal.TranscriptionStreamEvent
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: TranscriptionStreamEvent
+    fields_include: [type, text]
+  - id: models_multimodal.VoiceAgentEvent
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: VoiceAgentEvent
+    fields_include: [type, provider]

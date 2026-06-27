@@ -1,0 +1,185 @@
+"""gRPC transport facade (spec §7) — the *primary*, recommended transport.
+
+Servicers are thin: each delegates to :class:`BridgeCore` and renders a
+``BridgeError`` as ``context.abort(status, message, trailing_metadata)`` where
+the serialized :class:`LlmcoreError` proto is attached under the binary metadata
+key ``llmcore-error-bin``. This avoids a hard dependency on ``grpcio-status``
+while still giving clients the full structured error. ``CancelledError`` is
+propagated untouched so client cancellation maps to gRPC ``CANCELLED``.
+
+AudioService (Tier 2) is registered but returns ``UNIMPLEMENTED`` until B3.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any, Awaitable, Callable
+
+import grpc
+
+from ._generated.llmcore.v1 import (
+    audio_pb2_grpc,
+    catalog_pb2_grpc,
+    control_pb2_grpc,
+    inference_pb2_grpc,
+)
+from .core import BridgeCore
+from .errors import BridgeError, grpc_status_for, map_exception
+
+__all__ = ["ERROR_METADATA_KEY", "create_grpc_server"]
+
+#: Binary trailing-metadata key carrying the serialized ``LlmcoreError``.
+ERROR_METADATA_KEY = "llmcore-error-bin"
+
+_AUDIO_UNIMPLEMENTED = (
+    "AudioService is part of the llmcore.v1 contract but is not implemented in "
+    "this release (Tier 2 / phase B3). Use gRPC once enabled; the capability "
+    "flags tier2.* are absent from ServerInfo until then."
+)
+
+
+async def _abort(context: grpc.aio.ServicerContext, err: BridgeError) -> None:
+    """Abort the RPC, attaching the structured error as trailing metadata."""
+    await context.abort(
+        grpc_status_for(err.proto),
+        err.proto.message or err.proto.code,
+        trailing_metadata=((ERROR_METADATA_KEY, err.proto.SerializeToString()),),
+    )
+
+
+async def _unary(
+    call: Callable[[], Awaitable[Any]], context: grpc.aio.ServicerContext
+) -> Any:
+    """Run a unary BridgeCore coroutine, mapping failures to ``abort``."""
+    try:
+        return await call()
+    except BridgeError as be:
+        await _abort(context, be)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        await _abort(context, map_exception(exc))
+
+
+class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def Chat(self, request, context):
+        return await _unary(lambda: self._core.chat(request), context)
+
+    async def ChatStream(self, request, context):
+        try:
+            async for chunk in self._core.chat_stream(request):
+                yield chunk
+        except BridgeError as be:
+            await _abort(context, be)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await _abort(context, map_exception(exc))
+
+    async def Embed(self, request, context):
+        return await _unary(lambda: self._core.embed(request), context)
+
+    async def CountTokens(self, request, context):
+        return await _unary(lambda: self._core.count_tokens(request), context)
+
+    async def EstimateCost(self, request, context):
+        return await _unary(lambda: self._core.estimate_cost(request), context)
+
+
+class CatalogServicer(catalog_pb2_grpc.CatalogServiceServicer):
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def ListProviders(self, request, context):
+        return await _unary(lambda: self._core.list_providers(request), context)
+
+    async def ListModels(self, request, context):
+        return await _unary(lambda: self._core.list_models(request), context)
+
+    async def GetProviderDetails(self, request, context):
+        return await _unary(lambda: self._core.get_provider_details(request), context)
+
+
+class ControlServicer(control_pb2_grpc.ControlServiceServicer):
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def GetInfo(self, request, context):
+        return await _unary(lambda: self._core.get_info(request), context)
+
+    async def Health(self, request, context):
+        return await _unary(lambda: self._core.health(request), context)
+
+    async def ReloadConfig(self, request, context):
+        return await _unary(lambda: self._core.reload_config(request), context)
+
+
+class AudioServicer(audio_pb2_grpc.AudioServiceServicer):
+    """Tier-2 surface — registered for contract completeness; UNIMPLEMENTED (B3)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def _unimpl(self, context: grpc.aio.ServicerContext) -> None:
+        await context.abort(grpc.StatusCode.UNIMPLEMENTED, _AUDIO_UNIMPLEMENTED)
+
+    async def Synthesize(self, request, context):
+        await self._unimpl(context)
+
+    async def Transcribe(self, request, context):
+        await self._unimpl(context)
+
+    async def GenerateImage(self, request, context):
+        await self._unimpl(context)
+
+    async def Ocr(self, request, context):
+        await self._unimpl(context)
+
+    async def AnalyzeText(self, request, context):
+        await self._unimpl(context)
+
+    async def TranscribeStream(self, request_iterator, context):
+        await self._unimpl(context)
+        if False:  # pragma: no cover - make this an async generator
+            yield
+
+    async def SynthesizeStream(self, request_iterator, context):
+        await self._unimpl(context)
+        if False:  # pragma: no cover
+            yield
+
+    async def VoiceAgent(self, request_iterator, context):
+        await self._unimpl(context)
+        if False:  # pragma: no cover
+            yield
+
+
+def create_grpc_server(
+    core: BridgeCore,
+    *,
+    options: list[tuple[str, Any]] | None = None,
+    interceptors: list[grpc.aio.ServerInterceptor] | None = None,
+) -> grpc.aio.Server:
+    """Build a ``grpc.aio.Server`` with all bridge servicers registered.
+
+    The caller binds a port (``add_insecure_port`` / ``add_secure_port``) and
+    starts/stops the server. Registering AudioService keeps the served reflection
+    surface aligned with the published contract even while it is UNIMPLEMENTED.
+
+    Args:
+        core: The shared :class:`BridgeCore`.
+        options: Optional gRPC channel/server options.
+        interceptors: Optional server interceptors (e.g. an auth gate).
+
+    Returns:
+        An unstarted ``grpc.aio.Server``.
+    """
+    server = grpc.aio.server(options=options or [], interceptors=interceptors or [])
+    inference_pb2_grpc.add_InferenceServiceServicer_to_server(InferenceServicer(core), server)
+    catalog_pb2_grpc.add_CatalogServiceServicer_to_server(CatalogServicer(core), server)
+    control_pb2_grpc.add_ControlServiceServicer_to_server(ControlServicer(core), server)
+    audio_pb2_grpc.add_AudioServiceServicer_to_server(AudioServicer(core), server)
+    return server

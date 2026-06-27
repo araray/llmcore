@@ -1,0 +1,18 @@
+# Buf module config (v2) for the llmcore.v1 wire contract.
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  # Documented, conventional exceptions: several RPCs intentionally take a shared
+  # `Empty` request and return domain messages directly (ModelDetails, CostEstimate,
+  # ServerInfo, multimodal results) rather than single-field Method{Request,Response}
+  # wrappers. Wrapping would add no semantic value and bloat five generated clients.
+  except:
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE
