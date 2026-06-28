@@ -1,15 +1,20 @@
 # llmcore Rust bindings
 
 Async Rust client for the **llmcore bridge** over gRPC, generated from the frozen
-`llmcore.v1` contract. Two crates (per the per-language distribution plan):
+`llmcore.v1` contract. Crates (per the per-language distribution plan):
 
 * **`llmcore-proto`** — generated messages + tonic gRPC clients (codegen via a
   `build.rs`).
 * **`llmcore-client`** — ergonomic async wrapper: capability negotiation,
   structured errors, cancellable streaming.
+* **`llmcore-embedded`** — the **B5 in-process (PyO3) binding**: embeds CPython
+  and calls `llmcore` directly for single-binary Rust deployments, reusing the
+  same `llmcore.v1` types so its Tier-0 API mirrors `llmcore-client`. Excluded
+  from the default build (it links libpython); see
+  [`llmcore-embedded/README.md`](llmcore-embedded/README.md).
 
-Built on **tonic 0.12 / prost 0.13**. Depends only on the contract, never on
-Python.
+The gRPC crates are built on **tonic 0.12 / prost 0.13** and depend only on the
+contract, never on Python. `llmcore-embedded` is the deliberate exception (D8).
 
 > **Build status / sandbox note.** This was **not compiled in the authoring
 > sandbox**: no `cargo`/`rustc` was available and no Rust toolchain source was
@@ -69,6 +74,37 @@ See **USAGE.md** for the full API, TLS, error handling, and cancellation.
 `list_providers`, `list_models`, `get_provider_details`,
 `get_info`/`ensure_compatible`, `health`, `reload_config`. `embed(...)` returns a
 `BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
+
+## Surface (Tier 1 — sessions, vector store & presets)
+
+Available when the bridge advertises `tier1.sessions` and/or `tier1.vector`
+(negotiate with `client.ensure_compatible(&["tier1.sessions", "tier1.vector"])`).
+
+* **Sessions:** `create_session`, `get_session`, `list_sessions`,
+  `delete_session`, `update_session_name`, `fork_session`, `clone_session`,
+  `delete_messages`, `get_messages_by_range`.
+* **Context items:** `add_context_item`, `get_context_item`,
+  `remove_context_item`.
+* **Vector store / RAG:** `add_documents`, `search_vector_store`,
+  `list_vector_collections`, `list_rag_collections`, `get_rag_collection_info`,
+  `delete_rag_collection`.
+* **Context presets:** `save_context_preset`, `get_context_preset`,
+  `list_context_presets`, `delete_context_preset`.
+
+Run the end-to-end demo against a fake-backed bridge (the fake gates make the
+bridge advertise the Tier-1 capabilities without a real backend):
+
+```bash
+# bridge
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+# example (note the http:// endpoint scheme)
+LLMCORE_GRPC=http://127.0.0.1:50151 cargo run -p llmcore-client --example sessions
+```
+
+See **USAGE.md** for request shapes and the top-level **../CONTRACT.md** for the
+authoritative capability/contract reference.
 
 ## Surface (Tier 2 — audio)
 

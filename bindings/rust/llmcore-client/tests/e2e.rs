@@ -33,6 +33,14 @@ impl Bridge {
         Self::start_env(&[("LLMCORE_BRIDGE_FAKE_AUDIO", "1")]).await
     }
 
+    async fn start_sessions() -> Bridge {
+        Self::start_env(&[
+            ("LLMCORE_BRIDGE_FAKE_SESSIONS", "1"),
+            ("LLMCORE_BRIDGE_FAKE_VECTOR", "1"),
+        ])
+        .await
+    }
+
     async fn start_env(extra_env: &[(&str, &str)]) -> Bridge {
         let grpc_port = free_port();
         let http_port = free_port();
@@ -424,4 +432,164 @@ async fn analyze_text_unary() {
     assert_eq!(r.model.as_deref(), Some("fake-analyze"));
     assert!(r.summary.is_none());
     assert!(r.topics.is_empty());
+}
+
+// --------------------------------------------------------------------------- //
+// Tier-1: sessions, context items, vector store, presets
+// --------------------------------------------------------------------------- //
+async fn connected_sessions() -> (LlmcoreClient, Bridge) {
+    let b = Bridge::start_sessions().await;
+    let c = LlmcoreClient::connect(b.endpoint.clone()).await.unwrap();
+    (c, b)
+}
+
+#[tokio::test]
+async fn tier1_capabilities_advertised() {
+    let (mut c, _b) = connected_sessions().await;
+    let info = c.get_info().await.unwrap();
+    assert!(info.capabilities.iter().any(|s| s == "tier1.sessions"));
+    assert!(info.capabilities.iter().any(|s| s == "tier1.vector"));
+    assert!(info.tiers.iter().any(|t| t == "T1"));
+}
+
+#[tokio::test]
+async fn session_create_get_roundtrip() {
+    let (mut c, _b) = connected_sessions().await;
+    let created = c
+        .create_session(v1::CreateSessionRequest {
+            name: Some("rust-chat".into()),
+            system_message: Some("be brief".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(created.name.as_deref(), Some("rust-chat"));
+    assert_eq!(created.messages.len(), 1);
+    assert_eq!(created.messages[0].content, "be brief");
+
+    let got = c
+        .get_session(v1::GetSessionRequest {
+            session_id: created.id.clone(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(got.id, created.id);
+}
+
+#[tokio::test]
+async fn session_context_item_lifecycle() {
+    let (mut c, _b) = connected_sessions().await;
+    let s = c
+        .create_session(v1::CreateSessionRequest::default())
+        .await
+        .unwrap();
+    let added = c
+        .add_context_item(v1::AddContextItemRequest {
+            session_id: s.id.clone(),
+            content: "a fact".into(),
+            r#type: Some("rag_snippet".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let item = c
+        .get_context_item(v1::GetContextItemRequest {
+            session_id: s.id.clone(),
+            item_id: added.item_id.clone(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(item.r#type, "rag_snippet");
+    assert_eq!(item.content, "a fact");
+
+    let removed = c
+        .remove_context_item(v1::RemoveContextItemRequest {
+            session_id: s.id.clone(),
+            item_id: added.item_id,
+        })
+        .await
+        .unwrap();
+    assert!(removed.removed);
+}
+
+#[tokio::test]
+async fn session_get_missing_is_not_found() {
+    let (mut c, _b) = connected_sessions().await;
+    let err = c
+        .get_session(v1::GetSessionRequest {
+            session_id: "ghost".into(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.category, "ERROR_CATEGORY_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn vector_add_and_search() {
+    use std::collections::BTreeMap;
+    use prost_types::{Struct, Value, value::Kind};
+
+    let (mut c, _b) = connected_sessions().await;
+    let mut fields = BTreeMap::new();
+    fields.insert(
+        "content".to_string(),
+        Value { kind: Some(Kind::StringValue("the cat sat".into())) },
+    );
+    let doc = Struct { fields };
+    let added = c
+        .add_documents(v1::AddDocumentsRequest {
+            documents: vec![doc],
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(added.ids.len(), 1);
+
+    let res = c
+        .search_vector_store(v1::SearchVectorStoreRequest {
+            query: "cat".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(res.documents.len(), 1);
+    assert_eq!(res.documents[0].content, "the cat sat");
+}
+
+#[tokio::test]
+async fn preset_save_get_roundtrip() {
+    let (mut c, _b) = connected_sessions().await;
+    let preset = v1::ContextPreset {
+        name: "rust-preset".into(),
+        description: Some("d".into()),
+        items: vec![v1::ContextPresetItem {
+            r#type: "preset_text_content".into(),
+            content: Some("boilerplate".into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    c.save_context_preset(v1::SaveContextPresetRequest {
+        preset: Some(preset),
+    })
+    .await
+    .unwrap();
+
+    let got = c
+        .get_context_preset(v1::GetContextPresetRequest {
+            preset_name: "rust-preset".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(got.name, "rust-preset");
+    assert_eq!(got.items.len(), 1);
+    assert_eq!(got.items[0].content.as_deref(), Some("boilerplate"));
+
+    let err = c
+        .get_context_preset(v1::GetContextPresetRequest {
+            preset_name: "ghost".into(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.category, "ERROR_CATEGORY_NOT_FOUND");
 }

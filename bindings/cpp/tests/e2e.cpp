@@ -54,7 +54,7 @@ struct Bridge {
   }
 };
 
-std::unique_ptr<Bridge> StartBridge(bool with_audio = false) {
+std::unique_ptr<Bridge> StartBridge(bool with_audio = false, bool with_sessions = false) {
   auto b = std::make_unique<Bridge>();
   const std::string grpc_addr = "127.0.0.1:" + std::to_string(FreePort());
   const std::string http_addr = "127.0.0.1:" + std::to_string(FreePort());
@@ -65,6 +65,10 @@ std::unique_ptr<Bridge> StartBridge(bool with_audio = false) {
   if (pid == 0) {
     ::setenv("LLMCORE_BRIDGE_FAKE", "1", 1);
     if (with_audio) ::setenv("LLMCORE_BRIDGE_FAKE_AUDIO", "1", 1);
+    if (with_sessions) {
+      ::setenv("LLMCORE_BRIDGE_FAKE_SESSIONS", "1", 1);
+      ::setenv("LLMCORE_BRIDGE_FAKE_VECTOR", "1", 1);
+    }
     std::vector<std::string> args = {py,
                                      "-m",
                                      "llmcore.bridge.cli",
@@ -383,6 +387,118 @@ int main() {
       CHECK(r.model() == "fake-analyze");
       CHECK(!r.has_summary());
       CHECK(r.topics_size() == 0);
+    }
+  }
+
+  // ---- Tier-1 (sessions/vector/presets): a session-enabled bridge ----
+  {
+    auto sbridge = StartBridge(/*with_audio=*/false, /*with_sessions=*/true);
+    auto sc = llmcore::Client::Create(sbridge->target);
+
+    // tier1 capabilities advertised
+    {
+      auto info = sc->GetInfo();
+      const char* caps[] = {"tier1.sessions", "tier1.vector"};
+      for (const char* want : caps) {
+        bool found = false;
+        for (const auto& have : info.capabilities()) {
+          if (have == want) {
+            found = true;
+            break;
+          }
+        }
+        CHECK(found);
+      }
+    }
+
+    // session create/get round-trip
+    std::string sid;
+    {
+      llmcore::v1::CreateSessionRequest req;
+      req.set_name("cpp-chat");
+      req.set_system_message("be brief");
+      auto s = sc->CreateSession(req);
+      CHECK(s.name() == "cpp-chat");
+      CHECK(s.messages_size() == 1);
+      sid = s.id();
+      llmcore::v1::GetSessionRequest greq;
+      greq.set_session_id(sid);
+      CHECK(sc->GetSession(greq).id() == sid);
+    }
+
+    // context item lifecycle
+    {
+      llmcore::v1::AddContextItemRequest req;
+      req.set_session_id(sid);
+      req.set_content("a fact");
+      req.set_type("rag_snippet");
+      auto added = sc->AddContextItem(req);
+      llmcore::v1::GetContextItemRequest greq;
+      greq.set_session_id(sid);
+      greq.set_item_id(added.item_id());
+      auto item = sc->GetContextItem(greq);
+      CHECK(item.type() == "rag_snippet");
+      CHECK(item.content() == "a fact");
+      llmcore::v1::RemoveContextItemRequest rreq;
+      rreq.set_session_id(sid);
+      rreq.set_item_id(added.item_id());
+      CHECK(sc->RemoveContextItem(rreq).removed());
+    }
+
+    // get missing session -> NOT_FOUND
+    {
+      bool threw = false;
+      try {
+        llmcore::v1::GetSessionRequest req;
+        req.set_session_id("ghost");
+        sc->GetSession(req);
+      } catch (const llmcore::BridgeError& e) {
+        threw = true;
+        CHECK(e.category == "ERROR_CATEGORY_NOT_FOUND");
+      }
+      CHECK(threw);
+    }
+
+    // vector add + search
+    {
+      llmcore::v1::AddDocumentsRequest req;
+      auto* d = req.add_documents();
+      (*d->mutable_fields())["content"].set_string_value("the cat sat");
+      auto added = sc->AddDocuments(req);
+      CHECK(added.ids_size() == 1);
+      llmcore::v1::SearchVectorStoreRequest sreq;
+      sreq.set_query("cat");
+      auto res = sc->SearchVectorStore(sreq);
+      CHECK(res.documents_size() == 1);
+      if (res.documents_size() == 1) CHECK(res.documents(0).content() == "the cat sat");
+    }
+
+    // preset save/get + NOT_FOUND
+    {
+      llmcore::v1::SaveContextPresetRequest req;
+      auto* p = req.mutable_preset();
+      p->set_name("cpp-preset");
+      p->set_description("d");
+      auto* it = p->add_items();
+      it->set_type("preset_text_content");
+      it->set_content("boilerplate");
+      sc->SaveContextPreset(req);
+
+      llmcore::v1::GetContextPresetRequest greq;
+      greq.set_preset_name("cpp-preset");
+      auto got = sc->GetContextPreset(greq);
+      CHECK(got.name() == "cpp-preset");
+      CHECK(got.items_size() == 1);
+
+      bool threw = false;
+      try {
+        llmcore::v1::GetContextPresetRequest mreq;
+        mreq.set_preset_name("ghost");
+        sc->GetContextPreset(mreq);
+      } catch (const llmcore::BridgeError&) {
+        threw = true;
+      }
+      CHECK(threw);
     }
   }
 

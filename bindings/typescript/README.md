@@ -54,6 +54,38 @@ See **USAGE.md** for the full API, error handling, and cancellation.
 `reloadConfig`. `embed(...)` throws a `BridgeError` (UNSUPPORTED) — Embed is
 UNIMPLEMENTED in `llmcore.v1`.
 
+## Tier-1: sessions, vector store & presets
+
+Stateful surface on `LlmcoreGrpcClient`, available when the bridge advertises
+`tier1.sessions` / `tier1.vector` (real backend, or the fake gates
+`LLMCORE_BRIDGE_FAKE_SESSIONS=1` / `LLMCORE_BRIDGE_FAKE_VECTOR=1`). Negotiate with
+`ensureCompatible(["tier1.sessions", "tier1.vector"])`.
+
+- **Sessions:** `createSession`, `getSession`, `listSessions`, `deleteSession`,
+  `updateSessionName`, `forkSession`, `cloneSession`, `deleteMessages`,
+  `getMessagesByRange`.
+- **Context items:** `addContextItem`, `getContextItem`, `removeContextItem`.
+- **Vector store / RAG:** `addDocuments`, `searchVectorStore`,
+  `listVectorCollections`, `listRagCollections`, `getRagCollectionInfo`,
+  `deleteRagCollection`.
+- **Context presets:** `saveContextPreset`, `getContextPreset`,
+  `listContextPresets`, `deleteContextPreset`.
+
+Run the worked example (`examples/sessions.ts`):
+
+```bash
+# bridge with the Tier-1 fake stores enabled
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+
+# example: create a session, add/read a context item, index + search docs, save/get a preset
+LLMCORE_GRPC=127.0.0.1:50151 npx tsx examples/sessions.ts
+```
+
+See `bindings/CONTRACT.md` (`SessionService` / `VectorService` / `PresetService`)
+for the full RPC↔`api.py` mapping and the external-RAG invariant.
+
 ## Audio (Tier 2)
 
 Surfaced on both transports when the bridge advertises `tier2.audio`. **One-shot

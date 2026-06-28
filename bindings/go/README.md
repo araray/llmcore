@@ -73,6 +73,38 @@ and `examples/quickstart` for a runnable program.
 `EnsureCompatible`, `Health`, `ReloadConfig`, `Close`. `Embed(...)` returns a
 `*BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
 
+## Surface (Tier 1 — sessions, vector store & presets)
+
+Available when the bridge advertises `tier1.sessions` (sessions, context items,
+presets) and/or `tier1.vector` (vector store / RAG). Negotiate with
+`c.EnsureCompatible(ctx, "tier1.sessions", "tier1.vector")`.
+
+- **Sessions:** `CreateSession`, `GetSession`, `ListSessions`, `DeleteSession`,
+  `UpdateSessionName`, `ForkSession`, `CloneSession`, `DeleteMessages`,
+  `GetMessagesByRange`.
+- **Context items:** `AddContextItem`, `GetContextItem`, `RemoveContextItem`.
+- **Vector store / RAG:** `AddDocuments`, `SearchVectorStore`,
+  `ListVectorCollections`, `ListRagCollections`, `GetRagCollectionInfo`,
+  `DeleteRagCollection`.
+- **Context presets:** `SaveContextPreset`, `GetContextPreset`,
+  `ListContextPresets`, `DeleteContextPreset`.
+
+`examples/sessions` is a runnable end-to-end demo (create a session, add/read a
+context item, index + search documents, save/read a preset, clean up). Start a
+bridge with the Tier-1 fakes enabled (real backends advertise the caps without
+the `*_FAKE_*` gates):
+
+```bash
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+
+# the committed minimal go.mod needs -mod=mod for `go run`:
+LLMCORE_GRPC=127.0.0.1:50151 GOFLAGS=-mod=mod go run ./examples/sessions
+```
+
+See `bindings/CONTRACT.md` for the full Tier-1 contract.
+
 ## Surface (Tier 2 — audio)
 
 Available when the bridge advertises `tier2.audio`. One-shot: `Synthesize`,

@@ -14,6 +14,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "llmcore/v1/catalog.proto",
         "llmcore/v1/control.proto",
         "llmcore/v1/audio.proto",
+        "llmcore/v1/sessions.proto",
+        "llmcore/v1/vector.proto",
+        "llmcore/v1/presets.proto",
     ];
     let paths: Vec<PathBuf> = protos.iter().map(|p| proto_root.join(p)).collect();
 

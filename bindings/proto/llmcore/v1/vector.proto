@@ -1,0 +1,72 @@
+// llmcore.v1 — Tier-1 vector store & RAG collections (phase B4).
+//
+// Field numbers are STABLE for the v1 contract. Every message/field/RPC traces
+// to a verified llmcore source symbol (see bindings/contract_map.yaml).
+//
+// External-RAG invariant: these RPCs operate the *vector store* directly
+// (add/search/manage). They never trigger chat-time retrieval — chat keeps
+// enable_rag=false. Callers stage context explicitly, matching llmcore's design.
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "google/protobuf/struct.proto";
+import "llmcore/v1/common.proto";  // Empty
+
+// A retrieved document — mirrors llmcore.models.ContextDocument (models.py:338).
+message ContextDocument {
+  string id = 1;
+  string content = 2;
+  repeated float embedding = 3;
+  google.protobuf.Struct metadata = 4;
+  optional float score = 5;
+}
+
+// AddDocuments — each document is a free-form JSON object ({content, metadata,
+// id?}) matching LLMCore.add_documents_to_vector_store(documents: list[dict]).
+message AddDocumentsRequest {
+  repeated google.protobuf.Struct documents = 1;
+  optional string collection_name = 2;
+}
+message AddDocumentsResponse {
+  repeated string ids = 1;
+}
+
+message SearchVectorStoreRequest {
+  string query = 1;
+  int32 k = 2;                                // bridge default: 5 when unset (0)
+  optional string collection_name = 3;
+  google.protobuf.Struct metadata_filter = 4;
+}
+message SearchVectorStoreResponse {
+  repeated ContextDocument documents = 1;
+}
+
+message ListCollectionsResponse {
+  repeated string collections = 1;
+}
+
+message GetRagCollectionInfoRequest {
+  string collection_name = 1;
+}
+message RagCollectionInfo {
+  string collection_name = 1;
+  google.protobuf.Struct info = 2;            // arbitrary store-specific metadata
+}
+
+message DeleteRagCollectionRequest {
+  string collection_name = 1;
+  bool force = 2;
+}
+message DeleteRagCollectionResponse {
+  bool deleted = 1;
+}
+
+service VectorService {
+  rpc AddDocuments         (AddDocumentsRequest)         returns (AddDocumentsResponse);       // LLMCore.add_documents_to_vector_store
+  rpc SearchVectorStore    (SearchVectorStoreRequest)    returns (SearchVectorStoreResponse);  // LLMCore.search_vector_store
+  rpc ListVectorCollections (Empty)                      returns (ListCollectionsResponse);    // LLMCore.list_vector_collections
+  rpc ListRagCollections   (Empty)                       returns (ListCollectionsResponse);    // LLMCore.list_rag_collections
+  rpc GetRagCollectionInfo (GetRagCollectionInfoRequest) returns (RagCollectionInfo);          // LLMCore.get_rag_collection_info
+  rpc DeleteRagCollection  (DeleteRagCollectionRequest)  returns (DeleteRagCollectionResponse);// LLMCore.delete_rag_collection
+}

@@ -20,7 +20,10 @@ python -m grpc_tools.protoc \
   "$PROTO_DIR"/llmcore/v1/inference.proto \
   "$PROTO_DIR"/llmcore/v1/catalog.proto \
   "$PROTO_DIR"/llmcore/v1/control.proto \
-  "$PROTO_DIR"/llmcore/v1/audio.proto
+  "$PROTO_DIR"/llmcore/v1/audio.proto \
+  "$PROTO_DIR"/llmcore/v1/sessions.proto \
+  "$PROTO_DIR"/llmcore/v1/vector.proto \
+  "$PROTO_DIR"/llmcore/v1/presets.proto
 
 # Package markers
 touch "$OUT/__init__.py" "$OUT/llmcore/__init__.py" "$OUT/llmcore/v1/__init__.py"

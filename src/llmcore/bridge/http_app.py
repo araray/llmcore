@@ -30,6 +30,9 @@ from ._generated.llmcore.v1 import (
     common_pb2,
     control_pb2,
     inference_pb2,
+    presets_pb2,
+    sessions_pb2,
+    vector_pb2,
 )
 from .core import BridgeCore
 from .errors import BridgeError, http_status_for, invalid_argument, map_exception
@@ -134,6 +137,49 @@ def create_http_app(core: BridgeCore) -> Starlette:
         Route(f"{P}/ControlService/ReloadConfig", _make_unary(core.reload_config, control_pb2.ReloadConfigRequest), methods=["POST"]),
         Route("/healthz", _make_unary(core.health, common_pb2.Empty), methods=["GET", "POST"]),
     ]
+    # SessionService (Tier 1) — sessions & context items.
+    _session_unary = (
+        ("CreateSession", core.create_session, sessions_pb2.CreateSessionRequest),
+        ("GetSession", core.get_session, sessions_pb2.GetSessionRequest),
+        ("ListSessions", core.list_sessions, sessions_pb2.ListSessionsRequest),
+        ("DeleteSession", core.delete_session, sessions_pb2.DeleteSessionRequest),
+        ("UpdateSessionName", core.update_session_name, sessions_pb2.UpdateSessionNameRequest),
+        ("ForkSession", core.fork_session, sessions_pb2.ForkSessionRequest),
+        ("CloneSession", core.clone_session, sessions_pb2.CloneSessionRequest),
+        ("DeleteMessages", core.delete_messages, sessions_pb2.DeleteMessagesRequest),
+        ("GetMessagesByRange", core.get_messages_by_range, sessions_pb2.GetMessagesByRangeRequest),
+        ("AddContextItem", core.add_context_item, sessions_pb2.AddContextItemRequest),
+        ("GetContextItem", core.get_context_item, sessions_pb2.GetContextItemRequest),
+        ("RemoveContextItem", core.remove_context_item, sessions_pb2.RemoveContextItemRequest),
+    )
+    for name, method, req_type in _session_unary:
+        routes.append(
+            Route(f"{P}/SessionService/{name}", _make_unary(method, req_type), methods=["POST"])
+        )
+    # VectorService (Tier 1) — vector store & RAG collections.
+    _vector_unary = (
+        ("AddDocuments", core.add_documents, vector_pb2.AddDocumentsRequest),
+        ("SearchVectorStore", core.search_vector_store, vector_pb2.SearchVectorStoreRequest),
+        ("ListVectorCollections", core.list_vector_collections, common_pb2.Empty),
+        ("ListRagCollections", core.list_rag_collections, common_pb2.Empty),
+        ("GetRagCollectionInfo", core.get_rag_collection_info, vector_pb2.GetRagCollectionInfoRequest),
+        ("DeleteRagCollection", core.delete_rag_collection, vector_pb2.DeleteRagCollectionRequest),
+    )
+    for name, method, req_type in _vector_unary:
+        routes.append(
+            Route(f"{P}/VectorService/{name}", _make_unary(method, req_type), methods=["POST"])
+        )
+    # PresetService (Tier 1) — reusable context presets.
+    _preset_unary = (
+        ("SaveContextPreset", core.save_context_preset, presets_pb2.SaveContextPresetRequest),
+        ("GetContextPreset", core.get_context_preset, presets_pb2.GetContextPresetRequest),
+        ("ListContextPresets", core.list_context_presets, common_pb2.Empty),
+        ("DeleteContextPreset", core.delete_context_preset, presets_pb2.DeleteContextPresetRequest),
+    )
+    for name, method, req_type in _preset_unary:
+        routes.append(
+            Route(f"{P}/PresetService/{name}", _make_unary(method, req_type), methods=["POST"])
+        )
     # One-shot (unary) AudioService RPCs; gated at runtime on core.audio_enabled
     # (a disabled deployment yields UNSUPPORTED -> HTTP 501 via the error path).
     _audio_unary = (

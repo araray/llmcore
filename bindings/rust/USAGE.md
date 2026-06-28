@@ -98,6 +98,92 @@ client.list_models("openai").await?;     // .models:    Vec<String>
 client.get_provider_details(Some("openai".into())).await?; // v1::ModelDetails
 ```
 
+## Sessions, vector store & presets (Tier 1)
+
+Available when the bridge advertises `tier1.sessions` / `tier1.vector`; negotiate
+with `client.ensure_compatible(&["tier1.sessions", "tier1.vector"]).await?`. With
+a fake backend, start the bridge with the Tier-1 gates set so it advertises those
+capabilities:
+
+```bash
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+```
+
+### Sessions & context items
+
+```rust
+let session = client.create_session(v1::CreateSessionRequest {
+    name: Some("demo-session".into()),
+    system_message: Some("You are a terse assistant.".into()),
+    ..Default::default()
+}).await?; // v1::ChatSession { id, messages, .. }
+
+let added = client.add_context_item(v1::AddContextItemRequest {
+    session_id: session.id.clone(),
+    content: "Remember: the launch date is June 30.".into(),
+    r#type: Some("user_text".into()),
+    ..Default::default()
+}).await?;
+let item = client.get_context_item(v1::GetContextItemRequest {
+    session_id: session.id.clone(),
+    item_id: added.item_id,
+}).await?; // v1::ContextItem { content, tokens(), .. }
+
+client.delete_session(v1::DeleteSessionRequest { session_id: session.id }).await?;
+```
+
+Also: `get_session`, `list_sessions`, `update_session_name`, `fork_session`,
+`clone_session`, `delete_messages`, `get_messages_by_range`,
+`remove_context_item`.
+
+### Vector store / RAG
+
+```rust
+use prost_types::{Struct, Value, value::Kind};
+use std::collections::BTreeMap;
+
+let mut fields = BTreeMap::new();
+fields.insert("content".to_string(), Value { kind: Some(Kind::StringValue("Paris is the capital of France.".into())) });
+client.add_documents(v1::AddDocumentsRequest {
+    documents: vec![Struct { fields }],
+    ..Default::default()
+}).await?;
+let hits = client.search_vector_store(v1::SearchVectorStoreRequest {
+    query: "capital of France".into(), k: 3, ..Default::default()
+}).await?; // hits.documents: Vec<.. { content, score() }>
+```
+
+Also: `list_vector_collections`, `list_rag_collections`,
+`get_rag_collection_info`, `delete_rag_collection`.
+
+### Context presets
+
+```rust
+client.save_context_preset(v1::SaveContextPresetRequest {
+    preset: Some(v1::ContextPreset {
+        name: "preamble".into(),
+        items: vec![v1::ContextPresetItem {
+            r#type: "preset_text_content".into(),
+            content: Some("Always cite sources.".into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    }),
+}).await?;
+let preset = client.get_context_preset(v1::GetContextPresetRequest {
+    preset_name: "preamble".into(),
+}).await?; // v1::ContextPreset { name, items, .. }
+```
+
+Also: `list_context_presets`, `delete_context_preset`. A full runnable flow is in
+`examples/sessions.rs`:
+
+```bash
+LLMCORE_GRPC=http://127.0.0.1:50151 cargo run -p llmcore-client --example sessions
+```
+
 ## Audio (Tier 2)
 
 Available when the bridge advertises `tier2.audio`; negotiate with
@@ -194,5 +280,6 @@ set), `provider.unauthenticated` (401), `context.too_long` (413),
 cargo build
 cargo test         # set LLMCORE_BRIDGE_PYTHON first (spawns a real bridge)
 cargo run -p llmcore-client --example quickstart
+cargo run -p llmcore-client --example sessions   # Tier 1 (set the FAKE_SESSIONS/FAKE_VECTOR gates)
 cargo clippy --all-targets
 ```

@@ -18,6 +18,9 @@ type Client struct {
 	catalog   llmcorev1.CatalogServiceClient
 	control   llmcorev1.ControlServiceClient
 	audio     llmcorev1.AudioServiceClient
+	session   llmcorev1.SessionServiceClient
+	vector    llmcorev1.VectorServiceClient
+	preset    llmcorev1.PresetServiceClient
 }
 
 // Dial connects to a bridge at target ("host:port"). The connection is lazy
@@ -39,6 +42,9 @@ func Dial(target string, opts ...Option) (*Client, error) {
 		catalog:   llmcorev1.NewCatalogServiceClient(conn),
 		control:   llmcorev1.NewControlServiceClient(conn),
 		audio:     llmcorev1.NewAudioServiceClient(conn),
+		session:   llmcorev1.NewSessionServiceClient(conn),
+		vector:    llmcorev1.NewVectorServiceClient(conn),
+		preset:    llmcorev1.NewPresetServiceClient(conn),
 	}, nil
 }
 

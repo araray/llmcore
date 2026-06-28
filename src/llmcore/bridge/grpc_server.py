@@ -22,6 +22,9 @@ from ._generated.llmcore.v1 import (
     catalog_pb2_grpc,
     control_pb2_grpc,
     inference_pb2_grpc,
+    presets_pb2_grpc,
+    sessions_pb2_grpc,
+    vector_pb2_grpc,
 )
 from .core import BridgeCore
 from .errors import BridgeError, grpc_status_for, map_exception
@@ -101,6 +104,93 @@ class CatalogServicer(catalog_pb2_grpc.CatalogServiceServicer):
 
     async def GetProviderDetails(self, request, context):
         return await _unary(lambda: self._core.get_provider_details(request), context)
+
+
+class SessionServicer(sessions_pb2_grpc.SessionServiceServicer):
+    """Tier-1 sessions & context items (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def CreateSession(self, request, context):
+        return await _unary(lambda: self._core.create_session(request), context)
+
+    async def GetSession(self, request, context):
+        return await _unary(lambda: self._core.get_session(request), context)
+
+    async def ListSessions(self, request, context):
+        return await _unary(lambda: self._core.list_sessions(request), context)
+
+    async def DeleteSession(self, request, context):
+        return await _unary(lambda: self._core.delete_session(request), context)
+
+    async def UpdateSessionName(self, request, context):
+        return await _unary(lambda: self._core.update_session_name(request), context)
+
+    async def ForkSession(self, request, context):
+        return await _unary(lambda: self._core.fork_session(request), context)
+
+    async def CloneSession(self, request, context):
+        return await _unary(lambda: self._core.clone_session(request), context)
+
+    async def DeleteMessages(self, request, context):
+        return await _unary(lambda: self._core.delete_messages(request), context)
+
+    async def GetMessagesByRange(self, request, context):
+        return await _unary(lambda: self._core.get_messages_by_range(request), context)
+
+    async def AddContextItem(self, request, context):
+        return await _unary(lambda: self._core.add_context_item(request), context)
+
+    async def GetContextItem(self, request, context):
+        return await _unary(lambda: self._core.get_context_item(request), context)
+
+    async def RemoveContextItem(self, request, context):
+        return await _unary(lambda: self._core.remove_context_item(request), context)
+
+
+class VectorServicer(vector_pb2_grpc.VectorServiceServicer):
+    """Tier-1 vector store & RAG collections (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def AddDocuments(self, request, context):
+        return await _unary(lambda: self._core.add_documents(request), context)
+
+    async def SearchVectorStore(self, request, context):
+        return await _unary(lambda: self._core.search_vector_store(request), context)
+
+    async def ListVectorCollections(self, request, context):
+        return await _unary(lambda: self._core.list_vector_collections(request), context)
+
+    async def ListRagCollections(self, request, context):
+        return await _unary(lambda: self._core.list_rag_collections(request), context)
+
+    async def GetRagCollectionInfo(self, request, context):
+        return await _unary(lambda: self._core.get_rag_collection_info(request), context)
+
+    async def DeleteRagCollection(self, request, context):
+        return await _unary(lambda: self._core.delete_rag_collection(request), context)
+
+
+class PresetServicer(presets_pb2_grpc.PresetServiceServicer):
+    """Tier-1 context presets (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def SaveContextPreset(self, request, context):
+        return await _unary(lambda: self._core.save_context_preset(request), context)
+
+    async def GetContextPreset(self, request, context):
+        return await _unary(lambda: self._core.get_context_preset(request), context)
+
+    async def ListContextPresets(self, request, context):
+        return await _unary(lambda: self._core.list_context_presets(request), context)
+
+    async def DeleteContextPreset(self, request, context):
+        return await _unary(lambda: self._core.delete_context_preset(request), context)
 
 
 class ControlServicer(control_pb2_grpc.ControlServiceServicer):
@@ -230,4 +320,7 @@ def create_grpc_server(
     catalog_pb2_grpc.add_CatalogServiceServicer_to_server(CatalogServicer(core), server)
     control_pb2_grpc.add_ControlServiceServicer_to_server(ControlServicer(core), server)
     audio_pb2_grpc.add_AudioServiceServicer_to_server(AudioServicer(core), server)
+    sessions_pb2_grpc.add_SessionServiceServicer_to_server(SessionServicer(core), server)
+    vector_pb2_grpc.add_VectorServiceServicer_to_server(VectorServicer(core), server)
+    presets_pb2_grpc.add_PresetServiceServicer_to_server(PresetServicer(core), server)
     return server

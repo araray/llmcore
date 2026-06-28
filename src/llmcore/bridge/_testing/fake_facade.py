@@ -74,6 +74,21 @@ class FakeFacade:
     PROVIDER = "fake"
     MODEL = "fake-1"
 
+    def __init__(self) -> None:
+        # Tier-1 in-memory store (offline). Keyed by session id; values are real
+        # ``llmcore.models.ChatSession`` objects so the bridge conversion helpers
+        # exercise the same code path as a live ``LLMCore``.
+        self._sessions: dict[str, Any] = {}
+        self._counter = 0
+        # Tier-1 vector store: {collection_name: [ContextDocument, ...]}.
+        self._collections: dict[str, list[Any]] = {}
+        # Tier-1 context presets: {preset_name: ContextPreset}.
+        self._presets: dict[str, Any] = {}
+
+    def _next_id(self, prefix: str) -> str:
+        self._counter += 1
+        return f"{prefix}-{self._counter}"
+
     # -- chat ------------------------------------------------------------- #
     async def chat_with_usage(self, message: str, **kw: Any) -> tuple[str, ChatUsage]:
         if message.startswith(_ERROR_PREFIX):
@@ -191,6 +206,245 @@ class FakeFacade:
         five Tier-0 language clients' "tier2.audio rejected" assertions valid.
         """
         return os.getenv("LLMCORE_BRIDGE_FAKE_AUDIO") == "1"
+
+    # -- Tier-1: sessions & context items -------------------------------- #
+    def supports_sessions(self) -> bool:
+        """Tier-1 enablement gate for the fake bridge.
+
+        Read dynamically from ``LLMCORE_BRIDGE_FAKE_SESSIONS`` so a test can
+        toggle sessions on/off against an already-constructed fixture. Off by
+        default, which keeps the Tier-0 capability set byte-identical for the
+        existing conformance suites.
+        """
+        return os.getenv("LLMCORE_BRIDGE_FAKE_SESSIONS") == "1"
+
+    def _require(self, session_id: str) -> Any:
+        s = self._sessions.get(session_id)
+        if s is None:
+            raise SessionNotFoundError(session_id)
+        return s
+
+    async def create_session(
+        self,
+        session_id: str | None = None,
+        name: str | None = None,
+        system_message: str | None = None,
+    ) -> Any:
+        from llmcore.models import ChatSession, Message, Role
+
+        sid = session_id or self._next_id("sess")
+        if sid in self._sessions:
+            raise StorageError(f"session already exists: {sid}")
+        messages = []
+        if system_message:
+            messages.append(Message(session_id=sid, role=Role.SYSTEM, content=system_message))
+        session = ChatSession(id=sid, name=name, messages=messages)
+        self._sessions[sid] = session
+        return session
+
+    async def get_session(self, session_id: str) -> Any:
+        return self._require(session_id)
+
+    async def list_sessions(self, limit: int | None = None) -> list[Any]:
+        sessions = list(self._sessions.values())
+        if limit is not None:
+            sessions = sessions[:limit]
+        return sessions
+
+    async def delete_session(self, session_id: str) -> None:
+        self._require(session_id)
+        del self._sessions[session_id]
+
+    async def update_session_name(self, session_id: str, new_name: str) -> None:
+        self._require(session_id).name = new_name
+
+    async def fork_session(
+        self,
+        session_id: str,
+        *,
+        new_name: str | None = None,
+        from_message_id: str | None = None,
+        message_ids: list[str] | None = None,
+        message_range: tuple[int, int] | None = None,
+        include_context_items: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        from llmcore.models import ChatSession
+
+        src = self._require(session_id)
+        messages = list(src.messages)
+        if message_ids:
+            wanted = set(message_ids)
+            messages = [m for m in messages if m.id in wanted]
+        elif message_range is not None:
+            start, end = message_range
+            messages = messages[start:end]
+        elif from_message_id is not None:
+            ids = [m.id for m in messages]
+            if from_message_id in ids:
+                messages = messages[: ids.index(from_message_id) + 1]
+        new_id = self._next_id("fork")
+        fork = ChatSession(
+            id=new_id,
+            name=new_name or (src.name and f"{src.name} (fork)"),
+            messages=[m.model_copy() for m in messages],
+            context_items=[ci.model_copy() for ci in src.context_items] if include_context_items else [],
+            metadata=dict(metadata or {}),
+        )
+        self._sessions[new_id] = fork
+        return new_id
+
+    async def clone_session(
+        self,
+        session_id: str,
+        new_name: str | None = None,
+        *,
+        include_messages: bool = True,
+        include_context_items: bool = True,
+    ) -> str:
+        from llmcore.models import ChatSession
+
+        src = self._require(session_id)
+        new_id = self._next_id("clone")
+        clone = ChatSession(
+            id=new_id,
+            name=new_name or (src.name and f"{src.name} (clone)"),
+            messages=[m.model_copy() for m in src.messages] if include_messages else [],
+            context_items=[ci.model_copy() for ci in src.context_items] if include_context_items else [],
+            metadata=dict(src.metadata),
+        )
+        self._sessions[new_id] = clone
+        return new_id
+
+    async def delete_messages(self, session_id: str, message_ids: list[str]) -> int:
+        session = self._require(session_id)
+        wanted = set(message_ids)
+        before = len(session.messages)
+        session.messages = [m for m in session.messages if m.id not in wanted]
+        return before - len(session.messages)
+
+    async def get_messages_by_range(
+        self, session_id: str, start_index: int, end_index: int
+    ) -> list[Any]:
+        return self._require(session_id).messages[start_index:end_index]
+
+    async def add_context_item(
+        self,
+        session_id: str,
+        content: str,
+        item_type: Any = None,
+        source_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        from llmcore.models import ContextItem, ContextItemType
+
+        session = self._require(session_id)
+        item = ContextItem(
+            type=item_type or ContextItemType.USER_TEXT,
+            content=content,
+            source_id=source_id,
+            tokens=fake_count_tokens(content),
+            metadata=dict(metadata or {}),
+        )
+        session.context_items.append(item)
+        return item.id
+
+    async def get_context_item(self, session_id: str, item_id: str) -> Any:
+        session = self._require(session_id)
+        for item in session.context_items:
+            if item.id == item_id:
+                return item
+        return None
+
+    async def remove_context_item(self, session_id: str, item_id: str) -> bool:
+        session = self._require(session_id)
+        before = len(session.context_items)
+        session.context_items = [ci for ci in session.context_items if ci.id != item_id]
+        return len(session.context_items) < before
+
+    # -- Tier-1: vector store & RAG collections -------------------------- #
+    def supports_vector(self) -> bool:
+        """Tier-1 vector enablement gate, via ``LLMCORE_BRIDGE_FAKE_VECTOR``."""
+        return os.getenv("LLMCORE_BRIDGE_FAKE_VECTOR") == "1"
+
+    _DEFAULT_COLLECTION = "default"
+
+    async def add_documents_to_vector_store(
+        self, documents: list[dict[str, Any]], collection_name: str | None = None
+    ) -> list[str]:
+        from llmcore.models import ContextDocument
+
+        name = collection_name or self._DEFAULT_COLLECTION
+        store = self._collections.setdefault(name, [])
+        ids: list[str] = []
+        for doc in documents:
+            kwargs = {"content": doc.get("content", "")}
+            if doc.get("id"):
+                kwargs["id"] = doc["id"]
+            if doc.get("metadata"):
+                kwargs["metadata"] = doc["metadata"]
+            cd = ContextDocument(**kwargs)
+            store.append(cd)
+            ids.append(cd.id)
+        return ids
+
+    async def search_vector_store(
+        self,
+        query: str,
+        k: int = 5,
+        collection_name: str | None = None,
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        name = collection_name or self._DEFAULT_COLLECTION
+        docs = self._collections.get(name, [])
+        q = query.lower()
+        results = []
+        for doc in docs:
+            if metadata_filter and not all(
+                doc.metadata.get(mk) == mv for mk, mv in metadata_filter.items()
+            ):
+                continue
+            if q and q not in doc.content.lower():
+                continue
+            results.append(doc)
+        # Deterministic descending scores; copy so we don't mutate the store.
+        scored = []
+        for i, doc in enumerate(results[:k]):
+            scored.append(doc.model_copy(update={"score": round(1.0 - i * 0.1, 3)}))
+        return scored
+
+    async def list_vector_collections(self) -> list[str]:
+        return list(self._collections.keys())
+
+    async def list_rag_collections(self) -> list[str]:
+        return list(self._collections.keys())
+
+    async def get_rag_collection_info(self, collection_name: str) -> dict[str, Any] | None:
+        if collection_name not in self._collections:
+            return None
+        return {
+            "name": collection_name,
+            "document_count": len(self._collections[collection_name]),
+        }
+
+    async def delete_rag_collection(self, collection_name: str, force: bool = False) -> bool:
+        return self._collections.pop(collection_name, None) is not None
+
+    # -- Tier-1: context presets ----------------------------------------- #
+    async def save_context_preset(self, preset: Any) -> None:
+        self._presets[preset.name] = preset
+
+    async def get_context_preset(self, preset_name: str) -> Any:
+        return self._presets.get(preset_name)
+
+    async def list_context_presets(self) -> list[dict[str, Any]]:
+        return [
+            {"name": p.name, "description": p.description, "item_count": len(p.items)}
+            for p in self._presets.values()
+        ]
+
+    async def delete_context_preset(self, preset_name: str) -> bool:
+        return self._presets.pop(preset_name, None) is not None
 
     # -- lifecycle -------------------------------------------------------- #
     async def reload_config(self) -> None:

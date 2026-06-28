@@ -1,0 +1,33 @@
+# In-process (PyO3) Rust binding for llmcore — the B5 "single-binary" track.
+#
+# Unlike `llmcore-client` (which speaks gRPC to the out-of-process bridge), this
+# crate embeds CPython and calls the `llmcore` Python package directly, driving
+# its asyncio coroutines from Rust. It reuses the `llmcore-proto` message types
+# so its public API mirrors the gRPC client (drop-in for Tier-0).
+#
+# Requires at build + run time: a shared libpython (Py_ENABLE_SHARED) and the
+# `llmcore` package importable by that interpreter. Select the interpreter with
+# PYO3_PYTHON at build time.
+[package]
+name = "llmcore-embedded"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+llmcore-proto = { path = "../llmcore-proto" }
+pyo3 = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+pyo3 = { workspace = true }
+
+[[example]]
+name = "embedded_chat"

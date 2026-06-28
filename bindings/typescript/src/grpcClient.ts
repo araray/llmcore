@@ -62,6 +62,51 @@ import {
   VoiceAgentClientEvent,
   type VoiceAgentEvent,
 } from "./gen/llmcore/v1/audio";
+import {
+  AddContextItemRequest,
+  type AddContextItemResponse,
+  type ChatSession,
+  CloneSessionRequest,
+  type CloneSessionResponse,
+  type ContextItem,
+  CreateSessionRequest,
+  DeleteMessagesRequest,
+  type DeleteMessagesResponse,
+  DeleteSessionRequest,
+  ForkSessionRequest,
+  type ForkSessionResponse,
+  GetContextItemRequest,
+  GetMessagesByRangeRequest,
+  type GetMessagesByRangeResponse,
+  GetSessionRequest,
+  ListSessionsRequest,
+  type ListSessionsResponse,
+  RemoveContextItemRequest,
+  type RemoveContextItemResponse,
+  SessionServiceClient,
+  UpdateSessionNameRequest,
+} from "./gen/llmcore/v1/sessions";
+import {
+  AddDocumentsRequest,
+  type AddDocumentsResponse,
+  DeleteRagCollectionRequest,
+  type DeleteRagCollectionResponse,
+  GetRagCollectionInfoRequest,
+  type ListCollectionsResponse,
+  type RagCollectionInfo,
+  SearchVectorStoreRequest,
+  type SearchVectorStoreResponse,
+  VectorServiceClient,
+} from "./gen/llmcore/v1/vector";
+import {
+  type ContextPreset,
+  DeleteContextPresetRequest,
+  type DeleteContextPresetResponse,
+  GetContextPresetRequest,
+  type ListContextPresetsResponse,
+  PresetServiceClient,
+  SaveContextPresetRequest,
+} from "./gen/llmcore/v1/presets";
 
 export interface GrpcClientOptions {
   /** Channel credentials. Defaults to insecure (localhost/dev). */
@@ -131,6 +176,9 @@ export class LlmcoreGrpcClient {
   private readonly catalog: CatalogServiceClient;
   private readonly control: ControlServiceClient;
   private readonly audio: AudioServiceClient;
+  private readonly session: SessionServiceClient;
+  private readonly vector: VectorServiceClient;
+  private readonly preset: PresetServiceClient;
 
   constructor(address: string, options: GrpcClientOptions = {}) {
     const creds = options.credentials ?? ChannelCredentials.createInsecure();
@@ -138,6 +186,9 @@ export class LlmcoreGrpcClient {
     this.catalog = new CatalogServiceClient(address, creds);
     this.control = new ControlServiceClient(address, creds);
     this.audio = new AudioServiceClient(address, creds);
+    this.session = new SessionServiceClient(address, creds);
+    this.vector = new VectorServiceClient(address, creds);
+    this.preset = new PresetServiceClient(address, creds);
   }
 
   private call<Res>(
@@ -283,11 +334,161 @@ export class LlmcoreGrpcClient {
     );
   }
 
+  // -- sessions (Tier 1) ----------------------------------------------- //
+  createSession(req: Partial<CreateSessionRequest> = {}): Promise<ChatSession> {
+    return this.call<ChatSession>((cb) =>
+      this.session.createSession(CreateSessionRequest.fromPartial(req), cb),
+    );
+  }
+
+  getSession(req: Partial<GetSessionRequest>): Promise<ChatSession> {
+    return this.call<ChatSession>((cb) =>
+      this.session.getSession(GetSessionRequest.fromPartial(req), cb),
+    );
+  }
+
+  listSessions(req: Partial<ListSessionsRequest> = {}): Promise<ListSessionsResponse> {
+    return this.call<ListSessionsResponse>((cb) =>
+      this.session.listSessions(ListSessionsRequest.fromPartial(req), cb),
+    );
+  }
+
+  deleteSession(req: Partial<DeleteSessionRequest>): Promise<Empty> {
+    return this.call<Empty>((cb) =>
+      this.session.deleteSession(DeleteSessionRequest.fromPartial(req), cb),
+    );
+  }
+
+  updateSessionName(req: Partial<UpdateSessionNameRequest>): Promise<Empty> {
+    return this.call<Empty>((cb) =>
+      this.session.updateSessionName(UpdateSessionNameRequest.fromPartial(req), cb),
+    );
+  }
+
+  forkSession(req: Partial<ForkSessionRequest>): Promise<ForkSessionResponse> {
+    return this.call<ForkSessionResponse>((cb) =>
+      this.session.forkSession(ForkSessionRequest.fromPartial(req), cb),
+    );
+  }
+
+  cloneSession(req: Partial<CloneSessionRequest>): Promise<CloneSessionResponse> {
+    return this.call<CloneSessionResponse>((cb) =>
+      this.session.cloneSession(CloneSessionRequest.fromPartial(req), cb),
+    );
+  }
+
+  deleteMessages(req: Partial<DeleteMessagesRequest>): Promise<DeleteMessagesResponse> {
+    return this.call<DeleteMessagesResponse>((cb) =>
+      this.session.deleteMessages(DeleteMessagesRequest.fromPartial(req), cb),
+    );
+  }
+
+  getMessagesByRange(
+    req: Partial<GetMessagesByRangeRequest>,
+  ): Promise<GetMessagesByRangeResponse> {
+    return this.call<GetMessagesByRangeResponse>((cb) =>
+      this.session.getMessagesByRange(GetMessagesByRangeRequest.fromPartial(req), cb),
+    );
+  }
+
+  addContextItem(req: Partial<AddContextItemRequest>): Promise<AddContextItemResponse> {
+    return this.call<AddContextItemResponse>((cb) =>
+      this.session.addContextItem(AddContextItemRequest.fromPartial(req), cb),
+    );
+  }
+
+  getContextItem(req: Partial<GetContextItemRequest>): Promise<ContextItem> {
+    return this.call<ContextItem>((cb) =>
+      this.session.getContextItem(GetContextItemRequest.fromPartial(req), cb),
+    );
+  }
+
+  removeContextItem(
+    req: Partial<RemoveContextItemRequest>,
+  ): Promise<RemoveContextItemResponse> {
+    return this.call<RemoveContextItemResponse>((cb) =>
+      this.session.removeContextItem(RemoveContextItemRequest.fromPartial(req), cb),
+    );
+  }
+
+  // -- vector store & RAG (Tier 1) ------------------------------------- //
+  addDocuments(req: Partial<AddDocumentsRequest>): Promise<AddDocumentsResponse> {
+    return this.call<AddDocumentsResponse>((cb) =>
+      this.vector.addDocuments(AddDocumentsRequest.fromPartial(req), cb),
+    );
+  }
+
+  searchVectorStore(
+    req: Partial<SearchVectorStoreRequest>,
+  ): Promise<SearchVectorStoreResponse> {
+    return this.call<SearchVectorStoreResponse>((cb) =>
+      this.vector.searchVectorStore(SearchVectorStoreRequest.fromPartial(req), cb),
+    );
+  }
+
+  listVectorCollections(): Promise<ListCollectionsResponse> {
+    return this.call<ListCollectionsResponse>((cb) =>
+      this.vector.listVectorCollections(Empty.fromPartial({}), cb),
+    );
+  }
+
+  listRagCollections(): Promise<ListCollectionsResponse> {
+    return this.call<ListCollectionsResponse>((cb) =>
+      this.vector.listRagCollections(Empty.fromPartial({}), cb),
+    );
+  }
+
+  getRagCollectionInfo(
+    req: Partial<GetRagCollectionInfoRequest>,
+  ): Promise<RagCollectionInfo> {
+    return this.call<RagCollectionInfo>((cb) =>
+      this.vector.getRagCollectionInfo(GetRagCollectionInfoRequest.fromPartial(req), cb),
+    );
+  }
+
+  deleteRagCollection(
+    req: Partial<DeleteRagCollectionRequest>,
+  ): Promise<DeleteRagCollectionResponse> {
+    return this.call<DeleteRagCollectionResponse>((cb) =>
+      this.vector.deleteRagCollection(DeleteRagCollectionRequest.fromPartial(req), cb),
+    );
+  }
+
+  // -- context presets (Tier 1) ---------------------------------------- //
+  saveContextPreset(req: Partial<SaveContextPresetRequest>): Promise<Empty> {
+    return this.call<Empty>((cb) =>
+      this.preset.saveContextPreset(SaveContextPresetRequest.fromPartial(req), cb),
+    );
+  }
+
+  getContextPreset(req: Partial<GetContextPresetRequest>): Promise<ContextPreset> {
+    return this.call<ContextPreset>((cb) =>
+      this.preset.getContextPreset(GetContextPresetRequest.fromPartial(req), cb),
+    );
+  }
+
+  listContextPresets(): Promise<ListContextPresetsResponse> {
+    return this.call<ListContextPresetsResponse>((cb) =>
+      this.preset.listContextPresets(Empty.fromPartial({}), cb),
+    );
+  }
+
+  deleteContextPreset(
+    req: Partial<DeleteContextPresetRequest>,
+  ): Promise<DeleteContextPresetResponse> {
+    return this.call<DeleteContextPresetResponse>((cb) =>
+      this.preset.deleteContextPreset(DeleteContextPresetRequest.fromPartial(req), cb),
+    );
+  }
+
   /** Close all underlying channels. */
   close(): void {
     this.inference.close();
     this.catalog.close();
     this.control.close();
     this.audio.close();
+    this.session.close();
+    this.vector.close();
+    this.preset.close();
   }
 }

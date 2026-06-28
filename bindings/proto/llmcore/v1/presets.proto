@@ -1,0 +1,58 @@
+// llmcore.v1 — Tier-1 context presets (phase B4).
+//
+// Field numbers are STABLE for the v1 contract. Every message/field/RPC traces
+// to a verified llmcore source symbol (see bindings/contract_map.yaml).
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "google/protobuf/struct.proto";
+import "llmcore/v1/common.proto";  // Empty
+
+// A single preset entry — mirrors llmcore.models.ContextPresetItem (models.py:444).
+// `type` is the ContextItemType str-enum value (e.g. "preset_text_content").
+message ContextPresetItem {
+  string item_id = 1;
+  string type = 2;
+  optional string content = 3;
+  optional string source_identifier = 4;
+  google.protobuf.Struct metadata = 5;
+}
+
+// A reusable context preset — mirrors llmcore.models.ContextPreset (models.py:461).
+message ContextPreset {
+  string name = 1;
+  optional string description = 2;
+  repeated ContextPresetItem items = 3;
+  string created_at = 4;                      // ISO-8601 UTC (server-populated)
+  string updated_at = 5;                      // ISO-8601 UTC (server-populated)
+  google.protobuf.Struct metadata = 6;
+}
+
+message SaveContextPresetRequest {
+  ContextPreset preset = 1;
+}
+
+message GetContextPresetRequest {
+  string preset_name = 1;
+}
+
+// ListContextPresets returns store summaries (LLMCore.list_context_presets ->
+// list[dict]); each summary is a free-form JSON object.
+message ListContextPresetsResponse {
+  repeated google.protobuf.Struct presets = 1;
+}
+
+message DeleteContextPresetRequest {
+  string preset_name = 1;
+}
+message DeleteContextPresetResponse {
+  bool deleted = 1;
+}
+
+service PresetService {
+  rpc SaveContextPreset   (SaveContextPresetRequest)   returns (Empty);                        // LLMCore.save_context_preset
+  rpc GetContextPreset    (GetContextPresetRequest)    returns (ContextPreset);                // LLMCore.get_context_preset
+  rpc ListContextPresets  (Empty)                      returns (ListContextPresetsResponse);   // LLMCore.list_context_presets
+  rpc DeleteContextPreset (DeleteContextPresetRequest) returns (DeleteContextPresetResponse);  // LLMCore.delete_context_preset
+}

@@ -117,6 +117,63 @@ await http.health();                                   // { ok: true }
 HTTP request/response fields are **snake_case** (`provider_name`, `total_tokens`,
 …), matching the bridge's JSON projection.
 
+## Tier-1: sessions, vector store & presets — `LlmcoreGrpcClient`
+
+Stateful RPCs on the gRPC client, available when the bridge advertises
+`tier1.sessions` / `tier1.vector` (real backend, or a fake bridge started with
+`LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1`). Negotiate with
+`ensureCompatible(["tier1.sessions", "tier1.vector"])`. Request fields are
+**camelCase** and filled via `fromPartial`.
+
+```ts
+import { LlmcoreGrpcClient } from "@llmcore/client";
+const client = new LlmcoreGrpcClient("127.0.0.1:50151");
+
+// sessions + context items
+const session = await client.createSession({ name: "demo", systemMessage: "Be terse." });
+const added = await client.addContextItem({
+  sessionId: session.id, content: "launch date is June 30.", type: "user_text",
+});
+const item = await client.getContextItem({ sessionId: session.id, itemId: added.itemId });
+//   item.type, item.content, item.tokens
+await client.listSessions();                              // { sessions: [...] }
+await client.deleteSession({ sessionId: session.id });
+
+// vector store / RAG
+await client.addDocuments({
+  documents: [{ content: "Paris is the capital of France.", metadata: { topic: "geo" } }],
+});
+const hits = await client.searchVectorStore({ query: "capital of France", k: 3 });
+//   hits.documents[].{content, score, metadata}
+
+// context presets
+await client.saveContextPreset({
+  preset: { name: "preamble", items: [{ type: "preset_text_content", content: "Cite sources." }] },
+});
+const preset = await client.getContextPreset({ presetName: "preamble" });
+//   preset.name, preset.items[]
+```
+
+### Method reference (Tier 1, gRPC)
+
+| Group | Methods |
+|---|---|
+| sessions | `createSession`, `getSession`, `listSessions`, `deleteSession`, `updateSessionName`, `forkSession`, `cloneSession`, `deleteMessages`, `getMessagesByRange` |
+| context items | `addContextItem`, `getContextItem`, `removeContextItem` |
+| vector / RAG | `addDocuments`, `searchVectorStore`, `listVectorCollections`, `listRagCollections`, `getRagCollectionInfo`, `deleteRagCollection` |
+| presets | `saveContextPreset`, `getContextPreset`, `listContextPresets`, `deleteContextPreset` |
+
+See `bindings/CONTRACT.md` for the RPC↔`api.py` mapping and the external-RAG
+invariant. Run the full worked flow:
+
+```bash
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+
+LLMCORE_GRPC=127.0.0.1:50151 npx tsx examples/sessions.ts
+```
+
 ## Audio (Tier 2) — `LlmcoreGrpcClient` + `LlmcoreWsAudioClient`
 
 Available when the bridge advertises `tier2.audio` (e.g. a fake bridge started

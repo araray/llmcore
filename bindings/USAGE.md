@@ -76,6 +76,26 @@ The fake echoes prompts (`"echo: <message>"`), computes deterministic token
 usage, and returns real `CostEstimate`/`ModelDetails` objects — no provider keys
 or network required.
 
+Higher tiers are off by default even under the fake (so they stay UNIMPLEMENTED
+unless asked for). Opt into the in-memory Tier-1 / Tier-2 stores with:
+
+| Env var | Enables | Advertised capabilities |
+|---|---|---|
+| `LLMCORE_BRIDGE_FAKE_SESSIONS=1` | in-memory session store | `tier1`, `tier1.sessions` |
+| `LLMCORE_BRIDGE_FAKE_VECTOR=1` | in-memory vector store + presets | `tier1`, `tier1.vector` |
+| `LLMCORE_BRIDGE_FAKE_AUDIO=1` | deterministic audio surface | `tier2`, `tier2.*` |
+
+```bash
+# A bridge that serves Tier-0 inference + the full Tier-1 surface:
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  llmcore-bridge serve --transport grpc,http \
+  --grpc-address 127.0.0.1:50151 --http-address 127.0.0.1:50152 --insecure
+```
+
+This is exactly what the `examples/sessions.*` demos in each client expect.
+Against a **real** `LLMCore`, the same capabilities are advertised automatically
+when the configured backend supports sessions / a vector store.
+
 ### CLI flags
 
 | Flag | Default | Meaning |
@@ -141,6 +161,38 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 {"error":{"category":"ERROR_CATEGORY_UNSUPPORTED","code":"unsupported.capability",
           "message":"Embed is not available in llmcore.v1: ...","http_status":501}}
 ```
+
+## Tier-1: sessions, vector store, and presets (HTTP)
+
+With a bridge started using the Tier-1 fake gates above (`curl` against the HTTP
+projection; gRPC clients call the same `SessionService` / `VectorService` /
+`PresetService` RPCs):
+
+```bash
+H=http://127.0.0.1:50152
+
+# create a session with a system message
+SID=$(curl -s -X POST $H/llmcore.v1/SessionService/CreateSession \
+  -d '{"name":"demo","system_message":"You are terse."}' | jq -r .id)
+
+# stage a context item, then read it back
+curl -s -X POST $H/llmcore.v1/SessionService/AddContextItem \
+  -d "{\"session_id\":\"$SID\",\"content\":\"launch is June 30\",\"type\":\"user_text\"}"
+
+# index a document and search the vector store directly (no chat-time RAG)
+curl -s -X POST $H/llmcore.v1/VectorService/AddDocuments \
+  -d '{"documents":[{"content":"Paris is the capital of France."}]}'
+curl -s -X POST $H/llmcore.v1/VectorService/SearchVectorStore \
+  -d '{"query":"capital of France","k":3}'
+
+# save + fetch a reusable context preset
+curl -s -X POST $H/llmcore.v1/PresetService/SaveContextPreset \
+  -d '{"preset":{"name":"preamble","items":[{"type":"preset_text_content","content":"Cite sources."}]}}'
+curl -s -X POST $H/llmcore.v1/PresetService/GetContextPreset -d '{"preset_name":"preamble"}'
+```
+
+Each client ships an idiomatic version of this flow at `examples/sessions.*`
+(Go/Rust/TS/C++ over gRPC, C over HTTP).
 
 ## Common workflows
 
