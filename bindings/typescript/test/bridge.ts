@@ -74,6 +74,8 @@ async function waitGrpcReady(grpcAddress: string, timeoutMs = 25_000): Promise<v
 export interface StartBridgeOptions {
   /** Enable the Tier-2 fake audio surface (advertises tier2.audio + audio.*). */
   audio?: boolean;
+  /** Enable the Tier-1 fake sessions + vector stores (advertises tier1.*). */
+  sessions?: boolean;
 }
 
 export async function startBridge(opts: StartBridgeOptions = {}): Promise<BridgeHandle> {
@@ -85,6 +87,10 @@ export async function startBridge(opts: StartBridgeOptions = {}): Promise<Bridge
 
   const env: NodeJS.ProcessEnv = { ...process.env, LLMCORE_BRIDGE_FAKE: "1" };
   if (opts.audio) env.LLMCORE_BRIDGE_FAKE_AUDIO = "1";
+  if (opts.sessions) {
+    env.LLMCORE_BRIDGE_FAKE_SESSIONS = "1";
+    env.LLMCORE_BRIDGE_FAKE_VECTOR = "1";
+  }
 
   const proc: ChildProcess = spawn(
     python,
