@@ -81,6 +81,76 @@ client->ListModels("openai");         // .models(i)
 client->GetProviderDetails("openai"); // llmcore::v1::ModelDetails
 ```
 
+## Sessions, vector store & presets (Tier 1)
+
+Available when the bridge advertises `tier1.sessions` (sessions + context items)
+and/or `tier1.vector` (vector store + RAG); negotiate with
+`client->EnsureCompatible({"tier1.sessions", "tier1.vector"})`. The fake backend
+gates these behind `LLMCORE_BRIDGE_FAKE_SESSIONS=1` / `LLMCORE_BRIDGE_FAKE_VECTOR=1`.
+See `examples/sessions.cpp` for a runnable end-to-end demo.
+
+### Sessions & context items
+
+```cpp
+llmcore::v1::CreateSessionRequest creq;
+creq.set_name("demo-session");
+creq.set_system_message("You are a terse assistant.");
+auto session = client->CreateSession(creq);       // .id(), .messages(i), .messages_size()
+
+llmcore::v1::AddContextItemRequest areq;
+areq.set_session_id(session.id());
+areq.set_content("Remember: the launch date is June 30.");
+areq.set_type("user_text");
+auto added = client->AddContextItem(areq);         // .item_id()
+
+llmcore::v1::GetContextItemRequest greq;
+greq.set_session_id(session.id());
+greq.set_item_id(added.item_id());
+auto item = client->GetContextItem(greq);          // .type(), .content()
+
+// also: ListSessions, GetSession, UpdateSessionName, ForkSession, CloneSession,
+// DeleteMessages, GetMessagesByRange, RemoveContextItem, DeleteSession.
+llmcore::v1::DeleteSessionRequest delreq;
+delreq.set_session_id(session.id());
+client->DeleteSession(delreq);
+```
+
+### Vector store & RAG
+
+```cpp
+llmcore::v1::AddDocumentsRequest dreq;             // documents are google.protobuf.Struct
+(*dreq.add_documents()->mutable_fields())["content"].set_string_value(
+    "Paris is the capital of France.");
+client->AddDocuments(dreq);
+
+llmcore::v1::SearchVectorStoreRequest sreq;
+sreq.set_query("capital of France");
+sreq.set_k(3);
+auto hits = client->SearchVectorStore(sreq);
+for (const auto& d : hits.documents())
+  std::cout << d.score() << " " << d.content() << "\n";
+
+client->ListVectorCollections();                   // also ListRagCollections,
+                                                   // GetRagCollectionInfo, DeleteRagCollection
+```
+
+### Context presets
+
+```cpp
+llmcore::v1::SaveContextPresetRequest preq;
+auto* preset = preq.mutable_preset();
+preset->set_name("preamble");
+auto* pi = preset->add_items();
+pi->set_type("preset_text_content");
+pi->set_content("Always cite sources.");
+client->SaveContextPreset(preq);
+
+llmcore::v1::GetContextPresetRequest gpreq;
+gpreq.set_preset_name("preamble");
+auto got = client->GetContextPreset(gpreq);        // .name(), .items(i), .items_size()
+// also: ListContextPresets, DeleteContextPreset.
+```
+
 ## Audio (Tier 2)
 
 Available when the bridge advertises `tier2.audio`; negotiate with

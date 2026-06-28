@@ -6,20 +6,31 @@ a faithful secondary projection of the same messages.
 
 ## Services and methods
 
-| Service | RPC | Kind | Backing facade symbol | B1 |
+| Service | RPC | Kind | Backing facade symbol | Tier / phase |
 |---|---|---|---|:--:|
-| `InferenceService` | `Chat` | unary | `LLMCore.chat_with_usage` (api.py:1254) | ✅ |
-| | `ChatStream` | server-stream | `LLMCore.chat(stream=True)` (api.py:928) | ✅ |
+| `InferenceService` | `Chat` | unary | `LLMCore.chat_with_usage` (api.py) | T0 ✅ |
+| | `ChatStream` | server-stream | `LLMCore.chat(stream=True)` (api.py) | T0 ✅ |
 | | `Embed` | unary | *(no public path)* | ⛔ UNIMPLEMENTED |
-| | `CountTokens` | unary | `llmcore.count_tokens` (tokens.py:63) | ✅ |
-| | `EstimateCost` | unary | `LLMCore.estimate_cost` (api.py:1702) | ✅ |
-| `CatalogService` | `ListProviders` | unary | `LLMCore.get_available_providers` (api.py:598) | ✅ |
-| | `ListModels` | unary | `LLMCore.get_models_for_provider` (api.py:3078) | ✅ |
-| | `GetProviderDetails` | unary | `LLMCore.get_provider_details` (api.py:906) | ✅ |
-| `ControlService` | `GetInfo` | unary | bridge-assembled `ServerInfo` | ✅ |
-| | `Health` | unary | bridge | ✅ |
-| | `ReloadConfig` | unary | `LLMCore.reload_config` (api.py:541) | ✅ |
-| `AudioService` | (8 RPCs) | unary + bidi | multimodal/Deepgram surface | 🧩 designed, B3 |
+| | `CountTokens` | unary | `llmcore.count_tokens` (tokens.py) | T0 ✅ |
+| | `EstimateCost` | unary | `LLMCore.estimate_cost` (api.py) | T0 ✅ |
+| `CatalogService` | `ListProviders` | unary | `LLMCore.get_available_providers` (api.py) | T0 ✅ |
+| | `ListModels` | unary | `LLMCore.get_models_for_provider` (api.py) | T0 ✅ |
+| | `GetProviderDetails` | unary | `LLMCore.get_provider_details` (api.py) | T0 ✅ |
+| `ControlService` | `GetInfo` | unary | bridge-assembled `ServerInfo` | T0 ✅ |
+| | `Health` | unary | bridge | T0 ✅ |
+| | `ReloadConfig` | unary | `LLMCore.reload_config` (api.py) | T0 ✅ |
+| `AudioService` | (8 RPCs) | unary + bidi | multimodal/Deepgram surface | T2 ✅ (B3) |
+| `SessionService` | `CreateSession`/`GetSession`/`ListSessions`/`DeleteSession`/`UpdateSessionName` | unary | `LLMCore.{create,get,list,delete,update_session_name}_session` (api.py) | T1 ✅ (B4) |
+| | `ForkSession`/`CloneSession`/`DeleteMessages`/`GetMessagesByRange` | unary | `LLMCore.{fork,clone}_session` / `delete_messages` / `get_messages_by_range` (api.py) | T1 ✅ (B4) |
+| | `AddContextItem`/`GetContextItem`/`RemoveContextItem` | unary | `LLMCore.{add,get,remove}_context_item` (api.py) | T1 ✅ (B4) |
+| `VectorService` | `AddDocuments`/`SearchVectorStore` | unary | `LLMCore.{add_documents_to_vector_store,search_vector_store}` (api.py) | T1 ✅ (B4) |
+| | `ListVectorCollections`/`ListRagCollections`/`GetRagCollectionInfo`/`DeleteRagCollection` | unary | `LLMCore.{list_vector_collections,list_rag_collections,get_rag_collection_info,delete_rag_collection}` (api.py) | T1 ✅ (B4) |
+| `PresetService` | `SaveContextPreset`/`GetContextPreset`/`ListContextPresets`/`DeleteContextPreset` | unary | `LLMCore.{save,get,list,delete}_context_preset` (api.py) | T1 ✅ (B4) |
+
+> **External-RAG invariant.** `VectorService` operates the vector store
+> *directly* (add/search/manage). It never triggers chat-time retrieval — `Chat`
+> keeps `enable_rag=false`. Callers stage context explicitly via `SessionService`
+> / `VectorService`, matching llmcore's design.
 
 ## HTTP projection
 

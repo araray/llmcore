@@ -77,23 +77,33 @@ path for Rust is a deliberate, separate later track — phase B5.)
 | Phase | Contents | Status |
 |------:|----------|--------|
 | **B0** | Architecture spec (`LLMCORE_BINDINGS_SPEC.md`) | ✅ delivered |
-| **B1** | Proto contract (T0+T2) · Python bridge (gRPC + HTTP/SSE) · contract guard · golden e2e | ✅ **this deliverable** |
-| B2 | Foreign-language clients (C/C++/Rust/Go/TS) generated from `proto/` | ⏳ next |
-| B3 | Tier-2 audio: one-shot + duplex (gRPC bidi + HTTP-WS) | ⏳ |
-| B4 | Tier-1 sessions/vector store | ⏳ |
-| B5 | In-process PyO3 Rust binding | ⏳ |
+| **B1** | Proto contract (T0+T2) · Python bridge (gRPC + HTTP/SSE) · contract guard · golden e2e | ✅ delivered |
+| **B2** | Foreign-language clients (C/C++/Rust/Go/TS) generated from `proto/` | ✅ delivered |
+| **B3** | Tier-2 audio: one-shot + duplex (gRPC bidi + HTTP-WS) | ✅ delivered |
+| **B4** | Tier-1 sessions/vector store/presets | ✅ delivered |
+| B5 | In-process PyO3 Rust binding | ⏳ next |
 
-### What B1 implements (Tier 0)
+### What's implemented
 
-`Chat`, `ChatStream`, `CountTokens`, `EstimateCost`, `ListProviders`,
-`ListModels`, `GetProviderDetails`, `GetInfo`, `Health`, `ReloadConfig`.
+**Tier 0 (inference)** — `Chat`, `ChatStream`, `CountTokens`, `EstimateCost`,
+`ListProviders`, `ListModels`, `GetProviderDetails`, `GetInfo`, `Health`,
+`ReloadConfig`.
+
+**Tier 2 (audio, B3)** — one-shot transcription/synthesis plus live duplex
+(gRPC bidi streaming · HTTP-WebSocket), gated behind `tier2.*` capabilities.
+
+**Tier 1 (sessions / vector / presets, B4)** — full session CRUD (create, get,
+list, delete, rename, fork, clone, message range/delete), context items
+(add/get/remove), a direct vector store (add documents, search, list/manage
+collections), and context presets (save/get/list/delete). Gated behind
+`tier1.sessions` / `tier1.vector` capabilities. See [`CONTRACT.md`](CONTRACT.md)
+for the full RPC list and each client's `examples/sessions.*` for a runnable demo.
 
 `Embed` is part of the contract but returns **UNIMPLEMENTED**: `LLMCore` exposes
 no public embeddings method in this release (the provider-level
 `create_embeddings` sits behind the private provider manager, and reaching into
 internals would violate the public-surface rule). It is enabled in a later phase
-once a public path exists. `AudioService` is **designed** in the contract but
-returns UNIMPLEMENTED until B3.
+once a public path exists.
 
 ## Setup
 

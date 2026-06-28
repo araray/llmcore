@@ -1,9 +1,10 @@
 # llmcore C client
 
 C client for the **llmcore bridge** over its **HTTP + SSE** transport (JSON wire),
-built on **libcurl** + **cJSON**. Tier 0 plus the **Tier-2 audio one-shot (unary)
-RPCs** — per decision **D6**, the duplex audio path in C (WebSocket/gRPC) is
-reserved for a later phase. Depends only on the contract.
+built on **libcurl** + **cJSON**. Tier 0, the **Tier-1 sessions / vector store /
+presets** surface, plus the **Tier-2 audio one-shot (unary) RPCs** — per decision
+**D6**, the duplex audio path in C (WebSocket/gRPC) is reserved for a later phase.
+Depends only on the contract (see **../CONTRACT.md**).
 
 > **Build status / sandbox note.** The C source is complete and passes
 > `gcc -std=c11 -Wall -Wextra -fsyntax-only` against minimal stub headers, but it
@@ -14,12 +15,24 @@ reserved for a later phase. Depends only on the contract.
 
 ## Prerequisites
 
+**libcurl** is the only required system dev package:
+
 ```bash
-apt install libcurl4-openssl-dev libcjson-dev   # Debian/Ubuntu
-# Fedora: dnf install libcurl-devel cjson-devel
-# macOS:  brew install curl cjson
+apt install libcurl4-openssl-dev   # Debian/Ubuntu
+# Fedora: dnf install libcurl-devel
+# macOS:  brew install curl
 ```
-Plus a C11 compiler and either CMake ≥ 3.16 or GNU make + pkg-config.
+
+**cJSON is resolved automatically** — no system package is needed. An installed
+cJSON (CMake config, or pkg-config `libcjson`: `apt install libcjson-dev`) is used
+when present; otherwise cJSON is fetched and built from source via CMake
+`FetchContent`. It is a single small translation unit, so this adds only seconds to
+the build. Force the fetch with `-DLLMCORE_FETCH_CJSON=ON`, or pin a tag with
+`-DLLMCORE_CJSON_TAG=vX.Y.Z`. Plain `cmake -B build && cmake --build build` works
+out of the box.
+
+Plus a C11 compiler and either CMake ≥ 3.16 or GNU make + pkg-config (the plain
+`make` build still expects an installed cJSON).
 
 ## Build & test
 
@@ -70,6 +83,48 @@ ownership rules, error fields, and TLS guidance.
 `llmcore_estimate_cost`, `llmcore_list_providers`, `llmcore_list_models`,
 `llmcore_ensure_compatible`, `llmcore_health`. `llmcore_embed` always returns an
 UNSUPPORTED error (Embed is UNIMPLEMENTED in `llmcore.v1`).
+
+## Surface (Tier 1 — sessions, vector store & presets)
+
+Available when the bridge advertises `tier1.sessions` and/or `tier1.vector`;
+negotiate with `llmcore_ensure_compatible(c, (const char*[]){"tier1.sessions",
+"tier1.vector"}, 2)`. The C client drives these over the same HTTP transport.
+
+* **Sessions & context items** — `llmcore_create_session`, `llmcore_get_session`,
+  `llmcore_list_sessions`, `llmcore_delete_session`, `llmcore_update_session_name`,
+  `llmcore_fork_session`, `llmcore_clone_session`, `llmcore_delete_messages`;
+  `llmcore_add_context_item`, `llmcore_get_context_item`,
+  `llmcore_remove_context_item`. Results fill `llmcore_session` /
+  `llmcore_context_item` (freed with `llmcore_session_free` /
+  `llmcore_context_item_free`).
+* **Vector store & RAG** — `llmcore_add_documents`, `llmcore_search_vector_store`
+  (fills a `llmcore_search_result[]`, freed with `llmcore_search_results_free`),
+  `llmcore_list_vector_collections`, `llmcore_list_rag_collections`,
+  `llmcore_get_rag_collection_info`, `llmcore_delete_rag_collection`.
+* **Context presets** — `llmcore_save_context_preset`,
+  `llmcore_get_context_preset` (fills `llmcore_preset`, freed with
+  `llmcore_preset_free`), `llmcore_list_context_presets`,
+  `llmcore_delete_context_preset`.
+
+See `examples/sessions.c` for an end-to-end walkthrough and **USAGE.md** for the
+calling and ownership details.
+
+### Running the Tier-1 example
+
+Start a bridge over HTTP with the Tier-1 fakes gated on:
+
+```bash
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport http \
+  --http-address 127.0.0.1:50152 --insecure
+```
+
+Then build and run the example:
+
+```bash
+cmake -B build && cmake --build build -j
+LLMCORE_HTTP=http://127.0.0.1:50152 ./build/sessions
+```
 
 ## Surface (Tier 2 — audio, unary)
 

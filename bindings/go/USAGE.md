@@ -95,6 +95,54 @@ c.ListModels(ctx, "openai")          // GetModels()    []string
 c.GetProviderDetails(ctx, "openai")  // *llmcorev1.ModelDetails
 ```
 
+## Sessions, vector store & presets (Tier 1)
+
+Available when the bridge advertises `tier1.sessions` (sessions, context items,
+presets) and/or `tier1.vector` (vector store / RAG); negotiate with
+`c.EnsureCompatible(ctx, "tier1.sessions", "tier1.vector")`. With the fake
+backend, enable the stores via `LLMCORE_BRIDGE_FAKE_SESSIONS=1` and
+`LLMCORE_BRIDGE_FAKE_VECTOR=1` on the bridge.
+
+```go
+// Sessions + context items
+s, _ := c.CreateSession(ctx, &llmcorev1.CreateSessionRequest{Name: proto.String("demo")})
+add, _ := c.AddContextItem(ctx, &llmcorev1.AddContextItemRequest{
+	SessionId: s.GetId(), Content: "launch date is June 30.", Type: proto.String("user_text"),
+})
+item, _ := c.GetContextItem(ctx, &llmcorev1.GetContextItemRequest{
+	SessionId: s.GetId(), ItemId: add.GetItemId(),
+})
+_ = item.GetContent()
+// also: GetSession, ListSessions, UpdateSessionName, ForkSession, CloneSession,
+//       DeleteMessages, GetMessagesByRange, RemoveContextItem, DeleteSession.
+
+// Vector store / RAG
+doc, _ := structpb.NewStruct(map[string]any{"content": "Paris is the capital of France."})
+ids, _ := c.AddDocuments(ctx, &llmcorev1.AddDocumentsRequest{Documents: []*structpb.Struct{doc}})
+hits, _ := c.SearchVectorStore(ctx, &llmcorev1.SearchVectorStoreRequest{Query: "capital of France", K: 3})
+for _, d := range hits.GetDocuments() { fmt.Printf("%.3f %q\n", d.GetScore(), d.GetContent()) }
+_ = ids.GetIds()
+// also: ListVectorCollections, ListRagCollections, GetRagCollectionInfo, DeleteRagCollection.
+
+// Context presets
+_, _ = c.SaveContextPreset(ctx, &llmcorev1.SaveContextPresetRequest{Preset: &llmcorev1.ContextPreset{
+	Name:  "preamble",
+	Items: []*llmcorev1.ContextPresetItem{{Type: "preset_text_content", Content: proto.String("Always cite sources.")}},
+}})
+p, _ := c.GetContextPreset(ctx, &llmcorev1.GetContextPresetRequest{PresetName: "preamble"})
+_ = p.GetItems()
+// also: ListContextPresets, DeleteContextPreset.
+```
+
+A full runnable demo lives in `examples/sessions`:
+
+```bash
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+LLMCORE_GRPC=127.0.0.1:50151 GOFLAGS=-mod=mod go run ./examples/sessions
+```
+
 ## Audio (Tier 2)
 
 Available when the bridge advertises `tier2.audio`; negotiate with

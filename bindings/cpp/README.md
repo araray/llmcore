@@ -3,27 +3,33 @@
 C++ client for the **llmcore bridge** over gRPC, generated from the frozen
 `llmcore.v1` contract. Depends only on the contract, never on Python.
 
-> **Build status / sandbox note.** This was **not compiled in the authoring
-> sandbox**: gRPC/Protobuf development packages (and `protoc`) were unavailable
-> and unfetchable there (gcc/g++ 13 *are* present). The code is written against
-> the stable gRPC C++ API and every referenced proto symbol was verified against
-> the `.proto` sources. Build + test it with CMake as below.
+> **Build.** `cmake -B build && cmake --build build -j` works out of the box: if
+> gRPC isn't installed it is fetched and built from source (see
+> [Prerequisites](#prerequisites)). The Tier-1 `sessions` example below was built
+> and run against a fake bridge.
 
 ## Prerequisites
 
-* CMake ≥ 3.16, a C++17 compiler.
-* gRPC + Protobuf with CMake config, `protoc`, and `grpc_cpp_plugin`:
-  ```bash
-  apt install protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libprotobuf-dev
-  # or build gRPC from source; vcpkg ("grpc") / conan also work.
-  ```
+* CMake ≥ 3.16, a C++17 compiler, and (for the source-build fallback) network
+  access.
+* **gRPC + Protobuf are resolved automatically** — no system packages required:
+  * If an installed gRPC CMake config is found, it is used (fastest), e.g.
+    `apt install protobuf-compiler protobuf-compiler-grpc libgrpc++-dev
+    libprotobuf-dev`, `brew install grpc`, or vcpkg/conan.
+  * Otherwise gRPC (with its bundled protobuf, abseil, and `grpc_cpp_plugin`) is
+    fetched and **built from source** via CMake `FetchContent` — just a compiler
+    and a network. The first configure is slow because gRPC is large, but the
+    build then works on any machine out of the box.
+  * Force the source build with `-DLLMCORE_FETCH_GRPC=ON`; pin the version with
+    `-DLLMCORE_GRPC_TAG=vX.Y.Z`.
 
 ## Build & test
 
+The plain build works with no flags:
+
 ```bash
 cd bindings/cpp
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake -B build && cmake --build build -j
 # e2e spawns a real bridge; point at a python with llmcore[bridge]:
 export LLMCORE_BRIDGE_PYTHON=/path/to/venv/bin/python
 ctest --test-dir build --output-on-failure
@@ -63,6 +69,39 @@ fields, and cancellation.
 `ListProviders`, `ListModels`, `GetProviderDetails`, `GetInfo` /
 `EnsureCompatible`, `Health`, `ReloadConfig`. `Embed(...)` throws
 `BridgeError` (UNSUPPORTED) — Embed is UNIMPLEMENTED in `llmcore.v1`.
+
+## Surface (Tier 1 — sessions, vector store & presets)
+
+Available when the bridge advertises `tier1.sessions` (sessions + context items)
+and/or `tier1.vector` (vector store + RAG); negotiate with
+`client->EnsureCompatible({"tier1.sessions", "tier1.vector"})`. All return
+generated `llmcore::v1::*` types by value and throw `BridgeError`.
+
+* **Sessions:** `CreateSession`, `GetSession`, `ListSessions`, `DeleteSession`,
+  `UpdateSessionName`, `ForkSession`, `CloneSession`, `DeleteMessages`,
+  `GetMessagesByRange`.
+* **Context items:** `AddContextItem`, `GetContextItem`, `RemoveContextItem`.
+* **Vector store & RAG:** `AddDocuments`, `SearchVectorStore`,
+  `ListVectorCollections`, `ListRagCollections`, `GetRagCollectionInfo`,
+  `DeleteRagCollection`.
+* **Context presets:** `SaveContextPreset`, `GetContextPreset`,
+  `ListContextPresets`, `DeleteContextPreset`.
+
+The fake backend gates these behind `LLMCORE_BRIDGE_FAKE_SESSIONS=1` and
+`LLMCORE_BRIDGE_FAKE_VECTOR=1`. Run the end-to-end demo (`examples/sessions.cpp`):
+
+```bash
+# 1. serve a fake bridge that advertises tier1.sessions + tier1.vector
+LLMCORE_BRIDGE_FAKE=1 LLMCORE_BRIDGE_FAKE_SESSIONS=1 LLMCORE_BRIDGE_FAKE_VECTOR=1 \
+  python -m llmcore.bridge.cli serve --transport grpc \
+  --grpc-address 127.0.0.1:50151 --insecure
+
+# 2. build + run
+cmake -B build && cmake --build build -j
+LLMCORE_GRPC=127.0.0.1:50151 ./build/sessions
+```
+
+See **USAGE.md** for per-method field details.
 
 ## Surface (Tier 2 — audio)
 
