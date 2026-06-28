@@ -85,6 +85,74 @@ class LLMCoreFacade(Protocol):
         # one-shot generate_speech / transcribe_audio / generate_image / ocr).
         ...
 
+    # -- Tier-1: sessions & context items (api.py) ----------------------- #
+    async def create_session(
+        self,
+        session_id: str | None = ...,
+        name: str | None = ...,
+        system_message: str | None = ...,
+    ) -> Any:
+        ...
+
+    async def get_session(self, session_id: str) -> Any:
+        ...
+
+    async def list_sessions(self, limit: int | None = ...) -> list[Any]:
+        ...
+
+    async def delete_session(self, session_id: str) -> None:
+        ...
+
+    async def update_session_name(self, session_id: str, new_name: str) -> None:
+        ...
+
+    async def fork_session(
+        self,
+        session_id: str,
+        *,
+        new_name: str | None = ...,
+        from_message_id: str | None = ...,
+        message_ids: list[str] | None = ...,
+        message_range: tuple[int, int] | None = ...,
+        include_context_items: bool = ...,
+        metadata: dict[str, Any] | None = ...,
+    ) -> str:
+        ...
+
+    async def clone_session(
+        self,
+        session_id: str,
+        new_name: str | None = ...,
+        *,
+        include_messages: bool = ...,
+        include_context_items: bool = ...,
+    ) -> str:
+        ...
+
+    async def delete_messages(self, session_id: str, message_ids: list[str]) -> int:
+        ...
+
+    async def get_messages_by_range(
+        self, session_id: str, start_index: int, end_index: int
+    ) -> list[Any]:
+        ...
+
+    async def add_context_item(
+        self,
+        session_id: str,
+        content: str,
+        item_type: Any = ...,
+        source_id: str | None = ...,
+        metadata: dict[str, Any] | None = ...,
+    ) -> str:
+        ...
+
+    async def get_context_item(self, session_id: str, item_id: str) -> Any:
+        ...
+
+    async def remove_context_item(self, session_id: str, item_id: str) -> bool:
+        ...
+
     async def reload_config(self) -> None:
         ...
 

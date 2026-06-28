@@ -23,8 +23,15 @@ from ._generated.llmcore.v1 import (
     common_pb2,
     control_pb2,
     inference_pb2,
+    sessions_pb2,
 )
-from .errors import BridgeError, invalid_argument, map_exception, unsupported
+from .errors import (
+    BridgeError,
+    invalid_argument,
+    map_exception,
+    not_found,
+    unsupported,
+)
 from .facade import LLMCoreFacade
 from .info import audio_capable, build_server_info
 
@@ -145,6 +152,88 @@ def _model_details_to_proto(m: Any) -> catalog_pb2.ModelDetails:
             # Metadata held a non-JSON value; skip rather than fail the call.
             pass
     return p
+
+
+# -- SessionService (Tier 1) helpers ---------------------------------------- #
+_ROLE_TO_PROTO: dict[str, int] = {
+    "system": common_pb2.ROLE_SYSTEM,
+    "user": common_pb2.ROLE_USER,
+    "assistant": common_pb2.ROLE_ASSISTANT,
+    "tool": common_pb2.ROLE_TOOL,
+}
+
+
+def _iso(ts: Any) -> str:
+    """Serialize a datetime (or pass through a string) to ISO-8601 UTC."""
+    if ts is None:
+        return ""
+    if isinstance(ts, str):
+        return ts
+    iso = getattr(ts, "isoformat", None)
+    if callable(iso):
+        return iso().replace("+00:00", "Z")
+    return str(ts)
+
+
+def _set_struct(target: struct_pb2.Struct, data: Any) -> None:
+    """Populate a Struct field from a dict, skipping non-JSON values."""
+    if data:
+        try:
+            target.update(_json_safe(data))
+        except (TypeError, ValueError):
+            pass
+
+
+def _message_to_proto(m: Any) -> common_pb2.Message:
+    role = getattr(m, "role", None)
+    role_str = getattr(role, "value", role)
+    out = common_pb2.Message(
+        id=getattr(m, "id", "") or "",
+        session_id=getattr(m, "session_id", "") or "",
+        role=_ROLE_TO_PROTO.get(str(role_str), common_pb2.ROLE_UNSPECIFIED),
+        content=getattr(m, "content", "") or "",
+        timestamp=_iso(getattr(m, "timestamp", None)),
+        tool_call_id=getattr(m, "tool_call_id", "") or "",
+        tokens=int(getattr(m, "tokens", 0) or 0),
+    )
+    _set_struct(out.metadata, getattr(m, "metadata", None))
+    return out
+
+
+def _context_item_to_proto(ci: Any) -> sessions_pb2.ContextItem:
+    t = getattr(ci, "type", None)
+    t_str = getattr(t, "value", t)
+    out = sessions_pb2.ContextItem(
+        id=getattr(ci, "id", "") or "",
+        type=str(t_str) if t_str is not None else "",
+        content=getattr(ci, "content", "") or "",
+        is_truncated=bool(getattr(ci, "is_truncated", False)),
+        timestamp=_iso(getattr(ci, "timestamp", None)),
+    )
+    if getattr(ci, "source_id", None) is not None:
+        out.source_id = ci.source_id
+    if getattr(ci, "tokens", None) is not None:
+        out.tokens = ci.tokens
+    if getattr(ci, "original_tokens", None) is not None:
+        out.original_tokens = ci.original_tokens
+    _set_struct(out.metadata, getattr(ci, "metadata", None))
+    return out
+
+
+def _chat_session_to_proto(s: Any) -> sessions_pb2.ChatSession:
+    out = sessions_pb2.ChatSession(
+        id=getattr(s, "id", "") or "",
+        created_at=_iso(getattr(s, "created_at", None)),
+        updated_at=_iso(getattr(s, "updated_at", None)),
+    )
+    if getattr(s, "name", None) is not None:
+        out.name = s.name
+    for m in getattr(s, "messages", None) or []:
+        out.messages.append(_message_to_proto(m))
+    for ci in getattr(s, "context_items", None) or []:
+        out.context_items.append(_context_item_to_proto(ci))
+    _set_struct(out.metadata, getattr(s, "metadata", None))
+    return out
 
 
 # -- AudioService (Tier 2) helpers ------------------------------------------ #
@@ -609,6 +698,161 @@ class BridgeCore:
         except Exception as exc:
             raise map_exception(exc) from exc
         return control_pb2.ReloadConfigResponse(ok=True)
+
+    # -- SessionService (Tier 1) ------------------------------------------ #
+    async def create_session(
+        self, req: sessions_pb2.CreateSessionRequest
+    ) -> sessions_pb2.ChatSession:
+        try:
+            s = await self._facade.create_session(
+                session_id=_opt(req, "session_id"),
+                name=_opt(req, "name"),
+                system_message=_opt(req, "system_message"),
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _chat_session_to_proto(s)
+
+    async def get_session(
+        self, req: sessions_pb2.GetSessionRequest
+    ) -> sessions_pb2.ChatSession:
+        try:
+            s = await self._facade.get_session(req.session_id)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return _chat_session_to_proto(s)
+
+    async def list_sessions(
+        self, req: sessions_pb2.ListSessionsRequest
+    ) -> sessions_pb2.ListSessionsResponse:
+        try:
+            sessions = await self._facade.list_sessions(limit=_opt(req, "limit"))
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        out = sessions_pb2.ListSessionsResponse()
+        for s in sessions or []:
+            out.sessions.append(_chat_session_to_proto(s))
+        return out
+
+    async def delete_session(
+        self, req: sessions_pb2.DeleteSessionRequest
+    ) -> common_pb2.Empty:
+        try:
+            await self._facade.delete_session(req.session_id)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return common_pb2.Empty()
+
+    async def update_session_name(
+        self, req: sessions_pb2.UpdateSessionNameRequest
+    ) -> common_pb2.Empty:
+        try:
+            await self._facade.update_session_name(req.session_id, req.new_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return common_pb2.Empty()
+
+    async def fork_session(
+        self, req: sessions_pb2.ForkSessionRequest
+    ) -> sessions_pb2.ForkSessionResponse:
+        message_range = None
+        if req.HasField("message_range"):
+            message_range = (req.message_range.start, req.message_range.end)
+        try:
+            new_id = await self._facade.fork_session(
+                req.session_id,
+                new_name=_opt(req, "new_name"),
+                from_message_id=_opt(req, "from_message_id"),
+                message_ids=list(req.message_ids) or None,
+                message_range=message_range,
+                include_context_items=req.include_context_items,
+                metadata=self._kwargs(req.metadata) or None,
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return sessions_pb2.ForkSessionResponse(session_id=new_id)
+
+    async def clone_session(
+        self, req: sessions_pb2.CloneSessionRequest
+    ) -> sessions_pb2.CloneSessionResponse:
+        try:
+            new_id = await self._facade.clone_session(
+                req.session_id,
+                new_name=_opt(req, "new_name"),
+                include_messages=req.include_messages,
+                include_context_items=req.include_context_items,
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return sessions_pb2.CloneSessionResponse(session_id=new_id)
+
+    async def delete_messages(
+        self, req: sessions_pb2.DeleteMessagesRequest
+    ) -> sessions_pb2.DeleteMessagesResponse:
+        try:
+            n = await self._facade.delete_messages(req.session_id, list(req.message_ids))
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return sessions_pb2.DeleteMessagesResponse(deleted_count=int(n))
+
+    async def get_messages_by_range(
+        self, req: sessions_pb2.GetMessagesByRangeRequest
+    ) -> sessions_pb2.GetMessagesByRangeResponse:
+        try:
+            msgs = await self._facade.get_messages_by_range(
+                req.session_id, req.start_index, req.end_index
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        out = sessions_pb2.GetMessagesByRangeResponse()
+        for m in msgs or []:
+            out.messages.append(_message_to_proto(m))
+        return out
+
+    async def add_context_item(
+        self, req: sessions_pb2.AddContextItemRequest
+    ) -> sessions_pb2.AddContextItemResponse:
+        from llmcore.models import ContextItemType  # lazy import by design
+
+        type_value = _opt(req, "type") or "user_text"
+        try:
+            item_type = ContextItemType(type_value)
+        except ValueError as exc:
+            raise invalid_argument(f"unknown context item type: {type_value!r}") from exc
+        try:
+            item_id = await self._facade.add_context_item(
+                req.session_id,
+                req.content,
+                item_type=item_type,
+                source_id=_opt(req, "source_id"),
+                metadata=self._kwargs(req.metadata) or None,
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return sessions_pb2.AddContextItemResponse(item_id=item_id)
+
+    async def get_context_item(
+        self, req: sessions_pb2.GetContextItemRequest
+    ) -> sessions_pb2.ContextItem:
+        try:
+            ci = await self._facade.get_context_item(req.session_id, req.item_id)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if ci is None:
+            raise not_found(
+                f"context item {req.item_id!r} not found in session {req.session_id!r}",
+                code="not_found.context_item",
+            )
+        return _context_item_to_proto(ci)
+
+    async def remove_context_item(
+        self, req: sessions_pb2.RemoveContextItemRequest
+    ) -> sessions_pb2.RemoveContextItemResponse:
+        try:
+            removed = await self._facade.remove_context_item(req.session_id, req.item_id)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return sessions_pb2.RemoveContextItemResponse(removed=bool(removed))
 
     # -- AudioService (Tier 2) -------------------------------------------- #
     @property

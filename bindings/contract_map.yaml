@@ -70,6 +70,92 @@ symbols:
     name: reload_config
     returns_contains: "None"
 
+  # ---- Tier-1 facade: sessions & context items (api.py) ----
+  - id: LLMCore.create_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: create_session
+    params_include: [session_id, name, system_message]
+    returns_contains: "ChatSession"
+  - id: LLMCore.get_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_session
+    params_include: [session_id]
+    returns_contains: "ChatSession"
+  - id: LLMCore.list_sessions
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_sessions
+    params_include: [limit]
+    returns_contains: "ChatSession"
+  - id: LLMCore.delete_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_session
+    params_include: [session_id]
+    returns_contains: "None"
+  - id: LLMCore.update_session_name
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: update_session_name
+    params_include: [session_id, new_name]
+    returns_contains: "None"
+  - id: LLMCore.fork_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: fork_session
+    params_include: [session_id, new_name, from_message_id, message_ids, message_range, include_context_items, metadata]
+    returns_contains: "str"
+  - id: LLMCore.clone_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: clone_session
+    params_include: [session_id, new_name, include_messages, include_context_items]
+    returns_contains: "str"
+  - id: LLMCore.delete_messages
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_messages
+    params_include: [session_id, message_ids]
+    returns_contains: "int"
+  - id: LLMCore.get_messages_by_range
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_messages_by_range
+    params_include: [session_id, start_index, end_index]
+    returns_contains: "Message"
+  - id: LLMCore.add_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: add_context_item
+    params_include: [session_id, content, item_type, source_id, metadata]
+    returns_contains: "str"
+  - id: LLMCore.get_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_context_item
+    params_include: [session_id, item_id]
+    returns_contains: "ContextItem"
+  - id: LLMCore.remove_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: remove_context_item
+    params_include: [session_id, item_id]
+    returns_contains: "bool"
+
   # ---- Token counting (tokens.py) ----
   - id: tokens.count_tokens
     file: src/llmcore/tokens.py
@@ -114,6 +200,21 @@ symbols:
     kind: enum_class
     name: Role
     members_include: [SYSTEM, USER, ASSISTANT, TOOL]
+  - id: models.ChatSession
+    file: src/llmcore/models.py
+    kind: class
+    name: ChatSession
+    fields_include: [id, name, messages, context_items, created_at, updated_at, metadata]
+  - id: models.ContextItem
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextItem
+    fields_include: [id, type, source_id, content, tokens, original_tokens, is_truncated, metadata, timestamp]
+  - id: models.ContextItemType
+    file: src/llmcore/models.py
+    kind: enum_class
+    name: ContextItemType
+    members_include: [HISTORY_MESSAGE, USER_TEXT, USER_FILE, RAG_SNIPPET, PRESET_TEXT_CONTENT, PRESET_FILE_REFERENCE, PRESET_RAG_CONTENT]
 
   # ---- Usage (usage.py) ----
   - id: usage.ChatUsage

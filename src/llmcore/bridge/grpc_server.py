@@ -22,6 +22,7 @@ from ._generated.llmcore.v1 import (
     catalog_pb2_grpc,
     control_pb2_grpc,
     inference_pb2_grpc,
+    sessions_pb2_grpc,
 )
 from .core import BridgeCore
 from .errors import BridgeError, grpc_status_for, map_exception
@@ -101,6 +102,49 @@ class CatalogServicer(catalog_pb2_grpc.CatalogServiceServicer):
 
     async def GetProviderDetails(self, request, context):
         return await _unary(lambda: self._core.get_provider_details(request), context)
+
+
+class SessionServicer(sessions_pb2_grpc.SessionServiceServicer):
+    """Tier-1 sessions & context items (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def CreateSession(self, request, context):
+        return await _unary(lambda: self._core.create_session(request), context)
+
+    async def GetSession(self, request, context):
+        return await _unary(lambda: self._core.get_session(request), context)
+
+    async def ListSessions(self, request, context):
+        return await _unary(lambda: self._core.list_sessions(request), context)
+
+    async def DeleteSession(self, request, context):
+        return await _unary(lambda: self._core.delete_session(request), context)
+
+    async def UpdateSessionName(self, request, context):
+        return await _unary(lambda: self._core.update_session_name(request), context)
+
+    async def ForkSession(self, request, context):
+        return await _unary(lambda: self._core.fork_session(request), context)
+
+    async def CloneSession(self, request, context):
+        return await _unary(lambda: self._core.clone_session(request), context)
+
+    async def DeleteMessages(self, request, context):
+        return await _unary(lambda: self._core.delete_messages(request), context)
+
+    async def GetMessagesByRange(self, request, context):
+        return await _unary(lambda: self._core.get_messages_by_range(request), context)
+
+    async def AddContextItem(self, request, context):
+        return await _unary(lambda: self._core.add_context_item(request), context)
+
+    async def GetContextItem(self, request, context):
+        return await _unary(lambda: self._core.get_context_item(request), context)
+
+    async def RemoveContextItem(self, request, context):
+        return await _unary(lambda: self._core.remove_context_item(request), context)
 
 
 class ControlServicer(control_pb2_grpc.ControlServiceServicer):
@@ -230,4 +274,5 @@ def create_grpc_server(
     catalog_pb2_grpc.add_CatalogServiceServicer_to_server(CatalogServicer(core), server)
     control_pb2_grpc.add_ControlServiceServicer_to_server(ControlServicer(core), server)
     audio_pb2_grpc.add_AudioServiceServicer_to_server(AudioServicer(core), server)
+    sessions_pb2_grpc.add_SessionServiceServicer_to_server(SessionServicer(core), server)
     return server

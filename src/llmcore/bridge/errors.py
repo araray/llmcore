@@ -261,3 +261,8 @@ def invalid_argument(message: str, details: dict[str, Any] | None = None) -> Bri
         http_status=400,
     )
     return BridgeError(err)
+
+
+def not_found(message: str, *, code: str = "not_found") -> BridgeError:
+    """Construct a NOT_FOUND ``BridgeError`` (e.g. a missing context item)."""
+    return _make(_Cat.ERROR_CATEGORY_NOT_FOUND, code, message, 404)
