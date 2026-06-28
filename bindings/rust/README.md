@@ -1,15 +1,20 @@
 # llmcore Rust bindings
 
 Async Rust client for the **llmcore bridge** over gRPC, generated from the frozen
-`llmcore.v1` contract. Two crates (per the per-language distribution plan):
+`llmcore.v1` contract. Crates (per the per-language distribution plan):
 
 * **`llmcore-proto`** — generated messages + tonic gRPC clients (codegen via a
   `build.rs`).
 * **`llmcore-client`** — ergonomic async wrapper: capability negotiation,
   structured errors, cancellable streaming.
+* **`llmcore-embedded`** — the **B5 in-process (PyO3) binding**: embeds CPython
+  and calls `llmcore` directly for single-binary Rust deployments, reusing the
+  same `llmcore.v1` types so its Tier-0 API mirrors `llmcore-client`. Excluded
+  from the default build (it links libpython); see
+  [`llmcore-embedded/README.md`](llmcore-embedded/README.md).
 
-Built on **tonic 0.12 / prost 0.13**. Depends only on the contract, never on
-Python.
+The gRPC crates are built on **tonic 0.12 / prost 0.13** and depend only on the
+contract, never on Python. `llmcore-embedded` is the deliberate exception (D8).
 
 > **Build status / sandbox note.** This was **not compiled in the authoring
 > sandbox**: no `cargo`/`rustc` was available and no Rust toolchain source was

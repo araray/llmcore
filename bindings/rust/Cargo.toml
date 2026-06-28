@@ -6,7 +6,13 @@
 # llmcore-proto build script). See README.md.
 [workspace]
 resolver = "2"
-members = ["llmcore-proto", "llmcore-client"]
+members = ["llmcore-proto", "llmcore-client", "llmcore-embedded"]
+# The embedded (PyO3) binding links libpython, so it is excluded from the
+# default build set: `cargo build` stays python-free and only builds the proto
+# types + the gRPC client. Build the in-process binding explicitly with
+# `cargo build -p llmcore-embedded` (needs a shared libpython + `llmcore`
+# importable). See llmcore-embedded/README.md.
+default-members = ["llmcore-proto", "llmcore-client"]
 
 [workspace.package]
 version = "0.1.0"
@@ -23,3 +29,4 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"]
 tokio-stream = "0.1"
 thiserror = "1"
 bytes = "1"
+pyo3 = { version = "0.22", features = ["auto-initialize"] }
