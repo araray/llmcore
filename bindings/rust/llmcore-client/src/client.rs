@@ -6,6 +6,9 @@ use llmcore_proto::v1::{
     catalog_service_client::CatalogServiceClient,
     control_service_client::ControlServiceClient,
     inference_service_client::InferenceServiceClient,
+    preset_service_client::PresetServiceClient,
+    session_service_client::SessionServiceClient,
+    vector_service_client::VectorServiceClient,
 };
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
@@ -19,6 +22,9 @@ pub struct LlmcoreClient {
     catalog: CatalogServiceClient<Channel>,
     control: ControlServiceClient<Channel>,
     audio: AudioServiceClient<Channel>,
+    session: SessionServiceClient<Channel>,
+    vector: VectorServiceClient<Channel>,
+    preset: PresetServiceClient<Channel>,
 }
 
 /// A cancellable server stream of [`pb::ChatChunk`] frames.
@@ -90,7 +96,10 @@ impl LlmcoreClient {
             inference: InferenceServiceClient::new(channel.clone()),
             catalog: CatalogServiceClient::new(channel.clone()),
             control: ControlServiceClient::new(channel.clone()),
-            audio: AudioServiceClient::new(channel),
+            audio: AudioServiceClient::new(channel.clone()),
+            session: SessionServiceClient::new(channel.clone()),
+            vector: VectorServiceClient::new(channel.clone()),
+            preset: PresetServiceClient::new(channel),
         }
     }
 
@@ -288,6 +297,251 @@ impl LlmcoreClient {
     ) -> Result<pb::TextAnalysisResult, BridgeError> {
         self.audio
             .analyze_text(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    // ---- sessions (Tier 1) --------------------------------------------- //
+
+    pub async fn create_session(
+        &mut self,
+        req: pb::CreateSessionRequest,
+    ) -> Result<pb::ChatSession, BridgeError> {
+        self.session
+            .create_session(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn get_session(
+        &mut self,
+        req: pb::GetSessionRequest,
+    ) -> Result<pb::ChatSession, BridgeError> {
+        self.session
+            .get_session(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn list_sessions(
+        &mut self,
+        req: pb::ListSessionsRequest,
+    ) -> Result<pb::ListSessionsResponse, BridgeError> {
+        self.session
+            .list_sessions(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn delete_session(
+        &mut self,
+        req: pb::DeleteSessionRequest,
+    ) -> Result<pb::Empty, BridgeError> {
+        self.session
+            .delete_session(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn update_session_name(
+        &mut self,
+        req: pb::UpdateSessionNameRequest,
+    ) -> Result<pb::Empty, BridgeError> {
+        self.session
+            .update_session_name(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn fork_session(
+        &mut self,
+        req: pb::ForkSessionRequest,
+    ) -> Result<pb::ForkSessionResponse, BridgeError> {
+        self.session
+            .fork_session(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn clone_session(
+        &mut self,
+        req: pb::CloneSessionRequest,
+    ) -> Result<pb::CloneSessionResponse, BridgeError> {
+        self.session
+            .clone_session(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn delete_messages(
+        &mut self,
+        req: pb::DeleteMessagesRequest,
+    ) -> Result<pb::DeleteMessagesResponse, BridgeError> {
+        self.session
+            .delete_messages(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn get_messages_by_range(
+        &mut self,
+        req: pb::GetMessagesByRangeRequest,
+    ) -> Result<pb::GetMessagesByRangeResponse, BridgeError> {
+        self.session
+            .get_messages_by_range(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn add_context_item(
+        &mut self,
+        req: pb::AddContextItemRequest,
+    ) -> Result<pb::AddContextItemResponse, BridgeError> {
+        self.session
+            .add_context_item(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn get_context_item(
+        &mut self,
+        req: pb::GetContextItemRequest,
+    ) -> Result<pb::ContextItem, BridgeError> {
+        self.session
+            .get_context_item(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn remove_context_item(
+        &mut self,
+        req: pb::RemoveContextItemRequest,
+    ) -> Result<pb::RemoveContextItemResponse, BridgeError> {
+        self.session
+            .remove_context_item(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    // ---- vector store & RAG (Tier 1) ----------------------------------- //
+
+    pub async fn add_documents(
+        &mut self,
+        req: pb::AddDocumentsRequest,
+    ) -> Result<pb::AddDocumentsResponse, BridgeError> {
+        self.vector
+            .add_documents(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn search_vector_store(
+        &mut self,
+        req: pb::SearchVectorStoreRequest,
+    ) -> Result<pb::SearchVectorStoreResponse, BridgeError> {
+        self.vector
+            .search_vector_store(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn list_vector_collections(
+        &mut self,
+    ) -> Result<pb::ListCollectionsResponse, BridgeError> {
+        self.vector
+            .list_vector_collections(Request::new(pb::Empty {}))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn list_rag_collections(
+        &mut self,
+    ) -> Result<pb::ListCollectionsResponse, BridgeError> {
+        self.vector
+            .list_rag_collections(Request::new(pb::Empty {}))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn get_rag_collection_info(
+        &mut self,
+        req: pb::GetRagCollectionInfoRequest,
+    ) -> Result<pb::RagCollectionInfo, BridgeError> {
+        self.vector
+            .get_rag_collection_info(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn delete_rag_collection(
+        &mut self,
+        req: pb::DeleteRagCollectionRequest,
+    ) -> Result<pb::DeleteRagCollectionResponse, BridgeError> {
+        self.vector
+            .delete_rag_collection(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    // ---- context presets (Tier 1) -------------------------------------- //
+
+    pub async fn save_context_preset(
+        &mut self,
+        req: pb::SaveContextPresetRequest,
+    ) -> Result<pb::Empty, BridgeError> {
+        self.preset
+            .save_context_preset(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn get_context_preset(
+        &mut self,
+        req: pb::GetContextPresetRequest,
+    ) -> Result<pb::ContextPreset, BridgeError> {
+        self.preset
+            .get_context_preset(Request::new(req))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn list_context_presets(
+        &mut self,
+    ) -> Result<pb::ListContextPresetsResponse, BridgeError> {
+        self.preset
+            .list_context_presets(Request::new(pb::Empty {}))
+            .await
+            .map(|r| r.into_inner())
+            .map_err(BridgeError::from_status)
+    }
+
+    pub async fn delete_context_preset(
+        &mut self,
+        req: pb::DeleteContextPresetRequest,
+    ) -> Result<pb::DeleteContextPresetResponse, BridgeError> {
+        self.preset
+            .delete_context_preset(Request::new(req))
             .await
             .map(|r| r.into_inner())
             .map_err(BridgeError::from_status)
