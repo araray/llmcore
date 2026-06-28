@@ -22,6 +22,9 @@
 #include "llmcore/v1/control.pb.h"
 #include "llmcore/v1/errors.pb.h"
 #include "llmcore/v1/inference.pb.h"
+#include "llmcore/v1/presets.pb.h"
+#include "llmcore/v1/sessions.pb.h"
+#include "llmcore/v1/vector.pb.h"
 
 namespace llmcore {
 
@@ -193,6 +196,40 @@ class Client {
   TranscribeStream TranscribeStreamCall();
   SynthesizeStream SynthesizeStreamCall();
   VoiceAgentStream VoiceAgentCall();
+
+  // sessions (Tier 1) — available when the bridge advertises "tier1.sessions".
+  llmcore::v1::ChatSession CreateSession(const llmcore::v1::CreateSessionRequest& req);
+  llmcore::v1::ChatSession GetSession(const llmcore::v1::GetSessionRequest& req);
+  llmcore::v1::ListSessionsResponse ListSessions(const llmcore::v1::ListSessionsRequest& req);
+  llmcore::v1::Empty DeleteSession(const llmcore::v1::DeleteSessionRequest& req);
+  llmcore::v1::Empty UpdateSessionName(const llmcore::v1::UpdateSessionNameRequest& req);
+  llmcore::v1::ForkSessionResponse ForkSession(const llmcore::v1::ForkSessionRequest& req);
+  llmcore::v1::CloneSessionResponse CloneSession(const llmcore::v1::CloneSessionRequest& req);
+  llmcore::v1::DeleteMessagesResponse DeleteMessages(const llmcore::v1::DeleteMessagesRequest& req);
+  llmcore::v1::GetMessagesByRangeResponse GetMessagesByRange(
+      const llmcore::v1::GetMessagesByRangeRequest& req);
+  llmcore::v1::AddContextItemResponse AddContextItem(const llmcore::v1::AddContextItemRequest& req);
+  llmcore::v1::ContextItem GetContextItem(const llmcore::v1::GetContextItemRequest& req);
+  llmcore::v1::RemoveContextItemResponse RemoveContextItem(
+      const llmcore::v1::RemoveContextItemRequest& req);
+
+  // vector store & RAG (Tier 1) — available when "tier1.vector" is advertised.
+  llmcore::v1::AddDocumentsResponse AddDocuments(const llmcore::v1::AddDocumentsRequest& req);
+  llmcore::v1::SearchVectorStoreResponse SearchVectorStore(
+      const llmcore::v1::SearchVectorStoreRequest& req);
+  llmcore::v1::ListCollectionsResponse ListVectorCollections();
+  llmcore::v1::ListCollectionsResponse ListRagCollections();
+  llmcore::v1::RagCollectionInfo GetRagCollectionInfo(
+      const llmcore::v1::GetRagCollectionInfoRequest& req);
+  llmcore::v1::DeleteRagCollectionResponse DeleteRagCollection(
+      const llmcore::v1::DeleteRagCollectionRequest& req);
+
+  // context presets (Tier 1).
+  llmcore::v1::Empty SaveContextPreset(const llmcore::v1::SaveContextPresetRequest& req);
+  llmcore::v1::ContextPreset GetContextPreset(const llmcore::v1::GetContextPresetRequest& req);
+  llmcore::v1::ListContextPresetsResponse ListContextPresets();
+  llmcore::v1::DeleteContextPresetResponse DeleteContextPreset(
+      const llmcore::v1::DeleteContextPresetRequest& req);
 
  private:
   Client();

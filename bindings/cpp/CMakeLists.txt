@@ -22,7 +22,7 @@ set(GRPC_CPP_PLUGIN $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
 
 set(PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../proto")
 set(PROTO_FILES
-  common errors inference catalog control audio
+  common errors inference catalog control audio sessions vector presets
 )
 
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")

@@ -10,6 +10,9 @@
 #include "llmcore/v1/catalog.grpc.pb.h"
 #include "llmcore/v1/control.grpc.pb.h"
 #include "llmcore/v1/inference.grpc.pb.h"
+#include "llmcore/v1/presets.grpc.pb.h"
+#include "llmcore/v1/sessions.grpc.pb.h"
+#include "llmcore/v1/vector.grpc.pb.h"
 
 namespace llmcore {
 namespace {
@@ -181,6 +184,9 @@ struct Client::Impl {
   std::unique_ptr<llmcore::v1::CatalogService::Stub> catalog;
   std::unique_ptr<llmcore::v1::ControlService::Stub> control;
   std::unique_ptr<llmcore::v1::AudioService::Stub> audio;
+  std::unique_ptr<llmcore::v1::SessionService::Stub> session;
+  std::unique_ptr<llmcore::v1::VectorService::Stub> vector;
+  std::unique_ptr<llmcore::v1::PresetService::Stub> preset;
 };
 
 Client::Client() : impl_(std::make_unique<Impl>()) {}
@@ -193,6 +199,9 @@ std::unique_ptr<Client> Client::Create(const std::string& target) {
   c->impl_->catalog = llmcore::v1::CatalogService::NewStub(c->impl_->channel);
   c->impl_->control = llmcore::v1::ControlService::NewStub(c->impl_->channel);
   c->impl_->audio = llmcore::v1::AudioService::NewStub(c->impl_->channel);
+  c->impl_->session = llmcore::v1::SessionService::NewStub(c->impl_->channel);
+  c->impl_->vector = llmcore::v1::VectorService::NewStub(c->impl_->channel);
+  c->impl_->preset = llmcore::v1::PresetService::NewStub(c->impl_->channel);
   return c;
 }
 
@@ -359,6 +368,203 @@ llmcore::v1::TextAnalysisResult Client::AnalyzeText(const llmcore::v1::AnalyzeTe
   grpc::ClientContext ctx;
   llmcore::v1::TextAnalysisResult resp;
   grpc::Status s = impl_->audio->AnalyzeText(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+// -- sessions (Tier 1) --
+
+llmcore::v1::ChatSession Client::CreateSession(const llmcore::v1::CreateSessionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ChatSession resp;
+  grpc::Status s = impl_->session->CreateSession(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ChatSession Client::GetSession(const llmcore::v1::GetSessionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ChatSession resp;
+  grpc::Status s = impl_->session->GetSession(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ListSessionsResponse Client::ListSessions(
+    const llmcore::v1::ListSessionsRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ListSessionsResponse resp;
+  grpc::Status s = impl_->session->ListSessions(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::Empty Client::DeleteSession(const llmcore::v1::DeleteSessionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty resp;
+  grpc::Status s = impl_->session->DeleteSession(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::Empty Client::UpdateSessionName(const llmcore::v1::UpdateSessionNameRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty resp;
+  grpc::Status s = impl_->session->UpdateSessionName(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ForkSessionResponse Client::ForkSession(const llmcore::v1::ForkSessionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ForkSessionResponse resp;
+  grpc::Status s = impl_->session->ForkSession(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::CloneSessionResponse Client::CloneSession(
+    const llmcore::v1::CloneSessionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::CloneSessionResponse resp;
+  grpc::Status s = impl_->session->CloneSession(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::DeleteMessagesResponse Client::DeleteMessages(
+    const llmcore::v1::DeleteMessagesRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::DeleteMessagesResponse resp;
+  grpc::Status s = impl_->session->DeleteMessages(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::GetMessagesByRangeResponse Client::GetMessagesByRange(
+    const llmcore::v1::GetMessagesByRangeRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::GetMessagesByRangeResponse resp;
+  grpc::Status s = impl_->session->GetMessagesByRange(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::AddContextItemResponse Client::AddContextItem(
+    const llmcore::v1::AddContextItemRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::AddContextItemResponse resp;
+  grpc::Status s = impl_->session->AddContextItem(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ContextItem Client::GetContextItem(const llmcore::v1::GetContextItemRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ContextItem resp;
+  grpc::Status s = impl_->session->GetContextItem(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::RemoveContextItemResponse Client::RemoveContextItem(
+    const llmcore::v1::RemoveContextItemRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::RemoveContextItemResponse resp;
+  grpc::Status s = impl_->session->RemoveContextItem(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+// -- vector store & RAG (Tier 1) --
+
+llmcore::v1::AddDocumentsResponse Client::AddDocuments(
+    const llmcore::v1::AddDocumentsRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::AddDocumentsResponse resp;
+  grpc::Status s = impl_->vector->AddDocuments(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::SearchVectorStoreResponse Client::SearchVectorStore(
+    const llmcore::v1::SearchVectorStoreRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::SearchVectorStoreResponse resp;
+  grpc::Status s = impl_->vector->SearchVectorStore(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ListCollectionsResponse Client::ListVectorCollections() {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty req;
+  llmcore::v1::ListCollectionsResponse resp;
+  grpc::Status s = impl_->vector->ListVectorCollections(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ListCollectionsResponse Client::ListRagCollections() {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty req;
+  llmcore::v1::ListCollectionsResponse resp;
+  grpc::Status s = impl_->vector->ListRagCollections(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::RagCollectionInfo Client::GetRagCollectionInfo(
+    const llmcore::v1::GetRagCollectionInfoRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::RagCollectionInfo resp;
+  grpc::Status s = impl_->vector->GetRagCollectionInfo(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::DeleteRagCollectionResponse Client::DeleteRagCollection(
+    const llmcore::v1::DeleteRagCollectionRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::DeleteRagCollectionResponse resp;
+  grpc::Status s = impl_->vector->DeleteRagCollection(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+// -- context presets (Tier 1) --
+
+llmcore::v1::Empty Client::SaveContextPreset(const llmcore::v1::SaveContextPresetRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty resp;
+  grpc::Status s = impl_->preset->SaveContextPreset(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ContextPreset Client::GetContextPreset(
+    const llmcore::v1::GetContextPresetRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::ContextPreset resp;
+  grpc::Status s = impl_->preset->GetContextPreset(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::ListContextPresetsResponse Client::ListContextPresets() {
+  grpc::ClientContext ctx;
+  llmcore::v1::Empty req;
+  llmcore::v1::ListContextPresetsResponse resp;
+  grpc::Status s = impl_->preset->ListContextPresets(&ctx, req, &resp);
+  if (!s.ok()) ThrowFromStatus(s, ctx);
+  return resp;
+}
+
+llmcore::v1::DeleteContextPresetResponse Client::DeleteContextPreset(
+    const llmcore::v1::DeleteContextPresetRequest& req) {
+  grpc::ClientContext ctx;
+  llmcore::v1::DeleteContextPresetResponse resp;
+  grpc::Status s = impl_->preset->DeleteContextPreset(&ctx, req, &resp);
   if (!s.ok()) ThrowFromStatus(s, ctx);
   return resp;
 }
