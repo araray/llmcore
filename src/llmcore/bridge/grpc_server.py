@@ -22,6 +22,7 @@ from ._generated.llmcore.v1 import (
     catalog_pb2_grpc,
     control_pb2_grpc,
     inference_pb2_grpc,
+    presets_pb2_grpc,
     sessions_pb2_grpc,
     vector_pb2_grpc,
 )
@@ -173,6 +174,25 @@ class VectorServicer(vector_pb2_grpc.VectorServiceServicer):
         return await _unary(lambda: self._core.delete_rag_collection(request), context)
 
 
+class PresetServicer(presets_pb2_grpc.PresetServiceServicer):
+    """Tier-1 context presets (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def SaveContextPreset(self, request, context):
+        return await _unary(lambda: self._core.save_context_preset(request), context)
+
+    async def GetContextPreset(self, request, context):
+        return await _unary(lambda: self._core.get_context_preset(request), context)
+
+    async def ListContextPresets(self, request, context):
+        return await _unary(lambda: self._core.list_context_presets(request), context)
+
+    async def DeleteContextPreset(self, request, context):
+        return await _unary(lambda: self._core.delete_context_preset(request), context)
+
+
 class ControlServicer(control_pb2_grpc.ControlServiceServicer):
     def __init__(self, core: BridgeCore) -> None:
         self._core = core
@@ -302,4 +322,5 @@ def create_grpc_server(
     audio_pb2_grpc.add_AudioServiceServicer_to_server(AudioServicer(core), server)
     sessions_pb2_grpc.add_SessionServiceServicer_to_server(SessionServicer(core), server)
     vector_pb2_grpc.add_VectorServiceServicer_to_server(VectorServicer(core), server)
+    presets_pb2_grpc.add_PresetServiceServicer_to_server(PresetServicer(core), server)
     return server

@@ -30,6 +30,7 @@ from ._generated.llmcore.v1 import (
     common_pb2,
     control_pb2,
     inference_pb2,
+    presets_pb2,
     sessions_pb2,
     vector_pb2,
 )
@@ -167,6 +168,17 @@ def create_http_app(core: BridgeCore) -> Starlette:
     for name, method, req_type in _vector_unary:
         routes.append(
             Route(f"{P}/VectorService/{name}", _make_unary(method, req_type), methods=["POST"])
+        )
+    # PresetService (Tier 1) — reusable context presets.
+    _preset_unary = (
+        ("SaveContextPreset", core.save_context_preset, presets_pb2.SaveContextPresetRequest),
+        ("GetContextPreset", core.get_context_preset, presets_pb2.GetContextPresetRequest),
+        ("ListContextPresets", core.list_context_presets, common_pb2.Empty),
+        ("DeleteContextPreset", core.delete_context_preset, presets_pb2.DeleteContextPresetRequest),
+    )
+    for name, method, req_type in _preset_unary:
+        routes.append(
+            Route(f"{P}/PresetService/{name}", _make_unary(method, req_type), methods=["POST"])
         )
     # One-shot (unary) AudioService RPCs; gated at runtime on core.audio_enabled
     # (a disabled deployment yields UNSUPPORTED -> HTTP 501 via the error path).

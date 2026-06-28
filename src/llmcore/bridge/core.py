@@ -23,6 +23,7 @@ from ._generated.llmcore.v1 import (
     common_pb2,
     control_pb2,
     inference_pb2,
+    presets_pb2,
     sessions_pb2,
     vector_pb2,
 )
@@ -249,6 +250,64 @@ def _context_document_to_proto(d: Any) -> vector_pb2.ContextDocument:
         out.score = d.score
     _set_struct(out.metadata, getattr(d, "metadata", None))
     return out
+
+
+def _context_preset_item_to_proto(it: Any) -> presets_pb2.ContextPresetItem:
+    t = getattr(it, "type", None)
+    t_str = getattr(t, "value", t)
+    out = presets_pb2.ContextPresetItem(
+        item_id=getattr(it, "item_id", "") or "",
+        type=str(t_str) if t_str is not None else "",
+    )
+    if getattr(it, "content", None) is not None:
+        out.content = it.content
+    if getattr(it, "source_identifier", None) is not None:
+        out.source_identifier = it.source_identifier
+    _set_struct(out.metadata, getattr(it, "metadata", None))
+    return out
+
+
+def _context_preset_to_proto(p: Any) -> presets_pb2.ContextPreset:
+    out = presets_pb2.ContextPreset(
+        name=getattr(p, "name", "") or "",
+        created_at=_iso(getattr(p, "created_at", None)),
+        updated_at=_iso(getattr(p, "updated_at", None)),
+    )
+    if getattr(p, "description", None) is not None:
+        out.description = p.description
+    for it in getattr(p, "items", None) or []:
+        out.items.append(_context_preset_item_to_proto(it))
+    _set_struct(out.metadata, getattr(p, "metadata", None))
+    return out
+
+
+def _proto_to_context_preset(p: presets_pb2.ContextPreset) -> Any:
+    """Build an ``llmcore.models.ContextPreset`` from its proto (inbound)."""
+    from llmcore.models import ContextItemType, ContextPreset, ContextPresetItem
+
+    items = []
+    for it in p.items:
+        type_value = it.type or "preset_text_content"
+        try:
+            item_type = ContextItemType(type_value)
+        except ValueError as exc:
+            raise invalid_argument(f"unknown context item type: {type_value!r}") from exc
+        kwargs: dict[str, Any] = {"type": item_type}
+        if it.item_id:
+            kwargs["item_id"] = it.item_id
+        if it.HasField("content"):
+            kwargs["content"] = it.content
+        if it.HasField("source_identifier"):
+            kwargs["source_identifier"] = it.source_identifier
+        if len(it.metadata.fields):
+            kwargs["metadata"] = _struct_to_dict(it.metadata)
+        items.append(ContextPresetItem(**kwargs))
+    preset_kwargs: dict[str, Any] = {"name": p.name, "items": items}
+    if p.HasField("description"):
+        preset_kwargs["description"] = p.description
+    if len(p.metadata.fields):
+        preset_kwargs["metadata"] = _struct_to_dict(p.metadata)
+    return ContextPreset(**preset_kwargs)
 
 
 # -- AudioService (Tier 2) helpers ------------------------------------------ #
@@ -943,6 +1002,54 @@ class BridgeCore:
         except Exception as exc:
             raise map_exception(exc) from exc
         return vector_pb2.DeleteRagCollectionResponse(deleted=bool(deleted))
+
+    # -- PresetService (Tier 1) ------------------------------------------ #
+    async def save_context_preset(
+        self, req: presets_pb2.SaveContextPresetRequest
+    ) -> common_pb2.Empty:
+        if not req.HasField("preset") or not req.preset.name:
+            raise invalid_argument("save_context_preset requires preset.name")
+        preset = _proto_to_context_preset(req.preset)
+        try:
+            await self._facade.save_context_preset(preset)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return common_pb2.Empty()
+
+    async def get_context_preset(
+        self, req: presets_pb2.GetContextPresetRequest
+    ) -> presets_pb2.ContextPreset:
+        try:
+            preset = await self._facade.get_context_preset(req.preset_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if preset is None:
+            raise not_found(
+                f"context preset {req.preset_name!r} not found",
+                code="not_found.context_preset",
+            )
+        return _context_preset_to_proto(preset)
+
+    async def list_context_presets(
+        self, req: common_pb2.Empty
+    ) -> presets_pb2.ListContextPresetsResponse:
+        try:
+            presets = await self._facade.list_context_presets()
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        out = presets_pb2.ListContextPresetsResponse()
+        for summary in presets or []:
+            out.presets.add().update(_json_safe(summary))
+        return out
+
+    async def delete_context_preset(
+        self, req: presets_pb2.DeleteContextPresetRequest
+    ) -> presets_pb2.DeleteContextPresetResponse:
+        try:
+            deleted = await self._facade.delete_context_preset(req.preset_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return presets_pb2.DeleteContextPresetResponse(deleted=bool(deleted))
 
     # -- AudioService (Tier 2) -------------------------------------------- #
     @property

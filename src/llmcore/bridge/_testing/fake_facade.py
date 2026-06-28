@@ -82,6 +82,8 @@ class FakeFacade:
         self._counter = 0
         # Tier-1 vector store: {collection_name: [ContextDocument, ...]}.
         self._collections: dict[str, list[Any]] = {}
+        # Tier-1 context presets: {preset_name: ContextPreset}.
+        self._presets: dict[str, Any] = {}
 
     def _next_id(self, prefix: str) -> str:
         self._counter += 1
@@ -427,6 +429,22 @@ class FakeFacade:
 
     async def delete_rag_collection(self, collection_name: str, force: bool = False) -> bool:
         return self._collections.pop(collection_name, None) is not None
+
+    # -- Tier-1: context presets ----------------------------------------- #
+    async def save_context_preset(self, preset: Any) -> None:
+        self._presets[preset.name] = preset
+
+    async def get_context_preset(self, preset_name: str) -> Any:
+        return self._presets.get(preset_name)
+
+    async def list_context_presets(self) -> list[dict[str, Any]]:
+        return [
+            {"name": p.name, "description": p.description, "item_count": len(p.items)}
+            for p in self._presets.values()
+        ]
+
+    async def delete_context_preset(self, preset_name: str) -> bool:
+        return self._presets.pop(preset_name, None) is not None
 
     # -- lifecycle -------------------------------------------------------- #
     async def reload_config(self) -> None:

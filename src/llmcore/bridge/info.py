@@ -158,6 +158,11 @@ def capabilities_for(
             "sessions.add_context_item",
             "sessions.get_context_item",
             "sessions.remove_context_item",
+            # Context presets share the sessions/context-management family.
+            "presets.save",
+            "presets.get",
+            "presets.list",
+            "presets.delete",
         ])
     if audio:
         # Tier-2 umbrella + the live streaming RPCs and the one-shot (unary)

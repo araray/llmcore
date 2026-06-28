@@ -198,6 +198,35 @@ symbols:
     params_include: [collection_name, force]
     returns_contains: "bool"
 
+  # ---- Tier-1 facade: context presets (api.py) ----
+  - id: LLMCore.save_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: save_context_preset
+    params_include: [preset]
+    returns_contains: "None"
+  - id: LLMCore.get_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_context_preset
+    params_include: [preset_name]
+    returns_contains: "ContextPreset"
+  - id: LLMCore.list_context_presets
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_context_presets
+    returns_contains: "list"
+  - id: LLMCore.delete_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_context_preset
+    params_include: [preset_name]
+    returns_contains: "bool"
+
   # ---- Token counting (tokens.py) ----
   - id: tokens.count_tokens
     file: src/llmcore/tokens.py
@@ -262,6 +291,16 @@ symbols:
     kind: class
     name: ContextDocument
     fields_include: [id, content, embedding, metadata, score]
+  - id: models.ContextPreset
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextPreset
+    fields_include: [name, description, items, created_at, updated_at, metadata]
+  - id: models.ContextPresetItem
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextPresetItem
+    fields_include: [item_id, type, content, source_identifier, metadata]
 
   # ---- Usage (usage.py) ----
   - id: usage.ChatUsage

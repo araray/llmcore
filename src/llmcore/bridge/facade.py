@@ -180,6 +180,19 @@ class LLMCoreFacade(Protocol):
     async def delete_rag_collection(self, collection_name: str, force: bool = ...) -> bool:
         ...
 
+    # -- Tier-1: context presets (api.py) -------------------------------- #
+    async def save_context_preset(self, preset: Any) -> None:
+        ...
+
+    async def get_context_preset(self, preset_name: str) -> Any:
+        ...
+
+    async def list_context_presets(self) -> list[dict[str, Any]]:
+        ...
+
+    async def delete_context_preset(self, preset_name: str) -> bool:
+        ...
+
     async def reload_config(self) -> None:
         ...
 
