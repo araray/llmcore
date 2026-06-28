@@ -81,7 +81,7 @@ path for Rust is a deliberate, separate later track — phase B5.)
 | **B2** | Foreign-language clients (C/C++/Rust/Go/TS) generated from `proto/` | ✅ delivered |
 | **B3** | Tier-2 audio: one-shot + duplex (gRPC bidi + HTTP-WS) | ✅ delivered |
 | **B4** | Tier-1 sessions/vector store/presets | ✅ delivered |
-| B5 | In-process PyO3 Rust binding | ⏳ next |
+| **B5** | In-process PyO3 Rust binding (Tier-0 single-binary) | ✅ delivered |
 
 ### What's implemented
 
