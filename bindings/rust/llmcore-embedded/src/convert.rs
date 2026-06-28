@@ -5,9 +5,25 @@
 //! the same shapes as the gRPC path.
 
 use llmcore_proto::v1 as pb;
+use prost::Message;
 use prost_types::{value::Kind, Struct, Value};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+
+/// Marshal an `llmcore` value object to a prost message by delegating to a
+/// bridge converter (e.g. `_chat_session_to_proto`) and decoding the serialized
+/// proto it returns. This reuses the bridge's exact field mapping, so the
+/// in-process result is byte-identical to the gRPC path.
+pub(crate) fn via_converter<M: Message + Default>(
+    py: Python<'_>,
+    converter: &str,
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<M> {
+    let core = py.import_bound("llmcore.bridge.core")?;
+    let proto = core.call_method1(converter, (obj,))?;
+    let bytes: Vec<u8> = proto.call_method0("SerializeToString")?.extract()?;
+    M::decode(bytes.as_slice()).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
 
 /// `google.protobuf.Value` → a native Python object.
 fn value_to_py<'py>(py: Python<'py>, v: &Value) -> Bound<'py, PyAny> {

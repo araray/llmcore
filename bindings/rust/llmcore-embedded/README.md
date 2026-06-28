@@ -32,24 +32,37 @@ println!("{} (tokens={:?})", res.text, res.usage.and_then(|u| u.total_tokens));
 The out-of-process sidecar remains the default architecture (D1); this is the
 one place embedding is ergonomic — single-binary Rust deployments (D8).
 
-## Surface (Tier 0)
+## Surface
 
 All methods take `&self` and are `async` (the synchronous `llmcore` calls are
 exposed `async` too, for parity with the gRPC client):
 
-- **Inference:** `chat` (→ `ChatResponse` with token usage), `chat_stream`
+**Tier 0**
+
+- **Inference:** `chat` (→ `ChatResponse` with token usage; `tools` /
+  `tool_choice` are marshaled to `llmcore.models.Tool`), `chat_stream`
   (→ a `Stream` of `ChatChunk`, terminated by `done = true`), `count_tokens`,
   `estimate_cost`.
 - **Catalog:** `list_providers`, `list_models`, `get_provider_details`.
 - **Control:** `get_info` (locally-assembled `ServerInfo`), `reload_config`.
 
+**Tier 1 (sessions)**
+
+- `create_session`, `get_session`, `delete_session`, `add_context_item`,
+  `get_context_item`.
+
+Session results are marshaled through the bridge's own converters
+(`_chat_session_to_proto` / `_context_item_to_proto`), so they are byte-identical
+to the gRPC path. The vector-store and preset surfaces follow the identical
+pattern and are a documented follow-up (they need a configured vector backend to
+exercise).
+
 Construct with `Llmcore::create()` (ambient config) or
 `Llmcore::create_with_overrides(json)` (a JSON object passed to
 `LLMCore.create(config_overrides=...)`).
 
-Not yet marshaled: `tools` / `tool_choice` on `ChatRequest` (the contract's
-tool-calling fields are PROVISIONAL), and `ModelDetails.metadata`. `Embed` is
-UNIMPLEMENTED in the contract. Tier-1/Tier-2 are out of scope for this track.
+Not marshaled: `ModelDetails.metadata`. `Embed` is UNIMPLEMENTED in the contract.
+Tier-2 (audio) is out of scope for this track.
 
 ### Errors
 
@@ -75,8 +88,11 @@ cargo run     -p llmcore-embedded --example embedded_chat
 ```
 
 The tests are fully offline: they register `llmcore`'s shipped `FakeProvider`
-(an echo provider) and build `LLMCore` against it, then exercise chat,
-streaming, token counting, cost estimation, and the catalog.
+(an echo provider) and build `LLMCore` against it, then exercise chat (incl.
+tools), streaming, token counting, cost estimation, the catalog, and the Tier-1
+sessions CRUD (a temp sqlite session store). The session tests need the bridge's
+Tier-1 converters in the importable `llmcore`; until B4 is in your installed
+build, point the interpreter at this tree with `PYTHONPATH=<repo>/src`.
 
 ## How the async bridge works
 

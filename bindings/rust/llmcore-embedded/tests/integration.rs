@@ -101,6 +101,92 @@ async fn chat_stream_reassembles() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn chat_with_tools_does_not_break() {
+    let core = make_core().await;
+    // The fake provider ignores tools but must accept them — proves tools/
+    // tool_choice marshaling reaches llmcore without error.
+    use llmcore_embedded::proto::prost_types;
+    let mut params = prost_types::Struct::default();
+    params.fields.insert(
+        "type".into(),
+        prost_types::Value { kind: Some(prost_types::value::Kind::StringValue("object".into())) },
+    );
+    let res = core
+        .chat(v1::ChatRequest {
+            message: "hi".into(),
+            tools: vec![v1::Tool {
+                name: "get_weather".into(),
+                description: "Look up weather".into(),
+                parameters: Some(params),
+            }],
+            tool_choice: Some("auto".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("chat with tools");
+    assert_eq!(res.text, "echo: hi");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sessions_crud() {
+    let core = make_core().await;
+
+    let session = core
+        .create_session(v1::CreateSessionRequest {
+            name: Some("demo".into()),
+            system_message: Some("be terse".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("create_session");
+    assert!(!session.id.is_empty());
+    assert_eq!(session.name.as_deref(), Some("demo"));
+
+    let added = core
+        .add_context_item(v1::AddContextItemRequest {
+            session_id: session.id.clone(),
+            content: "launch is June 30".into(),
+            r#type: Some("user_text".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("add_context_item");
+    assert!(!added.item_id.is_empty());
+
+    let item = core
+        .get_context_item(v1::GetContextItemRequest {
+            session_id: session.id.clone(),
+            item_id: added.item_id.clone(),
+        })
+        .await
+        .expect("get_context_item");
+    assert_eq!(item.content, "launch is June 30");
+    assert_eq!(item.r#type, "user_text");
+
+    // Round-trip the session.
+    let fetched = core
+        .get_session(v1::GetSessionRequest { session_id: session.id.clone() })
+        .await
+        .expect("get_session");
+    assert_eq!(fetched.id, session.id);
+    assert_eq!(fetched.context_items.len(), 1);
+
+    // NOT_FOUND for an unknown item.
+    let missing = core
+        .get_context_item(v1::GetContextItemRequest {
+            session_id: session.id.clone(),
+            item_id: "does-not-exist".into(),
+        })
+        .await;
+    assert!(missing.is_err());
+    assert_eq!(missing.unwrap_err().category, "ERROR_CATEGORY_NOT_FOUND");
+
+    core.delete_session(v1::DeleteSessionRequest { session_id: session.id })
+        .await
+        .expect("delete_session");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn count_tokens_and_cost() {
     let core = make_core().await;
 

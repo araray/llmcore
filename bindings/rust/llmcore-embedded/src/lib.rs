@@ -23,6 +23,7 @@
 mod convert;
 mod error;
 mod runtime;
+mod tier1;
 
 use std::sync::Arc;
 
@@ -310,6 +311,24 @@ fn chat_kwargs<'py>(
     kwargs.set_item("enable_rag", false)?;
     if stream {
         kwargs.set_item("stream", true)?;
+    }
+    if !req.tools.is_empty() {
+        // Mirror the bridge's `_tools`: build llmcore.models.Tool(name, description,
+        // parameters=<JSON-schema dict>).
+        let tool_cls = py.import_bound("llmcore.models")?.getattr("Tool")?;
+        let tools = PyList::empty_bound(py);
+        for t in &req.tools {
+            let fields = PyDict::new_bound(py);
+            fields.set_item("name", &t.name)?;
+            fields.set_item("description", &t.description)?;
+            let params = match t.parameters.as_ref() {
+                Some(s) => convert::struct_to_pydict(py, s),
+                None => PyDict::new_bound(py),
+            };
+            fields.set_item("parameters", params)?;
+            tools.append(tool_cls.call((), Some(&fields))?)?;
+        }
+        kwargs.set_item("tools", tools)?;
     }
     if let Some(s) = req.provider_kwargs.as_ref() {
         let extra = convert::struct_to_pydict(py, s);

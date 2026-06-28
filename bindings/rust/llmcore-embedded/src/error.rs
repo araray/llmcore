@@ -50,6 +50,20 @@ impl EmbeddedError {
         }
     }
 
+    /// A `NOT_FOUND` error (used when an in-process lookup returns `None`).
+    pub(crate) fn not_found(message: impl Into<String>) -> Self {
+        EmbeddedError {
+            category: "ERROR_CATEGORY_NOT_FOUND".to_string(),
+            code: "not_found".to_string(),
+            message: message.into(),
+            http_status: Some(404),
+            retryable: false,
+            retry_after_ms: None,
+            provider: None,
+            model: None,
+        }
+    }
+
     pub(crate) fn from_proto(pb: &LlmcoreError) -> Self {
         let category = ErrorCategory::try_from(pb.category)
             .map(|e| e.as_str_name().to_string())
