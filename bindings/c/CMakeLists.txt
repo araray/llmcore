@@ -77,6 +77,9 @@ endif()
 add_executable(quickstart examples/quickstart.c)
 target_link_libraries(quickstart PRIVATE llmcore_c)
 
+add_executable(sessions examples/sessions.c)
+target_link_libraries(sessions PRIVATE llmcore_c)
+
 enable_testing()
 add_executable(e2e tests/e2e.c)
 target_link_libraries(e2e PRIVATE llmcore_c)
