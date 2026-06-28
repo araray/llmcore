@@ -80,6 +80,8 @@ class FakeFacade:
         # exercise the same code path as a live ``LLMCore``.
         self._sessions: dict[str, Any] = {}
         self._counter = 0
+        # Tier-1 vector store: {collection_name: [ContextDocument, ...]}.
+        self._collections: dict[str, list[Any]] = {}
 
     def _next_id(self, prefix: str) -> str:
         self._counter += 1
@@ -357,6 +359,74 @@ class FakeFacade:
         before = len(session.context_items)
         session.context_items = [ci for ci in session.context_items if ci.id != item_id]
         return len(session.context_items) < before
+
+    # -- Tier-1: vector store & RAG collections -------------------------- #
+    def supports_vector(self) -> bool:
+        """Tier-1 vector enablement gate, via ``LLMCORE_BRIDGE_FAKE_VECTOR``."""
+        return os.getenv("LLMCORE_BRIDGE_FAKE_VECTOR") == "1"
+
+    _DEFAULT_COLLECTION = "default"
+
+    async def add_documents_to_vector_store(
+        self, documents: list[dict[str, Any]], collection_name: str | None = None
+    ) -> list[str]:
+        from llmcore.models import ContextDocument
+
+        name = collection_name or self._DEFAULT_COLLECTION
+        store = self._collections.setdefault(name, [])
+        ids: list[str] = []
+        for doc in documents:
+            kwargs = {"content": doc.get("content", "")}
+            if doc.get("id"):
+                kwargs["id"] = doc["id"]
+            if doc.get("metadata"):
+                kwargs["metadata"] = doc["metadata"]
+            cd = ContextDocument(**kwargs)
+            store.append(cd)
+            ids.append(cd.id)
+        return ids
+
+    async def search_vector_store(
+        self,
+        query: str,
+        k: int = 5,
+        collection_name: str | None = None,
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        name = collection_name or self._DEFAULT_COLLECTION
+        docs = self._collections.get(name, [])
+        q = query.lower()
+        results = []
+        for doc in docs:
+            if metadata_filter and not all(
+                doc.metadata.get(mk) == mv for mk, mv in metadata_filter.items()
+            ):
+                continue
+            if q and q not in doc.content.lower():
+                continue
+            results.append(doc)
+        # Deterministic descending scores; copy so we don't mutate the store.
+        scored = []
+        for i, doc in enumerate(results[:k]):
+            scored.append(doc.model_copy(update={"score": round(1.0 - i * 0.1, 3)}))
+        return scored
+
+    async def list_vector_collections(self) -> list[str]:
+        return list(self._collections.keys())
+
+    async def list_rag_collections(self) -> list[str]:
+        return list(self._collections.keys())
+
+    async def get_rag_collection_info(self, collection_name: str) -> dict[str, Any] | None:
+        if collection_name not in self._collections:
+            return None
+        return {
+            "name": collection_name,
+            "document_count": len(self._collections[collection_name]),
+        }
+
+    async def delete_rag_collection(self, collection_name: str, force: bool = False) -> bool:
+        return self._collections.pop(collection_name, None) is not None
 
     # -- lifecycle -------------------------------------------------------- #
     async def reload_config(self) -> None:

@@ -23,6 +23,7 @@ from ._generated.llmcore.v1 import (
     control_pb2_grpc,
     inference_pb2_grpc,
     sessions_pb2_grpc,
+    vector_pb2_grpc,
 )
 from .core import BridgeCore
 from .errors import BridgeError, grpc_status_for, map_exception
@@ -145,6 +146,31 @@ class SessionServicer(sessions_pb2_grpc.SessionServiceServicer):
 
     async def RemoveContextItem(self, request, context):
         return await _unary(lambda: self._core.remove_context_item(request), context)
+
+
+class VectorServicer(vector_pb2_grpc.VectorServiceServicer):
+    """Tier-1 vector store & RAG collections (phase B4)."""
+
+    def __init__(self, core: BridgeCore) -> None:
+        self._core = core
+
+    async def AddDocuments(self, request, context):
+        return await _unary(lambda: self._core.add_documents(request), context)
+
+    async def SearchVectorStore(self, request, context):
+        return await _unary(lambda: self._core.search_vector_store(request), context)
+
+    async def ListVectorCollections(self, request, context):
+        return await _unary(lambda: self._core.list_vector_collections(request), context)
+
+    async def ListRagCollections(self, request, context):
+        return await _unary(lambda: self._core.list_rag_collections(request), context)
+
+    async def GetRagCollectionInfo(self, request, context):
+        return await _unary(lambda: self._core.get_rag_collection_info(request), context)
+
+    async def DeleteRagCollection(self, request, context):
+        return await _unary(lambda: self._core.delete_rag_collection(request), context)
 
 
 class ControlServicer(control_pb2_grpc.ControlServiceServicer):
@@ -275,4 +301,5 @@ def create_grpc_server(
     control_pb2_grpc.add_ControlServiceServicer_to_server(ControlServicer(core), server)
     audio_pb2_grpc.add_AudioServiceServicer_to_server(AudioServicer(core), server)
     sessions_pb2_grpc.add_SessionServiceServicer_to_server(SessionServicer(core), server)
+    vector_pb2_grpc.add_VectorServiceServicer_to_server(VectorServicer(core), server)
     return server

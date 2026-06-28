@@ -153,6 +153,33 @@ class LLMCoreFacade(Protocol):
     async def remove_context_item(self, session_id: str, item_id: str) -> bool:
         ...
 
+    # -- Tier-1: vector store & RAG collections (api.py) ----------------- #
+    async def add_documents_to_vector_store(
+        self, documents: list[dict[str, Any]], collection_name: str | None = ...
+    ) -> list[str]:
+        ...
+
+    async def search_vector_store(
+        self,
+        query: str,
+        k: int = ...,
+        collection_name: str | None = ...,
+        metadata_filter: dict[str, Any] | None = ...,
+    ) -> list[Any]:
+        ...
+
+    async def list_vector_collections(self) -> list[str]:
+        ...
+
+    async def list_rag_collections(self) -> list[str]:
+        ...
+
+    async def get_rag_collection_info(self, collection_name: str) -> Any:
+        ...
+
+    async def delete_rag_collection(self, collection_name: str, force: bool = ...) -> bool:
+        ...
+
     async def reload_config(self) -> None:
         ...
 

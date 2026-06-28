@@ -31,6 +31,7 @@ from ._generated.llmcore.v1 import (
     control_pb2,
     inference_pb2,
     sessions_pb2,
+    vector_pb2,
 )
 from .core import BridgeCore
 from .errors import BridgeError, http_status_for, invalid_argument, map_exception
@@ -153,6 +154,19 @@ def create_http_app(core: BridgeCore) -> Starlette:
     for name, method, req_type in _session_unary:
         routes.append(
             Route(f"{P}/SessionService/{name}", _make_unary(method, req_type), methods=["POST"])
+        )
+    # VectorService (Tier 1) — vector store & RAG collections.
+    _vector_unary = (
+        ("AddDocuments", core.add_documents, vector_pb2.AddDocumentsRequest),
+        ("SearchVectorStore", core.search_vector_store, vector_pb2.SearchVectorStoreRequest),
+        ("ListVectorCollections", core.list_vector_collections, common_pb2.Empty),
+        ("ListRagCollections", core.list_rag_collections, common_pb2.Empty),
+        ("GetRagCollectionInfo", core.get_rag_collection_info, vector_pb2.GetRagCollectionInfoRequest),
+        ("DeleteRagCollection", core.delete_rag_collection, vector_pb2.DeleteRagCollectionRequest),
+    )
+    for name, method, req_type in _vector_unary:
+        routes.append(
+            Route(f"{P}/VectorService/{name}", _make_unary(method, req_type), methods=["POST"])
         )
     # One-shot (unary) AudioService RPCs; gated at runtime on core.audio_enabled
     # (a disabled deployment yields UNSUPPORTED -> HTTP 501 via the error path).

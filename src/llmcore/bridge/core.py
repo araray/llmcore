@@ -24,6 +24,7 @@ from ._generated.llmcore.v1 import (
     control_pb2,
     inference_pb2,
     sessions_pb2,
+    vector_pb2,
 )
 from .errors import (
     BridgeError,
@@ -233,6 +234,20 @@ def _chat_session_to_proto(s: Any) -> sessions_pb2.ChatSession:
     for ci in getattr(s, "context_items", None) or []:
         out.context_items.append(_context_item_to_proto(ci))
     _set_struct(out.metadata, getattr(s, "metadata", None))
+    return out
+
+
+def _context_document_to_proto(d: Any) -> vector_pb2.ContextDocument:
+    out = vector_pb2.ContextDocument(
+        id=getattr(d, "id", "") or "",
+        content=getattr(d, "content", "") or "",
+    )
+    embedding = getattr(d, "embedding", None)
+    if embedding:
+        out.embedding.extend(float(x) for x in embedding)
+    if getattr(d, "score", None) is not None:
+        out.score = d.score
+    _set_struct(out.metadata, getattr(d, "metadata", None))
     return out
 
 
@@ -853,6 +868,81 @@ class BridgeCore:
         except Exception as exc:
             raise map_exception(exc) from exc
         return sessions_pb2.RemoveContextItemResponse(removed=bool(removed))
+
+    # -- VectorService (Tier 1) ------------------------------------------ #
+    async def add_documents(
+        self, req: vector_pb2.AddDocumentsRequest
+    ) -> vector_pb2.AddDocumentsResponse:
+        documents = [_struct_to_dict(d) for d in req.documents]
+        try:
+            ids = await self._facade.add_documents_to_vector_store(
+                documents, collection_name=_opt(req, "collection_name")
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return vector_pb2.AddDocumentsResponse(ids=[str(i) for i in ids or []])
+
+    async def search_vector_store(
+        self, req: vector_pb2.SearchVectorStoreRequest
+    ) -> vector_pb2.SearchVectorStoreResponse:
+        try:
+            docs = await self._facade.search_vector_store(
+                req.query,
+                k=req.k or 5,
+                collection_name=_opt(req, "collection_name"),
+                metadata_filter=self._kwargs(req.metadata_filter) or None,
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        out = vector_pb2.SearchVectorStoreResponse()
+        for d in docs or []:
+            out.documents.append(_context_document_to_proto(d))
+        return out
+
+    async def list_vector_collections(
+        self, req: common_pb2.Empty
+    ) -> vector_pb2.ListCollectionsResponse:
+        try:
+            collections = await self._facade.list_vector_collections()
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return vector_pb2.ListCollectionsResponse(collections=[str(c) for c in collections or []])
+
+    async def list_rag_collections(
+        self, req: common_pb2.Empty
+    ) -> vector_pb2.ListCollectionsResponse:
+        try:
+            collections = await self._facade.list_rag_collections()
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return vector_pb2.ListCollectionsResponse(collections=[str(c) for c in collections or []])
+
+    async def get_rag_collection_info(
+        self, req: vector_pb2.GetRagCollectionInfoRequest
+    ) -> vector_pb2.RagCollectionInfo:
+        try:
+            info = await self._facade.get_rag_collection_info(req.collection_name)
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        if info is None:
+            raise not_found(
+                f"rag collection {req.collection_name!r} not found",
+                code="not_found.rag_collection",
+            )
+        out = vector_pb2.RagCollectionInfo(collection_name=req.collection_name)
+        _set_struct(out.info, info)
+        return out
+
+    async def delete_rag_collection(
+        self, req: vector_pb2.DeleteRagCollectionRequest
+    ) -> vector_pb2.DeleteRagCollectionResponse:
+        try:
+            deleted = await self._facade.delete_rag_collection(
+                req.collection_name, force=req.force
+            )
+        except Exception as exc:
+            raise map_exception(exc) from exc
+        return vector_pb2.DeleteRagCollectionResponse(deleted=bool(deleted))
 
     # -- AudioService (Tier 2) -------------------------------------------- #
     @property

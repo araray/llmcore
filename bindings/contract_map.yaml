@@ -156,6 +156,48 @@ symbols:
     params_include: [session_id, item_id]
     returns_contains: "bool"
 
+  # ---- Tier-1 facade: vector store & RAG collections (api.py) ----
+  - id: LLMCore.add_documents_to_vector_store
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: add_documents_to_vector_store
+    params_include: [documents, collection_name]
+    returns_contains: "list"
+  - id: LLMCore.search_vector_store
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: search_vector_store
+    params_include: [query, k, collection_name, metadata_filter]
+    returns_contains: "ContextDocument"
+  - id: LLMCore.list_vector_collections
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_vector_collections
+    returns_contains: "list"
+  - id: LLMCore.list_rag_collections
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_rag_collections
+    returns_contains: "list"
+  - id: LLMCore.get_rag_collection_info
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_rag_collection_info
+    params_include: [collection_name]
+    returns_contains: "dict"
+  - id: LLMCore.delete_rag_collection
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_rag_collection
+    params_include: [collection_name, force]
+    returns_contains: "bool"
+
   # ---- Token counting (tokens.py) ----
   - id: tokens.count_tokens
     file: src/llmcore/tokens.py
@@ -215,6 +257,11 @@ symbols:
     kind: enum_class
     name: ContextItemType
     members_include: [HISTORY_MESSAGE, USER_TEXT, USER_FILE, RAG_SNIPPET, PRESET_TEXT_CONTENT, PRESET_FILE_REFERENCE, PRESET_RAG_CONTENT]
+  - id: models.ContextDocument
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextDocument
+    fields_include: [id, content, embedding, metadata, score]
 
   # ---- Usage (usage.py) ----
   - id: usage.ChatUsage
