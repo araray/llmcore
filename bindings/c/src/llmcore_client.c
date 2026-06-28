@@ -46,6 +46,26 @@ static char *jstrdup(const char *s) {
   return q;
 }
 
+/* Read an integer that protobuf's canonical JSON mapping may encode as a number
+ * OR a string: int64/uint64/fixed64 fields are emitted as JSON *strings* (e.g.
+ * "8"), so a plain cJSON_IsNumber check misses them. Returns 1 and sets *out on
+ * success, 0 otherwise. */
+static int json_to_long(const cJSON *node, long *out) {
+  if (cJSON_IsNumber(node)) {
+    *out = (long)node->valuedouble;
+    return 1;
+  }
+  if (cJSON_IsString(node) && node->valuestring && node->valuestring[0]) {
+    char *end = NULL;
+    long v = strtol(node->valuestring, &end, 10);
+    if (end && *end == '\0') {
+      *out = v;
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static char *join_url(const char *base, const char *path) {
   size_t a = strlen(base), b = strlen(path);
   char *u = (char *)malloc(a + b + 1);
@@ -812,8 +832,8 @@ llmcore_error *llmcore_ocr(llmcore_client *c, const unsigned char *data, size_t 
   const cJSON *pp = cJSON_GetObjectItemCaseSensitive(root, "pages_processed");
   if (cJSON_IsNumber(pp)) out->pages_processed = pp->valueint;
   const cJSON *ds = cJSON_GetObjectItemCaseSensitive(root, "doc_size_bytes");
-  if (cJSON_IsNumber(ds)) {
-    out->doc_size_bytes = (long)ds->valuedouble;
+  /* doc_size_bytes is int64 → protobuf JSON encodes it as a string. */
+  if (json_to_long(ds, &out->doc_size_bytes)) {
     out->has_doc_size_bytes = 1;
   }
   const cJSON *pages = cJSON_GetObjectItemCaseSensitive(root, "pages");
