@@ -77,7 +77,7 @@ struct bridge {
   char base[64];
 };
 
-static struct bridge start_bridge(int with_audio) {
+static struct bridge start_bridge(int with_audio, int with_sessions) {
   struct bridge b;
   b.pid = -1;
   int hport = free_port();
@@ -92,6 +92,10 @@ static struct bridge start_bridge(int with_audio) {
   if (pid == 0) {
     setenv("LLMCORE_BRIDGE_FAKE", "1", 1);
     if (with_audio) setenv("LLMCORE_BRIDGE_FAKE_AUDIO", "1", 1);
+    if (with_sessions) {
+      setenv("LLMCORE_BRIDGE_FAKE_SESSIONS", "1", 1);
+      setenv("LLMCORE_BRIDGE_FAKE_VECTOR", "1", 1);
+    }
     char *argv[] = {(char *)py,
                     "-m",
                     "llmcore.bridge.cli",
@@ -128,7 +132,7 @@ static struct bridge start_bridge(int with_audio) {
 }
 
 int main(void) {
-  struct bridge b = start_bridge(0);
+  struct bridge b = start_bridge(0, 0);
   llmcore_client *c = llmcore_client_new(b.base);
 
   /* ensure_compatible accept */
@@ -248,7 +252,7 @@ int main(void) {
 
   /* ---- audio (Tier 2): a second, audio-enabled bridge ---- */
   {
-    struct bridge ab = start_bridge(1);
+    struct bridge ab = start_bridge(1, 0);
     llmcore_client *ac = llmcore_client_new(ab.base);
 
     /* synthesize: audio_data decodes to "tts:hello" */
@@ -325,6 +329,135 @@ int main(void) {
     kill(ab.pid, SIGTERM);
     int ast;
     waitpid(ab.pid, &ast, 0);
+  }
+
+  /* ---- Tier-1 (sessions/vector/presets): a session-enabled bridge ---- */
+  {
+    struct bridge sb = start_bridge(0, 1);
+    llmcore_client *sc = llmcore_client_new(sb.base);
+
+    /* tier1 capabilities advertised */
+    {
+      const char *caps[] = {"tier1.sessions", "tier1.vector"};
+      llmcore_error *e = llmcore_ensure_compatible(sc, caps, 2);
+      CHECK(e == NULL);
+      if (e) llmcore_error_free(e);
+    }
+    /* session create/get round-trip */
+    char *sid = NULL;
+    {
+      llmcore_session s;
+      llmcore_error *e = llmcore_create_session(sc, "c-chat", "be brief", &s);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(strcmp(s.name, "c-chat") == 0);
+        CHECK(s.message_count == 1);
+        sid = strdup(s.id);
+        llmcore_session_free(&s);
+      }
+    }
+    if (sid) {
+      llmcore_session g;
+      llmcore_error *e = llmcore_get_session(sc, sid, &g);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        CHECK(strcmp(g.id, sid) == 0);
+        llmcore_session_free(&g);
+      }
+    }
+    /* context item lifecycle */
+    if (sid) {
+      char *item_id = NULL;
+      llmcore_error *e = llmcore_add_context_item(sc, sid, "a fact", "rag_snippet", &item_id);
+      CHECK(e == NULL);
+      if (e) {
+        llmcore_error_free(e);
+      } else {
+        llmcore_context_item it;
+        llmcore_error *e2 = llmcore_get_context_item(sc, sid, item_id, &it);
+        CHECK(e2 == NULL);
+        if (e2) {
+          llmcore_error_free(e2);
+        } else {
+          CHECK(strcmp(it.type, "rag_snippet") == 0);
+          CHECK(strcmp(it.content, "a fact") == 0);
+          llmcore_context_item_free(&it);
+        }
+        int removed = 0;
+        llmcore_error *e3 = llmcore_remove_context_item(sc, sid, item_id, &removed);
+        CHECK(e3 == NULL);
+        if (e3) llmcore_error_free(e3);
+        CHECK(removed == 1);
+        free(item_id);
+      }
+    }
+    /* get missing session -> NOT_FOUND */
+    {
+      llmcore_session g;
+      llmcore_error *e = llmcore_get_session(sc, "ghost", &g);
+      CHECK(e != NULL);
+      if (e) {
+        CHECK(strcmp(e->category, "ERROR_CATEGORY_NOT_FOUND") == 0);
+        llmcore_error_free(e);
+      } else {
+        llmcore_session_free(&g);
+      }
+    }
+    /* vector add + search */
+    {
+      const char *docs[] = {"the cat sat", "the dog ran"};
+      char **ids = NULL;
+      size_t nids = 0;
+      llmcore_error *e = llmcore_add_documents(sc, docs, 2, NULL, &ids, &nids);
+      CHECK(e == NULL);
+      if (e) llmcore_error_free(e);
+      CHECK(nids == 2);
+      llmcore_string_array_free(ids, nids);
+
+      llmcore_search_result *res = NULL;
+      size_t nres = 0;
+      llmcore_error *e2 = llmcore_search_vector_store(sc, "cat", 5, NULL, &res, &nres);
+      CHECK(e2 == NULL);
+      if (e2) llmcore_error_free(e2);
+      CHECK(nres == 1);
+      if (nres == 1) CHECK(strcmp(res[0].content, "the cat sat") == 0);
+      llmcore_search_results_free(res, nres);
+    }
+    /* preset save/get + NOT_FOUND */
+    {
+      llmcore_preset_item items[] = {{"preset_text_content", "boilerplate"}};
+      llmcore_error *e = llmcore_save_context_preset(sc, "c-preset", "d", items, 1);
+      CHECK(e == NULL);
+      if (e) llmcore_error_free(e);
+
+      llmcore_preset p;
+      llmcore_error *e2 = llmcore_get_context_preset(sc, "c-preset", &p);
+      CHECK(e2 == NULL);
+      if (e2) {
+        llmcore_error_free(e2);
+      } else {
+        CHECK(strcmp(p.name, "c-preset") == 0);
+        CHECK(p.item_count == 1);
+        llmcore_preset_free(&p);
+      }
+      llmcore_preset miss;
+      llmcore_error *e3 = llmcore_get_context_preset(sc, "ghost", &miss);
+      CHECK(e3 != NULL);
+      if (e3) {
+        llmcore_error_free(e3);
+      } else {
+        llmcore_preset_free(&miss);
+      }
+    }
+    free(sid);
+    llmcore_client_free(sc);
+    kill(sb.pid, SIGTERM);
+    int sst;
+    waitpid(sb.pid, &sst, 0);
   }
 
   llmcore_client_free(c);

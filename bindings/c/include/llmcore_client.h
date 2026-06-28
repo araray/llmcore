@@ -163,6 +163,111 @@ void llmcore_text_analysis_result_free(llmcore_text_analysis_result *r);
 llmcore_error *llmcore_analyze_text(llmcore_client *c, const char *text,
                                     llmcore_text_analysis_result *out);
 
+/* ===================== Tier-1: sessions & context items ==================== */
+
+/* A session summary. Free with llmcore_session_free. */
+typedef struct {
+  char *id;                 /* malloc'd */
+  char *name;               /* malloc'd ("" if unset) */
+  size_t message_count;
+  size_t context_item_count;
+} llmcore_session;
+void llmcore_session_free(llmcore_session *s);
+
+/* name/system_message may be NULL. On success fills *out. */
+llmcore_error *llmcore_create_session(llmcore_client *c, const char *name,
+                                      const char *system_message, llmcore_session *out);
+llmcore_error *llmcore_get_session(llmcore_client *c, const char *session_id,
+                                   llmcore_session *out);
+/* *out_ids is a malloc'd array of malloc'd session ids; free with
+ * llmcore_string_array_free. */
+llmcore_error *llmcore_list_sessions(llmcore_client *c, char ***out_ids, size_t *out_n);
+llmcore_error *llmcore_delete_session(llmcore_client *c, const char *session_id);
+llmcore_error *llmcore_update_session_name(llmcore_client *c, const char *session_id,
+                                           const char *new_name);
+/* *out_new_id is malloc'd (caller frees). */
+llmcore_error *llmcore_fork_session(llmcore_client *c, const char *session_id,
+                                    char **out_new_id);
+llmcore_error *llmcore_clone_session(llmcore_client *c, const char *session_id,
+                                     char **out_new_id);
+/* message_ids: array of length n. *out_deleted set to the removed count. */
+llmcore_error *llmcore_delete_messages(llmcore_client *c, const char *session_id,
+                                       const char *const *message_ids, size_t n,
+                                       int *out_deleted);
+
+/* A context item. Free with llmcore_context_item_free. */
+typedef struct {
+  char *id;      /* malloc'd */
+  char *type;    /* malloc'd (ContextItemType value) */
+  char *content; /* malloc'd */
+} llmcore_context_item;
+void llmcore_context_item_free(llmcore_context_item *it);
+
+/* type may be NULL (defaults to "user_text"). *out_item_id is malloc'd. */
+llmcore_error *llmcore_add_context_item(llmcore_client *c, const char *session_id,
+                                        const char *content, const char *type,
+                                        char **out_item_id);
+llmcore_error *llmcore_get_context_item(llmcore_client *c, const char *session_id,
+                                        const char *item_id, llmcore_context_item *out);
+llmcore_error *llmcore_remove_context_item(llmcore_client *c, const char *session_id,
+                                           const char *item_id, int *out_removed);
+
+/* ===================== Tier-1: vector store & RAG ========================== */
+
+/* A retrieved document. Free arrays with llmcore_search_results_free. */
+typedef struct {
+  char *id;      /* malloc'd */
+  char *content; /* malloc'd */
+  double score;  /* valid only when has_score */
+  int has_score;
+} llmcore_search_result;
+void llmcore_search_results_free(llmcore_search_result *r, size_t n);
+
+/* Each document is sent as {"content": contents[i]}. collection may be NULL.
+ * *out_ids is a malloc'd string array (free with llmcore_string_array_free). */
+llmcore_error *llmcore_add_documents(llmcore_client *c, const char *const *contents,
+                                     size_t n_contents, const char *collection,
+                                     char ***out_ids, size_t *out_n);
+/* k<=0 lets the bridge default (5). collection may be NULL. */
+llmcore_error *llmcore_search_vector_store(llmcore_client *c, const char *query, int k,
+                                           const char *collection,
+                                           llmcore_search_result **out, size_t *out_n);
+llmcore_error *llmcore_list_vector_collections(llmcore_client *c, char ***out, size_t *out_n);
+llmcore_error *llmcore_list_rag_collections(llmcore_client *c, char ***out, size_t *out_n);
+/* *out_info_json is the raw JSON object string (malloc'd; caller frees). */
+llmcore_error *llmcore_get_rag_collection_info(llmcore_client *c, const char *collection,
+                                               char **out_info_json);
+llmcore_error *llmcore_delete_rag_collection(llmcore_client *c, const char *collection,
+                                             int force, int *out_deleted);
+
+/* ===================== Tier-1: context presets ============================= */
+
+/* An input preset entry. `type` is a ContextItemType value; `content` may be NULL. */
+typedef struct {
+  const char *type;
+  const char *content;
+} llmcore_preset_item;
+
+/* description may be NULL; items may be NULL when n_items==0. */
+llmcore_error *llmcore_save_context_preset(llmcore_client *c, const char *name,
+                                           const char *description,
+                                           const llmcore_preset_item *items, size_t n_items);
+
+/* A fetched preset summary. Free with llmcore_preset_free. */
+typedef struct {
+  char *name;        /* malloc'd */
+  char *description; /* malloc'd ("" if unset) */
+  size_t item_count;
+} llmcore_preset;
+void llmcore_preset_free(llmcore_preset *p);
+
+llmcore_error *llmcore_get_context_preset(llmcore_client *c, const char *name,
+                                          llmcore_preset *out);
+/* *out_names is a malloc'd string array of preset names (llmcore_string_array_free). */
+llmcore_error *llmcore_list_context_presets(llmcore_client *c, char ***out_names, size_t *out_n);
+llmcore_error *llmcore_delete_context_preset(llmcore_client *c, const char *name,
+                                             int *out_deleted);
+
 #ifdef __cplusplus
 }
 #endif

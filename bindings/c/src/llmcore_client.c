@@ -857,3 +857,424 @@ llmcore_error *llmcore_analyze_text(llmcore_client *c, const char *text,
   cJSON_Delete(root);
   return NULL;
 }
+
+/* ===================== Tier-1: sessions, vector, presets =================== */
+
+/* POST `body` to `path`; on HTTP success parse the JSON body into *out_root
+ * (caller cJSON_Delete). HTTP>=400 becomes a structured error. */
+static llmcore_error *post_parse(llmcore_client *c, const char *path, const char *body,
+                                 cJSON **out_root) {
+  char *resp = NULL;
+  long code = 0;
+  llmcore_error *e = post_json(c, path, body, &resp, &code);
+  if (e) return e;
+  if (code >= 400) {
+    e = http_error(resp, code);
+    free(resp);
+    return e;
+  }
+  cJSON *root = cJSON_Parse(resp);
+  free(resp);
+  if (!root) return err_local("ERROR_CATEGORY_INTERNAL", "decode", "invalid JSON response");
+  *out_root = root;
+  return NULL;
+}
+
+/* POST and discard the (empty) JSON body; used by void-returning RPCs. */
+static llmcore_error *post_discard(llmcore_client *c, const char *path, const char *body) {
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, path, body, &root);
+  if (e) return e;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+/* Extract a malloc'd string field (returns jstrdup("") when absent). */
+static char *get_str(const cJSON *o, const char *key) {
+  const cJSON *v = cJSON_GetObjectItemCaseSensitive(o, key);
+  return jstrdup(cJSON_IsString(v) ? v->valuestring : "");
+}
+
+static size_t count_array(const cJSON *o, const char *key) {
+  const cJSON *a = cJSON_GetObjectItemCaseSensitive(o, key);
+  return cJSON_IsArray(a) ? (size_t)cJSON_GetArraySize(a) : 0;
+}
+
+static void parse_session(const cJSON *o, llmcore_session *out) {
+  out->id = get_str(o, "id");
+  out->name = get_str(o, "name");
+  out->message_count = count_array(o, "messages");
+  out->context_item_count = count_array(o, "context_items");
+}
+
+void llmcore_session_free(llmcore_session *s) {
+  if (!s) return;
+  free(s->id);
+  free(s->name);
+  s->id = s->name = NULL;
+  s->message_count = s->context_item_count = 0;
+}
+
+void llmcore_context_item_free(llmcore_context_item *it) {
+  if (!it) return;
+  free(it->id);
+  free(it->type);
+  free(it->content);
+  it->id = it->type = it->content = NULL;
+}
+
+void llmcore_search_results_free(llmcore_search_result *r, size_t n) {
+  if (!r) return;
+  for (size_t i = 0; i < n; i++) {
+    free(r[i].id);
+    free(r[i].content);
+  }
+  free(r);
+}
+
+void llmcore_preset_free(llmcore_preset *p) {
+  if (!p) return;
+  free(p->name);
+  free(p->description);
+  p->name = p->description = NULL;
+  p->item_count = 0;
+}
+
+/* -- sessions ------------------------------------------------------------- */
+
+llmcore_error *llmcore_create_session(llmcore_client *c, const char *name,
+                                      const char *system_message, llmcore_session *out) {
+  cJSON *req = cJSON_CreateObject();
+  if (name) cJSON_AddStringToObject(req, "name", name);
+  if (system_message) cJSON_AddStringToObject(req, "system_message", system_message);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/CreateSession", body, &root);
+  free(body);
+  if (e) return e;
+  parse_session(root, out);
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_get_session(llmcore_client *c, const char *session_id,
+                                   llmcore_session *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/GetSession", body, &root);
+  free(body);
+  if (e) return e;
+  parse_session(root, out);
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_list_sessions(llmcore_client *c, char ***out_ids, size_t *out_n) {
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/ListSessions", "{}", &root);
+  if (e) return e;
+  const cJSON *arr = cJSON_GetObjectItemCaseSensitive(root, "sessions");
+  size_t n = cJSON_IsArray(arr) ? (size_t)cJSON_GetArraySize(arr) : 0;
+  char **items = n ? (char **)calloc(n, sizeof(char *)) : NULL;
+  for (size_t i = 0; i < n; i++) {
+    items[i] = get_str(cJSON_GetArrayItem(arr, (int)i), "id");
+  }
+  *out_ids = items;
+  *out_n = n;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_delete_session(llmcore_client *c, const char *session_id) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  llmcore_error *e = post_discard(c, "/llmcore.v1/SessionService/DeleteSession", body);
+  free(body);
+  return e;
+}
+
+llmcore_error *llmcore_update_session_name(llmcore_client *c, const char *session_id,
+                                           const char *new_name) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  cJSON_AddStringToObject(req, "new_name", new_name);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  llmcore_error *e = post_discard(c, "/llmcore.v1/SessionService/UpdateSessionName", body);
+  free(body);
+  return e;
+}
+
+/* Shared by Fork/Clone: both return {"session_id": "<new id>"}. */
+static llmcore_error *session_returning_id(llmcore_client *c, const char *path,
+                                           const char *session_id, char **out_new_id) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, path, body, &root);
+  free(body);
+  if (e) return e;
+  *out_new_id = get_str(root, "session_id");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_fork_session(llmcore_client *c, const char *session_id,
+                                    char **out_new_id) {
+  return session_returning_id(c, "/llmcore.v1/SessionService/ForkSession", session_id,
+                              out_new_id);
+}
+
+llmcore_error *llmcore_clone_session(llmcore_client *c, const char *session_id,
+                                     char **out_new_id) {
+  return session_returning_id(c, "/llmcore.v1/SessionService/CloneSession", session_id,
+                              out_new_id);
+}
+
+llmcore_error *llmcore_delete_messages(llmcore_client *c, const char *session_id,
+                                       const char *const *message_ids, size_t n,
+                                       int *out_deleted) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  cJSON *ids = cJSON_AddArrayToObject(req, "message_ids");
+  for (size_t i = 0; i < n; i++) cJSON_AddItemToArray(ids, cJSON_CreateString(message_ids[i]));
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/DeleteMessages", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *dc = cJSON_GetObjectItemCaseSensitive(root, "deleted_count");
+  *out_deleted = cJSON_IsNumber(dc) ? dc->valueint : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_add_context_item(llmcore_client *c, const char *session_id,
+                                        const char *content, const char *type,
+                                        char **out_item_id) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  cJSON_AddStringToObject(req, "content", content);
+  if (type) cJSON_AddStringToObject(req, "type", type);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/AddContextItem", body, &root);
+  free(body);
+  if (e) return e;
+  *out_item_id = get_str(root, "item_id");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_get_context_item(llmcore_client *c, const char *session_id,
+                                        const char *item_id, llmcore_context_item *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  cJSON_AddStringToObject(req, "item_id", item_id);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/GetContextItem", body, &root);
+  free(body);
+  if (e) return e;
+  out->id = get_str(root, "id");
+  out->type = get_str(root, "type");
+  out->content = get_str(root, "content");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_remove_context_item(llmcore_client *c, const char *session_id,
+                                           const char *item_id, int *out_removed) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "session_id", session_id);
+  cJSON_AddStringToObject(req, "item_id", item_id);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/SessionService/RemoveContextItem", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *r = cJSON_GetObjectItemCaseSensitive(root, "removed");
+  *out_removed = cJSON_IsTrue(r) ? 1 : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+/* -- vector store & RAG --------------------------------------------------- */
+
+llmcore_error *llmcore_add_documents(llmcore_client *c, const char *const *contents,
+                                     size_t n_contents, const char *collection,
+                                     char ***out_ids, size_t *out_n) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON *docs = cJSON_AddArrayToObject(req, "documents");
+  for (size_t i = 0; i < n_contents; i++) {
+    cJSON *d = cJSON_CreateObject();
+    cJSON_AddStringToObject(d, "content", contents[i]);
+    cJSON_AddItemToArray(docs, d);
+  }
+  if (collection) cJSON_AddStringToObject(req, "collection_name", collection);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  llmcore_error *e =
+      get_string_array(c, "/llmcore.v1/VectorService/AddDocuments", body, "ids", out_ids, out_n);
+  free(body);
+  return e;
+}
+
+llmcore_error *llmcore_search_vector_store(llmcore_client *c, const char *query, int k,
+                                           const char *collection,
+                                           llmcore_search_result **out, size_t *out_n) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "query", query);
+  if (k > 0) cJSON_AddNumberToObject(req, "k", k);
+  if (collection) cJSON_AddStringToObject(req, "collection_name", collection);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/VectorService/SearchVectorStore", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *arr = cJSON_GetObjectItemCaseSensitive(root, "documents");
+  size_t n = cJSON_IsArray(arr) ? (size_t)cJSON_GetArraySize(arr) : 0;
+  llmcore_search_result *res = n ? (llmcore_search_result *)calloc(n, sizeof(*res)) : NULL;
+  for (size_t i = 0; i < n; i++) {
+    const cJSON *d = cJSON_GetArrayItem(arr, (int)i);
+    res[i].id = get_str(d, "id");
+    res[i].content = get_str(d, "content");
+    const cJSON *sc = cJSON_GetObjectItemCaseSensitive(d, "score");
+    if (cJSON_IsNumber(sc)) {
+      res[i].score = sc->valuedouble;
+      res[i].has_score = 1;
+    }
+  }
+  *out = res;
+  *out_n = n;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_list_vector_collections(llmcore_client *c, char ***out, size_t *out_n) {
+  return get_string_array(c, "/llmcore.v1/VectorService/ListVectorCollections", "{}",
+                          "collections", out, out_n);
+}
+
+llmcore_error *llmcore_list_rag_collections(llmcore_client *c, char ***out, size_t *out_n) {
+  return get_string_array(c, "/llmcore.v1/VectorService/ListRagCollections", "{}",
+                          "collections", out, out_n);
+}
+
+llmcore_error *llmcore_get_rag_collection_info(llmcore_client *c, const char *collection,
+                                               char **out_info_json) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "collection_name", collection);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/VectorService/GetRagCollectionInfo", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *info = cJSON_GetObjectItemCaseSensitive(root, "info");
+  *out_info_json = info ? cJSON_PrintUnformatted(info) : jstrdup("{}");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_delete_rag_collection(llmcore_client *c, const char *collection,
+                                             int force, int *out_deleted) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "collection_name", collection);
+  if (force) cJSON_AddBoolToObject(req, "force", 1);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/VectorService/DeleteRagCollection", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *d = cJSON_GetObjectItemCaseSensitive(root, "deleted");
+  *out_deleted = cJSON_IsTrue(d) ? 1 : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+/* -- context presets ------------------------------------------------------ */
+
+llmcore_error *llmcore_save_context_preset(llmcore_client *c, const char *name,
+                                           const char *description,
+                                           const llmcore_preset_item *items, size_t n_items) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON *preset = cJSON_AddObjectToObject(req, "preset");
+  cJSON_AddStringToObject(preset, "name", name);
+  if (description) cJSON_AddStringToObject(preset, "description", description);
+  cJSON *arr = cJSON_AddArrayToObject(preset, "items");
+  for (size_t i = 0; i < n_items; i++) {
+    cJSON *it = cJSON_CreateObject();
+    cJSON_AddStringToObject(it, "type", items[i].type ? items[i].type : "preset_text_content");
+    if (items[i].content) cJSON_AddStringToObject(it, "content", items[i].content);
+    cJSON_AddItemToArray(arr, it);
+  }
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  llmcore_error *e = post_discard(c, "/llmcore.v1/PresetService/SaveContextPreset", body);
+  free(body);
+  return e;
+}
+
+llmcore_error *llmcore_get_context_preset(llmcore_client *c, const char *name,
+                                          llmcore_preset *out) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "preset_name", name);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/PresetService/GetContextPreset", body, &root);
+  free(body);
+  if (e) return e;
+  out->name = get_str(root, "name");
+  out->description = get_str(root, "description");
+  out->item_count = count_array(root, "items");
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_list_context_presets(llmcore_client *c, char ***out_names, size_t *out_n) {
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/PresetService/ListContextPresets", "{}", &root);
+  if (e) return e;
+  const cJSON *arr = cJSON_GetObjectItemCaseSensitive(root, "presets");
+  size_t n = cJSON_IsArray(arr) ? (size_t)cJSON_GetArraySize(arr) : 0;
+  char **items = n ? (char **)calloc(n, sizeof(char *)) : NULL;
+  for (size_t i = 0; i < n; i++) {
+    items[i] = get_str(cJSON_GetArrayItem(arr, (int)i), "name");
+  }
+  *out_names = items;
+  *out_n = n;
+  cJSON_Delete(root);
+  return NULL;
+}
+
+llmcore_error *llmcore_delete_context_preset(llmcore_client *c, const char *name,
+                                             int *out_deleted) {
+  cJSON *req = cJSON_CreateObject();
+  cJSON_AddStringToObject(req, "preset_name", name);
+  char *body = cJSON_PrintUnformatted(req);
+  cJSON_Delete(req);
+  cJSON *root = NULL;
+  llmcore_error *e = post_parse(c, "/llmcore.v1/PresetService/DeleteContextPreset", body, &root);
+  free(body);
+  if (e) return e;
+  const cJSON *d = cJSON_GetObjectItemCaseSensitive(root, "deleted");
+  *out_deleted = cJSON_IsTrue(d) ? 1 : 0;
+  cJSON_Delete(root);
+  return NULL;
+}
