@@ -384,7 +384,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **Google** | Gemini 2.5 Pro/Flash, Gemini 3 Preview | Streaming, Tools, Vision |
 | **Ollama** | Llama 3.2/3.3, Gemma 3, Phi-3, Mistral | Streaming, Local |
 | **DeepSeek** | DeepSeek-R1, DeepSeek-V3.2, DeepSeek-Chat | Streaming, Reasoning |
-| **Z.ai (GLM)** | GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V, Embedding-3 | Streaming, Tools, Reasoning, Vision, Embeddings |
+| **Z.ai (GLM)** | GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V, CogView, CogVideoX, GLM-TTS/ASR/OCR, Embedding-3 | Streaming, Tools, Reasoning, Vision, Embeddings, Image, Video, TTS, STT, OCR, Web Search |
 | **Mistral** | Mistral Large 3 | Streaming, Tools |
 | **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |

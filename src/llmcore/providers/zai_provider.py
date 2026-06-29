@@ -83,10 +83,25 @@ except ImportError:
     tiktoken_available = False
     tiktoken = None  # type: ignore
 
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:
+    httpx_available = False
+    httpx = None  # type: ignore
+
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..models_multimodal import (
+    GeneratedImage,
+    ImageGenerationResult,
+    OCRResult,
+    SpeechResult,
+    TranscriptionResult,
+)
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
@@ -107,6 +122,13 @@ _DEFAULT_MODEL = "glm-5.2"
 
 #: Default embedding model.
 _DEFAULT_EMBEDDING_MODEL = "embedding-3"
+
+#: Default media models for the optional multimodal APIs.
+_DEFAULT_IMAGE_MODEL = "cogview-4"
+_DEFAULT_TTS_MODEL = "glm-tts"
+_DEFAULT_STT_MODEL = "glm-asr-2512"
+_DEFAULT_OCR_MODEL = "glm-ocr"
+_DEFAULT_VIDEO_MODEL = "cogvideox-3"
 
 #: Hardcoded context length map for the GLM family.
 _CONTEXT_LENGTHS: dict[str, int] = {
@@ -169,6 +191,10 @@ class ZaiProvider(BaseProvider):
     _encoding: Any  # tiktoken.Encoding | None
     _default_thinking: ThinkingType
     _default_reasoning_effort: str
+    _api_key: str
+    _base_url: str
+    _timeout: float
+    _http: Any  # httpx.AsyncClient | None
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """Initialize the Z.ai provider.
@@ -205,7 +231,14 @@ class ZaiProvider(BaseProvider):
         self.default_embedding_model = config.get(
             "default_embedding_model", _DEFAULT_EMBEDDING_MODEL
         )
+        # Optional media model defaults (image/TTS/STT/OCR/video).
+        self.default_image_model = config.get("default_image_model", _DEFAULT_IMAGE_MODEL)
+        self.default_tts_model = config.get("default_tts_model", _DEFAULT_TTS_MODEL)
+        self.default_stt_model = config.get("default_stt_model", _DEFAULT_STT_MODEL)
+        self.default_ocr_model = config.get("default_ocr_model", _DEFAULT_OCR_MODEL)
+        self.default_video_model = config.get("default_video_model", _DEFAULT_VIDEO_MODEL)
         timeout = config.get("timeout", 300)
+        self._timeout = float(timeout)
 
         # --- Thinking mode defaults ---
         thinking_raw = config.get("thinking", "enabled")
@@ -226,6 +259,11 @@ class ZaiProvider(BaseProvider):
         region = str(config.get("region", "overseas")).lower()
         default_base = _BASE_URL_CHINA if region == "china" else _BASE_URL_OVERSEAS
         base_url = config.get("base_url", default_base)
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        # Lazily-created raw httpx client for media endpoints (video, OCR,
+        # web search) that are not covered by the OpenAI-compatible surface.
+        self._http = None
         try:
             self._client = AsyncOpenAI(
                 api_key=api_key,
@@ -714,6 +752,362 @@ class ZaiProvider(BaseProvider):
             raise ProviderError(self.get_name(), f"Unexpected embeddings error: {e}")
 
     # =========================================================================
+    # Multimodal media APIs (image / TTS / STT / OCR / video / web search)
+    # =========================================================================
+
+    def _get_http(self) -> Any:
+        """Return (lazily creating) the raw httpx client for media endpoints."""
+        if not httpx_available:
+            raise ProviderError(
+                self.get_name(),
+                "The 'httpx' package is required for Z.ai media APIs.",
+            )
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                base_url=self._base_url,
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                timeout=self._timeout,
+            )
+        return self._http
+
+    async def _raw_post(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        files: Any | None = None,
+    ) -> Any:
+        """POST to a Z.ai endpoint and return the parsed httpx response."""
+        client = self._get_http()
+        try:
+            resp = await client.post(path, json=json, data=data, files=files)
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            body = e.response.text
+            if status in (401, 403):
+                raise ProviderError(
+                    self.get_name(),
+                    f"Authentication failed for Z.ai. Check ZAI_API_KEY. Error: {body}",
+                )
+            raise ProviderError(self.get_name(), f"API Error ({status}): {body}")
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"HTTP error: {e}")
+
+    async def _raw_get(self, path: str) -> Any:
+        """GET a Z.ai endpoint and return the parsed httpx response."""
+        client = self._get_http()
+        try:
+            resp = await client.get(path)
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as e:
+            raise ProviderError(
+                self.get_name(), f"API Error ({e.response.status_code}): {e.response.text}"
+            )
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"HTTP error: {e}")
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        quality: str | None = None,
+        response_format: str = "url",
+        style: str | None = None,
+        **kwargs: Any,
+    ) -> ImageGenerationResult:
+        """Generate images via ``POST /images/generations`` (CogView / GLM-Image).
+
+        Z.ai returns image URLs by default; ``response_format`` is accepted for
+        API parity but the platform primarily returns ``url`` entries.
+        """
+        image_model = model or self.default_image_model
+        body: dict[str, Any] = {"model": image_model, "prompt": prompt}
+        if size is not None:
+            body["size"] = size
+        if quality is not None:
+            body["quality"] = quality
+        body.update(kwargs)
+
+        resp = await self._raw_post("/images/generations", json=body)
+        payload = resp.json()
+        images: list[GeneratedImage] = []
+        for item in payload.get("data", []):
+            images.append(
+                GeneratedImage(
+                    data=item.get("b64_json"),
+                    url=item.get("url"),
+                    revised_prompt=item.get("revised_prompt"),
+                    format="png",
+                )
+            )
+        return ImageGenerationResult(
+            images=images,
+            model=image_model,
+            metadata={"created": payload.get("created"), "content_filter": payload.get("content_filter")},
+        )
+
+    async def generate_speech(
+        self,
+        text: str,
+        *,
+        voice: str = "tongtong",
+        model: str | None = None,
+        response_format: str = "wav",
+        speed: float = 1.0,
+        instructions: str | None = None,
+        **kwargs: Any,
+    ) -> SpeechResult:
+        """Generate speech audio via ``POST /audio/speech`` (GLM-TTS).
+
+        Note: Z.ai limits ``text`` to ~1024 characters and returns ``wav`` or
+        ``pcm`` audio.  ``speed``/``instructions`` are accepted for interface
+        parity but ignored by the GLM-TTS endpoint.
+        """
+        tts_model = model or self.default_tts_model
+        body: dict[str, Any] = {
+            "model": tts_model,
+            "input": text,
+            "voice": voice,
+            "response_format": response_format,
+        }
+        body.update(kwargs)
+
+        resp = await self._raw_post("/audio/speech", json=body)
+        # The endpoint returns raw audio bytes (or JSON on error, already raised).
+        return SpeechResult(
+            audio_data=resp.content,
+            format=response_format,
+            model=tts_model,
+            voice=voice,
+        )
+
+    async def transcribe_audio(
+        self,
+        audio_data: bytes | str,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        prompt: str | None = None,
+        response_format: str = "json",
+        temperature: float | None = None,
+        timestamp_granularities: list[str] | None = None,
+        **kwargs: Any,
+    ) -> TranscriptionResult:
+        """Transcribe audio via ``POST /audio/transcriptions`` (GLM-ASR).
+
+        Args:
+            audio_data: Raw audio bytes or a path to an audio file.
+            model: STT model (default: ``glm-asr-2512``).
+            prompt: Optional decoding hint.
+        """
+        stt_model = model or self.default_stt_model
+
+        if isinstance(audio_data, str):
+            # Treat as a file path.
+            try:
+                import aiofiles
+
+                async with aiofiles.open(audio_data, "rb") as f:
+                    file_bytes = await f.read()
+                filename = os.path.basename(audio_data)
+            except ImportError:
+                with open(audio_data, "rb") as f:
+                    file_bytes = f.read()
+                filename = os.path.basename(audio_data)
+        else:
+            file_bytes = audio_data
+            filename = "audio.wav"
+
+        data: dict[str, Any] = {"model": stt_model}
+        if prompt:
+            data["prompt"] = prompt
+        if temperature is not None:
+            data["temperature"] = str(temperature)
+        data.update({k: str(v) for k, v in kwargs.items()})
+        files = {"file": (filename, file_bytes)}
+
+        resp = await self._raw_post("/audio/transcriptions", data=data, files=files)
+        payload = resp.json()
+        return TranscriptionResult(
+            text=payload.get("text", ""),
+            language=language or payload.get("language"),
+            model=stt_model,
+            metadata={k: v for k, v in payload.items() if k != "text"},
+        )
+
+    async def ocr(
+        self,
+        document: str | bytes | dict[str, Any],
+        *,
+        model: str | None = None,
+        pages: list[int] | None = None,
+        include_image_base64: bool | None = None,
+        image_limit: int | None = None,
+        image_min_size: int | None = None,
+        **kwargs: Any,
+    ) -> OCRResult:
+        """Process a document with GLM-OCR via ``POST /layout_parsing``.
+
+        Args:
+            document: A URL string or base64-encoded image/PDF.  A dict with a
+                ``file`` key is also accepted.
+            model: OCR model (default: ``glm-ocr``).
+            pages: Optional 0-based page range; mapped to
+                ``start_page_id``/``end_page_id``.
+        """
+        ocr_model = model or self.default_ocr_model
+
+        if isinstance(document, dict):
+            file_ref = document.get("file") or document.get("url")
+        elif isinstance(document, bytes):
+            import base64
+
+            file_ref = base64.b64encode(document).decode("ascii")
+        else:
+            file_ref = document
+
+        body: dict[str, Any] = {"model": ocr_model, "file": file_ref}
+        if pages:
+            body["start_page_id"] = pages[0]
+            body["end_page_id"] = pages[-1]
+        if include_image_base64 is not None:
+            body["return_crop_images"] = include_image_base64
+        body.update(kwargs)
+
+        resp = await self._raw_post("/layout_parsing", json=body)
+        payload = resp.json()
+        raw_pages = payload.get("pages") or payload.get("data") or []
+        if isinstance(raw_pages, dict):
+            raw_pages = [raw_pages]
+        return OCRResult(
+            pages=raw_pages if isinstance(raw_pages, list) else [],
+            model=ocr_model,
+            pages_processed=len(raw_pages) if isinstance(raw_pages, list) else 0,
+            metadata={k: v for k, v in payload.items() if k not in ("pages", "data")},
+        )
+
+    async def generate_video(
+        self,
+        prompt: str | None = None,
+        *,
+        model: str | None = None,
+        image_url: str | None = None,
+        quality: str | None = None,
+        size: str | None = None,
+        duration: int | None = None,
+        fps: int | None = None,
+        with_audio: bool | None = None,
+        wait: bool = False,
+        poll_interval: float = 5.0,
+        max_wait_seconds: float = 300.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Generate a video via ``POST /videos/generations`` (CogVideoX).
+
+        Z.ai video generation is asynchronous: the initial call returns a task
+        ``id`` with status ``PROCESSING``.  When ``wait=True`` this polls
+        ``GET /async-result/{id}`` until the task completes (or ``max_wait_seconds``
+        elapses) and returns the final result dict; otherwise it returns the
+        initial task descriptor for the caller to poll via
+        :meth:`retrieve_video_result`.
+
+        Args:
+            prompt: Text prompt (text-to-video).
+            image_url: Optional source image (image-to-video).
+            model: Video model (default: ``cogvideox-3``).
+            wait: If True, block until the task finishes.
+
+        Returns:
+            The raw Z.ai video task/result dictionary.
+        """
+        video_model = model or self.default_video_model
+        body: dict[str, Any] = {"model": video_model}
+        if prompt is not None:
+            body["prompt"] = prompt
+        if image_url is not None:
+            body["image_url"] = image_url
+        if quality is not None:
+            body["quality"] = quality
+        if size is not None:
+            body["size"] = size
+        if duration is not None:
+            body["duration"] = duration
+        if fps is not None:
+            body["fps"] = fps
+        if with_audio is not None:
+            body["with_audio"] = with_audio
+        body.update(kwargs)
+
+        resp = await self._raw_post("/videos/generations", json=body)
+        task = resp.json()
+        if not wait:
+            return task
+
+        task_id = task.get("id")
+        if not task_id:
+            return task
+
+        elapsed = 0.0
+        while elapsed < max_wait_seconds:
+            result = await self.retrieve_video_result(task_id)
+            status = str(result.get("task_status", "")).upper()
+            if status in ("SUCCESS", "FAIL", "FAILED"):
+                return result
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise ProviderError(
+            self.get_name(),
+            f"Video task '{task_id}' did not complete within {max_wait_seconds}s.",
+        )
+
+    async def retrieve_video_result(self, task_id: str) -> dict[str, Any]:
+        """Fetch the status/result of an async video task via ``GET /async-result/{id}``."""
+        resp = await self._raw_get(f"/async-result/{task_id}")
+        return resp.json()
+
+    async def web_search(
+        self,
+        query: str,
+        *,
+        search_engine: str = "search_std",
+        count: int | None = None,
+        search_domain_filter: str | None = None,
+        search_recency_filter: str | None = None,
+        content_size: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Run a web search via ``POST /web_search`` (Z.ai Web Search API).
+
+        Args:
+            query: The search query string.
+            search_engine: Engine id (default ``search_std``).
+            count: Maximum number of results.
+
+        Returns:
+            The raw Z.ai web-search response dict (``search_result`` list, etc.).
+        """
+        body: dict[str, Any] = {"search_query": query, "search_engine": search_engine}
+        if count is not None:
+            body["count"] = count
+        if search_domain_filter is not None:
+            body["search_domain_filter"] = search_domain_filter
+        if search_recency_filter is not None:
+            body["search_recency_filter"] = search_recency_filter
+        if content_size is not None:
+            body["content_size"] = content_size
+        body.update(kwargs)
+
+        resp = await self._raw_post("/web_search", json=body)
+        return resp.json()
+
+    # =========================================================================
     # Response extraction
     # =========================================================================
 
@@ -877,11 +1271,17 @@ class ZaiProvider(BaseProvider):
     # =========================================================================
 
     async def close(self) -> None:
-        """Close the HTTP client."""
+        """Close the chat and media HTTP clients."""
         if self._client:
             try:
                 await self._client.close()
             except Exception as e:
                 logger.error("Error closing Z.ai client: %s", e)
         self._client = None
+        if self._http is not None:
+            try:
+                await self._http.aclose()
+            except Exception as e:
+                logger.error("Error closing Z.ai media client: %s", e)
+            self._http = None
         logger.info("ZaiProvider closed.")

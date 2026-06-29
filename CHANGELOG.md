@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     embeddings.
   - Region selection (`overseas` default, or `china` for the
     `open.bigmodel.cn` endpoint).
+- **Z.ai multimodal media APIs**: the provider implements llmcore's full
+  media surface against the Z.ai endpoints:
+  - `generate_image` (CogView / GLM-Image, `/images/generations`)
+  - `generate_speech` (GLM-TTS, `/audio/speech`)
+  - `transcribe_audio` (GLM-ASR, `/audio/transcriptions`)
+  - `ocr` (GLM-OCR layout parsing, `/layout_parsing`)
+  - `generate_video` + `retrieve_video_result` (CogVideoX,
+    `/videos/generations` with async task polling)
+  - `web_search` (Z.ai Web Search API, `/web_search`)
+- **cardctl**: new `ZaiAdapter` (OpenAI-compatible `/models` listing) and
+  `zai.toml` enrichment overlay registered in the model-card tool, with
+  `glm`/`zhipu`/`zhipuai`/`bigmodel` aliases; media/generation model ids are
+  filtered out of chat cards.
+- **Packaging**: new `llmcore[zai]` extra (`openai` + `httpx`), included in
+  `llmcore[all]`.
 - **Provider registration**: `zai` registered in `ProviderManager` with
   `glm`, `zhipu`, `zhipuai`, and `bigmodel` aliases.
 - **Model cards**: builtin cards for `glm-5.2`, `glm-5.1`, `glm-4.7`,

@@ -596,6 +596,123 @@ class TestClose:
 
 
 # ---------------------------------------------------------------------------
+# Multimodal media APIs (image / TTS / STT / OCR / video / web search)
+# ---------------------------------------------------------------------------
+
+
+def _mock_http_response(*, json_body: Any = None, content: bytes | None = None) -> MagicMock:
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    if json_body is not None:
+        resp.json = MagicMock(return_value=json_body)
+    if content is not None:
+        resp.content = content
+    return resp
+
+
+@pytest.fixture
+def media_provider():
+    """Provider with a mocked raw httpx media client."""
+    with patch("llmcore.providers.zai_provider.AsyncOpenAI"):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        p = ZaiProvider(MINIMAL_CONFIG.copy())
+        http = MagicMock()
+        http.post = AsyncMock()
+        http.get = AsyncMock()
+        p._http = http
+        # Bypass the lazy creator so the mock is always returned.
+        p._get_http = lambda: http  # type: ignore[assignment]
+        return p
+
+
+class TestMediaAPIs:
+    @pytest.mark.asyncio
+    async def test_generate_image(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"created": 123, "data": [{"url": "https://img/1.png"}]}
+        )
+        result = await media_provider.generate_image("a red panda", size="1024x1024")
+        assert result.model == "cogview-4"
+        assert result.images[0].url == "https://img/1.png"
+        path, kwargs = media_provider._http.post.call_args[0], media_provider._http.post.call_args.kwargs
+        assert path[0] == "/images/generations"
+        assert kwargs["json"]["prompt"] == "a red panda"
+        assert kwargs["json"]["size"] == "1024x1024"
+
+    @pytest.mark.asyncio
+    async def test_generate_speech(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(content=b"RIFFfake")
+        result = await media_provider.generate_speech("hello", voice="tongtong")
+        assert result.audio_data == b"RIFFfake"
+        assert result.format == "wav"
+        assert result.voice == "tongtong"
+        assert result.model == "glm-tts"
+        assert media_provider._http.post.call_args[0][0] == "/audio/speech"
+
+    @pytest.mark.asyncio
+    async def test_transcribe_audio_bytes(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"text": "hello world", "language": "en"}
+        )
+        result = await media_provider.transcribe_audio(b"\x00\x01audio")
+        assert result.text == "hello world"
+        assert result.model == "glm-asr-2512"
+        kwargs = media_provider._http.post.call_args.kwargs
+        assert "files" in kwargs and "file" in kwargs["files"]
+        assert kwargs["data"]["model"] == "glm-asr-2512"
+
+    @pytest.mark.asyncio
+    async def test_ocr_url(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"pages": [{"index": 0, "markdown": "# Title"}]}
+        )
+        result = await media_provider.ocr("https://example.com/doc.pdf")
+        assert result.model == "glm-ocr"
+        assert result.pages_processed == 1
+        assert result.pages[0]["markdown"] == "# Title"
+        kwargs = media_provider._http.post.call_args.kwargs
+        assert media_provider._http.post.call_args[0][0] == "/layout_parsing"
+        assert kwargs["json"]["file"] == "https://example.com/doc.pdf"
+
+    @pytest.mark.asyncio
+    async def test_generate_video_no_wait(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"id": "task-1", "task_status": "PROCESSING"}
+        )
+        result = await media_provider.generate_video("a cat surfing")
+        assert result["id"] == "task-1"
+        assert media_provider._http.post.call_args[0][0] == "/videos/generations"
+        assert media_provider._http.post.call_args.kwargs["json"]["prompt"] == "a cat surfing"
+
+    @pytest.mark.asyncio
+    async def test_generate_video_wait_polls(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"id": "task-2", "task_status": "PROCESSING"}
+        )
+        media_provider._http.get.return_value = _mock_http_response(
+            json_body={"id": "task-2", "task_status": "SUCCESS", "video_result": [{"url": "v.mp4"}]}
+        )
+        result = await media_provider.generate_video(
+            "a dog", wait=True, poll_interval=0, max_wait_seconds=10
+        )
+        assert result["task_status"] == "SUCCESS"
+        assert media_provider._http.get.call_args[0][0] == "/async-result/task-2"
+
+    @pytest.mark.asyncio
+    async def test_web_search(self, media_provider):
+        media_provider._http.post.return_value = _mock_http_response(
+            json_body={"search_result": [{"title": "T", "link": "https://x"}]}
+        )
+        result = await media_provider.web_search("llmcore", count=5)
+        assert result["search_result"][0]["title"] == "T"
+        kwargs = media_provider._http.post.call_args.kwargs
+        assert media_provider._http.post.call_args[0][0] == "/web_search"
+        assert kwargs["json"]["search_query"] == "llmcore"
+        assert kwargs["json"]["count"] == 5
+
+
+# ---------------------------------------------------------------------------
 # Provider registration / aliases
 # ---------------------------------------------------------------------------
 

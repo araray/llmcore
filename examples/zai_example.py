@@ -79,6 +79,23 @@ async def main() -> None:
             print(chunk, end="", flush=True)
         print()
 
+        # --- Example 4: Multimodal media (image / video / web search) ---
+        # The Z.ai provider also exposes llmcore's media surface. These call
+        # the provider directly (not through the chat facade).
+        zai = llm._provider_manager.get_provider("zai")
+
+        logger.info("\n--- Generating an image (CogView) ---")
+        img = await zai.generate_image("a watercolor red panda in a teacup")
+        logger.info(f"Image URL(s): {[i.url for i in img.images]}")
+
+        logger.info("\n--- Web search (Z.ai Web Search API) ---")
+        results = await zai.web_search("what is GLM-5.2?", count=3)
+        logger.info(f"Search results: {results.get('search_result', [])[:1]}")
+
+        # Video generation is asynchronous; use wait=True to poll to completion:
+        # video = await zai.generate_video("a cat surfing a wave", wait=True)
+        # logger.info(f"Video: {video.get('video_result')}")
+
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
     except ProviderError as e:

@@ -60,6 +60,11 @@ deepinfra = ["openai>=2.31.0", "httpx>=0.27.0"]
 # WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
 # and the Voice Agent.  Install with: pip install llmcore[deepgram]
 deepgram = ["deepgram-sdk>=7.0.0", "websockets>=12.0"]
+# Z.ai (Zhipu AI / GLM) reuses the OpenAI SDK for the OpenAI-compatible chat
+# and embeddings endpoints, plus httpx for the native media endpoints
+# (image/audio/OCR/video generation, web search).
+# Install with: pip install llmcore[zai]
+zai = ["openai>=2.31.0", "httpx>=0.27.0"]
 
 # ----------------------------------------------------------------------------
 # Search providers (web / data search — optional, parallel to LLM providers)
@@ -165,6 +170,7 @@ all = [
     "llmcore[ollama]",
     "llmcore[deepinfra]",
     "llmcore[deepgram]",
+    "llmcore[zai]",
     "llmcore[brightdata]",
     "llmcore[serper]",
     "llmcore[serpapi]",
