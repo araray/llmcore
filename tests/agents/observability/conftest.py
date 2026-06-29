@@ -62,6 +62,10 @@ _events = _load_module(
     "llmcore.agents.observability.events",
     str(_src_path / "llmcore" / "agents" / "observability" / "events.py"),
 )
+_context_diagnostics = _load_module(
+    "llmcore.agents.observability.context_diagnostics",
+    str(_src_path / "llmcore" / "agents" / "observability" / "context_diagnostics.py"),
+)
 _logger = _load_module(
     "llmcore.agents.observability.logger",
     str(_src_path / "llmcore" / "agents" / "observability" / "logger.py"),
@@ -82,6 +86,7 @@ _observability_factory = _load_module(
 
 # Link modules into the package namespace for standard imports
 _obs_pkg = sys.modules["llmcore.agents.observability"]
+_obs_pkg.context_diagnostics = _context_diagnostics
 _obs_pkg.events = _events
 _obs_pkg.logger = _logger
 _obs_pkg.metrics = _metrics
@@ -90,6 +95,8 @@ _agents_pkg = sys.modules["llmcore.agents"]
 _agents_pkg.observability_factory = _observability_factory
 
 # Export all symbols at the observability package level
+for _name in _context_diagnostics.__all__:
+    setattr(_obs_pkg, _name, getattr(_context_diagnostics, _name))
 for _name in _events.__all__:
     setattr(_obs_pkg, _name, getattr(_events, _name))
 for _name in _logger.__all__:
@@ -100,7 +107,7 @@ for _name in _replay.__all__:
     setattr(_obs_pkg, _name, getattr(_replay, _name))
 
 # Now use standard imports (they'll find the pre-registered modules)
-from llmcore.agents.observability.events import (
+from llmcore.agents.observability.events import (  # noqa: E402
     ActivityEvent,
     ActivityEventType,
     # Events
@@ -125,7 +132,7 @@ from llmcore.agents.observability.events import (
     SandboxEvent,
     SandboxEventType,
 )
-from llmcore.agents.observability.logger import (
+from llmcore.agents.observability.logger import (  # noqa: E402
     CallbackSink,
     EventLogger,
     # Logger
@@ -134,12 +141,12 @@ from llmcore.agents.observability.logger import (
     InMemorySink,
     JSONLFileSink,
 )
-from llmcore.agents.observability.metrics import (
+from llmcore.agents.observability.metrics import (  # noqa: E402
     # Enums
     ExecutionMetrics,
     MetricsCollector,
 )
-from llmcore.agents.observability.replay import (
+from llmcore.agents.observability.replay import (  # noqa: E402
     # Replay
     ExecutionReplay,
 )

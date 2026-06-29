@@ -36,9 +36,12 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from inspect import Parameter, signature
+from typing import Any, Protocol
+
+from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +67,7 @@ class CompressionStrategy(Enum):
 class TokenCounter(Protocol):
     """Protocol for counting tokens in text."""
 
-    def count(self, text: str) -> int: ...
+    def count(self, text: str | None) -> int: ...
 
 
 class LLMSummarizer(Protocol):
@@ -73,9 +76,55 @@ class LLMSummarizer(Protocol):
     async def summarize(self, text: str, max_tokens: int) -> str: ...
 
 
+class ObjectiveAwareLLMSummarizer(Protocol):
+    """Protocol for summarizers that can honor a downstream objective."""
+
+    async def summarize(
+        self,
+        text: str,
+        max_tokens: int,
+        objective: "SummaryObjective | None" = None,
+    ) -> str: ...
+
+
 # =============================================================================
 # Data Models
 # =============================================================================
+
+
+@dataclass
+class SummaryObjective:
+    """Describes what a summarization should preserve for the next consumer."""
+
+    purpose: str
+    preserve: list[str] = field(default_factory=list)
+    drop: list[str] = field(default_factory=list)
+    target_audience: str | None = None
+    max_tokens: int = 2000
+    min_coverage: float | None = None
+
+    @classmethod
+    def from_value(
+        cls,
+        value: "SummaryObjective | dict[str, Any] | str | None",
+    ) -> "SummaryObjective | None":
+        """Normalize common objective shapes to ``SummaryObjective``."""
+        if value is None or isinstance(value, SummaryObjective):
+            return value
+        if isinstance(value, str):
+            return cls(purpose=value)
+        if isinstance(value, dict):
+            return cls(
+                purpose=str(value.get("purpose") or value.get("objective") or ""),
+                preserve=_string_list(value.get("preserve")),
+                drop=_string_list(value.get("drop")),
+                target_audience=(
+                    str(value["target_audience"]) if value.get("target_audience") else None
+                ),
+                max_tokens=_safe_int(value.get("max_tokens"), default=2000),
+                min_coverage=_safe_float(value.get("min_coverage")),
+            )
+        return cls(purpose=str(value))
 
 
 @dataclass
@@ -90,6 +139,7 @@ class CompressionResult:
         strategy_used: Which strategy was applied.
         sections_summarized: Number of sections that were summarized.
         sections_preserved: Number of sections kept verbatim.
+        summary_objective: Optional objective used for summarization.
     """
 
     content: str
@@ -98,10 +148,11 @@ class CompressionResult:
     strategy_used: str
     sections_summarized: int = 0
     sections_preserved: int = 0
+    summary_objective: SummaryObjective | None = None
 
     @property
     def compression_ratio(self) -> float:
-        """Ratio of compressed to original size (0.0–1.0)."""
+        """Ratio of compressed to original size (0.0-1.0)."""
         if self.original_tokens <= 0:
             return 1.0
         return self.compressed_tokens / self.original_tokens
@@ -170,6 +221,7 @@ class ContextCompressor:
         content: str,
         target_tokens: int,
         current_tokens: int | None = None,
+        summary_objective: SummaryObjective | dict[str, Any] | str | None = None,
     ) -> CompressionResult:
         """
         Compress context to fit within ``target_tokens``.
@@ -178,10 +230,14 @@ class ContextCompressor:
             content: The full context string (section-delimited).
             target_tokens: Desired token budget.
             current_tokens: Current token count (computed if ``None``).
+            summary_objective: Optional downstream objective that guides
+                abstractive summarization.
 
         Returns:
             ``CompressionResult`` with compressed content and metadata.
         """
+        objective = SummaryObjective.from_value(summary_objective)
+
         if current_tokens is None:
             current_tokens = self.token_counter.count(content)
 
@@ -192,17 +248,18 @@ class ContextCompressor:
                 original_tokens=current_tokens,
                 compressed_tokens=current_tokens,
                 strategy_used="none",
+                summary_objective=objective,
             )
 
         if self.strategy == CompressionStrategy.TRUNCATION:
-            return await self._truncate(content, target_tokens, current_tokens)
+            return await self._truncate(content, target_tokens, current_tokens, objective)
         elif self.strategy == CompressionStrategy.EXTRACTIVE:
-            return await self._extract(content, target_tokens, current_tokens)
+            return await self._extract(content, target_tokens, current_tokens, objective)
         elif self.strategy == CompressionStrategy.ABSTRACTIVE:
-            return await self._abstractive(content, target_tokens, current_tokens)
+            return await self._abstractive(content, target_tokens, current_tokens, objective)
         else:
             # Fallback
-            return await self._truncate(content, target_tokens, current_tokens)
+            return await self._truncate(content, target_tokens, current_tokens, objective)
 
     # ------------------------------------------------------------------
     # Strategy implementations
@@ -213,6 +270,7 @@ class ContextCompressor:
         content: str,
         target_tokens: int,
         current_tokens: int,
+        objective: SummaryObjective | None = None,
     ) -> CompressionResult:
         """Truncation strategy: keep beginning, drop tail."""
         sections = _split_sections(content)
@@ -246,6 +304,7 @@ class ContextCompressor:
             strategy_used="truncation",
             sections_preserved=len(kept),
             sections_summarized=0,
+            summary_objective=objective,
         )
 
     async def _extract(
@@ -253,6 +312,7 @@ class ContextCompressor:
         content: str,
         target_tokens: int,
         current_tokens: int,
+        objective: SummaryObjective | None = None,
     ) -> CompressionResult:
         """
         Extractive strategy: keep top-N sections verbatim, extract
@@ -308,6 +368,7 @@ class ContextCompressor:
             strategy_used="extractive",
             sections_preserved=len(preserved),
             sections_summarized=len(to_compress),
+            summary_objective=objective,
         )
 
     async def _abstractive(
@@ -315,6 +376,7 @@ class ContextCompressor:
         content: str,
         target_tokens: int,
         current_tokens: int,
+        objective: SummaryObjective | None = None,
     ) -> CompressionResult:
         """
         Abstractive strategy: use LLM to summarize lower-priority
@@ -325,7 +387,7 @@ class ContextCompressor:
                 "Abstractive compression requested but no LLM summarizer "
                 "configured — falling back to extractive"
             )
-            return await self._extract(content, target_tokens, current_tokens)
+            return await self._extract(content, target_tokens, current_tokens, objective)
 
         sections = _split_sections(content)
 
@@ -348,7 +410,12 @@ class ContextCompressor:
             # Summarize each section
             combined = "\n\n".join(to_summarize)
             try:
-                summary = await self.llm_summarizer.summarize(combined, max_tokens=remaining_budget)
+                summary = await _call_summarizer(
+                    self.llm_summarizer,
+                    combined,
+                    max_tokens=remaining_budget,
+                    objective=objective,
+                )
                 summarized_sections.append(f"## COMPRESSED CONTEXT\n\n{summary}")
             except Exception as exc:
                 logger.warning("LLM summarization failed: %s — using extractive", exc)
@@ -369,6 +436,7 @@ class ContextCompressor:
             strategy_used="abstractive",
             sections_preserved=len(preserved),
             sections_summarized=len(to_summarize),
+            summary_objective=objective,
         )
 
     # ------------------------------------------------------------------
@@ -393,11 +461,64 @@ class ContextCompressor:
 # =============================================================================
 
 
-class _EstimateCounter:
-    """Fallback token counter using character-based estimation."""
+class _EstimateCounter(_LLMCoreEstimateCounter):
+    """Fallback token counter using LLMCore's estimator."""
 
-    def count(self, text: str) -> int:
-        return max(1, len(text) // 4) if text else 0
+
+async def _call_summarizer(
+    summarizer: LLMSummarizer,
+    text: str,
+    *,
+    max_tokens: int,
+    objective: SummaryObjective | None,
+) -> str:
+    """Call old or objective-aware summarizers without breaking either shape."""
+    summarize = summarizer.summarize
+    if objective is not None and _accepts_objective(summarize):
+        return await summarize(text, max_tokens=max_tokens, objective=objective)
+    return await summarize(text, max_tokens=max_tokens)
+
+
+def _accepts_objective(callable_obj: Any) -> bool:
+    """Return True when a callable can accept an ``objective`` keyword."""
+    try:
+        parameters = signature(callable_obj).parameters.values()
+    except (TypeError, ValueError):
+        return False
+
+    return any(
+        param.kind == Parameter.VAR_KEYWORD or param.name == "objective"
+        for param in parameters
+    )
+
+
+def _string_list(value: Any) -> list[str]:
+    """Normalize list-like objective fields without splitting plain strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def _safe_int(value: Any, *, default: int) -> int:
+    """Coerce an integer objective field with a conservative default."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any) -> float | None:
+    """Coerce an optional float objective field."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _split_sections(content: str) -> list[str]:
@@ -417,18 +538,18 @@ def _extract_key_sentences(
 
     Scoring heuristics:
     - Position bonus: earlier sentences score higher.
-    - Length bonus: medium-length sentences (20–80 words) preferred.
+    - Length bonus: medium-length sentences (20-80 words) preferred.
     - Header proximity: sentences near headers score higher.
     - Code blocks: preserved verbatim (compact, high information).
     """
     # Preserve headers
     lines = text.split("\n")
-    header_lines = [l for l in lines if l.startswith("#")]
+    header_lines = [line for line in lines if line.startswith("#")]
     header = "\n".join(header_lines) + "\n\n" if header_lines else ""
 
     # Split into sentences (rough)
     # Keep code blocks as atomic units
-    body = "\n".join(l for l in lines if not l.startswith("#"))
+    body = "\n".join(line for line in lines if not line.startswith("#"))
     sentences = _split_into_sentences(body)
 
     if not sentences:

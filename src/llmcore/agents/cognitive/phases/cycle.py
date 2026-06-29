@@ -15,6 +15,7 @@ References:
     - Dossier: Step 2.7 (Cognitive Cycle Orchestrator)
 """
 
+import json
 import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from ..models import (
     # Phase inputs
     PerceiveInput,
     PlanInput,
+    PlanStepSpec,
     ReflectInput,
     ThinkInput,
     UpdateInput,
@@ -190,6 +192,9 @@ class CognitiveCycle:
         prompt_registry: Any | None = None,
         tracer: Any | None = None,
         context_synthesizer: Any | None = None,
+        agents_config: Optional["AgentsConfig"] = None,
+        max_history_iterations: int = 3,
+        max_history_observation_chars: int = 1000,
     ):
         """
         Initialize the cognitive cycle orchestrator.
@@ -207,6 +212,8 @@ class CognitiveCycle:
                 gathering from goals, recent history, RAG, skills, and
                 episodic memory. When None, falls back to direct
                 MemoryManager retrieval.
+            agents_config: Optional agent system configuration. Defaults to
+                AgentsConfig() for direct CognitiveCycle use.
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -215,6 +222,13 @@ class CognitiveCycle:
         self.prompt_registry = prompt_registry
         self.tracer = tracer
         self.context_synthesizer = context_synthesizer
+        if agents_config is None:
+            from ....config.agents_config import AgentsConfig
+
+            agents_config = AgentsConfig()
+        self.agents_config = agents_config
+        self.max_history_iterations = max(1, int(max_history_iterations))
+        self.max_history_observation_chars = max(1, int(max_history_observation_chars))
 
     async def run_iteration(
         self,
@@ -316,16 +330,30 @@ class CognitiveCycle:
                     if agent_state.current_plan_step_index < len(agent_state.plan)
                     else "Complete the goal"
                 )
+                current_step_spec = _current_plan_step_spec(agent_state)
+
+                tool_inventory_config = self.agents_config.tool_inventory
+                if (
+                    tool_inventory_config.enabled
+                    and callable(getattr(type(self.tool_manager), "get_tool_inventory", None))
+                ):
+                    available_tools = self.tool_manager.get_tool_inventory(
+                        max_description_chars=tool_inventory_config.max_description_chars,
+                        include_parameters=tool_inventory_config.include_parameters,
+                    )
+                else:
+                    available_tools = [
+                        t.model_dump() if hasattr(t, "model_dump") else t
+                        for t in self.tool_manager.get_tool_definitions()
+                    ]
 
                 think_input = ThinkInput(
                     goal=agent_state.goal,
                     current_step=current_step,
+                    current_step_spec=current_step_spec,
                     history=self._build_history(agent_state),
                     context="\n".join(iteration.perceive_output.retrieved_context),
-                    available_tools=[
-                        t.model_dump() if hasattr(t, "model_dump") else t
-                        for t in self.tool_manager.get_tool_definitions()
-                    ],
+                    available_tools=available_tools,
                 )
 
                 iteration.think_output = await think_phase(
@@ -338,11 +366,13 @@ class CognitiveCycle:
                     tracer=self.tracer,
                     provider_name=provider_name,
                     model_name=model_name,
+                    agents_config=self.agents_config,
                 )
 
                 # If final answer, skip remaining phases
                 if iteration.think_output.is_final_answer:
                     logger.info("Final answer provided, completing iteration")
+                    iteration.update_token_totals_from_phases()
                     agent_state.complete_iteration(success=True)
                     return iteration
 
@@ -372,6 +402,7 @@ class CognitiveCycle:
                             agent_state=agent_state,
                             validate_input=validate_input,
                             provider_manager=self.provider_manager,
+                            tool_manager=self.tool_manager,
                             prompt_registry=self.prompt_registry,
                             tracer=self.tracer,
                             provider_name=provider_name,
@@ -452,6 +483,7 @@ class CognitiveCycle:
                 # ============================================================
                 # Complete iteration
                 # ============================================================
+                iteration.update_token_totals_from_phases()
                 agent_state.complete_iteration(success=True)
 
                 if span:
@@ -575,10 +607,6 @@ class CognitiveCycle:
                 # Track cost if available
                 if hasattr(iteration, "total_cost") and iteration.total_cost:
                     accumulated_cost += iteration.total_cost
-
-                # Accumulate tokens from think phase if available
-                if iteration.think_output and iteration.think_output.reasoning_tokens:
-                    iteration.total_tokens_used += iteration.think_output.reasoning_tokens
 
                 # =================================================================
                 # G3 Phase 5: Circuit Breaker Check After Successful Iteration
@@ -972,34 +1000,38 @@ class CognitiveCycle:
 
     def _build_history(self, agent_state: EnhancedAgentState) -> str:
         """
-        Build history string from recent iterations.
+        Build a bounded JSON history summary from recent iterations.
 
-        Args:
-            agent_state: Current agent state
-
-        Returns:
-            Formatted history string
+        Tool results and observations are truncated before serialization, so the
+        returned value remains valid JSON and can be parsed by downstream callers.
         """
-        if not agent_state.iterations:
+        summaries = agent_state.recent_history_summaries(
+            max_iterations=self.max_history_iterations,
+            max_observation_chars=self.max_history_observation_chars,
+            max_tool_result_chars=self.max_history_observation_chars,
+        )
+        if not summaries:
             return "No previous actions"
 
-        # Get last 3 iterations
-        recent_iterations = agent_state.iterations[-3:]
+        return json.dumps({"recent_iterations": summaries}, ensure_ascii=False)
 
-        history_parts = []
-        for iteration in recent_iterations:
-            if iteration.think_output and iteration.think_output.proposed_action:
-                action = iteration.think_output.proposed_action
-                history_parts.append(f"Iteration {iteration.iteration_number}: {action.name}")
 
-                if iteration.observe_output:
-                    # Truncate observation
-                    obs = iteration.observe_output.observation
-                    if len(obs) > 200:
-                        obs = obs[:200] + "..."
-                    history_parts.append(f"  Result: {obs}")
+def _current_plan_step_spec(agent_state: EnhancedAgentState) -> PlanStepSpec | None:
+    """Return the structured spec for the current plan step when available."""
+    raw_specs = agent_state.metadata.get("plan_step_specs")
+    if not isinstance(raw_specs, list):
+        return None
 
-        return "\n".join(history_parts) if history_parts else "No previous actions"
+    step_index = agent_state.current_plan_step_index
+    if step_index < 0 or step_index >= len(raw_specs):
+        return None
+
+    raw_spec = raw_specs[step_index]
+    try:
+        return PlanStepSpec.model_validate(raw_spec)
+    except Exception:
+        logger.debug("Ignoring invalid structured plan step at index %s", step_index)
+        return None
 
 
 # =============================================================================

@@ -59,7 +59,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -143,7 +143,7 @@ class FeedbackRecord(BaseModel):
     )
     provider_id: str = Field(default="user", description="Feedback provider ID")
     session_id: str | None = Field(default=None, description="Session identifier")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), description="Creation timestamp")
 
 
 class AggregatedFeedback(BaseModel):
@@ -178,7 +178,7 @@ class AggregatedFeedback(BaseModel):
     first_feedback_at: datetime | None = Field(default=None, description="First feedback timestamp")
     last_feedback_at: datetime | None = Field(default=None, description="Last feedback timestamp")
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update timestamp"
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), description="Last update timestamp"
     )
 
 
@@ -535,7 +535,7 @@ class FeedbackManager:
                     trend,
                     first_feedback_at,
                     last_feedback_at,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 ),
             )
 
@@ -825,7 +825,7 @@ class FeedbackManager:
         if days == 0:
             return 0
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
         with self._lock:
             with sqlite3.connect(self.db_path) as conn:

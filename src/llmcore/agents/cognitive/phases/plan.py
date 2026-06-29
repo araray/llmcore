@@ -104,21 +104,38 @@ async def plan_phase(
                 Message(role=Role.USER, content=planning_prompt),
             ]
 
-            response = await provider.chat_completion(
-                context=messages,
-                model=target_model,
-                stream=False,
-                temperature=0.7,  # Some creativity in planning
-            )
+            if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
+                response = await provider_manager.chat_completion_with_retry(
+                    provider,
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tracer=tracer,
+                    operation="cognitive.plan",
+                    temperature=0.7,  # Some creativity in planning
+                )
+            else:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    temperature=0.7,
+                )
 
             # Extract response content from provider-specific response format
             response_content = provider.extract_response_content(response)
+            usage = response.get("usage", {}) if isinstance(response, dict) else None
+            total_tokens = usage.get("total_tokens") if usage else None
 
             # 3. Parse response
             output = _parse_plan_response(response_text=response_content, plan_input=plan_input)
+            output.tokens_used = total_tokens
 
             # 4. Update agent state
-            agent_state.plan = output.plan_steps
+            agent_state.plan = output.step_descriptions
+            agent_state.metadata["plan_step_specs"] = [
+                step.model_dump(exclude_none=True) for step in output.plan_steps
+            ]
             agent_state.plan_steps_status = ["pending"] * len(output.plan_steps)
             agent_state.current_plan_step_index = 0
             agent_state.plan_created_at = output.created_at
@@ -130,9 +147,6 @@ async def plan_phase(
                     # Get active version ID for planning_prompt
                     template = prompt_registry.get_template("planning_prompt")
                     if template.active_version:
-                        # Extract token usage from response dict
-                        usage = response.get("usage", {}) if isinstance(response, dict) else None
-                        total_tokens = usage.get("total_tokens") if usage else None
                         prompt_registry.record_use(
                             version_id=template.active_version.id,
                             success=len(output.plan_steps) > 0,

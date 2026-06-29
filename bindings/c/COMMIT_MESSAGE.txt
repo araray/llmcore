@@ -1,0 +1,38 @@
+feat(bindings): add C Tier-0 client (libcurl + cJSON, HTTP/SSE) — B2 (C)
+
+Fifth and final foreign-language client of phase B2. Talks to the bridge over its
+HTTP + SSE transport (JSON wire); Tier 0 only — per D6 the gRPC path in C is
+reserved for duplex audio (B3). Depends only on the contract.
+
+Contents (bindings/c/)
+- include/llmcore_client.h - public C API. Opaque llmcore_client; llmcore_error
+    {category,code,message,http_status,retryable,retry_after_ms,provider,model};
+    chat/chat_stream(callback, nonzero=cancel)/count_tokens/estimate_cost/embed
+    (always UNSUPPORTED)/list_providers/list_models/health/ensure_compatible.
+    Ownership documented per function; caller frees.
+- src/llmcore_client.c - libcurl POST + cJSON parse; error decode from
+    {"error":{...}}; SSE frame parser (event:/data:, split on blank line) with
+    mid-stream error events and callback-driven cancellation; single easy handle
+    reset per call.
+- CMakeLists.txt        - find_package(CURL); cJSON via config/pkg-config/-lcjson;
+    builds lib + example + CTest e2e (forwards LLMCORE_BRIDGE_PYTHON).
+- Makefile              - plain pkg-config fallback (libcurl + libcjson).
+- examples/quickstart.c, tests/e2e.c, README.md, USAGE.md, .gitignore.
+
+Tests (tests/e2e.c)
+- fork/exec a real bridge (FakeFacade, HTTP transport), poll health, then assert
+  chat/streaming (concatenation == unary), count/cost, catalog, capability
+  negotiation (accept + reject), Embed UNSUPPORTED, structured error decode
+  (HTTP 429 / retryable / retry_after_ms == 2000.0 / provider), and stream
+  cancellation — the same fixtures proven by the TS/Go/Rust/C++ clients.
+
+Verification
+- All sources pass `gcc -std=c11 -Wall -Wextra -fsyntax-only` against minimal
+  libcurl/cJSON stub headers in the authoring sandbox. NOT linked or run there
+  (libcurl/cJSON dev packages unavailable/unfetchable). Build + run with CMake or
+  make where those libraries exist. Consistent with the anti-fabrication rule:
+  syntax-checking is reported as such, not as a passing test run.
+
+Scope
+- Pure addition under bindings/c/; no changes to the bridge, contract, or other
+  packages.

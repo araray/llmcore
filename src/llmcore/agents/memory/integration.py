@@ -14,8 +14,9 @@ References:
     - Dossier: Step 2.10 (Memory Integration)
 """
 
+import inspect
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ...memory.manager import MemoryManager
@@ -62,16 +63,23 @@ class CognitiveMemoryIntegrator:
         ... )
     """
 
-    def __init__(self, memory_manager: "MemoryManager", storage_manager: "StorageManager"):
+    def __init__(
+        self,
+        memory_manager: "MemoryManager",
+        storage_manager: "StorageManager",
+        memory_backend: Any | None = None,
+    ):
         """
         Initialize the memory integrator.
 
         Args:
             memory_manager: Memory manager for semantic memory
             storage_manager: Storage manager for episodic memory
+            memory_backend: Optional external long-term memory backend.
         """
         self.memory_manager = memory_manager
         self.storage_manager = storage_manager
+        self.memory_backend = memory_backend
 
     async def record_iteration(
         self,
@@ -187,30 +195,31 @@ class CognitiveMemoryIntegrator:
                 if iteration.reflect_output and iteration.reflect_output.insights:
                     all_insights.extend(iteration.reflect_output.insights)
 
-            if not all_insights:
+            if all_insights:
+                # Create consolidated memory
+                consolidated = self._create_consolidated_memory(
+                    goal=agent_state.goal,
+                    insights=all_insights,
+                    success=agent_state.is_finished,
+                    iterations=agent_state.iteration_count,
+                )
+
+                # Store in semantic memory
+                await self.memory_manager.store_memory(
+                    content=consolidated,
+                    metadata={
+                        "type": "session_learning",
+                        "session_id": session_id,
+                        "goal": agent_state.goal,
+                        "success": agent_state.is_finished,
+                    },
+                )
+
+                logger.info(f"Consolidated {len(all_insights)} insights from session {session_id}")
+            else:
                 logger.debug("No insights to consolidate")
-                return
 
-            # Create consolidated memory
-            consolidated = self._create_consolidated_memory(
-                goal=agent_state.goal,
-                insights=all_insights,
-                success=agent_state.is_finished,
-                iterations=agent_state.iteration_count,
-            )
-
-            # Store in semantic memory
-            await self.memory_manager.store_memory(
-                content=consolidated,
-                metadata={
-                    "type": "session_learning",
-                    "session_id": session_id,
-                    "goal": agent_state.goal,
-                    "success": agent_state.is_finished,
-                },
-            )
-
-            logger.info(f"Consolidated {len(all_insights)} insights from session {session_id}")
+            await self._run_backend_consolidation(session_id=session_id)
 
         except Exception as e:
             logger.error(f"Failed to consolidate session memory: {e}")
@@ -310,6 +319,64 @@ class CognitiveMemoryIntegrator:
             memory_parts.append(f"{i}. {insight}")
 
         return "\n".join(memory_parts)
+
+    async def _run_backend_consolidation(self, session_id: str) -> None:
+        """Run optional long-term backend consolidation after session processing."""
+        consolidate = self._resolve_consolidation_callable()
+        if consolidate is None:
+            return
+
+        try:
+            report = consolidate()
+            if inspect.isawaitable(report):
+                report = await report
+        except Exception as e:
+            logger.warning("Backend memory consolidation failed for %s: %s", session_id, e)
+            return
+
+        backend = self._report_value(report, "backend", "unknown")
+        scanned = self._report_value(report, "items_scanned", 0)
+        distilled = self._report_value(report, "items_distilled", 0)
+        archived = self._report_value(report, "items_archived", 0)
+        warnings = self._report_value(report, "warnings", [])
+        if warnings:
+            logger.warning(
+                "Backend memory consolidation completed with warnings: "
+                "session=%s backend=%s warnings=%s",
+                session_id,
+                backend,
+                warnings,
+            )
+            return
+
+        logger.info(
+            "Backend memory consolidation complete: session=%s backend=%s "
+            "scanned=%s distilled=%s archived=%s",
+            session_id,
+            backend,
+            scanned,
+            distilled,
+            archived,
+        )
+
+    def _resolve_consolidation_callable(self) -> Any | None:
+        """Return the first configured consolidation callable, if any."""
+        for candidate in (self.memory_backend, self.memory_manager):
+            if candidate is None:
+                continue
+            try:
+                inspect.getattr_static(candidate, "consolidate")
+            except AttributeError:
+                continue
+            consolidate = getattr(candidate, "consolidate", None)
+            if callable(consolidate):
+                return consolidate
+        return None
+
+    def _report_value(self, report: Any, key: str, default: Any) -> Any:
+        if isinstance(report, dict):
+            return report.get(key, default)
+        return getattr(report, key, default)
 
 
 # =============================================================================

@@ -4,12 +4,12 @@ Example demonstrating LLMCore capabilities using the Google Gemini provider.
 
 This script shows how to:
 1. Initialize LLMCore.
-2. Perform simple, streaming, and session-based chat using Gemini models.
+2. Perform simple, streaming, and session-based chat using current Gemini models.
 3. Use Retrieval Augmented Generation (RAG) with Gemini.
 4. Handle potential errors.
 
 Prerequisites:
-- Install LLMCore with Gemini support: `pip install llmcore[gemini,all]` (or relevant extras).
+- Install LLMCore with Gemini support: `pip install "llmcore[gemini]"`.
 - Configure your Google AI API key:
     - Set the environment variable `LLMCORE_PROVIDERS__GEMINI__API_KEY="YOUR_API_KEY"`.
     - Or add it to your `~/.config/llmcore/config.toml` under `[providers.gemini]`.
@@ -66,7 +66,7 @@ async def main():
         },
         {
             "id": "gemini_doc_2",
-            "content": "The Gemini 1.5 Pro model features a large context window, up to 1 million tokens.",
+            "content": "Current Gemini 2.5 and Gemini 3 preview models support very large context windows and multimodal inputs.",
             "metadata": {"source": "gemini_example"},
         },
     ]
@@ -86,7 +86,7 @@ async def main():
                 response1 = await llm.chat(
                     message=prompt1,
                     provider_name=provider_name,
-                    # model_name="gemini-1.5-flash-latest" # Optionally specify model
+                    # model_name="gemini-3.1-flash-lite-preview"  # Optionally specify model
                     # Pass provider-specific kwargs if needed, e.g., safety settings
                     # safety_settings={...}
                 )
@@ -151,7 +151,7 @@ async def main():
                 logger.error(f"Failed to add RAG documents: {e}. Skipping RAG chat.")
             else:
                 # b) Chat with RAG enabled
-                prompt4 = "Based on the documents, what is a key feature of Gemini 1.5 Pro?"
+                prompt4 = "Based on the documents, what is a key feature of current Gemini models?"
                 logger.info(f"User (RAG): {prompt4}")
                 try:
                     response4 = await llm.chat(

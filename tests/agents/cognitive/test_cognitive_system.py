@@ -31,6 +31,7 @@ from llmcore.agents.cognitive import (
     PerceiveOutput,
     PlanInput,
     PlanOutput,
+    PlanStepSpec,
     ThinkInput,
     ThinkOutput,
     ValidateOutput,
@@ -125,9 +126,36 @@ class TestPhaseInputOutputModels:
         )
 
         assert len(output.plan_steps) == 3
+        assert isinstance(output.plan_steps[0], PlanStepSpec)
+        assert output.step_descriptions == ["Step 1", "Step 2", "Step 3"]
         assert output.reasoning == "Strategic approach"
         assert output.estimated_iterations == 6
         assert len(output.risks_identified) == 2
+
+    def test_plan_output_accepts_structured_steps(self):
+        """PlanOutput accepts typed step dictionaries for forward compatibility."""
+        output = PlanOutput(
+            plan_steps=[
+                {
+                    "description": "Inspect target files",
+                    "tool_name": "read_file",
+                    "input": {"path": "src/app.py"},
+                    "depends_on": [],
+                    "estimated_cost": 1.5,
+                }
+            ]
+        )
+
+        step = output.plan_steps[0]
+
+        assert step.index == 0
+        assert step.description == "Inspect target files"
+        assert step.tool_name == "read_file"
+        assert step.input == {"path": "src/app.py"}
+        assert step.depends_on == []
+        assert step.estimated_cost == 1.5
+        assert str(step) == "Inspect target files"
+        assert "target files" in step
 
     def test_think_output(self):
         """Test ThinkOutput model."""
@@ -416,11 +444,47 @@ RISKS:
         assert "Understand the problem" in output.plan_steps[0]
         assert "methodical" in output.reasoning.lower()
         assert len(output.risks_identified) == 2
+        assert state.plan == output.step_descriptions
+        assert state.metadata["plan_step_specs"][0]["description"] == output.plan_steps[0].description
         assert state.plan_version == 1
 
 
 class TestThinkPhase:
     """Tests for enhanced THINK phase implementation."""
+
+    @pytest.mark.asyncio
+    async def test_think_phase_uses_structured_plan_step_tool(self):
+        """THINK uses a typed plan step tool intent without another LLM call."""
+        provider_manager = Mock()
+        memory_manager = Mock()
+        tool_manager = Mock()
+        state = EnhancedAgentState(goal="Inspect file")
+        think_input = ThinkInput(
+            goal="Inspect file",
+            current_step="Inspect target file",
+            current_step_spec=PlanStepSpec(
+                index=0,
+                description="Inspect target file",
+                tool_name="read_file",
+                input={"path": "src/app.py"},
+            ),
+            available_tools=[],
+        )
+
+        output = await think_phase(
+            agent_state=state,
+            think_input=think_input,
+            provider_manager=provider_manager,
+            memory_manager=memory_manager,
+            tool_manager=tool_manager,
+        )
+
+        assert output.proposed_action is not None
+        assert output.proposed_action.name == "read_file"
+        assert output.proposed_action.arguments == {"path": "src/app.py"}
+        assert output.confidence == ConfidenceLevel.HIGH
+        assert state.pending_tool_call == output.proposed_action
+        provider_manager.get_provider.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_think_phase_with_action(self):

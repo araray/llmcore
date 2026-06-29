@@ -7,7 +7,7 @@ Tests both SQLite and PostgreSQL backends with the same test suite.
 
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -181,8 +181,8 @@ class TestFailurePattern:
             description="Missing return statement",
             failure_type="test_failure",
             occurrence_count=5,
-            first_seen=datetime.utcnow(),
-            last_seen=datetime.utcnow(),
+            first_seen=datetime.now(timezone.utc).replace(tzinfo=None),
+            last_seen=datetime.now(timezone.utc).replace(tzinfo=None),
             common_error_messages=["Function returned None", "Expected string, got None"],
             suggested_avoidance="Always include explicit return statements",
         )

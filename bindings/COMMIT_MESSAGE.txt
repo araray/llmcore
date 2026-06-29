@@ -1,0 +1,59 @@
+feat(bridge): add gRPC + HTTP/SSE language-binding bridge (B1, Tier 0)
+
+Add an out-of-process bridge that exposes the LLMCore facade to non-Python
+clients over a single versioned wire contract (proto package `llmcore.v1`),
+shipped behind the new `llmcore[bridge]` extra and the `llmcore-bridge`
+console entry point. gRPC is the primary transport; HTTP+SSE is a faithful
+secondary projection of the same messages.
+
+This is phase B1 of the bindings effort (B0 = design spec, already delivered).
+It implements the Tier-0 surface and lays the language-neutral contract that
+the foreign-language clients (B2) will generate from.
+
+What's included
+- Wire contract: bindings/proto/llmcore/v1/{common,errors,inference,catalog,
+  control,audio}.proto. `buf lint` clean (3 documented RPC-naming exceptions).
+- Python bridge under src/llmcore/bridge/ (additive; no changes to existing
+  llmcore modules):
+    * core.py        - BridgeCore, the transport-agnostic adapter (proto in/out,
+                       raises BridgeError, passes enable_rag=False on every chat).
+    * facade.py      - LLMCoreFacade Protocol (the narrow surface used) + lazy
+                       build_facade() calling LLMCore.create().
+    * errors.py      - exception -> LlmcoreError mapping + gRPC/HTTP status maps.
+    * redact.py      - secret redaction for all error messages.
+    * info.py        - ServerInfo / capability negotiation.
+    * grpc_server.py - gRPC servicers + create_grpc_server (errors via abort +
+                       `llmcore-error-bin` trailing metadata).
+    * http_app.py    - Starlette ASGI app: unary JSON + ChatStream SSE.
+    * ws_app.py      - Tier-2 WebSocket placeholder (B3).
+    * cli.py         - `llmcore-bridge serve`: transports, UDS/TCP, TLS/mTLS,
+                       auth gate, pdeathsig, graceful shutdown.
+    * _testing/      - FakeFacade (conformance) + FakeProvider (integration).
+    * _generated/    - generated protobuf/gRPC stubs (excluded from ruff).
+- Contract-vs-reality guard: bindings/scripts/contract_guard.py (AST-only, no
+  confy needed) + bindings/contract_map.yaml; fails CI on llmcore drift.
+- Tooling: bindings/scripts/gen_proto.sh, e2e_smoke.py; examples/python/client.py.
+- Tests: tests/bridge/ (44 passed, 1 skipped) — gRPC over a real UDS channel and
+  HTTP via ASGITransport on a deterministic FakeFacade; error-mapping and
+  redaction units; the contract guard (+ drift-detection negatives); a
+  skip-guarded real-LLMCore integration test.
+- Docs: bindings/{README,USAGE,CONTRACT}.md.
+
+Scope notes
+- Embed returns UNIMPLEMENTED: LLMCore exposes no public embeddings path in this
+  release (provider create_embeddings is behind the private manager); enabled in
+  a later phase rather than reaching into internals.
+- AudioService is in the contract but UNIMPLEMENTED (Tier 2, phase B3); its
+  capability flags are absent from ServerInfo.
+
+Packaging
+- pyproject.toml (additive only): `bridge`/`bridge-dev` optional extras,
+  inclusion of `bridge` in `all`, the `llmcore-bridge` script, and a ruff
+  extend-exclude for the generated stubs.
+
+Verification
+- buf lint: clean · ruff: clean · pytest tests/bridge: 44 passed, 1 skipped ·
+  contract guard: OK · e2e smoke (real subprocess, both transports): PASS.
+
+Gate: zero changes under src/llmcore/ outside bridge/; only additions under
+bridge/, bindings/, tests/bridge/, and additive pyproject.toml edits.

@@ -50,6 +50,7 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -777,10 +778,11 @@ class MistralProvider(BaseProvider):
     # ------------------------------------------------------------------
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
+        if not text:
+            return 0
         if self._encoding:
             return len(self._encoding.encode(text))
-        # Rough fallback: ~4 chars per token for Mistral's tokenizer
-        return len(text) // 4
+        return _EstimateCounter().count(text)
 
     async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         total = 0

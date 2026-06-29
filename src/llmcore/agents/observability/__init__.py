@@ -67,6 +67,16 @@ References:
 from __future__ import annotations
 
 # =============================================================================
+# CONTEXT DIAGNOSTICS
+# =============================================================================
+from .context_diagnostics import (
+    ContextFailureDetectorConfig,
+    ContextFailureDiagnostic,
+    ContextFailureType,
+    detect_context_failures,
+)
+
+# =============================================================================
 # EVENTS
 # =============================================================================
 from .events import (
@@ -168,9 +178,14 @@ __version__ = "1.0.0"
 # EXPORTS
 # =============================================================================
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - grouped by observability subsystem.
     # Version
     "__version__",
+    # === CONTEXT DIAGNOSTICS ===
+    "ContextFailureDetectorConfig",
+    "ContextFailureDiagnostic",
+    "ContextFailureType",
+    "detect_context_failures",
     # === EVENTS ===
     # Enums
     "EventCategory",

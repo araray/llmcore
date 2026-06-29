@@ -8,7 +8,7 @@ Suitable for production deployments with multi-user and high-concurrency require
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 try:
@@ -231,7 +231,7 @@ class PostgresFailureStorage(BaseFailureStorage):
             return
 
         table_name = self._get_table_name("failure_patterns")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         async with conn.cursor() as cur:
             # Check for existing pattern
@@ -494,7 +494,7 @@ class PostgresFailureStorage(BaseFailureStorage):
             raise RuntimeError("Storage not initialized")
 
         table_name = self._get_table_name("failure_logs")
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
         async with self._pool.connection() as conn:
             async with conn.cursor() as cur:

@@ -25,10 +25,11 @@ References:
     - G3_COMPLETE_IMPLEMENTATION_PLAN.md
 """
 
+import inspect
 import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from .cognitive import (
@@ -67,6 +68,41 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # SINGLE AGENT MODE
 # =============================================================================
+
+
+def _build_memory_context_synthesizer(
+    memory_backend: Any | None,
+    *,
+    observability: Any | None = None,
+) -> Any | None:
+    """Build a semantic-only context synthesizer for an external memory backend."""
+    if memory_backend is None:
+        return None
+
+    from ..context import ContextSynthesizer
+    from ..context.sources import SemanticContextSource
+
+    retrieval_factory = getattr(memory_backend, "as_retrieval_fn", None)
+    if callable(retrieval_factory):
+        retrieval_fn = retrieval_factory()
+    else:
+
+        async def retrieval_fn(query: str, top_k: int = 10, **kwargs: Any):
+            records = memory_backend.retrieve(query, top_k=top_k, **kwargs)
+            if inspect.isawaitable(records):
+                records = await records
+            return [
+                record.to_context_dict() if hasattr(record, "to_context_dict") else record
+                for record in records
+            ]
+
+    synthesizer = ContextSynthesizer()
+    synthesizer.add_source(
+        "semantic",
+        SemanticContextSource(retrieval_fn, observability=observability),
+        priority=60,
+    )
+    return synthesizer
 
 
 class SingleAgentMode:
@@ -132,6 +168,9 @@ class SingleAgentMode:
         prompt_registry: Optional["PromptRegistry"] = None,
         tracer: Any | None = None,
         agents_config: Optional["AgentsConfig"] = None,
+        context_synthesizer: Any | None = None,
+        memory_backend: Any | None = None,
+        observability: Any | None = None,
     ):
         """
         Initialize SingleAgentMode.
@@ -144,6 +183,11 @@ class SingleAgentMode:
             prompt_registry: Optional prompt registry
             tracer: Optional OpenTelemetry tracer
             agents_config: Optional agents configuration (uses defaults if not provided)
+            context_synthesizer: Optional context synthesizer for PERCEIVE
+            memory_backend: Optional external memory backend used to create a
+                semantic context source when ``context_synthesizer`` is absent
+            observability: Optional observability components passed to the
+                semantic context source when llmcore creates one.
         """
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
@@ -151,6 +195,12 @@ class SingleAgentMode:
         self.tool_manager = tool_manager
         self.prompt_registry = prompt_registry
         self.tracer = tracer
+        self.memory_backend = memory_backend
+        self.observability = observability
+        self.context_synthesizer = context_synthesizer or _build_memory_context_synthesizer(
+            memory_backend,
+            observability=observability,
+        )
 
         # Load agents config (G3)
         # If not provided, try to load from environment/defaults
@@ -164,7 +214,14 @@ class SingleAgentMode:
             if config_path:
                 from pathlib import Path
 
-                self._agents_config = load_agents_config(config_path=Path(config_path))
+                from confy.loader import Config as ConfyConfig
+
+                config = ConfyConfig(
+                    file_path=str(Path(config_path)),
+                    load_dotenv_file=False,
+                    prefix="LLMCORE",
+                )
+                self._agents_config = load_agents_config(config=config)
                 logger.debug(f"Loaded agents config from {config_path}")
             else:
                 # Will use defaults + environment variable overrides
@@ -195,6 +252,8 @@ class SingleAgentMode:
             tool_manager=tool_manager,
             prompt_registry=prompt_registry,
             tracer=tracer,
+            context_synthesizer=self.context_synthesizer,
+            agents_config=self._agents_config,
         )
 
         logger.info("SingleAgentMode initialized with G3 components")
@@ -215,6 +274,7 @@ class SingleAgentMode:
         session_id: str | None = None,
         skip_validation: bool = False,
         skip_goal_classification: bool = False,
+        agent_state: EnhancedAgentState | None = None,
         approval_callback: Callable[[str], bool] | None = None,
     ) -> "AgentResult":
         """
@@ -237,6 +297,7 @@ class SingleAgentMode:
             session_id: Optional session ID (generated if not provided)
             skip_validation: If True, auto-approve all actions (bypass HITL)
             skip_goal_classification: If True, skip goal classification (use provided max_iterations)
+            agent_state: Optional restored EnhancedAgentState to continue from.
             approval_callback: Optional callback for HITL approval prompts.
                 Signature: (prompt: str) -> bool. Returns True to approve, False to reject.
                 If None and HITL approval is required, activities will be rejected.
@@ -263,7 +324,7 @@ class SingleAgentMode:
             if not session_id:
                 session_id = f"session-{uuid.uuid4()}"
 
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # =================================================================
             # G3 Phase 1: Goal Classification
@@ -326,7 +387,7 @@ class SingleAgentMode:
                 if classification:
                     requires_tools = classification.requires_tools
 
-                # Get the target model
+                # Get the target provider/model
                 actual_provider = provider_name or self.provider_manager.get_default_provider_name()
                 actual_model = model_name or self.provider_manager.get_default_model()
 
@@ -343,7 +404,7 @@ class SingleAgentMode:
                         error_msg = self._format_capability_error(compat_result)
                         logger.error(f"Model capability check failed: {error_msg}")
 
-                        end_time = datetime.utcnow()
+                        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                         duration = (end_time - start_time).total_seconds()
 
                         return AgentResult(
@@ -380,10 +441,16 @@ class SingleAgentMode:
             # Resolve persona
             agent_persona = self._resolve_persona(persona)
 
-            # Create enhanced agent state
-            agent_state = EnhancedAgentState(
-                goal=goal, session_id=session_id, context=context or ""
-            )
+            # Create or reuse enhanced agent state
+            if agent_state is None:
+                agent_state = EnhancedAgentState(
+                    goal=goal, session_id=session_id, context=context or ""
+                )
+            else:
+                agent_state.goal = goal or agent_state.goal
+                agent_state.session_id = session_id
+                if context is not None:
+                    agent_state.context = context
 
             # Store classification in working memory for cognitive cycle
             if classification:
@@ -425,7 +492,7 @@ class SingleAgentMode:
                     approval_callback=approval_callback,
                 )
 
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                 duration = (end_time - start_time).total_seconds()
 
                 # Create result
@@ -471,7 +538,7 @@ class SingleAgentMode:
                 logger.error(f"Agent execution failed: {e}", exc_info=True)
 
                 # Create failure result
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc).replace(tzinfo=None)
                 duration = (end_time - start_time).total_seconds()
 
                 return AgentResult(
@@ -531,7 +598,7 @@ class SingleAgentMode:
                 context=context,
             )
 
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
             duration = (end_time - start_time).total_seconds()
 
             # Resolve persona for result
@@ -574,7 +641,7 @@ class SingleAgentMode:
         except Exception as e:
             logger.error(f"Fast-path execution failed: {e}", exc_info=True)
 
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
             duration = (end_time - start_time).total_seconds()
 
             return AgentResult(
@@ -710,7 +777,7 @@ class SingleAgentMode:
                         and self._agents_config.fast_path.enabled
                     ):
                         # Execute fast-path and yield single update
-                        start_time = datetime.utcnow()
+                        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
                         result = await self._execute_fast_path(
                             goal=goal,
                             classification=classification,
@@ -751,7 +818,6 @@ class SingleAgentMode:
                 if classification:
                     requires_tools = classification.requires_tools
 
-                actual_provider = provider_name or self.provider_manager.get_default_provider_name()
                 actual_model = model_name or self.provider_manager.get_default_model()
 
                 compat_result = self.capability_checker.check_compatibility(
@@ -1031,6 +1097,7 @@ class AgentResult:
         session_id: Session identifier
         persona_used: Persona name used
         agent_state: Complete agent state
+        iteration_summaries: Bounded, JSON-safe recent iteration summaries.
         error: Error message if failed
         classification: Goal classification result (G3)
         fast_path: Whether fast-path was used (G3)
@@ -1047,6 +1114,7 @@ class AgentResult:
         session_id: str,
         persona_used: str | None = None,
         agent_state: EnhancedAgentState | None = None,
+        iteration_summaries: list[dict[str, Any]] | None = None,
         error: str | None = None,
         classification: GoalClassification | None = None,
         fast_path: bool = False,
@@ -1060,6 +1128,11 @@ class AgentResult:
         self.session_id = session_id
         self.persona_used = persona_used
         self.agent_state = agent_state
+        self.iteration_summaries = (
+            list(iteration_summaries)
+            if iteration_summaries is not None
+            else _agent_state_iteration_summaries(agent_state)
+        )
         self.error = error
         self.classification = classification  # G3
         self.fast_path = fast_path  # G3
@@ -1085,6 +1158,7 @@ class AgentResult:
             "persona_used": self.persona_used,
             "error": self.error,
             "fast_path": self.fast_path,
+            "iteration_summaries": self.iteration_summaries,
         }
 
         # Add classification if available
@@ -1095,7 +1169,51 @@ class AgentResult:
                 "confidence": self.classification.confidence,
             }
 
+        if self.agent_state is not None and hasattr(self.agent_state, "to_resume_snapshot"):
+            result["agent_state_snapshot"] = self.agent_state.to_resume_snapshot()
+
         return result
+
+
+def _agent_state_iteration_summaries(
+    agent_state: EnhancedAgentState | None,
+    *,
+    max_iterations: int = 5,
+) -> list[dict[str, Any]]:
+    """Extract bounded recent iteration summaries from an agent state."""
+    if agent_state is None:
+        return []
+    recent_history_summaries = getattr(agent_state, "recent_history_summaries", None)
+    if callable(recent_history_summaries):
+        return recent_history_summaries(
+            max_iterations=max_iterations,
+            max_observation_chars=1000,
+            max_tool_result_chars=1000,
+        )
+
+    iterations = getattr(agent_state, "iterations", None)
+    if not iterations:
+        return []
+
+    summaries: list[dict[str, Any]] = []
+    try:
+        recent_iterations = list(iterations)[-max(0, max_iterations) :]
+    except TypeError:
+        return []
+
+    for iteration in recent_iterations:
+        summary: Any = None
+        to_history_summary = getattr(iteration, "to_history_summary", None)
+        if callable(to_history_summary):
+            summary = to_history_summary(
+                max_observation_chars=1000,
+                max_tool_result_chars=1000,
+            )
+        elif isinstance(iteration, dict):
+            summary = dict(iteration)
+        if isinstance(summary, dict):
+            summaries.append(summary)
+    return summaries
 
 
 class IterationUpdate:

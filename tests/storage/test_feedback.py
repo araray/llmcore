@@ -18,7 +18,7 @@ import os
 import sys
 import tempfile
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -164,14 +164,14 @@ class TestFeedbackRecord:
 
     def test_record_created_at_default(self):
         """Test that created_at defaults to now."""
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc).replace(tzinfo=None)
         record = FeedbackRecord(
             item_id="test",
             collection="test",
             query="test",
             relevance_score=5.0,
         )
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc).replace(tzinfo=None)
 
         assert before <= record.created_at <= after
 

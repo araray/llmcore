@@ -13,13 +13,12 @@ Unit tests for the GeminiProvider covering:
 All tests use mocking — no live API calls.
 """
 
+import inspect
 import json
 
 # We need to mock the google imports before importing the provider
 import sys
-import uuid
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -43,8 +42,6 @@ with patch.dict(
     },
 ):
     # Now set the module-level flags
-    import importlib
-
     # We need a fresh import
     from llmcore.providers import gemini_provider as gp
 
@@ -55,8 +52,8 @@ with patch.dict(
     gp.PermissionDenied = PermissionError
     gp.InvalidArgument = ValueError
 
-from llmcore.models import Message, ModelDetails, Tool, ToolCall
-from llmcore.models import Role as LLMCoreRole
+from llmcore.models import Message  # noqa: E402
+from llmcore.models import Role as LLMCoreRole  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -105,6 +102,32 @@ class TestDefaults:
         """Shutdown 1.x models should not be in the fallback table."""
         assert "gemini-1.0-pro" not in gp.DEFAULT_GEMINI_TOKEN_LIMITS
         assert "gemini-1.5-flash-latest" not in gp.DEFAULT_GEMINI_TOKEN_LIMITS
+
+
+# ---------------------------------------------------------------------------
+# Test: Token counting fallbacks
+# ---------------------------------------------------------------------------
+
+
+class TestTokenCounting:
+    @pytest.mark.asyncio
+    async def test_count_tokens_falls_back_to_shared_estimator(self, provider):
+        """API failures should use LLMCore's shared token estimator."""
+        provider._client.aio.models.count_tokens = AsyncMock(side_effect=Exception("boom"))
+
+        count = await provider.count_tokens("abcd")
+
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_count_message_tokens_falls_back_to_shared_estimator(self, provider):
+        """Message count API failures should use LLMCore's shared token estimator."""
+        provider._client.aio.models.count_tokens = AsyncMock(side_effect=Exception("boom"))
+        messages = [Message(role=LLMCoreRole.USER, content="abcd")]
+
+        count = await provider.count_message_tokens(messages)
+
+        assert count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +224,7 @@ class TestConvertMessages:
             Message(role=LLMCoreRole.SYSTEM, content="Rule 2"),
             Message(role=LLMCoreRole.USER, content="Hi"),
         ]
-        contents, sys_text = provider._convert_llmcore_msgs_to_genai_contents(msgs)
+        _, sys_text = provider._convert_llmcore_msgs_to_genai_contents(msgs)
         assert sys_text == "Rule 1\nRule 2"
 
     def test_role_mapping(self, provider):
@@ -312,7 +335,7 @@ class TestExtractToolCalls:
         }
         calls = provider.extract_tool_calls(response)
         assert len(calls) == 1
-        assert isinstance(calls[0], ToolCall)
+        assert isinstance(calls[0], gp.ToolCall)
         assert calls[0].name == "search"
         assert calls[0].arguments == {"query": "hello"}
 
@@ -392,6 +415,53 @@ class TestExtractDeltaContent:
     def test_empty_chunk(self, provider):
         """Empty chunk returns empty string."""
         assert provider.extract_delta_content({}) == ""
+
+
+class TestStreamingChatCompletion:
+    @pytest.mark.asyncio
+    async def test_streaming_returns_async_iterator_not_coroutine(self, provider):
+        """chat_completion(stream=True) should return the async chunk iterator."""
+
+        class FakeStream:
+            def __aiter__(self):
+                self._chunks = iter(
+                    [
+                        SimpleNamespace(
+                            candidates=[
+                                SimpleNamespace(
+                                    content=SimpleNamespace(
+                                        parts=[SimpleNamespace(text="hello", thought=False)]
+                                    )
+                                )
+                            ]
+                        )
+                    ]
+                )
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._chunks)
+                except StopIteration as exc:
+                    raise StopAsyncIteration from exc
+
+        provider._client.aio.models.generate_content_stream = AsyncMock(
+            return_value=FakeStream()
+        )
+
+        result = await provider.chat_completion(
+            [gp.Message(role=gp.LLMCoreRole.USER, content="Hi")],
+            stream=True,
+        )
+
+        assert hasattr(result, "__aiter__")
+        assert not inspect.iscoroutine(result)
+
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+
+        assert chunks == [{"choices": [{"delta": {"content": "hello"}}]}]
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,8 @@ from llmcore import ConfigError, LLMCore, SearchProviderError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+for noisy_logger in ("httpx", "httpcore"):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
 # The packaged defaults ship the S2 block commented out (so search stays empty
 # by default). Enable it here without requiring a key. In a real app you would

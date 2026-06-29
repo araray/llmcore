@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 try:
@@ -198,7 +198,7 @@ class SqliteFailureStorage(BaseFailureStorage):
         )
         row = await cursor.fetchone()
 
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
         if row:
             # Update existing pattern
@@ -428,7 +428,7 @@ class SqliteFailureStorage(BaseFailureStorage):
         if not self._conn:
             raise RuntimeError("Storage not initialized")
 
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
 
         # Total failures
         cursor = await self._conn.execute(

@@ -73,7 +73,10 @@ class TestOutputTrackerInit:
         """Test initialization with home directory expansion."""
         tracker = OutputTracker(base_path="~/.llmcore/test_outputs")
 
-        expected = Path.home() / ".llmcore" / "test_outputs"
+        # Mirror the production transformation exactly (``expanduser().resolve()``)
+        # so the assertion is independent of $HOME vs. the passwd home dir and of
+        # any symlink resolution on the host.
+        expected = Path("~/.llmcore/test_outputs").expanduser().resolve()
         assert tracker._base_path == expected
 
 

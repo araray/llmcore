@@ -14,6 +14,7 @@ and coordinate the context preparation process.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -223,6 +224,7 @@ class MemoryManager:
         rag_collection: str | None = None,
         rag_metadata_filter: dict[str, Any] | None = None,
         prompt_template_values: dict[str, str] | None = None,
+        tool_schema_tokens: int = 0,
     ) -> ContextPreparationDetails:
         """
         Prepares the context payload by orchestrating RAG and context building.
@@ -275,12 +277,17 @@ class MemoryManager:
                 logger.error(f"RAG retrieval failed: {e}. Proceeding without RAG.", exc_info=True)
                 rag_documents_used = []
 
+        builder_config = {
+            **self._cm_config,
+            "tool_schema_tokens": tool_schema_tokens,
+        }
+
         context_details = await context_builder.build_context_payload(
             session=session,
             provider=provider,
             target_model=target_model,
             max_model_tokens=max_model_tokens,
-            config=self._cm_config,
+            config=builder_config,
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
             message_inclusion_map=message_inclusion_map,
@@ -293,6 +300,8 @@ class MemoryManager:
             context_details.rendered_rag_template_content = final_user_query_content
 
         logger.info(
-            f"Final context prepared for model '{target_model}': {context_details.final_token_count} tokens."
+            "Final context prepared for model '%s': %s tokens.",
+            target_model,
+            context_details.final_token_count,
         )
         return context_details

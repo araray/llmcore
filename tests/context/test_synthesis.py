@@ -193,6 +193,14 @@ class TestEstimateCounter:
         counter = EstimateCounter()
         assert counter.count("a") == 1
 
+    def test_matches_llmcore_estimator(self):
+        """Context wrapper uses LLMCore's canonical estimate."""
+        from llmcore.tokens import EstimateCounter as LLMCoreEstimateCounter
+
+        text = "abcde"
+
+        assert EstimateCounter().count(text) == LLMCoreEstimateCounter().count(text)
+
 
 class TestTiktokenCounter:
     """Tests for the tiktoken-based token counter.

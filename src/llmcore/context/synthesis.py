@@ -38,7 +38,14 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from inspect import Parameter, signature
 from typing import Any, Protocol
+
+from llmcore.context.budgeting import should_compress_prompt
+from llmcore.context.compression import SummaryObjective
+from llmcore.tokens import EstimateCounter as _LLMCoreEstimateCounter
+from llmcore.tokens import TiktokenCounter as _LLMCoreTiktokenCounter
+from llmcore.tokens import get_counter as _get_llmcore_counter
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +86,7 @@ class ContextSource(Protocol):
 class TokenCounter(Protocol):
     """Protocol for counting tokens in text."""
 
-    def count(self, text: str) -> int:
+    def count(self, text: str | None) -> int:
         """
         Count tokens in the given text.
 
@@ -106,9 +113,9 @@ class ContextChunk:
         source: Name identifying the source (e.g. ``"goals"``).
         content: The actual textual content.
         tokens: Token count of ``content``.
-        priority: Base priority of this chunk (0–100, higher = more important).
-        relevance: Relevance score to current task (0.0–1.0).
-        recency: Recency score (0.0–1.0, 1.0 = most recent).
+        priority: Base priority of this chunk (0-100, higher = more important).
+        relevance: Relevance score to current task (0.0-1.0).
+        recency: Recency score (0.0-1.0, 1.0 = most recent).
         metadata: Arbitrary metadata dict for debugging / tracing.
     """
 
@@ -159,7 +166,7 @@ class SynthesizedContext:
 
     @property
     def utilization(self) -> float:
-        """Context window utilization as a fraction (0.0–1.0)."""
+        """Context window utilization as a fraction (0.0-1.0)."""
         if self.max_tokens <= 0:
             return 0.0
         return self.total_tokens / self.max_tokens
@@ -170,45 +177,22 @@ class SynthesizedContext:
 # =============================================================================
 
 
-class TiktokenCounter:
-    """Token counter using tiktoken (``cl100k_base`` encoding)."""
-
-    def __init__(self) -> None:
-        import tiktoken
-
-        self._encoding = tiktoken.get_encoding("cl100k_base")
-
-    def count(self, text: str) -> int:
-        """Count tokens via tiktoken."""
-        return len(self._encoding.encode(text))
+class TiktokenCounter(_LLMCoreTiktokenCounter):
+    """Token counter using LLMCore's tiktoken implementation."""
 
 
-class EstimateCounter:
-    """
-    Fallback token counter using character-based estimation.
-
-    Uses ~4 characters per token as a rough heuristic.
-    """
-
-    def __init__(self, chars_per_token: int = 4) -> None:
-        self._chars_per_token = chars_per_token
-
-    def count(self, text: str) -> int:
-        """Estimate tokens from character count."""
-        return max(1, len(text) // self._chars_per_token) if text else 0
+class EstimateCounter(_LLMCoreEstimateCounter):
+    """Fallback token counter using LLMCore's character estimator."""
 
 
 def _make_default_counter() -> TokenCounter:
     """
     Create the best available token counter.
 
-    Tries tiktoken first; falls back to estimation if unavailable.
+    Delegates to :func:`llmcore.tokens.get_counter`, which tries tiktoken first
+    and falls back to character estimation if unavailable.
     """
-    try:
-        return TiktokenCounter()
-    except (ImportError, Exception):
-        logger.warning("tiktoken not available — using character-based token estimation")
-        return EstimateCounter()
+    return _get_llmcore_counter()
 
 
 # =============================================================================
@@ -223,7 +207,7 @@ class ContextSynthesizer:
     The synthesizer orchestrates context assembly by:
 
     1. Querying all registered sources in parallel.
-    2. Scoring chunks via a composite formula (priority × relevance × recency).
+    2. Scoring chunks via a composite formula (priority x relevance x recency).
     3. Fitting chunks into the token budget in score-descending order.
     4. Truncating oversized chunks when beneficial.
     5. Triggering compression when utilization exceeds the threshold.
@@ -290,7 +274,7 @@ class ContextSynthesizer:
         Args:
             name: Unique name for the source.
             source: Object implementing the ``ContextSource`` protocol.
-            priority: Base priority (0–100, higher = more important).
+            priority: Base priority (0-100, higher = more important).
         """
         self._sources[name] = (source, priority)
         logger.debug("Registered context source: %s (priority=%d)", name, priority)
@@ -408,10 +392,10 @@ class ContextSynthesizer:
 
         # Compress if over threshold
         compression_applied = False
-        if (
-            total_tokens > 0
-            and self.max_tokens > 0
-            and total_tokens > self.max_tokens * self.compression_threshold
+        if should_compress_prompt(
+            prompt_tokens=total_tokens,
+            prompt_budget_tokens=self.max_tokens,
+            threshold=self.compression_threshold,
         ):
             content = await self._compress(content, current_task)
             total_tokens = self.token_counter.count(content)
@@ -569,11 +553,15 @@ class ContextSynthesizer:
             try:
                 target = int(self.max_tokens * self.compression_threshold)
                 current = self.token_counter.count(content)
-                result = await self.compressor.compress(
-                    content=content,
-                    target_tokens=target,
-                    current_tokens=current,
-                )
+                compress_kwargs: dict[str, Any] = {
+                    "content": content,
+                    "target_tokens": target,
+                    "current_tokens": current,
+                }
+                if _accepts_summary_objective(self.compressor.compress):
+                    compress_kwargs["summary_objective"] = _summary_objective_from_task(task)
+
+                result = await self.compressor.compress(**compress_kwargs)
                 return result.content
             except Exception as exc:
                 logger.debug(
@@ -587,6 +575,33 @@ class ContextSynthesizer:
         if len(content) > max_chars:
             return content[:max_chars] + "\n\n[Context compressed to fit limits]"
         return content
+
+
+def _accepts_summary_objective(callable_obj: Any) -> bool:
+    """Return True when a compressor accepts ``summary_objective``."""
+    try:
+        parameters = signature(callable_obj).parameters.values()
+    except (TypeError, ValueError):
+        return False
+
+    return any(
+        param.kind == Parameter.VAR_KEYWORD or param.name == "summary_objective"
+        for param in parameters
+    )
+
+
+def _summary_objective_from_task(task: Any | None) -> SummaryObjective | None:
+    """Convert the synthesis task into an objective for compression."""
+    if task is None:
+        return None
+    if isinstance(task, SummaryObjective):
+        return task
+    if isinstance(task, dict):
+        return SummaryObjective.from_value(task)
+    return SummaryObjective(
+        purpose=str(task),
+        target_audience="context-synthesis",
+    )
 
 
 # =============================================================================

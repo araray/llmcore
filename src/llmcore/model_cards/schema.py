@@ -61,6 +61,8 @@ class ArchitectureType(str, Enum):
     SSM = "ssm"  # State Space Model (e.g., Mamba)
     HYBRID = "hybrid"
     EMBEDDING = "embedding"  # Embedding-optimised architecture
+    ENCODER_DECODER = "encoder-decoder"  # Encoder-decoder models (e.g., Whisper)
+    DIFFUSION_TRANSFORMER = "diffusion-transformer"  # Diffusion transformer image models
 
 
 class ModelStatus(str, Enum):
@@ -115,7 +117,11 @@ class ModelArchitecture(BaseModel):
         None, description="Active parameters for MoE models (e.g., '37B' for DeepSeek)"
     )
     architecture_type: ArchitectureType | None = Field(
-        None, description="Architecture type (transformer, moe, ssm, hybrid)"
+        None,
+        description=(
+            "Architecture type (transformer, moe, ssm, hybrid, embedding, "
+            "encoder-decoder, diffusion-transformer)"
+        ),
     )
 
     model_config = {"use_enum_values": True}

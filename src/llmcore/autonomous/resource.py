@@ -39,7 +39,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
@@ -107,7 +107,7 @@ class ResourceUsage:
     Captured periodically by ResourceMonitor.
     """
 
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Hardware
     cpu_percent: float = 0.0
@@ -278,8 +278,8 @@ class ResourceMonitor:
         self._daily_tokens = 0
         self._daily_cost = 0.0
 
-        self._last_hour = datetime.utcnow().hour
-        self._last_day = datetime.utcnow().date()
+        self._last_hour = datetime.now(timezone.utc).replace(tzinfo=None).hour
+        self._last_day = datetime.now(timezone.utc).replace(tzinfo=None).date()
 
         # Callbacks
         self._on_violation: list[Callable] = []
@@ -360,7 +360,7 @@ class ResourceMonitor:
             )
 
         # Reset counters if needed
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if now.hour != self._last_hour:
             self._hourly_tokens = 0
             self._hourly_cost = 0.0
@@ -556,8 +556,8 @@ class ResourceMonitor:
         Returns:
             True if resources became available, False if timeout
         """
-        start = datetime.utcnow()
-        while (datetime.utcnow() - start).total_seconds() < timeout:
+        start = datetime.now(timezone.utc).replace(tzinfo=None)
+        while (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds() < timeout:
             # Force resource check
             self._status = await self._check_resources()
 

@@ -1,0 +1,43 @@
+feat(bindings): add Rust Tier-0 client (tonic) — B2 (Rust)
+
+Third foreign-language client of phase B2, generated from the frozen
+`llmcore.v1` contract. gRPC-only (tonic/prost); depends only on the contract,
+never on Python. Two crates per the distribution plan.
+
+Contents (bindings/rust/)
+- llmcore-proto/      - generated messages + tonic gRPC clients.
+    build.rs          - tonic-build codegen from ../../proto (needs protoc).
+    src/lib.rs        - `pub mod v1 { tonic::include_proto!("llmcore.v1"); }`.
+- llmcore-client/     - ergonomic async wrapper.
+    src/client.rs     - LlmcoreClient over one Channel: connect/with_channel,
+                        ensure_compatible, chat, chat_stream (cancellable),
+                        count_tokens, estimate_cost, embed, list_providers,
+                        list_models, get_provider_details, health, reload_config.
+    src/error.rs      - BridgeError + from_status: decodes the binary trailing
+                        metadata `llmcore-error-bin` (LlmcoreError) ->
+                        category/code/http_status/retryable/retry_after_ms/
+                        provider/model/grpc_code.
+    src/lib.rs        - public barrel (re-exports proto + v1).
+    examples/quickstart.rs, tests/e2e.rs.
+- Cargo.toml (workspace), rust-toolchain.toml, .gitignore, README.md, USAGE.md.
+
+Tests (llmcore-client/tests/e2e.rs)
+- Spawn a real `llmcore-bridge` (FakeFacade) over localhost; 8 #[tokio::test]
+  cases drive chat/streaming (concatenation == unary), count/cost,
+  catalog/control, capability negotiation (accept + reject), Embed UNSUPPORTED,
+  structured error decode (incl. retry_after_ms = 2000.0), and stream
+  cancellation — matching the fixtures proven by the TS/Go clients.
+
+Design
+- ChatStream wraps tonic::Streaming in an Option; cancel() drops it (HTTP/2
+  reset -> server CANCELLED), and message() returns Ok(None) afterwards.
+- Optional proto fields are Option<T>; provider_kwargs is
+  Option<prost_types::Struct> (see USAGE).
+- Pure addition under bindings/rust/; no changes to the bridge, contract, or
+  other packages.
+
+Build/verification note
+- NOT compiled in the authoring sandbox (no cargo/rustc; no reachable toolchain
+  source). Written against stable tonic 0.12 / prost 0.13; every referenced proto
+  symbol verified against source. Run `cargo build && cargo test` in a Rust env
+  with `protoc` installed (tonic-build requirement).

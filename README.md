@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg"/></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"/></a>
-  <a href="https://github.com/araray/llmcore"><img alt="Version" src="https://img.shields.io/badge/version-0.26.0-green.svg"/></a>
+  <a href="https://github.com/araray/llmcore"><img alt="Version" src="https://img.shields.io/badge/version-0.50.0-green.svg"/></a>
   <a href="https://github.com/araray/llmcore/actions"><img alt="CI Status" src="https://img.shields.io/badge/CI-passing-brightgreen.svg"/></a>
   <a href="https://codecov.io/gh/araray/llmcore"><img alt="Coverage" src="https://img.shields.io/badge/coverage-85%25-green.svg"/></a>
 </p>
@@ -31,25 +31,26 @@
 
 | Category | Features |
 |----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Mistral, Qwen, xAI, DeepInfra |
-| **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling |
+| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram |
+| **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling, per-call usage via `chat_with_usage()` |
 | **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
 | **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
+| **🌐 Search Providers** | Bright Data, Serper.dev, SerpApi, Semantic Scholar |
 | **🤖 Autonomous Agents** | 8-phase cognitive cycle, goal classification, iterative reasoning |
 | **🔒 Sandboxed Execution** | Docker/VM isolation, security policies, output tracking |
 | **👤 Human-in-the-Loop** | Risk assessment, approval workflows, audit logging |
-| **📊 Observability** | Structured event logging, metrics collection, execution replay |
+| **📊 Observability** | Structured event logging, metrics collection, execution replay, context diagnostics |
 | **🎭 Persona System** | Customizable agent personalities and communication styles |
 | **📚 Model Card Library** | Comprehensive model metadata, capability validation, cost estimation |
 
-### What's New in v0.26.0
+### What's New in v0.50.0
 
-- **🐳 Sandbox System**: Complete Docker and VM-based isolation for agent code execution
-- **🧠 Darwin Layer 2**: Enhanced cognitive cycle with 8 reasoning phases
-- **⚡ Fast-Path Execution**: Sub-5-second responses for trivial goals
-- **🔌 Circuit Breaker**: Automatic detection and interruption of failing agent loops
-- **📋 Activity System**: XML-based structured output for models without native tool support
-- **📈 Comprehensive Observability**: JSONL event logging with execution replay
+- **Deepgram voice/audio provider**: Native SDK support for STT, TTS, Flux streaming, Voice Agent, text intelligence, token grants, and Deepgram model cards.
+- **Per-call usage accounting**: `LLMCore.chat_with_usage()` returns `ChatUsage` without requiring session persistence.
+- **Search subsystem maturity**: Bright Data, Serper.dev, SerpApi, and keyless Semantic Scholar providers are available through `llmcore.search`.
+- **Agent and context upgrades**: Objective-aware compression, semantic citation provenance, structured tool result summaries, iteration/phase token summaries, runtime permission metadata, and loaded-tool validation.
+- **Observability upgrades**: Semantic retrieval events, context diagnostics after agent runs, context failure diagnostics, and ecosystem federation telemetry.
+- **Test hygiene**: The suite now treats warning cleanup as part of release readiness; optional SDK and infrastructure tests are skipped only behind explicit environment gates.
 
 ---
 
@@ -167,6 +168,15 @@ pip install llmcore[gemini]
 
 # Local Ollama support
 pip install llmcore[ollama]
+
+# Deepgram voice/audio support (STT, TTS, Voice Agent)
+pip install llmcore[deepgram]
+
+# Search providers
+pip install llmcore[brightdata]
+pip install llmcore[serper]
+pip install llmcore[serpapi]
+pip install llmcore[semanticscholar]
 ```
 
 ### With Storage Backends
@@ -371,6 +381,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
 | **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
 | **DeepInfra** | DeepSeek, Llama, Qwen, Mistral, FLUX, Whisper, Kokoro (100+ open models) | Streaming, Tools, Vision, Reasoning, TTS, STT, Image, Embeddings |
+| **Deepgram** | Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent | Streaming STT/TTS, Flux turn-taking, Voice Agent, Text Intelligence |
 
 ### Switching Providers
 
@@ -394,6 +405,47 @@ response = await llm.chat(
     max_tokens=500
 )
 ```
+
+### Voice & Audio (Deepgram)
+
+The **Deepgram** provider adds real-time **voice/audio** — speech-to-text (STT),
+text-to-speech (TTS), conversational **Flux** STT, a bidirectional **Voice
+Agent** (STT → LLM → TTS over one socket), and **text intelligence**. Deepgram
+is not a chat-completion provider, so its media methods are called **directly on
+the provider instance** (the `LLMCore` facade has no audio methods):
+
+```python
+from llmcore.providers.deepgram_provider import DeepgramProvider
+
+dg = DeepgramProvider({"api_key": "dg_...", "_instance_name": "deepgram"})
+
+# Pre-recorded STT
+result = await dg.transcribe_audio(open("call.wav", "rb").read(),
+                                   model="nova-3", smart_format=True, diarize=True)
+print(result.text)
+
+# TTS
+speech = await dg.generate_speech("Hello from Aura.", voice="aura-2-thalia-en")
+open("out.mp3", "wb").write(speech.audio_data)
+
+# Live STT (async byte source -> streamed events)
+async for ev in dg.transcribe_stream(mic_frames(), model="nova-3",
+                                      encoding="linear16", sample_rate=16000,
+                                      interim_results=True):
+    print(ev.is_final, ev.text)
+
+# Voice Agent (auto-answers client-side tool calls; prompt is never defaulted)
+async for event in dg.run_voice_agent(mic_audio(), function_handler=handle,
+                                       functions=[weather_fn],
+                                       prompt="You are a concise assistant."):
+    ...   # CONVERSATION_TEXT / AUDIO / FUNCTION_CALL_REQUEST events
+
+await dg.close()
+```
+
+See **[`docs/Deepgram_provider_usage.md`](docs/Deepgram_provider_usage.md)** for
+the full guide (config, streaming, Flux, Voice Agent settings shape, token auth)
+and the runnable scripts in [`examples/`](examples) (`deepgram_*.py`).
 
 ---
 
@@ -727,6 +779,7 @@ Built-in model cards for:
 - **Qwen**: Qwen 3 Max, Qwen3-Coder
 - **xAI**: Grok-4, Grok-4-Heavy
 - **DeepInfra**: DeepSeek-V3/R1, Llama 3.x, Qwen, Mistral, FLUX (image), Whisper (STT), Kokoro (TTS), embeddings
+- **Deepgram**: Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent
 
 ### Custom Model Cards
 
@@ -856,7 +909,7 @@ await llm.add_documents_to_vector_store(
             "content": "LLMCore is a Python library...",
             "metadata": {
                 "source": "documentation",
-                "version": "0.26.0",
+                "version": "0.50.0",
                 "category": "overview"
             }
         },
@@ -970,6 +1023,19 @@ from llmcore import (
     SandboxCleanupError,
 )
 ```
+
+---
+
+## 📚 Documentation
+
+- [Configuration reference](docs/CONFIG_REFERENCE.md)
+- [Search providers usage](docs/Search_providers_usage.md)
+- [Search providers rationale](docs/Search_providers_rationale.md)
+- [Deepgram provider usage](docs/Deepgram_provider_usage.md)
+- [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md)
+- [Model cards](docs/model_cards.md)
+- [Agentic system guide](docs/Agentic_System_Guide.md)
+- [External RAG integration](docs/External_RAG_integration_guide.md)
 
 ---
 

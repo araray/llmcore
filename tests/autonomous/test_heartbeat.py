@@ -12,7 +12,7 @@ Coverage target: >90%
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -68,12 +68,12 @@ class TestHeartbeatTask:
     def test_should_run_never_run_before(self):
         """A new task (next_run=None) should run immediately."""
         task = self._make_task()
-        assert task.should_run(datetime.utcnow()) is True
+        assert task.should_run(datetime.now(timezone.utc).replace(tzinfo=None)) is True
 
     def test_should_run_disabled(self):
         """A disabled task should never run."""
         task = self._make_task(enabled=False)
-        assert task.should_run(datetime.utcnow()) is False
+        assert task.should_run(datetime.now(timezone.utc).replace(tzinfo=None)) is False
 
     def test_should_run_circuit_broken(self):
         """Task with too many consecutive errors should not run."""
@@ -81,23 +81,23 @@ class TestHeartbeatTask:
             max_consecutive_errors=3,
         )
         task.consecutive_errors = 3
-        assert task.should_run(datetime.utcnow()) is False
+        assert task.should_run(datetime.now(timezone.utc).replace(tzinfo=None)) is False
 
     def test_should_run_time_not_due(self):
         """Task should not run if next_run is in the future."""
         task = self._make_task()
-        task.next_run = datetime.utcnow() + timedelta(hours=1)
-        assert task.should_run(datetime.utcnow()) is False
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
+        assert task.should_run(datetime.now(timezone.utc).replace(tzinfo=None)) is False
 
     def test_should_run_time_is_due(self):
         """Task should run if next_run is in the past."""
         task = self._make_task()
-        task.next_run = datetime.utcnow() - timedelta(seconds=1)
-        assert task.should_run(datetime.utcnow()) is True
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+        assert task.should_run(datetime.now(timezone.utc).replace(tzinfo=None)) is True
 
     def test_should_run_exact_time(self):
         """Task should run if next_run equals now."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         task = self._make_task()
         task.next_run = now
         assert task.should_run(now) is True
@@ -107,7 +107,7 @@ class TestHeartbeatTask:
     def test_schedule_next(self):
         """schedule_next sets last_run, next_run, and increments run_count."""
         task = self._make_task(interval=timedelta(minutes=10))
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         task.schedule_next(now)
 
@@ -118,7 +118,7 @@ class TestHeartbeatTask:
     def test_schedule_next_multiple_times(self):
         """Successive schedule_next calls increment run_count."""
         task = self._make_task()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         task.schedule_next(now)
         task.schedule_next(now + timedelta(seconds=60))
@@ -199,7 +199,7 @@ class TestHeartbeatTask:
             description="A test task",
             tags=["test", "unit"],
         )
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         task.schedule_next(now)
 
         d = task.to_dict()
@@ -390,7 +390,7 @@ class TestHeartbeatManager:
         """tick() does not execute tasks that are not due."""
         cb = AsyncMock()
         task = self._make_task("not_due", callback=cb)
-        task.next_run = datetime.utcnow() + timedelta(hours=1)
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
         heartbeat_manager.register(task)
 
         await heartbeat_manager.tick()
@@ -513,7 +513,7 @@ class TestHeartbeatManager:
         """run_task_now executes a task immediately."""
         cb = AsyncMock(return_value="immediate")
         task = self._make_task("imm", callback=cb)
-        task.next_run = datetime.utcnow() + timedelta(hours=99)
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=99)
         heartbeat_manager.register(task)
 
         await heartbeat_manager.run_task_now("imm")
@@ -546,7 +546,7 @@ class TestHeartbeatManager:
     def test_get_due_tasks_none(self, heartbeat_manager):
         """get_due_tasks returns empty when no tasks due."""
         task = self._make_task("future")
-        task.next_run = datetime.utcnow() + timedelta(hours=1)
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
         heartbeat_manager.register(task)
 
         assert heartbeat_manager.get_due_tasks() == []
@@ -555,7 +555,7 @@ class TestHeartbeatManager:
         """get_due_tasks returns names of due tasks."""
         t1 = self._make_task("due1")  # next_run=None → due
         t2 = self._make_task("not_due")
-        t2.next_run = datetime.utcnow() + timedelta(hours=1)
+        t2.next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
 
         heartbeat_manager.register(t1)
         heartbeat_manager.register(t2)
@@ -734,7 +734,7 @@ class TestHeartbeatConcurrentLimit:
                 concurrent_count -= 1
 
         # Register 5 tasks, all immediately due
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for i in range(5):
             task = HeartbeatTask(
                 name=f"task_{i}",
@@ -784,10 +784,10 @@ class TestHeartbeatConcurrentLimit:
             callback=failing_task,
             interval=timedelta(seconds=0),
         )
-        task.next_run = datetime.utcnow() - timedelta(seconds=1)
+        task.next_run = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
         hb.register(task)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         await hb._run_task(task, now)
 
         # Semaphore should be released — next task should be able to acquire

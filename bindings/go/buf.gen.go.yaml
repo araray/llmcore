@@ -1,0 +1,17 @@
+# Generate Go stubs from llmcore.v1 using buf's managed mode (injects go_package
+# without editing the .proto files). Requires the Go protoc plugins on PATH:
+#   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+#   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/araray/llmcore-go/gen
+plugins:
+  - local: protoc-gen-go
+    out: gen
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: gen
+    opt: paths=source_relative

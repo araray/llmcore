@@ -1,0 +1,43 @@
+{
+  "model_id": "whisper-large",
+  "display_name": "Whisper Cloud (large)",
+  "provider": "deepgram",
+  "model_type": "stt",
+  "architecture": {
+    "family": "whisper",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": false,
+    "audio_input": true,
+    "audio_output": false
+  },
+  "pricing": null,
+  "provider_extension": {
+    "pricing": {
+      "currency": "USD",
+      "unit": "audio_minute",
+      "billing_tier": "pay-as-you-go",
+      "model_improvement_program": true,
+      "source": "https://deepgram.com/pricing",
+      "as_of": "2026-06-25",
+      "status": "not_listed",
+      "rate_per_minute": null,
+      "note": "Deepgram Whisper Cloud appears under concurrency limits but no per-minute rate is published on the current pricing page. Consult the pricing page or Deepgram for current rates."
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram-hosted OpenAI Whisper (large) for batch transcription. Billed per audio-minute.",
+  "tags": [
+    "batch"
+  ],
+  "source": "generated"
+}

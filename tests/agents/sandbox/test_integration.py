@@ -146,7 +146,8 @@ outputs_path = "{outputs_path}"
         config_path.write_text(toml_content)
 
         # Load and create registry
-        config = load_sandbox_config(config_path=config_path)
+        with pytest.warns(DeprecationWarning):
+            config = load_sandbox_config(config_path=config_path)
         registry_config = create_registry_config(config)
 
         assert registry_config.docker_memory_limit == "1g"

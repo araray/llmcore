@@ -25,6 +25,7 @@ from llmcore.context.compression import (
     CompressionResult,
     CompressionStrategy,
     ContextCompressor,
+    SummaryObjective,
     _EstimateCounter,
     _extract_key_sentences,
     _split_into_sentences,
@@ -125,6 +126,36 @@ class TestCompressionResult:
             strategy_used="none",
         )
         assert result.compression_ratio == 1.0
+
+
+class TestSummaryObjective:
+    """Tests for objective normalization."""
+
+    def test_from_string(self):
+        objective = SummaryObjective.from_value("preserve security findings")
+
+        assert objective is not None
+        assert objective.purpose == "preserve security findings"
+
+    def test_from_dict(self):
+        objective = SummaryObjective.from_value(
+            {
+                "purpose": "identify auth risks",
+                "preserve": "decorators",
+                "drop": ["style comments"],
+                "target_audience": "security-step",
+                "max_tokens": "500",
+                "min_coverage": "0.8",
+            }
+        )
+
+        assert objective is not None
+        assert objective.purpose == "identify auth risks"
+        assert objective.preserve == ["decorators"]
+        assert objective.drop == ["style comments"]
+        assert objective.target_audience == "security-step"
+        assert objective.max_tokens == 500
+        assert objective.min_coverage == pytest.approx(0.8)
 
 
 # =============================================================================
@@ -335,6 +366,87 @@ class TestAbstractiveStrategy:
         assert "## GOALS" in result.content  # First section preserved
         assert "COMPRESSED CONTEXT" in result.content
         mock_llm.summarize.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_passes_objective_to_objective_aware_summarizer(
+        self, multi_section_content, counter
+    ):
+        """Objective-aware summarizers receive the downstream purpose."""
+
+        class ObjectiveSummarizer:
+            def __init__(self):
+                self.calls: list[dict[str, object]] = []
+
+            async def summarize(
+                self,
+                text: str,
+                max_tokens: int,
+                objective: SummaryObjective | None = None,
+            ) -> str:
+                self.calls.append(
+                    {"text": text, "max_tokens": max_tokens, "objective": objective}
+                )
+                return "Objective-shaped summary."
+
+        summarizer = ObjectiveSummarizer()
+        objective = SummaryObjective(
+            purpose="identify authentication vulnerabilities",
+            preserve=["auth decorators", "session handling"],
+            drop=["style comments"],
+            target_audience="security-analysis-step",
+            max_tokens=400,
+        )
+        compressor = ContextCompressor(
+            strategy="abstractive",
+            preserve_top_n=1,
+            token_counter=counter,
+            llm_summarizer=summarizer,
+        )
+        total = counter.count(multi_section_content)
+
+        result = await compressor.compress(
+            content=multi_section_content,
+            target_tokens=total // 2,
+            current_tokens=total,
+            summary_objective=objective,
+        )
+
+        assert result.summary_objective is objective
+        assert summarizer.calls[0]["objective"] is objective
+        assert "Objective-shaped summary." in result.content
+
+    @pytest.mark.asyncio
+    async def test_legacy_summarizer_ignores_objective(self, multi_section_content, counter):
+        """Old summarizers keep working when a compression objective is supplied."""
+
+        class LegacySummarizer:
+            def __init__(self):
+                self.calls: list[dict[str, object]] = []
+
+            async def summarize(self, text: str, max_tokens: int) -> str:
+                self.calls.append({"text": text, "max_tokens": max_tokens})
+                return "Legacy summary."
+
+        summarizer = LegacySummarizer()
+        compressor = ContextCompressor(
+            strategy="abstractive",
+            preserve_top_n=1,
+            token_counter=counter,
+            llm_summarizer=summarizer,
+        )
+        total = counter.count(multi_section_content)
+
+        result = await compressor.compress(
+            content=multi_section_content,
+            target_tokens=total // 2,
+            current_tokens=total,
+            summary_objective="preserve auth details",
+        )
+
+        assert result.summary_objective is not None
+        assert result.summary_objective.purpose == "preserve auth details"
+        assert summarizer.calls[0]["max_tokens"] > 0
+        assert "Legacy summary." in result.content
 
     @pytest.mark.asyncio
     async def test_llm_failure_falls_back(self, multi_section_content, counter):

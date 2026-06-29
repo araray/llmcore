@@ -23,29 +23,22 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-# --- Granular import checks for google-genai and its dependencies ---
-google_genai_available = False
-try:
-    from google import genai
-    from google.api_core.exceptions import InvalidArgument, PermissionDenied
-    from google.genai import types
-    from google.genai.errors import APIError
-
-    google_genai_available = True
-except ImportError:
-    genai = None  # type: ignore
-    types = None  # type: ignore
-    APIError = Exception  # type: ignore
-    PermissionDenied = Exception  # type: ignore
-    InvalidArgument = Exception  # type: ignore
-
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
+
+google_genai_available = False
+genai: Any | None = None
+types: Any | None = None
+APIError: type[Exception] = Exception
+PermissionDenied: type[Exception] = Exception
+InvalidArgument: type[Exception] = Exception
+_google_genai_import_attempted = False
+
+logger = logging.getLogger(__name__)
 
 # Updated for current-generation Gemini models (April 2026).
 # Used as last-resort fallback when neither the model card registry
@@ -75,6 +68,41 @@ LLMCORE_TO_GEMINI_ROLE_MAP = {
 
 # Cache for dynamically discovered context lengths, shared across instances.
 _discovered_context_lengths: dict[str, int] = {}
+
+
+def _ensure_google_genai_imported() -> bool:
+    """Import google-genai only when the Gemini provider is instantiated."""
+    global _google_genai_import_attempted
+    global APIError, InvalidArgument, PermissionDenied, genai, google_genai_available, types
+
+    if google_genai_available and genai is not None:
+        return True
+    if _google_genai_import_attempted and not google_genai_available:
+        return False
+
+    _google_genai_import_attempted = True
+    try:
+        from google import genai as _genai
+        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
+        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
+        from google.genai import types as _types
+        from google.genai.errors import APIError as _APIError
+    except ImportError:
+        google_genai_available = False
+        genai = None
+        types = None
+        APIError = Exception
+        PermissionDenied = Exception
+        InvalidArgument = Exception
+        return False
+
+    genai = _genai
+    types = _types
+    APIError = _APIError
+    PermissionDenied = _PermissionDenied
+    InvalidArgument = _InvalidArgument
+    google_genai_available = True
+    return True
 
 
 class GeminiProvider(BaseProvider):
@@ -112,7 +140,7 @@ class GeminiProvider(BaseProvider):
             log_raw_payloads: Whether to log raw request/response payloads.
         """
         super().__init__(config, log_raw_payloads)
-        if not google_genai_available:
+        if not _ensure_google_genai_imported():
             raise ImportError(
                 "Google Gen AI library (`google-genai`) not installed. "
                 "Install with 'pip install llmcore[gemini]'."
@@ -159,7 +187,7 @@ class GeminiProvider(BaseProvider):
             self._client = genai.Client(**client_kwargs)
             logger.debug("Google Gen AI client initialized successfully.")
         except Exception as e:
-            raise ConfigError(f"Google Gen AI configuration failed: {e}")
+            raise ConfigError(f"Google Gen AI configuration failed: {e}") from e
 
     def _parse_safety_settings(
         self, settings_config: dict[str, str] | None
@@ -285,11 +313,7 @@ class GeminiProvider(BaseProvider):
                         model_type = model_type_val.value
 
                     metadata["from_model_card"] = True
-                    metadata["lifecycle_status"] = (
-                        card.lifecycle.status
-                        if isinstance(card.lifecycle.status, str)
-                        else card.lifecycle.status
-                    )
+                    metadata["lifecycle_status"] = card.lifecycle.status
 
                 details = ModelDetails(
                     id=model_id,
@@ -312,7 +336,7 @@ class GeminiProvider(BaseProvider):
             logger.error(
                 f"Failed to list models from Google AI: {e}", exc_info=True
             )
-            raise ProviderError(self.get_name(), f"Failed to list models: {e}")
+            raise ProviderError(self.get_name(), f"Failed to list models: {e}") from e
         return details_list
 
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
@@ -680,7 +704,7 @@ class GeminiProvider(BaseProvider):
 
         try:
             if stream:
-                return self._handle_streaming(
+                return await self._handle_streaming(
                     model_name, genai_contents, config
                 )
             else:
@@ -693,13 +717,13 @@ class GeminiProvider(BaseProvider):
             if "context length" in err_str or "token" in err_str:
                 raise ContextLengthError(
                     model_name=model_name, message=str(e)
-                )
-            raise ProviderError(self.get_name(), f"Google AI API Error: {e}")
+                ) from e
+            raise ProviderError(self.get_name(), f"Google AI API Error: {e}") from e
         except PermissionDenied as e:
             logger.error(
                 f"Permission denied during Gemini chat: {e}", exc_info=True
             )
-            raise ProviderError(self.get_name(), f"Permission denied: {e}")
+            raise ProviderError(self.get_name(), f"Permission denied: {e}") from e
         except (ContextLengthError, ProviderError):
             raise
         except Exception as e:
@@ -708,7 +732,7 @@ class GeminiProvider(BaseProvider):
             )
             raise ProviderError(
                 self.get_name(), f"An unexpected error occurred: {e}"
-            )
+            ) from e
 
     async def _handle_non_streaming(
         self,
@@ -914,7 +938,7 @@ class GeminiProvider(BaseProvider):
             logger.warning(
                 "Gemini client not available. Approximating token count."
             )
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
         if not text:
             return 0
 
@@ -930,7 +954,7 @@ class GeminiProvider(BaseProvider):
                 f"'{target_model}': {e}",
                 exc_info=True,
             )
-            return (len(text) + 3) // 4
+            return _EstimateCounter().count(text)
 
     async def count_message_tokens(
         self, messages: list[Message], model: str | None = None
@@ -940,8 +964,8 @@ class GeminiProvider(BaseProvider):
             logger.warning(
                 "Gemini client not available. Approximating message token count."
             )
-            total_chars = sum(len(msg.content) for msg in messages)
-            return (total_chars + 3 * len(messages)) // 4
+            counter = _EstimateCounter()
+            return sum(counter.count(msg.content) for msg in messages) + len(messages)
         if not messages:
             return 0
 
@@ -966,13 +990,14 @@ class GeminiProvider(BaseProvider):
                 f"'{target_model}': {e}",
                 exc_info=True,
             )
-            total_chars = sum(
-                len(part.get("text", ""))
+            counter = _EstimateCounter()
+            total = sum(
+                counter.count(part.get("text", ""))
                 for content_dict in genai_contents
                 for part in content_dict.get("parts", [])
                 if "text" in part
             )
-            return (total_chars + 3 * len(genai_contents)) // 4
+            return total + len(genai_contents)
 
     # ------------------------------------------------------------------
     # Response Content Extraction

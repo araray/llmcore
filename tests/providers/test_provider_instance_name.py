@@ -313,3 +313,52 @@ class TestRoleValueSafety:
         count = await provider.count_message_tokens(msgs)
         assert isinstance(count, int)
         assert count > 0
+
+    @pytest.mark.asyncio
+    async def test_openai_count_tokens_uses_shared_model_counter(self):
+        """OpenAIProvider delegates raw text counts to llmcore.tokens."""
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        provider = object.__new__(OpenAIProvider)
+        provider.default_model = "default-model"
+
+        with patch(
+            "llmcore.providers.openai_provider._count_tokens",
+            return_value=42,
+        ) as mock_count:
+            count = await provider.count_tokens("hello", model="override-model")
+
+        assert count == 42
+        mock_count.assert_called_once_with("hello", "override-model")
+
+    @pytest.mark.asyncio
+    async def test_openai_message_tokens_use_shared_counter(self):
+        """OpenAIProvider uses the shared token counter for message text."""
+        from llmcore.models import Message, Role
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        class FakeCounter:
+            def __init__(self):
+                self.inputs: list[str] = []
+
+            def count(self, text):
+                self.inputs.append(str(text))
+                return len(str(text))
+
+        provider = object.__new__(OpenAIProvider)
+        provider.default_model = "default-model"
+        counter = FakeCounter()
+
+        with patch(
+            "llmcore.providers.openai_provider._get_token_counter",
+            return_value=counter,
+        ) as mock_get_counter:
+            count = await provider.count_message_tokens(
+                [Message(role=Role.USER, content="Count my tokens")],
+                model="override-model",
+            )
+
+        mock_get_counter.assert_called_once_with("override-model")
+        assert "user" in counter.inputs
+        assert "Count my tokens" in counter.inputs
+        assert count > 0

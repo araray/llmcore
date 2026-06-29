@@ -112,6 +112,14 @@ class RiskAssessment(BaseModel):
     dangerous_patterns: list[str] = Field(
         default_factory=list, description="Dangerous patterns detected"
     )
+    owasp_categories: list[str] = Field(
+        default_factory=list,
+        description="OWASP LLM Top-10 categories associated with detected patterns",
+    )
+    dangerous_pattern_metadata: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Structured metadata for each detected dangerous pattern",
+    )
 
     @property
     def is_high_risk(self) -> bool:
@@ -193,6 +201,8 @@ class HITLRequest(BaseModel):
                 "requires_approval": self.risk_assessment.requires_approval,
                 "reason": self.risk_assessment.reason,
                 "dangerous_patterns": self.risk_assessment.dangerous_patterns,
+                "owasp_categories": self.risk_assessment.owasp_categories,
+                "dangerous_pattern_metadata": self.risk_assessment.dangerous_pattern_metadata,
             },
             "context_summary": self.context_summary,
             "created_at": self.created_at.isoformat(),
@@ -230,6 +240,8 @@ class HITLRequest(BaseModel):
                 requires_approval=risk_data.get("requires_approval", True),
                 reason=risk_data.get("reason", ""),
                 dangerous_patterns=risk_data.get("dangerous_patterns", []),
+                owasp_categories=risk_data.get("owasp_categories", []),
+                dangerous_pattern_metadata=risk_data.get("dangerous_pattern_metadata", []),
             ),
             context_summary=data.get("context_summary", ""),
             created_at=datetime.fromisoformat(data["created_at"])

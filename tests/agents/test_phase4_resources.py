@@ -9,6 +9,8 @@ Tests the efficiency and resource management components:
 - Memory Store (Working + Long-term)
 """
 
+import json
+
 import pytest
 
 # =============================================================================
@@ -93,7 +95,7 @@ class TestModelRouter:
             model_id = (
                 first_model.model_id if hasattr(first_model, "model_id") else str(first_model)
             )
-            info = router.get_model_info(model_id)
+            router.get_model_info(model_id)
             # May return None or info depending on model
 
     def test_statistics(self):
@@ -151,7 +153,7 @@ class TestSemanticCache:
         )
 
         # Retrieve
-        result = await cache.get("What is the capital of France?")
+        await cache.get("What is the capital of France?")
         # Result may be CacheHit or None
 
     @pytest.mark.asyncio
@@ -240,7 +242,7 @@ class TestPlanCache:
         )
 
         # Find similar
-        result = await cache.find_similar_plan("Find files in folder")
+        await cache.find_similar_plan("Find files in folder")
         # May or may not find depending on similarity
 
     @pytest.mark.asyncio
@@ -318,6 +320,134 @@ class TestContextManager:
         assert Priority.MEDIUM is not None
         assert Priority.LOW is not None
 
+    def test_tool_result_context_uses_bounded_json_summary(self):
+        """Structured tool output remains valid JSON after pruning."""
+        from llmcore.agents.context import ContextManager, ContextManagerConfig
+
+        manager = ContextManager(
+            config=ContextManagerConfig(
+                max_tokens=10000,
+                reserve_for_output=100,
+                max_tool_result_chars=24,
+                max_tool_result_items=3,
+            )
+        )
+
+        context = manager.build_context(
+            system_prompt="You are a helpful assistant.",
+            goal="Inspect files.",
+            tool_results=[
+                {
+                    "tool": "inspect_files",
+                    "tool_call_id": "call-1",
+                    "output": {
+                        "files": [
+                            {"path": "a.py", "content": "A" * 80},
+                            {"path": "b.py", "content": "B" * 80},
+                            {"path": "c.py", "content": "C" * 80},
+                            {"path": "d.py", "content": "D" * 80},
+                        ],
+                        "summary": "S" * 80,
+                    },
+                }
+            ],
+        )
+
+        tool_payload = _extract_tool_result_payload(context.messages)
+
+        assert tool_payload["tool"] == "inspect_files"
+        assert tool_payload["tool_call_id"] == "call-1"
+        assert tool_payload["truncated"] is True
+        assert len(tool_payload["output"]["summary"]) == 24
+        assert tool_payload["output"]["files"][-1] == {"_truncated_items": 1}
+
+    def test_tool_result_context_parses_json_string_before_pruning(self):
+        """JSON string outputs are bounded as objects, not sliced as text."""
+        from llmcore.agents.context import ContextManager, ContextManagerConfig
+
+        manager = ContextManager(
+            config=ContextManagerConfig(
+                max_tokens=10000,
+                reserve_for_output=100,
+                max_tool_result_chars=16,
+                max_tool_result_items=2,
+            )
+        )
+        output = json.dumps(
+            {
+                "rows": [
+                    {"id": 1, "text": "alpha" * 20},
+                    {"id": 2, "text": "beta" * 20},
+                    {"id": 3, "text": "gamma" * 20},
+                ],
+                "status": "ok",
+            }
+        )
+
+        context = manager.build_context(
+            system_prompt="You are a helpful assistant.",
+            goal="Read JSON output.",
+            tool_results=[{"tool": "query", "output": output}],
+        )
+
+        tool_payload = _extract_tool_result_payload(context.messages)
+
+        assert isinstance(tool_payload["output"], dict)
+        assert tool_payload["output"]["rows"][-1] == {"_truncated_items": 1}
+        assert tool_payload["output"]["rows"][0]["text"] == "alphaalphaalphaa"
+        assert tool_payload["truncated"] is True
+
+    def test_tool_result_json_survives_context_compression(self):
+        """Generic compression does not corrupt tool-result envelopes."""
+        from llmcore.agents.context import ContextManager, ContextManagerConfig
+
+        manager = ContextManager(
+            config=ContextManagerConfig(
+                max_tokens=400,
+                reserve_for_output=50,
+                compression_threshold=0.1,
+                max_tool_result_chars=32,
+            )
+        )
+
+        context = manager.build_context(
+            system_prompt="You are a helpful assistant.",
+            goal="Inspect output.",
+            reflections=["This is a verbose reflection. " * 120],
+            tool_results=[
+                {
+                    "tool": "read_state",
+                    "output": {"status": "ok", "value": "important result"},
+                }
+            ],
+        )
+
+        tool_payload = _extract_tool_result_payload(context.messages)
+
+        assert context.compression_applied is True
+        assert tool_payload["tool"] == "read_state"
+        assert tool_payload["output"] == {"status": "ok", "value": "important result"}
+
+    def test_tool_result_context_can_be_disabled(self):
+        """max_tool_results=0 excludes tool-result context."""
+        from llmcore.agents.context import ContextManager, ContextManagerConfig
+
+        manager = ContextManager(
+            config=ContextManagerConfig(
+                max_tokens=10000,
+                reserve_for_output=100,
+                max_tool_results=0,
+            )
+        )
+
+        context = manager.build_context(
+            system_prompt="You are a helpful assistant.",
+            goal="Ignore tool output.",
+            tool_results=[{"tool": "read_state", "output": {"status": "ok"}}],
+        )
+
+        assert all("## Tool Result" not in message.get("content", "") for message in context.messages)
+
 
 class TestTextCompressor:
     """Tests for text compression utilities."""
@@ -339,6 +469,18 @@ class TestTextCompressor:
         compressed = compressor.compress(long_text, target_ratio=0.5)
 
         assert len(compressed) < len(long_text)
+
+
+def _extract_tool_result_payload(messages: list[dict]) -> dict:
+    """Return the first tool-result JSON object from built context messages."""
+    for message in messages:
+        content = message.get("content", "")
+        marker = "## Tool Result\n"
+        if marker in content:
+            after_marker = content.split(marker, 1)[1]
+            first_line = after_marker.split("\n\n", 1)[0]
+            return json.loads(first_line)
+    raise AssertionError("No tool result payload found")
 
 
 # =============================================================================
@@ -565,6 +707,46 @@ class TestMemoryManager:
 
         stats = await manager.get_statistics()
         assert stats is not None
+
+    @pytest.mark.asyncio
+    async def test_consolidate_without_backend_reports_noop(self):
+        """Default consolidation reports local counts without mutating stores."""
+        from llmcore.agents.memory import MemoryManager
+        from llmcore.agents.memory.memory_store import MemoryType
+
+        manager = MemoryManager()
+        await manager.remember("Long-term fact", memory_type=MemoryType.SEMANTIC)
+
+        report = await manager.consolidate()
+
+        assert report.backend == "in_process"
+        assert report.items_scanned == 1
+        assert report.items_archived == 0
+        assert report.diagnostics["mode"] == "noop"
+        assert report.diagnostics["counts"]["semantic"] == 1
+
+    @pytest.mark.asyncio
+    async def test_consolidate_delegates_to_backend(self):
+        """External backend owns real consolidation when configured."""
+        from llmcore.agents.memory import MemoryManager
+
+        class FakeBackend:
+            async def consolidate(self):
+                return {
+                    "backend": "semantiscan",
+                    "run_id": "run-7",
+                    "items_scanned": 9,
+                    "items_archived": 2,
+                }
+
+        manager = MemoryManager(backend=FakeBackend())
+
+        report = await manager.consolidate()
+
+        assert report.backend == "semantiscan"
+        assert report.run_id == "run-7"
+        assert report.items_scanned == 9
+        assert report.items_archived == 2
 
     def test_memory_stores_access(self):
         """Test accessing different memory stores."""

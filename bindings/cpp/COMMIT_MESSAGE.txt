@@ -1,0 +1,38 @@
+feat(bindings): add C++ Tier-0 client (grpc++) — B2 (C++)
+
+Fourth foreign-language client of phase B2, generated from the frozen
+`llmcore.v1` contract. gRPC-only (grpc++); depends only on the contract.
+
+Contents (bindings/cpp/)
+- include/llmcore/client.hpp - public, pimpl'd API. Client + ChatStream;
+    methods return generated llmcore::v1::* messages by value and throw
+    llmcore::BridgeError on failure.
+- src/client.cpp             - grpc++ stubs (Inference/Catalog/Control), error
+    decode from the binary trailing metadata `llmcore-error-bin`
+    (ErrorCategory_Name + has_*/optional accessors), cancellable ClientReader
+    (TryCancel), capability negotiation.
+- CMakeLists.txt             - find_package(gRPC/Protobuf CONFIG); generates
+    pb + grpc.pb from ../../proto via protoc + grpc_cpp_plugin; builds the
+    static lib, example, and a CTest e2e.
+- examples/quickstart.cpp, tests/e2e.cpp, README.md, USAGE.md, .gitignore.
+
+Tests (tests/e2e.cpp)
+- fork/exec a real `llmcore-bridge` (FakeFacade), wait for Health, then assert
+  chat/streaming (concatenation == unary), count/cost, catalog/control,
+  capability negotiation (accept + reject), Embed UNSUPPORTED, structured error
+  decode (incl. retry_after_ms == 2000.0), and stream cancellation — matching
+  the fixtures proven by the TS/Go/Rust clients. Registered via add_test.
+
+Design
+- Pimpl keeps the public header free of <grpcpp/grpcpp.h>; ChatStream holds the
+  ClientContext + ClientReader behind a stable heap address so moving the stream
+  out of the factory keeps the reader's context pointer valid.
+- Optional proto fields use has_*/set_*; provider_kwargs via mutable Struct.
+- Pure addition under bindings/cpp/; no changes to the bridge, contract, or
+  other packages.
+
+Build/verification note
+- NOT compiled in the authoring sandbox (no grpc++/protoc; gcc/g++ 13 present but
+  the gRPC dev stack was unfetchable). Written against the stable grpc++ API;
+  every referenced proto symbol verified against source. Build + run with CMake +
+  CTest in an environment providing gRPC/Protobuf (protoc, grpc_cpp_plugin).

@@ -14,7 +14,7 @@ Coverage target: >90%
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -638,7 +638,7 @@ class TestResourceMonitor:
         resource_monitor.record_usage(tokens=5000, cost_usd=0.5)
 
         # Simulate hour change
-        resource_monitor._last_hour = (datetime.utcnow().hour - 1) % 24
+        resource_monitor._last_hour = (datetime.now(timezone.utc).replace(tzinfo=None).hour - 1) % 24
 
         # Next _get_usage will detect hour change and reset
         # We test the logic directly by accessing internal state

@@ -25,20 +25,28 @@ Example::
     synthesizer.add_source("recent", RecentContextSource(max_turns=20), priority=80)
 
     context = await synthesizer.synthesize(current_task=my_goal)
-    # context.content → assembled string
-    # context.utilization → 0.0–1.0
+    # context.content -> assembled string
+    # context.utilization -> 0.0-1.0
 
 References:
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §12 (Adaptive Context Synthesis)
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §13 (Skill Loading System)
 """
 
-# Compression (Phase 3)
+from .budgeting import (
+    ContextBudget,
+    build_context_budget,
+    estimate_tool_schema_tokens,
+    should_compress_prompt,
+)
 from .compression import (
     CompressionResult,
     CompressionStrategy,
     ContextCompressor,
+    ObjectiveAwareLLMSummarizer,
+    SummaryObjective,
 )
+from .messages import sanitize_tool_message_pairs
 
 # Prioritization (Phase 3)
 from .prioritization import (
@@ -57,23 +65,24 @@ from .synthesis import (
 )
 
 __all__ = [
-    # Core synthesizer
-    "ContextSynthesizer",
-    # Data models
-    "ContextChunk",
-    "SynthesizedContext",
-    # Protocols
-    "ContextSource",
-    "TokenCounter",
-    # Token counter implementations
-    "TiktokenCounter",
-    "EstimateCounter",
-    # Compression
     "CompressionResult",
     "CompressionStrategy",
-    "ContextCompressor",
-    # Prioritization
     "ContentPrioritizer",
+    "ContextBudget",
+    "ContextChunk",
+    "ContextCompressor",
+    "ContextSource",
+    "ContextSynthesizer",
+    "EstimateCounter",
+    "ObjectiveAwareLLMSummarizer",
     "PriorityWeights",
     "ScoredChunk",
+    "SummaryObjective",
+    "SynthesizedContext",
+    "TiktokenCounter",
+    "TokenCounter",
+    "build_context_budget",
+    "estimate_tool_schema_tokens",
+    "sanitize_tool_message_pairs",
+    "should_compress_prompt",
 ]

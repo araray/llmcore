@@ -52,6 +52,7 @@ except ImportError:
 
 from ..exceptions import ConfigError, ProviderError
 from ..models import Message, ModelDetails, Tool, ToolCall
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -532,7 +533,7 @@ class OllamaProvider(BaseProvider):
             response_or_stream = await self._client.chat(**call_kwargs)
 
             if stream:
-                return self._wrap_stream(response_or_stream)
+                return await self._wrap_stream(response_or_stream)
             else:
                 return self._normalize_response(response_or_stream)
 
@@ -798,21 +799,22 @@ class OllamaProvider(BaseProvider):
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Counts tokens using the configured tokenizer or character approximation."""
-        if not self._encoding:
-            return (len(text) + 3) // 4
         if not text:
             return 0
+        if not self._encoding:
+            return _EstimateCounter().count(text)
         return await asyncio.to_thread(lambda: len(self._encoding.encode(text)))  # type: ignore
 
     async def count_message_tokens(self, messages: list[Message], model: str | None = None) -> int:
         """Approximates token count for a list of messages using tiktoken."""
         if not self._encoding:
-            total_chars = sum(
-                len(msg.content)
-                + len(msg.role.value if hasattr(msg.role, "value") else str(msg.role))
+            counter = _EstimateCounter()
+            total = sum(
+                counter.count(msg.content)
+                + counter.count(msg.role.value if hasattr(msg.role, "value") else str(msg.role))
                 for msg in messages
             )
-            return (total_chars + (len(messages) * 5) + 3) // 4
+            return total + len(messages) * 2 + 1
 
         num_tokens = 0
         for message in messages:

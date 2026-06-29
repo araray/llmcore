@@ -9,9 +9,9 @@ This script shows how to:
 4. Handle potential errors (e.g., Ollama server not running, model not found).
 
 Prerequisites:
-- Install LLMCore with Ollama support: `pip install llmcore[ollama,all]` (or relevant extras).
+- Install LLMCore with Ollama support: `pip install "llmcore[ollama]"`.
 - Have Ollama installed and running: https://ollama.com/
-- Pull the desired model: `ollama pull llama3` (or the model specified in your config/example).
+- Pull the desired model: `ollama pull llama3.2` (or the model specified in your config/example).
 - Ensure an embedding model and vector store are configured for RAG (see config file).
 """
 
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Example config section:
 # [providers.ollama]
 # host = "http://192.168.1.100:11434" # If Ollama is on another machine
-# default_model = "mistral"
+# default_model = "llama3.2"
 # --- End Configuration Note ---
 
 

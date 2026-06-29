@@ -67,6 +67,7 @@ from ..models_multimodal import (
     TranscriptionResult,
     TranscriptionSegment,
 )
+from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -526,7 +527,7 @@ class HuggingFaceProvider(BaseProvider):
         the model's specific tokenizer would need to be loaded locally.
         This heuristic gives a reasonable upper-bound estimate.
         """
-        return max(1, int(len(text) / _APPROX_CHARS_PER_TOKEN))
+        return _EstimateCounter(chars_per_token=int(_APPROX_CHARS_PER_TOKEN)).count(text)
 
     async def count_message_tokens(
         self, messages: list[Message], model: str | None = None

@@ -1273,4 +1273,4 @@ Cards created for older versions remain compatible:
 
 ---
 
-*Document generated for llmcore v0.26.0*
+*Document generated for llmcore v0.50.0*

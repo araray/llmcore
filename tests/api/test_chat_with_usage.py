@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 
 from llmcore import ChatUsage, LLMCore
-from llmcore.models import ContextPreparationDetails, Message
+from llmcore.models import ContextPreparationDetails, Message, Tool
 from llmcore.providers.base import BaseProvider
 
 # ---------------------------------------------------------------------------
@@ -252,6 +252,37 @@ class TestChatWithUsageBehaviour:
         details = llm.get_last_interaction_context_info(sid)
         assert details is not None
         assert details.prompt_tokens == usage.tokens_in
+
+    async def test_tool_schema_tokens_are_counted_in_prompt_usage(self, fake_llm):
+        llm, _ = fake_llm
+        sid = "tool-schema-session"
+        tool = Tool(
+            name="lookup_document",
+            description="Lookup a document by identifier.",
+            parameters={
+                "type": "object",
+                "properties": {"document_id": {"type": "string"}},
+                "required": ["document_id"],
+            },
+        )
+
+        _, usage = await llm.chat_with_usage(
+            message="use the lookup tool if needed",
+            session_id=sid,
+            save_session=False,
+            tools=[tool],
+        )
+
+        details = llm.get_last_interaction_context_info(sid)
+        assert details is not None
+        assert details.tool_schema_tokens > 0
+        assert details.prompt_tokens == details.final_token_count + details.tool_schema_tokens
+        assert usage.tokens_in == details.prompt_tokens
+        assert details.available_context_tokens == (
+            details.max_context_length
+            - details.reserved_response_tokens
+            - details.tool_schema_tokens
+        )
 
     async def test_stream_kwarg_is_rejected(self, fake_llm):
         llm, _ = fake_llm

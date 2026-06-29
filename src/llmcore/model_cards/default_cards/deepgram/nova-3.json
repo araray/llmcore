@@ -1,0 +1,55 @@
+{
+  "model_id": "nova-3",
+  "display_name": "Nova-3",
+  "provider": "deepgram",
+  "model_type": "stt",
+  "architecture": {
+    "family": "nova",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "audio_input": true,
+    "audio_output": false
+  },
+  "pricing": null,
+  "provider_extension": {
+    "pricing": {
+      "currency": "USD",
+      "unit": "audio_minute",
+      "billing_tier": "pay-as-you-go",
+      "model_improvement_program": true,
+      "source": "https://deepgram.com/pricing",
+      "as_of": "2026-06-25",
+      "status": "published",
+      "rate_per_minute": 0.0077,
+      "note": "Nova-3 monolingual/English. The page shows two pay-as-you-go values; the lower is the current limited-time promotional streaming rate and the higher is the standard (pre-recorded/regular) rate. Growth (prepaid) tier shown as a [min, max] range. Multilingual Nova-3 is priced higher ($0.0058-$0.0092/min PAYG).",
+      "promotional_streaming_rate_per_minute": 0.0048,
+      "observed_rates_per_minute": [
+        0.0048,
+        0.0077
+      ],
+      "growth_rate_per_minute": [
+        0.0042,
+        0.0065
+      ]
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram Nova-3 speech-to-text (batch + streaming). Supports keyterm prompting and multilingual code-switching. Billed per audio-minute.",
+  "tags": [
+    "streaming",
+    "batch",
+    "keyterm",
+    "multilingual"
+  ],
+  "source": "generated"
+}

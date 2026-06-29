@@ -1,0 +1,41 @@
+// llmcore.v1 — control plane: capability negotiation, health, config reload.
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "llmcore/v1/common.proto";
+
+message ProviderInfo {
+  string name = 1;
+  bool available = 2;
+}
+
+// Handshake payload used for capability negotiation (spec §15).
+message ServerInfo {
+  string llmcore_version = 1;
+  string bridge_version = 2;
+  string contract_version = 3;           // "llmcore.v1"
+  repeated string transports = 4;        // e.g. ["grpc", "http"]
+  repeated ProviderInfo providers = 5;
+  repeated string capabilities = 6;      // e.g. ["tier0", "transport.grpc", ...]
+  repeated string tiers = 7;             // e.g. ["T0"]
+}
+
+message HealthStatus {
+  bool ok = 1;
+  string detail = 2;
+}
+
+message ReloadConfigRequest {
+  optional string path = 1;
+}
+
+message ReloadConfigResponse {
+  bool ok = 1;
+}
+
+service ControlService {
+  rpc GetInfo (Empty) returns (ServerInfo);
+  rpc Health (Empty) returns (HealthStatus);
+  rpc ReloadConfig (ReloadConfigRequest) returns (ReloadConfigResponse);  // LLMCore.reload_config (api.py:541)
+}

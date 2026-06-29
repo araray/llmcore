@@ -74,7 +74,7 @@ from typing import (
     Any,
 )
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 logger = logging.getLogger(__name__)
 
@@ -212,13 +212,16 @@ class Event(BaseModel):
     )
     tags: list[str] = Field(default_factory=list, description="Tags for filtering and organization")
 
-    class Config:
-        """Pydantic configuration."""
+    model_config = ConfigDict(use_enum_values=True)
 
-        use_enum_values = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
+    @field_serializer("timestamp")
+    def _serialize_timestamp(self, value: datetime) -> str:
+        """Preserve ISO-8601 timestamp serialization (e.g. ``...+00:00``).
+
+        Pydantic v2 would otherwise emit a ``Z`` suffix for UTC; this keeps the
+        exact format previously produced by the (now-removed) ``json_encoders``.
+        """
+        return value.isoformat()
 
     def to_jsonl(self) -> str:
         """Convert to JSONL-compatible string."""

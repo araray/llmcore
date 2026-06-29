@@ -98,7 +98,7 @@ class Candidate(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utc_now)
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class EvaluationCriteria(BaseModel):
@@ -148,7 +148,7 @@ class CandidateScore(BaseModel):
     evaluation_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
 
 class ArbiterDecision(BaseModel):
@@ -179,7 +179,7 @@ class ArbiterDecision(BaseModel):
     total_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     def get_candidate_by_id(self, candidate_id: str) -> Candidate | None:
         """Get a candidate by ID."""

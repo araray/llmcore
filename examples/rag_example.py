@@ -25,6 +25,7 @@ import uuid
 # Import the main class and relevant exceptions/models
 from llmcore import (
     ConfigError,
+    ContextLengthError,
     EmbeddingError,
     LLMCore,
     LLMCoreError,

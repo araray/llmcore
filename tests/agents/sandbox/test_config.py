@@ -11,6 +11,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 # Assumes llmcore is installed or in PYTHONPATH
 from llmcore.agents.sandbox.config import (
     DEFAULT_CONFIG,
@@ -240,7 +242,8 @@ host = "192.168.1.50"
             f.flush()
 
             try:
-                config = load_sandbox_config(config_path=Path(f.name))
+                with pytest.warns(DeprecationWarning):
+                    config = load_sandbox_config(config_path=Path(f.name))
 
                 assert config.mode == "vm"
                 assert config.docker.image == "custom:latest"

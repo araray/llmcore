@@ -122,6 +122,72 @@ SUGGESTIONS: None
         assert "dangerous" in output.concerns[0].lower()
 
     @pytest.mark.asyncio
+    async def test_validate_phase_rejects_unknown_tool_before_llm(self):
+        """VALIDATE rejects unloaded tools before asking the model for approval."""
+        provider_manager = Mock()
+        tool_manager = Mock()
+        tool_manager.is_tool_loaded.return_value = False
+        tool_manager.get_tool_names.return_value = ["calculator", "semantic_search"]
+
+        state = EnhancedAgentState(goal="Test")
+        validate_input = ValidateInput(
+            goal="Inspect a file",
+            proposed_action=ToolCall(
+                id="call_1",
+                name="read_file",
+                arguments={"path": "src/app.py"},
+            ),
+            reasoning="Need to inspect the target file",
+            risk_tolerance="medium",
+        )
+
+        output = await validate_phase(
+            agent_state=state,
+            validate_input=validate_input,
+            provider_manager=provider_manager,
+            tool_manager=tool_manager,
+        )
+
+        assert output.result == ValidationResult.REJECTED
+        assert output.confidence == ConfidenceLevel.HIGH
+        assert not output.requires_human_approval
+        assert "read_file" in output.concerns[0]
+        assert "calculator" in output.concerns[0]
+        provider_manager.get_provider.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_validate_phase_rejects_unknown_tool_before_danger_approval(self):
+        """Unloaded tools are rejected instead of creating unusable HITL requests."""
+        provider_manager = Mock()
+        tool_manager = Mock()
+        tool_manager.is_tool_loaded.return_value = False
+        tool_manager.get_tool_names.return_value = ["calculator"]
+
+        state = EnhancedAgentState(goal="Test")
+        validate_input = ValidateInput(
+            goal="Clean up files",
+            proposed_action=ToolCall(
+                id="call_1",
+                name="execute_shell",
+                arguments={"command": "rm -rf /"},
+            ),
+            reasoning="Remove all files",
+            risk_tolerance="medium",
+        )
+
+        output = await validate_phase(
+            agent_state=state,
+            validate_input=validate_input,
+            provider_manager=provider_manager,
+            tool_manager=tool_manager,
+        )
+
+        assert output.result == ValidationResult.REJECTED
+        assert not output.requires_human_approval
+        assert "execute_shell" in output.concerns[0]
+        provider_manager.get_provider.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_validate_phase_low_confidence(self):
         """Test VALIDATE phase with low confidence requiring HITL."""
         provider_manager = Mock()

@@ -44,7 +44,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -427,7 +427,7 @@ class HeartbeatManager:
         Useful for testing or when you want to run due tasks
         without waiting for the automatic loop.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Run general heartbeat callbacks
         for callback in self._on_heartbeat:
@@ -530,7 +530,7 @@ class HeartbeatManager:
             raise ValueError(f"Task not found: {name}")
 
         task = self._tasks[name]
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         logger.info(f"Running task immediately: {name}")
         await self._run_task(task, now)
@@ -553,7 +553,7 @@ class HeartbeatManager:
 
     def get_due_tasks(self) -> list[str]:
         """Get names of tasks that are due to run."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         return [name for name, task in self._tasks.items() if task.should_run(now)]
 
 

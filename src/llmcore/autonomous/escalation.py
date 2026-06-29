@@ -47,7 +47,7 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
@@ -155,7 +155,7 @@ class Escalation:
     task_id: str | None = None
 
     # Timestamps
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     acknowledged_at: datetime | None = None
     resolved_at: datetime | None = None
     expires_at: datetime | None = None
@@ -177,7 +177,7 @@ class Escalation:
         """
         if self.resolved_at:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc).replace(tzinfo=None) > self.expires_at:
             return False
         return True
 
@@ -228,7 +228,7 @@ class Escalation:
             details=data.get("details", {}),
             goal_id=data.get("goal_id"),
             task_id=data.get("task_id"),
-            created_at=(parse_datetime(data.get("created_at")) or datetime.utcnow()),
+            created_at=(parse_datetime(data.get("created_at")) or datetime.now(timezone.utc).replace(tzinfo=None)),
             acknowledged_at=parse_datetime(data.get("acknowledged_at")),
             resolved_at=parse_datetime(data.get("resolved_at")),
             expires_at=parse_datetime(data.get("expires_at")),
@@ -320,7 +320,7 @@ class EscalationManager:
     def _is_duplicate(self, escalation: Escalation) -> bool:
         """Check if this is a duplicate within dedup window."""
         hash_key = self._compute_hash(escalation)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Clean old hashes
         self._recent_hashes = {
@@ -398,7 +398,7 @@ class EscalationManager:
         )
 
         if expires_in_seconds:
-            escalation.expires_at = datetime.utcnow() + timedelta(seconds=expires_in_seconds)
+            escalation.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=expires_in_seconds)
 
         # Check for duplicate
         if self._is_duplicate(escalation):
@@ -408,7 +408,7 @@ class EscalationManager:
         # Auto-resolve low priority
         if level.value < self.auto_resolve_below.value:
             escalation.auto_resolved = True
-            escalation.resolved_at = datetime.utcnow()
+            escalation.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
             logger.info(f"Auto-resolved escalation: {title}")
             return None
 
@@ -485,8 +485,8 @@ class EscalationManager:
 
         escalation = self._escalations[escalation_id]
         escalation.human_response = response
-        escalation.acknowledged_at = datetime.utcnow()
-        escalation.resolved_at = datetime.utcnow()
+        escalation.acknowledged_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        escalation.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Wake up any waiters
         if escalation_id in self._response_waiters:
@@ -508,7 +508,7 @@ class EscalationManager:
         if escalation_id not in self._escalations:
             return False
 
-        self._escalations[escalation_id].acknowledged_at = datetime.utcnow()
+        self._escalations[escalation_id].acknowledged_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return True
 
     def resolve(self, escalation_id: str) -> bool:
@@ -525,7 +525,7 @@ class EscalationManager:
             return False
 
         escalation = self._escalations[escalation_id]
-        escalation.resolved_at = datetime.utcnow()
+        escalation.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Wake up any waiters with None response
         if escalation_id in self._response_waiters:
@@ -567,7 +567,7 @@ class EscalationManager:
         Returns:
             Number of escalations cleared
         """
-        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=older_than_hours)
         to_remove = [
             eid for eid, e in self._escalations.items() if e.resolved_at and e.resolved_at < cutoff
         ]

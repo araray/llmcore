@@ -1,0 +1,147 @@
+// llmcore.v1 — Tier-1 sessions & context items (phase B4).
+//
+// Field numbers are STABLE for the v1 contract. Every message/field/RPC traces
+// to a verified llmcore source symbol (see bindings/contract_map.yaml).
+syntax = "proto3";
+
+package llmcore.v1;
+
+import "google/protobuf/struct.proto";
+import "llmcore/v1/common.proto";  // Message, Empty
+
+// Context-item kind — mirrors llmcore.models.ContextItemType (models.py:137), a
+// str-Enum. Carried on the wire as its lowercase string value (e.g. "user_text")
+// so it round-trips through llmcore's use_enum_values serialization unchanged.
+message ContextItem {
+  string id = 1;
+  string type = 2;                            // ContextItemType value
+  optional string source_id = 3;
+  string content = 4;
+  optional int32 tokens = 5;
+  optional int32 original_tokens = 6;
+  bool is_truncated = 7;
+  google.protobuf.Struct metadata = 8;
+  string timestamp = 9;                       // RFC-3339 / ISO-8601 UTC
+}
+
+// A conversation session — mirrors llmcore.models.ChatSession (models.py:264).
+message ChatSession {
+  string id = 1;
+  optional string name = 2;
+  repeated Message messages = 3;
+  repeated ContextItem context_items = 4;
+  string created_at = 5;                      // ISO-8601 UTC
+  string updated_at = 6;                      // ISO-8601 UTC
+  google.protobuf.Struct metadata = 7;
+}
+
+// Inclusive [start, end] message index window (for ForkSession.message_range).
+message Int32Range {
+  int32 start = 1;
+  int32 end = 2;
+}
+
+message CreateSessionRequest {
+  optional string session_id = 1;
+  optional string name = 2;
+  optional string system_message = 3;
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message ListSessionsRequest {
+  optional int32 limit = 1;
+}
+message ListSessionsResponse {
+  repeated ChatSession sessions = 1;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+message UpdateSessionNameRequest {
+  string session_id = 1;
+  string new_name = 2;
+}
+
+message ForkSessionRequest {
+  string session_id = 1;
+  optional string new_name = 2;
+  optional string from_message_id = 3;
+  repeated string message_ids = 4;
+  optional Int32Range message_range = 5;
+  bool include_context_items = 6;             // default true at the bridge
+  google.protobuf.Struct metadata = 7;
+}
+message ForkSessionResponse {
+  string session_id = 1;                      // id of the new session
+}
+
+message CloneSessionRequest {
+  string session_id = 1;
+  optional string new_name = 2;
+  bool include_messages = 3;                  // default true at the bridge
+  bool include_context_items = 4;             // default true at the bridge
+}
+message CloneSessionResponse {
+  string session_id = 1;
+}
+
+message DeleteMessagesRequest {
+  string session_id = 1;
+  repeated string message_ids = 2;
+}
+message DeleteMessagesResponse {
+  int32 deleted_count = 1;
+}
+
+message GetMessagesByRangeRequest {
+  string session_id = 1;
+  int32 start_index = 2;
+  int32 end_index = 3;
+}
+message GetMessagesByRangeResponse {
+  repeated Message messages = 1;
+}
+
+message AddContextItemRequest {
+  string session_id = 1;
+  string content = 2;
+  optional string type = 3;                   // ContextItemType value; default "user_text"
+  optional string source_id = 4;
+  google.protobuf.Struct metadata = 5;
+}
+message AddContextItemResponse {
+  string item_id = 1;
+}
+
+message GetContextItemRequest {
+  string session_id = 1;
+  string item_id = 2;
+}
+
+message RemoveContextItemRequest {
+  string session_id = 1;
+  string item_id = 2;
+}
+message RemoveContextItemResponse {
+  bool removed = 1;
+}
+
+service SessionService {
+  rpc CreateSession      (CreateSessionRequest)      returns (ChatSession);                 // LLMCore.create_session
+  rpc GetSession         (GetSessionRequest)         returns (ChatSession);                 // LLMCore.get_session
+  rpc ListSessions       (ListSessionsRequest)       returns (ListSessionsResponse);        // LLMCore.list_sessions
+  rpc DeleteSession      (DeleteSessionRequest)      returns (Empty);                       // LLMCore.delete_session
+  rpc UpdateSessionName  (UpdateSessionNameRequest)  returns (Empty);                       // LLMCore.update_session_name
+  rpc ForkSession        (ForkSessionRequest)        returns (ForkSessionResponse);         // LLMCore.fork_session
+  rpc CloneSession       (CloneSessionRequest)       returns (CloneSessionResponse);        // LLMCore.clone_session
+  rpc DeleteMessages     (DeleteMessagesRequest)     returns (DeleteMessagesResponse);      // LLMCore.delete_messages
+  rpc GetMessagesByRange (GetMessagesByRangeRequest) returns (GetMessagesByRangeResponse);  // LLMCore.get_messages_by_range
+  rpc AddContextItem     (AddContextItemRequest)     returns (AddContextItemResponse);      // LLMCore.add_context_item
+  rpc GetContextItem     (GetContextItemRequest)     returns (ContextItem);                 // LLMCore.get_context_item
+  rpc RemoveContextItem  (RemoveContextItemRequest)  returns (RemoveContextItemResponse);   // LLMCore.remove_context_item
+}

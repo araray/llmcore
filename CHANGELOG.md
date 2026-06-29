@@ -5,7 +5,113 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.50.0
+
+### Added — June 2026 agent, context, provider, and observability rollup
+
+- **Deepgram voice/audio provider**: native SDK integration for speech-to-text,
+  text-to-speech, Flux streaming, Voice Agent, text intelligence, token grants,
+  Deepgram model cards, docs, examples, and offline tests.
+- **Per-call usage accounting**: `LLMCore.chat_with_usage()` and `ChatUsage`
+  expose prompt/completion/total token counts for transient calls without
+  requiring session persistence.
+- **Search providers**: the optional `llmcore.search` subsystem now includes
+  Bright Data, Serper.dev, SerpApi, and Semantic Scholar, with provider-neutral
+  result models and manager/facade wiring.
+- **Token counting**: native provider fallback paths and OpenAI token counting
+  now route through llmcore's shared model-aware token counters.
+- **Agent execution**: typed plan-step specs, structured plan-step tool
+  execution, loaded-tool validation, activity-protocol routing to loaded tools,
+  runtime permission metadata, and preserved resumed history/pending action
+  snapshots.
+- **Context and memory**: objective-aware compression, semantic citation
+  provenance, structured tool-result summaries, typed citation source handling,
+  and external backend consolidation hooks.
+- **Observability**: semantic retrieval events, context diagnostics after agent
+  runs, context failure diagnostics, phase token summaries, iteration summaries,
+  and ecosystem federation telemetry.
+- **HITL auditability**: OWASP metadata and audit reporting for dangerous action
+  patterns.
+
+### Changed
+
+- Bumped package and documentation metadata to `0.50.0`.
+- Removed noisy import-time optional SDK warnings by lazy-loading
+  `sentence-transformers` and `google-genai` only when their providers are
+  instantiated.
+- Updated `SingleAgent` environment config loading to use the current unified
+  `confy.Config` path instead of the deprecated `load_agents_config(config_path=...)`
+  compatibility path.
+
 ## v0.49.14
+
+### Added — Deepgram voice/audio provider (STT, TTS, Flux, Voice Agent, Text Intelligence)
+
+Adds a complete, native-SDK **Deepgram** provider — llmcore's first real-time
+**voice/audio** provider. Deepgram is fundamentally different from the
+text-completion LLM providers: its primary surfaces are WebSocket streams for
+speech-to-text (STT), text-to-speech (TTS), and a bidirectional **Voice Agent**
+(STT → LLM → TTS over one socket). There is no text chat-completion surface, so
+`chat_completion` raises a clear, actionable `ProviderError` (HTTP 400,
+non-retryable) and callers use the media methods instead. Tested against
+`deepgram-sdk` v7.3.1.
+
+- **New provider `DeepgramProvider`** (`llmcore/providers/deepgram_provider.py`),
+  registered in `ProviderManager.PROVIDER_MAP` as `"deepgram"`. Follows the
+  Gemini native-SDK template: lazy SDK import with an availability flag, an
+  `ImportError` (surfaced as *"install llmcore[deepgram]"*) when the SDK is
+  absent, and `ConfigError` for bad config. Wraps the official async-first,
+  WebSocket-native `deepgram-sdk` (v7.x).
+- **Batch media**: `transcribe_audio` (bytes / file path, or a remote `url=`) →
+  `TranscriptionResult`; `generate_speech` (Aura voices) → `SpeechResult`.
+- **Streaming**: `transcribe_stream` / `open_transcription_socket` (live STT),
+  `transcribe_stream_flux` / `open_flux_socket` (Flux, listen.v2, turn-aware),
+  and a dual-mode `stream_speech` / `open_speech_socket` (a string → REST
+  streaming; an async iterable of text → a TTS WebSocket). The one-call
+  streaming helpers fan microphone audio in and stream events/audio out
+  concurrently, always close the socket on completion, and surface producer
+  errors as `ProviderError`.
+- **Voice Agent**: `open_voice_agent` (manual `DeepgramVoiceAgentSession`) and
+  `run_voice_agent` (high-level driver that auto-answers `FunctionCallRequest`s
+  via a `function_handler` and exposes an `on_event` hook). Runtime steering:
+  `inject_user_message` / `inject_agent_message` / `update_prompt` /
+  `update_think` / `update_speak` / `respond_to_function_call` / `keepalive`.
+  **No system prompt is ever defaulted** — callers pass `prompt=` explicitly (or
+  inject upstream), honouring the ecosystem "no hardcoded prompt" invariant.
+- **Text intelligence**: `analyze_text` (read.v1) → `TextAnalysisResult`
+  (summary / topics / sentiment / intents).
+- **Token auth & account**: `grant_token` (short-lived access token for
+  browsers/clients) and `get_projects`; the full management API remains
+  available via the `provider.client` escape hatch.
+- **New provider-neutral models** (`llmcore/models_multimodal.py`):
+  `StreamEventType`, `TranscriptionStreamEvent`, `VoiceAgentEventType`,
+  `VoiceAgentFunctionCall`, `VoiceAgentEvent`, and `TextAnalysisResult`.
+- **Configuration**: a fully-documented `[providers.deepgram]` block in
+  `config/default_config.toml` wires every capability (auth, transport,
+  default models, `[stt]`/`[stt.streaming]`, `[flux]`, `[tts]`/`[tts.streaming]`,
+  and `[agent]` with the SDK's `provider`-nested `listen`/`think`/`speak`
+  shape and top-level `audio`).
+- **Model cards**: 11 cards under `model_cards/default_cards/deepgram/` (STT:
+  `nova-3`, `nova-3-medical`, `nova-2`, `nova-2-phonecall`, `whisper-large`,
+  `flux-general-en`; TTS: `aura-2-thalia-en`, `aura-2-andromeda-en`,
+  `aura-2-apollo-en`, `aura-asteria-en`, `aura-luna-en`), generated by
+  `tools/generate_deepgram_cards.py`. Each card records Deepgram's published
+  pay-as-you-go rates (per audio-minute STT / per-character TTS) in
+  `provider_extension.pricing` with units, source URL, and capture date; the
+  token-centric `pricing` field stays `null` (tokens are not the billing unit).
+- **Packaging**: new optional extra `deepgram = ["deepgram-sdk>=7.0.0",
+  "websockets>=12.0"]` (also folded into `all`).
+- **Tokens / context**: Deepgram bills per audio-minute (STT) / per-character
+  (TTS), so `count_tokens` returns a documented character-count heuristic and
+  `get_max_context_length` returns a configurable nominal value
+  (`fallback_context_length`, default 2000). These are **not** billing units.
+- **Tests**: 54 new tests across `tests/providers/test_deepgram_provider.py`,
+  `test_deepgram_streaming.py`, and `test_deepgram_agent.py` (fake
+  clients/sockets; no network). Full provider suite: 553 passed, 2 skipped.
+- **Docs & examples**: `docs/Deepgram_provider_usage.md` plus seven runnable
+  `examples/deepgram_*.py` scripts.
+
+The existing public API is unchanged; this is purely additive.
 
 ### Added — Per-call token usage surface (`LLMCore.chat_with_usage`)
 

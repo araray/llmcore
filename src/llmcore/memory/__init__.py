@@ -24,12 +24,26 @@ References:
     - UNIFIED_ECOSYSTEM_SPECIFICATION.md §8 (Memory System)
 """
 
+from .backends import (
+    Citation,
+    ConsolidationReport,
+    MemoryBackendProtocol,
+    MemoryConsolidationBackendProtocol,
+    MemoryRecord,
+    SemantiscanMemoryBackend,
+)
 from .hierarchical import HierarchicalMemoryManager, MemoryItem, MemoryTier
 from .manager import MemoryManager
 
 __all__ = [
-    "MemoryManager",
+    "Citation",
+    "ConsolidationReport",
     "HierarchicalMemoryManager",
+    "MemoryBackendProtocol",
+    "MemoryConsolidationBackendProtocol",
     "MemoryItem",
+    "MemoryManager",
+    "MemoryRecord",
     "MemoryTier",
+    "SemantiscanMemoryBackend",
 ]

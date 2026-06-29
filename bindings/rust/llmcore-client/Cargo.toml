@@ -1,0 +1,20 @@
+[package]
+name = "llmcore-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Ergonomic async Rust client for the llmcore bridge over gRPC (tonic)."
+
+[dependencies]
+llmcore-proto = { path = "../llmcore-proto", version = "0.1.0" }
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+tokio-stream = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-stream = { workspace = true }

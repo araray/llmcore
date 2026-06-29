@@ -17,6 +17,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
 from typing import (
+    TYPE_CHECKING,
     Any,
     Literal,
     Optional,
@@ -24,6 +25,7 @@ from typing import (
     runtime_checkable,
 )
 
+from .context.budgeting import build_context_budget, estimate_tool_schema_tokens
 from .embedding.manager import EmbeddingManager
 from .exceptions import (
     ConfigError,
@@ -65,6 +67,9 @@ from .search.models import (
 from .sessions.manager import SessionManager
 from .storage.manager import StorageManager
 from .usage import ChatUsage
+
+if TYPE_CHECKING:
+    from .model_cards import ModelCard, ModelCardSummary
 
 try:
     from confy.loader import Config as ConfyConfig
@@ -193,6 +198,7 @@ class LLMCore:
     _config_file_path: str | None
     _runtime_config_dirty: bool
     _original_config_dict: dict[str, Any]
+    _observability: Any | None
 
     def __init__(self):
         """
@@ -205,6 +211,7 @@ class LLMCore:
         self._config_file_path = None
         self._runtime_config_dirty = False
         self._original_config_dict = {}
+        self._observability = None
 
     @classmethod
     async def create(
@@ -212,6 +219,7 @@ class LLMCore:
         config_overrides: dict[str, Any] | None = None,
         config_file_path: str | None = None,
         env_prefix: str | None = "LLMCORE",
+        observability: Any | None = None,
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -224,6 +232,9 @@ class LLMCore:
             config_overrides: Optional dictionary of configuration overrides
             config_file_path: Optional path to a TOML configuration file
             env_prefix: Environment variable prefix (default: "LLMCORE")
+            observability: Optional observability object. If it or its ``logger``
+                exposes ``log_event()``, provider and embedding lifecycle events
+                are emitted through that logger.
 
         Returns:
             Fully initialized LLMCore instance
@@ -233,8 +244,86 @@ class LLMCore:
             StorageError: If storage backends cannot be initialized
         """
         instance = cls()
-        await instance._initialize_from_config(config_overrides, config_file_path, env_prefix)
+        await instance._initialize_from_config(
+            config_overrides,
+            config_file_path,
+            env_prefix,
+            observability=observability,
+        )
         return instance
+
+    def create_enhanced_agent_manager(
+        self,
+        *,
+        prompt_registry: Any | None = None,
+        tracer: Any | None = None,
+        default_mode: Any | None = None,
+        observability: Any | None = None,
+        agents_config: Any | None = None,
+        context_synthesizer: Any | None = None,
+        memory_backend: Any | None = None,
+    ) -> Any:
+        """Create an ``EnhancedAgentManager`` backed by this LLMCore instance.
+
+        ``LLMCore`` owns the provider, memory, and storage managers required by
+        Darwin Layer 2. This factory exposes the supported construction path
+        without making callers reach into private attributes.
+
+        Args:
+            prompt_registry: Optional prompt registry for Darwin prompt lookup.
+            tracer: Optional tracer passed to the agent manager.
+            default_mode: Optional ``AgentMode``. Defaults to ``AgentMode.SINGLE``.
+            observability: Optional observability components.
+            agents_config: Optional agents configuration object.
+            context_synthesizer: Optional context synthesizer for Darwin PERCEIVE.
+            memory_backend: Optional external memory backend. When provided without
+                ``context_synthesizer``, llmcore creates a semantic context source
+                from the backend.
+
+        Returns:
+            A configured ``EnhancedAgentManager``.
+
+        Raises:
+            RuntimeError: If this instance was not initialized via ``LLMCore.create()``.
+        """
+        required_managers = {
+            "provider_manager": getattr(self, "_provider_manager", None),
+            "memory_manager": getattr(self, "_memory_manager", None),
+            "storage_manager": getattr(self, "_storage_manager", None),
+        }
+        missing = [name for name, value in required_managers.items() if value is None]
+        if missing:
+            missing_text = ", ".join(missing)
+            raise RuntimeError(
+                "LLMCore is not initialized; call LLMCore.create() before "
+                f"create_enhanced_agent_manager(). Missing: {missing_text}."
+            )
+
+        effective_agents_config = agents_config
+        if effective_agents_config is None:
+            config = getattr(self, "config", None)
+            if config is not None:
+                try:
+                    from .config.agents_config import load_agents_config
+
+                    effective_agents_config = load_agents_config(config=config)
+                except Exception as exc:
+                    logger.debug("Falling back to default agent config loading: %s", exc)
+
+        from .agents import AgentMode, EnhancedAgentManager
+
+        return EnhancedAgentManager(
+            provider_manager=required_managers["provider_manager"],
+            memory_manager=required_managers["memory_manager"],
+            storage_manager=required_managers["storage_manager"],
+            prompt_registry=prompt_registry,
+            tracer=tracer,
+            default_mode=default_mode or AgentMode.SINGLE,
+            observability=observability,
+            agents_config=effective_agents_config,
+            context_synthesizer=context_synthesizer,
+            memory_backend=memory_backend,
+        )
 
     async def __aenter__(self) -> "LLMCore":
         """Context manager entry - instance is already initialized."""
@@ -271,6 +360,7 @@ class LLMCore:
         config_overrides: dict[str, Any] | None,
         config_file_path: str | None,
         env_prefix: str | None,
+        observability: Any | None = None,
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -294,6 +384,7 @@ class LLMCore:
             config_overrides: Optional configuration overrides
             config_file_path: Optional path to config file
             env_prefix: Environment variable prefix
+            observability: Optional observability object for lifecycle telemetry
         """
         logger.debug("Initializing LLMCore components from configuration...")
         try:
@@ -358,13 +449,21 @@ class LLMCore:
             if self._log_raw_payloads_enabled:
                 logger.info("Raw payload logging is ENABLED for this LLMCore instance")
 
+            if observability is not None:
+                self._observability = observability
+            event_logger = self._resolve_observability_event_logger(self._observability)
+
             # Initialize managers
             logger.debug("Initializing StorageManager...")
             self._storage_manager = StorageManager(self.config)
             await self._storage_manager.initialize_storages()
 
             logger.debug("Initializing ProviderManager...")
-            self._provider_manager = ProviderManager(self.config, self._log_raw_payloads_enabled)
+            self._provider_manager = ProviderManager(
+                self.config,
+                self._log_raw_payloads_enabled,
+                event_logger=event_logger,
+            )
             await self._provider_manager.initialize()
 
             logger.debug("Initializing SearchProviderManager...")
@@ -380,7 +479,11 @@ class LLMCore:
             self._session_manager = SessionManager(self._storage_manager.session_storage)
 
             logger.debug("Initializing EmbeddingManager...")
-            self._embedding_manager = EmbeddingManager(self.config, self._storage_manager)
+            self._embedding_manager = EmbeddingManager(
+                self.config,
+                self._storage_manager,
+                event_logger=event_logger,
+            )
             await self._embedding_manager.initialize()
 
             logger.debug("Initializing MemoryManager...")
@@ -396,6 +499,24 @@ class LLMCore:
         except Exception as e:
             logger.error(f"Failed to initialize LLMCore: {e}", exc_info=True)
             raise ConfigError(f"Initialization failed: {e}")
+
+    @staticmethod
+    def _resolve_observability_event_logger(observability: Any | None) -> Any | None:
+        """Return a sync log_event-capable logger from an observability object."""
+
+        if observability is None:
+            return None
+
+        log_event = getattr(observability, "log_event", None)
+        if callable(log_event):
+            return observability
+
+        logger_obj = getattr(observability, "logger", None)
+        log_event = getattr(logger_obj, "log_event", None)
+        if callable(log_event):
+            return logger_obj
+
+        return None
 
     async def close(self) -> None:
         """
@@ -482,6 +603,32 @@ class LLMCore:
             List of provider names (e.g., ['openai', 'anthropic', 'ollama'])
         """
         return self._provider_manager.get_available_providers()
+
+    def get_provider(self, provider_name: str | None = None) -> BaseProvider:
+        """Return an LLM-provider instance by name, or the default.
+
+        Public accessor mirroring :meth:`get_search_provider`. It exposes the
+        configured provider object so callers (e.g. the llmcore bridge's Tier-2
+        AudioService) can invoke provider-level multimodal / live-audio methods
+        such as ``transcribe_stream`` / ``stream_speech`` / ``run_voice_agent``
+        and the one-shot ``generate_speech`` / ``transcribe_audio`` without
+        reaching into provider-manager internals.
+
+        Supports the same alias resolution as the underlying manager (e.g.
+        ``"google"`` resolves to a configured ``"gemini"`` instance).
+
+        Args:
+            provider_name: Provider instance (config section) name. If ``None``,
+                returns the configured default provider.
+
+        Returns:
+            The requested :class:`~llmcore.providers.base.BaseProvider`.
+
+        Raises:
+            ConfigError: If the requested/default provider is not configured or
+                failed to load.
+        """
+        return self._provider_manager.get_provider(provider_name)
 
     # ==========================================================================
     # Web / Data Search Providers
@@ -1018,6 +1165,8 @@ class LLMCore:
         # Add user message to session with metadata
         chat_session.add_message(message, Role.USER, metadata=user_message_metadata)
 
+        tool_schema_tokens = estimate_tool_schema_tokens(tools, model=actual_model)
+
         # Prepare context (includes history, RAG, context management)
         context_details = await self._memory_manager.prepare_context(
             session=chat_session,
@@ -1030,15 +1179,20 @@ class LLMCore:
             active_context_item_ids=active_context_item_ids,
             explicitly_staged_items=explicitly_staged_items,
             prompt_template_values=prompt_template_values,
+            tool_schema_tokens=tool_schema_tokens,
         )
         context_payload = context_details.prepared_messages
 
         # Pre-populate introspection fields that are known before the LLM call
         context_details.provider = active_provider.get_name()
         context_details.model = actual_model
-        context_details.prompt_tokens = context_details.final_token_count
         context_details.rag_used = enable_rag
-        context_details.max_context_length = active_provider.get_max_context_length(actual_model)
+        context_details.max_context_length = (
+            context_details.max_tokens_for_model
+            or active_provider.get_max_context_length(actual_model)
+        )
+        context_details.tool_schema_tokens = tool_schema_tokens
+        context_details.prompt_tokens = context_details.final_token_count + tool_schema_tokens
 
         # Determine if truncation was applied
         context_details.context_truncation_applied = bool(
@@ -1052,13 +1206,22 @@ class LLMCore:
             context_details.rag_documents_retrieved = 0 if enable_rag else None
 
         # Calculate available context tokens
-        reserved_tokens = self.config.get("context_management", {}).get(
+        cm_config = self.config.get("context_management", {})
+        reserved_tokens = context_details.reserved_response_tokens or cm_config.get(
             "reserved_response_tokens", 500
         )
-        context_details.reserved_response_tokens = reserved_tokens
-        context_details.available_context_tokens = (
-            context_details.max_context_length - reserved_tokens
+        safety_margin_tokens = context_details.safety_margin_tokens or cm_config.get(
+            "safety_margin_tokens", 0
         )
+        budget = build_context_budget(
+            context_window_tokens=context_details.max_context_length,
+            reserved_output_tokens=reserved_tokens,
+            tool_schema_tokens=tool_schema_tokens,
+            safety_margin_tokens=safety_margin_tokens,
+        )
+        context_details.reserved_response_tokens = budget.reserved_output_tokens
+        context_details.safety_margin_tokens = budget.safety_margin_tokens
+        context_details.available_context_tokens = budget.prompt_tokens_available
 
         # Call provider
         response_data = await active_provider.chat_completion(

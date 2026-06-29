@@ -188,6 +188,7 @@ class TestErrorEventType:
         expected = {
             "EXCEPTION",
             "VALIDATION_ERROR",
+            "CONTEXT_FAILURE",
             "TIMEOUT_ERROR",
             "RATE_LIMIT_ERROR",
             "API_ERROR",

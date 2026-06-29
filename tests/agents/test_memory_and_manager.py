@@ -14,17 +14,21 @@ References:
     - Integration Audit: INTEGRATION_AUDIT.md
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from llmcore.agents import AgentResult
 from llmcore.agents.cognitive import (
+    ActOutput,
     EnhancedAgentState,
     ReflectOutput,
+    ThinkOutput,
 )
 from llmcore.agents.manager import AgentManager, AgentMode, EnhancedAgentManager
 from llmcore.agents.memory import CognitiveMemoryIntegrator
+from llmcore.models import ToolCall, ToolResult
 
 # =============================================================================
 # MEMORY INTEGRATOR TESTS
@@ -160,6 +164,34 @@ class TestCognitiveMemoryIntegrator:
         metadata = call_args[1]["metadata"]
         assert metadata["type"] == "session_learning"
         assert metadata["session_id"] == "session-123"
+
+    @pytest.mark.asyncio
+    async def test_consolidate_session_memory_runs_backend_consolidation(self, mock_managers):
+        """Session consolidation runs an optional long-term backend pass."""
+        from llmcore.memory import ConsolidationReport
+
+        memory_manager, storage_manager = mock_managers
+        memory_backend = SimpleNamespace(
+            consolidate=AsyncMock(
+                return_value=ConsolidationReport(
+                    backend="semantiscan",
+                    started_at="2026-06-22T00:00:00+00:00",
+                    items_scanned=5,
+                    items_archived=1,
+                )
+            )
+        )
+        integrator = CognitiveMemoryIntegrator(
+            memory_manager=memory_manager,
+            storage_manager=storage_manager,
+            memory_backend=memory_backend,
+        )
+        state = EnhancedAgentState(goal="Test goal", session_id="session-123")
+
+        await integrator.consolidate_session_memory(session_id="session-123", agent_state=state)
+
+        memory_backend.consolidate.assert_awaited_once()
+        memory_manager.store_memory.assert_not_called()
 
 
 # =============================================================================
@@ -301,16 +333,6 @@ class TestEnhancedAgentManager:
         manager = EnhancedAgentManager(**mock_components)
 
         # Mock the internal _run_cognitive_loop to avoid provider issues
-        mock_result = AgentResult(
-            goal="Test goal",
-            final_answer="Legacy result",
-            success=True,
-            iteration_count=1,
-            total_tokens=100,
-            total_time_seconds=1.0,
-            session_id="session-123",
-        )
-
         # Patch _run_cognitive_loop directly since legacy mode uses it
         with patch.object(manager, "_run_cognitive_loop", new_callable=AsyncMock) as mock_loop:
             mock_loop.return_value = "Legacy result"
@@ -343,10 +365,70 @@ class TestEnhancedAgentManager:
         manager.single_agent = mock_single_instance
 
         # Run without specifying mode
-        result = await manager.run(goal="Test")
+        await manager.run(goal="Test")
 
         # Should use default (SINGLE)
         assert mock_single_instance.run.called
+
+    @pytest.mark.asyncio
+    async def test_single_mode_logs_context_failure_diagnostics(self, mock_components):
+        """Repeated Darwin tool failures are emitted through observability."""
+        from llmcore.agents.observability import EventLogger, InMemorySink
+        from llmcore.agents.observability_factory import ObservabilityComponents
+
+        state = EnhancedAgentState(goal="Test diagnostics", session_id="session-123")
+        for number in range(1, 4):
+            call_id = f"call-{number}"
+            iteration = state.start_iteration(number)
+            iteration.think_output = ThinkOutput(
+                thought="Try the command",
+                proposed_action=ToolCall(
+                    id=call_id,
+                    name="run_command",
+                    arguments={"command": "false"},
+                ),
+            )
+            iteration.act_output = ActOutput(
+                tool_result=ToolResult(
+                    tool_call_id=call_id,
+                    content="ERROR: command failed",
+                    is_error=True,
+                ),
+                success=False,
+            )
+            state.complete_iteration(success=False)
+
+        mock_result = AgentResult(
+            goal="Test diagnostics",
+            final_answer="failed",
+            success=False,
+            iteration_count=3,
+            total_tokens=100,
+            total_time_seconds=1.0,
+            session_id="session-123",
+            agent_state=state,
+        )
+        mock_single_instance = Mock()
+        mock_single_instance.run = AsyncMock(return_value=mock_result)
+
+        sink = InMemorySink()
+        event_logger = EventLogger(session_id="session-123", sinks=[sink])
+        observability = ObservabilityComponents(enabled=True, logger=event_logger)
+
+        manager = EnhancedAgentManager(**mock_components, observability=observability)
+        manager.single_agent = mock_single_instance
+
+        result = await manager.run(goal="Test diagnostics", mode=AgentMode.SINGLE)
+
+        assert result is mock_result
+        context_events = [
+            event
+            for event in sink.get_events()
+            if event.event_type == "context_failure"
+            and event.error_type == "repeated_tool_failure"
+        ]
+        assert len(context_events) == 1
+        assert context_events[0].data["details"]["tool_name"] == "run_command"
 
     def test_create_persona(self, mock_components):
         """Test creating a persona through manager."""

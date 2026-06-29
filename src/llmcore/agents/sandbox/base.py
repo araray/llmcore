@@ -19,7 +19,7 @@ Classes:
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -133,7 +133,7 @@ class SandboxConfig:
     labels: dict[str, str] = field(default_factory=dict)
 
     # Timestamps
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     def __post_init__(self):
         """Validate configuration after initialization."""

@@ -21,7 +21,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -467,7 +467,7 @@ class TestComponentInterop:
 
         @heartbeat_task(interval=timedelta(seconds=2), name="decorated_check")
         async def decorated_check():
-            invocations.append(datetime.utcnow())
+            invocations.append(datetime.now(timezone.utc).replace(tzinfo=None))
             return "ok"
 
         heartbeat_manager.register(decorated_check)

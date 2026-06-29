@@ -129,6 +129,105 @@ class TestActivityFallback:
         assert agent_state.get_working_memory("using_activity_fallback")
 
     @pytest.mark.asyncio
+    async def test_activity_protocol_can_call_loaded_tool(
+        self, agents_config, mock_provider, agent_state
+    ):
+        """XML fallback can name a loaded ToolManager tool and execute it normally."""
+        from llmcore.agents.cognitive.models import ActInput, ThinkInput, ValidationResult
+        from llmcore.agents.cognitive.phases.act import act_phase
+        from llmcore.agents.cognitive.phases.think import think_phase
+        from llmcore.agents.tools import ToolManager
+        from llmcore.models import Tool
+
+        tool_manager = ToolManager(MagicMock(), MagicMock())
+        tool_manager.register_runtime_tool(
+            Tool(
+                name="inspect_file",
+                description="Inspect file contents",
+                parameters={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            ),
+            "tests.runtime.inspect_file.activity_protocol",
+            lambda path: f"inspected {path}",
+        )
+
+        async def mock_chat(*args, **kwargs):
+            if kwargs.get("tools"):
+                raise Exception("Model does not support tools")
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": """Use the runtime tool.
+
+<activity_request>
+    <activity>inspect_file</activity>
+    <parameters>
+        <path>README.md</path>
+    </parameters>
+    <reasoning>Need file contents.</reasoning>
+</activity_request>"""
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 42},
+            }
+
+        mock_provider.chat_completion = AsyncMock(side_effect=mock_chat)
+        mock_provider.extract_response_content = MagicMock(
+            return_value="""Use the runtime tool.
+
+<activity_request>
+    <activity>inspect_file</activity>
+    <parameters>
+        <path>README.md</path>
+    </parameters>
+    <reasoning>Need file contents.</reasoning>
+</activity_request>"""
+        )
+
+        provider_manager = MagicMock()
+        provider_manager.get_provider.return_value = mock_provider
+
+        think_output = await think_phase(
+            agent_state=agent_state,
+            think_input=ThinkInput(
+                goal="Inspect README",
+                current_step="Inspect README.md",
+                available_tools=tool_manager.get_tool_inventory(),
+            ),
+            provider_manager=provider_manager,
+            memory_manager=MagicMock(),
+            tool_manager=tool_manager,
+            agents_config=agents_config,
+        )
+
+        assert think_output.using_activity_fallback is True
+        assert think_output.proposed_action is not None
+        assert think_output.proposed_action.name == "inspect_file"
+        assert think_output.proposed_action.arguments == {"path": "README.md"}
+        assert agent_state.get_working_memory("using_activity_fallback") is False
+        activity_prompt = mock_provider.chat_completion.await_args_list[1].kwargs["context"][
+            1
+        ].content
+        assert "inspect_file" in activity_prompt
+
+        act_output = await act_phase(
+            agent_state=agent_state,
+            act_input=ActInput(
+                tool_call=think_output.proposed_action,
+                validation_result=ValidationResult.APPROVED,
+            ),
+            tool_manager=tool_manager,
+        )
+
+        assert act_output.success is True
+        assert act_output.tool_result.content == "inspected README.md"
+
+    @pytest.mark.asyncio
     async def test_activity_fallback_disabled(self, mock_provider, agent_state):
         """Test that activity fallback doesn't activate when disabled."""
         from llmcore.agents.cognitive.models import ThinkInput

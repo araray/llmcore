@@ -4,8 +4,8 @@
 
 LLMCore now provides first-class support for external Retrieval Augmented Generation (RAG) engines like `semantiscan`. This guide explains how to integrate your RAG engine with LLMCore as the LLM backend.
 
-**Version**: 0.24.0+
- **Target Audience**: Developers building RAG pipelines with LLMCore
+**Version**: 0.50.0
+**Target Audience**: Developers building RAG pipelines with LLMCore
 
 ------
 
@@ -628,4 +628,3 @@ items = [
 - **Semantiscan Integration**: See `docs/SEMANTISCAN_INTEGRATION.md`
 
 ------
-

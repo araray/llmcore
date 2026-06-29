@@ -11,16 +11,79 @@ These build a real :class:`LLMCore` via ``LLMCore.create()`` and verify that:
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from typing import Any
+
 import httpx
 import pytest
 import respx
 
 from llmcore import LLMCore
 from llmcore.exceptions import ConfigError
+from llmcore.models import Message, ModelDetails, Tool
+from llmcore.providers.base import BaseProvider
 from llmcore.search.models import WebSearchResult
 from llmcore.search.providers.brightdata_provider import DEFAULT_BASE_URL
 
 BASE = DEFAULT_BASE_URL
+
+
+class _FakeProvider(BaseProvider):
+    """Minimal in-process LLM provider so ``LLMCore.create()`` initializes without
+    any external library, API key, or network (e.g. no Ollama daemon)."""
+
+    def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False) -> None:
+        super().__init__(config, log_raw_payloads=log_raw_payloads)
+        self.default_model = config.get("default_model", "fake-model")
+
+    def get_name(self) -> str:
+        return "fake"
+
+    async def warm_up(self) -> None:
+        return None
+
+    async def get_models_details(self) -> list[ModelDetails]:
+        return []
+
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
+        return {}
+
+    def get_max_context_length(self, model: str | None = None) -> int:
+        return 4096
+
+    async def chat_completion(
+        self,
+        context: list[Message],
+        model: str | None = None,
+        stream: bool = False,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
+        return len(text.split())
+
+    async def count_message_tokens(
+        self, messages: list[Message], model: str | None = None
+    ) -> int:
+        return len(messages)
+
+    def extract_response_content(self, response: dict[str, Any]) -> str:
+        return response["choices"][0]["message"]["content"]
+
+    def extract_delta_content(self, chunk: dict[str, Any]) -> str:
+        return ""
+
+
+@pytest.fixture(autouse=True)
+def _register_fake_provider(monkeypatch):
+    """Register the ``fake`` LLM provider type used by ``_base_overrides``."""
+    from llmcore.providers import manager as provider_manager
+
+    monkeypatch.setitem(provider_manager.PROVIDER_MAP, "fake", _FakeProvider)
+    yield
 
 
 @pytest.fixture(autouse=True)
@@ -36,19 +99,31 @@ def _no_sleep(monkeypatch):
 
 @pytest.fixture
 def _no_bd_token(monkeypatch):
-    """Ensure the conventional Bright Data token is absent for this test."""
+    """Force a genuinely empty search subsystem.
+
+    Clearing only the Bright Data token is insufficient because the packaged
+    default config also declares *key-optional* providers (e.g. Semantic Scholar,
+    which loads against the public pool with no key). To make availability
+    deterministic regardless of the host's env vars, also blank the
+    ``SEARCH_PROVIDER_MAP`` so no ``[search_providers.*]`` section resolves to a
+    provider class — every section is skipped and the subsystem is empty.
+    """
     monkeypatch.delenv("BRIGHTDATA_API_TOKEN", raising=False)
+    monkeypatch.setattr("llmcore.search.manager.SEARCH_PROVIDER_MAP", {})
     yield
 
 
 def _base_overrides(tmp_path) -> dict:
     """Lightweight LLMCore config: no vector store, temp sqlite session DB.
 
-    Keeps ``LLMCore.create()`` self-contained and fast for CI (no ChromaDB /
-    Postgres / network), while leaving the default LLM provider (ollama, lazy)
-    in place so the LLM ProviderManager initializes successfully.
+    Keeps ``LLMCore.create()`` self-contained, fast and deterministic for CI (no
+    ChromaDB / Postgres / network and no dependency on a reachable Ollama daemon)
+    by using the in-process ``fake`` LLM provider as the default. The search
+    subsystem under test is configured separately per-test.
     """
     return {
+        "llmcore": {"default_provider": "fake"},
+        "providers": {"fake": {"type": "fake", "default_model": "fake-model"}},
         "storage": {
             "vector": {"type": ""},  # disable vector store (RAG not needed here)
             "session": {"type": "sqlite", "path": str(tmp_path / "sessions.db")},

@@ -1,0 +1,381 @@
+# Contract map: every llmcore symbol the bridge relies on, with the shape the
+# bridge assumes. Consumed by bindings/scripts/contract_guard.py (AST-only; no
+# import, so it runs without confy/heavy deps). If llmcore drifts, the guard
+# fails in CI before a release can ship a stale contract.
+#
+# kind:
+#   function    - module-level def (params_include / returns_contains)
+#   method      - def inside `class` (params_include / returns_contains)
+#   class       - class def (fields_include = annotated class attributes)
+#   enum_class  - class def (members_include = class-level names)
+#
+# params_include / fields_include / members_include are *subsets* (additive
+# evolution is allowed). returns_contains is a substring of the unparsed return
+# annotation (omitted where the base annotation is intentionally `Any`).
+
+symbols:
+  # ---- Tier-0 facade (api.py) ----
+  - id: LLMCore.chat
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: chat
+    params_include: [message, stream, tools, tool_choice, session_id]
+    returns_contains: "AsyncGenerator"
+  - id: LLMCore.chat_with_usage
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: chat_with_usage
+    params_include: [message, session_id, system_message, provider_name, model_name, save_session, enable_rag, tools, tool_choice]
+    returns_contains: "ChatUsage"
+  - id: LLMCore.estimate_cost
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: estimate_cost
+    params_include: [provider_name, model_name, prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens]
+    returns_contains: "CostEstimate"
+  - id: LLMCore.get_provider_details
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_provider_details
+    params_include: [provider_name]
+    returns_contains: "ModelDetails"
+  - id: LLMCore.get_available_providers
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_available_providers
+    returns_contains: "list"
+  - id: LLMCore.get_models_for_provider
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_models_for_provider
+    params_include: [provider_name]
+    returns_contains: "list"
+  - id: LLMCore.get_provider
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_provider
+    params_include: [provider_name]
+    returns_contains: "BaseProvider"
+  - id: LLMCore.reload_config
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: reload_config
+    returns_contains: "None"
+
+  # ---- Tier-1 facade: sessions & context items (api.py) ----
+  - id: LLMCore.create_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: create_session
+    params_include: [session_id, name, system_message]
+    returns_contains: "ChatSession"
+  - id: LLMCore.get_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_session
+    params_include: [session_id]
+    returns_contains: "ChatSession"
+  - id: LLMCore.list_sessions
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_sessions
+    params_include: [limit]
+    returns_contains: "ChatSession"
+  - id: LLMCore.delete_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_session
+    params_include: [session_id]
+    returns_contains: "None"
+  - id: LLMCore.update_session_name
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: update_session_name
+    params_include: [session_id, new_name]
+    returns_contains: "None"
+  - id: LLMCore.fork_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: fork_session
+    params_include: [session_id, new_name, from_message_id, message_ids, message_range, include_context_items, metadata]
+    returns_contains: "str"
+  - id: LLMCore.clone_session
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: clone_session
+    params_include: [session_id, new_name, include_messages, include_context_items]
+    returns_contains: "str"
+  - id: LLMCore.delete_messages
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_messages
+    params_include: [session_id, message_ids]
+    returns_contains: "int"
+  - id: LLMCore.get_messages_by_range
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_messages_by_range
+    params_include: [session_id, start_index, end_index]
+    returns_contains: "Message"
+  - id: LLMCore.add_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: add_context_item
+    params_include: [session_id, content, item_type, source_id, metadata]
+    returns_contains: "str"
+  - id: LLMCore.get_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_context_item
+    params_include: [session_id, item_id]
+    returns_contains: "ContextItem"
+  - id: LLMCore.remove_context_item
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: remove_context_item
+    params_include: [session_id, item_id]
+    returns_contains: "bool"
+
+  # ---- Tier-1 facade: vector store & RAG collections (api.py) ----
+  - id: LLMCore.add_documents_to_vector_store
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: add_documents_to_vector_store
+    params_include: [documents, collection_name]
+    returns_contains: "list"
+  - id: LLMCore.search_vector_store
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: search_vector_store
+    params_include: [query, k, collection_name, metadata_filter]
+    returns_contains: "ContextDocument"
+  - id: LLMCore.list_vector_collections
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_vector_collections
+    returns_contains: "list"
+  - id: LLMCore.list_rag_collections
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_rag_collections
+    returns_contains: "list"
+  - id: LLMCore.get_rag_collection_info
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_rag_collection_info
+    params_include: [collection_name]
+    returns_contains: "dict"
+  - id: LLMCore.delete_rag_collection
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_rag_collection
+    params_include: [collection_name, force]
+    returns_contains: "bool"
+
+  # ---- Tier-1 facade: context presets (api.py) ----
+  - id: LLMCore.save_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: save_context_preset
+    params_include: [preset]
+    returns_contains: "None"
+  - id: LLMCore.get_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: get_context_preset
+    params_include: [preset_name]
+    returns_contains: "ContextPreset"
+  - id: LLMCore.list_context_presets
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: list_context_presets
+    returns_contains: "list"
+  - id: LLMCore.delete_context_preset
+    file: src/llmcore/api.py
+    kind: method
+    class: LLMCore
+    name: delete_context_preset
+    params_include: [preset_name]
+    returns_contains: "bool"
+
+  # ---- Token counting (tokens.py) ----
+  - id: tokens.count_tokens
+    file: src/llmcore/tokens.py
+    kind: function
+    name: count_tokens
+    params_include: [text, model]
+    returns_contains: "int"
+
+  # ---- Canonical models (models.py) ----
+  - id: models.Message
+    file: src/llmcore/models.py
+    kind: class
+    name: Message
+    fields_include: [id, session_id, role, content, timestamp, tool_call_id, tokens, metadata]
+  - id: models.Tool
+    file: src/llmcore/models.py
+    kind: class
+    name: Tool
+    fields_include: [name, description, parameters]
+  - id: models.ToolCall
+    file: src/llmcore/models.py
+    kind: class
+    name: ToolCall
+    fields_include: [id, name, arguments]
+  - id: models.ToolResult
+    file: src/llmcore/models.py
+    kind: class
+    name: ToolResult
+    fields_include: [tool_call_id, content, is_error]
+  - id: models.ModelDetails
+    file: src/llmcore/models.py
+    kind: class
+    name: ModelDetails
+    fields_include: [id, provider_name, display_name, context_length, max_output_tokens, supports_streaming, supports_tools, supports_vision, supports_reasoning, metadata]
+  - id: models.CostEstimate
+    file: src/llmcore/models.py
+    kind: class
+    name: CostEstimate
+    fields_include: [input_cost, output_cost, total_cost, currency, pricing_source, prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens]
+  - id: models.Role
+    file: src/llmcore/models.py
+    kind: enum_class
+    name: Role
+    members_include: [SYSTEM, USER, ASSISTANT, TOOL]
+  - id: models.ChatSession
+    file: src/llmcore/models.py
+    kind: class
+    name: ChatSession
+    fields_include: [id, name, messages, context_items, created_at, updated_at, metadata]
+  - id: models.ContextItem
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextItem
+    fields_include: [id, type, source_id, content, tokens, original_tokens, is_truncated, metadata, timestamp]
+  - id: models.ContextItemType
+    file: src/llmcore/models.py
+    kind: enum_class
+    name: ContextItemType
+    members_include: [HISTORY_MESSAGE, USER_TEXT, USER_FILE, RAG_SNIPPET, PRESET_TEXT_CONTENT, PRESET_FILE_REFERENCE, PRESET_RAG_CONTENT]
+  - id: models.ContextDocument
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextDocument
+    fields_include: [id, content, embedding, metadata, score]
+  - id: models.ContextPreset
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextPreset
+    fields_include: [name, description, items, created_at, updated_at, metadata]
+  - id: models.ContextPresetItem
+    file: src/llmcore/models.py
+    kind: class
+    name: ContextPresetItem
+    fields_include: [item_id, type, content, source_identifier, metadata]
+
+  # ---- Usage (usage.py) ----
+  - id: usage.ChatUsage
+    file: src/llmcore/usage.py
+    kind: class
+    name: ChatUsage
+    fields_include: [prompt_tokens, completion_tokens, total_tokens, provider, model]
+
+  # ---- Errors (exceptions.py) ----
+  - id: exceptions.ProviderError.__init__
+    file: src/llmcore/exceptions.py
+    kind: method
+    class: ProviderError
+    name: __init__
+    params_include: [provider_name, message, model_name, status_code, retryable, retry_after_seconds]
+
+  # ---- Provider base (providers/base.py) — Tier-2 surface (designed) ----
+  - id: BaseProvider.create_embeddings
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: create_embeddings
+    params_include: [input_texts, model]
+    returns_contains: "dict"
+  - id: BaseProvider.generate_speech
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: generate_speech
+    params_include: [text, voice, model, response_format, speed]
+  - id: BaseProvider.transcribe_audio
+    file: src/llmcore/providers/base.py
+    kind: method
+    class: BaseProvider
+    name: transcribe_audio
+    params_include: [audio_data, model, language, prompt, response_format]
+
+  # ---- Deepgram duplex (providers/deepgram_provider.py) — Tier-2 (designed) ----
+  - id: DeepgramProvider.transcribe_stream
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: transcribe_stream
+    returns_contains: "TranscriptionStreamEvent"
+  - id: DeepgramProvider.stream_speech
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: stream_speech
+    returns_contains: "bytes"
+  - id: DeepgramProvider.run_voice_agent
+    file: src/llmcore/providers/deepgram_provider.py
+    kind: method
+    class: DeepgramProvider
+    name: run_voice_agent
+    returns_contains: "VoiceAgentEvent"
+
+  # ---- Multimodal models (models_multimodal.py) — Tier-2 (designed) ----
+  - id: models_multimodal.SpeechResult
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: SpeechResult
+    fields_include: [audio_data, format, model, voice]
+  - id: models_multimodal.TranscriptionResult
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: TranscriptionResult
+    fields_include: [text, segments, model]
+  - id: models_multimodal.TranscriptionStreamEvent
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: TranscriptionStreamEvent
+    fields_include: [type, text]
+  - id: models_multimodal.VoiceAgentEvent
+    file: src/llmcore/models_multimodal.py
+    kind: class
+    name: VoiceAgentEvent
+    fields_include: [type, provider]

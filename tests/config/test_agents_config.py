@@ -31,6 +31,7 @@ from llmcore.config.agents_config import (
     RoutingConfig,
     RoutingStrategy,
     TimeoutPolicy,
+    ToolInventoryConfig,
     load_agents_config,
 )
 
@@ -104,6 +105,16 @@ class TestAgentsConfigDefaults:
         assert config.max_observation_length == 4000
         assert config.include_reasoning is True
 
+
+    def test_tool_inventory_config_defaults(self):
+        """Tool inventory config should preserve native schema compatibility by default."""
+        config = ToolInventoryConfig()
+
+        assert config.enabled is True
+        assert config.max_description_chars == 180
+        assert config.include_parameters is False
+        assert config.max_native_tool_schemas is None
+
     def test_capability_check_config_defaults(self):
         """Capability check config should have sensible defaults."""
         config = CapabilityCheckConfig()
@@ -146,6 +157,7 @@ class TestAgentsConfigDefaults:
         assert isinstance(config.fast_path, FastPathConfig)
         assert isinstance(config.circuit_breaker, CircuitBreakerConfig)
         assert isinstance(config.activities, ActivitiesConfig)
+        assert isinstance(config.tool_inventory, ToolInventoryConfig)
         assert isinstance(config.capability_check, CapabilityCheckConfig)
         assert isinstance(config.hitl, HITLConfig)
         assert isinstance(config.routing, RoutingConfig)
@@ -287,7 +299,8 @@ class TestLoadAgentsConfig:
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         assert config.max_iterations == 20
         assert config.goals.classifier_enabled is False
@@ -309,7 +322,8 @@ max_execution_time_seconds = 600
             config_file = Path(f.name)
 
         try:
-            config = load_agents_config(config_path=config_file)
+            with pytest.warns(DeprecationWarning):
+                config = load_agents_config(config_path=config_file)
 
             assert config.max_iterations == 25
             assert config.circuit_breaker.max_same_errors == 5
@@ -321,7 +335,8 @@ max_execution_time_seconds = 600
 
     def test_load_nonexistent_file_falls_back_to_defaults(self):
         """Loading from nonexistent file should fall back to defaults."""
-        config = load_agents_config(config_path=Path("/nonexistent/path/config.toml"))
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_path=Path("/nonexistent/path/config.toml"))
 
         assert config.max_iterations == 10
         assert config.goals.classifier_enabled is True
@@ -340,7 +355,8 @@ max_execution_time_seconds = 600
             },
         }
 
-        config = load_agents_config(config_dict=config_dict, overrides=overrides)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict, overrides=overrides)
 
         assert config.max_iterations == 30
         assert config.goals.classifier_enabled is False
@@ -354,7 +370,8 @@ max_execution_time_seconds = 600
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         # Should use defaults when validation fails
         assert config.max_iterations == 10
@@ -416,7 +433,8 @@ class TestEnvVarOverrides:
             }
         }
 
-        config = load_agents_config(config_dict=config_dict)
+        with pytest.warns(DeprecationWarning):
+            config = load_agents_config(config_dict=config_dict)
 
         # Env var wins
         assert config.goals.classifier_enabled is True
@@ -547,7 +565,8 @@ strategy = "quality_optimized"
             config_file = Path(f.name)
 
         try:
-            config = load_agents_config(config_path=config_file)
+            with pytest.warns(DeprecationWarning):
+                config = load_agents_config(config_path=config_file)
 
             # Root values
             assert config.max_iterations == 15

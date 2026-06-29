@@ -17,7 +17,7 @@ Exception Hierarchy:
     ├── ContextError - Context management errors
     │   └── ContextLengthError - Context exceeds model limits
     ├── EmbeddingError - Embedding generation errors
-    └── SandboxError - Sandbox execution errors (NEW in v0.26.0)
+    └── SandboxError - Sandbox execution errors (introduced in v0.26.0)
         ├── SandboxInitializationError - Failed to create/start sandbox
         ├── SandboxExecutionError - Command/code execution failed
         ├── SandboxTimeoutError - Operation exceeded time limit
@@ -27,7 +27,10 @@ Exception Hierarchy:
         └── SandboxCleanupError - Failed to cleanup resources
 """
 
-from typing import Any
+import re
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from typing import Any, ClassVar
 
 # =============================================================================
 # BASE EXCEPTION
@@ -59,11 +62,186 @@ class ConfigError(LLMCoreError):
 
 
 class ProviderError(LLMCoreError):
-    """Raised for errors originating from an LLM provider (e.g., API errors, connection issues)."""
+    """Raised for errors originating from an LLM provider.
 
-    def __init__(self, provider_name: str = "Unknown", message: str = "Provider error."):
+    The constructor keeps the original ``ProviderError(provider, message)``
+    call style while adding structured metadata used by orchestration and
+    retry logic.  Providers can opt in incrementally by passing keyword
+    metadata; callers still get best-effort inference from common SDK
+    exception attributes and provider error strings.
+    """
+
+    _RETRYABLE_STATUSES: ClassVar[set[int]] = {408, 409, 425, 429, 500, 502, 503, 504}
+    _NON_RETRYABLE_STATUSES: ClassVar[set[int]] = {400, 401, 403, 404, 422}
+
+    def __init__(
+        self,
+        provider_name: str = "Unknown",
+        message: str = "Provider error.",
+        *,
+        model_name: str | None = None,
+        status_code: int | None = None,
+        retryable: bool | None = None,
+        retry_after_seconds: float | None = None,
+        original_exception: Exception | None = None,
+        headers: Any | None = None,
+    ):
         self.provider_name = provider_name
-        super().__init__(f"Error with provider '{provider_name}': {message}")
+        self.provider = provider_name
+        self.model_name = model_name
+        self.model = model_name
+        self.message = message
+        self.original_exception = original_exception
+
+        self.status_code = status_code
+        if self.status_code is None:
+            self.status_code = self._extract_status_code(original_exception, message)
+
+        self.headers = self._extract_headers(headers, original_exception)
+        self.retry_after_seconds = retry_after_seconds
+        if self.retry_after_seconds is None:
+            self.retry_after_seconds = self._parse_retry_after(self.headers)
+
+        self.retryable = self._infer_retryable(message, retryable)
+
+        details: list[str] = []
+        if self.model_name:
+            details.append(f"model='{self.model_name}'")
+        if self.status_code is not None:
+            details.append(f"HTTP {self.status_code}")
+        if self.retryable:
+            if self.retry_after_seconds is not None:
+                details.append(f"retryable after {self.retry_after_seconds:g}s")
+            else:
+                details.append("retryable")
+        detail = f" ({', '.join(details)})" if details else ""
+
+        super().__init__(f"Error with provider '{provider_name}': {message}{detail}")
+
+    @classmethod
+    def _extract_headers(cls, headers: Any | None, exc: Exception | None) -> Any | None:
+        if headers is not None:
+            return headers
+        if exc is None:
+            return None
+        response = getattr(exc, "response", None)
+        for candidate in (getattr(exc, "headers", None), getattr(response, "headers", None)):
+            if candidate is not None:
+                return candidate
+        return None
+
+    @classmethod
+    def _extract_status_code(cls, exc: Exception | None, message: str) -> int | None:
+        for candidate in (
+            getattr(exc, "status_code", None),
+            getattr(getattr(exc, "response", None), "status_code", None),
+        ):
+            if candidate is None:
+                continue
+            try:
+                return int(candidate)
+            except (TypeError, ValueError):
+                continue
+
+        match = re.search(r"(?:HTTP|Status|status|API Error)\s*[:(]?\s*(\d{3})", message)
+        if match:
+            return int(match.group(1))
+        match = re.search(r"\((\d{3})\)", message)
+        if match:
+            return int(match.group(1))
+        return None
+
+    @classmethod
+    def _get_header(cls, headers: Any | None, name: str) -> str | None:
+        if headers is None:
+            return None
+
+        getter = getattr(headers, "get", None)
+        if callable(getter):
+            for key in (name, name.lower(), name.upper()):
+                value = getter(key)
+                if value is not None:
+                    return str(value)
+
+        if isinstance(headers, dict):
+            target = name.lower()
+            for key, value in headers.items():
+                if str(key).lower() == target:
+                    return str(value)
+        return None
+
+    @classmethod
+    def _parse_retry_after(cls, headers: Any | None) -> float | None:
+        value = cls._get_header(headers, "Retry-After")
+        if value is None:
+            return None
+
+        value = value.strip()
+        try:
+            seconds = float(value)
+            return max(0.0, seconds)
+        except ValueError:
+            pass
+
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=UTC)
+            return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    def _infer_retryable(self, message: str, explicit: bool | None) -> bool:
+        if explicit is not None:
+            return explicit
+        if self.status_code in self._RETRYABLE_STATUSES:
+            return True
+        if self.status_code in self._NON_RETRYABLE_STATUSES:
+            return False
+
+        lowered = message.lower()
+        non_retryable_markers = (
+            "authentication",
+            "invalid api key",
+            "missing api key",
+            "permission denied",
+            "unsupported context",
+            "no valid messages",
+            "model not found",
+            "not found",
+            "does not exist",
+            "invalid model",
+            "context length",
+            "token limit",
+        )
+        if any(marker in lowered for marker in non_retryable_markers):
+            return False
+
+        retryable_markers = (
+            "rate limit",
+            "rate limited",
+            "timeout",
+            "connection error",
+            "temporarily unavailable",
+            "overloaded",
+            "server error",
+            "service unavailable",
+        )
+        return any(marker in lowered for marker in retryable_markers)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return structured metadata for logs, telemetry, and API surfaces."""
+        return {
+            "provider": self.provider_name,
+            "model": self.model_name,
+            "message": self.message,
+            "status_code": self.status_code,
+            "retryable": self.retryable,
+            "retry_after_seconds": self.retry_after_seconds,
+            "original_exception_type": (
+                type(self.original_exception).__name__ if self.original_exception else None
+            ),
+        }
 
 
 class SearchProviderError(LLMCoreError):
@@ -241,7 +419,7 @@ class EmbeddingError(LLMCoreError):
 
 
 # =============================================================================
-# SANDBOX EXCEPTIONS (NEW in v0.26.0)
+# SANDBOX EXCEPTIONS (introduced in v0.26.0)
 # =============================================================================
 # These exceptions are re-exported from llmcore.agents.sandbox.exceptions
 # for convenience. The canonical definitions are in the sandbox module.

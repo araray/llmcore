@@ -12,6 +12,7 @@ UPDATED: Added async initialize() method for future async initialization needs.
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 # Assume ConfyConfig type for hinting
@@ -66,11 +67,17 @@ class EmbeddingManager:
 
     _global_config: ConfyConfig
     _storage_manager: StorageManager | None
+    _event_logger: Any | None
     _initialized_models: dict[str, BaseEmbeddingModel]
     _model_init_locks: dict[str, asyncio.Lock]
     _initialized: bool
 
-    def __init__(self, global_config: ConfyConfig, storage_manager: StorageManager | None = None):
+    def __init__(
+        self,
+        global_config: ConfyConfig,
+        storage_manager: StorageManager | None = None,
+        event_logger: Any | None = None,
+    ):
         """
         Initializes the EmbeddingManager.
 
@@ -79,12 +86,19 @@ class EmbeddingManager:
             storage_manager: Optional StorageManager instance. Currently stored for
                            potential future use (e.g., caching embeddings to vector store).
                            This parameter is accepted for API compatibility with LLMCore.
+            event_logger: Optional structured event logger with a log_event()
+                          method. When provided, embedding warm-up lifecycle
+                          events are emitted.
         """
         self._global_config = global_config
         self._storage_manager = storage_manager
+        self._event_logger = event_logger
         self._initialized_models = {}
         self._model_init_locks = {}
         self._initialized = False
+        self._warm_up_complete = False
+        self._warmed_models: set[str] = set()
+        self._warm_up_failures_logged: set[str] = set()
         logger.info(
             "EmbeddingManager initialized. Models will be loaded on demand via get_model()."
         )
@@ -93,10 +107,10 @@ class EmbeddingManager:
         """
         Asynchronous initialization hook for the EmbeddingManager.
 
-        Currently, embedding models are loaded on-demand via get_model().
+        Embedding models are loaded on-demand via get_model() by default.
         This method is provided for:
         1. API compatibility with LLMCore's async initialization pattern
-        2. Future support for pre-loading default models
+        2. Optional warm-up of configured embedding models
         3. Post-construction async setup tasks
 
         This method is idempotent - calling it multiple times is safe.
@@ -105,10 +119,7 @@ class EmbeddingManager:
             logger.debug("EmbeddingManager already initialized, skipping async initialize()")
             return
 
-        # Future: Could pre-load the default embedding model here
-        # default_model = self._global_config.get('llmcore.default_embedding_model')
-        # if default_model:
-        #     await self.get_model(default_model)
+        await self._warm_up_configured_models()
 
         self._initialized = True
         logger.debug("EmbeddingManager async initialize() complete")
@@ -213,6 +224,7 @@ class EmbeddingManager:
             try:
                 model_instance = EmbeddingCls(instance_config)
                 await model_instance.initialize()
+                await self._warm_up_model(model_identifier, model_instance)
                 self._initialized_models[model_identifier] = model_instance
                 logger.info(
                     f"Successfully initialized and cached embedding model for identifier: '{model_identifier}' ({EmbeddingCls.__name__})"
@@ -226,6 +238,8 @@ class EmbeddingManager:
                     model_name=model_identifier,
                     message=f"Missing dependency for {provider_type_for_map}: {e_imp}",
                 ) from e_imp
+            except EmbeddingError:
+                raise
             except Exception as e_init:
                 logger.error(
                     f"Failed to initialize model '{model_identifier}' ({EmbeddingCls.__name__}): {e_init}",
@@ -234,6 +248,176 @@ class EmbeddingManager:
                 raise EmbeddingError(
                     model_name=model_identifier, message=f"Initialization failed: {e_init}"
                 ) from e_init
+
+    def _embedding_warm_up_enabled(self) -> bool:
+        """Return whether embedding warm-up is enabled in llmcore config."""
+        return bool(self._global_config.get("llmcore.embedding_warm_up_enabled", False))
+
+    def _embedding_warm_up_strict(self) -> bool:
+        """Return whether embedding warm-up failures should abort startup."""
+        return bool(self._global_config.get("llmcore.embedding_warm_up_strict", False))
+
+    def _configured_warm_up_models(self) -> list[str]:
+        """Resolve configured embedding identifiers for eager warm-up."""
+        configured = self._global_config.get("llmcore.embedding_warm_up_models", [])
+        if isinstance(configured, str):
+            model_ids = [item.strip() for item in configured.split(",") if item.strip()]
+        elif isinstance(configured, (list, tuple, set)):
+            model_ids = [str(item).strip() for item in configured if str(item).strip()]
+        else:
+            model_ids = []
+
+        if not model_ids:
+            default_model = self._global_config.get("llmcore.default_embedding_model")
+            if default_model:
+                model_ids = [str(default_model)]
+
+        return model_ids
+
+    async def _warm_up_configured_models(self) -> None:
+        """Eagerly warm configured embedding models when explicitly enabled."""
+        if self._warm_up_complete:
+            return
+
+        if not self._embedding_warm_up_enabled():
+            self._warm_up_complete = True
+            self._log_embedding_event(
+                event_type="embedding_warm_up_skipped",
+                data={
+                    "component": "embedding.manager",
+                    "enabled": False,
+                    "strict": self._embedding_warm_up_strict(),
+                    "configured_model_count": len(self._configured_warm_up_models()),
+                },
+                severity="debug",
+            )
+            logger.debug("Embedding warm-up disabled; async initialize() complete")
+            return
+
+        strict = self._embedding_warm_up_strict()
+        for model_identifier in self._configured_warm_up_models():
+            started_at = time.perf_counter()
+            try:
+                await self.get_model(model_identifier)
+            except Exception as exc:
+                if model_identifier not in self._warm_up_failures_logged:
+                    self._log_embedding_event(
+                        event_type="embedding_warm_up_failed",
+                        data={
+                            "model_identifier": model_identifier,
+                            "component": self._embedding_component(model_identifier),
+                            "strict": strict,
+                            "success": False,
+                            "stage": "initialize",
+                            "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        },
+                        severity="error" if strict else "warning",
+                    )
+                    self._warm_up_failures_logged.add(model_identifier)
+                message = (
+                    f"Embedding warm-up failed for model '{model_identifier}': {exc}"
+                )
+                if strict:
+                    raise EmbeddingError(
+                        model_name=model_identifier,
+                        message=message,
+                    ) from exc
+                logger.warning(message, exc_info=True)
+
+        self._warm_up_complete = True
+
+    async def _warm_up_model(
+        self,
+        model_identifier: str,
+        model_instance: BaseEmbeddingModel,
+    ) -> None:
+        """Warm a model once when embedding warm-up is enabled."""
+        if (
+            not self._embedding_warm_up_enabled()
+            or model_identifier in self._warmed_models
+        ):
+            return
+
+        started_at = time.perf_counter()
+        strict = self._embedding_warm_up_strict()
+        self._log_embedding_event(
+            event_type="embedding_warm_up_started",
+            data={
+                "model_identifier": model_identifier,
+                "component": self._embedding_component(model_identifier),
+                "strict": strict,
+            },
+            severity="debug",
+        )
+        try:
+            await model_instance.warm_up()
+            self._warmed_models.add(model_identifier)
+            self._log_embedding_event(
+                event_type="embedding_warm_up_completed",
+                data={
+                    "model_identifier": model_identifier,
+                    "component": self._embedding_component(model_identifier),
+                    "strict": strict,
+                    "success": True,
+                    "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                },
+                severity="info",
+            )
+            logger.debug("Embedding model '%s' warm-up complete", model_identifier)
+        except Exception as exc:
+            self._log_embedding_event(
+                event_type="embedding_warm_up_failed",
+                data={
+                    "model_identifier": model_identifier,
+                    "component": self._embedding_component(model_identifier),
+                    "strict": strict,
+                    "success": False,
+                    "stage": "warm_up",
+                    "duration_ms": (time.perf_counter() - started_at) * 1000.0,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+                severity="error" if strict else "warning",
+            )
+            self._warm_up_failures_logged.add(model_identifier)
+            message = f"Embedding warm-up failed for model '{model_identifier}': {exc}"
+            if self._embedding_warm_up_strict():
+                raise EmbeddingError(
+                    model_name=model_identifier,
+                    message=message,
+                ) from exc
+            logger.warning(message, exc_info=True)
+
+    def _log_embedding_event(
+        self,
+        *,
+        event_type: str,
+        data: dict[str, Any],
+        severity: str = "info",
+    ) -> None:
+        """Emit an optional structured embedding event without affecting flow."""
+
+        if self._event_logger is None:
+            return
+
+        try:
+            self._event_logger.log_event(
+                category="lifecycle",
+                event_type=event_type,
+                data=data,
+                severity=severity,
+                source="embedding.manager",
+                tags=["embedding", "warm_up"],
+            )
+        except Exception as exc:
+            logger.debug("EmbeddingManager event logging failed: %s", exc, exc_info=True)
+
+    @staticmethod
+    def _embedding_component(model_identifier: str) -> str:
+        provider = model_identifier.split(":", 1)[0] if ":" in model_identifier else "default"
+        return f"embedding.{provider}"
 
     @staticmethod
     def _resolve_lazy_provider(provider_type: str) -> type[BaseEmbeddingModel] | None:
@@ -347,5 +531,8 @@ class EmbeddingManager:
             except Exception as e:
                 logger.error(f"Error closing embedding model '{model_id}': {e}", exc_info=True)
         self._initialized_models.clear()
+        self._warmed_models.clear()
+        self._warm_up_failures_logged.clear()
         self._initialized = False
+        self._warm_up_complete = False
         logger.info("EmbeddingManager closed.")

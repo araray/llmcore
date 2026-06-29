@@ -19,15 +19,149 @@ References:
     - Dossier: Step 2.4 (Cognitive Cycle Models)
 """
 
+import json
+import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 # Import existing models from llmcore
 from ...models import AgentState, ToolCall, ToolResult
+
+STATE_SNAPSHOT_VERSION = "llmcore.enhanced_agent_state.v1"
+_CONTEXT_COMPRESSION_KEY = "_context_compression"
+
+
+def _truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
+    text = "" if value is None else str(value)
+    if max_chars < 1 or len(text) <= max_chars:
+        return text, False
+    suffix = "...[truncated]"
+    keep = max(0, max_chars - len(suffix))
+    return f"{text[:keep]}{suffix}", True
+
+
+def _coerce_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _coerce_nonnegative_float(value: Any) -> float:
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return number if math.isfinite(number) and number >= 0.0 else 0.0
+
+
+def _json_safe(
+    value: Any,
+    *,
+    max_string_chars: int = 2000,
+    max_items: int = 50,
+    _depth: int = 0,
+    _max_depth: int = 5,
+) -> Any:
+    if _depth >= _max_depth:
+        return _truncate_text(value, max_string_chars)[0]
+
+    if value is None or isinstance(value, bool | int | str):
+        if isinstance(value, str):
+            return _truncate_text(value, max_string_chars)[0]
+        return value
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, Enum):
+        return value.value
+
+    if isinstance(value, BaseModel):
+        return _json_safe(
+            value.model_dump(mode="json"),
+            max_string_chars=max_string_chars,
+            max_items=max_items,
+            _depth=_depth + 1,
+            _max_depth=_max_depth,
+        )
+
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        items = list(value.items())
+        for index, (key, item) in enumerate(items):
+            if index >= max_items:
+                safe["__truncated_items__"] = len(items) - max_items
+                break
+            safe[str(key)] = _json_safe(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+                _depth=_depth + 1,
+                _max_depth=_max_depth,
+            )
+        return safe
+
+    if isinstance(value, list | tuple | set):
+        values = list(value)
+        safe_list = [
+            _json_safe(
+                item,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+                _depth=_depth + 1,
+                _max_depth=_max_depth,
+            )
+            for item in values[:max_items]
+        ]
+        if len(values) > max_items:
+            safe_list.append({"__truncated_items__": len(values) - max_items})
+        return safe_list
+
+    return _truncate_text(value, max_string_chars)[0]
+
+
+def _merge_history_summaries(
+    *summary_lists: Any,
+    max_iterations: int = 5,
+    max_string_chars: int = 1000,
+    max_items: int = 50,
+) -> list[dict[str, Any]]:
+    """Merge bounded iteration summaries without duplicating restored history."""
+    max_iterations = max(0, max_iterations)
+    if max_iterations == 0:
+        return []
+
+    summaries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_summaries in summary_lists:
+        if not isinstance(raw_summaries, list):
+            continue
+        for raw_summary in raw_summaries[-max_iterations:]:
+            if not isinstance(raw_summary, dict):
+                continue
+            safe_summary = _json_safe(
+                raw_summary,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            )
+            if not isinstance(safe_summary, dict):
+                continue
+            fingerprint = json.dumps(safe_summary, ensure_ascii=False, sort_keys=True)
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            summaries.append(safe_summary)
+
+    return summaries[-max_iterations:]
+
 
 # =============================================================================
 # ENUMERATIONS
@@ -102,7 +236,7 @@ class PerceiveOutput(BaseModel):
         default_factory=dict, description="Current environmental state (sandbox, tools, etc.)"
     )
     perceived_at: datetime = Field(
-        default_factory=datetime.utcnow, description="When perception occurred"
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), description="When perception occurred"
     )
 
 
@@ -115,11 +249,39 @@ class PlanInput(BaseModel):
     existing_plan: list[str] | None = Field(default=None, description="Existing plan to refine")
 
 
+class PlanStepSpec(BaseModel):
+    """A structured plan step with optional tool intent.
+
+    Legacy prose-only plans are represented by setting only ``description``.
+    ``tool_name`` and ``input`` let future planners pre-commit a tool call
+    without forcing the rest of the cognitive cycle to change shape.
+    """
+
+    index: int = Field(default=0, ge=0, description="0-based step index within the plan")
+    description: str = Field(default="", description="Human-readable step description")
+    tool_name: str | None = Field(default=None, description="Optional intended tool name")
+    input: dict[str, Any] | None = Field(
+        default=None, description="Optional structured tool input arguments"
+    )
+    depends_on: list[int] = Field(
+        default_factory=list, description="Prior step indices this step depends on"
+    )
+    estimated_cost: float | None = Field(default=None, description="Optional planner cost estimate")
+
+    def __str__(self) -> str:
+        """Return the prose description for backward-compatible string use."""
+        return self.description
+
+    def __contains__(self, item: str) -> bool:
+        """Allow legacy tests/callers to use substring checks on a step."""
+        return item in self.description
+
+
 class PlanOutput(BaseModel):
     """Output from the PLAN phase."""
 
-    plan_steps: list[str] = Field(
-        default_factory=list, description="Ordered list of actionable steps"
+    plan_steps: list[PlanStepSpec] = Field(
+        default_factory=list, description="Ordered list of structured actionable steps"
     )
     reasoning: str = Field(default="", description="Strategic reasoning behind the plan")
     estimated_iterations: int | None = Field(
@@ -128,7 +290,44 @@ class PlanOutput(BaseModel):
     risks_identified: list[str] = Field(
         default_factory=list, description="Potential risks or challenges identified"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_legacy_plan_steps(cls, data: Any) -> Any:
+        """Accept legacy ``list[str]`` plans and structured dictionaries."""
+        if not isinstance(data, dict):
+            return data
+        raw_steps = data.get("plan_steps")
+        if raw_steps is None:
+            return data
+        if not isinstance(raw_steps, list):
+            return data
+
+        normalized_steps: list[Any] = []
+        for index, step in enumerate(raw_steps):
+            if isinstance(step, PlanStepSpec):
+                normalized_steps.append(step)
+            elif isinstance(step, str):
+                normalized_steps.append({"index": index, "description": step})
+            elif isinstance(step, dict):
+                step_data = dict(step)
+                step_data.setdefault("index", index)
+                if "description" not in step_data and "step" in step_data:
+                    step_data["description"] = str(step_data["step"])
+                normalized_steps.append(step_data)
+            else:
+                normalized_steps.append({"index": index, "description": str(step)})
+
+        output_data = dict(data)
+        output_data["plan_steps"] = normalized_steps
+        return output_data
+
+    @property
+    def step_descriptions(self) -> list[str]:
+        """Return plan steps as plain descriptions for legacy state storage."""
+        return [step.description for step in self.plan_steps]
 
 
 class ThinkInput(BaseModel):
@@ -136,6 +335,9 @@ class ThinkInput(BaseModel):
 
     goal: str = Field(..., description="Current objective")
     current_step: str = Field(..., description="Current plan step")
+    current_step_spec: PlanStepSpec | None = Field(
+        default=None, description="Structured plan step when the planner provided one"
+    )
     history: str = Field(default="", description="Recent actions and observations")
     context: str = Field(default="", description="Relevant context from memory")
     available_tools: list[dict[str, Any]] = Field(
@@ -183,6 +385,7 @@ class ValidateOutput(BaseModel):
     approval_prompt: str | None = Field(
         default=None, description="Prompt to show to human if approval needed"
     )
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
 
 
 class ActInput(BaseModel):
@@ -250,6 +453,7 @@ class ReflectOutput(BaseModel):
     )
     step_completed: bool = Field(default=False, description="Whether current step is complete")
     next_focus: str | None = Field(default=None, description="What to prioritize next")
+    tokens_used: int | None = Field(default=None, description="Provider tokens used")
 
 
 class UpdateInput(BaseModel):
@@ -300,7 +504,7 @@ class CycleIteration(BaseModel):
     )
 
     # Timestamps
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     completed_at: datetime | None = Field(default=None)
 
     # Phase outputs (populated as phases complete)
@@ -320,7 +524,7 @@ class CycleIteration(BaseModel):
 
     def mark_completed(self, success: bool = True) -> None:
         """Mark iteration as completed."""
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.status = IterationStatus.COMPLETED if success else IterationStatus.FAILED
 
         # Calculate total time
@@ -331,7 +535,7 @@ class CycleIteration(BaseModel):
     def mark_interrupted(self, reason: str) -> None:
         """Mark iteration as interrupted."""
         self.status = IterationStatus.INTERRUPTED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.error = f"Interrupted: {reason}"
 
     @property
@@ -363,6 +567,109 @@ class CycleIteration(BaseModel):
         if self.update_output:
             completed.add(CognitivePhase.UPDATE)
         return completed
+
+    def update_token_totals_from_phases(self) -> int:
+        """Set and return total provider tokens captured by phase outputs."""
+        total = sum(
+            token_count
+            for token_count in (
+                self.plan_output.tokens_used if self.plan_output else None,
+                self.think_output.reasoning_tokens if self.think_output else None,
+                self.validate_output.tokens_used if self.validate_output else None,
+                self.reflect_output.tokens_used if self.reflect_output else None,
+            )
+            if token_count is not None
+        )
+        self.total_tokens_used = total
+        return total
+
+    def to_history_summary(
+        self,
+        *,
+        max_observation_chars: int = 1000,
+        max_tool_result_chars: int = 1000,
+        max_argument_chars: int = 1000,
+    ) -> dict[str, Any]:
+        """Return a compact, JSON-safe summary suitable for future prompts."""
+        action_payload = None
+        if self.think_output and self.think_output.proposed_action:
+            action = self.think_output.proposed_action
+            action_payload = {
+                "id": action.id,
+                "name": action.name,
+                "arguments": _json_safe(
+                    action.arguments,
+                    max_string_chars=max_argument_chars,
+                    max_items=20,
+                ),
+            }
+
+        observation_payload = None
+        if self.observe_output:
+            content, truncated = _truncate_text(
+                self.observe_output.observation,
+                max_observation_chars,
+            )
+            observation_payload = {
+                "content": content,
+                "truncated": truncated,
+                "matches_expectation": self.observe_output.matches_expectation,
+                "follow_up_needed": self.observe_output.follow_up_needed,
+                "insights": _json_safe(
+                    self.observe_output.insights,
+                    max_string_chars=300,
+                    max_items=10,
+                ),
+            }
+
+        tool_result_payload = None
+        if self.act_output and self.act_output.tool_result:
+            result = self.act_output.tool_result
+            content, truncated = _truncate_text(result.content, max_tool_result_chars)
+            tool_result_payload = {
+                "tool_call_id": result.tool_call_id,
+                "content": content,
+                "truncated": truncated,
+                "is_error": result.is_error,
+                "execution_success": self.act_output.success,
+                "execution_time_ms": self.act_output.execution_time_ms,
+            }
+
+        reflect_payload = None
+        if self.reflect_output:
+            reflect_payload = {
+                "progress_estimate": self.reflect_output.progress_estimate,
+                "step_completed": self.reflect_output.step_completed,
+                "plan_needs_update": self.reflect_output.plan_needs_update,
+                "next_focus": self.reflect_output.next_focus,
+            }
+
+        return {
+            "iteration_number": self.iteration_number,
+            "status": self.status.value,
+            "phases_completed": sorted(phase.value for phase in self.phases_completed),
+            "action": action_payload,
+            "observation": observation_payload,
+            "tool_result": tool_result_payload,
+            "reflection": reflect_payload,
+            "phase_tokens": {
+                "plan": self.plan_output.tokens_used
+                if self.plan_output and self.plan_output.tokens_used is not None
+                else None,
+                "think": self.think_output.reasoning_tokens
+                if self.think_output and self.think_output.reasoning_tokens is not None
+                else None,
+                "validate": self.validate_output.tokens_used
+                if self.validate_output and self.validate_output.tokens_used is not None
+                else None,
+                "reflect": self.reflect_output.tokens_used
+                if self.reflect_output and self.reflect_output.tokens_used is not None
+                else None,
+            },
+            "total_tokens_used": self.total_tokens_used,
+            "duration_ms": self.duration_ms,
+            "error": self.error,
+        }
 
 
 # =============================================================================
@@ -462,6 +769,10 @@ class EnhancedAgentState(AgentState):
 
     # Fix #3: Private field for explicit is_finished setting
     _is_finished_override: bool = PrivateAttr(default=False)
+    _resume_iteration_count_offset: int = PrivateAttr(default=0)
+    _resume_successful_iterations_offset: int = PrivateAttr(default=0)
+    _resume_failed_iterations_offset: int = PrivateAttr(default=0)
+    _resume_iteration_time_ms_total: float = PrivateAttr(default=0.0)
     # === END P0 FIX ===
 
     @property
@@ -496,6 +807,234 @@ class EnhancedAgentState(AgentState):
     def is_finished(self, value: bool) -> None:
         """Allow explicit setting of finished state (P0 Fix #3)."""
         object.__setattr__(self, "_is_finished_override", value)
+
+    def to_resume_snapshot(
+        self,
+        *,
+        max_iterations: int = 5,
+        max_string_chars: int = 2000,
+        max_observation_chars: int = 1000,
+        max_items: int = 50,
+    ) -> dict[str, Any]:
+        """Return a bounded, JSON-safe snapshot for checkpoint/resume surfaces."""
+        plan = [_truncate_text(step, max_string_chars)[0] for step in self.plan[:max_items]]
+        statuses = [str(status) for status in self.plan_steps_status[:max_items]]
+        current_index = self.current_plan_step_index
+        current_step = plan[current_index] if 0 <= current_index < len(plan) else ""
+        recent_iteration_summaries = self.recent_history_summaries(
+            max_iterations=max_iterations,
+            max_observation_chars=max_observation_chars,
+            max_tool_result_chars=max_observation_chars,
+            max_items=max_items,
+        )
+        metadata = dict(self.metadata)
+        metadata.pop("_resume_snapshot_iterations", None)
+        metadata.pop("_resume_snapshot_schema_version", None)
+
+        return {
+            "schema_version": STATE_SNAPSHOT_VERSION,
+            "session_id": self.session_id,
+            "goal": _truncate_text(self.goal, max_string_chars)[0],
+            "context": _truncate_text(self.context, max_string_chars)[0],
+            "plan": plan,
+            "plan_steps_status": statuses,
+            "current_plan_step_index": current_index,
+            "current_plan_step": current_step,
+            "plan_version": self.plan_version,
+            "progress_estimate": self.progress_estimate,
+            "overall_confidence": self.overall_confidence.value,
+            "is_finished": self.is_finished,
+            "final_answer": _truncate_text(self.final_answer, max_string_chars)[0]
+            if self.final_answer
+            else None,
+            "awaiting_human_approval": self.awaiting_human_approval,
+            "pending_approval_prompt": _truncate_text(
+                self.pending_approval_prompt,
+                max_string_chars,
+            )[0]
+            if self.pending_approval_prompt
+            else None,
+            "pending_tool_call": _json_safe(
+                self.pending_tool_call,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "pending_validation": _json_safe(
+                self.pending_validation,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "working_memory": _json_safe(
+                self.working_memory,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "metadata": _json_safe(
+                metadata,
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "history_of_thoughts": _json_safe(
+                self.history_of_thoughts[-max_items:],
+                max_string_chars=max_string_chars,
+                max_items=max_items,
+            ),
+            "observations": _json_safe(
+                self.observations,
+                max_string_chars=max_observation_chars,
+                max_items=max_items,
+            ),
+            "iterations": recent_iteration_summaries,
+            "current_iteration": self.current_iteration.to_history_summary(
+                max_observation_chars=max_observation_chars
+            )
+            if self.current_iteration
+            else None,
+            "metrics": {
+                "iteration_count": self.iteration_count,
+                "successful_iterations": self.successful_iterations,
+                "failed_iterations": self.failed_iterations,
+                "total_tokens_used": self.total_tokens_used,
+                "total_tool_calls": self.total_tool_calls,
+                "average_iteration_time_ms": self.average_iteration_time_ms,
+            },
+        }
+
+    @classmethod
+    def from_resume_snapshot(cls, snapshot: dict[str, Any]) -> "EnhancedAgentState":
+        """Rehydrate core resumable state from ``to_resume_snapshot`` output."""
+        state = cls(
+            goal=str(snapshot.get("goal") or ""),
+            session_id=str(snapshot.get("session_id") or ""),
+            context=str(snapshot.get("context") or ""),
+        )
+        state.plan = [str(item) for item in snapshot.get("plan") or []]
+        state.plan_steps_status = [str(item) for item in snapshot.get("plan_steps_status") or []]
+        state.current_plan_step_index = int(snapshot.get("current_plan_step_index") or 0)
+        state.plan_version = int(snapshot.get("plan_version") or 0)
+        state.progress_estimate = float(snapshot.get("progress_estimate") or 0.0)
+        try:
+            state.overall_confidence = ConfidenceLevel(
+                snapshot.get("overall_confidence") or ConfidenceLevel.MEDIUM.value
+            )
+        except ValueError:
+            state.overall_confidence = ConfidenceLevel.MEDIUM
+
+        state.final_answer = snapshot.get("final_answer")
+        state.awaiting_human_approval = bool(snapshot.get("awaiting_human_approval", False))
+        state.pending_approval_prompt = snapshot.get("pending_approval_prompt")
+        pending_tool_call = snapshot.get("pending_tool_call")
+        pending_tool_call_fallback = None
+        if isinstance(pending_tool_call, dict):
+            try:
+                state.pending_tool_call = ToolCall.model_validate(pending_tool_call)
+            except Exception:
+                pending_tool_call_fallback = pending_tool_call
+
+        pending_validation = snapshot.get("pending_validation")
+        pending_validation_fallback = None
+        if isinstance(pending_validation, dict):
+            try:
+                state.pending_validation = ValidateInput.model_validate(pending_validation)
+            except Exception:
+                pending_validation_fallback = pending_validation
+
+        state.working_memory = dict(snapshot.get("working_memory") or {})
+        state.metadata = dict(snapshot.get("metadata") or {})
+        if pending_tool_call_fallback is not None:
+            state.metadata["_resume_pending_tool_call"] = pending_tool_call_fallback
+        if pending_validation_fallback is not None:
+            state.metadata["_resume_pending_validation"] = pending_validation_fallback
+        state.history_of_thoughts = [str(item) for item in snapshot.get("history_of_thoughts") or []]
+        observations = snapshot.get("observations") or {}
+        state.observations = observations if isinstance(observations, dict) else {}
+        metrics = snapshot.get("metrics") or {}
+        state._resume_iteration_count_offset = _coerce_nonnegative_int(
+            metrics.get("iteration_count")
+        )
+        state._resume_successful_iterations_offset = _coerce_nonnegative_int(
+            metrics.get("successful_iterations")
+        )
+        state._resume_failed_iterations_offset = _coerce_nonnegative_int(
+            metrics.get("failed_iterations")
+        )
+        state._resume_iteration_time_ms_total = (
+            _coerce_nonnegative_float(metrics.get("average_iteration_time_ms"))
+            * state._resume_iteration_count_offset
+        )
+        state.total_tokens_used = int(metrics.get("total_tokens_used") or 0)
+        state.total_tool_calls = int(metrics.get("total_tool_calls") or 0)
+        prior_resume_iterations = state.metadata.get("_resume_snapshot_iterations")
+        state.metadata["_resume_snapshot_schema_version"] = snapshot.get("schema_version")
+        state.metadata["_resume_snapshot_iterations"] = _merge_history_summaries(
+            prior_resume_iterations,
+            snapshot.get("iterations"),
+        )
+        state.is_finished = bool(snapshot.get("is_finished", False))
+        return state
+
+    def recent_history_summaries(
+        self,
+        *,
+        max_iterations: int = 5,
+        max_observation_chars: int = 1000,
+        max_tool_result_chars: int = 1000,
+        max_argument_chars: int = 1000,
+        max_items: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return bounded history summaries from restored and in-memory iterations."""
+        max_iterations = max(0, max_iterations)
+        if max_iterations == 0:
+            return []
+
+        summaries = _merge_history_summaries(
+            self.metadata.get("_resume_snapshot_iterations"),
+            [
+                iteration.to_history_summary(
+                    max_observation_chars=max_observation_chars,
+                    max_tool_result_chars=max_tool_result_chars,
+                    max_argument_chars=max_argument_chars,
+                )
+                for iteration in self.iterations[-max_iterations:]
+            ],
+            max_iterations=max_iterations,
+            max_string_chars=max(max_observation_chars, max_tool_result_chars, max_argument_chars),
+            max_items=max_items,
+        )
+        return summaries[-max_iterations:]
+
+    def mark_context_compressed(
+        self,
+        *,
+        reason: str,
+        tokens_before: int | None = None,
+        tokens_after: int | None = None,
+    ) -> dict[str, Any]:
+        """Record a context compression event and cooldown marker."""
+        previous = self.working_memory.get(_CONTEXT_COMPRESSION_KEY)
+        if not isinstance(previous, dict):
+            previous = {}
+        metadata = {
+            "compression_count": int(previous.get("compression_count") or 0) + 1,
+            "last_iteration_count": self.iteration_count,
+            "last_reason": reason,
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "last_compressed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        }
+        self.working_memory[_CONTEXT_COMPRESSION_KEY] = metadata
+        return metadata
+
+    def should_compress_context(self, *, min_iterations_between: int = 2) -> bool:
+        """Return False during the compression cooldown window."""
+        marker = self.working_memory.get(_CONTEXT_COMPRESSION_KEY)
+        if not isinstance(marker, dict):
+            return True
+        try:
+            last_iteration = int(marker.get("last_iteration_count", -min_iterations_between))
+        except (TypeError, ValueError):
+            return True
+        return (self.iteration_count - last_iteration) >= max(0, min_iterations_between)
 
     def add_iteration(self, iteration: CycleIteration) -> None:
         """
@@ -549,31 +1088,37 @@ class EnhancedAgentState(AgentState):
         self.plan_steps_status = ["pending"] * len(new_plan)
         self.current_plan_step_index = 0
         self.plan_version += 1
-        self.plan_updated_at = datetime.utcnow()
+        self.plan_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     @property
     def iteration_count(self) -> int:
         """Get total number of iterations."""
-        return len(self.iterations)
+        return self._resume_iteration_count_offset + len(self.iterations)
 
     @property
     def successful_iterations(self) -> int:
         """Get count of successful iterations."""
-        return sum(1 for it in self.iterations if it.status == IterationStatus.COMPLETED)
+        return self._resume_successful_iterations_offset + sum(
+            1 for it in self.iterations if it.status == IterationStatus.COMPLETED
+        )
 
     @property
     def failed_iterations(self) -> int:
         """Get count of failed iterations."""
-        return sum(1 for it in self.iterations if it.status == IterationStatus.FAILED)
+        return self._resume_failed_iterations_offset + sum(
+            1 for it in self.iterations if it.status == IterationStatus.FAILED
+        )
 
     @property
     def average_iteration_time_ms(self) -> float:
         """Get average iteration time in milliseconds."""
-        if not self.iterations:
+        if self.iteration_count == 0:
             return 0.0
 
-        total_time = sum(it.duration_ms for it in self.iterations)
-        return total_time / len(self.iterations)
+        total_time = self._resume_iteration_time_ms_total + sum(
+            it.duration_ms for it in self.iterations
+        )
+        return total_time / self.iteration_count
 
     def get_working_memory(self, key: str, default: Any = None) -> Any:
         """Get value from working memory."""
@@ -593,30 +1138,27 @@ class EnhancedAgentState(AgentState):
 # =============================================================================
 
 __all__ = [
-    # Enums
+    "ActInput",
+    "ActOutput",
     "CognitivePhase",
-    "IterationStatus",
-    "ValidationResult",
     "ConfidenceLevel",
-    # Phase I/O Models
+    "CycleIteration",
+    "EnhancedAgentState",
+    "IterationStatus",
+    "ObserveInput",
+    "ObserveOutput",
     "PerceiveInput",
     "PerceiveOutput",
     "PlanInput",
     "PlanOutput",
-    "ThinkInput",
-    "ThinkOutput",
-    "ValidateInput",
-    "ValidateOutput",
-    "ActInput",
-    "ActOutput",
-    "ObserveInput",
-    "ObserveOutput",
+    "PlanStepSpec",
     "ReflectInput",
     "ReflectOutput",
+    "ThinkInput",
+    "ThinkOutput",
     "UpdateInput",
     "UpdateOutput",
-    # Iteration Tracking
-    "CycleIteration",
-    # Enhanced State
-    "EnhancedAgentState",
+    "ValidateInput",
+    "ValidateOutput",
+    "ValidationResult",
 ]

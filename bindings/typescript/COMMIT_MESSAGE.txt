@@ -1,0 +1,42 @@
+feat(bindings): add TypeScript/Node Tier-0 client (@llmcore/client) — B2 (TS)
+
+First foreign-language client of phase B2, generated from the frozen
+`llmcore.v1` contract. Talks to a running `llmcore-bridge` over both transports
+and depends only on the contract, never on Python.
+
+Contents (bindings/typescript/)
+- src/grpcClient.ts  - LlmcoreGrpcClient: typed, promise-based wrapper over the
+                       ts-proto/grpc-js stubs. Capability negotiation
+                       (ensureCompatible), chat/chatStream(+cancel)/countTokens/
+                       estimateCost/embed/listProviders/listModels/
+                       getProviderDetails/health/reloadConfig, close().
+- src/httpClient.ts  - LlmcoreHttpClient: fetch-based unary + SSE ChatStream
+                       (snake_case JSON), same surface.
+- src/errors.ts      - BridgeError + decoders: gRPC binary trailing metadata
+                       `llmcore-error-bin` and HTTP `{error:{...}}` body.
+- src/gen/**         - ts-proto generated messages + grpc-js service clients
+                       (committed; regenerate with `npm run gen`).
+- src/index.ts       - public barrel.
+- examples/quickstart.ts, README.md, USAGE.md.
+- buf.gen.ts.yaml + scripts/gen.sh - codegen via buf's bundled protoc + the local
+                       ts-proto plugin (no standalone protoc/grpc-tools needed).
+- tsconfig.json, package.json, package-lock.json, .gitignore.
+
+Tests (test/)
+- test/bridge.ts spawns a real `llmcore-bridge` (FakeFacade) over localhost TCP
+  and waits for both transports; test/grpc.test.ts + test/http.test.ts drive the
+  clients end to end: **18 tests, all green**. Covers chat/streaming
+  (concatenation == unary), count/cost, catalog/control, capability negotiation
+  (accept + reject), Embed UNIMPLEMENTED, structured error decode (incl.
+  retryAfterMs), mid-stream error, and stream cancellation.
+
+Notes
+- gRPC types are camelCase (binary protobuf on the wire); HTTP types are
+  snake_case (matching the bridge JSON). The two client classes are parallel.
+- `embed(...)` rejects with a BridgeError (UNSUPPORTED) — Embed is UNIMPLEMENTED
+  in llmcore.v1. AudioService (Tier 2) is not yet surfaced.
+- Pure addition under bindings/typescript/; no changes to the bridge, the
+  contract, or any other package.
+
+Verification: tsc --strict build clean · npm test = 18 passed (real bridge
+subprocess, gRPC + HTTP/SSE).
