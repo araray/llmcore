@@ -5,6 +5,32 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.51.0
+
+### Added — Z.ai (GLM) provider
+
+- **Z.ai provider**: first-class `ZaiProvider` for the Z.ai Open Platform,
+  serving the GLM model family (`glm-5.2`, `glm-5.1`, `glm-4.7`, the `glm-*v`
+  vision models, and `embedding-3`). Built on the OpenAI-compatible chat
+  endpoint (`https://api.z.ai/api/paas/v4`) via the AsyncOpenAI SDK, with:
+  - GLM **thinking mode** (`thinking = {"type": "enabled" | "disabled"}`) and
+    `reasoning_effort` (`none|minimal|low|medium|high|xhigh|max`).
+  - `reasoning_content` extraction in both streaming and non-streaming modes.
+  - Open-interval `(0, 1)` clamping of `temperature`/`top_p` (matching the
+    Z.ai API constraint).
+  - Platform extras (`do_sample`, `request_id`, `user_id`, `seed`,
+    `watermark_enabled`, `sensitive_word_check`, `tool_stream`) routed via
+    `extra_body`.
+  - Tool calling, cache/reasoning token usage accounting, and `embedding-3`
+    embeddings.
+  - Region selection (`overseas` default, or `china` for the
+    `open.bigmodel.cn` endpoint).
+- **Provider registration**: `zai` registered in `ProviderManager` with
+  `glm`, `zhipu`, `zhipuai`, and `bigmodel` aliases.
+- **Model cards**: builtin cards for `glm-5.2`, `glm-5.1`, `glm-4.7`,
+  `glm-4.6v` (vision), and `embedding-3`.
+- **Tests**: 57-test offline suite for the Z.ai provider.
+
 ## v0.50.0
 
 ### Added — June 2026 agent, context, provider, and observability rollup

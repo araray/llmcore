@@ -31,7 +31,7 @@
 
 | Category | Features |
 |----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram |
+| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram |
 | **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling, per-call usage via `chat_with_usage()` |
 | **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
 | **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
@@ -313,6 +313,14 @@ default_model = "llama3.2:latest"
 default_model = "meta-llama/Llama-3.1-8B-Instruct"
 timeout = 240
 
+[providers.zai]
+# Z.ai Open Platform (GLM family). API key via ZAI_API_KEY.
+# region = "overseas"   # or "china" for the open.bigmodel.cn endpoint
+default_model = "glm-5.2"
+thinking = "enabled"            # "enabled" | "disabled"
+reasoning_effort = "high"       # none|minimal|low|medium|high|xhigh|max
+timeout = 300
+
 [storage.session]
 type = "sqlite"
 path = "~/.llmcore/sessions.db"
@@ -376,6 +384,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **Google** | Gemini 2.5 Pro/Flash, Gemini 3 Preview | Streaming, Tools, Vision |
 | **Ollama** | Llama 3.2/3.3, Gemma 3, Phi-3, Mistral | Streaming, Local |
 | **DeepSeek** | DeepSeek-R1, DeepSeek-V3.2, DeepSeek-Chat | Streaming, Reasoning |
+| **Z.ai (GLM)** | GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V, Embedding-3 | Streaming, Tools, Reasoning, Vision, Embeddings |
 | **Mistral** | Mistral Large 3 | Streaming, Tools |
 | **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
@@ -775,6 +784,7 @@ Built-in model cards for:
 - **Google**: Gemini 2.5 Pro/Flash, Gemini 3 Preview
 - **Ollama**: Llama 3.2/3.3, Gemma 3, Phi-3, Mistral, CodeLlama
 - **DeepSeek**: DeepSeek-R1, DeepSeek-V3.2
+- **Z.ai (GLM)**: GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V (vision), Embedding-3
 - **Mistral**: Mistral Large 3
 - **Qwen**: Qwen 3 Max, Qwen3-Coder
 - **xAI**: Grok-4, Grok-4-Heavy
