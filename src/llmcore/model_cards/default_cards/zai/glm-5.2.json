@@ -1,0 +1,35 @@
+{
+  "model_id": "glm-5.2",
+  "display_name": "GLM-5.2",
+  "provider": "zai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GLM",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "reasoning": true
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "aliases": [],
+  "description": "GLM-5.2 is Z.ai's flagship GLM model with a 1M-token context window and up to 128K output tokens. It supports deep thinking mode with a configurable reasoning_effort parameter (none/minimal/low/medium/high/xhigh/max) and powerful tool-calling capabilities.",
+  "tags": [
+    "text",
+    "output:text",
+    "reasoning",
+    "tools"
+  ],
+  "source": "builtin"
+}
