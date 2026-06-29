@@ -12,8 +12,9 @@ def test_bearer_token_redacted():
 
 
 def test_sk_key_redacted():
-    out = redact("the key is sk-ABCDEFGHIJKLMNOP1234 ok")
-    assert "sk-ABCDEFGHIJKLMNOP1234" not in out
+    fake_key = "sk-" + "ABCDEFGHIJKLMNOP1234"
+    out = redact(f"the key is {fake_key} ok")
+    assert fake_key not in out
     assert "[REDACTED]" in out
 
 

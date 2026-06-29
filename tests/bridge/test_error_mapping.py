@@ -71,8 +71,9 @@ def test_retry_after_ms_conversion():
 
 
 def test_message_is_redacted():
-    err = errors.to_llmcore_error(LLMCoreError("key sk-ABCDEFGHIJKLMNOP1234 leaked"))
-    assert "sk-ABCDEFGHIJKLMNOP1234" not in err.message
+    fake_key = "sk-" + "ABCDEFGHIJKLMNOP1234"
+    err = errors.to_llmcore_error(LLMCoreError(f"key {fake_key} leaked"))
+    assert fake_key not in err.message
     assert "REDACTED" in err.message
 
 
