@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filtered out of chat cards.
 - **Packaging**: new `llmcore[zai]` extra (`openai` + `httpx`), included in
   `llmcore[all]`.
+- **Pricing**: GLM model cards and the `zai.toml` enrichment now carry
+  verified USD per-1M-token pricing (input/output/cached-input) from the
+  official Z.ai pricing page, plus per-unit reference notes for image/video/
+  web-search services.
 - **Provider registration**: `zai` registered in `ProviderManager` with
   `glm`, `zhipu`, `zhipuai`, and `bigmodel` aliases.
 - **Model cards**: builtin cards for `glm-5.2`, `glm-5.1`, `glm-4.7`,

@@ -20,6 +20,14 @@
     "vision": true,
     "reasoning": true
   },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 0.9,
+      "cached_input": 0.05
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
