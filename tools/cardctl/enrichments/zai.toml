@@ -1,0 +1,78 @@
+# tools/cardctl/enrichments/zai.toml
+# Manual enrichment overlay for the Z.ai (Zhipu AI) provider — GLM family.
+#
+# The Z.ai /models endpoint (GET /api/paas/v4/models) returns the minimal
+# OpenAI-compatible shape (id/object/owned_by) with no context length,
+# capabilities, or pricing.  The ZaiAdapter maps capabilities/context from a
+# static table; pricing and architecture details live here and survive card
+# regeneration.
+#
+# Canonical provider key: "zai"  (default_cards/zai/).
+# Service docs:    https://docs.z.ai/
+# Model guide:     https://docs.z.ai/guides/llm/glm-5.2
+# Last updated:    2026-06-29
+
+[context]
+"glm-5.2"   = { max_input_tokens = 1000000, max_output_tokens = 131072 }
+"glm-5.1"   = { max_input_tokens = 1000000, max_output_tokens = 131072 }
+"glm-4.7"   = { max_input_tokens = 131072,  max_output_tokens = 32768 }
+"glm-4.6"   = { max_input_tokens = 204800,  max_output_tokens = 32768 }
+"glm-4.6v"  = { max_input_tokens = 65536,   max_output_tokens = 16384 }
+"embedding-3" = { max_input_tokens = 8192 }
+
+[architecture]
+"glm-5"  = { family = "GLM", type = "moe" }
+"glm-4"  = { family = "GLM", type = "moe" }
+
+[overrides]
+"glm-5.2"  = { display_name = "GLM-5.2" }
+"glm-5.1"  = { display_name = "GLM-5.1" }
+"glm-4.7"  = { display_name = "GLM-4.7" }
+"glm-4.6v" = { display_name = "GLM-4.6V" }
+"embedding-3" = { display_name = "Embedding-3" }
+
+[provider_extension."glm-5.2"]
+thinking_mode = "toggle"          # thinking.type enabled|disabled
+default_thinking = "enabled"
+reasoning_effort = "none|minimal|low|medium|high|xhigh|max"
+
+[provider_extension."glm-5.1"]
+thinking_mode = "toggle"
+default_thinking = "enabled"
+
+[pricing]
+# Source: https://docs.z.ai/guides/overview/pricing  (USD per 1M tokens).
+# Last verified: 2026-06-29.  cached_input = prompt-cache hit price.
+# Text models
+"glm-5.2"             = { input = 1.4,  output = 4.4, cached_input = 0.26 }
+"glm-5.1"             = { input = 1.4,  output = 4.4, cached_input = 0.26 }
+"glm-5"               = { input = 1.0,  output = 3.2, cached_input = 0.2 }
+"glm-5-turbo"         = { input = 1.2,  output = 4.0, cached_input = 0.24 }
+"glm-4.7"             = { input = 0.6,  output = 2.2, cached_input = 0.11 }
+"glm-4.7-flashx"      = { input = 0.07, output = 0.4, cached_input = 0.01 }
+"glm-4.7-flash"       = { input = 0.0,  output = 0.0, notes = "free tier" }
+"glm-4.6"             = { input = 0.6,  output = 2.2, cached_input = 0.11 }
+"glm-4.5"             = { input = 0.6,  output = 2.2, cached_input = 0.11 }
+"glm-4.5-x"           = { input = 2.2,  output = 8.9, cached_input = 0.45 }
+"glm-4.5-air"         = { input = 0.2,  output = 1.1, cached_input = 0.03 }
+"glm-4.5-airx"        = { input = 1.1,  output = 4.5, cached_input = 0.22 }
+"glm-4.5-flash"       = { input = 0.0,  output = 0.0, notes = "free tier" }
+"glm-4-32b-0414-128k" = { input = 0.1,  output = 0.1 }
+# Vision models
+"glm-5v-turbo"        = { input = 1.2,  output = 4.0, cached_input = 0.24 }
+"glm-4.6v"            = { input = 0.3,  output = 0.9, cached_input = 0.05 }
+"glm-4.6v-flashx"     = { input = 0.04, output = 0.4, cached_input = 0.004 }
+"glm-4.6v-flash"      = { input = 0.0,  output = 0.0, notes = "free tier" }
+"glm-4.5v"            = { input = 0.6,  output = 1.8, cached_input = 0.11 }
+# OCR / audio (token-priced)
+"glm-ocr"             = { input = 0.03, output = 0.03 }
+"glm-asr-2512"        = { input = 0.03, output = 0.03, notes = "~$0.0024/minute" }
+# Per-unit services (NOT token-priced; documented here for reference only):
+#   Web Search tool:    $0.01 / call
+#   Image generation:   GLM-Image $0.015/img, CogView-4 $0.01/img
+#   Video generation:   CogVideoX-3 $0.2/video, Vidu variants $0.2-$0.4/video
+
+[exclude]
+# Image/video/audio generation + OCR models are surfaced through the media
+# APIs, not as chat cards; the adapter already filters to glm*/embedding* ids.
+patterns = []

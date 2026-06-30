@@ -34,7 +34,7 @@ For advanced or less-common types, import from sub-packages::
     from llmcore.agents.hitl import HITLManager
     from llmcore.autonomous import AutonomousScheduler
 
-Version: 0.50.0
+Version: 0.51.0
 """
 
 from importlib.metadata import PackageNotFoundError, version

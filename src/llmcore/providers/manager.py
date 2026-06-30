@@ -39,6 +39,7 @@ from .openai_provider import OpenAIProvider
 from .openrouter_provider import OpenRouterProvider
 from .poe_provider import PoeProvider
 from .vllm_provider import VLLMProvider
+from .zai_provider import ZaiProvider
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,17 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "huggingface": HuggingFaceProvider,
     "kimi": KimiProvider,
     "deepinfra": DeepInfraProvider,
+    # Z.ai (Zhipu AI) — GLM family of models.
+    "zai": ZaiProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
+    # Aliases for Z.ai: glm (brand) and zhipu/zhipuai/bigmodel (vendor).
+    "glm": ZaiProvider,
+    "zhipu": ZaiProvider,
+    "zhipuai": ZaiProvider,
+    "bigmodel": ZaiProvider,
     # Alias: google → gemini
     "google": GeminiProvider,
     # OpenAI-compatible providers
@@ -82,6 +90,10 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
 _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "google": "gemini",
     "moonshot": "kimi",
+    "glm": "zai",
+    "zhipu": "zai",
+    "zhipuai": "zai",
+    "bigmodel": "zai",
 }
 
 # Well-known defaults for providers that reuse OpenAIProvider.

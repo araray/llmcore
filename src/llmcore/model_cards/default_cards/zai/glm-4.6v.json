@@ -1,0 +1,45 @@
+{
+  "model_id": "glm-4.6v",
+  "display_name": "GLM-4.6V",
+  "provider": "zai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GLM",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 16384
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 0.9,
+      "cached_input": 0.05
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "aliases": [],
+  "description": "GLM-4.6V is a GLM vision-language model that accepts image inputs alongside text, with tool calling and thinking mode support.",
+  "tags": [
+    "text",
+    "image",
+    "output:text",
+    "vision",
+    "reasoning",
+    "tools"
+  ],
+  "source": "builtin"
+}

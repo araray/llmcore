@@ -322,6 +322,71 @@ posthog = "ERROR"
   # Beta endpoint (for prefix completion, FIM, strict tools):
   # beta_base_url = "https://api.deepseek.com/beta"
 
+  # --- Z.ai (Zhipu AI / GLM) Provider ---
+  # Native provider for the Z.ai Open Platform, serving the GLM model family
+  # (glm-5.2, glm-5.1, glm-4.7, the glm-*v vision models, embedding-3) plus the
+  # CogView/CogVideoX/GLM-TTS/ASR/OCR media models and Web Search.
+  #
+  # Transport is selectable via `backend`:
+  #   "sdk"    — official zai-sdk (preferred; default when installed)
+  #   "openai" — openai SDK in OpenAI-compatibility mode
+  #   "httpx"  — direct REST calls
+  # Omit/"auto" to auto-detect in order sdk -> openai -> httpx.
+  # Install with: pip install llmcore[zai]
+  #
+  # Docs: https://docs.z.ai/
+  # Pricing: https://docs.z.ai/guides/overview/pricing
+  [providers.zai]
+  # type = "zai"  # auto-detected from section name
+  # Aliases that map to this provider class: glm, zhipu, zhipuai, bigmodel.
+
+  # API Key: Set via environment variable for security.
+  # Environment Variable: ZAI_API_KEY (ZHIPUAI_API_KEY is also accepted)
+  # api_key = "..."
+
+  # Transport backend: "sdk" (default) | "openai" | "httpx". Omit for auto.
+  # backend = "sdk"
+
+  # Region selects the default endpoint when base_url is not set:
+  #   "overseas" (default) -> https://api.z.ai/api/paas/v4
+  #   "china"              -> https://open.bigmodel.cn/api/paas/v4
+  # region = "overseas"
+
+  # Default model for this provider instance.
+  # Current models (June 2026):
+  #   glm-5.2   — flagship; 1M context, 128K output, thinking + tools
+  #   glm-5.1   — GLM-5 generation; 1M context
+  #   glm-4.7   — GLM-4 generation; 128K context
+  #   glm-4.6v  — vision-language; 64K context
+  default_model = "glm-5.2"
+
+  # Default models for the optional multimodal media APIs.
+  # default_embedding_model = "embedding-3"
+  # default_image_model = "cogview-4"
+  # default_tts_model = "glm-tts"
+  # default_stt_model = "glm-asr-2512"
+  # default_ocr_model = "glm-ocr"
+  # default_video_model = "cogvideox-3"
+
+  # Request timeout in seconds. GLM-5 models support 1M-token context and may
+  # take longer for large inputs.
+  timeout = 300
+
+  # --- Thinking Mode ---
+  # GLM models support a thinking mode where the model generates internal
+  # reasoning (reasoning_content) before the final answer.
+  #
+  # thinking: "enabled" or "disabled" (default: "enabled")
+  # reasoning_effort: none | minimal | low | medium | high | xhigh | max
+  #                   (default: "high"; effective for glm-5.2 and above)
+  # These can be overridden per-request via chat_completion(thinking=...).
+  thinking = "enabled"
+  reasoning_effort = "high"
+
+  # --- Base URL ---
+  # Override the endpoint chosen by `region`.
+  # base_url = "https://api.z.ai/api/paas/v4"
+
   # --- Ollama Provider ---
   # For locally running models via Ollama.
   [providers.ollama]

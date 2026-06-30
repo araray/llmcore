@@ -1,0 +1,29 @@
+{
+  "model_id": "embedding-3",
+  "display_name": "Embedding-3",
+  "provider": "zai",
+  "model_type": "embedding",
+  "architecture": {
+    "family": "GLM"
+  },
+  "context": {
+    "max_input_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "vision": false,
+    "reasoning": false
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "aliases": [],
+  "description": "Embedding-3 is Z.ai's text embedding model supporting configurable output dimensions for semantic search and retrieval.",
+  "tags": [
+    "embedding",
+    "text"
+  ],
+  "source": "builtin"
+}

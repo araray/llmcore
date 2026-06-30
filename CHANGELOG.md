@@ -5,6 +5,58 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.51.0
+
+### Added — Z.ai (GLM) provider
+
+- **Z.ai provider**: first-class `ZaiProvider` for the Z.ai Open Platform,
+  serving the GLM model family (`glm-5.2`, `glm-5.1`, `glm-4.7`, the `glm-*v`
+  vision models, and `embedding-3`).
+- **Selectable transport backend** (`backend` config): the provider prefers
+  the official synchronous `zai-sdk` (`"sdk"`, the default when installed,
+  bridged to async via threads), and falls back to the `openai` SDK
+  (`"openai"`, OpenAI-compatibility mode) and/or direct `httpx` REST calls
+  (`"httpx"`). Unset/`"auto"` auto-detects in that order. All three backends
+  share one request-building path and normalize responses to a common shape.
+  Chat, embeddings, and every media API honor the selected backend. Built on
+  the chat endpoint (`https://api.z.ai/api/paas/v4`) with:
+  - GLM **thinking mode** (`thinking = {"type": "enabled" | "disabled"}`) and
+    `reasoning_effort` (`none|minimal|low|medium|high|xhigh|max`).
+  - `reasoning_content` extraction in both streaming and non-streaming modes.
+  - Open-interval `(0, 1)` clamping of `temperature`/`top_p` (matching the
+    Z.ai API constraint).
+  - Platform extras (`do_sample`, `request_id`, `user_id`, `seed`,
+    `watermark_enabled`, `sensitive_word_check`, `tool_stream`) routed via
+    `extra_body`.
+  - Tool calling, cache/reasoning token usage accounting, and `embedding-3`
+    embeddings.
+  - Region selection (`overseas` default, or `china` for the
+    `open.bigmodel.cn` endpoint).
+- **Z.ai multimodal media APIs**: the provider implements llmcore's full
+  media surface against the Z.ai endpoints:
+  - `generate_image` (CogView / GLM-Image, `/images/generations`)
+  - `generate_speech` (GLM-TTS, `/audio/speech`)
+  - `transcribe_audio` (GLM-ASR, `/audio/transcriptions`)
+  - `ocr` (GLM-OCR layout parsing, `/layout_parsing`)
+  - `generate_video` + `retrieve_video_result` (CogVideoX,
+    `/videos/generations` with async task polling)
+  - `web_search` (Z.ai Web Search API, `/web_search`)
+- **cardctl**: new `ZaiAdapter` (OpenAI-compatible `/models` listing) and
+  `zai.toml` enrichment overlay registered in the model-card tool, with
+  `glm`/`zhipu`/`zhipuai`/`bigmodel` aliases; media/generation model ids are
+  filtered out of chat cards.
+- **Packaging**: new `llmcore[zai]` extra (`openai` + `httpx`), included in
+  `llmcore[all]`.
+- **Pricing**: GLM model cards and the `zai.toml` enrichment now carry
+  verified USD per-1M-token pricing (input/output/cached-input) from the
+  official Z.ai pricing page, plus per-unit reference notes for image/video/
+  web-search services.
+- **Provider registration**: `zai` registered in `ProviderManager` with
+  `glm`, `zhipu`, `zhipuai`, and `bigmodel` aliases.
+- **Model cards**: builtin cards for `glm-5.2`, `glm-5.1`, `glm-4.7`,
+  `glm-4.6v` (vision), and `embedding-3`.
+- **Tests**: 57-test offline suite for the Z.ai provider.
+
 ## v0.50.0
 
 ### Added — June 2026 agent, context, provider, and observability rollup
