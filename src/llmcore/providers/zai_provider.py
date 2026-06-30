@@ -27,9 +27,18 @@ GLM-specific extensions handled here:
 - **Embeddings**: ``embedding-3`` / ``embedding-2`` via the OpenAI-compatible
   ``/embeddings`` endpoint.
 
-Transport: Uses the ``openai`` Python SDK (AsyncOpenAI) pointed at the Z.ai
-base URL.  The SDK handles SSE parsing, keep-alive tolerance, and retry/timeout
-plumbing.
+Transport (selectable via the ``backend`` config key):
+
+- ``"sdk"`` — the official synchronous ``zai-sdk`` (``ZaiClient`` /
+  ``ZhipuAiClient``), bridged to async via ``asyncio.to_thread``.  This is the
+  **default** when the SDK is installed.
+- ``"openai"`` — the ``openai`` Python SDK (AsyncOpenAI) pointed at the Z.ai
+  base URL (OpenAI-compatibility mode); native async.
+- ``"httpx"`` — direct async HTTP calls against the REST endpoints.
+
+When unset, the backend is auto-resolved in that order of preference based on
+which libraries are installed (``zai-sdk`` → ``openai`` → ``httpx``).  An
+explicitly requested backend that is unavailable falls back with a warning.
 
 References:
   - https://docs.z.ai/
@@ -47,6 +56,39 @@ import os
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
+# --- Optional native Z.ai SDK (zai-sdk) ---
+# The official SDK is synchronous (httpx.Client based); we bridge its calls to
+# async via ``asyncio.to_thread``.  Preferred backend when installed.
+try:
+    from zai import ZaiClient, ZhipuAiClient
+    from zai.core import (
+        APIAuthenticationError as ZaiAuthError,
+    )
+    from zai.core import (
+        APIReachLimitError as ZaiRateLimitError,
+    )
+    from zai.core import (
+        APIStatusError as ZaiStatusError,
+    )
+    from zai.core import (
+        APITimeoutError as ZaiTimeoutError,
+    )
+    from zai.core import (
+        ZaiError,
+    )
+
+    zai_sdk_available = True
+except ImportError:
+    zai_sdk_available = False
+    ZaiClient = None  # type: ignore
+    ZhipuAiClient = None  # type: ignore
+    ZaiError = Exception  # type: ignore
+    ZaiStatusError = Exception  # type: ignore
+    ZaiAuthError = Exception  # type: ignore
+    ZaiRateLimitError = Exception  # type: ignore
+    ZaiTimeoutError = Exception  # type: ignore
+
+# --- Optional OpenAI SDK (OpenAI-compatible fallback backend) ---
 try:
     from openai import AsyncOpenAI
     from openai._exceptions import (
@@ -170,6 +212,9 @@ class ZaiProvider(BaseProvider):
     Configuration keys (under ``[providers.zai]``):
 
     - ``api_key`` / ``api_key_env_var`` — API credential.
+    - ``backend`` — Transport: ``"sdk"`` (native zai-sdk, default when
+      installed), ``"openai"`` (OpenAI-compatibility mode), or ``"httpx"``
+      (direct REST).  Omit/``"auto"`` to auto-detect (sdk → openai → httpx).
     - ``base_url`` — Override the API URL (default: the overseas endpoint
       ``https://api.z.ai/api/paas/v4``).
     - ``region`` — ``"overseas"`` (default) or ``"china"``; selects the
@@ -187,6 +232,8 @@ class ZaiProvider(BaseProvider):
 
     default_model: str
     default_embedding_model: str
+    _backend: str  # "sdk" | "openai" | "httpx"
+    _sdk_client: Any  # zai.ZaiClient | None
     _client: AsyncOpenAI | None
     _encoding: Any  # tiktoken.Encoding | None
     _default_thinking: ThinkingType
@@ -208,10 +255,11 @@ class ZaiProvider(BaseProvider):
         """
         super().__init__(config, log_raw_payloads)
 
-        if not openai_available:
+        if not (zai_sdk_available or openai_available or httpx_available):
             raise ConfigError(
-                "The 'openai' package is required for the Z.ai provider. "
-                "Install with: pip install openai"
+                "The Z.ai provider requires one of: the 'zai' SDK (preferred), "
+                "the 'openai' SDK (compatibility mode), or 'httpx' (direct API). "
+                "Install with: pip install llmcore[zai]"
             )
 
         # --- API key ---
@@ -255,24 +303,43 @@ class ZaiProvider(BaseProvider):
             effort_raw = "high"
         self._default_reasoning_effort = effort_raw
 
-        # --- Client ---
+        # --- Endpoint / region ---
         region = str(config.get("region", "overseas")).lower()
         default_base = _BASE_URL_CHINA if region == "china" else _BASE_URL_OVERSEAS
         base_url = config.get("base_url", default_base)
+        self._region = region
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
-        # Lazily-created raw httpx client for media endpoints (video, OCR,
-        # web search) that are not covered by the OpenAI-compatible surface.
+        # Lazily-created raw httpx client (used as the "httpx" backend and for
+        # media endpoints not covered by the OpenAI-compatibility surface).
         self._http = None
+        self._sdk_client = None
+        self._client = None
+
+        # --- Backend resolution: SDK preferred, then openai-compat, then httpx ---
+        self._backend = self._resolve_backend(config.get("backend"))
+
         try:
-            self._client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=base_url,
-                timeout=timeout,
-            )
+            if self._backend == "sdk":
+                # Pick the regional client; both accept an explicit base_url.
+                client_cls = ZhipuAiClient if region == "china" else ZaiClient
+                self._sdk_client = client_cls(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=timeout,
+                )
+            elif self._backend == "openai":
+                self._client = AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=timeout,
+                )
+            # The "httpx" backend uses the lazily-created raw client; nothing to
+            # initialize eagerly here.
             logger.debug(
-                "Z.ai client initialized (base_url=%s, default_model=%s, "
-                "thinking=%s, reasoning_effort=%s).",
+                "Z.ai client initialized (backend=%s, base_url=%s, "
+                "default_model=%s, thinking=%s, reasoning_effort=%s).",
+                self._backend,
                 base_url,
                 self.default_model,
                 self._default_thinking,
@@ -290,6 +357,51 @@ class ZaiProvider(BaseProvider):
                 logger.warning("Failed to load tiktoken for Z.ai: %s", e)
 
     # =========================================================================
+    # Backend resolution and SDK bridging
+    # =========================================================================
+
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport backend, honoring availability.
+
+        Preference order when unset/``"auto"``: ``sdk`` → ``openai`` → ``httpx``.
+        An explicitly requested backend that is unavailable falls back through
+        the same chain with a warning.
+        """
+        available = {
+            "sdk": zai_sdk_available,
+            "openai": openai_available,
+            "httpx": httpx_available,
+        }
+        order = ["sdk", "openai", "httpx"]
+
+        req = (requested or "auto").lower()
+        if req not in ("auto", *order):
+            logger.warning("Unknown Z.ai backend '%s'; using auto-detection.", req)
+            req = "auto"
+
+        if req != "auto":
+            if available.get(req):
+                return req
+            logger.warning(
+                "Requested Z.ai backend '%s' is unavailable; falling back. "
+                "Install with: pip install llmcore[zai]",
+                req,
+            )
+
+        for backend in order:
+            if available[backend]:
+                if req != "auto" and backend != req:
+                    logger.info("Z.ai backend resolved to '%s'.", backend)
+                return backend
+        # Should be unreachable given the __init__ guard.
+        raise ConfigError("No usable Z.ai transport backend is installed.")
+
+    async def _run_sdk(self, fn: Any) -> Any:
+        """Run a synchronous SDK call in a worker thread (async bridge)."""
+        return await asyncio.to_thread(fn)
+
+    # =========================================================================
     # BaseProvider interface
     # =========================================================================
 
@@ -300,34 +412,33 @@ class ZaiProvider(BaseProvider):
         """Discover available models via the ``GET /models`` endpoint.
 
         Z.ai exposes an OpenAI-compatible model listing.  When the endpoint is
-        unavailable the static :data:`_CONTEXT_LENGTHS` table is used as a
-        fallback so capability discovery always returns the known GLM models.
+        unavailable (or the active backend cannot list models) the static
+        :data:`_CONTEXT_LENGTHS` table is used as a fallback so capability
+        discovery always returns the known GLM models.
         """
-        if not self._client:
-            raise ProviderError(self.get_name(), "Client not initialized.")
-
-        provider = self.get_name()
         try:
             registry = get_model_card_registry()
         except Exception:
             registry = None
 
         try:
-            resp = await self._client.models.list()
+            raw_models = await self._list_models_raw()
             result: list[ModelDetails] = []
-            for m in resp.data:
-                mid = m.id
+            for m in raw_models:
+                mid = m.get("id")
+                if not mid:
+                    continue
                 result.append(
                     self._build_model_details(
                         mid,
                         registry,
-                        owned_by=getattr(m, "owned_by", None),
-                        created=getattr(m, "created", None),
+                        owned_by=m.get("owned_by"),
+                        created=m.get("created"),
                     )
                 )
             if result:
                 return result
-        except OpenAIError as e:
+        except Exception as e:
             logger.warning(
                 "Z.ai model listing failed (%s); falling back to static table.", e
             )
@@ -338,6 +449,19 @@ class ZaiProvider(BaseProvider):
             for mid in _CONTEXT_LENGTHS
             if not mid.startswith("embedding")
         ]
+
+    async def _list_models_raw(self) -> list[dict[str, Any]]:
+        """Return the raw ``/models`` listing as dicts, per active backend."""
+        if self._backend == "openai" and self._client is not None:
+            resp = await self._client.models.list()
+            return [
+                {"id": m.id, "owned_by": getattr(m, "owned_by", None), "created": getattr(m, "created", None)}
+                for m in resp.data
+            ]
+        # SDK and httpx backends both read /models over raw HTTP (the zai SDK
+        # does not expose a model-listing resource).
+        resp = await self._raw_get("/models")
+        return resp.json().get("data", [])
 
     def _build_model_details(
         self,
@@ -544,11 +668,11 @@ class ZaiProvider(BaseProvider):
     ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """Perform a chat completion against the Z.ai API.
 
-        Extends the standard OpenAI-compatible flow with:
+        Dispatches to the active backend (``sdk`` / ``openai`` / ``httpx``).
+        Across all backends it provides:
 
         - Automatic thinking-mode parameter injection.
-        - GLM platform extras (``do_sample``, ``request_id``, ``seed`` …)
-          routed through ``extra_body``.
+        - GLM platform extras (``do_sample``, ``request_id``, ``seed`` …).
         - ``reasoning_content`` extraction in streaming and non-streaming modes.
         - Open-interval clamping of ``temperature`` / ``top_p``.
 
@@ -557,9 +681,6 @@ class ZaiProvider(BaseProvider):
         - ``thinking``: ``dict | str | bool | None`` — override thinking mode.
         - ``reasoning_effort``: ``str | None`` — override reasoning effort.
         """
-        if not self._client:
-            raise ProviderError(self.get_name(), "Client not initialized.")
-
         model_name = model or self.default_model
 
         # Validate kwargs (only known parameters)
@@ -581,92 +702,232 @@ class ZaiProvider(BaseProvider):
         if tools:
             tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
 
-        # --- Build API kwargs ---
-        api_kwargs: dict[str, Any] = {}
-        extra_body: dict[str, Any] = {}
-
-        # Thinking mode
+        # --- Resolve thinking + split remaining kwargs ---
         thinking_obj, effort = self._resolve_thinking_params(kwargs)
-        if thinking_obj:
-            extra_body["thinking"] = thinking_obj
-        if effort:
-            extra_body["reasoning_effort"] = effort
 
-        # Copy remaining kwargs, routing platform extras into extra_body and
-        # clamping sampling parameters to the open interval (0, 1).
+        # ``sampling`` = native chat params; ``extras`` = GLM platform params.
+        sampling: dict[str, Any] = {}
+        extras: dict[str, Any] = {}
         for key, val in kwargs.items():
             if key in ("thinking", "reasoning_effort"):
                 continue  # already handled
             if key in ("temperature", "top_p"):
-                api_kwargs[key] = self._clamp_open_interval(val)
+                sampling[key] = self._clamp_open_interval(val)
             elif key in self._EXTRA_BODY_KEYS:
-                extra_body[key] = val
+                extras[key] = val
             else:
-                api_kwargs[key] = val
+                sampling[key] = val
 
-        if extra_body:
-            api_kwargs["extra_body"] = extra_body
-        if tools_payload:
-            api_kwargs["tools"] = tools_payload
         if tool_choice:
-            api_kwargs["tool_choice"] = tool_choice
-
-        # Stream options — request usage in final chunk
+            sampling["tool_choice"] = tool_choice
         if stream:
-            api_kwargs.setdefault("stream_options", {"include_usage": True})
+            sampling.setdefault("stream_options", {"include_usage": True})
 
-        # --- Logging ---
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "RAW ZAI REQUEST: %s",
+                "RAW ZAI REQUEST (backend=%s): %s",
+                self._backend,
                 json.dumps(
                     {
                         "model": model_name,
                         "messages": messages_payload,
                         "stream": stream,
-                        **api_kwargs,
+                        "thinking": thinking_obj,
+                        "reasoning_effort": effort,
+                        "tools": tools_payload,
+                        **sampling,
+                        **extras,
                     },
                     indent=2,
                     default=str,
                 ),
             )
 
-        # --- API call ---
         try:
-            resp = await self._client.chat.completions.create(
+            if self._backend == "sdk":
+                return await self._chat_via_sdk(
+                    model_name, messages_payload, stream, tools_payload,
+                    thinking_obj, effort, sampling, extras,
+                )
+            if self._backend == "openai":
+                return await self._chat_via_openai(
+                    model_name, messages_payload, stream, tools_payload,
+                    thinking_obj, effort, sampling, extras,
+                )
+            return await self._chat_via_httpx(
+                model_name, messages_payload, stream, tools_payload,
+                thinking_obj, effort, sampling, extras,
+            )
+        except (ProviderError, ContextLengthError, ValueError):
+            raise
+        except Exception as e:
+            self._raise_chat_error(e, model_name)
+
+    async def _chat_via_sdk(
+        self,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        stream: bool,
+        tools_payload: list[dict[str, Any]] | None,
+        thinking_obj: dict[str, str] | None,
+        effort: str | None,
+        sampling: dict[str, Any],
+        extras: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat via the native (synchronous) zai-sdk, bridged to async."""
+        call_kwargs: dict[str, Any] = {**sampling, **extras}
+        if tools_payload:
+            call_kwargs["tools"] = tools_payload
+        if thinking_obj:
+            call_kwargs["thinking"] = thinking_obj
+        if effort:
+            call_kwargs["reasoning_effort"] = effort
+
+        resp = await self._run_sdk(
+            lambda: self._sdk_client.chat.completions.create(
                 model=model_name,
-                messages=messages_payload,
+                messages=messages,
                 stream=stream,
-                **api_kwargs,
-            )  # type: ignore
+                **call_kwargs,
+            )
+        )
 
-            if stream:
+        if stream:
+            return self._bridge_sdk_stream(resp)
+        return self._normalize_obj(resp)
 
-                async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
-                    async for chunk in resp:  # type: ignore
-                        chunk_dict = chunk.model_dump(exclude_none=True)
-                        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(
-                                "RAW ZAI STREAM CHUNK: %s",
-                                json.dumps(chunk_dict, default=str),
-                            )
-                        yield chunk_dict
+    async def _bridge_sdk_stream(
+        self, iterator: Any
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Bridge the SDK's synchronous stream iterator to an async generator."""
+        sentinel = object()
 
-                return stream_wrapper()
-            else:
-                response_dict = resp.model_dump(exclude_none=True)  # type: ignore
-                if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        "RAW ZAI RESPONSE: %s",
-                        json.dumps(response_dict, indent=2, default=str),
-                    )
-                return response_dict
+        def _next() -> Any:
+            try:
+                return next(iterator)
+            except StopIteration:
+                return sentinel
 
-        except OpenAIAPIStatusError as e:
-            status = e.status_code
-            msg = str(e)
-            logger.error("Z.ai status error (%d): %s", status, msg, exc_info=True)
+        while True:
+            chunk = await asyncio.to_thread(_next)
+            if chunk is sentinel:
+                break
+            chunk_dict = self._normalize_obj(chunk)
+            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("RAW ZAI SDK STREAM CHUNK: %s", json.dumps(chunk_dict, default=str))
+            yield chunk_dict
 
+    async def _chat_via_openai(
+        self,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        stream: bool,
+        tools_payload: list[dict[str, Any]] | None,
+        thinking_obj: dict[str, str] | None,
+        effort: str | None,
+        sampling: dict[str, Any],
+        extras: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat via the OpenAI-compatible AsyncOpenAI client (extra_body extras)."""
+        api_kwargs: dict[str, Any] = dict(sampling)
+        extra_body: dict[str, Any] = dict(extras)
+        if thinking_obj:
+            extra_body["thinking"] = thinking_obj
+        if effort:
+            extra_body["reasoning_effort"] = effort
+        if extra_body:
+            api_kwargs["extra_body"] = extra_body
+        if tools_payload:
+            api_kwargs["tools"] = tools_payload
+
+        resp = await self._client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            stream=stream,
+            **api_kwargs,
+        )  # type: ignore
+
+        if stream:
+
+            async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
+                async for chunk in resp:  # type: ignore
+                    yield self._normalize_obj(chunk)
+
+            return stream_wrapper()
+        return self._normalize_obj(resp)
+
+    async def _chat_via_httpx(
+        self,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        stream: bool,
+        tools_payload: list[dict[str, Any]] | None,
+        thinking_obj: dict[str, str] | None,
+        effort: str | None,
+        sampling: dict[str, Any],
+        extras: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat via direct httpx calls against ``/chat/completions``."""
+        body: dict[str, Any] = {
+            "model": model_name,
+            "messages": messages,
+            "stream": stream,
+            **sampling,
+            **extras,
+        }
+        if tools_payload:
+            body["tools"] = tools_payload
+        if thinking_obj:
+            body["thinking"] = thinking_obj
+        if effort:
+            body["reasoning_effort"] = effort
+
+        if stream:
+            return self._httpx_sse_stream(body)
+        resp = await self._raw_post("/chat/completions", json=body)
+        return resp.json()
+
+    async def _httpx_sse_stream(
+        self, body: dict[str, Any]
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream ``/chat/completions`` over httpx, parsing SSE ``data:`` lines."""
+        client = self._get_http()
+        try:
+            async with client.stream("POST", "/chat/completions", json=body) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        yield json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+        except httpx.HTTPStatusError as e:
+            self._raise_chat_error(e, body.get("model", ""))
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Streaming error: {e}")
+
+    @staticmethod
+    def _normalize_obj(obj: Any) -> dict[str, Any]:
+        """Normalize an SDK/OpenAI pydantic response to a plain dict."""
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump(exclude_none=True)
+        if isinstance(obj, dict):
+            return obj
+        return dict(obj)
+
+    def _raise_chat_error(self, e: Exception, model_name: str) -> None:
+        """Map a backend exception to an llmcore ProviderError/ContextLengthError."""
+        status = getattr(e, "status_code", None)
+        if status is None:
+            resp = getattr(e, "response", None)
+            status = getattr(resp, "status_code", None)
+        msg = str(e)
+        if status is not None:
+            logger.error("Z.ai status error (%s): %s", status, msg)
             if status == 400 and "context" in msg.lower() and "length" in msg.lower():
                 raise ContextLengthError(
                     provider_name=self.get_name(),
@@ -690,17 +951,10 @@ class ZaiProvider(BaseProvider):
                     f"include glm-5.2, glm-5.1, glm-4.7, glm-4.6v. Error: {msg}",
                 )
             raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
-        except OpenAIAPITimeoutError as e:
+        if isinstance(e, (ZaiTimeoutError, OpenAIAPITimeoutError)):
             raise ProviderError(self.get_name(), f"Timeout: {e}")
-        except OpenAIAPIConnectionError as e:
-            raise ProviderError(self.get_name(), f"Connection error: {e}")
-        except OpenAIAPIError as e:
-            raise ProviderError(self.get_name(), f"API Error: {e}")
-        except OpenAIError as e:
-            raise ProviderError(self.get_name(), f"Error: {e}")
-        except Exception as e:
-            logger.error("Unexpected Z.ai error: %s", e, exc_info=True)
-            raise ProviderError(self.get_name(), f"Unexpected error: {e}")
+        logger.error("Unexpected Z.ai error: %s", e, exc_info=True)
+        raise ProviderError(self.get_name(), f"Error: {e}")
 
     # =========================================================================
     # Embeddings
@@ -727,9 +981,6 @@ class ZaiProvider(BaseProvider):
         Returns:
             Raw API response dict with ``data``, ``model`` and ``usage``.
         """
-        if not self._client:
-            raise ProviderError(self.get_name(), "Client not initialized.")
-
         embed_model = model or self.default_embedding_model
         api_kwargs: dict[str, Any] = dict(kwargs)
         if dimensions is not None:
@@ -738,18 +989,28 @@ class ZaiProvider(BaseProvider):
             api_kwargs["encoding_format"] = encoding_format
 
         try:
-            resp = await self._client.embeddings.create(
-                model=embed_model,
-                input=input_texts,
-                **api_kwargs,
-            )
-            return resp.model_dump(exclude_none=True)
-        except OpenAIAPIStatusError as e:
-            raise ProviderError(self.get_name(), f"Embeddings API Error ({e.status_code}): {e}")
-        except OpenAIError as e:
-            raise ProviderError(self.get_name(), f"Embeddings error: {e}")
+            if self._backend == "sdk":
+                resp = await self._run_sdk(
+                    lambda: self._sdk_client.embeddings.create(
+                        model=embed_model, input=input_texts, **api_kwargs
+                    )
+                )
+                return self._normalize_obj(resp)
+            if self._backend == "openai":
+                resp = await self._client.embeddings.create(
+                    model=embed_model,
+                    input=input_texts,
+                    **api_kwargs,
+                )
+                return self._normalize_obj(resp)
+            # httpx backend: direct POST /embeddings.
+            body = {"model": embed_model, "input": input_texts, **api_kwargs}
+            resp = await self._raw_post("/embeddings", json=body)
+            return resp.json()
+        except (ProviderError, ContextLengthError):
+            raise
         except Exception as e:
-            raise ProviderError(self.get_name(), f"Unexpected embeddings error: {e}")
+            self._raise_chat_error(e, embed_model)
 
     # =========================================================================
     # Multimodal media APIs (image / TTS / STT / OCR / video / web search)
@@ -810,6 +1071,27 @@ class ZaiProvider(BaseProvider):
         except httpx.HTTPError as e:
             raise ProviderError(self.get_name(), f"HTTP error: {e}")
 
+    async def _media_json(
+        self,
+        *,
+        sdk_call: Any,
+        path: str,
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        files: Any | None = None,
+    ) -> dict[str, Any]:
+        """Run a JSON-returning media op via the SDK (preferred) or httpx."""
+        if self._backend == "sdk":
+            try:
+                sdk_resp = await self._run_sdk(sdk_call)
+            except (ProviderError, ContextLengthError):
+                raise
+            except Exception as e:
+                self._raise_chat_error(e, "")
+            return self._normalize_obj(sdk_resp)
+        resp = await self._raw_post(path, json=json, data=data, files=files)
+        return resp.json()
+
     async def generate_image(
         self,
         prompt: str,
@@ -835,8 +1117,13 @@ class ZaiProvider(BaseProvider):
             body["quality"] = quality
         body.update(kwargs)
 
-        resp = await self._raw_post("/images/generations", json=body)
-        payload = resp.json()
+        payload = await self._media_json(
+            sdk_call=lambda: self._sdk_client.images.generations(
+                **{k: v for k, v in body.items()}
+            ),
+            path="/images/generations",
+            json=body,
+        )
         images: list[GeneratedImage] = []
         for item in payload.get("data", []):
             images.append(
@@ -879,10 +1166,17 @@ class ZaiProvider(BaseProvider):
         }
         body.update(kwargs)
 
-        resp = await self._raw_post("/audio/speech", json=body)
         # The endpoint returns raw audio bytes (or JSON on error, already raised).
+        if self._backend == "sdk":
+            sdk_resp = await self._run_sdk(lambda: self._sdk_client.audio.speech(**body))
+            audio_bytes = getattr(sdk_resp, "content", None)
+            if audio_bytes is None and hasattr(sdk_resp, "read"):
+                audio_bytes = sdk_resp.read()
+        else:
+            resp = await self._raw_post("/audio/speech", json=body)
+            audio_bytes = resp.content
         return SpeechResult(
-            audio_data=resp.content,
+            audio_data=audio_bytes or b"",
             format=response_format,
             model=tts_model,
             voice=voice,
@@ -933,8 +1227,14 @@ class ZaiProvider(BaseProvider):
         data.update({k: str(v) for k, v in kwargs.items()})
         files = {"file": (filename, file_bytes)}
 
-        resp = await self._raw_post("/audio/transcriptions", data=data, files=files)
-        payload = resp.json()
+        payload = await self._media_json(
+            sdk_call=lambda: self._sdk_client.audio.transcriptions.create(
+                file=(filename, file_bytes), **data
+            ),
+            path="/audio/transcriptions",
+            data=data,
+            files=files,
+        )
         return TranscriptionResult(
             text=payload.get("text", ""),
             language=language or payload.get("language"),
@@ -981,8 +1281,11 @@ class ZaiProvider(BaseProvider):
             body["return_crop_images"] = include_image_base64
         body.update(kwargs)
 
-        resp = await self._raw_post("/layout_parsing", json=body)
-        payload = resp.json()
+        payload = await self._media_json(
+            sdk_call=lambda: self._sdk_client.layout_parsing.create(**body),
+            path="/layout_parsing",
+            json=body,
+        )
         raw_pages = payload.get("pages") or payload.get("data") or []
         if isinstance(raw_pages, dict):
             raw_pages = [raw_pages]
@@ -1045,8 +1348,11 @@ class ZaiProvider(BaseProvider):
             body["with_audio"] = with_audio
         body.update(kwargs)
 
-        resp = await self._raw_post("/videos/generations", json=body)
-        task = resp.json()
+        task = await self._media_json(
+            sdk_call=lambda: self._sdk_client.videos.generations(**body),
+            path="/videos/generations",
+            json=body,
+        )
         if not wait:
             return task
 
@@ -1068,7 +1374,16 @@ class ZaiProvider(BaseProvider):
         )
 
     async def retrieve_video_result(self, task_id: str) -> dict[str, Any]:
-        """Fetch the status/result of an async video task via ``GET /async-result/{id}``."""
+        """Fetch the status/result of an async video task.
+
+        Uses the SDK ``videos.retrieve_videos_result`` when available, otherwise
+        ``GET /async-result/{id}`` directly.
+        """
+        if self._backend == "sdk":
+            sdk_resp = await self._run_sdk(
+                lambda: self._sdk_client.videos.retrieve_videos_result(id=task_id)
+            )
+            return self._normalize_obj(sdk_resp)
         resp = await self._raw_get(f"/async-result/{task_id}")
         return resp.json()
 
@@ -1104,8 +1419,11 @@ class ZaiProvider(BaseProvider):
             body["content_size"] = content_size
         body.update(kwargs)
 
-        resp = await self._raw_post("/web_search", json=body)
-        return resp.json()
+        return await self._media_json(
+            sdk_call=lambda: self._sdk_client.web_search.web_search(**body),
+            path="/web_search",
+            json=body,
+        )
 
     # =========================================================================
     # Response extraction
@@ -1271,7 +1589,15 @@ class ZaiProvider(BaseProvider):
     # =========================================================================
 
     async def close(self) -> None:
-        """Close the chat and media HTTP clients."""
+        """Close the SDK / OpenAI / media HTTP clients."""
+        if self._sdk_client is not None:
+            try:
+                close_fn = getattr(self._sdk_client, "close", None)
+                if callable(close_fn):
+                    await asyncio.to_thread(close_fn)
+            except Exception as e:
+                logger.error("Error closing Z.ai SDK client: %s", e)
+            self._sdk_client = None
         if self._client:
             try:
                 await self._client.close()

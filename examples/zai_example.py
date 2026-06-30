@@ -8,9 +8,14 @@ This script shows how to:
 3. Toggle GLM "thinking" mode and ``reasoning_effort`` per request.
 4. Stream a response token-by-token.
 
+Transport: the provider prefers the official ``zai-sdk`` (SDK backend), and
+falls back to the ``openai`` SDK (OpenAI-compatibility mode) or direct ``httpx``
+calls.  Pick one explicitly with ``backend = "sdk" | "openai" | "httpx"`` in the
+provider config.
+
 To run this example:
-- Ensure you have llmcore installed (`pip install .` from the project root)
-  along with the `openai` SDK (`pip install openai`).
+- Install with the Z.ai extra: ``pip install llmcore[zai]`` (pulls in
+  ``zai-sdk``, ``openai``, and ``httpx``).
 - Set the Z.ai API key:
     export ZAI_API_KEY='your-key-here'
 - For mainland-China users, set ``region = "china"`` (uses the
@@ -36,6 +41,7 @@ CONFIG_OVERRIDES = {
             "default_model": "glm-5.2",
             "thinking": "enabled",
             "reasoning_effort": "high",
+            # "backend": "sdk",   # "sdk" (default) | "openai" | "httpx"
             # "region": "china",  # uncomment for open.bigmodel.cn
         }
     },

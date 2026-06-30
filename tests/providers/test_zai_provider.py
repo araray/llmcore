@@ -596,6 +596,149 @@ class TestClose:
 
 
 # ---------------------------------------------------------------------------
+# Backend resolution and SDK / httpx transports
+# ---------------------------------------------------------------------------
+
+
+def _make_sdk_provider():
+    """Build a provider forced onto the (simulated) native SDK backend."""
+    import llmcore.providers.zai_provider as zp
+
+    cfg = MINIMAL_CONFIG.copy()
+    cfg["backend"] = "sdk"
+    cfg["_instance_name"] = "zai"
+    sdk_client = MagicMock()
+    with patch.object(zp, "zai_sdk_available", True), patch.object(
+        zp, "ZaiClient", MagicMock(return_value=sdk_client)
+    ), patch.object(zp, "ZhipuAiClient", MagicMock(return_value=sdk_client)):
+        p = zp.ZaiProvider(cfg)
+    return p, sdk_client
+
+
+class TestBackendResolution:
+    def test_auto_prefers_available(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        # In this environment zai-sdk is absent, openai present → "openai".
+        assert ZaiProvider._resolve_backend("auto") == "openai"
+
+    def test_explicit_httpx(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        assert ZaiProvider._resolve_backend("httpx") == "httpx"
+
+    def test_unavailable_sdk_falls_back(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        # sdk unavailable here → falls through to openai
+        assert ZaiProvider._resolve_backend("sdk") == "openai"
+
+    def test_unknown_backend_uses_auto(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        assert ZaiProvider._resolve_backend("bogus") == "openai"
+
+
+class TestSDKBackend:
+    def test_init_uses_sdk_client(self):
+        p, sdk_client = _make_sdk_provider()
+        assert p._backend == "sdk"
+        assert p._sdk_client is sdk_client
+        assert p._client is None
+
+    @pytest.mark.asyncio
+    async def test_chat_passes_native_thinking_kwargs(self):
+        p, sdk_client = _make_sdk_provider()
+        result_obj = MagicMock()
+        result_obj.model_dump.return_value = {"choices": [{"message": {"content": "hi"}}]}
+        sdk_client.chat.completions.create = MagicMock(return_value=result_obj)
+
+        result = await p.chat_completion(
+            [Message(role=Role.USER, content="Hi")], reasoning_effort="max", do_sample=False
+        )
+        assert result["choices"][0]["message"]["content"] == "hi"
+        call = sdk_client.chat.completions.create.call_args.kwargs
+        # SDK takes thinking / reasoning_effort as NATIVE kwargs (not extra_body)
+        assert call["thinking"] == {"type": "enabled"}
+        assert call["reasoning_effort"] == "max"
+        assert call["do_sample"] is False
+        assert "extra_body" not in call
+
+    @pytest.mark.asyncio
+    async def test_sdk_streaming_bridges_sync_iterator(self):
+        p, sdk_client = _make_sdk_provider()
+        chunks = [
+            MagicMock(model_dump=lambda exclude_none=True: {"choices": [{"delta": {"content": "a"}}]}),
+            MagicMock(model_dump=lambda exclude_none=True: {"choices": [{"delta": {"content": "b"}}]}),
+        ]
+        sdk_client.chat.completions.create = MagicMock(return_value=iter(chunks))
+
+        gen = await p.chat_completion([Message(role=Role.USER, content="Hi")], stream=True)
+        out = [c async for c in gen]
+        assert [p.extract_delta_content(c) for c in out] == ["a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_sdk_embeddings(self):
+        p, sdk_client = _make_sdk_provider()
+        emb = MagicMock()
+        emb.model_dump.return_value = {"data": [{"embedding": [0.1]}], "model": "embedding-3"}
+        sdk_client.embeddings.create = MagicMock(return_value=emb)
+        result = await p.create_embeddings("hi")
+        assert result["model"] == "embedding-3"
+        assert sdk_client.embeddings.create.call_args.kwargs["input"] == "hi"
+
+    @pytest.mark.asyncio
+    async def test_sdk_web_search(self):
+        p, sdk_client = _make_sdk_provider()
+        ws = MagicMock()
+        ws.model_dump.return_value = {"search_result": [{"title": "T"}]}
+        sdk_client.web_search.web_search = MagicMock(return_value=ws)
+        result = await p.web_search("q")
+        assert result["search_result"][0]["title"] == "T"
+
+
+class TestHttpxBackend:
+    @pytest.fixture
+    def httpx_provider(self):
+        cfg = MINIMAL_CONFIG.copy()
+        cfg["backend"] = "httpx"
+        with patch("llmcore.providers.zai_provider.AsyncOpenAI"):
+            from llmcore.providers.zai_provider import ZaiProvider
+
+            p = ZaiProvider(cfg)
+        http = MagicMock()
+        http.post = AsyncMock()
+        p._get_http = lambda: http  # type: ignore[assignment]
+        p._http = http
+        return p, http
+
+    @pytest.mark.asyncio
+    async def test_chat_posts_inline_body(self, httpx_provider):
+        p, http = httpx_provider
+        http.post.return_value = _mock_http_response(
+            json_body={"choices": [{"message": {"content": "ok"}}]}
+        )
+        result = await p.chat_completion(
+            [Message(role=Role.USER, content="Hi")], reasoning_effort="high"
+        )
+        assert result["choices"][0]["message"]["content"] == "ok"
+        body = http.post.call_args.kwargs["json"]
+        assert http.post.call_args[0][0] == "/chat/completions"
+        # httpx backend inlines thinking/effort directly in the body
+        assert body["thinking"] == {"type": "enabled"}
+        assert body["reasoning_effort"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_embeddings_posts_to_endpoint(self, httpx_provider):
+        p, http = httpx_provider
+        http.post.return_value = _mock_http_response(json_body={"model": "embedding-3", "data": []})
+        result = await p.create_embeddings(["a", "b"])
+        assert result["model"] == "embedding-3"
+        assert http.post.call_args[0][0] == "/embeddings"
+        assert http.post.call_args.kwargs["json"]["input"] == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
 # Multimodal media APIs (image / TTS / STT / OCR / video / web search)
 # ---------------------------------------------------------------------------
 

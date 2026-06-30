@@ -315,6 +315,7 @@ timeout = 240
 
 [providers.zai]
 # Z.ai Open Platform (GLM family). API key via ZAI_API_KEY.
+# backend = "sdk"       # "sdk" (native zai-sdk, default) | "openai" | "httpx"
 # region = "overseas"   # or "china" for the open.bigmodel.cn endpoint
 default_model = "glm-5.2"
 thinking = "enabled"            # "enabled" | "disabled"

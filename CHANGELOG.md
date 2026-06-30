@@ -11,8 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Z.ai provider**: first-class `ZaiProvider` for the Z.ai Open Platform,
   serving the GLM model family (`glm-5.2`, `glm-5.1`, `glm-4.7`, the `glm-*v`
-  vision models, and `embedding-3`). Built on the OpenAI-compatible chat
-  endpoint (`https://api.z.ai/api/paas/v4`) via the AsyncOpenAI SDK, with:
+  vision models, and `embedding-3`).
+- **Selectable transport backend** (`backend` config): the provider prefers
+  the official synchronous `zai-sdk` (`"sdk"`, the default when installed,
+  bridged to async via threads), and falls back to the `openai` SDK
+  (`"openai"`, OpenAI-compatibility mode) and/or direct `httpx` REST calls
+  (`"httpx"`). Unset/`"auto"` auto-detects in that order. All three backends
+  share one request-building path and normalize responses to a common shape.
+  Chat, embeddings, and every media API honor the selected backend. Built on
+  the chat endpoint (`https://api.z.ai/api/paas/v4`) with:
   - GLM **thinking mode** (`thinking = {"type": "enabled" | "disabled"}`) and
     `reasoning_effort` (`none|minimal|low|medium|high|xhigh|max`).
   - `reasoning_content` extraction in both streaming and non-streaming modes.
