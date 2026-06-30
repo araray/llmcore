@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "app": {
     "name": "LLMCore",
-    "version": "0.50.0",
+    "version": "0.51.0",
     "description": "Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution",
     "url": "https://github.com/araray/llmcore",
     "maintainer": "araray"
@@ -2230,6 +2230,199 @@
           "required": false,
           "description": "Validation strictness for model card files. If true, invalid JSON files will raise errors during loading. If false, invalid files are logged as warnings and skipped.",
           "default": false
+        }
+      ]
+    },
+    {
+      "id": "provider_zai",
+      "title": "Provider: Z.ai (GLM)",
+      "description": "Native provider for the Z.ai Open Platform (Zhipu AI), serving the GLM model family (glm-5.2, glm-5.1, glm-4.7, the glm-*v vision models, embedding-3) plus CogView/CogVideoX/GLM-TTS/ASR/OCR media models and Web Search. Transport is selectable via 'backend': the official zai-sdk (preferred), the openai SDK (compatibility mode), or direct httpx. Aliases: glm, zhipu, zhipuai, bigmodel. Install with: pip install llmcore[zai].",
+      "icon": "✨",
+      "order": 13,
+      "fields": [
+        {
+          "key": "providers.zai.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "description": "Z.ai API key. Strongly recommended to set via the ZAI_API_KEY environment variable (ZHIPUAI_API_KEY is also accepted).",
+          "placeholder": "...",
+          "recommendation": "Set via ZAI_API_KEY or LLMCORE_PROVIDERS__ZAI__API_KEY environment variable.",
+          "tags": [
+            "security",
+            "credentials"
+          ],
+          "required": false
+        },
+        {
+          "key": "providers.zai.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the Z.ai API key. type = \"zai\" (auto-detected from section name).",
+          "default": "ZAI_API_KEY"
+        },
+        {
+          "key": "providers.zai.backend",
+          "title": "Transport Backend",
+          "type": "enum",
+          "required": false,
+          "description": "Transport: \"sdk\" (official zai-sdk, preferred/default when installed), \"openai\" (openai SDK in OpenAI-compatibility mode), or \"httpx\" (direct REST). Leave empty for auto-detection in order sdk -> openai -> httpx.",
+          "default": "",
+          "options": [
+            {
+              "value": "",
+              "label": "Auto (sdk -> openai -> httpx)"
+            },
+            {
+              "value": "sdk",
+              "label": "Native zai-sdk (preferred)"
+            },
+            {
+              "value": "openai",
+              "label": "OpenAI-compatibility mode"
+            },
+            {
+              "value": "httpx",
+              "label": "Direct REST (httpx)"
+            }
+          ]
+        },
+        {
+          "key": "providers.zai.region",
+          "title": "Region",
+          "type": "enum",
+          "required": false,
+          "description": "Selects the default endpoint when base_url is not set. \"overseas\" -> https://api.z.ai/api/paas/v4 ; \"china\" -> https://open.bigmodel.cn/api/paas/v4 (separate, non-interchangeable key).",
+          "default": "overseas",
+          "options": [
+            {
+              "value": "overseas",
+              "label": "Overseas (api.z.ai)"
+            },
+            {
+              "value": "china",
+              "label": "China (open.bigmodel.cn)"
+            }
+          ]
+        },
+        {
+          "key": "providers.zai.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "description": "Override the endpoint chosen by 'region'. Leave empty to use the regional default.",
+          "placeholder": "https://api.z.ai/api/paas/v4",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.zai.default_model",
+          "title": "Default Model",
+          "type": "enum",
+          "required": false,
+          "description": "Default model. Current models (June 2026): glm-5.2 (flagship; 1M context, 128K output, thinking + tools), glm-5.1 (1M context), glm-4.7 (128K context), glm-4.6v (vision; 64K context).",
+          "default": "glm-5.2",
+          "options": [
+            {
+              "value": "glm-5.2",
+              "label": "GLM-5.2 (flagship, thinking)"
+            },
+            {
+              "value": "glm-5.1",
+              "label": "GLM-5.1"
+            },
+            {
+              "value": "glm-4.7",
+              "label": "GLM-4.7"
+            },
+            {
+              "value": "glm-4.6v",
+              "label": "GLM-4.6V (vision)"
+            }
+          ],
+          "discover": {
+            "id": "zai_chat_cards",
+            "command": "python3 << 'PYEOF'\nimport json, os, sys\nP = 'zai'\ndirs = [os.path.join('src', 'llmcore')]\ndirs += [os.path.join(p, 'llmcore') for p in sys.path if os.path.isdir(os.path.join(p, 'llmcore', 'model_cards'))]\nfor b in [os.path.join(d, 'model_cards', 'default_cards', P) for d in dirs]:\n    if not os.path.isdir(b): continue\n    r = []\n    for f in sorted(os.listdir(b)):\n        if not f.endswith('.json'): continue\n        try:\n            d = json.load(open(os.path.join(b, f)))\n            if d.get('model_type') != 'chat': continue\n            if d.get('lifecycle', {}).get('status') in ('retired', 'deprecated'): continue\n            ctx = d.get('context', {}).get('max_input_tokens', '?')\n            pi = d.get('pricing', {}).get('per_million_tokens', {}).get('input', '?')\n            r.append({'value': d['model_id'], 'label': d.get('display_name', d['model_id']), 'description': f'{ctx} ctx, ${pi}/M in'})\n        except Exception: pass\n    print(json.dumps(r))\n    sys.exit()\nprint('[]')\nPYEOF",
+            "description": "Load available zai chat models from llmcore model cards",
+            "parse": "json",
+            "populate": "options",
+            "merge": "replace",
+            "on_failure": "use_static",
+            "cache": true,
+            "timeout": 5
+          }
+        },
+        {
+          "key": "providers.zai.thinking",
+          "title": "Thinking Mode",
+          "type": "enum",
+          "required": false,
+          "description": "Default thinking mode. \"enabled\": model emits reasoning_content before the answer. \"disabled\": answer only (faster, cheaper). Per-request override via the API.",
+          "default": "enabled",
+          "options": [
+            {
+              "value": "enabled",
+              "label": "Enabled (emit reasoning_content)"
+            },
+            {
+              "value": "disabled",
+              "label": "Disabled (answer only)"
+            }
+          ]
+        },
+        {
+          "key": "providers.zai.reasoning_effort",
+          "title": "Reasoning Effort",
+          "type": "enum",
+          "required": false,
+          "description": "Default reasoning effort when thinking is enabled (effective for glm-5.2 and above). Higher levels reason longer and more thoroughly.",
+          "default": "high",
+          "options": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "minimal",
+              "label": "Minimal"
+            },
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "high",
+              "label": "High (default)"
+            },
+            {
+              "value": "xhigh",
+              "label": "X-High"
+            },
+            {
+              "value": "max",
+              "label": "Max"
+            }
+          ]
+        },
+        {
+          "key": "providers.zai.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds. GLM-5 models support 1M-token context and may take longer for large inputs.",
+          "default": 300,
+          "validation": {
+            "min": 10,
+            "max": 600
+          }
         }
       ]
     },
