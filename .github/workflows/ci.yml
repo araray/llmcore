@@ -52,10 +52,19 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # confy is not published on PyPI (the PyPI 'confy' is an unrelated
+          # package capped at 0.3.8); install it from its public GitHub repo
+          # first so the llmcore resolve below finds confy>=0.4.2 satisfied.
+          pip install "confy @ git+https://github.com/araray/confy.git@v0.4.2"
           # dev pulls in test (pytest, pytest-asyncio, respx, ...) and sandbox
-          # deps; bridge provides grpcio/protobuf/starlette needed by
-          # tests/bridge/. numpy is used by embedding-shaped unit tests.
-          pip install -e ".[dev,bridge]"
+          # deps; the extras below are [all] minus [zai]: provider SDKs
+          # (openai, anthropic, ...), chromadb, and the bridge deps
+          # (grpcio/protobuf/starlette) that unit tests import at collection
+          # or fixture time. zai-sdk is deliberately NOT installed: the zai
+          # unit tests mock the openai/httpx fallback transport, and the SDK
+          # transport would bypass those mocks and hit the live API.
+          # numpy is used by embedding-shaped unit tests.
+          pip install -e ".[dev,bridge,openai,anthropic,gemini,ollama,deepinfra,deepgram,brightdata,serper,serpapi,semanticscholar,postgres,chromadb]"
           pip install numpy
 
       - name: Version drift guard
