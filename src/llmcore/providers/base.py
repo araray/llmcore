@@ -411,48 +411,6 @@ class BaseProvider(abc.ABC):
     # NEW: Observability Instrumentation Methods
     # ============================================================================
 
-    def _record_llm_metrics(
-        self,
-        model: str,
-        duration: float,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-        error: str | None = None,
-        tenant_id: str | None = None,
-    ) -> None:
-        """
-        Record metrics for an LLM API request.
-
-        This method should be called by concrete provider implementations
-        to record observability metrics for each API call.
-
-        Args:
-            model: Model name used for the request
-            duration: Request duration in seconds
-            input_tokens: Number of input tokens
-            output_tokens: Number of output tokens
-            error: Error type if request failed
-            tenant_id: Tenant identifier if available
-        """
-        try:
-            # Extract tenant_id from current request context if not provided
-            if tenant_id is None:
-                record_llm_request(
-                    provider=self.get_name(),
-                    model=model,
-                    tenant_id=tenant_id,
-                    duration=duration,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    error=error,
-                )
-        except Exception as e:
-            # Don't fail the main operation if metrics recording fails
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Failed to record LLM metrics: {e}")
-
     def _create_llm_span(self, operation: str, model: str, **attributes):
         """
         Create a tracing span for an LLM operation.
@@ -561,15 +519,7 @@ class BaseProvider(abc.ABC):
                     record_span_exception(span, e)
                 raise
             finally:
-                # Record metrics
                 duration = time.time() - start_time
-                self._record_llm_metrics(
-                    model=actual_model,
-                    duration=duration,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    error=error,
-                )
 
                 # Add span attributes
                 if span:
