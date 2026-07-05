@@ -93,14 +93,20 @@ class TestGiantToolResultCapped:
         assert "tool_result" in context.excluded_components
         assert "observation" in context.included_components
 
-    def test_giant_observations_are_truncated_and_demoted(self):
+    def test_giant_observations_keep_newest_tail_and_stay_critical(self):
         manager = _make_manager(max_observations=200, max_component_tokens=1000)
-        observations = ["o" * 400 for _ in range(200)]
+        observations = [f"obs-{i:03d} " + "o" * 380 for i in range(200)]
 
-        obs_block = "## Observations\n" + "\n".join(f"- {o}" for o in observations)
-        _content, priority, truncated = manager._apply_component_cap(obs_block, Priority.CRITICAL)
+        obs_block = "\n".join(f"- {o}" for o in observations)
+        content, priority, truncated = manager._apply_component_cap(
+            obs_block, Priority.CRITICAL, keep="tail", demote=False
+        )
         assert truncated is True
-        assert priority == Priority.HIGH
+        assert priority == Priority.CRITICAL
+        assert content.startswith("[truncated ")
+        # Tail-keep: the newest observation survives, the oldest is cut.
+        assert "obs-199" in content
+        assert "obs-000" not in content
 
         context = manager.build_context(
             system_prompt="You are a helpful assistant.",
@@ -110,7 +116,35 @@ class TestGiantToolResultCapped:
         combined = _combined_content(context)
         assert "## Observations" in combined
         assert "[truncated " in combined
+        assert "obs-199" in combined
+        assert "obs-000" not in combined
         assert any("observations" in warning.lower() for warning in context.warnings)
+
+    def test_capped_observations_survive_budget_pressure(self):
+        """Fresh observations stay CRITICAL: budget pressure drops the demoted
+        tool result, never the (bounded) newest-observations block."""
+        manager = ContextManager(
+            config=ContextManagerConfig(
+                max_tokens=1000,
+                reserve_for_output=100,
+                max_observations=400,
+                max_component_tokens=450,
+                max_tool_result_chars=1_000_000,
+            )
+        )
+
+        context = manager.build_context(
+            system_prompt="You are a helpful assistant.",
+            goal="Inspect output.",
+            observations=[f"obs-{i:03d} fresh feedback" for i in range(400)],
+            tool_results=[{"tool": "dump", "output": "x" * 40_000}],
+        )
+
+        assert "observation" in context.included_components
+        assert "tool_result" in context.excluded_components
+        combined = _combined_content(context)
+        assert "obs-399" in combined
+        assert "obs-000" not in combined
 
 
 class TestBackCompat:

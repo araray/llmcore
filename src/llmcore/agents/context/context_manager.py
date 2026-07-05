@@ -604,22 +604,29 @@ class ContextManager:
         else:
             self._recent_history = []
 
-        # Observations (critical; oversized content is capped and demoted)
+        # Observations (critical; oversized content keeps the newest tail).
+        # The block is joined oldest-first, so head-keep truncation would
+        # discard the freshest tool feedback while retaining stale entries.
+        # Keep the tail instead, and stay CRITICAL: the capped block is
+        # bounded and holds exactly the recent material this priority exists
+        # to protect, so a single demotion must not drop the whole set.
         if observations:
             obs_limited = observations[-self.config.max_observations :]
             obs_content = "\n".join(f"- {o[:500]}" for o in obs_limited)
             obs_capped, obs_priority, obs_truncated = self._apply_component_cap(
-                f"## Observations\n{obs_content}",
+                obs_content,
                 Priority.CRITICAL,
+                keep="tail",
+                demote=False,
             )
             if obs_truncated:
                 warnings.append(
                     "Truncated oversized observations to "
-                    f"~{self.config.max_component_tokens} tokens"
+                    f"~{self.config.max_component_tokens} tokens (kept newest)"
                 )
             components.append(
                 ContextComponent(
-                    content=obs_capped,
+                    content=f"## Observations\n{obs_capped}",
                     content_type=ContentType.OBSERVATION,
                     priority=obs_priority,
                 )
@@ -868,14 +875,20 @@ class ContextManager:
         self,
         content: str,
         priority: Priority,
+        *,
+        keep: str = "head",
+        demote: bool = True,
     ) -> tuple[str, Priority, bool]:
         """Apply the per-item token cap to OBSERVATION/TOOL_RESULT content.
 
         Returns ``(content, priority, truncated)``. Content at or under
         ``config.max_component_tokens`` is returned unchanged; oversized
         content is truncated with an explicit ``[truncated N tokens]`` marker
-        and demoted from CRITICAL to HIGH so budget pressure can drop or
-        compress it. A cap <= 0 disables the behavior entirely.
+        and, when ``demote`` is true, demoted from CRITICAL to HIGH so budget
+        pressure can drop or compress it. ``keep`` selects which end survives:
+        ``"head"`` (default) keeps the start, ``"tail"`` keeps the end — used
+        for the observations block, whose newest entries matter most. A cap
+        <= 0 disables the behavior entirely.
         """
         cap = _nonnegative_int(getattr(self.config, "max_component_tokens", 0))
         if cap <= 0:
@@ -885,16 +898,28 @@ class ContextManager:
         if tokens <= cap:
             return content, priority, False
 
+        keep_tail = keep == "tail"
+
+        def _slice(chars: int) -> str:
+            return content[-chars:] if keep_tail else content[:chars]
+
         # Proportional character cut, then shrink until under the token cap.
         keep_chars = max(1, (len(content) * cap) // tokens)
-        truncated = content[:keep_chars]
+        truncated = _slice(keep_chars)
         while keep_chars > 1 and self.token_counter.count(truncated) > cap:
             keep_chars = max(1, (keep_chars * 9) // 10)
-            truncated = content[:keep_chars]
+            truncated = _slice(keep_chars)
+
+        if keep_tail:
+            # Drop the leading partial line so the tail starts on a boundary.
+            newline = truncated.find("\n")
+            if 0 <= newline < len(truncated) - 1:
+                truncated = truncated[newline + 1 :]
 
         removed = max(0, tokens - self.token_counter.count(truncated))
-        capped = f"{truncated}\n[truncated {removed} tokens]"
-        if priority > Priority.HIGH:
+        marker = f"[truncated {removed} tokens]"
+        capped = f"{marker}\n{truncated}" if keep_tail else f"{truncated}\n{marker}"
+        if demote and priority > Priority.HIGH:
             priority = Priority.HIGH
         return capped, priority, True
 
