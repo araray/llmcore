@@ -87,6 +87,68 @@ class TestMessage:
         assert "content" in data
 
 
+class TestMessageToolProtocol:
+    """Tests for the tool-role message protocol fields (R-2)."""
+
+    def test_tool_fields_default_none(self):
+        """Old constructors are unaffected: new fields default to None."""
+        msg = Message(role=Role.USER, content="Hello")
+        assert msg.tool_call_id is None
+        assert msg.tool_calls is None
+
+    def test_tool_role_accepted_as_string(self):
+        """role='tool' (plain string) validates to the TOOL role."""
+        msg = Message(role="tool", content="result", tool_call_id="call_1")
+        assert msg.role == "tool"
+        assert msg.tool_call_id == "call_1"
+
+    def test_assistant_with_tool_calls(self):
+        """Assistant messages can carry structured tool calls."""
+        calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"city": "NYC"}'},
+            }
+        ]
+        msg = Message(role=Role.ASSISTANT, content="", tool_calls=calls)
+        assert msg.tool_calls == calls
+
+    def test_round_trip_without_new_fields(self):
+        """(De)serialization round-trips when the new fields are unset."""
+        msg = Message(role=Role.USER, content="Hello")
+        restored = Message.model_validate(msg.model_dump())
+        assert restored.content == "Hello"
+        assert restored.tool_call_id is None
+        assert restored.tool_calls is None
+
+    def test_round_trip_with_new_fields(self):
+        """(De)serialization round-trips with the new fields populated."""
+        calls = [{"id": "call_9", "type": "function", "function": {"name": "f", "arguments": "{}"}}]
+        msg = Message(role=Role.ASSISTANT, content="calling", tool_calls=calls)
+        restored = Message.model_validate(msg.model_dump())
+        assert restored.tool_calls == calls
+
+        tool_msg = Message(role=Role.TOOL, content='{"ok": true}', tool_call_id="call_9")
+        restored_tool = Message.model_validate(tool_msg.model_dump())
+        assert restored_tool.role == "tool"
+        assert restored_tool.tool_call_id == "call_9"
+
+    def test_json_round_trip_with_new_fields(self):
+        """JSON (de)serialization preserves the tool protocol fields."""
+        calls = [{"id": "c1", "type": "function", "function": {"name": "f", "arguments": "{}"}}]
+        msg = Message(role=Role.ASSISTANT, content="", tool_calls=calls)
+        restored = Message.model_validate_json(msg.model_dump_json())
+        assert restored.tool_calls == calls
+
+    def test_legacy_payload_without_new_fields_validates(self):
+        """Persisted payloads that predate the new fields still validate."""
+        legacy = {"role": "assistant", "content": "hi"}
+        msg = Message.model_validate(legacy)
+        assert msg.tool_calls is None
+        assert msg.tool_call_id is None
+
+
 class TestContextItemType:
     """Tests for ContextItemType enum."""
 
