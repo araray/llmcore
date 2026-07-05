@@ -252,6 +252,8 @@ def record_span_exception(span, exception: Exception) -> None:
         return
 
     try:
+        from opentelemetry import trace
+
         span.record_exception(exception)
         span.set_status(trace.Status(trace.StatusCode.ERROR, str(exception)))
     except Exception as e:
