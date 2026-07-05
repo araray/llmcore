@@ -270,3 +270,80 @@ async def test_semantiscan_backend_consolidation_degrades_on_exception():
     assert report.backend == "semantiscan"
     assert report.warnings == ["semantiscan consolidation failed: database offline"]
     assert report.diagnostics["error_type"] == "RuntimeError"
+
+
+def _block_semantiscan_imports(monkeypatch) -> None:
+    for name in list(sys.modules):
+        if name == "semantiscan" or name.startswith("semantiscan."):
+            monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setitem(sys.modules, "semantiscan", None)
+
+
+def test_create_semantiscan_memory_backend_degrades_without_semantiscan(monkeypatch, caplog):
+    import logging
+
+    from llmcore.memory import create_semantiscan_memory_backend
+
+    _block_semantiscan_imports(monkeypatch)
+
+    with caplog.at_level(logging.WARNING, logger="llmcore.memory.backends"):
+        backend = create_semantiscan_memory_backend(collection="notes")
+
+    assert backend is None
+    warnings = [
+        record
+        for record in caplog.records
+        if "memory backend disabled: semantiscan not installed" in record.getMessage()
+    ]
+    assert len(warnings) == 1
+
+
+def test_create_semantiscan_memory_backend_with_retrieve_fn_needs_no_semantiscan(
+    monkeypatch, caplog
+):
+    import logging
+
+    # Import from the defining module: an earlier test reloads it, so the
+    # package-level re-export may be a previous class generation.
+    from llmcore.memory.backends import (
+        SemantiscanMemoryBackend,
+        create_semantiscan_memory_backend,
+    )
+
+    _block_semantiscan_imports(monkeypatch)
+
+    async def fake_retrieve(query: str, **kwargs):
+        return SimpleNamespace(results=[])
+
+    with caplog.at_level(logging.WARNING, logger="llmcore.memory.backends"):
+        backend = create_semantiscan_memory_backend(retrieve_fn=fake_retrieve, collection="notes")
+
+    assert isinstance(backend, SemantiscanMemoryBackend)
+    assert backend.collection == "notes"
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+def test_create_semantiscan_memory_backend_constructs_when_semantiscan_importable(
+    monkeypatch, caplog
+):
+    import logging
+    from types import ModuleType
+
+    from llmcore.memory.backends import (
+        SemantiscanMemoryBackend,
+        create_semantiscan_memory_backend,
+    )
+
+    api_module = ModuleType("semantiscan.api")
+    api_module.retrieve = lambda query, **kwargs: SimpleNamespace(results=[])
+    package = ModuleType("semantiscan")
+    package.api = api_module
+    monkeypatch.setitem(sys.modules, "semantiscan", package)
+    monkeypatch.setitem(sys.modules, "semantiscan.api", api_module)
+
+    with caplog.at_level(logging.WARNING, logger="llmcore.memory.backends"):
+        backend = create_semantiscan_memory_backend(collection="notes", strategy="hybrid")
+
+    assert isinstance(backend, SemantiscanMemoryBackend)
+    assert backend.strategy == "hybrid"
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
