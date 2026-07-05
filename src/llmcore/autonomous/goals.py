@@ -633,6 +633,7 @@ class GoalManager:
         self._goals: dict[str, Goal] = {}
         self._lock = asyncio.Lock()
         self._initialized = False
+        self._warned_no_decompose_provider = False
 
         # Config-driven defaults (overridden by from_config)
         self._default_auto_decompose: bool = True
@@ -778,6 +779,13 @@ class GoalManager:
                 logger.info("Decomposed goal into %d sub-goals", len(sub_goals))
             except Exception as e:
                 logger.warning("Goal decomposition failed: %s", e)
+        elif should_decompose and not self._warned_no_decompose_provider:
+            self._warned_no_decompose_provider = True
+            logger.warning(
+                "auto_decompose is enabled but no LLM provider is configured; "
+                "goals will not be decomposed into sub-goals. Pass llm_provider= "
+                "to GoalManager (or GoalManager.from_config) to enable decomposition."
+            )
 
         return goal
 
