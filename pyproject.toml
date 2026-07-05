@@ -158,8 +158,6 @@ dev = [
     "tox>=4.0.0",  # For testing in different environments
     "build",  # For building the package
     "twine",  # For uploading to PyPI
-    "pytes",
-    "pytest-asyncio",
 ]
 
 # Full installation with all optional dependencies
