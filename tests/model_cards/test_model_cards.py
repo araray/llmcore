@@ -392,6 +392,43 @@ class TestProviderExtensions:
         assert ext.owned_by == "openai"
         assert ext.supports_predicted_outputs is True
 
+    @pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh"])
+    def test_openai_extension_reasoning_effort_tiers(self, effort):
+        """All canonical reasoning-effort tiers (incl. xhigh) should validate."""
+        ext = OpenAIExtension(supports_reasoning=True, reasoning_effort=effort)
+        assert ext.reasoning_effort == effort
+
+    def test_openai_extension_invalid_reasoning_effort(self):
+        """Unknown effort tiers should be rejected (wire spelling is not canonical)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            OpenAIExtension(reasoning_effort="x-high")
+
+    def test_builtin_gpt_5_2_pro_card_round_trip(self):
+        """The builtin gpt-5.2-pro card should validate and round-trip with xhigh."""
+        import llmcore.model_cards as mc_pkg
+
+        card_path = (
+            Path(mc_pkg.__file__).parent / "default_cards" / "openai" / "gpt-5.2-pro.json"
+        )
+        card = ModelCard.model_validate_json(card_path.read_text())
+        assert card.provider_openai is not None
+        assert card.provider_openai.reasoning_effort == "xhigh"
+
+        restored = ModelCard.model_validate_json(card.model_dump_json())
+        assert restored.provider_openai is not None
+        assert restored.provider_openai.reasoning_effort == "xhigh"
+
+    def test_builtin_poe_gpt_5_2_pro_card_reasoning_effort(self):
+        """The builtin Poe gpt-5.2-pro card should carry xhigh in its extension."""
+        import llmcore.model_cards as mc_pkg
+
+        card_path = Path(mc_pkg.__file__).parent / "default_cards" / "poe" / "gpt-5.2-pro.json"
+        card = ModelCard.model_validate_json(card_path.read_text())
+        assert card.provider_extension is not None
+        assert card.provider_extension["reasoning_effort"] == "xhigh"
+
 
 # =============================================================================
 # REGISTRY TESTS

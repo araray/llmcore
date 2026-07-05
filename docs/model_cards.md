@@ -439,7 +439,7 @@ Each provider can have a dedicated extension object for provider-specific fields
   "provider_openai": {
     "owned_by": "openai",
     "supports_reasoning": false,         // o1/o3 series
-    "reasoning_effort": "medium",        // "low", "medium", "high"
+    "reasoning_effort": "medium",        // "low", "medium", "high", "xhigh"
     "supports_predicted_outputs": true,
     "fine_tuning_available": true,
     "moderation_model": false,

@@ -709,6 +709,11 @@ class TestGetSupportedParameters:
         assert "max_tokens" not in params
         assert "max_completion_tokens" in params
 
+    def test_reasoning_effort_enum_includes_xhigh(self):
+        provider = self._make_provider_stub()
+        params = provider.get_supported_parameters()
+        assert params["reasoning_effort"]["enum"] == ["low", "medium", "high", "xhigh"]
+
     def test_has_new_parameters(self):
         provider = self._make_provider_stub()
         params = provider.get_supported_parameters()
@@ -727,6 +732,61 @@ class TestGetSupportedParameters:
         assert "store" in params
         assert "metadata" in params
         assert "user" in params
+
+
+class TestReasoningEffortWireMapping:
+    """Tests for canonical reasoning_effort -> OpenAI wire value mapping."""
+
+    def _make_provider_stub(self, default_model="gpt-5.2-pro"):
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        provider = object.__new__(OpenAIProvider)
+        provider.log_raw_payloads_enabled = False
+        provider._provider_instance_name = "openai"
+        provider.default_model = default_model
+        provider._client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.model_dump.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_resp)
+        return provider
+
+    def test_wire_map_xhigh(self):
+        from llmcore.providers.openai_provider import _REASONING_EFFORT_WIRE_MAP
+
+        assert _REASONING_EFFORT_WIRE_MAP == {"xhigh": "x-high"}
+
+    @pytest.mark.asyncio
+    async def test_xhigh_maps_to_x_high_on_wire(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub()
+        context = [Message(role="user", content="hi")]
+        await provider.chat_completion(context, reasoning_effort="xhigh")
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == "x-high"
+
+    @pytest.mark.asyncio
+    async def test_lower_tiers_pass_through_unchanged(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub()
+        for tier in ("low", "medium", "high"):
+            await provider.chat_completion(
+                [Message(role="user", content="hi")], reasoning_effort=tier
+            )
+            call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["reasoning_effort"] == tier
+
+    @pytest.mark.asyncio
+    async def test_absent_reasoning_effort_not_injected(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub()
+        await provider.chat_completion([Message(role="user", content="hi")])
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert "reasoning_effort" not in call_kwargs
 
 
 class TestExtractResponseContent:

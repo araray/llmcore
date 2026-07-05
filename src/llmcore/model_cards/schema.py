@@ -318,8 +318,8 @@ class OpenAIExtension(BaseModel):
 
     owned_by: str | None = Field(None, description="Organization that owns the model")
     supports_reasoning: bool = Field(False, description="o1/o3 series model with reasoning")
-    reasoning_effort: Literal["low", "medium", "high"] | None = Field(
-        None, description="Reasoning effort level for o1/o3 models"
+    reasoning_effort: Literal["low", "medium", "high", "xhigh"] | None = Field(
+        None, description="Reasoning effort level for reasoning models (xhigh = maximum tier)"
     )
     supports_predicted_outputs: bool = Field(
         False, description="Supports predicted outputs feature"
