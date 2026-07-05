@@ -466,6 +466,7 @@ class ContextManagerConfig:
         max_tool_result_items: int = 20,
         tool_schema_tokens: int = 0,
         safety_margin_tokens: int = 0,
+        max_component_tokens: int = 8000,
     ):
         self.max_tokens = max_tokens
         self.reserve_for_output = reserve_for_output
@@ -479,6 +480,8 @@ class ContextManagerConfig:
         self.max_tool_results = max_tool_results
         self.max_tool_result_chars = max_tool_result_chars
         self.max_tool_result_items = max_tool_result_items
+        # Per-item token cap for OBSERVATION/TOOL_RESULT components; <=0 disables.
+        self.max_component_tokens = _nonnegative_int(max_component_tokens)
 
 
 class ContextManager:
@@ -601,15 +604,24 @@ class ContextManager:
         else:
             self._recent_history = []
 
-        # Observations (critical)
+        # Observations (critical; oversized content is capped and demoted)
         if observations:
             obs_limited = observations[-self.config.max_observations :]
             obs_content = "\n".join(f"- {o[:500]}" for o in obs_limited)
+            obs_capped, obs_priority, obs_truncated = self._apply_component_cap(
+                f"## Observations\n{obs_content}",
+                Priority.CRITICAL,
+            )
+            if obs_truncated:
+                warnings.append(
+                    "Truncated oversized observations to "
+                    f"~{self.config.max_component_tokens} tokens"
+                )
             components.append(
                 ContextComponent(
-                    content=f"## Observations\n{obs_content}",
+                    content=obs_capped,
                     content_type=ContentType.OBSERVATION,
-                    priority=Priority.CRITICAL,
+                    priority=obs_priority,
                 )
             )
 
@@ -636,16 +648,25 @@ class ContextManager:
                 )
             )
 
-        # Tool results (critical)
+        # Tool results (critical; oversized items are capped and demoted)
         if tool_results:
             max_tool_results = max(0, self.config.max_tool_results)
             recent_tool_results = tool_results[-max_tool_results:] if max_tool_results else []
             for result in recent_tool_results:
+                result_capped, result_priority, result_truncated = self._apply_component_cap(
+                    self._format_tool_result(result),
+                    Priority.CRITICAL,
+                )
+                if result_truncated:
+                    warnings.append(
+                        "Truncated oversized tool result to "
+                        f"~{self.config.max_component_tokens} tokens"
+                    )
                 components.append(
                     ContextComponent(
-                        content=self._format_tool_result(result),
+                        content=result_capped,
                         content_type=ContentType.TOOL_RESULT,
-                        priority=Priority.CRITICAL,
+                        priority=result_priority,
                         compressible=False,
                     )
                 )
@@ -842,6 +863,40 @@ class ContextManager:
                 truncated = truncated or value_truncated
         payload["truncated"] = truncated
         return f"## Tool Result\n{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+
+    def _apply_component_cap(
+        self,
+        content: str,
+        priority: Priority,
+    ) -> tuple[str, Priority, bool]:
+        """Apply the per-item token cap to OBSERVATION/TOOL_RESULT content.
+
+        Returns ``(content, priority, truncated)``. Content at or under
+        ``config.max_component_tokens`` is returned unchanged; oversized
+        content is truncated with an explicit ``[truncated N tokens]`` marker
+        and demoted from CRITICAL to HIGH so budget pressure can drop or
+        compress it. A cap <= 0 disables the behavior entirely.
+        """
+        cap = _nonnegative_int(getattr(self.config, "max_component_tokens", 0))
+        if cap <= 0:
+            return content, priority, False
+
+        tokens = self.token_counter.count(content)
+        if tokens <= cap:
+            return content, priority, False
+
+        # Proportional character cut, then shrink until under the token cap.
+        keep_chars = max(1, (len(content) * cap) // tokens)
+        truncated = content[:keep_chars]
+        while keep_chars > 1 and self.token_counter.count(truncated) > cap:
+            keep_chars = max(1, (keep_chars * 9) // 10)
+            truncated = content[:keep_chars]
+
+        removed = max(0, tokens - self.token_counter.count(truncated))
+        capped = f"{truncated}\n[truncated {removed} tokens]"
+        if priority > Priority.HIGH:
+            priority = Priority.HIGH
+        return capped, priority, True
 
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
