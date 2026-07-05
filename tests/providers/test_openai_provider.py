@@ -53,10 +53,11 @@ class _Role:
 
 
 class _Message:
-    def __init__(self, role, content, tool_call_id=None, metadata=None):
+    def __init__(self, role, content, tool_call_id=None, metadata=None, tool_calls=None):
         self.role = _Role(role)
         self.content = content
         self.tool_call_id = tool_call_id
+        self.tool_calls = tool_calls
         self.metadata = metadata or {}
 
     def __repr__(self):
@@ -595,6 +596,66 @@ class TestBuildMessagePayload:
         result = provider._build_message_payload(msg, "gpt-4o")
         assert result["content"] == "Let me calculate that."
         assert result["tool_calls"] == tool_calls
+
+    def test_assistant_with_first_class_tool_calls_field(self):
+        """Message.tool_calls (R-2) maps to the native assistant tool_calls entry."""
+        provider = self._make_provider_stub()
+        tool_calls = [
+            {
+                "id": "call_789",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"city": "SF"}'},
+            }
+        ]
+        msg = _Message(role="assistant", content="", tool_calls=tool_calls)
+        result = provider._build_message_payload(msg, "gpt-4o")
+        assert result["role"] == "assistant"
+        assert result["tool_calls"] == tool_calls
+        assert result["content"] is None
+
+    def test_first_class_tool_calls_precede_metadata(self):
+        """The first-class field wins over the legacy metadata channel."""
+        provider = self._make_provider_stub()
+        field_calls = [
+            {"id": "call_field", "type": "function", "function": {"name": "a", "arguments": "{}"}}
+        ]
+        meta_calls = [
+            {"id": "call_meta", "type": "function", "function": {"name": "b", "arguments": "{}"}}
+        ]
+        msg = _Message(
+            role="assistant",
+            content="",
+            tool_calls=field_calls,
+            metadata={"tool_calls": meta_calls},
+        )
+        result = provider._build_message_payload(msg, "gpt-4o")
+        assert result["tool_calls"] == field_calls
+
+    def test_real_llmcore_message_tool_protocol(self):
+        """Real llmcore Message objects drive the native tool wire format."""
+        from llmcore.models import Message, Role
+
+        provider = self._make_provider_stub()
+        calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": '{"q": "x"}'},
+            }
+        ]
+        assistant = Message(role=Role.ASSISTANT, content="", tool_calls=calls)
+        tool_msg = Message(role=Role.TOOL, content='{"answer": 42}', tool_call_id="call_1")
+
+        assistant_payload = provider._build_message_payload(assistant, "gpt-4o")
+        assert assistant_payload["tool_calls"] == calls
+        assert assistant_payload["content"] is None
+
+        tool_payload = provider._build_message_payload(tool_msg, "gpt-4o")
+        assert tool_payload == {
+            "role": "tool",
+            "content": '{"answer": 42}',
+            "tool_call_id": "call_1",
+        }
 
     def test_multimodal_inline_images(self):
         provider = self._make_provider_stub()

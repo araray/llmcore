@@ -405,8 +405,11 @@ class OpenAIProvider(BaseProvider):
         if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
             msg_dict["tool_call_id"] = msg.tool_call_id
 
-        if role_str == "assistant" and "tool_calls" in metadata:
-            msg_dict["tool_calls"] = metadata["tool_calls"]
+        # First-class Message.tool_calls (R-2) takes precedence over the
+        # legacy metadata["tool_calls"] channel.
+        tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+        if role_str == "assistant" and tool_calls:
+            msg_dict["tool_calls"] = tool_calls
             if not msg.content:
                 msg_dict["content"] = None
 
