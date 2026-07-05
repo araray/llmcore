@@ -735,7 +735,11 @@ class TestGetSupportedParameters:
 
 
 class TestReasoningEffortWireMapping:
-    """Tests for canonical reasoning_effort -> OpenAI wire value mapping."""
+    """Tests that reasoning_effort tiers pass through to the wire unchanged.
+
+    OpenAI's API spells the top tier "xhigh" (same as llmcore's canonical
+    spelling), so no rewrite must ever happen on the way out.
+    """
 
     def _make_provider_stub(self, default_model="gpt-5.2-pro"):
         from llmcore.providers.openai_provider import OpenAIProvider
@@ -750,28 +754,12 @@ class TestReasoningEffortWireMapping:
         provider._client.chat.completions.create = AsyncMock(return_value=mock_resp)
         return provider
 
-    def test_wire_map_xhigh(self):
-        from llmcore.providers.openai_provider import _REASONING_EFFORT_WIRE_MAP
-
-        assert _REASONING_EFFORT_WIRE_MAP == {"xhigh": "x-high"}
-
     @pytest.mark.asyncio
-    async def test_xhigh_maps_to_x_high_on_wire(self):
+    async def test_all_tiers_pass_through_unchanged(self):
         from llmcore.models import Message
 
         provider = self._make_provider_stub()
-        context = [Message(role="user", content="hi")]
-        await provider.chat_completion(context, reasoning_effort="xhigh")
-
-        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["reasoning_effort"] == "x-high"
-
-    @pytest.mark.asyncio
-    async def test_lower_tiers_pass_through_unchanged(self):
-        from llmcore.models import Message
-
-        provider = self._make_provider_stub()
-        for tier in ("low", "medium", "high"):
+        for tier in ("low", "medium", "high", "xhigh"):
             await provider.chat_completion(
                 [Message(role="user", content="hi")], reasoning_effort=tier
             )

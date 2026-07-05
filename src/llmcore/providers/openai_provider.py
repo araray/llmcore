@@ -138,15 +138,6 @@ _OPENAI_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
 _warned_unknown_models: set[str] = set()
 DEFAULT_MODEL = "gpt-4o"
 
-# Canonical llmcore reasoning-effort tier -> OpenAI wire value.
-# llmcore uses "xhigh" everywhere (see deepseek/zai providers); the OpenAI
-# API spells the top tier "x-high" (e.g. gpt-5.2-pro). Other tiers pass
-# through unchanged.
-_REASONING_EFFORT_WIRE_MAP: dict[str, str] = {
-    "xhigh": "x-high",
-}
-
-
 def _is_reasoning_model(model: str) -> bool:
     """Check if model is an o-series reasoning model."""
     return any(model.startswith(p) for p in ("o1", "o3", "o4"))
@@ -462,10 +453,6 @@ class OpenAIProvider(BaseProvider):
             api_kwargs["tools"] = tools_payload_api
         if tool_choice:
             api_kwargs["tool_choice"] = tool_choice
-
-        effort = api_kwargs.get("reasoning_effort")
-        if effort in _REASONING_EFFORT_WIRE_MAP:
-            api_kwargs["reasoning_effort"] = _REASONING_EFFORT_WIRE_MAP[effort]
 
         if _is_reasoning_model(model_name) and "max_tokens" in api_kwargs:
             if "max_completion_tokens" not in api_kwargs:
