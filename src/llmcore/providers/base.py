@@ -17,10 +17,44 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 # Import models for type hinting
-from ..models import Message, ModelDetails, Tool
+from ..models import Message, ModelDetails, Role, Tool
 
 # Define a type alias for the context payload that can be passed to providers.
 ContextPayload = list[Message]
+
+
+def flatten_tool_messages_for_text_protocol(messages: list[Message]) -> list[Message]:
+    """Downgrade tool-protocol messages for providers without native support.
+
+    Fallback for providers whose wire format has no tool role (R-2): each
+    ``role="tool"`` message is rendered as a plain user-role text message, and
+    assistant messages keep their text content (structured ``tool_calls`` are
+    not re-rendered — providers without native tool calling never see them).
+    Messages that carry no tool-protocol data are passed through unchanged, so
+    this is a no-op for existing callers.
+
+    Args:
+        messages: The prepared context payload.
+
+    Returns:
+        A new list with tool-role messages rewritten as user-role text.
+    """
+    flattened: list[Message] = []
+    for msg in messages:
+        if msg.role == Role.TOOL:
+            call_id = msg.tool_call_id or "unknown"
+            flattened.append(
+                msg.model_copy(
+                    update={
+                        "role": Role.USER,
+                        "content": f"[Tool result for call {call_id}]:\n{msg.content}",
+                        "tool_call_id": None,
+                    }
+                )
+            )
+        else:
+            flattened.append(msg)
+    return flattened
 
 
 class BaseProvider(abc.ABC):
