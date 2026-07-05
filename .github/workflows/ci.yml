@@ -1,0 +1,85 @@
+# Per-PR CI Pipeline for llmcore.
+# Runs unit tests only — no API keys, no Docker/VM sandboxes, no Postgres.
+# Integration/e2e suites (tests/integration/, keyed provider tests) are excluded
+# via path ignores and markers.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint tools
+        run: pip install ruff
+
+      # Blocking gate: syntax errors and obvious logic bugs only. The full
+      # repo ruff config still reports pre-existing findings; tighten this
+      # gate as the backlog is cleaned up.
+      - name: ruff check (blocking gate)
+        run: ruff check src/ tests/ --select E9,F63,F7
+
+      - name: ruff check (advisory, full config)
+        run: ruff check src/ tests/ --exit-zero
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          # dev pulls in test (pytest, pytest-asyncio, respx, ...) and sandbox
+          # deps; bridge provides grpcio/protobuf/starlette needed by
+          # tests/bridge/. numpy is used by embedding-shaped unit tests.
+          pip install -e ".[dev,bridge]"
+          pip install numpy
+
+      - name: Version drift guard
+        run: |
+          python - <<'EOF'
+          import importlib.metadata
+          import tomllib
+
+          import llmcore
+
+          meta = importlib.metadata.version("llmcore")
+          with open("pyproject.toml", "rb") as fh:
+              pyproject = tomllib.load(fh)["project"]["version"]
+
+          print(f"llmcore.__version__      = {llmcore.__version__}")
+          print(f"importlib.metadata       = {meta}")
+          print(f"pyproject [project].version = {pyproject}")
+          assert llmcore.__version__ == meta == pyproject, "version drift detected"
+          EOF
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests \
+            --ignore=tests/integration \
+            --ignore=tests/adhoc_checks \
+            -m "not slow and not integration and not docker and not vm and not sandbox and not requires_postgres and not requires_pgvector" \
+            -q
