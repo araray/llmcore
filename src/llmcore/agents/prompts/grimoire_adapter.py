@@ -8,12 +8,15 @@ or depend on grimoire unless the adapter is explicitly instantiated.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .models import PromptMetrics
 from .registry import TemplateNotFoundError
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPLATE_MAP: dict[str, str] = {
     "planning_prompt": "planning_prompt",
@@ -212,9 +215,48 @@ class GrimoirePromptRegistryAdapter:
         return f"grimoire:{template_id}:{spell_id}:{version}:{content_hash}"
 
 
+def create_grimoire_prompt_registry(
+    grimoire: Any | None = None,
+    *,
+    repo_path: str | Path | None = None,
+    template_map: dict[str, str] | None = None,
+    include_role_headers: bool = False,
+    strict: bool = True,
+) -> GrimoirePromptRegistryAdapter | None:
+    """Construct a ``GrimoirePromptRegistryAdapter``, degrading to ``None`` without grimoire.
+
+    The adapter constructor stays strict and raises ``ImportError`` when the
+    optional ``grimoire`` package is absent. Config-driven wiring should call
+    this factory instead — on ImportError-rooted failure it emits a single
+    structured warning and returns ``None`` so callers can skip the feature.
+
+    Args:
+        grimoire: Existing Grimoire facade; when omitted, ``repo_path`` is used.
+        repo_path: Grimoire repository root for lazy construction.
+        template_map: Mapping from llmcore template IDs to Grimoire spell IDs.
+        include_role_headers: See ``GrimoirePromptRegistryAdapter``.
+        strict: See ``GrimoirePromptRegistryAdapter``.
+
+    Returns:
+        An adapter instance, or ``None`` when grimoire is required but missing.
+    """
+    try:
+        return GrimoirePromptRegistryAdapter(
+            grimoire,
+            repo_path=repo_path,
+            template_map=template_map,
+            include_role_headers=include_role_headers,
+            strict=strict,
+        )
+    except ImportError as exc:
+        logger.warning("grimoire prompt registry disabled: grimoire not installed (%s)", exc)
+        return None
+
+
 __all__ = [
     "DEFAULT_TEMPLATE_MAP",
     "GrimoirePromptRegistryAdapter",
     "GrimoirePromptTemplate",
     "GrimoirePromptVersion",
+    "create_grimoire_prompt_registry",
 ]

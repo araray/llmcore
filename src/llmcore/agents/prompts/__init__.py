@@ -15,6 +15,7 @@ from .grimoire_adapter import (
     GrimoirePromptRegistryAdapter,
     GrimoirePromptTemplate,
     GrimoirePromptVersion,
+    create_grimoire_prompt_registry,
 )
 from .models import (
     PromptCategory,
@@ -55,5 +56,6 @@ __all__ = [
     "TemplateLoader",
     "TemplateNotFoundError",
     "VersionStatus",
+    "create_grimoire_prompt_registry",
     "load_default_templates",
 ]
