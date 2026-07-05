@@ -46,7 +46,10 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .registry import SandboxRegistryConfig
 
 logger = logging.getLogger(__name__)
 
