@@ -38,7 +38,11 @@ from ..models import (
     Role,
 )
 from . import sqlite_episode_helpers, sqlite_preset_helpers
-from .base_session import BaseSessionStorage
+from .base_session import (
+    BaseSessionStorage,
+    embed_tool_fields_in_metadata,
+    extract_tool_fields_from_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +208,9 @@ class SqliteSessionStorage(BaseSessionStorage):
                         msg.content,
                         msg.timestamp.isoformat(),
                         msg.tokens,
-                        json.dumps(msg.metadata or {}),
+                        # No tool_call_id/tool_calls columns — fold into
+                        # metadata so the fields round-trip (R-2).
+                        json.dumps(embed_tool_fields_in_metadata(msg)),
                     )
                     for msg in session.messages
                 ]
@@ -271,6 +277,7 @@ class SqliteSessionStorage(BaseSessionStorage):
                 async for row in cursor:
                     msg_dict = dict(row)
                     msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or "{}")
+                    extract_tool_fields_from_metadata(msg_dict)
                     msg_dict["role"] = Role(msg_dict["role"])
                     msg_dict["timestamp"] = datetime.fromisoformat(
                         msg_dict["timestamp"].replace("Z", "+00:00")

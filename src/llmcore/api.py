@@ -139,6 +139,7 @@ class LLMCoreProtocol(Protocol):
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -149,6 +150,10 @@ class LLMCoreProtocol(Protocol):
         - Pass via 'message' parameter
         - Set enable_rag=False to prevent double-RAG
         - Optionally stage additional context via explicitly_staged_items
+
+        For native tool-calling loops (R-2):
+        - Submit an assistant-tool_calls + role="tool" results sequence via
+          'extra_messages'; they are appended before this turn's user message.
         """
         ...
 
@@ -970,6 +975,7 @@ class LLMCore:
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -1084,6 +1090,33 @@ class LLMCore:
 
             tool_choice: Optional tool choice strategy ('auto', 'required', or specific tool name).
 
+            extra_messages: Optional list of fully-formed Message objects appended to the
+                session history *before* this turn's user message. This is the additive
+                hook for native tool-calling loops (R-2): after executing tool calls, a
+                caller (e.g. wairu) submits the assistant message carrying ``tool_calls``
+                plus the matching ``role="tool"`` result messages here, and lets
+                ``message`` carry the follow-up user text. Example::
+
+                    await llm.chat(
+                        message="Answer using the tool results above.",
+                        session_id=sid,
+                        extra_messages=[
+                            Message(role=Role.ASSISTANT, content="",
+                                    tool_calls=[{"id": "call_1", "type": "function",
+                                                 "function": {"name": "f",
+                                                              "arguments": "{}"}}]),
+                            Message(role=Role.TOOL, content='{"ok": true}',
+                                    tool_call_id="call_1"),
+                        ],
+                    )
+
+                The extra messages are stored in the session like any others (and
+                persisted when ``save_session=True``). Providers with a native tool
+                protocol (OpenAI-compatible, Anthropic, Gemini, Mistral, Ollama) map
+                them to their wire format; others render tool results as user-role
+                text. Note the prepared payload always ends with this turn's user
+                message, so ``message`` should be non-empty.
+
             **provider_kwargs: Additional provider-specific parameters (e.g., temperature=0.7,
                 max_tokens=1000). These vary by provider - see provider documentation.
 
@@ -1161,6 +1194,17 @@ class LLMCore:
             user_message_metadata["staged_items_count"] = len(explicitly_staged_items)
         if prompt_template_values:
             user_message_metadata["prompt_template_values"] = list(prompt_template_values.keys())
+
+        # R-2 tool-role protocol: append caller-provided turn messages (e.g. an
+        # assistant message carrying tool_calls plus the matching role="tool"
+        # results) to the session before this turn's user message. They are
+        # stored — and persisted via save_session — like any other message.
+        if extra_messages:
+            for extra in extra_messages:
+                if extra.session_id != chat_session.id:
+                    extra = extra.model_copy(update={"session_id": chat_session.id})
+                chat_session.messages.append(extra)
+            chat_session.updated_at = datetime.now(UTC)
 
         # Add user message to session with metadata
         chat_session.add_message(message, Role.USER, metadata=user_message_metadata)
@@ -1295,6 +1339,7 @@ class LLMCore:
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
         **provider_kwargs,
     ) -> tuple[str, ChatUsage]:
         """Send a message and return both the response text and its usage.
@@ -1350,6 +1395,9 @@ class LLMCore:
             prompt_template_values: Custom RAG prompt template values.
             tools: Optional tools available to the LLM for function calling.
             tool_choice: Optional tool choice strategy.
+            extra_messages: Optional fully-formed Message objects appended
+                before this turn's user message (tool-calling feedback turns;
+                see :meth:`chat`).
             **provider_kwargs: Additional provider-specific parameters
                 (e.g. ``temperature``). ``stream`` is not accepted here.
 
@@ -1403,6 +1451,7 @@ class LLMCore:
                 prompt_template_values=prompt_template_values,
                 tools=tools,
                 tool_choice=tool_choice,
+                extra_messages=extra_messages,
                 **provider_kwargs,
             )
             # stream=False guarantees a str, but coerce defensively.

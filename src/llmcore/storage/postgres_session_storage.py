@@ -35,7 +35,11 @@ from ..models import (
     Message,
     Role,
 )
-from .base_session import BaseSessionStorage
+from .base_session import (
+    BaseSessionStorage,
+    embed_tool_fields_in_metadata,
+    extract_tool_fields_from_metadata,
+)
 
 if TYPE_CHECKING:
     try:
@@ -371,7 +375,11 @@ class PostgresSessionStorage(BaseSessionStorage):
                     "timestamp": msg.timestamp,
                     "tool_call_id": msg.tool_call_id,
                     "tokens": msg.tokens,
-                    "metadata": json.dumps(msg.metadata or {}),
+                    # tool_call_id has a column; tool_calls folds into
+                    # metadata so it round-trips (R-2).
+                    "metadata": json.dumps(
+                        embed_tool_fields_in_metadata(msg, embed_tool_call_id=False)
+                    ),
                 }
                 for msg in session.messages
             ]
@@ -447,7 +455,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                             msg.timestamp,
                             msg.tool_call_id,
                             msg.tokens,
-                            Jsonb(msg.metadata or {}),
+                            Jsonb(embed_tool_fields_in_metadata(msg, embed_tool_call_id=False)),
                         )
                         for msg in session.messages
                     ]
@@ -541,6 +549,7 @@ class PostgresSessionStorage(BaseSessionStorage):
             try:
                 msg_dict = dict(msg_row._mapping)
                 msg_dict["metadata"] = json.loads(msg_dict.get("metadata") or "{}")
+                extract_tool_fields_from_metadata(msg_dict)
                 msg_dict["role"] = Role(msg_dict["role"])
                 msg_dict["timestamp"] = (
                     msg_dict["timestamp"].replace(tzinfo=UTC)
@@ -625,6 +634,7 @@ class PostgresSessionStorage(BaseSessionStorage):
                     msg_dict = dict(msg_row_data)
                     try:
                         msg_dict["metadata"] = msg_dict.get("metadata") or {}
+                        extract_tool_fields_from_metadata(msg_dict)
                         msg_dict["role"] = Role(msg_dict["role"])
                         msg_dict["timestamp"] = (
                             msg_dict["timestamp"].replace(tzinfo=UTC)
