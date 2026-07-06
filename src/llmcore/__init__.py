@@ -333,6 +333,16 @@ from .search import (
 from .sessions.manager import SessionManager
 
 # =============================================================================
+# SHARED EVENT SPINE (cross-repo, stdlib-only)
+# =============================================================================
+from .shared_events import (
+    UnifiedEvent,
+    correlation_context,
+    get_correlation_id,
+    set_correlation_id,
+)
+
+# =============================================================================
 # STORAGE
 # =============================================================================
 from .storage import StorageManager
@@ -362,7 +372,7 @@ except PackageNotFoundError:
 # =============================================================================
 # PUBLIC API (__all__)
 # =============================================================================
-__all__ = [
+__all__ = [  # noqa: RUF022 - grouped by domain.
     # -- Core API --
     "LLMCore",
     # -- Providers --
@@ -579,6 +589,11 @@ __all__ = [
     "MetricsRegistry",
     "ObservabilityLogger",
     "CostAnalyzer",
+    # -- Shared event spine --
+    "UnifiedEvent",
+    "correlation_context",
+    "get_correlation_id",
+    "set_correlation_id",
     # -- Version --
     "__version__",
 ]
