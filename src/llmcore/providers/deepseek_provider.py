@@ -7,7 +7,8 @@ Uses the OpenAI-compatible chat completions endpoint with DeepSeek-specific
 extensions:
 
 - **Thinking mode**: ``thinking.type = "enabled" | "disabled"`` toggle plus
-  ``reasoning_effort = "high" | "max"`` control.
+  ``reasoning_effort = "high" | "max"`` control (wire values; canonical
+  ``low``..``max`` inputs are folded via ``_EFFORT_MAP`` below).
 - **Reasoning content**: ``reasoning_content`` field on assistant messages
   (both streaming delta and non-streaming response).
 - **Cache-aware token accounting**: ``prompt_cache_hit_tokens`` and
@@ -134,8 +135,11 @@ class DeepSeekProvider(BaseProvider):
     - ``timeout`` — HTTP request timeout in seconds (default: 300).
     - ``thinking`` — Default thinking mode: ``"enabled"`` or ``"disabled"``
       (default: ``"enabled"``).
-    - ``reasoning_effort`` — Default reasoning effort: ``"high"`` or ``"max"``
-      (default: ``"high"``).
+    - ``reasoning_effort`` — Default reasoning effort; accepts the canonical
+      values ``low | medium | high | xhigh | max`` and folds them to the
+      DeepSeek wire vocabulary via ``_EFFORT_MAP`` (``low``/``medium`` →
+      ``"high"``, ``xhigh`` → ``"max"``; unrecognized values fall back to
+      ``"high"``; default: ``"high"``).
     """
 
     default_model: str

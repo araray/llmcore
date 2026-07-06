@@ -19,6 +19,7 @@ The Model Card Library provides comprehensive metadata management for LLM models
    - [Enumerations](#enumerations)
    - [Nested Structures](#nested-structures)
    - [Provider Extensions](#provider-extensions)
+   - [Reasoning-Effort Vocabulary](#reasoning-effort-vocabulary)
 6. [Creating Model Cards](#creating-model-cards)
    - [Method 1: JSON File](#method-1-json-file-recommended)
    - [Method 2: Python API](#method-2-python-api)
@@ -439,7 +440,8 @@ Each provider can have a dedicated extension object for provider-specific fields
   "provider_openai": {
     "owned_by": "openai",
     "supports_reasoning": false,         // o1/o3 series
-    "reasoning_effort": "medium",        // "low", "medium", "high", "xhigh"
+    "reasoning_effort": "medium",        // "low", "medium", "high", "xhigh" — see
+                                         // "Reasoning-Effort Vocabulary" below
     "supports_predicted_outputs": true,
     "fine_tuning_available": true,
     "moderation_model": false,
@@ -577,6 +579,65 @@ Each provider can have a dedicated extension object for provider-specific fields
   }
 }
 ```
+
+### Reasoning-Effort Vocabulary
+
+llmcore uses **one canonical vocabulary** for reasoning effort across all
+providers, ordered weakest to strongest:
+
+```
+none | minimal | low | medium | high | xhigh | max
+```
+
+Model cards, config files, and per-call `reasoning_effort` kwargs always use
+canonical spellings. Each provider is responsible for translating canonical
+values to whatever its wire protocol expects — **inside the provider module,
+never at the card level**.
+
+Card-level today: `OpenAIExtension.reasoning_effort`
+(`model_cards/schema.py`) accepts the `low | medium | high | xhigh` subset —
+the tiers OpenAI-family reasoning models expose.
+
+#### Per-provider wire mapping (as implemented)
+
+| Canonical | OpenAI (`openai_provider.py`) | DeepSeek (`deepseek_provider.py`) | Z.ai (`zai_provider.py`) |
+|-----------|-------------------------------|-----------------------------------|--------------------------|
+| `none`    | — (not advertised)            | `high` (fold-to-default)          | `none`                   |
+| `minimal` | — (not advertised)            | `high` (fold-to-default)          | `minimal`                |
+| `low`     | `low`                         | `high`                            | `low`                    |
+| `medium`  | `medium`                      | `high`                            | `medium`                 |
+| `high`    | `high`                        | `high`                            | `high`                   |
+| `xhigh`   | `xhigh` (unchanged on wire)   | `max`                             | `xhigh`                  |
+| `max`     | — (not advertised)            | `max`                             | `max`                    |
+
+Provider notes (verified against the code):
+
+- **OpenAI** — advertises `low | medium | high | xhigh` in
+  `get_supported_parameters()` and passes the value through **unchanged**;
+  there is no translation layer (the provider validates parameter *names*,
+  not values, so anything else would ride the wire verbatim and be accepted
+  or rejected by the API). `xhigh` is sent as-is — the `openai` SDK's
+  `ReasoningEffort` literal includes it.
+- **DeepSeek** — wire vocabulary is `high | max` only. `_EFFORT_MAP` folds
+  canonical values down (`low`/`medium` → `high`, `xhigh` → `max`);
+  unrecognized values (including `none`/`minimal`) fall back to `high`.
+  Sent via `extra_body` and only when thinking mode is enabled.
+- **Z.ai (GLM)** — accepts the full canonical set (`_VALID_EFFORTS`),
+  lowercases input, and passes it through **verbatim** (GLM-5.2+). Invalid
+  values fall back to the configured default (`high`). Only sent when
+  thinking mode is enabled.
+
+#### Adding a new provider
+
+1. Accept **canonical spellings** at the provider boundary (config keys and
+   per-call kwargs).
+2. Map canonical → wire inside the provider module with an explicit table
+   (copy the `_EFFORT_MAP` precedent in `deepseek_provider.py`), folding
+   tiers the wire does not support to the nearest supported value.
+3. Advertise the accepted values in `get_supported_parameters()`.
+4. **Never invent new card-level spellings.** If a provider exposes a tier
+   the canonical set cannot express, extend the canonical set here first —
+   it is a deliberate superset — then map it in the provider.
 
 ---
 
