@@ -57,6 +57,15 @@ _register_dummy_package("llmcore")
 _register_dummy_package("llmcore.agents")
 _register_dummy_package("llmcore.agents.observability")
 
+# logger.py forwards into the stdlib-only shared_events spine; make it
+# importable without the llmcore package chain (skip if the real module is
+# already loaded so we never create a second sink registry).
+if "llmcore.shared_events" not in sys.modules:
+    _load_module(
+        "llmcore.shared_events",
+        str(_src_path / "llmcore" / "shared_events.py"),
+    )
+
 # Load observability modules in order (events first, since others depend on it)
 _events = _load_module(
     "llmcore.agents.observability.events",
