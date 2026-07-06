@@ -165,6 +165,30 @@ async def test_empty_results_raises_moderation_error():
         await gateway.check("hello")
 
 
+async def test_unrecognized_result_shape_raises_moderation_error():
+    """A non-empty result item without a ``flagged`` field must not ALLOW.
+
+    A compatible proxy (base_url) returning a 200 whose ``results[0]``
+    lacks the expected fields must surface as a ModerationError, never a
+    silent ``flagged=False`` allow. Covers both the object and dict paths.
+    """
+    gateway, _ = _gateway(response=SimpleNamespace(results=[SimpleNamespace()], model="m"))
+    with pytest.raises(ModerationError, match="unrecognized result shape"):
+        await gateway.check("hello")
+
+    gateway, _ = _gateway(response={"results": [{}], "model": "m"})
+    with pytest.raises(ModerationError, match="unrecognized result shape"):
+        await gateway.check("hello")
+
+
+async def test_unrecognized_result_shape_blocks_through_policy_fail_safe():
+    """Acceptance: unrecognized 200 body + enabled policy => block (fail-safe)."""
+    gateway, _ = _gateway(response={"results": [{}], "model": "m"})
+    decision = await moderate(gateway, ModerationPolicy(), "hello", context="input")
+    assert decision.allowed is False
+    assert decision.fail_safe is True
+
+
 async def test_gateway_error_blocks_through_policy_fail_safe():
     """Acceptance: gateway-down + enabled => block."""
     request = httpx.Request("POST", "https://api.openai.com/v1/moderations")

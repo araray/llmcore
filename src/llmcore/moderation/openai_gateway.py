@@ -177,7 +177,11 @@ class OpenAIModerationGateway:
         """Map a ``ModerationCreateResponse`` (or dict equivalent) to a result.
 
         Raises:
-            ModerationError: When the response carries no results entry.
+            ModerationError: When the response carries no results entry, or
+                the first result does not match the expected shape (has no
+                ``flagged`` field). An unrecognized shape must never be read
+                as ``flagged=False`` — that would silently ALLOW every piece
+                of content and defeat the policy fail-safe.
         """
         if isinstance(response, Mapping):
             results = response.get("results")
@@ -190,13 +194,27 @@ class OpenAIModerationGateway:
         first = results[0]
 
         if isinstance(first, Mapping):
+            has_flagged = "flagged" in first
             flagged = bool(first.get("flagged", False))
             raw_scores = first.get("category_scores")
             raw_flags = first.get("categories")
         else:
+            has_flagged = hasattr(first, "flagged")
             flagged = bool(getattr(first, "flagged", False))
             raw_scores = getattr(first, "category_scores", None)
             raw_flags = getattr(first, "categories", None)
+
+        # A response whose result item lacks the ``flagged`` field is not a
+        # moderation verdict we recognize (e.g. a proxy returning
+        # ``{"results": [{}]}`` or a renamed schema). Absent an explicit
+        # verdict we must NOT default to ``flagged=False``; surface it as a
+        # ModerationError so the policy fail-safe converts it to BLOCK.
+        if not has_flagged:
+            raise ModerationError(
+                _GATEWAY_NAME,
+                "Malformed moderation response: unrecognized result shape "
+                "(missing 'flagged' field).",
+            )
 
         categories: dict[str, float] = {}
         for name, score in _as_mapping(raw_scores).items():
