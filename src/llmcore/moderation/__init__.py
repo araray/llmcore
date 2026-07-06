@@ -22,16 +22,22 @@ Usage:
 
 from __future__ import annotations
 
+from .factory import build_moderation_gateway, build_moderation_policy
 from .gateway import ModerationGateway, NoopGateway, moderate
 from .models import ModerationAction, ModerationDecision, ModerationResult
+from .openai_gateway import DEFAULT_MODERATION_MODEL, OpenAIModerationGateway
 from .policy import ModerationPolicy
 
 __all__ = [
+    "DEFAULT_MODERATION_MODEL",
     "ModerationAction",
     "ModerationDecision",
     "ModerationGateway",
     "ModerationPolicy",
     "ModerationResult",
     "NoopGateway",
+    "OpenAIModerationGateway",
+    "build_moderation_gateway",
+    "build_moderation_policy",
     "moderate",
 ]

@@ -203,6 +203,66 @@ chromadb = "WARNING"
 posthog = "ERROR"
 
 # ==============================================================================
+# [moderation] - Content Moderation Gateway (SF-1 / DDS-06)
+# ==============================================================================
+# Two-stage moderation: a gateway (e.g. OpenAI's /moderations endpoint)
+# scores text per category, then a policy applies thresholds and decides
+# allow / warn / block. Consumers (e.g. wairu's ToolDispatcher) opt in.
+#
+# SAFETY: with fail_safe = true (the default), a gateway error while
+# moderation is ENABLED results in a BLOCK decision — never a silent allow.
+[moderation]
+
+# Master switch. Moderation is OFF by default; enabling it requires a
+# working gateway (API key for the configured provider).
+# Default Value: false
+# Environment Variable: LLMCORE_MODERATION__ENABLED
+enabled = false
+
+# Gateway backend: "openai" (the /moderations endpoint) or "noop"
+# (never flags anything — dry-run wiring only).
+# Default Value: "openai"
+# Environment Variable: LLMCORE_MODERATION__PROVIDER
+provider = "openai"
+
+# Moderation model (OpenAI provider). The omni models accept text today;
+# see https://platform.openai.com/docs/guides/moderation for options.
+# Default Value: "omni-moderation-latest"
+model = "omni-moderation-latest"
+
+# Fail-safe: when true, a gateway exception (timeout, auth, transport)
+# while moderation is enabled yields BLOCK. Setting this to false
+# (fail-open) is an explicit, logged opt-out — not recommended.
+# Default Value: true
+fail_safe = true
+
+# What to do when content triggers the policy: "block" or "warn"
+# ("warn" still allows the content through but surfaces the decision).
+# Default Value: "block"
+default_action = "block"
+
+# Request timeout (seconds) and SDK-level retries for the gateway call.
+timeout = 30.0
+max_retries = 2
+
+# API key resolution (OpenAI provider): [moderation].api_key, then
+# api_key_env_var, then the OPENAI_API_KEY environment variable.
+# api_key_env_var = "OPENAI_API_KEY"
+
+# Optional score threshold applied to categories NOT listed in
+# [moderation.thresholds]. When unset, unlisted categories defer to the
+# provider's own per-category flag.
+# default_threshold = 0.9
+
+# Optional per-category thresholds (inclusive, 0.0-1.0). A category listed
+# here triggers purely on its score, overriding the provider's flag for
+# that category. Category names are snake_case (e.g. self_harm_intent,
+# harassment_threatening, violence_graphic).
+# [moderation.thresholds]
+# violence = 0.8
+# self_harm = 0.5
+
+# ==============================================================================
 # [providers] - LLM Provider Configurations
 # ==============================================================================
 # This section is where all individual LLM provider instances are defined.
