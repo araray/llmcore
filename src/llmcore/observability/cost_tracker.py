@@ -69,6 +69,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from ..shared_events import get_correlation_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -251,6 +253,8 @@ class UsageRecord(BaseModel):
         latency_ms: Latency in milliseconds (optional).
         session_id: Session identifier (optional).
         user_id: User identifier (optional).
+        correlation_id: Correlation id linking this record to a logical
+            operation across the ecosystem (see llmcore.shared_events).
         metadata: Additional metadata (optional).
     """
 
@@ -266,9 +270,10 @@ class UsageRecord(BaseModel):
     latency_ms: int | None = Field(default=None, ge=0)
     session_id: str | None = None
     user_id: str | None = None
+    correlation_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any, /) -> None:
         """Compute total tokens if not set."""
         if self.total_tokens == 0:
             self.total_tokens = self.input_tokens + self.output_tokens
@@ -415,9 +420,17 @@ class CostTracker:
                     latency_ms INTEGER,
                     session_id TEXT,
                     user_id TEXT,
-                    metadata TEXT
+                    metadata TEXT,
+                    correlation_id TEXT
                 )
             """)
+
+            # Migrate pre-correlation databases (additive column).
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(usage_records)").fetchall()
+            }
+            if "correlation_id" not in columns:
+                conn.execute("ALTER TABLE usage_records ADD COLUMN correlation_id TEXT")
 
             # Create indices
             conn.execute("""
@@ -431,6 +444,10 @@ class CostTracker:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_usage_session
                 ON usage_records(session_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_correlation
+                ON usage_records(correlation_id)
             """)
 
             conn.commit()
@@ -465,6 +482,7 @@ class CostTracker:
         user_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         model_card_pricing: dict[str, float] | None = None,
+        correlation_id: str | None = None,
     ) -> UsageRecord:
         """Record a single API usage event.
 
@@ -479,10 +497,17 @@ class CostTracker:
             user_id: User identifier.
             metadata: Additional metadata.
             model_card_pricing: Optional pricing from model card.
+            correlation_id: Correlation id for cross-service attribution.
+                Defaults to the ambient id from
+                :func:`llmcore.shared_events.get_correlation_id` when unset.
 
         Returns:
             UsageRecord with computed cost.
         """
+        # Capture the ambient correlation id (contextvar) when not explicit.
+        if correlation_id is None:
+            correlation_id = get_correlation_id()
+
         if not self._enabled:
             # Return a record but don't persist
             return UsageRecord(
@@ -491,6 +516,7 @@ class CostTracker:
                 operation=operation,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                correlation_id=correlation_id,
             )
 
         # Calculate cost
@@ -512,6 +538,7 @@ class CostTracker:
             latency_ms=latency_ms,
             session_id=session_id,
             user_id=user_id,
+            correlation_id=correlation_id,
             metadata=metadata or {},
         )
 
@@ -524,8 +551,9 @@ class CostTracker:
                     """
                     INSERT INTO usage_records
                     (id, timestamp, provider, model, operation, input_tokens, output_tokens,
-                     total_tokens, estimated_cost_usd, latency_ms, session_id, user_id, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     total_tokens, estimated_cost_usd, latency_ms, session_id, user_id, metadata,
+                     correlation_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record.id,
@@ -541,6 +569,7 @@ class CostTracker:
                         record.session_id,
                         record.user_id,
                         json.dumps(record.metadata) if record.metadata else None,
+                        record.correlation_id,
                     ),
                 )
                 conn.commit()
@@ -713,6 +742,62 @@ class CostTracker:
                 result[key] = {
                     "provider": row["provider"],
                     "model": row["model"],
+                    "call_count": row["call_count"],
+                    "input_tokens": row["input_tokens"],
+                    "output_tokens": row["output_tokens"],
+                    "total_tokens": row["total_tokens"],
+                    "total_cost_usd": round(row["total_cost"], 6),
+                }
+
+            return result
+
+    def summary_by_correlation(
+        self,
+        days: int = 30,
+        correlation_id: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Get usage breakdown by correlation id (see llmcore.shared_events).
+
+        Records without a correlation id are excluded; they cannot be
+        attributed to a logical operation.
+
+        Args:
+            days: Number of days to include.
+            correlation_id: Restrict to a single correlation id (optional).
+
+        Returns:
+            Dictionary mapping correlation id to usage stats
+            (call_count, input/output/total tokens, total_cost_usd).
+        """
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+
+        query = """
+            SELECT
+                correlation_id,
+                COUNT(*) as call_count,
+                SUM(input_tokens) as input_tokens,
+                SUM(output_tokens) as output_tokens,
+                SUM(total_tokens) as total_tokens,
+                SUM(estimated_cost_usd) as total_cost
+            FROM usage_records
+            WHERE timestamp >= ? AND timestamp <= ?
+              AND correlation_id IS NOT NULL
+        """
+        params: list[Any] = [int(start.timestamp()), int(end.timestamp())]
+
+        if correlation_id:
+            query += " AND correlation_id = ?"
+            params.append(correlation_id)
+
+        query += " GROUP BY correlation_id ORDER BY total_cost DESC"
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(query, params)
+
+            result = {}
+            for row in cursor:
+                result[row["correlation_id"]] = {
                     "call_count": row["call_count"],
                     "input_tokens": row["input_tokens"],
                     "output_tokens": row["output_tokens"],
@@ -916,6 +1001,7 @@ class CostTracker:
                         "latency_ms": row["latency_ms"],
                         "session_id": row["session_id"],
                         "user_id": row["user_id"],
+                        "correlation_id": row["correlation_id"],
                     }
                 )
 
