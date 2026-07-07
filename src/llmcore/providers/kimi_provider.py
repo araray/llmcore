@@ -662,9 +662,12 @@ class KimiProvider(BaseProvider):
             msg_dict["tool_call_id"] = msg.tool_call_id
 
         # Assistant message may carry tool_calls, reasoning_content, partial.
+        # First-class Message.tool_calls (R-2) takes precedence over the legacy
+        # metadata channel so native tool-role results pair correctly.
         if role_str == "assistant":
-            if "tool_calls" in metadata:
-                msg_dict["tool_calls"] = metadata["tool_calls"]
+            tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+            if tool_calls:
+                msg_dict["tool_calls"] = tool_calls
                 if not msg.content:
                     msg_dict["content"] = None
             if "reasoning_content" in metadata:
