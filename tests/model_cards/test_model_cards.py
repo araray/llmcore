@@ -821,6 +821,80 @@ class TestRegistryConfig:
 
 
 # =============================================================================
+# NATIVE SEARCH CAPABILITY HELPER
+# =============================================================================
+
+
+class TestModelSupportsNativeSearch:
+    """Tests for model_supports_native_search() routing helper (plan §4/F9)."""
+
+    def _base_card(self, **kwargs):
+        from llmcore.model_cards import ModelCapabilities
+
+        defaults = {
+            "model_id": "m",
+            "provider": "openai",
+            "model_type": "chat",
+            "context": ModelContext(max_input_tokens=8192),
+            "capabilities": ModelCapabilities(),
+        }
+        defaults.update(kwargs)
+        return ModelCard(**defaults)
+
+    def test_none_card_is_false(self):
+        from llmcore.model_cards import model_supports_native_search
+
+        assert model_supports_native_search(None) is False
+
+    def test_web_search_capability_true(self):
+        from llmcore.model_cards import ModelCapabilities, model_supports_native_search
+
+        card = self._base_card(capabilities=ModelCapabilities(web_search=True))
+        assert model_supports_native_search(card) is True
+
+    def test_default_capabilities_false(self):
+        from llmcore.model_cards import model_supports_native_search
+
+        assert model_supports_native_search(self._base_card()) is False
+
+    def test_xai_server_tools_search_true(self):
+        from llmcore.model_cards import XAIExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="xai",
+            provider_xai=XAIExtension(server_tools=["web_search", "code_execution"]),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_xai_live_search_true(self):
+        from llmcore.model_cards import XAIExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="xai",
+            provider_xai=XAIExtension(live_search={"enabled": True}),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_google_grounding_google_search_true(self):
+        from llmcore.model_cards import GoogleExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="google",
+            provider_google=GoogleExtension(grounding={"google_search": True}),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_google_grounding_without_search_false(self):
+        from llmcore.model_cards import GoogleExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="google",
+            provider_google=GoogleExtension(grounding={"maps": True}),
+        )
+        assert model_supports_native_search(card) is False
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 

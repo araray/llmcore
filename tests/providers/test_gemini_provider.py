@@ -525,3 +525,66 @@ class TestProviderName:
     def test_instance_name_override(self, provider):
         provider._provider_instance_name = "google-vertex"
         assert provider.get_name() == "google-vertex"
+
+
+class TestNativeSearch:
+    """Tests for Google Search grounding via native_search (plan §4/F9).
+
+    ``native_search=True`` must append a Google Search grounding tool to the
+    request's tool list; ``False`` (default) must leave the request untouched.
+    """
+
+    def _mock_response(self):
+        return SimpleNamespace(
+            text="ok",
+            candidates=[],
+            function_calls=None,
+            usage_metadata=None,
+        )
+
+    def test_supports_native_search(self, provider):
+        assert provider.supports_native_search("gemini-2.5-flash") is True
+
+    @pytest.mark.asyncio
+    async def test_native_search_appends_google_search_tool(self, provider):
+        gp.types.Tool.reset_mock()
+        gp.types.GoogleSearch.reset_mock()
+        provider._client.aio.models.generate_content = AsyncMock(
+            return_value=self._mock_response()
+        )
+
+        await provider.chat_completion(
+            [gp.Message(role=gp.LLMCoreRole.USER, content="latest news?")],
+            native_search=True,
+        )
+
+        gp.types.GoogleSearch.assert_called_once()
+        # The grounding tool must be built as types.Tool(google_search=...).
+        tool_calls = [
+            c for c in gp.types.Tool.call_args_list if "google_search" in c.kwargs
+        ]
+        assert tool_calls, "types.Tool was not called with google_search=..."
+        assert provider._client.aio.models.generate_content.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_native_search_off_by_default_no_grounding(self, provider):
+        gp.types.GoogleSearch.reset_mock()
+        provider._client.aio.models.generate_content = AsyncMock(
+            return_value=self._mock_response()
+        )
+
+        await provider.chat_completion(
+            [gp.Message(role=gp.LLMCoreRole.USER, content="hi")],
+        )
+
+        gp.types.GoogleSearch.assert_not_called()
+
+    def test_apply_native_search_preserves_existing_tools(self, provider):
+        gp.types.Tool.reset_mock()
+        gp.types.GoogleSearch.reset_mock()
+        sentinel = object()
+        gen_kwargs = {"tools": [sentinel]}
+        provider._apply_native_search(gen_kwargs)
+        # Existing function tool preserved, grounding tool appended.
+        assert gen_kwargs["tools"][0] is sentinel
+        assert len(gen_kwargs["tools"]) == 2
