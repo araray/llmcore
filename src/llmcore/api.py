@@ -976,6 +976,7 @@ class LLMCore:
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
         extra_messages: list[Message] | None = None,
+        native_search: bool = False,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -1116,6 +1117,18 @@ class LLMCore:
                 them to their wire format; others render tool results as user-role
                 text. Note the prepared payload always ends with this turn's user
                 message, so ``message`` should be non-empty.
+
+            native_search: If ``True``, request that the provider attach its
+                *native* server-side web-search / grounding config to this call
+                (plan §4/F9 dependency): OpenAI's ``web_search_options``, Google
+                Gemini's Google Search grounding tool, or xAI Live Search. This
+                is fully additive and conservative — it is only honoured when the
+                resolved provider exposes such a surface
+                (``provider.supports_native_search(model)``); for every other
+                provider it is a silent no-op (logged at debug level), never an
+                error. Use :func:`llmcore.model_cards.model_supports_native_search`
+                on the resolved model card to decide whether to set it. Defaults
+                to ``False`` (today's behaviour, byte-identical).
 
             **provider_kwargs: Additional provider-specific parameters (e.g., temperature=0.7,
                 max_tokens=1000). These vary by provider - see provider documentation.
@@ -1267,6 +1280,21 @@ class LLMCore:
         context_details.safety_margin_tokens = budget.safety_margin_tokens
         context_details.available_context_tokens = budget.prompt_tokens_available
 
+        # F9 dependency: provider-native web-search routing. Additive and
+        # conservative — only forwarded to providers that expose a native search
+        # surface, so it is a clean no-op (never an error) everywhere else.
+        native_search_call_kwargs: dict[str, Any] = {}
+        if native_search:
+            if active_provider.supports_native_search(actual_model):
+                native_search_call_kwargs["native_search"] = True
+            else:
+                logger.debug(
+                    "native_search requested but provider '%s' (model '%s') has "
+                    "no native search surface; ignoring.",
+                    active_provider.get_name(),
+                    actual_model,
+                )
+
         # Call provider
         response_data = await active_provider.chat_completion(
             context=context_payload,
@@ -1274,6 +1302,7 @@ class LLMCore:
             stream=stream,
             tools=tools,
             tool_choice=tool_choice,
+            **native_search_call_kwargs,
             **provider_kwargs,
         )
 
@@ -1340,6 +1369,7 @@ class LLMCore:
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
         extra_messages: list[Message] | None = None,
+        native_search: bool = False,
         **provider_kwargs,
     ) -> tuple[str, ChatUsage]:
         """Send a message and return both the response text and its usage.
@@ -1398,6 +1428,9 @@ class LLMCore:
             extra_messages: Optional fully-formed Message objects appended
                 before this turn's user message (tool-calling feedback turns;
                 see :meth:`chat`).
+            native_search: Forwarded verbatim to :meth:`chat`; requests
+                provider-native web-search/grounding when supported and is a
+                silent no-op otherwise. Defaults to ``False``.
             **provider_kwargs: Additional provider-specific parameters
                 (e.g. ``temperature``). ``stream`` is not accepted here.
 
@@ -1452,6 +1485,7 @@ class LLMCore:
                 tools=tools,
                 tool_choice=tool_choice,
                 extra_messages=extra_messages,
+                native_search=native_search,
                 **provider_kwargs,
             )
             # stream=False guarantees a str, but coerce defensively.

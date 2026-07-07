@@ -113,6 +113,29 @@ class BaseProvider(abc.ABC):
         """
         return None
 
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """Whether this provider can attach a native web-search/grounding config.
+
+        Providers with a first-class, server-side web search surface — OpenAI's
+        ``web_search_options``, Google Gemini's Google Search grounding tool, or
+        xAI Live Search (``search_parameters``) — override this to return
+        ``True`` so the additive ``native_search=True`` chat option can route
+        the request to that surface (plan §4/F9 dependency).
+
+        The base implementation returns ``False`` so ``native_search`` is a safe
+        no-op for every provider without such a surface: the option is dropped
+        (logged at debug level by the caller) and never raises.
+
+        Args:
+            model: The model that would service the request. Providers may use
+                it to refine support per model; the base signature accepts it so
+                overrides can be model-aware without changing the contract.
+
+        Returns:
+            ``True`` if this provider can attach a native search config.
+        """
+        return False
+
     @abc.abstractmethod
     async def get_models_details(self) -> list[ModelDetails]:
         """

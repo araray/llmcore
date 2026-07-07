@@ -613,6 +613,50 @@ class ModelCard(BaseModel):
         return status in (ModelStatus.DEPRECATED, ModelStatus.LEGACY, ModelStatus.RETIRED)
 
 
+def model_supports_native_search(card: ModelCard | None) -> bool:
+    """Return ``True`` if a model card advertises provider-native web search.
+
+    This is the routing helper for the ``native_search`` chat option (plan
+    §4/F9 dependency): callers (and later wairu) use it to decide whether a
+    given model can service a request against its provider's native
+    grounding/search surface before setting ``native_search=True``.
+
+    A card qualifies when any of the following hold:
+
+    * ``capabilities.web_search`` is ``True`` (the canonical, provider-agnostic
+      flag);
+    * the xAI extension advertises a search server-tool (``server_tools``
+      containing a ``*search*`` entry) or a ``live_search`` config;
+    * the Google extension advertises ``grounding.google_search``.
+
+    Args:
+        card: The model card to inspect, or ``None``.
+
+    Returns:
+        ``True`` if the card advertises a native web-search surface.
+    """
+    if card is None:
+        return False
+
+    capabilities = card.capabilities
+    if capabilities is not None and capabilities.web_search:
+        return True
+
+    xai = card.provider_xai
+    if xai is not None:
+        if any("search" in str(tool).lower() for tool in (xai.server_tools or [])):
+            return True
+        if xai.live_search:
+            return True
+
+    google = card.provider_google
+    if google is not None and isinstance(google.grounding, dict):
+        if google.grounding.get("google_search"):
+            return True
+
+    return False
+
+
 class ModelCardSummary(BaseModel):
     """
     Lightweight summary for listing model cards.
