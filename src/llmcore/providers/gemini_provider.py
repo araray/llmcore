@@ -211,6 +211,30 @@ class GeminiProvider(BaseProvider):
         """Returns the provider instance name (e.g. 'gemini', 'google')."""
         return self._provider_instance_name or "gemini"
 
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """Gemini exposes Google Search grounding as a native search surface."""
+        return True
+
+    def _apply_native_search(
+        self, generation_config_kwargs: dict[str, Any]
+    ) -> None:
+        """Append Google Search grounding to the request's tool list.
+
+        Additive: preserves any function-calling tools already present. Failures
+        to construct the grounding tool degrade to a logged no-op rather than
+        breaking the request.
+        """
+        try:
+            search_tool = types.Tool(google_search=types.GoogleSearch())
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Could not build Google Search grounding tool: %s", exc)
+            return
+        existing = generation_config_kwargs.get("tools")
+        if existing:
+            generation_config_kwargs["tools"] = [*existing, search_tool]
+        else:
+            generation_config_kwargs["tools"] = [search_tool]
+
     async def get_models_details(self) -> list[ModelDetails]:
         """Dynamically discovers available models from the Google AI API.
 
@@ -595,6 +619,7 @@ class GeminiProvider(BaseProvider):
         stream: bool = False,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        native_search: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         """Sends a chat completion request to the Google Gemini API.
@@ -609,6 +634,10 @@ class GeminiProvider(BaseProvider):
             stream: If True, returns an async generator of streaming chunks.
             tools: Optional list of Tool definitions for function calling.
             tool_choice: Tool choice mode (``"auto"``, ``"any"``, ``"none"``).
+            native_search: If True, attach Google Search grounding as a native
+                tool so the model can ground its answer on live web results
+                (plan §4/F9 dependency). Additive: it is appended to any
+                function tools and defaults to ``False``.
             **kwargs: Additional ``GenerateContentConfig`` parameters
                 (temperature, thinking_config, response_schema, etc.).
 
@@ -683,6 +712,9 @@ class GeminiProvider(BaseProvider):
                         mode=mode_str
                     )
                 )
+
+        if native_search:
+            self._apply_native_search(generation_config_kwargs)
 
         config = (
             types.GenerateContentConfig(**generation_config_kwargs)
