@@ -401,10 +401,15 @@ class DeepSeekProvider(BaseProvider):
         if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
             msg_dict["tool_call_id"] = msg.tool_call_id
 
-        # Assistant message may carry tool_calls and reasoning_content
+        # Assistant message may carry tool_calls and reasoning_content.
+        # First-class Message.tool_calls (R-2) takes precedence over the
+        # legacy metadata["tool_calls"] channel — without this, a role="tool"
+        # result sent by a caller using the native tool-role protocol has no
+        # preceding assistant tool_calls and the API rejects the request.
         if role_str == "assistant":
-            if "tool_calls" in metadata:
-                msg_dict["tool_calls"] = metadata["tool_calls"]
+            tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+            if tool_calls:
+                msg_dict["tool_calls"] = tool_calls
                 if not msg.content:
                     msg_dict["content"] = None
 
