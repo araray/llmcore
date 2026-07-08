@@ -140,7 +140,12 @@ async def update_phase(
 
                     episode = Episode(
                         session_id=session_id,
-                        episode_type=EpisodeType.TOOL_USE,
+                        # EpisodeType has no TOOL_USE member (THOUGHT/ACTION/
+                        # OBSERVATION/USER_INTERACTION/AGENT_REFLECTION); an
+                        # iteration's tool-use episode is an ACTION.  The old
+                        # EpisodeType.TOOL_USE raised AttributeError every
+                        # UPDATE phase, so no Darwin episode was ever recorded.
+                        episode_type=EpisodeType.ACTION,
                         content=episode_content,
                         metadata={
                             "iteration": agent_state.iteration_count + 1,
@@ -154,7 +159,7 @@ async def update_phase(
                     memory_updates.append(
                         {
                             "type": "episode",
-                            "episode_type": EpisodeType.TOOL_USE.value,
+                            "episode_type": EpisodeType.ACTION.value,
                             "iteration": agent_state.iteration_count + 1,
                         }
                     )
