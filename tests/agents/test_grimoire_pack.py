@@ -113,11 +113,29 @@ class TestFormatContracts:
                 "history": "No previous actions.",
                 "context": "",
                 "tools": "- finish(answer)",
-                "remaining_steps": "unlimited",
+                "remaining_steps": "3",
             },
         )
         for label in ("Thought:", "Action:", "Action Input:", "Final Answer:"):
             assert label in text
+        # Phase-2 convergence deltas: explicit finish-tool instruction, the
+        # no-tool → finish-immediately rule, and the step-budget line.
+        assert "call the `finish` tool" in text
+        assert "call `finish` immediately" in text
+        assert "You have 3 step(s) remaining" in text
+
+    def test_think_remaining_steps_defaults_to_unlimited(self, bundled_adapter):
+        text = bundled_adapter.render(
+            "thinking_prompt",
+            {
+                "goal": "G",
+                "current_step": "S",
+                "history": "No previous actions.",
+                "context": "",
+                "tools": "- finish(answer)",
+            },
+        )
+        assert "You have unlimited step(s) remaining" in text
 
     def test_validate_contract(self, bundled_adapter):
         text = bundled_adapter.render(

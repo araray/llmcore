@@ -1,7 +1,7 @@
 ---
 id: llmcore/cognitive/think
 name: Cognitive THINK phase
-version: 1.0.0
+version: 1.1.0
 tags: [llmcore.builtin, cognitive, think]
 description: ReAct-style decision — a thought plus a tool call or a final answer.
 variables:
@@ -44,6 +44,8 @@ GOAL: {{ goal }}
 
 CURRENT STEP: {{ current_step }}
 
+You have {{ remaining_steps }} step(s) remaining. If this is your last step, call finish now with your best answer.
+
 RECENT HISTORY:
 {{ history }}
 
@@ -52,6 +54,8 @@ RELEVANT CONTEXT:
 
 AVAILABLE TOOLS:
 {{ tools }}
+
+When the goal is fully answered, call the `finish` tool with the complete answer in its `answer` argument. If the goal needs NO tool (a knowledge or reasoning question you can answer directly), call `finish` immediately with the answer. Never leave a completed goal without calling finish.
 
 Use the ReAct format:
 

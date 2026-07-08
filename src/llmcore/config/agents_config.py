@@ -16,6 +16,7 @@ The configuration hierarchy:
     ├── CircuitBreakerConfig - Circuit breaker settings
     ├── ActivitiesConfig     - Activity system settings
     ├── ToolInventoryConfig  - Lightweight tool inventory and schema selection
+    ├── ConvergenceConfig    - Finish-tool convergence and forced finalize
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -303,6 +304,62 @@ class ToolInventoryConfig(BaseModel):
 
 
 # =============================================================================
+# CONVERGENCE CONFIG
+# =============================================================================
+
+
+class ConvergenceConfig(BaseModel):
+    """
+    Configuration for agent convergence (finish-tool + forced finalize).
+
+    Convergence guarantees the cognitive cycle exits with a final answer:
+    native ``finish``-tool calls terminate the run directly, and when the
+    iteration budget runs out an in-cycle forced-finalize synthesis pass
+    produces the best answer from the accumulated observations instead of
+    returning "task incomplete".
+    """
+
+    finish_tool_names: list[str] = Field(
+        default_factory=lambda: ["finish", "final_answer"],
+        description="Tool names treated as the terminal finish signal",
+    )
+    require_nonempty_answer: bool = Field(
+        default=True,
+        description="Reject finish calls whose answer argument is empty",
+    )
+    min_answer_chars: int = Field(
+        default=1,
+        ge=0,
+        description="Minimum answer length (chars) for a finish call to terminate",
+    )
+    forced_finalize_enabled: bool = Field(
+        default=True,
+        description="Replace the last budgeted iteration with a finalize synthesis pass",
+    )
+    finalize_when_remaining: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "Force finalize when this many iterations remain (0 disables the "
+            "in-loop trigger; exhaustion synthesis still applies)"
+        ),
+    )
+    synthesis_on_exhaustion: bool = Field(
+        default=True,
+        description=(
+            "Synthesize a final answer when the loop exits un-finished "
+            "(max-iterations / update-stopped exits only)"
+        ),
+    )
+    finalize_temperature: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=2.0,
+        description="LLM temperature for the forced-finalize synthesis call",
+    )
+
+
+# =============================================================================
 # CAPABILITY CHECK CONFIG
 # =============================================================================
 
@@ -487,6 +544,10 @@ class AgentsConfig(BaseModel):
     tool_inventory: ToolInventoryConfig = Field(
         default_factory=ToolInventoryConfig,
         description="Lightweight tool inventory and native schema selection",
+    )
+    convergence: ConvergenceConfig = Field(
+        default_factory=ConvergenceConfig,
+        description="Finish-tool convergence and forced-finalize settings",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -754,6 +815,7 @@ FastPathConfig.model_rebuild()
 CircuitBreakerConfig.model_rebuild()
 ActivitiesConfig.model_rebuild()
 ToolInventoryConfig.model_rebuild()
+ConvergenceConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -773,6 +835,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "CircuitBreakerConfig",
     "ActivitiesConfig",
     "ToolInventoryConfig",
+    "ConvergenceConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

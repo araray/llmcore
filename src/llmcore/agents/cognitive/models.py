@@ -206,6 +206,26 @@ class ConfidenceLevel(str, Enum):
     HIGH = "high"  # 70-100%
 
 
+class TerminationReason(str, Enum):
+    """Why an agent run stopped.
+
+    Stamped on ``EnhancedAgentState.termination_reason`` at every stop site
+    so callers (and benchmarks) can distinguish native convergence from
+    rescued or aborted runs.
+    """
+
+    FINISH_TOOL = "finish_tool"  # Model called the finish tool natively
+    FINAL_ANSWER_TEXT = "final_answer_text"  # Parsed from text/activity protocol
+    FORCED_FINALIZE = "forced_finalize"  # In-loop finalize at budget edge
+    SYNTHESIS_FALLBACK = "synthesis_fallback"  # Exhaustion synthesis pass
+    PLAN_COMPLETE = "plan_complete"  # UPDATE flipped is_finished (plan/progress done)
+    UPDATE_STOPPED = "update_stopped"  # UPDATE stopped the loop un-finished
+    HUMAN_APPROVAL_REQUIRED = "human_approval_required"  # Paused for HITL
+    CIRCUIT_BREAKER = "circuit_breaker"  # Circuit breaker tripped
+    MAX_ITERATIONS = "max_iterations"  # Budget exhausted without an answer
+    ERROR = "error"  # Hard error aborted the run
+
+
 # =============================================================================
 # PHASE INPUT/OUTPUT MODELS
 # =============================================================================
@@ -360,6 +380,14 @@ class ThinkOutput(BaseModel):
     reasoning_tokens: int | None = Field(default=None, description="Tokens used in reasoning")
     using_activity_fallback: bool = Field(
         default=False, description="Whether activity fallback was used instead of native tools"
+    )
+    final_answer_source: str | None = Field(
+        default=None,
+        description=(
+            "How the final answer was produced when is_final_answer is True: "
+            "'finish_tool' (native finish call), 'text' (Final Answer: parse), "
+            "or 'activity' (XML activity protocol)"
+        ),
     )
 
 
@@ -752,6 +780,12 @@ class EnhancedAgentState(AgentState):
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Arbitrary metadata for extensibility and goal tracking"
     )
+    # Termination tracking (see TerminationReason)
+    termination_reason: str | None = Field(
+        default=None,
+        description="Why the run stopped (TerminationReason value), stamped at stop sites",
+    )
+
     # === P0 FIX: Added missing fields ===
     # Fix #1: Final answer storage when task completes
     final_answer: str | None = Field(default=None, description="Final answer when task is complete")
@@ -844,6 +878,7 @@ class EnhancedAgentState(AgentState):
             "progress_estimate": self.progress_estimate,
             "overall_confidence": self.overall_confidence.value,
             "is_finished": self.is_finished,
+            "termination_reason": self.termination_reason,
             "final_answer": _truncate_text(self.final_answer, max_string_chars)[0]
             if self.final_answer
             else None,
@@ -921,6 +956,10 @@ class EnhancedAgentState(AgentState):
             state.overall_confidence = ConfidenceLevel.MEDIUM
 
         state.final_answer = snapshot.get("final_answer")
+        raw_termination_reason = snapshot.get("termination_reason")
+        state.termination_reason = (
+            str(raw_termination_reason) if raw_termination_reason else None
+        )
         state.awaiting_human_approval = bool(snapshot.get("awaiting_human_approval", False))
         state.pending_approval_prompt = snapshot.get("pending_approval_prompt")
         pending_tool_call = snapshot.get("pending_tool_call")
@@ -1154,6 +1193,7 @@ __all__ = [
     "PlanStepSpec",
     "ReflectInput",
     "ReflectOutput",
+    "TerminationReason",
     "ThinkInput",
     "ThinkOutput",
     "UpdateInput",

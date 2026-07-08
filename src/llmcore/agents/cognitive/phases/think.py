@@ -24,7 +24,14 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import ConfidenceLevel, EnhancedAgentState, PlanStepSpec, ThinkInput, ThinkOutput
+from ..models import (
+    ConfidenceLevel,
+    EnhancedAgentState,
+    PlanStepSpec,
+    TerminationReason,
+    ThinkInput,
+    ThinkOutput,
+)
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
@@ -38,6 +45,13 @@ from ...activities.parser import ActivityRequestParser
 from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
 
 logger = logging.getLogger(__name__)
+
+
+#: Deterministic corrective thought fed back when a finish call carries no
+#: usable answer — the model is re-prompted instead of silently looping.
+FINISH_WITHOUT_ANSWER_THOUGHT = (
+    "finish called without an answer — provide the complete answer in the `answer` argument"
+)
 
 
 # =============================================================================
@@ -117,7 +131,42 @@ async def think_phase(
         require_prompt_registry(prompt_registry, "THINK")
         logger.debug("Starting THINK phase")
 
+        convergence = getattr(agents_config, "convergence", None)
+
         structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
+        if structured_action is not None and structured_action.name in _finish_tool_names(
+            convergence
+        ):
+            # A finish-named plan step is a terminal answer, not a tool call.
+            answer = _finish_answer_from_arguments(structured_action.arguments)
+            if _finish_answer_acceptable(answer, convergence):
+                output = ThinkOutput(
+                    thought="The current plan step provides the final answer directly.",
+                    proposed_action=None,
+                    is_final_answer=True,
+                    final_answer=answer,
+                    final_answer_source="finish_tool",
+                    confidence=ConfidenceLevel.HIGH,
+                )
+                agent_state.is_finished = True
+                agent_state.final_answer = answer
+                agent_state.termination_reason = TerminationReason.FINISH_TOOL.value
+                agent_state.overall_confidence = output.confidence
+                if span:
+                    add_span_attributes(
+                        span,
+                        {
+                            "think.structured_plan_step": True,
+                            "think.is_final": True,
+                            "think.final_answer_source": "finish_tool",
+                        },
+                    )
+                return output
+            # Empty finish answer in the plan step: fall through to a normal
+            # THINK so the model produces a real answer.
+            logger.info("Plan-step finish call without an answer — running normal THINK")
+            structured_action = None
+
         if structured_action is not None:
             output = ThinkOutput(
                 thought=(
@@ -259,6 +308,7 @@ async def think_phase(
                 response_text=response_content,
                 response_dict=response,
                 tool_manager=tool_manager,
+                convergence=convergence,
             )
 
             # 5. Update agent state
@@ -268,6 +318,11 @@ async def think_phase(
             if output.is_final_answer:
                 agent_state.is_finished = True
                 agent_state.final_answer = output.final_answer
+                agent_state.termination_reason = (
+                    TerminationReason.FINISH_TOOL.value
+                    if output.final_answer_source == "finish_tool"
+                    else TerminationReason.FINAL_ANSWER_TEXT.value
+                )
 
             agent_state.overall_confidence = output.confidence
 
@@ -288,6 +343,7 @@ async def think_phase(
                     {
                         "think.has_action": output.proposed_action is not None,
                         "think.is_final": output.is_final_answer,
+                        "think.final_answer_source": output.final_answer_source or "",
                         "think.confidence": output.confidence.value,
                         "think.provider": provider.get_name(),
                         "think.model": target_model,
@@ -427,6 +483,7 @@ async def _think_phase_with_activities(
         final_answer_text = parser.extract_final_answer(response_content)
         agent_state.is_finished = True
         agent_state.final_answer = final_answer_text
+        agent_state.termination_reason = TerminationReason.FINAL_ANSWER_TEXT.value
 
     # Runtime tools can use the same XML protocol, then execute through the
     # normal ToolManager ACT path.
@@ -478,6 +535,7 @@ async def _think_phase_with_activities(
         proposed_action=proposed_action,
         is_final_answer=is_final,
         final_answer=final_answer_text,
+        final_answer_source="activity" if is_final else None,
         confidence=ConfidenceLevel.MEDIUM,
         using_activity_fallback=True,
     )
@@ -774,6 +832,7 @@ def _parse_think_response(
     response_text: str,
     response_dict: dict[str, Any] | None,
     tool_manager: "ToolManager",
+    convergence: Any | None = None,
 ) -> ThinkOutput:
     """
     Parse the LLM response into structured ThinkOutput.
@@ -782,6 +841,8 @@ def _parse_think_response(
         response_text: Extracted text content from the LLM response
         response_dict: Original response dict for token usage extraction
         tool_manager: Tool manager for validation
+        convergence: Optional ``ConvergenceConfig`` governing finish-tool
+            interception (defaults apply when None)
 
     Returns:
         Parsed ThinkOutput
@@ -792,6 +853,7 @@ def _parse_think_response(
     proposed_action = None
     is_final_answer = False
     final_answer = None
+    final_answer_source = None
     confidence = ConfidenceLevel.MEDIUM
 
     # Extract Thought
@@ -805,7 +867,21 @@ def _parse_think_response(
         thought = thought_match.group(1).strip()
 
     native_tool_call = _extract_native_tool_call(response_dict)
-    if native_tool_call is not None:
+    if native_tool_call is not None and native_tool_call.name in _finish_tool_names(convergence):
+        # Convergence: a native finish call terminates the run — it must
+        # never surface as a proposed action for VALIDATE/ACT to churn on.
+        answer = _finish_answer_from_arguments(native_tool_call.arguments)
+        if _finish_answer_acceptable(answer, convergence):
+            is_final_answer = True
+            final_answer = answer
+            final_answer_source = "finish_tool"
+            confidence = ConfidenceLevel.HIGH
+        else:
+            # Empty/too-short answer: stay non-final with a deterministic
+            # corrective thought so the next iteration re-prompts properly.
+            thought = FINISH_WITHOUT_ANSWER_THOUGHT
+            confidence = ConfidenceLevel.LOW
+    elif native_tool_call is not None:
         proposed_action = native_tool_call
         confidence = _determine_confidence(thought, response_text)
     else:
@@ -817,6 +893,7 @@ def _parse_think_response(
         if final_answer_match:
             is_final_answer = True
             final_answer = final_answer_match.group(1).strip()
+            final_answer_source = "text"
             confidence = ConfidenceLevel.HIGH
         else:
             # Extract Action
@@ -865,9 +942,48 @@ def _parse_think_response(
         proposed_action=proposed_action,
         is_final_answer=is_final_answer,
         final_answer=final_answer,
+        final_answer_source=final_answer_source,
         confidence=confidence,
         reasoning_tokens=reasoning_tokens,
     )
+
+
+def _finish_tool_names(convergence: Any | None) -> list[str]:
+    """Return the configured finish-tool names (defaults without a real config)."""
+    names = getattr(convergence, "finish_tool_names", None)
+    if isinstance(names, (list, tuple, set)):
+        return [str(name) for name in names]
+    return ["finish", "final_answer"]
+
+
+def _finish_answer_from_arguments(arguments: Any) -> str:
+    """Extract the final answer from finish-tool arguments.
+
+    Prefers the schema's ``answer`` key, falling back to ``input`` because
+    ``_coerce_tool_arguments`` wraps bare-string arguments as ``{"input": ...}``.
+    """
+    if not isinstance(arguments, dict):
+        return "" if arguments is None else str(arguments)
+    answer = arguments.get("answer")
+    if answer is None:
+        answer = arguments.get("input")
+    if answer is None:
+        return ""
+    return answer if isinstance(answer, str) else str(answer)
+
+
+def _finish_answer_acceptable(answer: str, convergence: Any | None) -> bool:
+    """Check a finish answer against the convergence config's minimums."""
+    require_nonempty = getattr(convergence, "require_nonempty_answer", True)
+    if not isinstance(require_nonempty, bool):
+        require_nonempty = True
+    if not require_nonempty:
+        return True
+    try:
+        min_chars = max(1, int(getattr(convergence, "min_answer_chars", 1)))
+    except (TypeError, ValueError):
+        min_chars = 1
+    return len(answer.strip()) >= min_chars
 
 
 def _extract_native_tool_call(response_dict: dict[str, Any] | None) -> Any | None:

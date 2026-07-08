@@ -21,7 +21,7 @@ References:
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import EnhancedAgentState, UpdateInput, UpdateOutput
+from ..models import EnhancedAgentState, TerminationReason, UpdateInput, UpdateOutput
 
 if TYPE_CHECKING:
     from ....storage.manager import StorageManager
@@ -277,6 +277,8 @@ def _should_continue(
     # Don't continue if progress is at 100%
     if reflection.progress_estimate >= 1.0:
         agent_state.is_finished = True
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.PLAN_COMPLETE.value
         return False
 
     # Don't continue if all steps are completed — but only when there ARE
@@ -288,6 +290,8 @@ def _should_continue(
         status == "completed" for status in agent_state.plan_steps_status
     ):
         agent_state.is_finished = True
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.PLAN_COMPLETE.value
         return False
 
     # Otherwise, continue

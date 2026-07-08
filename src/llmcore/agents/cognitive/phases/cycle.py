@@ -32,11 +32,12 @@ from ..models import (
     PlanInput,
     PlanStepSpec,
     ReflectInput,
+    # Enums
+    TerminationReason,
     ThinkInput,
     UpdateInput,
     ValidateInput,
     ValidateOutput,
-    # Enums
     ValidationResult,
 )
 from .act import act_phase
@@ -95,6 +96,9 @@ class StreamingIterationResult:
         tokens_used: Tokens used in this iteration
         duration_ms: Duration of this iteration in milliseconds
         stop_reason: Reason for stopping (if stopped early)
+        termination_reason: Why the run terminated (TerminationReason value),
+            populated on every final update; ``stop_reason`` mirrors it where
+            no more specific legacy value applies
     """
 
     iteration: int
@@ -114,6 +118,7 @@ class StreamingIterationResult:
     tokens_used: int = 0
     duration_ms: float = 0.0
     stop_reason: str | None = None
+    termination_reason: str | None = None
 
 
 # =============================================================================
@@ -432,6 +437,7 @@ class CognitiveCycle:
                         act_input=act_input,
                         tool_manager=self.tool_manager,
                         tracer=self.tracer,
+                        agents_config=self.agents_config,
                     )
 
                     # ========================================================
@@ -646,6 +652,7 @@ class CognitiveCycle:
                             f"Circuit breaker tripped: {cb_result.reason.value} - "
                             f"{cb_result.message}"
                         )
+                        agent_state.termination_reason = TerminationReason.CIRCUIT_BREAKER.value
                         return (
                             f"Execution stopped by circuit breaker.\n"
                             f"Reason: {cb_result.reason.value}\n"
@@ -660,8 +667,13 @@ class CognitiveCycle:
                     # Determine stop reason
                     if agent_state.awaiting_human_approval:
                         stop_reason = "human_approval_required"
+                        agent_state.termination_reason = (
+                            TerminationReason.HUMAN_APPROVAL_REQUIRED.value
+                        )
                     else:
                         stop_reason = "update_stopped"
+                        if not agent_state.is_finished and not agent_state.termination_reason:
+                            agent_state.termination_reason = TerminationReason.UPDATE_STOPPED.value
                     logger.info(f"Stopping after {actual_iterations} iterations ({stop_reason})")
                     break
 
@@ -688,6 +700,7 @@ class CognitiveCycle:
                             f"Circuit breaker tripped on error: {cb_result.reason.value} - "
                             f"{cb_result.message}"
                         )
+                        agent_state.termination_reason = TerminationReason.CIRCUIT_BREAKER.value
                         return (
                             f"Execution stopped by circuit breaker.\n"
                             f"Reason: {cb_result.reason.value}\n"
@@ -699,6 +712,7 @@ class CognitiveCycle:
                 # If circuit breaker hasn't tripped, the error is fatal
                 # (unlike the old behavior which silently returned)
                 if circuit_breaker is None:
+                    agent_state.termination_reason = TerminationReason.ERROR.value
                     return f"Task failed: {e!s}"
 
         # Check if task completed during the last iteration
@@ -728,6 +742,8 @@ class CognitiveCycle:
 
         # Actually hit max iterations
         logger.warning(f"Max iterations ({max_iterations}) reached without completion")
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.MAX_ITERATIONS.value
         return (
             f"Task incomplete after {max_iterations} iterations (limit reached). "
             f"Progress: {agent_state.progress_estimate:.1%}"
@@ -813,6 +829,8 @@ class CognitiveCycle:
                     status="complete",
                     current_phase="complete",
                     message=agent_state.final_answer or "Task completed successfully",
+                    stop_reason=agent_state.termination_reason,
+                    termination_reason=agent_state.termination_reason,
                 )
                 return
 
@@ -853,6 +871,7 @@ class CognitiveCycle:
                         logger.warning(
                             f"Circuit breaker tripped on error: {cb_result.reason.value}"
                         )
+                        agent_state.termination_reason = TerminationReason.CIRCUIT_BREAKER.value
                         yield StreamingIterationResult(
                             iteration=iteration_num + 1,
                             max_iterations=max_iterations,
@@ -864,10 +883,13 @@ class CognitiveCycle:
                             message=f"Circuit breaker: {cb_result.message}",
                             error=error_msg,
                             stop_reason=cb_result.reason.value,
+                            termination_reason=agent_state.termination_reason,
                         )
                         return
 
                 # Yield error update
+                if circuit_breaker is None:
+                    agent_state.termination_reason = TerminationReason.ERROR.value
                 yield StreamingIterationResult(
                     iteration=iteration_num + 1,
                     max_iterations=max_iterations,
@@ -878,6 +900,12 @@ class CognitiveCycle:
                     current_phase="error",
                     message=f"Iteration failed: {error_msg[:100]}",
                     error=error_msg,
+                    stop_reason=agent_state.termination_reason
+                    if circuit_breaker is None
+                    else None,
+                    termination_reason=agent_state.termination_reason
+                    if circuit_breaker is None
+                    else None,
                 )
 
                 if circuit_breaker is None:
@@ -958,6 +986,7 @@ class CognitiveCycle:
                     should_stop = True
                     stop_reason = cb_result.reason.value
                     message = f"Circuit breaker: {cb_result.message}"
+                    agent_state.termination_reason = TerminationReason.CIRCUIT_BREAKER.value
                     logger.warning(f"Circuit breaker tripped: {stop_reason}")
 
             # Check if UPDATE phase says to stop
@@ -968,8 +997,16 @@ class CognitiveCycle:
                 should_stop = True
                 if agent_state.awaiting_human_approval:
                     stop_reason = "human_approval_required"
+                    if not is_complete:
+                        agent_state.termination_reason = (
+                            TerminationReason.HUMAN_APPROVAL_REQUIRED.value
+                        )
                 else:
                     stop_reason = "update_stopped"
+                    if not is_complete and not agent_state.termination_reason:
+                        agent_state.termination_reason = TerminationReason.UPDATE_STOPPED.value
+
+            is_final = is_complete or should_stop
 
             # Yield the iteration result
             yield StreamingIterationResult(
@@ -977,7 +1014,7 @@ class CognitiveCycle:
                 max_iterations=max_iterations,
                 progress=progress,
                 is_complete=is_complete,
-                is_final=is_complete or should_stop,
+                is_final=is_final,
                 status="complete" if is_complete else ("stopped" if should_stop else "in_progress"),
                 current_phase=current_phase,
                 message=message,
@@ -988,7 +1025,9 @@ class CognitiveCycle:
                 plan_step=plan_step,
                 tokens_used=iteration_result.total_tokens_used,
                 duration_ms=iteration_result.duration_ms,
-                stop_reason=stop_reason,
+                stop_reason=stop_reason
+                or (agent_state.termination_reason if is_final else None),
+                termination_reason=agent_state.termination_reason if is_final else None,
             )
 
             if is_complete or should_stop:
@@ -996,6 +1035,8 @@ class CognitiveCycle:
 
         # Max iterations reached
         logger.warning(f"Max iterations ({max_iterations}) reached without completion")
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.MAX_ITERATIONS.value
         yield StreamingIterationResult(
             iteration=max_iterations,
             max_iterations=max_iterations,
@@ -1006,6 +1047,7 @@ class CognitiveCycle:
             current_phase="complete",
             message=f"Max iterations ({max_iterations}) reached",
             stop_reason="max_iterations",
+            termination_reason=agent_state.termination_reason,
         )
 
     def _build_history(self, agent_state: EnhancedAgentState) -> str:
