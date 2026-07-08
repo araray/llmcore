@@ -157,10 +157,14 @@ def _analyze_result(action: "ToolCall", result: "ToolResult", expected: str | No
     if result.is_error:
         observation_parts.append(f"Result: ERROR - {result.content}")
     else:
-        # Truncate long results
+        # Truncate long results.  Keep enough that multi-line tool output
+        # (directory listings, `du` across many dirs, search results) survives
+        # into the observation the model reasons over — 500 chars dropped most
+        # of it, so the model could not synthesize a complete answer and kept
+        # acting.  The history builder applies its own bound downstream.
         content = result.content
-        if len(content) > 500:
-            content = content[:500] + "... (truncated)"
+        if len(content) > 4000:
+            content = content[:4000] + "... (truncated)"
         observation_parts.append(f"Result: {content}")
 
     # Expectation comparison

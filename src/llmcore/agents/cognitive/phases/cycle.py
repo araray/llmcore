@@ -194,7 +194,7 @@ class CognitiveCycle:
         context_synthesizer: Any | None = None,
         agents_config: Optional["AgentsConfig"] = None,
         max_history_iterations: int = 3,
-        max_history_observation_chars: int = 1000,
+        max_history_observation_chars: int = 3000,
     ):
         """
         Initialize the cognitive cycle orchestrator.

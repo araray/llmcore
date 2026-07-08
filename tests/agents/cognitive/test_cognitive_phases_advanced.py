@@ -557,6 +557,30 @@ class TestUpdatePhase:
         assert not output.should_continue
         assert state.is_finished
 
+    async def test_update_phase_empty_plan_does_not_vacuously_complete(self):
+        """Regression: an EMPTY plan_steps_status must NOT be treated as
+        'all steps completed' (``all([])`` is vacuously True), which would
+        stop the cycle after iteration 1 before the model synthesizes an
+        answer from its tool observation."""
+        state = EnhancedAgentState(goal="Find the answer with a tool")
+        state.plan = []
+        state.plan_steps_status = []  # PLAN produced no explicit steps
+
+        reflect_output = ReflectOutput(
+            evaluation="Ran a tool; not done yet",
+            progress_estimate=0.4,
+            insights=["tool output gathered"],
+            plan_needs_update=False,
+            step_completed=False,
+        )
+        update_input = UpdateInput(reflection=reflect_output, current_state=state)
+
+        output = await update_phase(agent_state=state, update_input=update_input)
+
+        # The cycle must CONTINUE so THINK can synthesize a final answer.
+        assert output.should_continue
+        assert not state.is_finished
+
 
 # =============================================================================
 # COGNITIVE CYCLE ORCHESTRATOR TESTS

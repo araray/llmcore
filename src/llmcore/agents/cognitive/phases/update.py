@@ -270,8 +270,14 @@ def _should_continue(
         agent_state.is_finished = True
         return False
 
-    # Don't continue if all steps are completed
-    if all(status == "completed" for status in agent_state.plan_steps_status):
+    # Don't continue if all steps are completed — but only when there ARE
+    # steps.  ``all([])`` is vacuously True, which would falsely mark a
+    # plan-less task (PLAN produced no explicit steps, common for simple
+    # tool tasks) "complete" after its FIRST iteration — stopping the cycle
+    # before THINK ever synthesizes a final answer from the tool observation.
+    if agent_state.plan_steps_status and all(
+        status == "completed" for status in agent_state.plan_steps_status
+    ):
         agent_state.is_finished = True
         return False
 
