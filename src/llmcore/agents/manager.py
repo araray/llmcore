@@ -78,6 +78,7 @@ class AgentManager:
         memory_manager: MemoryManager,
         storage_manager: StorageManager,
         observability: ObservabilityComponents | None = None,
+        tool_catalog: Any | None = None,
     ):
         """
         Initialize the AgentManager with required dependencies.
@@ -88,11 +89,15 @@ class AgentManager:
             storage_manager: The StorageManager for episodic memory logging.
             observability: Optional observability components (Phase 8 integration).
                           If None, observability is disabled for this manager.
+            tool_catalog: Optional ``GrimoireToolCatalog`` — when present the
+                ToolManager sources default tools from grimoire rune contracts.
         """
         self._provider_manager = provider_manager
         self._memory_manager = memory_manager
         self._storage_manager = storage_manager
-        self._tool_manager = ToolManager(memory_manager, storage_manager)
+        self._tool_manager = ToolManager(
+            memory_manager, storage_manager, tool_catalog=tool_catalog
+        )
 
         # NEW: Sandbox integration (optional, initialized separately)
         self._sandbox_integration: SandboxIntegration | None = None
@@ -728,6 +733,7 @@ class EnhancedAgentManager(AgentManager):
         agents_config: Any | None = None,  # G3: AgentsConfig for capability/activity settings
         context_synthesizer: Any | None = None,
         memory_backend: Any | None = None,
+        grimoire: Any | None = None,
     ):
         """
         Initialize the enhanced agent manager.
@@ -744,13 +750,29 @@ class EnhancedAgentManager(AgentManager):
             memory_backend: Optional external memory backend used to build a
                 semantic context source when ``context_synthesizer`` is absent
         """
+        # Control plane (0.52.0): with a grimoire instance, builtin tools are
+        # sourced from the pack's rune contracts via the catalog.
+        tool_catalog = None
+        if grimoire is not None:
+            try:
+                from .grimoire_tool_catalog import GrimoireToolCatalog, bind_builtin_tools
+
+                tool_catalog = GrimoireToolCatalog(grimoire)
+                bind_builtin_tools(tool_catalog)
+            except Exception as e:
+                logger.warning(f"Grimoire tool catalog unavailable: {e}")
+                tool_catalog = None
+
         # Initialize parent class (original AgentManager)
         super().__init__(
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             storage_manager=storage_manager,
             observability=observability,
+            tool_catalog=tool_catalog,
         )
+        self._grimoire = grimoire
+        self._tool_catalog = tool_catalog
 
         # Store additional components
         self.prompt_registry = prompt_registry

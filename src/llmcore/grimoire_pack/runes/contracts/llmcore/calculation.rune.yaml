@@ -1,0 +1,19 @@
+---
+id: llmcore/calculation
+name: Calculation
+version: 1.0.0
+description: Safe mathematical calculation.
+tags: [llmcore.builtin, calculation]
+risk_level: low
+commands:
+  - name: calculator
+    summary: Perform mathematical calculations
+    params:
+      - name: expression
+        type: string
+        required: true
+        description: The mathematical expression to evaluate
+    side_effects: []
+mappings:
+  llmcore.tool_name.calculator: calculator
+  llmcore.implementation_key.calculator: llmcore.tools.calculation.calculator

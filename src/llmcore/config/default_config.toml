@@ -203,6 +203,60 @@ chromadb = "WARNING"
 posthog = "ERROR"
 
 # ==============================================================================
+# [grimoire] - Prompt/Tool/Skill Control Plane (0.52.0+, HARD dependency)
+# ==============================================================================
+# ALL llmcore agent prompts are grimoire spells. The bundled pack
+# (llmcore/grimoire_pack) is ALWAYS the base layer, so agents work with zero
+# configuration. Overlay layers compose ABOVE it with deterministic
+# precedence (highest wins):
+#
+#     llmcore-builtin  <  extra packs  <  admin  <  user...
+#
+# FAIL-LOUD: overlay layers load strict; when any overlay is configured,
+# every required prompt template is rendered once at init and ANY failure
+# aborts startup naming the template, spell, and layer. There is no silent
+# fallback (the pre-0.52 f-string fallbacks are gone).
+[grimoire]
+
+# Additional read-only packs layered ABOVE the bundled pack and BELOW
+# admin/user overlays. Hosts (e.g. wairu) point this at their own bundled
+# packs when not injecting a pre-built Grimoire instance.
+# Default Value: []
+extra_pack_paths = []
+
+# Optional read-only admin overlay repo.
+# Default Value: ""
+admin_repo_path = ""
+
+# Ordered user overlay roots (lowest -> highest precedence). The LAST entry
+# is the writable layer (scaffolded on demand). Override any bundled spell,
+# rune, promptlet, ritual, or skilldoc by shipping the same id here.
+# Default Value: []
+user_repo_paths = []
+
+# llmcore template id -> spell id overrides, merged over the built-in map
+# (e.g. thinking_prompt = "my/company/think").
+# Default Value: {}
+prompt_map = {}
+
+# Strict conjure: a spell referencing a missing REQUIRED variable raises
+# instead of leaving the placeholder unfilled.
+# Default Value: true
+strict = true
+
+# Render every required template at init when overlays are configured.
+# Default Value: true
+validate_on_startup = true
+
+# Persistent prompt-usage telemetry (JSONL). In-memory metrics always run;
+# this adds the durable sink for cross-process prompt optimization work.
+[grimoire.metrics]
+# Default Value: false
+enabled = false
+# Default Value: "" (=> ~/.local/state/llmcore/prompt_usage.jsonl)
+path = ""
+
+# ==============================================================================
 # [moderation] - Content Moderation Gateway (SF-1 / DDS-06)
 # ==============================================================================
 # Two-stage moderation: a gateway (e.g. OpenAI's /moderations endpoint)

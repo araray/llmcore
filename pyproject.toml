@@ -34,6 +34,11 @@ classifiers = [
 # Core dependencies for llmcore - LIBRARY MODE ONLY
 dependencies = [
     "confy>=0.4.2",
+    # The prompt/tool/skill control plane. Hard dependency (0.52.0+): ALL
+    # agent prompts are grimoire spells (bundled pack in llmcore/grimoire_pack).
+    # Not on PyPI — install from GitHub (see CI):
+    #   pip install "grimoire @ git+https://github.com/araray/grimoire.git@v0.4.0"
+    "grimoire>=0.4.0",
     "aiohttp>=3.11.0",
     "aiofiles>=24.0.0",
     "python-dotenv>=1.0.0",
@@ -199,6 +204,7 @@ llmcore = [
     "py.typed",
     "config/*.toml",
     "model_cards/default_cards/**/*.json",
+    "grimoire_pack/**/*",
 ]
 
 # --- Ruff Linter Configuration ---

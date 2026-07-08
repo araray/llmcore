@@ -56,6 +56,8 @@ jobs:
           # package capped at 0.3.8); install it from its public GitHub repo
           # first so the llmcore resolve below finds confy>=0.4.2 satisfied.
           pip install "confy @ git+https://github.com/araray/confy.git@v0.4.2"
+          # grimoire (the control plane) is also GitHub-only.
+          pip install "grimoire @ git+https://github.com/araray/grimoire.git@v0.4.0"
           # dev pulls in test (pytest, pytest-asyncio, respx, ...) and sandbox
           # deps; the extras below are [all] minus [zai]: provider SDKs
           # (openai, anthropic, ...), chromadb, and the bridge deps

@@ -217,6 +217,24 @@ class LLMCore:
         self._runtime_config_dirty = False
         self._original_config_dict = {}
         self._observability = None
+        # Grimoire control plane (populated by _initialize_from_config)
+        self._grimoire: Any | None = None
+        self._grimoire_config: Any | None = None
+        self._prompt_registry: Any | None = None
+
+    @property
+    def grimoire(self) -> Any:
+        """The composed Grimoire control-plane facade (read-only access).
+
+        Hosts (e.g. wairu) use this to render their own spells and register
+        runtime runes against the SAME instance the agent subsystem reads.
+        """
+        return self._grimoire
+
+    @property
+    def prompt_registry(self) -> Any:
+        """The instance-level prompt registry (grimoire-backed adapter)."""
+        return self._prompt_registry
 
     @classmethod
     async def create(
@@ -225,6 +243,7 @@ class LLMCore:
         config_file_path: str | None = None,
         env_prefix: str | None = "LLMCORE",
         observability: Any | None = None,
+        grimoire_instance: Any | None = None,
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -240,12 +259,20 @@ class LLMCore:
             observability: Optional observability object. If it or its ``logger``
                 exposes ``log_event()``, provider and embedding lifecycle events
                 are emitted through that logger.
+            grimoire_instance: Optional pre-built ``grimoire.Grimoire`` facade
+                (typically a LAYERED one from a host like wairu). When given it
+                becomes this instance's control plane — the bundled pack must
+                be one of its layers — and no separate grimoire is constructed.
+                When omitted, llmcore composes its own from ``[grimoire]``
+                config (bundled pack as the base layer; zero config works).
 
         Returns:
             Fully initialized LLMCore instance
 
         Raises:
             ConfigError: If configuration is invalid or cannot be loaded
+                (including a grimoire overlay that fails fail-loud startup
+                validation)
             StorageError: If storage backends cannot be initialized
         """
         instance = cls()
@@ -254,6 +281,7 @@ class LLMCore:
             config_file_path,
             env_prefix,
             observability=observability,
+            grimoire_instance=grimoire_instance,
         )
         return instance
 
@@ -291,6 +319,12 @@ class LLMCore:
         Raises:
             RuntimeError: If this instance was not initialized via ``LLMCore.create()``.
         """
+        # Control plane: the instance-level grimoire prompt registry is the
+        # default — an explicit prompt_registry argument still wins (hosts may
+        # inject a customized adapter).
+        if prompt_registry is None:
+            prompt_registry = getattr(self, "_prompt_registry", None)
+
         required_managers = {
             "provider_manager": getattr(self, "_provider_manager", None),
             "memory_manager": getattr(self, "_memory_manager", None),
@@ -322,6 +356,7 @@ class LLMCore:
             memory_manager=required_managers["memory_manager"],
             storage_manager=required_managers["storage_manager"],
             prompt_registry=prompt_registry,
+            grimoire=getattr(self, "_grimoire", None),
             tracer=tracer,
             default_mode=default_mode or AgentMode.SINGLE,
             observability=observability,
@@ -366,6 +401,7 @@ class LLMCore:
         config_file_path: str | None,
         env_prefix: str | None,
         observability: Any | None = None,
+        grimoire_instance: Any | None = None,
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -497,6 +533,40 @@ class LLMCore:
                 provider_manager=self._provider_manager,
                 embedding_manager=self._embedding_manager,
                 storage_manager=self._storage_manager,
+            )
+
+            # --- Grimoire control plane (0.52.0: hard dependency) ---
+            # ALL agent prompts come from grimoire spells. The bundled pack is
+            # the base layer (zero-config startup); [grimoire] config adds
+            # overlays; a host (wairu) may inject its own layered instance.
+            # Fail-loud: a configured overlay that breaks a required template
+            # aborts init here — never a silent fallback.
+            logger.debug("Initializing Grimoire control plane...")
+            from llmcore.config.grimoire_config import load_grimoire_config
+            from llmcore.grimoire_runtime import (
+                build_grimoire,
+                build_prompt_registry,
+                validate_grimoire_startup,
+            )
+
+            grimoire_cfg = load_grimoire_config(config=self.config)
+            self._grimoire_config = grimoire_cfg
+            if grimoire_instance is not None:
+                self._grimoire = grimoire_instance
+            else:
+                self._grimoire = build_grimoire(grimoire_cfg)
+            self._prompt_registry = build_prompt_registry(self._grimoire, grimoire_cfg)
+            overlays_present = bool(
+                grimoire_instance is not None
+                or grimoire_cfg.user_repo_paths
+                or grimoire_cfg.admin_repo_path
+                or grimoire_cfg.extra_pack_paths
+            )
+            validate_grimoire_startup(
+                self._grimoire,
+                self._prompt_registry,
+                grimoire_cfg,
+                overlays_present=overlays_present,
             )
 
             logger.debug("LLMCore initialization complete")

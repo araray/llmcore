@@ -47,8 +47,17 @@ def test_grimoire_adapter_renders_mapped_spell() -> None:
 
     rendered = adapter.render("planning_prompt", {"goal": "ship tests"})
 
-    assert rendered == "Plan {{ goal }}\n\nGoal: ship tests"
+    # 0.52.0 contract: render() returns USER-side blocks only for multi-role
+    # spells (legacy string callers supply their own system message);
+    # render_messages() carries the full atomic SYSTEM+USER contract.
+    assert rendered == "Goal: ship tests"
     assert grimoire.calls == [("agent/planning", {"goal": "ship tests"}, True)]
+
+    messages = adapter.render_messages("planning_prompt", {"goal": "ship tests"})
+    assert messages == [
+        {"role": "system", "content": "Plan {{ goal }}"},
+        {"role": "user", "content": "Goal: ship tests"},
+    ]
 
 
 def test_grimoire_adapter_get_template_returns_active_version_facade() -> None:
