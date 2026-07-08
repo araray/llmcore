@@ -17,6 +17,7 @@ The configuration hierarchy:
     ├── ActivitiesConfig     - Activity system settings
     ├── ToolInventoryConfig  - Lightweight tool inventory and schema selection
     ├── ConvergenceConfig    - Finish-tool convergence and forced finalize
+    ├── ValidationConfig     - VALIDATE phase deterministic guards
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -367,6 +368,28 @@ class ConvergenceConfig(BaseModel):
 
 
 # =============================================================================
+# VALIDATION CONFIG
+# =============================================================================
+
+
+class ValidationConfig(BaseModel):
+    """
+    Configuration for the VALIDATE phase.
+
+    ``deterministic_guards`` keeps the no-LLM safety checks (tool-registry
+    membership + dangerous-pattern scan) active even when a caller skips the
+    LLM validation judge (``skip_validation=True``): dangerous arguments
+    pause for human approval and unknown tools are rejected. Disable it to
+    restore the pre-0.52 blanket auto-approve behavior.
+    """
+
+    deterministic_guards: bool = Field(
+        default=True,
+        description="Run deterministic registry/danger guards even under skip_validation",
+    )
+
+
+# =============================================================================
 # CAPABILITY CHECK CONFIG
 # =============================================================================
 
@@ -555,6 +578,10 @@ class AgentsConfig(BaseModel):
     convergence: ConvergenceConfig = Field(
         default_factory=ConvergenceConfig,
         description="Finish-tool convergence and forced-finalize settings",
+    )
+    validation: ValidationConfig = Field(
+        default_factory=ValidationConfig,
+        description="VALIDATE phase settings (deterministic guards)",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -823,6 +850,7 @@ CircuitBreakerConfig.model_rebuild()
 ActivitiesConfig.model_rebuild()
 ToolInventoryConfig.model_rebuild()
 ConvergenceConfig.model_rebuild()
+ValidationConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -843,6 +871,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "ActivitiesConfig",
     "ToolInventoryConfig",
     "ConvergenceConfig",
+    "ValidationConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

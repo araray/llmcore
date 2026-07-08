@@ -55,7 +55,7 @@ from .think import (
     think_phase,
 )
 from .update import update_phase
-from .validate import validate_phase
+from .validate import deterministic_precheck, validate_phase
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
@@ -442,15 +442,52 @@ class CognitiveCycle:
                 # ============================================================
                 if iteration.think_output.proposed_action:
                     if skip_validation:
-                        # Auto-approve when skip_validation is True
-                        logger.info("Skipping validation (auto-approve enabled)")
-                        iteration.validate_output = ValidateOutput(
-                            result=ValidationResult.APPROVED,
-                            confidence=ConfidenceLevel.HIGH,
-                            concerns=[],
-                            suggestions=[],
-                            requires_human_approval=False,
+                        # skip_validation skips only the LLM judge (2.3): the
+                        # deterministic guards (registry membership + dangerous
+                        # patterns) still run unless explicitly disabled.
+                        precheck_output = None
+                        validation_config = getattr(self.agents_config, "validation", None)
+                        deterministic_guards = getattr(
+                            validation_config, "deterministic_guards", True
                         )
+                        if not isinstance(deterministic_guards, bool):
+                            deterministic_guards = True
+                        if deterministic_guards:
+                            precheck_output = deterministic_precheck(
+                                iteration.think_output.proposed_action,
+                                self.tool_manager,
+                                goal=agent_state.goal,
+                                reasoning=iteration.think_output.thought,
+                            )
+                        if precheck_output is not None:
+                            # A guard fired: USE its output, mirroring
+                            # validate_phase's state side-effects.
+                            logger.info(
+                                "Deterministic guard fired under skip_validation: %s",
+                                precheck_output.result.value,
+                            )
+                            agent_state.pending_validation = ValidateInput(
+                                goal=agent_state.goal,
+                                proposed_action=iteration.think_output.proposed_action,
+                                reasoning=iteration.think_output.thought,
+                            )
+                            agent_state.validation_history.append(precheck_output)
+                            if precheck_output.requires_human_approval:
+                                agent_state.awaiting_human_approval = True
+                                agent_state.pending_approval_prompt = (
+                                    precheck_output.approval_prompt
+                                )
+                            iteration.validate_output = precheck_output
+                        else:
+                            # Clean action: only the LLM judge is skipped.
+                            logger.info("Skipping validation (auto-approve enabled)")
+                            iteration.validate_output = ValidateOutput(
+                                result=ValidationResult.APPROVED,
+                                confidence=ConfidenceLevel.HIGH,
+                                concerns=[],
+                                suggestions=["LLM validation skipped"],
+                                requires_human_approval=False,
+                            )
                     else:
                         validate_input = ValidateInput(
                             goal=agent_state.goal,

@@ -115,35 +115,17 @@ async def validate_phase(
             f"Starting VALIDATE phase for action: {validate_input.proposed_action.name}"
         )
 
-        # 1. Ensure the proposed tool is available for this run before
-        # asking the model or a human to judge safety. Deterministic — runs
-        # without the LLM or the prompt registry.
-        registry_check = _check_tool_registry(
+        # 1-2. Deterministic pre-checks (tool-registry membership, then
+        # dangerous patterns) — no LLM, no prompt registry. Public so the
+        # cycle can run the same guards when the LLM judge is skipped.
+        precheck_output = deterministic_precheck(
             validate_input.proposed_action,
             tool_manager,
+            goal=validate_input.goal,
+            reasoning=validate_input.reasoning,
         )
-        if registry_check:
-            logger.warning("Tool registry validation failed: %s", registry_check)
-            return ValidateOutput(
-                result=ValidationResult.REJECTED,
-                confidence=ConfidenceLevel.HIGH,
-                concerns=[registry_check],
-                suggestions=["Choose a loaded tool before validation and execution."],
-                requires_human_approval=False,
-            )
-
-        # 2. Check for dangerous patterns (also deterministic).
-        dangerous_check = _check_dangerous_patterns(validate_input.proposed_action)
-        if dangerous_check:
-            logger.warning(f"Dangerous pattern detected: {dangerous_check}")
-            return ValidateOutput(
-                result=ValidationResult.REQUIRES_HUMAN_APPROVAL,
-                confidence=ConfidenceLevel.HIGH,
-                concerns=[f"Dangerous pattern detected: {dangerous_check}"],
-                suggestions=["Request human approval before executing"],
-                requires_human_approval=True,
-                approval_prompt=_generate_approval_prompt(validate_input, dangerous_check),
-            )
+        if precheck_output is not None:
+            return precheck_output
 
         # 3. Render the VALIDATE messages (system + user) from the registry.
         #    Built BEFORE the LLM try/except: a broken template must abort
@@ -239,6 +221,68 @@ async def validate_phase(
                 requires_human_approval=True,
                 approval_prompt=f"Validation failed with error. Review action: {validate_input.proposed_action.name}",
             )
+
+
+# =============================================================================
+# DETERMINISTIC PRE-CHECK (public — shared with the cycle's skip_validation path)
+# =============================================================================
+
+
+def deterministic_precheck(
+    proposed_action: Any,
+    tool_manager: Any | None,
+    *,
+    goal: str = "",
+    reasoning: str = "",
+) -> ValidateOutput | None:
+    """Run the deterministic validation guards (no LLM, no prompt registry).
+
+    Order matters and is pinned by tests: the tool-registry membership check
+    runs first (an unloaded tool is REJECTED instead of raising an unusable
+    HITL request), then the dangerous-pattern scan (REQUIRES_HUMAN_APPROVAL
+    with a generated approval prompt).
+
+    Args:
+        proposed_action: The ToolCall to check.
+        tool_manager: Optional concrete tool registry; when None the
+            membership check is skipped (the danger scan still runs).
+        goal: Optional goal text, used only to build the approval prompt.
+        reasoning: Optional reasoning text, used only to build the approval
+            prompt.
+
+    Returns:
+        A terminal ``ValidateOutput`` when a guard fires, or ``None`` when
+        the action passes both checks.
+    """
+    registry_check = _check_tool_registry(proposed_action, tool_manager)
+    if registry_check:
+        logger.warning("Tool registry validation failed: %s", registry_check)
+        return ValidateOutput(
+            result=ValidationResult.REJECTED,
+            confidence=ConfidenceLevel.HIGH,
+            concerns=[registry_check],
+            suggestions=["Choose a loaded tool before validation and execution."],
+            requires_human_approval=False,
+        )
+
+    dangerous_check = _check_dangerous_patterns(proposed_action)
+    if dangerous_check:
+        logger.warning(f"Dangerous pattern detected: {dangerous_check}")
+        approval_input = ValidateInput(
+            goal=goal or "",
+            proposed_action=proposed_action,
+            reasoning=reasoning or "",
+        )
+        return ValidateOutput(
+            result=ValidationResult.REQUIRES_HUMAN_APPROVAL,
+            confidence=ConfidenceLevel.HIGH,
+            concerns=[f"Dangerous pattern detected: {dangerous_check}"],
+            suggestions=["Request human approval before executing"],
+            requires_human_approval=True,
+            approval_prompt=_generate_approval_prompt(approval_input, dangerous_check),
+        )
+
+    return None
 
 
 # =============================================================================
@@ -502,4 +546,4 @@ Do you approve this action? (yes/no)
 # EXPORTS
 # =============================================================================
 
-__all__ = ["validate_phase"]
+__all__ = ["deterministic_precheck", "validate_phase"]
