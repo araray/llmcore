@@ -71,10 +71,10 @@ class MockSandboxProvider(SandboxProvider):
         self._config = config
         self._status = SandboxStatus.READY
 
-    async def execute_shell(self, command, timeout=None, working_dir=None):
+    async def execute_shell(self, command, timeout=None, working_dir=None):  # noqa: ASYNC109
         pass
 
-    async def execute_python(self, code, timeout=None, working_dir=None):
+    async def execute_python(self, code, timeout=None, working_dir=None):  # noqa: ASYNC109
         pass
 
     async def write_file(self, path, content, mode="w"):
@@ -207,6 +207,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that _setup_sandbox returns None when sandbox is disabled in config."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -228,6 +229,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             sandbox = await agent._setup_sandbox(None)
@@ -240,6 +242,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
         mock_sandbox_provider,
     ):
@@ -269,6 +272,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             sandbox = await agent._setup_sandbox(None)
@@ -282,6 +286,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
         mock_sandbox_provider,
     ):
@@ -310,6 +315,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             sandbox = await agent._setup_sandbox("docker")
@@ -326,6 +332,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
         mock_sandbox_provider,
     ):
@@ -354,6 +361,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             # Invalid mode should fall back to config default
@@ -368,6 +376,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
         mock_sandbox_provider,
     ):
@@ -396,6 +405,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             await agent._setup_sandbox("docker")
@@ -408,6 +418,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
     ):
         """Test that _setup_sandbox falls back gracefully when creation fails."""
@@ -435,6 +446,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             # Should return None (fallback) instead of raising
@@ -448,6 +460,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         temp_config_dir,
     ):
         """Test that _setup_sandbox raises when fallback is disabled."""
@@ -487,6 +500,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             # Should raise when fallback is disabled
@@ -500,6 +514,7 @@ class TestSandboxSetup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that _setup_sandbox returns None when config loading fails."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -513,6 +528,7 @@ class TestSandboxSetup:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             sandbox = await agent._setup_sandbox("docker")
@@ -534,6 +550,7 @@ class TestSandboxCleanup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that cleanup with None sandbox is a no-op."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -543,6 +560,7 @@ class TestSandboxCleanup:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Should not raise
@@ -555,6 +573,7 @@ class TestSandboxCleanup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_provider,
     ):
         """Test that cleanup uses registry when available."""
@@ -565,6 +584,7 @@ class TestSandboxCleanup:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Setup mock registry
@@ -586,6 +606,7 @@ class TestSandboxCleanup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_provider,
     ):
         """Test that cleanup falls back to direct cleanup when no registry."""
@@ -596,6 +617,7 @@ class TestSandboxCleanup:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # No registry set
@@ -615,6 +637,7 @@ class TestSandboxCleanup:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that cleanup errors don't propagate."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -624,6 +647,7 @@ class TestSandboxCleanup:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Mock sandbox that raises on cleanup
@@ -651,6 +675,7 @@ class TestSandboxIntegrationWithRun:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_system_config,
         mock_sandbox_provider,
     ):
@@ -692,9 +717,10 @@ class TestSandboxIntegrationWithRun:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
-            result = await agent.run(
+            await agent.run(
                 goal="Test goal",
                 use_sandbox=True,
                 sandbox_type="docker",
@@ -714,6 +740,7 @@ class TestSandboxIntegrationWithRun:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that run() skips sandbox operations when use_sandbox=False."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -738,6 +765,7 @@ class TestSandboxIntegrationWithRun:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             await agent.run(
@@ -765,6 +793,7 @@ class TestSandboxConfiguration:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
         mock_sandbox_provider,
         monkeypatch,
     ):
@@ -806,6 +835,7 @@ class TestSandboxEdgeCases:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test handling when sandbox config returns None-like values."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -826,6 +856,7 @@ class TestSandboxEdgeCases:
                 memory_manager=mock_memory_manager,
                 storage_manager=mock_storage_manager,
                 tool_manager=mock_tool_manager,
+                prompt_registry=bundled_prompt_registry,
             )
 
             result = await agent._setup_sandbox("docker")
@@ -838,6 +869,7 @@ class TestSandboxEdgeCases:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test cleanup handles sandbox with no config."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -847,6 +879,7 @@ class TestSandboxEdgeCases:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Mock sandbox with no config

@@ -48,7 +48,9 @@ class TestActivityFallback:
         )
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_on_tool_error(self, agents_config, mock_provider, agent_state):
+    async def test_activity_fallback_on_tool_error(
+        self, agents_config, mock_provider, agent_state, bundled_prompt_registry
+    ):
         """Test that activity fallback activates on tool support error."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -120,6 +122,7 @@ class TestActivityFallback:
             provider_manager=mock_provider_manager,
             memory_manager=mock_memory_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -130,7 +133,7 @@ class TestActivityFallback:
 
     @pytest.mark.asyncio
     async def test_activity_protocol_can_call_loaded_tool(
-        self, agents_config, mock_provider, agent_state
+        self, agents_config, mock_provider, agent_state, bundled_prompt_registry
     ):
         """XML fallback can name a loaded ToolManager tool and execute it normally."""
         from llmcore.agents.cognitive.models import ActInput, ThinkInput, ValidationResult
@@ -202,6 +205,7 @@ class TestActivityFallback:
             provider_manager=provider_manager,
             memory_manager=MagicMock(),
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -228,7 +232,9 @@ class TestActivityFallback:
         assert act_output.tool_result.content == "inspected README.md"
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_disabled(self, mock_provider, agent_state):
+    async def test_activity_fallback_disabled(
+        self, mock_provider, agent_state, bundled_prompt_registry
+    ):
         """Test that activity fallback doesn't activate when disabled."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -258,6 +264,7 @@ class TestActivityFallback:
             provider_manager=mock_provider_manager,
             memory_manager=MagicMock(),
             tool_manager=MagicMock(),
+            prompt_registry=bundled_prompt_registry,
             agents_config=config,
         )
 

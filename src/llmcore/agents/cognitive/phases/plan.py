@@ -22,8 +22,10 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from ..models import EnhancedAgentState, PlanInput, PlanOutput
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
 
 if TYPE_CHECKING:
+    from ....models import Message
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -57,7 +59,8 @@ async def plan_phase(
         agent_state: Current enhanced agent state
         plan_input: Input configuration for planning
         provider_manager: Provider manager for LLM calls
-        prompt_registry: Optional prompt registry for templates
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — raises
+            ValueError when None; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
@@ -80,29 +83,23 @@ async def plan_phase(
         >>>
         >>> print(f"Generated {len(output.plan_steps)} steps")
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "cognitive.plan") as span:
+        require_prompt_registry(prompt_registry, "PLAN")
+        logger.debug("Starting PLAN phase")
+
+        # 1. Render the PLAN messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        messages = _generate_planning_messages(
+            plan_input=plan_input, prompt_registry=prompt_registry
+        )
+
         try:
-            logger.debug("Starting PLAN phase")
-
-            # 1. Generate planning prompt
-            planning_prompt = _generate_planning_prompt(
-                plan_input=plan_input, prompt_registry=prompt_registry
-            )
-
             # 2. Call LLM
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
-
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are a strategic planning agent. Create clear, actionable plans.",
-                ),
-                Message(role=Role.USER, content=planning_prompt),
-            ]
 
             if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
                 response = await provider_manager.chat_completion_with_retry(
@@ -141,19 +138,13 @@ async def plan_phase(
             agent_state.plan_created_at = output.created_at
             agent_state.plan_version += 1
 
-            # 5. Record metrics if using prompt library
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    # Get active version ID for planning_prompt
-                    template = prompt_registry.get_template("planning_prompt")
-                    if template.active_version:
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=len(output.plan_steps) > 0,
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 5. Record prompt usage metrics (best-effort)
+            record_template_use(
+                prompt_registry,
+                "planning_prompt",
+                success=len(output.plan_steps) > 0,
+                tokens=total_tokens,
+            )
 
             # 6. Add tracing
             if span:
@@ -191,72 +182,40 @@ async def plan_phase(
 # =============================================================================
 
 
-def _generate_planning_prompt(plan_input: PlanInput, prompt_registry: Any | None) -> str:
+def _generate_planning_messages(
+    plan_input: PlanInput, prompt_registry: Any
+) -> list["Message"]:
     """
-    Generate the planning prompt using prompt library or fallback.
+    Render the PLAN phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         plan_input: Planning input configuration
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted planning prompt
+        Role-structured messages for the LLM call
     """
-    # Try to use prompt library if available
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="planning_prompt",
-                variables={
-                    "goal": plan_input.goal,
-                    "context": plan_input.context or "",
-                    "constraints": plan_input.constraints or "",
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back to default")
-
-    # Fallback prompt
-    prompt = f"""Create a strategic plan to achieve the following goal:
-
-GOAL:
-{plan_input.goal}
-"""
-
-    if plan_input.context:
-        prompt += f"\n\nCONTEXT:\n{plan_input.context}"
-
-    if plan_input.constraints:
-        prompt += f"\n\nCONSTRAINTS:\n{plan_input.constraints}"
-
+    existing_plan_section = ""
     if plan_input.existing_plan:
-        prompt += "\n\nEXISTING PLAN:\n"
-        for i, step in enumerate(plan_input.existing_plan, 1):
-            prompt += f"{i}. {step}\n"
-        prompt += "\nRefine or update this plan as needed."
+        existing_plan_section = (
+            "\n\nEXISTING PLAN:\n"
+            + "".join(f"{i}. {step}\n" for i, step in enumerate(plan_input.existing_plan, 1))
+            + "\nRefine or update this plan as needed."
+        )
 
-    prompt += """
-
-Provide your plan as:
-1. A numbered list of concrete, actionable steps
-2. Strategic reasoning explaining your approach
-3. Any risks or challenges identified
-
-FORMAT:
-PLAN:
-1. [First step]
-2. [Second step]
-...
-
-REASONING:
-[Your strategic approach]
-
-RISKS:
-- [Risk 1]
-- [Risk 2]
-"""
-
-    return prompt
+    return messages_from_registry(
+        prompt_registry,
+        "planning_prompt",
+        {
+            "goal": plan_input.goal,
+            "context": plan_input.context or "",
+            "constraints": plan_input.constraints or "",
+            "existing_plan_section": existing_plan_section,
+        },
+    )
 
 
 def _parse_plan_response(response_text: str, plan_input: PlanInput) -> PlanOutput:

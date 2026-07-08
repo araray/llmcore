@@ -774,6 +774,21 @@ class EnhancedAgentManager(AgentManager):
         self._grimoire = grimoire
         self._tool_catalog = tool_catalog
 
+        # Control plane (0.52.0): the prompt registry is mandatory. When the
+        # caller did not inject one (direct construction), self-build the
+        # grimoire-backed adapter — over the provided grimoire instance when
+        # given, else over the bundled pack alone. Grimoire is a hard
+        # dependency, so this always succeeds on a healthy install.
+        if prompt_registry is None:
+            from grimoire import Grimoire as _Grimoire
+
+            from ..grimoire_runtime import bundled_pack_path
+            from .prompts.grimoire_adapter import GrimoirePromptRegistryAdapter
+
+            prompt_registry = GrimoirePromptRegistryAdapter(
+                grimoire if grimoire is not None else _Grimoire(bundled_pack_path())
+            )
+
         # Store additional components
         self.prompt_registry = prompt_registry
         self.default_mode = default_mode

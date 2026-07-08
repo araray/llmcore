@@ -180,7 +180,8 @@ class SingleAgentMode:
             memory_manager: Memory manager for context
             storage_manager: Storage manager for episodic memory
             tool_manager: Tool manager for actions
-            prompt_registry: Optional prompt registry
+            prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — the
+                grimoire-backed adapter supplying every phase prompt)
             tracer: Optional OpenTelemetry tracer
             agents_config: Optional agents configuration (uses defaults if not provided)
             context_synthesizer: Optional context synthesizer for PERCEIVE
@@ -188,7 +189,16 @@ class SingleAgentMode:
                 semantic context source when ``context_synthesizer`` is absent
             observability: Optional observability components passed to the
                 semantic context source when llmcore creates one.
+
+        Raises:
+            ValueError: When ``prompt_registry`` is None — the grimoire
+                control plane is mandatory (0.52.0).
         """
+        if prompt_registry is None:
+            raise ValueError(
+                "prompt_registry is required (0.52.0): llmcore agent prompts "
+                "come from the grimoire control plane"
+            )
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
         self.storage_manager = storage_manager

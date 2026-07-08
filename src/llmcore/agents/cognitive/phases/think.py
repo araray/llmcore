@@ -29,12 +29,13 @@ from ..models import ConfidenceLevel, EnhancedAgentState, PlanStepSpec, ThinkInp
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
     from ....memory.manager import MemoryManager
+    from ....models import Message
     from ....providers.manager import ProviderManager
     from ...tools import ToolManager
     from ..models import EnhancedAgentState
 
 from ...activities.parser import ActivityRequestParser
-from ...activities.prompts import ACTIVITY_SYSTEM_PROMPT, generate_activity_prompt
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,8 @@ async def think_phase(
         provider_manager: Provider manager for LLM calls
         memory_manager: Memory manager for context
         tool_manager: Tool manager for available tools
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — raises
+            ValueError when None; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
@@ -103,7 +105,6 @@ async def think_phase(
         >>> if output.proposed_action:
         ...     print(f"Proposed: {output.proposed_action.name}")
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     # Load agents config if not provided (G3)
@@ -113,35 +114,38 @@ async def think_phase(
         agents_config = AgentsConfig()
 
     with create_span(tracer, "cognitive.think") as span:
-        try:
-            logger.debug("Starting THINK phase")
+        require_prompt_registry(prompt_registry, "THINK")
+        logger.debug("Starting THINK phase")
 
-            structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
-            if structured_action is not None:
-                output = ThinkOutput(
-                    thought=(
-                        "Using the structured tool intent supplied by the current plan step."
-                    ),
-                    proposed_action=structured_action,
-                    confidence=ConfidenceLevel.HIGH,
-                )
-                agent_state.pending_tool_call = structured_action
-                agent_state.overall_confidence = output.confidence
-                if span:
-                    add_span_attributes(
-                        span,
-                        {
-                            "think.structured_plan_step": True,
-                            "think.proposed_tool": structured_action.name,
-                        },
-                    )
-                return output
-
-            # 1. Generate thinking prompt
-            thinking_prompt = _generate_thinking_prompt(
-                think_input=think_input, agent_state=agent_state, prompt_registry=prompt_registry
+        structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
+        if structured_action is not None:
+            output = ThinkOutput(
+                thought=(
+                    "Using the structured tool intent supplied by the current plan step."
+                ),
+                proposed_action=structured_action,
+                confidence=ConfidenceLevel.HIGH,
             )
+            agent_state.pending_tool_call = structured_action
+            agent_state.overall_confidence = output.confidence
+            if span:
+                add_span_attributes(
+                    span,
+                    {
+                        "think.structured_plan_step": True,
+                        "think.proposed_tool": structured_action.name,
+                    },
+                )
+            return output
 
+        # 1. Render the THINK messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        messages = _generate_thinking_messages(
+            think_input=think_input, agent_state=agent_state, prompt_registry=prompt_registry
+        )
+
+        try:
             # 2. Build provider-native tool definitions
             tool_definitions = _select_native_tool_definitions(
                 tool_manager=tool_manager,
@@ -152,15 +156,6 @@ async def think_phase(
             # 3. Call LLM
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
-
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are an autonomous AI agent using the ReAct framework. "
-                    "Think step-by-step and use tools effectively.",
-                ),
-                Message(role=Role.USER, content=thinking_prompt),
-            ]
 
             # Convert Tool objects to provider-compatible format
             tools_param = tool_definitions if tool_definitions else None
@@ -276,21 +271,15 @@ async def think_phase(
 
             agent_state.overall_confidence = output.confidence
 
-            # 6. Record metrics
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    template = prompt_registry.get_template("thinking_prompt")
-                    if template.active_version:
-                        # Extract token usage from response dict
-                        usage = response.get("usage", {}) if isinstance(response, dict) else None
-                        total_tokens = usage.get("total_tokens") if usage else None
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=output.proposed_action is not None or output.is_final_answer,
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 6. Record prompt usage metrics (best-effort)
+            usage = response.get("usage", {}) if isinstance(response, dict) else None
+            total_tokens = usage.get("total_tokens") if usage else None
+            record_template_use(
+                prompt_registry,
+                "thinking_prompt",
+                success=output.proposed_action is not None or output.is_final_answer,
+                tokens=total_tokens,
+            )
 
             # 7. Add tracing
             if span:
@@ -339,7 +328,7 @@ async def _think_phase_with_activities(
     provider_manager: "ProviderManager",
     provider: Any,
     target_model: str,
-    prompt_registry: Any | None,
+    prompt_registry: Any,
     tool_manager: "ToolManager",
     agents_config: "AgentsConfig",
     tracer: Any | None,
@@ -349,7 +338,9 @@ async def _think_phase_with_activities(
     Fallback think phase using activity system instead of native tools.
 
     This prompts the model to output activities in XML format instead of
-    using native function calling.
+    using native function calling. Both the activity system prompt and the
+    per-iteration execution prompt come from the prompt registry (rendering
+    errors propagate — no inline fallback).
 
     Args:
         agent_state: Current agent state
@@ -357,7 +348,7 @@ async def _think_phase_with_activities(
         provider_manager: Provider manager for retry-aware LLM calls
         provider: LLM provider
         target_model: Target model name
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
         agents_config: Agents configuration
         tracer: Optional tracer
         span: Optional tracing span
@@ -372,22 +363,34 @@ async def _think_phase_with_activities(
     # Get built-in activity names plus runtime tools registered for this run.
     available_activities = _activity_protocol_names(tool_manager)
 
-    # Generate activity-aware prompt with available activities
-    activity_prompt = generate_activity_prompt(
-        goal=think_input.goal,
-        current_step=think_input.current_step,
-        history=think_input.history,
-        context=think_input.context,
-        available_activities=available_activities,
+    # Pre-formatted prompt sections; the spell interpolates them verbatim.
+    activities_section = ""
+    if available_activities:
+        activities_section = (
+            f"\nAVAILABLE ACTIVITIES: {', '.join(available_activities)}\n"
+            "IMPORTANT: You MUST use one of the activities listed above. "
+            "Do not invent activity names.\n"
+        )
+    history_section = f"\n\nRECENT HISTORY:\n{think_input.history}" if think_input.history else ""
+    context_section = f"\n\nRELEVANT CONTEXT:\n{think_input.context}" if think_input.context else ""
+
+    system_messages = messages_from_registry(prompt_registry, "activity_system", {})
+    user_messages = messages_from_registry(
+        prompt_registry,
+        "activity_execute",
+        {
+            "goal": think_input.goal,
+            "current_step": think_input.current_step,
+            "activities_section": activities_section,
+            "history_section": history_section,
+            "context_section": context_section,
+        },
     )
 
     # Build messages with activity system prompt
     messages = [
-        Message(
-            role=Role.SYSTEM,
-            content=ACTIVITY_SYSTEM_PROMPT,
-        ),
-        Message(role=Role.USER, content=activity_prompt),
+        Message(role=Role.SYSTEM, content=system_messages[0].content),
+        *user_messages,
     ]
 
     # Call LLM without tools
@@ -684,73 +687,36 @@ def _tool_call_from_plan_step(step_spec: PlanStepSpec | None):
     )
 
 
-def _generate_thinking_prompt(
-    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Any | None
-) -> str:
+def _generate_thinking_messages(
+    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Any
+) -> list["Message"]:
     """
-    Generate the thinking prompt using prompt library or fallback.
+    Render the THINK phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         think_input: Thinking input configuration
         agent_state: Current agent state
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted thinking prompt
+        Role-structured messages for the LLM call
     """
-    # Format tool definitions as string
-    tools_str = _format_tools(think_input.available_tools)
+    del agent_state  # Reserved for future state-aware prompt variables.
 
-    # Try to use prompt library
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="thinking_prompt",
-                variables={
-                    "goal": think_input.goal,
-                    "current_step": think_input.current_step,
-                    "history": think_input.history or "No previous actions.",
-                    "context": think_input.context or "",
-                    "tools": tools_str,
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back")
-
-    # Fallback prompt
-    prompt = f"""You are solving this task:
-
-GOAL: {think_input.goal}
-
-CURRENT STEP: {think_input.current_step}
-"""
-
-    if think_input.history:
-        prompt += f"\n\nRECENT HISTORY:\n{think_input.history}"
-
-    if think_input.context:
-        prompt += f"\n\nRELEVANT CONTEXT:\n{think_input.context}"
-
-    prompt += f"""
-
-AVAILABLE TOOLS:
-{tools_str}
-
-Use the ReAct format:
-
-Thought: [Your reasoning about what to do next]
-Action: [Tool name]
-Action Input: [Tool arguments]
-
-OR if the task is complete:
-
-Thought: [Final reasoning]
-Final Answer: [Complete answer to the goal]
-
-Respond now:
-"""
-
-    return prompt
+    return messages_from_registry(
+        prompt_registry,
+        "thinking_prompt",
+        {
+            "goal": think_input.goal,
+            "current_step": think_input.current_step,
+            "history": think_input.history or "No previous actions.",
+            "context": think_input.context or "",
+            "tools": _format_tools(think_input.available_tools),
+        },
+    )
 
 
 def _format_tools(tool_definitions: list[dict[str, Any]]) -> str:

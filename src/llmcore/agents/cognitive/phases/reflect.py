@@ -23,8 +23,10 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from ..models import EnhancedAgentState, ReflectInput, ReflectOutput
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
 
 if TYPE_CHECKING:
+    from ....models import Message
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -59,7 +61,8 @@ async def reflect_phase(
         agent_state: Current enhanced agent state
         reflect_input: Input with action and observation
         provider_manager: Provider manager for LLM calls
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — raises
+            ValueError when None; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
@@ -86,30 +89,23 @@ async def reflect_phase(
         >>> print(f"Progress: {output.progress_estimate:.1%}")
         >>> print(f"Update plan: {output.plan_needs_update}")
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "cognitive.reflect") as span:
+        require_prompt_registry(prompt_registry, "REFLECT")
+        logger.debug(f"Starting REFLECT phase (iteration {reflect_input.iteration_number})")
+
+        # 1. Render the REFLECT messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        messages = _generate_reflection_messages(
+            reflect_input=reflect_input, prompt_registry=prompt_registry
+        )
+
         try:
-            logger.debug(f"Starting REFLECT phase (iteration {reflect_input.iteration_number})")
-
-            # 1. Generate reflection prompt
-            reflection_prompt = _generate_reflection_prompt(
-                reflect_input=reflect_input, prompt_registry=prompt_registry
-            )
-
             # 2. Call LLM for reflection
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
-
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are a reflective AI agent. Honestly evaluate your actions, "
-                    "identify learnings, and recommend improvements.",
-                ),
-                Message(role=Role.USER, content=reflection_prompt),
-            ]
 
             if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
                 response = await provider_manager.chat_completion_with_retry(
@@ -143,18 +139,13 @@ async def reflect_phase(
             # 4. Update agent state progress
             agent_state.progress_estimate = output.progress_estimate
 
-            # 5. Record metrics
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    template = prompt_registry.get_template("reflection_prompt")
-                    if template.active_version:
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=True,  # Reflection always "succeeds"
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 5. Record prompt usage metrics (best-effort)
+            record_template_use(
+                prompt_registry,
+                "reflection_prompt",
+                success=True,  # Reflection always "succeeds"
+                tokens=total_tokens,
+            )
 
             # 6. Add tracing
             if span:
@@ -198,16 +189,21 @@ async def reflect_phase(
 # =============================================================================
 
 
-def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: Any | None) -> str:
+def _generate_reflection_messages(
+    reflect_input: ReflectInput, prompt_registry: Any
+) -> list["Message"]:
     """
-    Generate the reflection prompt using prompt library or fallback.
+    Render the REFLECT phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         reflect_input: Reflection input
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted reflection prompt
+        Role-structured messages for the LLM call
     """
     # Format plan
     plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(reflect_input.plan))
@@ -220,66 +216,26 @@ def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: An
         action_str = "(no action proposed)"
         logger.warning("REFLECT: No last_action available - THINK phase may have failed")
 
-    # Try to use prompt library
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="reflection_prompt",
-                variables={
-                    "goal": reflect_input.goal,
-                    "plan": plan_str,
-                    "last_action": action_str,
-                    "observation": reflect_input.observation,
-                    "iteration": str(reflect_input.iteration_number),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back")
-
-    # Fallback prompt
+    # Format current step display, e.g. "2. Read the file"
     current_step = (
         reflect_input.plan[reflect_input.current_step_index]
         if reflect_input.current_step_index < len(reflect_input.plan)
         else "Unknown"
     )
+    current_step_display = f"{reflect_input.current_step_index + 1}. {current_step}"
 
-    prompt = f"""Reflect on your recent action and its outcome.
-
-ORIGINAL GOAL:
-{reflect_input.goal}
-
-CURRENT PLAN:
-{plan_str}
-
-CURRENT STEP: {reflect_input.current_step_index + 1}. {current_step}
-
-LAST ACTION:
-{action_str}
-
-OBSERVATION:
-{reflect_input.observation}
-
-ITERATION: {reflect_input.iteration_number}
-
-REFLECTION QUESTIONS:
-1. Did the action produce the expected result?
-2. Are we making progress toward the goal?
-3. Should we continue with the current plan or adjust?
-4. What have we learned that could help in future iterations?
-5. Is the current step complete?
-
-PROVIDE:
-- EVALUATION: Assess the action's effectiveness (success/partial/failure)
-- PROGRESS: Estimate overall progress toward goal (0-100%)
-- INSIGHTS: Key learnings from this iteration
-- PLAN_UPDATE: Whether plan needs modification (yes/no)
-- STEP_COMPLETED: Is current step done (yes/no)
-- NEXT_FOCUS: What to prioritize in the next iteration
-
-Be honest and critical in your self-assessment.
-"""
-
-    return prompt
+    return messages_from_registry(
+        prompt_registry,
+        "reflection_prompt",
+        {
+            "goal": reflect_input.goal,
+            "plan": plan_str,
+            "current_step_display": current_step_display,
+            "last_action": action_str,
+            "observation": reflect_input.observation,
+            "iteration": str(reflect_input.iteration_number),
+        },
+    )
 
 
 def _parse_reflection_response(response_text: str, reflect_input: ReflectInput) -> ReflectOutput:

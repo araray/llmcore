@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -89,15 +90,19 @@ class TestFormatContracts:
         )
         for label in ("PLAN:", "REASONING:", "RISKS:"):
             assert label in text
-        # Equivalent to the legacy f-string generator's contract tail.
+        # The phase's registry-backed message builder preserves the same
+        # contract (the legacy f-string generator was deleted in 0.52.0).
         from llmcore.agents.cognitive.models import PlanInput
-        from llmcore.agents.cognitive.phases.plan import _generate_planning_prompt
+        from llmcore.agents.cognitive.phases.plan import _generate_planning_messages
+        from llmcore.models import Role
 
-        legacy = _generate_planning_prompt(
-            PlanInput(goal="G", context="C", constraints="K"), None
+        messages = _generate_planning_messages(
+            PlanInput(goal="G", context="C", constraints="K"), bundled_adapter
         )
+        assert messages[0].role == Role.SYSTEM
+        user_text = "\n".join(m.content for m in messages if m.role == Role.USER)
         for label in ("PLAN:", "REASONING:", "RISKS:"):
-            assert label in legacy
+            assert label in user_text
 
     def test_think_contract(self, bundled_adapter):
         text = bundled_adapter.render(
@@ -225,10 +230,10 @@ class TestLayering:
         overlay = self._overlay(tmp_path, "not: [valid frontmatter")
 
         class Cfg:
-            extra_pack_paths: list[str] = []
+            extra_pack_paths: ClassVar[list[str]] = []
             admin_repo_path = ""
-            user_repo_paths = [str(overlay)]
-            prompt_map: dict[str, str] = {}
+            user_repo_paths: ClassVar[list[str]] = [str(overlay)]
+            prompt_map: ClassVar[dict[str, str]] = {}
             strict = True
             validate_on_startup = True
 
@@ -256,10 +261,10 @@ class TestLayering:
         )
 
         class Cfg:
-            extra_pack_paths: list[str] = []
+            extra_pack_paths: ClassVar[list[str]] = []
             admin_repo_path = ""
-            user_repo_paths = [str(overlay)]
-            prompt_map: dict[str, str] = {}
+            user_repo_paths: ClassVar[list[str]] = [str(overlay)]
+            prompt_map: ClassVar[dict[str, str]] = {}
             strict = True
             validate_on_startup = True
 

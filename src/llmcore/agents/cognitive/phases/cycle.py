@@ -179,7 +179,7 @@ class CognitiveCycle:
         memory_manager: Memory manager for context
         storage_manager: Storage manager for episodic memory
         tool_manager: Tool manager for actions
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (required, grimoire adapter)
         context_synthesizer: Optional ContextSynthesizer for PERCEIVE phase
     """
 
@@ -204,7 +204,8 @@ class CognitiveCycle:
             memory_manager: Memory manager for context retrieval.
             storage_manager: Storage manager for episodic memory.
             tool_manager: Tool manager for actions.
-            prompt_registry: Optional prompt registry.
+            prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — the
+                grimoire-backed adapter supplying every phase prompt).
             tracer: Optional OpenTelemetry tracer.
             context_synthesizer: Optional ContextSynthesizer for sophisticated
                 multi-source context assembly in the PERCEIVE phase. When
@@ -214,7 +215,16 @@ class CognitiveCycle:
                 MemoryManager retrieval.
             agents_config: Optional agent system configuration. Defaults to
                 AgentsConfig() for direct CognitiveCycle use.
+
+        Raises:
+            ValueError: When ``prompt_registry`` is None — the grimoire
+                control plane is mandatory (0.52.0).
         """
+        if prompt_registry is None:
+            raise ValueError(
+                "prompt_registry is required (0.52.0): llmcore agent prompts "
+                "come from the grimoire control plane"
+            )
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
         self.storage_manager = storage_manager
