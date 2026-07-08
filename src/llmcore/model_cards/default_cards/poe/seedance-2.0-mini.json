@@ -1,0 +1,34 @@
+{
+  "model_id": "seedance-2.0-mini",
+  "display_name": "seedance-2.0-mini",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seedance 2.0 Mini is the fast, low-cost tier of ByteDance's Seedance 2.0 video model. It generates short cinematic clips with synchronized native audio, camera control, and stable motion from text, images, or video, at 480p and 720p. It is built for drafts, rapid iteration, and high-volume short-form video.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

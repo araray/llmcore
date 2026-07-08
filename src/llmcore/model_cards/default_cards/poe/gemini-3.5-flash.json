@@ -15,8 +15,8 @@
     "tool_use": true,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
-    "audio_input": true,
+    "vision": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false

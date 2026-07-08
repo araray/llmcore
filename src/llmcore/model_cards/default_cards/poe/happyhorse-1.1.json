@@ -1,0 +1,34 @@
+{
+  "model_id": "happyhorse-1.1",
+  "display_name": "happyhorse-1.1",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "HappyHorse 1.1, from Alibaba, supports text-to-video, image-to-video, and reference-to-video from up to nine images, all with synchronized native audio. It has sharper visual quality, smoother motion, and stronger character consistency across clips, at 720p or 1080p for 3 to 15 seconds.\n\nModes (auto-detected)\n- Text-to-Video: send a prompt only.\n- Image-to-Video: attach one image to animate it. The output follows the image's aspect ratio.\n- Reference-to-Video: attach 2 to 9 reference images and name them in your prompt as character1, character2, and so on for consistent subjects, scenes, and styles.\n\nInput limits\n- Prompt up to 2,500 characters.\n- Images: JPEG, PNG, BMP, or WEBP. One image for image-to-video, up to nine for reference-to-video.\n- No video or audio input.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

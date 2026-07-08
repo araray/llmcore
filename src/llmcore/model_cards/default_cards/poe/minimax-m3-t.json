@@ -1,0 +1,34 @@
+{
+  "model_id": "minimax-m3-t",
+  "display_name": "minimax-m3-t",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Together AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiniMax M3 is MiniMax's frontier open-weight model combining coding and agentic capability, 1M token context, and native multimodality in a single checkpoint — the first open-weight model to bring all three together. It introduces MSA (MiniMax Sparse Attention), a new sparse attention architecture that reduces per-token compute to 1/20 of the previous generation at 1M context, delivering 9x prefilling and 15x decoding speedups. The model is natively multimodal from training step 0, supporting image and video input and computer use, with a toggleable thinking mode. It scores 59.0% on SWE-Bench Pro and 66.0% on Terminal-Bench 2.1, and is available on Together AI with a 1M token context window.",
+  "tags": [],
+  "source": "generated"
+}
