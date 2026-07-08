@@ -1,11 +1,10 @@
 {
-  "model_id": "codestral-latest",
+  "model_id": "mistral-code-latest",
   "display_name": "codestral-2508",
   "provider": "mistral",
   "model_type": "code",
   "architecture": {
-    "family": "mistral",
-    "architecture_type": "dense"
+    "family": "mistral"
   },
   "context": {
     "max_input_tokens": 256000
@@ -22,13 +21,7 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": {
-    "currency": "USD",
-    "per_million_tokens": {
-      "input": 0.3,
-      "output": 0.9
-    }
-  },
+  "pricing": null,
   "lifecycle": {
     "status": "active",
     "release_date": "2026-07-08"
@@ -37,7 +30,7 @@
   "open_weights": false,
   "aliases": [
     "codestral-2508",
-    "mistral-code-latest",
+    "codestral-latest",
     "mistral-code-fim-latest"
   ],
   "description": "Our cutting-edge language model for coding released August 2025.",

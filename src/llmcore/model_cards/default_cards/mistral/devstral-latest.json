@@ -25,11 +25,15 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
+  "aliases": [
+    "devstral-2512",
+    "devstral-medium-latest",
+    "mistral-code-agent-latest"
+  ],
   "description": "Official devstral-2512 Mistral AI model",
   "tags": [],
   "source": "generated",

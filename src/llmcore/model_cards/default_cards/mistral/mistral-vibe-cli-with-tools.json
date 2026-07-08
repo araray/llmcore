@@ -1,13 +1,13 @@
 {
   "model_id": "mistral-vibe-cli-with-tools",
-  "display_name": "mistral-medium-2508",
+  "display_name": "mistral-medium-latest",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
     "family": "mistral"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -24,16 +24,20 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "mistral-medium-2508",
     "mistral-medium-latest",
-    "mistral-medium"
+    "mistral-medium",
+    "mistral-medium-3-5",
+    "mistral-medium-3.5",
+    "mistral-medium-3",
+    "mistral-medium-2604",
+    "mistral-vibe-cli-latest"
   ],
-  "description": "Update on Mistral Medium 3 with improved capabilities.",
+  "description": "Official mistral-medium-latest Mistral AI model",
   "tags": [
     "multimodal"
   ],
@@ -44,6 +48,6 @@
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.3
+    "default_temperature": 1.0
   }
 }

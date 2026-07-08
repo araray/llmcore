@@ -1,14 +1,13 @@
 {
-  "model_id": "codestral-latest",
-  "display_name": "codestral-2508",
+  "model_id": "labs-leanstral-1-5",
+  "display_name": "labs-leanstral-1-5-1",
   "provider": "mistral",
-  "model_type": "code",
+  "model_type": "chat",
   "architecture": {
-    "family": "mistral",
-    "architecture_type": "dense"
+    "family": "mistral"
   },
   "context": {
-    "max_input_tokens": 256000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -16,19 +15,13 @@
     "tool_use": true,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
   },
-  "pricing": {
-    "currency": "USD",
-    "per_million_tokens": {
-      "input": 0.3,
-      "output": 0.9
-    }
-  },
+  "pricing": null,
   "lifecycle": {
     "status": "active",
     "release_date": "2026-07-08"
@@ -36,22 +29,19 @@
   "license": null,
   "open_weights": false,
   "aliases": [
-    "codestral-2508",
-    "mistral-code-latest",
-    "mistral-code-fim-latest"
+    "labs-leanstral-1-5-1"
   ],
-  "description": "Our cutting-edge language model for coding released August 2025.",
+  "description": "A mid & post-trained version of mistral small 4 for Lean (260618 SFT)",
   "tags": [
-    "code",
-    "fim"
+    "multimodal"
   ],
   "source": "generated",
   "provider_mistral": {
     "open_weights": false,
-    "fill_in_middle": true,
+    "fill_in_middle": false,
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.3
+    "default_temperature": 1.0
   }
 }
