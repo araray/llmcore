@@ -140,14 +140,18 @@ async def update_phase(
 
                     episode = Episode(
                         session_id=session_id,
+                        # The Episode model requires `event_type` + `data`
+                        # (models.py) — NOT episode_type/content/metadata.
                         # EpisodeType has no TOOL_USE member (THOUGHT/ACTION/
                         # OBSERVATION/USER_INTERACTION/AGENT_REFLECTION); an
-                        # iteration's tool-use episode is an ACTION.  The old
-                        # EpisodeType.TOOL_USE raised AttributeError every
-                        # UPDATE phase, so no Darwin episode was ever recorded.
-                        episode_type=EpisodeType.ACTION,
-                        content=episode_content,
-                        metadata={
+                        # iteration's tool-use episode is an ACTION.  The prior
+                        # code passed the wrong field NAMES *and* enum, so
+                        # Episode(...) raised (AttributeError, then
+                        # ValidationError) every UPDATE phase — swallowed by the
+                        # except below — and no Darwin episode was ever recorded.
+                        event_type=EpisodeType.ACTION,
+                        data={
+                            "content": episode_content,
                             "iteration": agent_state.iteration_count + 1,
                             "progress": reflection.progress_estimate,
                             "insights_count": len(reflection.insights),
