@@ -613,11 +613,94 @@ exact 70-run matrix to measure the delta. That turns "Darwin is more accurate bu
 
 # Part VIII — External Research: How the Field Solves This
 
-*(Forthcoming — being gathered by a deep, multi-source research pass on: fixing
-agent-loop failure modes, SOTA agentic reasoning architectures, production agent
-frameworks, and prompt design for phase loops, plus a primary-source study of
-LangGraph / OpenAI Agents SDK / smolagents / CrewAI / DSPy / Swarm agent loops.
-This section will map field-proven techniques onto the Part VII directions.)*
+This part maps field-proven techniques onto the Part VII directions. It draws on
+a **primary-source study of six production agent frameworks** — their actual
+source cloned to `/av/avalon/xrepos` and read (§18–§19) — and a
+**multi-source academic + practitioner web-research pass** (§20, forthcoming).
+
+## 18. The cross-framework consensus (the important part)
+
+We read the agent-loop, termination, and tool-gating source of **LangGraph,
+OpenAI Agents SDK, smolagents, CrewAI, DSPy, and Swarm.** The convergence is
+striking — and it lands squarely on Darwin's two measured weaknesses
+(74% self-convergence, over-tooling). The table below is the single most useful
+artifact for the brainstorm: **every column-3 "✗/partial" is a concrete Darwin
+gap that ≥3 mature frameworks close the same way.**
+
+| Pattern | Who does it | Darwin today | The transfer |
+|---------|-------------|--------------|--------------|
+| **Explicit finish/submit tool** — the model *calls* to terminate; detected structurally by tool name/exception | smolagents (`final_answer`), DSPy (`finish`/`submit`), OpenAI (`StopAtTools`), CrewAI (`result_as_answer`) | **✗** — a `Final Answer:` **regex** on free text (`think.py:847`). llmcore *registers* a `finish` builtin but never wires it to convergence | **A1.** Wire the existing `finish` tool into the stop path; THINK/ACT recognize a `finish` call → done. Structural >> regex. *This is the #1 fix — 4 of 6 frameworks converge here.* |
+| **Forced synthesis on cap-hit, inside the loop** — never return nothing; on budget exhaustion do one tool-less pass to synthesize a best-effort answer | smolagents (`provide_final_answer`), LangGraph (soft finish before the wall), OpenAI (`RunErrorHandler`), DSPy V2 (`_forced_submit`, pins `tool_choice=submit`), CrewAI (`handle_max_iterations_exceeded` — invariant: the loop *cannot* exit un-converged), Swarm (flagged as its #1 gap) | **partial** — exists but **wairu-side** (grace synthesis), triplicated, and only after the fact | **A3/A1.** Move grace *into the cognitive cycle* as a guaranteed forced-finalize; make "loop cannot exit un-converged" an invariant. All 6 frameworks do cap-synthesis in-loop. |
+| **`remaining_steps` injected into the prompt** — the model self-paces toward the budget | LangGraph (computed `stop − step`, injected every step), smolagents (planning injects `remaining_steps`) | **✗** — budget is invisible to THINK/PLAN | **A2/B3.** Compute `budget − iteration` and pass it into THINK/PLAN so the model knows how much runway it has. |
+| **Soft budget-aware forced finish** — intercept the model *before* it over-commits when `remaining < 2` and swap in a terminal answer | LangGraph (`_are_more_steps_needed`) | **✗** | **A1.** When `remaining_steps < 2`, skip ACT/OBSERVE and force a final answer. Directly attacks the 26%. |
+| **Machine-readable `termination_reason`** — `converged`/`forced`/`max_steps`/`parse_error` | DSPy V2 (`termination_reason`), smolagents (`RunResult.state`) | **partial** — wairu records `terminal_mode` for the *whole turn*, but the cycle has no per-run stop reason | **A3/G4.** Have REFLECT/UPDATE emit *why* it stopped — essential telemetry to drive 74%→higher. |
+| **Complexity routing / fast-path** — cheaply classify, then skip phases or shrink the toolset for simple tasks | CrewAI (`reasoning_effort` low/med/high gates REFLECT depth), OpenAI (`tool_use_behavior` callable), LangGraph (`pre_model_hook` router), Swarm (agent/toolset swap), DSPy (per-call `max_iters`) | **partial** — `--engine auto` routes *between engines*, but **inside** Darwin every task runs all phases at full depth | **B1/B2/D2.** Add an intra-cycle fast-path (PERCEIVE→answer for trivial goals) and gate PLAN/REFLECT depth by a cheap complexity signal. llmcore has an unused `fast_path` stub. |
+| **Redundant / repeated-tool-call detection** — same tool+args as last step → reject/penalize | CrewAI (`_check_tool_repeated_usage`), OpenAI (`AgentToolUseTracker`) | **✗** (LangGraph, Swarm, Darwin all lack it) | **B/E.** A cheap deterministic loop-breaker: dedupe tool-call signatures in OBSERVE/REFLECT. Both frameworks that *have* it and both that *lack* it flag it as the missing guard. |
+| **`reset_tool_choice` after first tool** — stop *forcing* tool calls once one has run | OpenAI (one-line, docstring: "so the agent doesn't enter an infinite loop of tool usage") | n/a (Darwin doesn't force tool_choice, but the prompt effectively does) | **B1.** Ensure THINK isn't implicitly pushing a tool every iteration; add an explicit "you may answer now" affordance. |
+| **Separate acting from answering** — the loop only gathers observations; a *dedicated extraction pass* produces the final typed answer | DSPy (`extract` runs unconditionally after the loop) | **partial** — this is *exactly* what grace does, but only as a fallback | **A/C.** Consider making a final synthesis pass the **normal** terminal step, not just the rescue — DSPy converges more reliably by never asking the last loop-turn to be both correct *and* terminal. |
+| **Reflection → targeted, re-injected advice** — per-phase blame + concrete correction fed into the next attempt | DSPy (`Refine.OfferFeedback`, `hint_` injection) | **partial** — REFLECT produces `insights`/`next_focus` appended to working memory, but not phase-keyed corrective advice | **F/C.** Make REFLECT→UPDATE carry specific corrective guidance keyed to the phase that erred, so a retry is a *better* retry. |
+| **Errors-as-observations** — a failed tool's error becomes an observation; the loop continues and self-repairs | all six | **✓** — OBSERVE does this (truncated 4000 chars) | keep; it's a strength. |
+| **Structured output / typed done-contract** — `submit` validates all required output fields exist before accepting convergence | DSPy V2 (`submit` rejects missing fields), LangGraph (`generate_structured_response` node), OpenAI (`output_type` schema) | **✗** — every phase parses free-text with header regexes | **C2.** Move PLAN/THINK/REFLECT toward structured/JSON or native tool-calls so a prompt reword can't break parsing *and* so "done" is a typed assertion. |
+| **Gate phase depth / don't run every phase every loop** — planning on an interval, single-tool-then-reflect | smolagents (`planning_interval`), CrewAI (one tool → forced `post_tool_reasoning`) | **partial** — PLAN is conditional, but THINK/REFLECT/UPDATE run every iteration | **D2.** Most iterations should be ACT/OBSERVE; replan/reflect on a cadence, not always. |
+| **Bounded replanning** — a hard replan budget that keeps completed results | CrewAI (`max_replans=3`) | **✗** — the UPDATE→PLAN back-edge (`plan_needs_update`) has no replan cap | **A/E.** Cap replans so the cycle can't thrash re-planning. |
+
+## 19. Per-framework one-line highlights
+
+- **smolagents** — *code-as-action*: one step composes many operations in a
+  single LLM turn (collapsing N JSON round-trips), with an inner
+  `MAX_OPERATIONS` guard. `final_answer` is a real tool; cap-hit runs
+  `provide_final_answer`. The strongest anti-over-tooling idea we saw.
+- **LangGraph** — the loop *is a cyclic graph*; termination = "no tool call →
+  `END`" + a computed `remaining_steps` + a **soft forced-finish** one step
+  before the recursion wall. Also `return_direct` tools (tool output *is* the
+  answer, skip the final LLM round-trip).
+- **OpenAI Agents SDK** — type-driven termination (`NextStepFinalOutput`),
+  `reset_tool_choice`, `AgentToolUseTracker`, and a per-run `tool_use_behavior`
+  policy that's the cleanest complexity-routing injection point.
+- **DSPy** — `ReActV2` is the gold standard for convergence: explicit `submit`
+  with a **typed completeness contract**, **forced finalize** on cap, a
+  machine-readable `termination_reason`, and `Refine`'s per-module feedback loop.
+- **CrewAI** — the richest guard set: `handle_max_iterations_exceeded` invariant,
+  `reasoning_effort` depth routing, repeated-tool-call refusal, per-tool budgets,
+  bounded replanning, early goal-achieved detection.
+- **Swarm** — minimalist ("no tool call = done", agent handoffs); its *absences*
+  (no cap-synthesis, no redundant-call guard) are themselves a lesson — it
+  documents exactly the gaps Darwin also has.
+
+## 20. Academic & production web research
+
+*(Forthcoming — a multi-source, adversarially-verified pass on: fixing
+agent-loop failure modes, SOTA agentic reasoning architectures — ReAct /
+Reflexion / Plan-and-Solve / Tree-of-Thoughts / LATS / self-consistency /
+self-refine — and prompt design for phase loops. Will be folded in with
+citations, then reconciled against §18.)*
+
+## 21. Consensus → Darwin action map (ranked)
+
+Synthesizing §18 with Part VII, the highest-leverage sequence — each step is
+something ≥3 mature frameworks already do:
+
+1. **Wire a first-class `finish`/`submit` tool into convergence** (A1) — replace
+   the `Final Answer:` regex. *Universal across smolagents/DSPy/OpenAI/CrewAI.*
+2. **Move forced-finalize into the cycle** (A1/A3) — on cap-hit (and when
+   `remaining_steps < 2`), do one tool-less synthesis pass; make "cannot exit
+   un-converged" an invariant. Retire the triplicated wairu-side grace crutch.
+   *Universal.*
+3. **Inject `remaining_steps` + emit a `termination_reason`** (A2/A3/G4) —
+   budget-aware self-pacing and convergence telemetry. *LangGraph, DSPy, smolagents.*
+4. **Intra-cycle complexity routing + a direct-answer prompt** (B1/B2) — a cheap
+   "is a tool even needed?" gate and phase-depth by `reasoning_effort`. Targets
+   over-tooling head-on. *CrewAI, OpenAI, LangGraph, Swarm.*
+5. **Redundant-tool-call detector** (B/E) — dedupe tool signatures; a cheap
+   deterministic loop-breaker. *CrewAI, OpenAI.*
+6. **Structured phase outputs / typed done-contract** (C2) — move off regex-on-prose;
+   this also unlocks a clean Grimoire spell pack (C1). *DSPy, LangGraph, OpenAI.*
+7. **Reflection-as-targeted-advice** (F/C) — phase-keyed corrections re-injected
+   into the next iteration. *DSPy Refine.*
+
+Then re-run the exact 70-run matrix with token capture (D1) and restraint-aware
+scoring (G1) to measure the delta. Expect: over-tooling ↓, native convergence
+↑ (fewer grace runs), latency ↓ (fast-path + gated phases), accuracy held or up.
 
 ---
 
