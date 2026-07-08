@@ -1,19 +1,19 @@
 {
-  "model_id": "google/gemma-3-12b-it",
-  "display_name": "gemma-3-12b-it",
+  "model_id": "stepfun-ai/Step-3.7-Flash",
+  "display_name": "Step-3.7-Flash",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 16384
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
-    "json_mode": true,
-    "structured_output": true,
+    "json_mode": false,
+    "structured_output": false,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
@@ -23,8 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.05,
-      "output": 0.15
+      "input": 0.2,
+      "output": 1.15,
+      "cached_input": 0.04
     }
   },
   "lifecycle": {
@@ -33,7 +34,7 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Gemma 3 introduces multimodality, supporting vision-language input and text outputs. It handles context windows up to 128k tokens, understands over 140 languages, and offers improved math, reasoning, and chat capabilities, including structured outputs and function calling. Gemma 3-12B is Google's latest open source model, successor to Gemma 2",
+  "description": "Step 3.7 Flash is an open-source multimodal reasoning model by StepFun with 198B total parameters (11B active) using Mixture of Experts. It accepts   text and image inputs and features a 256K context window, selectable reasoning effort, tool calling, and agentic capabilities for coding and search workflows, scoring   80.9% on GPQA Diamond and 56.3% on SWE-bench Pro.",
   "tags": [
     "text",
     "image",
@@ -41,8 +42,8 @@
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "google/gemma-3-12b-it",
-    "quantization": "bfloat16",
+    "hugging_face_id": "stepfun-ai/Step-3.7-Flash",
+    "quantization": "modelopt",
     "input_modalities": [
       "text",
       "image"
@@ -52,8 +53,6 @@
     ],
     "supported_features": [
       "tools",
-      "json_mode",
-      "structured_outputs",
       "logprobs"
     ],
     "datacenters": [

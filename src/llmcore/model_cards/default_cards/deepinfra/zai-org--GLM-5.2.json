@@ -1,12 +1,12 @@
 {
-  "model_id": "openai/gpt-oss-120b",
-  "display_name": "gpt-oss-120b",
+  "model_id": "zai-org/GLM-5.2",
+  "display_name": "GLM-5.2",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 131072
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
@@ -23,8 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.039,
-      "output": 0.17
+      "input": 0.93,
+      "output": 3.0,
+      "cached_input": 0.18
     }
   },
   "lifecycle": {
@@ -33,15 +34,15 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
+  "description": "GLM-5.2 is Z-AI's latest flagship model for long-horizon tasks. It marks a substantial leap in long-horizon task capability over its predecessor GLM-5.1 and, for the first time, delivers that capability on a **solid 1M-token context**.",
   "tags": [
     "text",
     "output:text"
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "openai/gpt-oss-120b",
-    "quantization": "bfloat16",
+    "hugging_face_id": "zai-org/GLM-5.2",
+    "quantization": "fp4",
     "input_modalities": [
       "text"
     ],

@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 196608,
-    "max_output_tokens": 131072
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,

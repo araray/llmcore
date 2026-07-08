@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.3,
-      "output": 0.3
+      "input": 0.7,
+      "output": 0.7
     }
   },
   "lifecycle": {

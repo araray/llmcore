@@ -1,20 +1,20 @@
 {
-  "model_id": "openai/gpt-oss-120b",
-  "display_name": "gpt-oss-120b",
+  "model_id": "MiniMaxAI/MiniMax-M3",
+  "display_name": "MiniMax-M3",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 131072
+    "max_input_tokens": 524288,
+    "max_output_tokens": 512000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
     "json_mode": true,
-    "structured_output": true,
-    "vision": false,
+    "structured_output": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
@@ -23,8 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.039,
-      "output": 0.17
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.06
     }
   },
   "lifecycle": {
@@ -33,17 +34,19 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
+  "description": "MiniMax-M3 is a native multimodal model with 1M context. It has ~428B parameters and ~23B activated parameters.",
   "tags": [
     "text",
+    "image",
     "output:text"
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "openai/gpt-oss-120b",
-    "quantization": "bfloat16",
+    "hugging_face_id": "MiniMaxAI/MiniMax-M3",
+    "quantization": "bf16",
     "input_modalities": [
-      "text"
+      "text",
+      "image"
     ],
     "output_modalities": [
       "text"
@@ -52,7 +55,6 @@
       "tools",
       "json_mode",
       "reasoning",
-      "structured_outputs",
       "logprobs"
     ],
     "datacenters": [

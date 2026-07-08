@@ -1,12 +1,12 @@
 {
-  "model_id": "openai/gpt-oss-120b",
-  "display_name": "gpt-oss-120b",
+  "model_id": "moonshotai/Kimi-K2.7-Code",
+  "display_name": "Kimi-K2.7-Code",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 131072
+    "max_input_tokens": 262144,
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -14,7 +14,7 @@
     "tool_use": true,
     "json_mode": true,
     "structured_output": true,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
@@ -23,8 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.039,
-      "output": 0.17
+      "input": 0.74,
+      "output": 3.5,
+      "cached_input": 0.15
     }
   },
   "lifecycle": {
@@ -33,17 +34,19 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
+  "description": "Kimi K2.7 Code is a coding-focused agentic model built upon Kimi K2.6. With substantial improvements on real-world long-horizon coding tasks, it strengthens end-to-end task completion across complex software engineering workflows while improving token efficiency, reducing thinking-token usage by approximately 30% compared with Kimi K2.6.",
   "tags": [
     "text",
+    "image",
     "output:text"
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "openai/gpt-oss-120b",
-    "quantization": "bfloat16",
+    "hugging_face_id": "moonshotai/Kimi-K2.7-Code",
+    "quantization": "fp4",
     "input_modalities": [
-      "text"
+      "text",
+      "image"
     ],
     "output_modalities": [
       "text"

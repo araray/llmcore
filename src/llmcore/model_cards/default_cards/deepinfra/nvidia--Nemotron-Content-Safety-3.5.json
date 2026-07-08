@@ -1,6 +1,6 @@
 {
-  "model_id": "google/gemma-3-12b-it",
-  "display_name": "gemma-3-12b-it",
+  "model_id": "nvidia/Nemotron-Content-Safety-3.5",
+  "display_name": "Nemotron-Content-Safety-3.5",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
@@ -10,10 +10,10 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
-    "json_mode": true,
-    "structured_output": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.05,
-      "output": 0.15
+      "input": 0.2,
+      "output": 0.2
     }
   },
   "lifecycle": {
@@ -33,7 +33,7 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Gemma 3 introduces multimodality, supporting vision-language input and text outputs. It handles context windows up to 128k tokens, understands over 140 languages, and offers improved math, reasoning, and chat capabilities, including structured outputs and function calling. Gemma 3-12B is Google's latest open source model, successor to Gemma 2",
+  "description": "Nemotron Content Safety 3.5 is a multimodal safety classifier developed by NVIDIA. A  compact safety model that handles text, images, and custom policies. It outputs a safe/unsafe classification plus a reasoning trace, and can be used as an inference-time guardrail, as a judge for LLM safety testing and evaluation, or with the accompanying training dataset to post-train models for safer behavior.",
   "tags": [
     "text",
     "image",
@@ -41,7 +41,7 @@
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "google/gemma-3-12b-it",
+    "hugging_face_id": "nvidia/Nemotron-Content-Safety-3.5",
     "quantization": "bfloat16",
     "input_modalities": [
       "text",
@@ -51,9 +51,6 @@
       "text"
     ],
     "supported_features": [
-      "tools",
-      "json_mode",
-      "structured_outputs",
       "logprobs"
     ],
     "datacenters": [

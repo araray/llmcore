@@ -1,12 +1,12 @@
 {
-  "model_id": "openai/gpt-oss-120b",
-  "display_name": "gpt-oss-120b",
+  "model_id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
+  "display_name": "NVIDIA-Nemotron-3-Ultra-550B-A55B",
   "provider": "deepinfra",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 131072
+    "max_input_tokens": 262144,
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -14,7 +14,7 @@
     "tool_use": true,
     "json_mode": true,
     "structured_output": true,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
@@ -23,8 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.039,
-      "output": 0.17
+      "input": 0.5,
+      "output": 2.2,
+      "cached_input": 0.1
     }
   },
   "lifecycle": {
@@ -33,17 +34,19 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
+  "description": "Nemotron 3 Ultra is built for, frontier reasoning, orchestration, coding agents, deep research, and complex enterprise workflows. It delivers up to 5x faster inference and up to 30% lower cost for agentic workloads while supporting up to 1M token context.",
   "tags": [
     "text",
+    "image",
     "output:text"
   ],
   "source": "generated",
   "provider_extension": {
-    "hugging_face_id": "openai/gpt-oss-120b",
-    "quantization": "bfloat16",
+    "hugging_face_id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
+    "quantization": "fp4",
     "input_modalities": [
-      "text"
+      "text",
+      "image"
     ],
     "output_modalities": [
       "text"
