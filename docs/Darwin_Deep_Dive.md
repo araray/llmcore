@@ -12,10 +12,11 @@ date; verify against HEAD before acting on a specific line number.
 
 > **How to read this.** Parts I–IV are *understanding* (what exists and why).
 > Part V is the *evidence* (the eval). Part VI is *what's broken*. Part VII is
-> the *brainstorm material* (improvement directions, ranked). Part VIII will
-> hold the external-research synthesis (how the wider field solves these
-> problems) once that work lands. If you only read one thing, read the
-> Executive Summary then Part VII.
+> the *brainstorm material* (improvement directions). Part VIII is *how the
+> wider field solves these problems* — a six-framework source study (§18–19) and
+> a peer-reviewed literature synthesis (§20), converging on one prescription
+> (§21). If you only read one thing, read the Executive Summary, then **§21**
+> (the unified, ranked action map). References in Appendix D.
 
 ---
 
@@ -669,38 +670,213 @@ gap that ≥3 mature frameworks close the same way.**
 
 ## 20. Academic & production web research
 
-*(Forthcoming — a multi-source, adversarially-verified pass on: fixing
-agent-loop failure modes, SOTA agentic reasoning architectures — ReAct /
-Reflexion / Plan-and-Solve / Tree-of-Thoughts / LATS / self-consistency /
-self-refine — and prompt design for phase loops. Will be folded in with
-citations, then reconciled against §18.)*
+Three multi-source, adversarially-verified research passes (each: fan-out
+search → fetch → 3-vote refutation → synthesis) covered (a) agent-loop failure
+modes & fixes, (b) SOTA agentic reasoning architectures, (c) production
+frameworks (the doc layer complementing §18's source layer). The literature is
+unusually decisive and lands on the *same* levers §18 surfaced from code — with
+several findings that **directly implicate Darwin's design.**
 
-## 21. Consensus → Darwin action map (ranked)
+### 20.1 Over-tooling is an intrinsic, measurable, model-specific bias
 
-Synthesizing §18 with Part VII, the highest-leverage sequence — each step is
-something ≥3 mature frameworks already do:
+- **Agents systematically over-call tools; the hard part is deciding when NOT
+  to.** On the When2Call benchmark, six models show high call-accuracy but weak
+  *no-call* accuracy (55–70% overall); "To Call or Not to Call"
+  ([arXiv 2605.18882]) formalizes an **Intrinsic Bias toward CALL** — the model
+  favors calling even when call/no-call evidence is at parity. Prompting "use
+  tools less" is the *wrong* lever: it cuts calls indiscriminately and hard
+  tasks pay a disproportionate accuracy price.
+- **The tool-vs-answer decision is already latent in the model.** "LLM Agents
+  Already Know When to Call Tools" ([arXiv 2605.09252], UCSD/Amazon) shows
+  tool-necessity is **linearly decodable from the pre-generation hidden state
+  (AUROC 0.89–0.96)**. A tiny linear probe ("Probe&Prefill") cuts tool calls
+  **~48% at 1.7% accuracy loss** — 8× better than the best prompt-only baseline
+  (which cuts only 6%) — and on a real agentic benchmark cuts API calls 20–56%
+  with *no* accuracy loss. (Caveat: needs white-box activations — applies to
+  self-hosted models, not API-only.)
+- **Necessity is model-specific** ([arXiv 2605.14038], UMD): routing must be
+  *capability-calibrated per model* — there's a 26–54% "knowing-doing gap"
+  where the model recognizes a tool is needed but fails to act. **This is
+  precisely our eval finding that Darwin amplifies model quality differences**
+  (gpt-5.4 100%@25s vs kimi 100%@219s) — the over-tooling/convergence gap is
+  model-dependent, so any fix should be tuned per model, not globally.
 
-1. **Wire a first-class `finish`/`submit` tool into convergence** (A1) — replace
-   the `Final Answer:` regex. *Universal across smolagents/DSPy/OpenAI/CrewAI.*
-2. **Move forced-finalize into the cycle** (A1/A3) — on cap-hit (and when
-   `remaining_steps < 2`), do one tool-less synthesis pass; make "cannot exit
-   un-converged" an invariant. Retire the triplicated wairu-side grace crutch.
-   *Universal.*
-3. **Inject `remaining_steps` + emit a `termination_reason`** (A2/A3/G4) —
-   budget-aware self-pacing and convergence telemetry. *LangGraph, DSPy, smolagents.*
-4. **Intra-cycle complexity routing + a direct-answer prompt** (B1/B2) — a cheap
-   "is a tool even needed?" gate and phase-depth by `reasoning_effort`. Targets
-   over-tooling head-on. *CrewAI, OpenAI, LangGraph, Swarm.*
-5. **Redundant-tool-call detector** (B/E) — dedupe tool signatures; a cheap
-   deterministic loop-breaker. *CrewAI, OpenAI.*
-6. **Structured phase outputs / typed done-contract** (C2) — move off regex-on-prose;
-   this also unlocks a clean Grimoire spell pack (C1). *DSPy, LangGraph, OpenAI.*
-7. **Reflection-as-targeted-advice** (F/C) — phase-keyed corrections re-injected
-   into the next iteration. *DSPy Refine.*
+### 20.2 Convergence: never delegate the stop decision to the model alone
 
-Then re-run the exact 70-run matrix with token capture (D1) and restraint-aware
-scoring (G1) to measure the delta. Expect: over-tooling ↓, native convergence
-↑ (fewer grace runs), latency ↓ (fast-path + gated phases), accuracy held or up.
+- **The single most-cited cause of non-termination is an unbounded feedback
+  path.** An empirical study of 68 real infinite-loop failures across 47
+  projects ([arXiv 2607.01641]) finds every one shared a missing/mis-scoped
+  bound, and **38.2% stem from delegating the stop decision to the model.** A
+  stop criterion only works if it's a *verifiable* "strong finite bound sitting
+  **on** the loop's feedback path"** — exactly the explicit finish-tool +
+  in-loop forced-finalize pattern §18 found universal.
+- **Running to budget exhaustion is actively harmful, not just wasteful** —
+  correct answers get *discarded during over-refinement.* Adaptive early
+  termination (an LLM-as-judge deciding each round whether to stop, with a
+  minimum-2-round floor — TUMIX, [arXiv 2510.01279], Google) reaches near-full
+  accuracy at **~49% of fixed-round cost.** Darwin's "act until the budget runs
+  out" default is the anti-pattern here; the 4 budget-exhausting runs in our
+  eval are the symptom.
+- **Reflexion's bounded termination is the template**: stop on *max-trials* OR
+  *no-improvement between two trials* OR *success* ([arXiv 2303.11366]).
+
+### 20.3 Reflection only helps when it's grounded in an external check
+
+This is the subtlest — and most important — nuance for Darwin's REFLECT phase:
+
+- **Same-model Self-Refine works** (~20% absolute preference gain, no training;
+  NeurIPS 2023 [arXiv 2303.17651]) **when the critique targets stylistic/format
+  quality with a clear improvement signal.**
+- **BUT intrinsic self-correction — a model re-judging its own reasoning with NO
+  external signal — is unreliable and frequently NET-NEGATIVE** (ICLR 2024
+  [arXiv 2310.01798]; TACL 2024): performance often *degrades* after
+  self-correction on reasoning tasks.
+- **Reflexion works because it retries against a task signal** (unit tests, a
+  binary reward/heuristic), writing verbal critiques into episodic memory. The
+  lesson: **REFLECT should be gated on a verifiable external check (a tool
+  result, an oracle, a test), not on the model re-scoring itself.** Darwin's
+  REFLECT currently self-evaluates and emits a heuristic `progress_estimate`
+  with no external anchor — a documented anti-pattern.
+
+### 20.4 The architecture taxonomy — three cost tiers keyed to LLM-calls/step
+
+| Architecture | Structure | Termination | vs ReAct | Cost |
+|---|---|---|---|---|
+| **ReAct** ([2210.03629]) | interleave reason+act+observe, 1 call/step | no tool call → done | baseline; +34%/+10% ALFWorld/WebShop over non-reasoning | **1×** (cheapest) |
+| **Reflexion** ([2303.11366]) | verbal critique → episodic memory → retry | max-trials / no-improve / success | 80→91% HumanEval; 75→97% AlfWorld ≤12 trials | +few/failed step |
+| **ADaPT** ([2311.05772]) | recursively decompose **only on failure**, bounded depth | executor self-classifies done/failed | +28/27/33 on ALFWorld/WebShop/TextCraft | conditional |
+| **ReWOO** ([2305.18323]) | Planner blueprints all tool calls upfront → Worker → Solver | plan consumed | +4% HotpotQA, **5× token efficiency** | low (decoupled) |
+| **Self-Consistency** ([2203.11171]) | sample N CoT paths, majority vote | fixed N | +18% GSM8K | **N×** |
+| **LATS** ([2310.04406]) | MCTS over trajectories + LM value + reflection | solved or compute budget | HotpotQA 0.61 vs 0.32; HumanEval 92.7% | **5–20×** |
+
+**The accuracy-without-latency-explosion lever is architectural and
+conditional:** reflect/decompose *only when a step fails* (ADaPT/Reflexion),
+tune search width (LATS n=1 ≈ ReAct), or plan tool calls upfront to decouple
+reasoning from observations (ReWOO). The verified synthesis recommendation for
+an 8-phase cycle: **a ReAct backbone + Reflexion-style verbal REFLECT/UPDATE
+into memory + ADaPT-style *bounded, failure-triggered* decomposition at PLAN +
+a binary self-heuristic at VALIDATE, under a hard cap, reserving LATS-style
+branching for genuinely hard sub-tasks only.**
+
+### 20.5 Latency/cost: route by complexity, prune the trajectory
+
+- **Complexity routing to both a cheaper model and a lighter reasoning
+  strategy** (Route-To-Reason, [arXiv 2505.19435]): +2.5pp accuracy at **−60%
+  tokens.** Heavy reasoning helps mainly on hard tasks and is *marginal or
+  negative* on easy ones — the empirical basis for a fast-path.
+- **Inference-time trajectory reduction** (AgentDiet, FSE 2026
+  [arXiv 2509.23586]): removing redundant/expired info from the running
+  trajectory cuts input tokens **40–60%** and cost **21–36%** with no
+  performance loss. Mirrors CrewAI's isolated-context and DSPy's oldest-first
+  truncation from §18.
+
+### 20.6 Three findings that directly implicate Darwin's design
+
+1. **Darwin PLANs before it observes — and the literature says that hurts
+   knowledge tasks.** BOLAA ([arXiv 2308.05960]) shows PlanAct/PlanReAct
+   *underperform* plain ReAct on knowledge-reasoning (HotpotQA): "plans
+   generated before interaction lack contextualized information and induce more
+   hallucination." Darwin's cycle runs **PLAN → THINK**, planning up front every
+   time. This plausibly explains **why Darwin over-tools *knowledge* questions**
+   (it plans tool steps for a question it could just answer) — the most
+   surprising over-tooling result in our eval. **Directions:** make PLAN
+   conditional/failure-triggered (ADaPT), or defer planning until after a first
+   PERCEIVE/THINK observation, or skip PLAN entirely on no-tool goals.
+2. **Darwin's REFLECT self-judges without an external anchor** (§20.3) — the
+   documented net-negative pattern. Gate it on tool-result/oracle signals.
+3. **Darwin runs all reflective phases every iteration** — the literature says
+   reflect/decompose *conditionally on failure* is what buys accuracy without
+   latency. Darwin's every-iteration REFLECT/UPDATE is pure overhead on
+   succeeding steps.
+
+### 20.7 Engineering ⋂ Academia — the consensus is one prescription
+
+The six-framework source study (§18) and the peer-reviewed literature (§20)
+independently converge:
+
+| Lever | §18 frameworks | §20 literature |
+|-------|----------------|----------------|
+| Explicit finish/submit tool | 4/6 | non-termination study: bound must be *on* the feedback path |
+| In-loop forced-finalize on cap | 6/6 | TUMIX adaptive stop; budget-exhaustion is harmful |
+| Complexity routing / fast-path | CrewAI, OpenAI, LangGraph, Swarm | RTR (−60% tokens); Probe&Prefill (−48% calls) |
+| Conditional (not every-iteration) reflect/plan | smolagents `planning_interval`, CrewAI | ADaPT (decompose on failure); BOLAA (plan-first hurts) |
+| Reflection grounded in external check | errors-as-observations (all 6) | Self-Refine caveat; Reflexion retries vs a test |
+| Structured/typed done-contract | DSPy `submit`, OpenAI `output_type` | — |
+| Trajectory/context pruning | CrewAI isolated ctx, DSPy truncation | AgentDiet (−40–60% tokens) |
+
+When the practitioners who *built* the frameworks and the researchers who
+*measured* the failure modes agree this precisely, the path is clear.
+
+## 21. Consensus → Darwin action map (ranked, unified)
+
+Synthesizing Part VII + §18 (framework source) + §20 (literature). Each item
+cites its dual evidence — *what mature frameworks build* and *what the research
+measures*. This is the recommended sequence for the team.
+
+**Tier 1 — convergence (attacks the 26% non-convergence + budget-exhaustion):**
+
+1. **Wire a first-class `finish`/`submit` tool into the stop path** (A1) —
+   replace the `Final Answer:` regex; llmcore already registers an unused
+   `finish` builtin. *Frameworks: 4/6. Research: the stop bound must sit ON the
+   feedback path ([2607.01641]); delegating stop to the model is the #1
+   non-termination cause.*
+2. **Move forced-finalize into the cycle as an invariant** (A1/A3) — on cap-hit
+   and when `remaining_steps < 2`, do one tool-less synthesis pass; "cannot exit
+   un-converged." Retire the triplicated wairu-side grace crutch. *Frameworks:
+   6/6. Research: budget-exhaustion is actively harmful; TUMIX adaptive stop hits
+   ~full accuracy at ~49% cost.*
+3. **Inject `remaining_steps` + emit a structured `termination_reason`**
+   (A2/A3/G4) — self-pacing + convergence telemetry. *Frameworks: LangGraph/DSPy/
+   smolagents. Research: Reflexion's max-trials/no-improve/success template.*
+
+**Tier 2 — over-tooling (attacks the 5-tools-for-a-knowledge-question problem):**
+
+4. **A direct-answer heuristic in the THINK/PLAN prompt + an intra-cycle
+   fast-path** (B1/B2) — "answer from your own knowledge if no tool is needed."
+   *Frameworks: complexity routing in CrewAI/OpenAI/LangGraph/Swarm. Research:
+   over-calling is an intrinsic bias; prompting "use tools less" is the wrong
+   lever, but RTR-style routing cuts tokens −60%.*
+5. **Make PLAN conditional / post-observation, not always-upfront** (new — B/A)
+   — Darwin plans before it observes, which **hurts knowledge tasks** ([2308.05960])
+   and is a prime suspect for the knowledge over-tooling. *Frameworks: smolagents
+   `planning_interval`, CrewAI. Research: ADaPT decomposes only on failure.*
+6. **Redundant-tool-call detector** (B/E) — dedupe tool signatures; a cheap
+   deterministic loop-breaker. *Frameworks: CrewAI, OpenAI. (Both frameworks
+   lacking it flag it as the missing guard.)*
+7. **(Self-hosted only) a tool-necessity probe** — tool-need is linearly
+   decodable from activations (AUROC 0.89–0.96); Probe&Prefill cuts calls ~48%
+   at 1.7% accuracy loss. Calibrate the threshold **per model** ([2605.09252],
+   [2605.14038]) — matches our eval's finding that Darwin amplifies per-model
+   differences.
+
+**Tier 3 — reflection & structure (quality + robustness):**
+
+8. **Ground REFLECT in an external check, not self-judgment** (new — F/C) —
+   Darwin's REFLECT self-scores and emits a heuristic `progress_estimate` with
+   no anchor; *intrinsic self-correction is net-negative on reasoning*
+   ([2310.01798]). Gate reflection on a tool-result/oracle signal (Reflexion),
+   and make REFLECT/UPDATE emit **phase-keyed corrective advice** re-injected
+   next iteration (DSPy `Refine`).
+9. **Structured/typed phase outputs** (C2) — move PLAN/THINK/REFLECT off
+   regex-on-prose toward JSON/native-tool-calls; also unlocks a clean Grimoire
+   spell pack (C1) and a typed done-contract. *Frameworks: DSPy `submit`, OpenAI
+   `output_type`, LangGraph structured node.*
+10. **Conditional phase depth + trajectory pruning** (D2/D-cost) — don't run
+    REFLECT/UPDATE every iteration on succeeding steps; prune stale trajectory
+    context. *Frameworks: CrewAI isolated context. Research: ADaPT conditional;
+    AgentDiet −40–60% tokens.*
+
+**Then measure.** Re-run the exact 70-run matrix with **token capture (D1)** and
+**restraint-aware scoring (G1)**, ≥2 trials. Expected deltas: over-tooling ↓,
+native convergence ↑ (fewer grace runs), latency ↓ (fast-path + conditional
+phases), accuracy held or up. The `darwin+grimoire` prompt-pack arm (C1) tests
+whether prompts alone close the gap before touching the architecture.
+
+> **If the team does only three things:** (1) an explicit finish tool +
+> in-loop forced-finalize (kills the grace crutch and the 26%), (2) a
+> direct-answer heuristic + conditional PLAN (kills knowledge over-tooling),
+> (3) externally-grounded REFLECT (stops the net-negative self-judgment). Then
+> re-run the benchmark.
 
 ---
 
@@ -753,3 +929,34 @@ python benchmarks/darwin_vs_lite.py run --engines lite,darwin --trials 1
 python benchmarks/darwin_vs_lite.py summary \
   --out benchmarks/results/results_2026-07-08.jsonl
 ```
+
+## Appendix D — References (Part VIII)
+
+**Peer-reviewed / arXiv (adversarially verified, §20):**
+- ReAct — *Reasoning + Acting* — arXiv 2210.03629 (ICLR 2023)
+- Reflexion — *verbal RL / episodic reflection* — arXiv 2303.11366 (NeurIPS 2023)
+- Self-Refine — arXiv 2303.17651 (NeurIPS 2023)
+- "LLMs cannot self-correct reasoning yet" — arXiv 2310.01798 (ICLR 2024); TACL 2024 self-correction survey
+- Self-Consistency — arXiv 2203.11171
+- Plan-and-Solve / BOLAA (plan-first hurts knowledge tasks) — arXiv 2308.05960
+- LATS (Language Agent Tree Search) — arXiv 2310.04406 (ICML 2024)
+- ADaPT (as-needed decomposition) — arXiv 2311.05772
+- ReWOO (reasoning without observation) — arXiv 2305.18323
+- When2Call / "To Call or Not to Call" (tool over-calling) — arXiv 2605.18882
+- "LLM Agents Already Know When to Call Tools" (Probe&Prefill) — arXiv 2605.09252
+- Model-Adaptive Tool Necessity / knowing-doing gap — arXiv 2605.14038
+- Agent-loop non-termination empirical study (68 failures) — arXiv 2607.01641
+- TUMIX (adaptive early termination) — arXiv 2510.01279
+- Route-To-Reason (complexity routing) — arXiv 2505.19435
+- AgentDiet (trajectory reduction) — arXiv 2509.23586 (FSE 2026)
+
+**Framework source studied (§18, cloned to `/av/avalon/xrepos`):**
+- LangGraph (`langchain-ai/langgraph`) · OpenAI Agents SDK (`openai/openai-agents-python`)
+  · smolagents (`huggingface/smolagents`) · CrewAI (`crewAIInc/crewAI`)
+  · DSPy (`stanfordnlp/dspy`) · Swarm (`openai/swarm`)
+
+*Note: a few 2605/2607-series arXiv ids are from very recent (2026) preprints
+surfaced by the research pass; treat their specific numbers as provisional and
+verify the id before citing externally — the findings were cross-checked against
+multiple independent sources during verification, but preprint ids occasionally
+shift.*
