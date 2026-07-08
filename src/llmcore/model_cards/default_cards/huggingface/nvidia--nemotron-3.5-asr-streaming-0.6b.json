@@ -1,12 +1,9 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "nvidia/nemotron-3.5-asr-streaming-0.6b",
+  "display_name": "nemotron-3.5-asr-streaming-0.6b",
   "provider": "huggingface",
   "model_type": "stt",
-  "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
-  },
+  "architecture": null,
   "context": {
     "max_input_tokens": 128000
   },
@@ -29,7 +26,7 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: nvidia/nemotron-3.5-asr-streaming-0.6b",
   "tags": [
     "open-weights",
     "audio",

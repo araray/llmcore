@@ -1,12 +1,9 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "CohereLabs/cohere-transcribe-03-2026",
+  "display_name": "cohere-transcribe-03-2026",
   "provider": "huggingface",
   "model_type": "stt",
-  "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
-  },
+  "architecture": null,
   "context": {
     "max_input_tokens": 128000
   },
@@ -29,7 +26,7 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: CohereLabs/cohere-transcribe-03-2026",
   "tags": [
     "open-weights",
     "audio",

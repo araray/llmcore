@@ -1,12 +1,9 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "WhereIsAI/UAE-Large-V1",
+  "display_name": "UAE-Large-V1",
   "provider": "huggingface",
-  "model_type": "stt",
-  "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
-  },
+  "model_type": "embedding",
+  "architecture": null,
   "context": {
     "max_input_tokens": 128000
   },
@@ -17,7 +14,7 @@
     "json_mode": false,
     "structured_output": false,
     "vision": false,
-    "audio_input": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
@@ -29,11 +26,10 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: WhereIsAI/UAE-Large-V1",
   "tags": [
     "open-weights",
-    "audio",
-    "stt"
+    "embedding"
   ],
   "source": "generated"
 }

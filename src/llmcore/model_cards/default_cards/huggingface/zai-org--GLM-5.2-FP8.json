@@ -1,23 +1,20 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "zai-org/GLM-5.2-FP8",
+  "display_name": "GLM-5.2-FP8",
   "provider": "huggingface",
-  "model_type": "stt",
-  "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
-  },
+  "model_type": "chat",
+  "architecture": null,
   "context": {
     "max_input_tokens": 128000
   },
   "capabilities": {
-    "streaming": false,
+    "streaming": true,
     "function_calling": false,
     "tool_use": false,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
-    "audio_input": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
@@ -29,11 +26,9 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: zai-org/GLM-5.2-FP8",
   "tags": [
-    "open-weights",
-    "audio",
-    "stt"
+    "open-weights"
   ],
   "source": "generated"
 }

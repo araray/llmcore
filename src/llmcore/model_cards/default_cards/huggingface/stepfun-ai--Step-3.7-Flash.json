@@ -1,12 +1,9 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "stepfun-ai/Step-3.7-Flash",
+  "display_name": "Step-3.7-Flash",
   "provider": "huggingface",
-  "model_type": "stt",
-  "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
-  },
+  "model_type": "vision",
+  "architecture": null,
   "context": {
     "max_input_tokens": 128000
   },
@@ -16,8 +13,8 @@
     "tool_use": false,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
-    "audio_input": true,
+    "vision": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
@@ -29,11 +26,11 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: stepfun-ai/Step-3.7-Flash",
   "tags": [
     "open-weights",
-    "audio",
-    "stt"
+    "multimodal",
+    "vision"
   ],
   "source": "generated"
 }

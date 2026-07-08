@@ -1,23 +1,23 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "Qwen/Qwen2.5-1.5B",
+  "display_name": "Qwen2.5-1.5B",
   "provider": "huggingface",
-  "model_type": "stt",
+  "model_type": "chat",
   "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
+    "family": "qwen",
+    "parameter_count": "1.5B"
   },
   "context": {
     "max_input_tokens": 128000
   },
   "capabilities": {
-    "streaming": false,
-    "function_calling": false,
-    "tool_use": false,
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
-    "audio_input": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
@@ -29,11 +29,10 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: Qwen/Qwen2.5-1.5B",
   "tags": [
     "open-weights",
-    "audio",
-    "stt"
+    "tool-calling"
   ],
   "source": "generated"
 }

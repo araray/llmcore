@@ -1,11 +1,11 @@
 {
-  "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "model_id": "Qwen/Qwen3-VL-32B-Instruct",
+  "display_name": "Qwen3-VL-32B-Instruct",
   "provider": "huggingface",
-  "model_type": "stt",
+  "model_type": "vision",
   "architecture": {
-    "family": "whisper",
-    "parameter_count": "809M"
+    "family": "qwen",
+    "parameter_count": "32B"
   },
   "context": {
     "max_input_tokens": 128000
@@ -16,8 +16,8 @@
     "tool_use": false,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
-    "audio_input": true,
+    "vision": true,
+    "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
@@ -29,11 +29,11 @@
   "license": null,
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
+  "description": "Huggingface model: Qwen/Qwen3-VL-32B-Instruct",
   "tags": [
     "open-weights",
-    "audio",
-    "stt"
+    "multimodal",
+    "vision"
   ],
   "source": "generated"
 }
