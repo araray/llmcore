@@ -1,17 +1,18 @@
 {
-  "model_id": "moonshotai/kimi-k2.6:free",
-  "display_name": "MoonshotAI: Kimi K2.6 (free)",
+  "model_id": "~anthropic/claude-fable-latest",
+  "display_name": "Anthropic: Claude Fable Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -19,15 +20,21 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 10.0,
+      "output": 50.0
+    }
+  },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-20"
+    "release_date": "2026-06-09"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Kimi K2.6 is Moonshot AI's next-generation multimodal model, designed for long-horizon coding, coding-driven UI/UX generation, and multi-agent orchestration. It handles complex end-to-end coding tasks across Python, Rust, and Go, and...",
+  "description": "This model always redirects to the latest model in the Claude Fable family.",
   "tags": [],
   "source": "generated"
 }

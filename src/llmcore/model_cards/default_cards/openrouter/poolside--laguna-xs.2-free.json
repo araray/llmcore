@@ -28,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
+  "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
   "tags": [],
   "source": "generated"
 }

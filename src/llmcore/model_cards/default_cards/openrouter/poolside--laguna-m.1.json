@@ -1,6 +1,6 @@
 {
-  "model_id": "poolside/laguna-m.1:free",
-  "display_name": "Poolside: Laguna M.1 (free)",
+  "model_id": "poolside/laguna-m.1",
+  "display_name": "Poolside: Laguna M.1",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -20,7 +20,13 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.4
+    }
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-04-28"

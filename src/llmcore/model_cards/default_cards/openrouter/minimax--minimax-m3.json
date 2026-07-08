@@ -1,18 +1,18 @@
 {
-  "model_id": "deepseek/deepseek-v4-flash:free",
-  "display_name": "DeepSeek: DeepSeek V4 Flash (free)",
+  "model_id": "minimax/minimax-m3",
+  "display_name": "MiniMax: MiniMax M3",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 384000
+    "max_output_tokens": 512000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -20,15 +20,21 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2
+    }
+  },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-24"
+    "release_date": "2026-05-31"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
+  "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
   "tags": [],
   "source": "generated"
 }

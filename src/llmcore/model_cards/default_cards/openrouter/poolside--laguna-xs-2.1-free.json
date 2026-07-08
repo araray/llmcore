@@ -1,6 +1,6 @@
 {
-  "model_id": "poolside/laguna-m.1:free",
-  "display_name": "Poolside: Laguna M.1 (free)",
+  "model_id": "poolside/laguna-xs-2.1:free",
+  "display_name": "Poolside: Laguna XS 2.1 (free)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -23,12 +23,12 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-28"
+    "release_date": "2026-07-02"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Laguna M.1 is the flagship coding agent model from [Poolside](https://poolside.ai/), optimized for complex software engineering tasks. Designed for agentic coding workflows, it supports tool calling and reasoning, with a 256K...",
+  "description": "Laguna XS 2.1 is the latest coding agent model in the 33B-A3B category from [Poolside](https://poolside.ai/) and a step forward from their Laguna XS.2 model (released in April 2026). It combines...",
   "tags": [],
   "source": "generated"
 }

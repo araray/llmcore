@@ -1,12 +1,12 @@
 {
-  "model_id": "poolside/laguna-m.1:free",
-  "display_name": "Poolside: Laguna M.1 (free)",
+  "model_id": "cohere/north-mini-code:free",
+  "display_name": "Cohere: North Mini Code (free)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 262144,
-    "max_output_tokens": 32768
+    "max_input_tokens": 256000,
+    "max_output_tokens": 64000
   },
   "capabilities": {
     "streaming": true,
@@ -23,12 +23,12 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-28"
+    "release_date": "2026-06-17"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Laguna M.1 is the flagship coding agent model from [Poolside](https://poolside.ai/), optimized for complex software engineering tasks. Designed for agentic coding workflows, it supports tool calling and reasoning, with a 256K...",
+  "description": "North Mini Code is Cohere's first agentic coding model and the debut of its North family. A sparse mixture-of-experts model with 30B total parameters and 3B active, it is optimized...",
   "tags": [],
   "source": "generated"
 }

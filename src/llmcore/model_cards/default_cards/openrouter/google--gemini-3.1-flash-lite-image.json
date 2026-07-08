@@ -1,12 +1,12 @@
 {
-  "model_id": "microsoft/phi-4-mini-instruct",
-  "display_name": "Microsoft: Phi 4 Mini Instruct",
+  "model_id": "google/gemini-3.1-flash-lite-image",
+  "display_name": "Google: Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 131072,
-    "max_output_tokens": 128000
+    "max_input_tokens": 65536,
+    "max_output_tokens": 66000
   },
   "capabilities": {
     "streaming": true,
@@ -23,18 +23,18 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.08,
-      "output": 0.35
+      "input": 0.25,
+      "output": 1.5
     }
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2025-10-17"
+    "release_date": "2026-06-30"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Phi-4-mini-instruct is a lightweight open model built upon synthetic data and filtered publicly available websites - with a focus on high-quality, reasoning dense data. The model belongs to the Phi-4...",
+  "description": "Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image) is Google's fastest, most cost-efficient Gemini image model, built for high-velocity developer pipelines and rapid-fire visual exploration. It delivers text-to-image generation...",
   "tags": [],
   "source": "generated"
 }

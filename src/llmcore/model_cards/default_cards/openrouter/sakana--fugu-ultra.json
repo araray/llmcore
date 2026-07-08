@@ -1,12 +1,12 @@
 {
-  "model_id": "poolside/laguna-m.1:free",
-  "display_name": "Poolside: Laguna M.1 (free)",
+  "model_id": "sakana/fugu-ultra",
+  "display_name": "Sakana: Fugu Ultra",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 262144,
-    "max_output_tokens": 32768
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -20,15 +20,21 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 5.0,
+      "output": 30.0
+    }
+  },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-28"
+    "release_date": "2026-06-24"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Laguna M.1 is the flagship coding agent model from [Poolside](https://poolside.ai/), optimized for complex software engineering tasks. Designed for agentic coding workflows, it supports tool calling and reasoning, with a 256K...",
+  "description": "Fugu Ultra is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
   "tags": [],
   "source": "generated"
 }

@@ -1,18 +1,18 @@
 {
-  "model_id": "openrouter/owl-alpha",
-  "display_name": "Owl Alpha",
+  "model_id": "poolside/laguna-xs.2",
+  "display_name": "Poolside: Laguna XS.2",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1048756,
-    "max_output_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": true,
+    "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -20,7 +20,13 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.2
+    }
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-04-28"
@@ -28,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Owl Alpha is a high-performance foundation model designed for agentic workloads. Natively supports tool use, and long-context tasks, with strong performance in code generation, automated workflows, and complex instruction execution....",
+  "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
   "tags": [],
   "source": "generated"
 }

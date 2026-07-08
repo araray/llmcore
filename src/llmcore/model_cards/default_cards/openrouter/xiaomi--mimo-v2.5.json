@@ -5,8 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1048576,
-    "max_output_tokens": 131072
+    "max_input_tokens": 1048576
   },
   "capabilities": {
     "streaming": true,
@@ -23,7 +22,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.14,
+      "input": 0.105,
       "output": 0.28
     }
   },
