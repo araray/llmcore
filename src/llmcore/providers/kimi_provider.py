@@ -668,8 +668,15 @@ class KimiProvider(BaseProvider):
             tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
             if tool_calls:
                 msg_dict["tool_calls"] = tool_calls
-                if not msg.content:
-                    msg_dict["content"] = None
+            # Moonshot/kimi REJECTS an empty *or null* assistant content
+            # ("the message at position N with role 'assistant' must not be
+            # empty"), unlike OpenAI which accepts it (with or without
+            # tool_calls).  Two cases produce an empty assistant turn: a
+            # tool-calling turn with no prose, and the spurious empty-text
+            # assistant message wairu/llmcore stores when a response is
+            # tool_calls-only.  Both must carry a non-empty placeholder.
+            if not msg_dict.get("content"):
+                msg_dict["content"] = " "
             if "reasoning_content" in metadata:
                 # Preserved Thinking: forward historical reasoning as-is.
                 msg_dict["reasoning_content"] = metadata["reasoning_content"]

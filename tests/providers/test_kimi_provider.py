@@ -306,9 +306,20 @@ class TestMessagePayload:
             },
         )
         out = provider._build_message_payload(msg)
-        assert out["content"] is None
+        # Moonshot rejects empty/null assistant content even with tool_calls
+        # ("must not be empty"), so a tool-call turn with no prose gets a
+        # non-empty placeholder (not None, unlike OpenAI).
+        assert out["content"] == " "
         assert out["tool_calls"][0]["id"] == "t1"
         assert out["reasoning_content"] == "because"
+
+    def test_assistant_empty_content_gets_placeholder(self, provider):
+        """A tool_calls-only response stores a spurious empty-text assistant
+        message; kimi rejects its empty content, so it must be padded."""
+        msg = Message(role=Role.ASSISTANT, content="")
+        out = provider._build_message_payload(msg)
+        assert out["content"] == " "
+        assert "tool_calls" not in out
 
     def test_assistant_partial_mode(self, provider):
         msg = Message(role=Role.ASSISTANT, content="The story so far", metadata={"partial": True})
