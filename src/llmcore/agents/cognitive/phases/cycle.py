@@ -15,6 +15,7 @@ References:
     - Dossier: Step 2.7 (Cognitive Cycle Orchestrator)
 """
 
+import inspect
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -40,12 +41,19 @@ from ..models import (
     ValidateOutput,
     ValidationResult,
 )
+from ._prompting import messages_from_registry
 from .act import act_phase
 from .observe import observe_phase
 from .perceive import perceive_phase
 from .plan import plan_phase
 from .reflect import reflect_phase
-from .think import think_phase
+from .think import (
+    _extract_native_tool_call,
+    _finish_answer_acceptable,
+    _finish_answer_from_arguments,
+    _finish_tool_names,
+    think_phase,
+)
 from .update import update_phase
 from .validate import validate_phase
 
@@ -119,6 +127,40 @@ class StreamingIterationResult:
     duration_ms: float = 0.0
     stop_reason: str | None = None
     termination_reason: str | None = None
+
+
+# =============================================================================
+# CONVERGENCE HELPERS
+# =============================================================================
+
+
+def _resolve_convergence(agents_config: Any) -> Any:
+    """Return a real ``ConvergenceConfig`` from a config object.
+
+    Mock/legacy config objects without a typed ``convergence`` section get
+    the defaults — the convergence invariant must not depend on duck-typed
+    attributes evaluating truthy.
+    """
+    from ....config.agents_config import ConvergenceConfig
+
+    convergence = getattr(agents_config, "convergence", None)
+    if isinstance(convergence, ConvergenceConfig):
+        return convergence
+    return ConvergenceConfig()
+
+
+def _provider_accepts_tool_choice(provider: Any) -> bool:
+    """Feature-detect ``tool_choice`` support on ``provider.chat_completion``."""
+    try:
+        signature = inspect.signature(provider.chat_completion)
+    except (TypeError, ValueError):
+        return False
+    parameters = signature.parameters
+    if "tool_choice" in parameters:
+        return True
+    return any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+    )
 
 
 # =============================================================================
@@ -254,6 +296,7 @@ class CognitiveCycle:
         model_name: str | None = None,
         skip_validation: bool = False,
         approval_callback: Callable[[str], bool] | None = None,
+        remaining_iterations: int | None = None,
     ) -> CycleIteration:
         """
         Run a single complete cognitive iteration.
@@ -274,6 +317,8 @@ class CognitiveCycle:
             sandbox: Optional active sandbox
             provider_name: Optional provider override
             model_name: Optional model override
+            remaining_iterations: Iterations left in the run's budget; surfaced
+                to THINK as ``remaining_steps`` (None = unlimited/unknown)
 
         Returns:
             Completed CycleIteration with all phase outputs
@@ -369,6 +414,7 @@ class CognitiveCycle:
                     history=self._build_history(agent_state),
                     context="\n".join(iteration.perceive_output.retrieved_context),
                     available_tools=available_tools,
+                    remaining_steps=remaining_iterations,
                 )
 
                 iteration.think_output = await think_phase(
@@ -594,6 +640,14 @@ class CognitiveCycle:
             f"circuit_breaker={'enabled' if circuit_breaker else 'disabled'}"
         )
 
+        convergence = _resolve_convergence(agents_config)
+        # Convergence interventions need at least one normal iteration ahead
+        # of the finalize slot. Single-iteration budgets (wairu's bounded
+        # ``run(max_iterations=1)`` outer-loop driving pattern) keep legacy
+        # semantics — the outer driver owns convergence there.
+        convergence_active = max_iterations > max(1, convergence.finalize_when_remaining)
+        finalize_attempted = False
+
         actual_iterations = 0
         stopped_early = False
         stop_reason = None
@@ -606,6 +660,30 @@ class CognitiveCycle:
                 logger.info(f"Task completed in {iteration_num} iterations")
                 return agent_state.final_answer or "Task completed successfully"
 
+            # Convergence (2.2): spend the last budgeted iteration on a
+            # finalize synthesis pass instead of a normal iteration.
+            remaining_iterations = max_iterations - iteration_num
+            if (
+                convergence_active
+                and convergence.forced_finalize_enabled
+                and not finalize_attempted
+                and convergence.finalize_when_remaining > 0
+                and remaining_iterations <= convergence.finalize_when_remaining
+            ):
+                finalize_attempted = True
+                logger.info(
+                    "Iteration budget nearly exhausted (%d remaining) — forcing finalization",
+                    remaining_iterations,
+                )
+                await self._force_finalize(
+                    agent_state,
+                    reason=TerminationReason.FORCED_FINALIZE,
+                    convergence=convergence,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                )
+                break
+
             # Run iteration
             try:
                 iteration = await self.run_iteration(
@@ -616,6 +694,7 @@ class CognitiveCycle:
                     model_name=model_name,
                     skip_validation=skip_validation,
                     approval_callback=approval_callback,
+                    remaining_iterations=remaining_iterations,
                 )
                 actual_iterations = iteration_num + 1
                 last_error = None  # Clear error on success
@@ -719,6 +798,27 @@ class CognitiveCycle:
         if agent_state.is_finished:
             return agent_state.final_answer or "Task completed"
 
+        # Convergence (2.2): the loop must not exit un-converged on the
+        # max-iterations / update-stopped paths — synthesize an answer from
+        # the accumulated observations. Human-approval and circuit-breaker
+        # exits (and hard errors) remain the only un-converged exits.
+        if (
+            convergence_active
+            and convergence.synthesis_on_exhaustion
+            and not finalize_attempted
+            and (not stopped_early or stop_reason == "update_stopped")
+        ):
+            finalize_attempted = True
+            logger.info("Loop exited un-finished — attempting synthesis fallback")
+            if await self._force_finalize(
+                agent_state,
+                reason=TerminationReason.SYNTHESIS_FALLBACK,
+                convergence=convergence,
+                provider_name=provider_name,
+                model_name=model_name,
+            ):
+                return agent_state.final_answer or "Task completed"
+
         # Determine result based on how loop ended
         if stopped_early:
             if stop_reason == "human_approval_required":
@@ -814,6 +914,12 @@ class CognitiveCycle:
             f"skip_validation={skip_validation}"
         )
 
+        convergence = _resolve_convergence(agents_config)
+        # See run_until_complete: single-iteration budgets (wairu's bounded
+        # outer-loop driving pattern) keep legacy semantics.
+        convergence_active = max_iterations > max(1, convergence.finalize_when_remaining)
+        finalize_attempted = False
+
         accumulated_cost = 0.0
 
         for iteration_num in range(max_iterations):
@@ -834,6 +940,44 @@ class CognitiveCycle:
                 )
                 return
 
+            # Convergence (2.2): spend the last budgeted iteration on a
+            # finalize synthesis pass instead of a normal iteration.
+            remaining_iterations = max_iterations - iteration_num
+            if (
+                convergence_active
+                and convergence.forced_finalize_enabled
+                and not finalize_attempted
+                and convergence.finalize_when_remaining > 0
+                and remaining_iterations <= convergence.finalize_when_remaining
+            ):
+                finalize_attempted = True
+                logger.info(
+                    "Iteration budget nearly exhausted (%d remaining) — forcing finalization",
+                    remaining_iterations,
+                )
+                finalized = await self._force_finalize(
+                    agent_state,
+                    reason=TerminationReason.FORCED_FINALIZE,
+                    convergence=convergence,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                )
+                if finalized:
+                    yield StreamingIterationResult(
+                        iteration=iteration_num,
+                        max_iterations=max_iterations,
+                        progress=1.0,
+                        is_complete=True,
+                        is_final=True,
+                        status="complete",
+                        current_phase="finalize",
+                        message=agent_state.final_answer or "Task completed",
+                        stop_reason=agent_state.termination_reason,
+                        termination_reason=agent_state.termination_reason,
+                    )
+                    return
+                break  # fall through to the max-iterations terminal update
+
             # Run single iteration
             iteration_result: CycleIteration | None = None
             error_msg: str | None = None
@@ -847,6 +991,7 @@ class CognitiveCycle:
                     model_name=model_name,
                     skip_validation=skip_validation,
                     approval_callback=approval_callback,
+                    remaining_iterations=remaining_iterations,
                 )
 
                 # Track cost if available
@@ -1006,6 +1151,30 @@ class CognitiveCycle:
                     if not is_complete and not agent_state.termination_reason:
                         agent_state.termination_reason = TerminationReason.UPDATE_STOPPED.value
 
+            # Convergence (2.2): an update-stopped exit must not leave the
+            # run un-converged — synthesize from the accumulated work.
+            if (
+                convergence_active
+                and should_stop
+                and not is_complete
+                and stop_reason == "update_stopped"
+                and convergence.synthesis_on_exhaustion
+                and not finalize_attempted
+            ):
+                finalize_attempted = True
+                logger.info("UPDATE stopped the loop un-finished — attempting synthesis fallback")
+                if await self._force_finalize(
+                    agent_state,
+                    reason=TerminationReason.SYNTHESIS_FALLBACK,
+                    convergence=convergence,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                ):
+                    is_complete = True
+                    progress = 1.0
+                    message = agent_state.final_answer or "Task completed"
+                    stop_reason = agent_state.termination_reason
+
             is_final = is_complete or should_stop
 
             # Yield the iteration result
@@ -1033,6 +1202,37 @@ class CognitiveCycle:
             if is_complete or should_stop:
                 return
 
+        # Convergence (2.2): loop exhausted without an answer — synthesis
+        # fallback before conceding to the legacy max-iterations terminal.
+        if (
+            convergence_active
+            and convergence.synthesis_on_exhaustion
+            and not finalize_attempted
+            and not agent_state.is_finished
+        ):
+            finalize_attempted = True
+            logger.info("Loop exhausted un-finished — attempting synthesis fallback")
+            if await self._force_finalize(
+                agent_state,
+                reason=TerminationReason.SYNTHESIS_FALLBACK,
+                convergence=convergence,
+                provider_name=provider_name,
+                model_name=model_name,
+            ):
+                yield StreamingIterationResult(
+                    iteration=max_iterations,
+                    max_iterations=max_iterations,
+                    progress=1.0,
+                    is_complete=True,
+                    is_final=True,
+                    status="complete",
+                    current_phase="finalize",
+                    message=agent_state.final_answer or "Task completed",
+                    stop_reason=agent_state.termination_reason,
+                    termination_reason=agent_state.termination_reason,
+                )
+                return
+
         # Max iterations reached
         logger.warning(f"Max iterations ({max_iterations}) reached without completion")
         if not agent_state.termination_reason:
@@ -1050,17 +1250,172 @@ class CognitiveCycle:
             termination_reason=agent_state.termination_reason,
         )
 
-    def _build_history(self, agent_state: EnhancedAgentState) -> str:
+    async def _force_finalize(
+        self,
+        agent_state: EnhancedAgentState,
+        *,
+        reason: TerminationReason,
+        convergence: Any | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+    ) -> bool:
+        """Synthesize a final answer when the loop cannot exit converged.
+
+        Renders the ``finalize_prompt`` template (vars: goal/history/context/
+        reason), calls the provider with only the ``finish`` tool —
+        ``tool_choice="required"`` where the provider's ``chat_completion``
+        signature accepts it — and parses either a native finish call or the
+        full response text as the final answer.
+
+        NEVER raises in the exhaustion position: on any failure the state is
+        left un-finished with ``termination_reason=ERROR`` and the caller
+        falls through to the legacy terminal paths.
+
+        Args:
+            agent_state: State to finalize (mutated on success).
+            reason: FORCED_FINALIZE (in-loop) or SYNTHESIS_FALLBACK (exhaustion).
+            convergence: Resolved ConvergenceConfig; defaults from
+                ``self.agents_config`` when omitted.
+            provider_name: Optional provider override.
+            model_name: Optional model override.
+
+        Returns:
+            True when a final answer was set on the state.
+        """
+        if convergence is None:
+            convergence = _resolve_convergence(self.agents_config)
+
+        logger.info("Forcing finalization (%s)", reason.value)
+        try:
+            # Raised history bounds: the synthesis pass is the last chance to
+            # use the run's observations, so give it more than THINK's default.
+            history = self._build_history(
+                agent_state,
+                max_iterations=max(5, self.max_history_iterations),
+                max_observation_chars=max(4000, self.max_history_observation_chars),
+            )
+            messages = messages_from_registry(
+                self.prompt_registry,
+                "finalize_prompt",
+                {
+                    "goal": agent_state.goal,
+                    "history": history,
+                    "context": agent_state.context or "",
+                    "reason": reason.value,
+                },
+            )
+
+            finish_tools = self._finish_tool_definitions(convergence)
+            provider = self.provider_manager.get_provider(provider_name)
+            target_model = model_name or provider.default_model
+
+            call_kwargs: dict[str, Any] = {}
+            if finish_tools and _provider_accepts_tool_choice(provider):
+                call_kwargs["tool_choice"] = "required"
+
+            if callable(getattr(type(self.provider_manager), "chat_completion_with_retry", None)):
+                response = await self.provider_manager.chat_completion_with_retry(
+                    provider,
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tools=finish_tools or None,
+                    tracer=self.tracer,
+                    operation="cognitive.finalize",
+                    temperature=convergence.finalize_temperature,
+                    **call_kwargs,
+                )
+            else:
+                response = await provider.chat_completion(
+                    context=messages,
+                    model=target_model,
+                    stream=False,
+                    tools=finish_tools or None,
+                    temperature=convergence.finalize_temperature,
+                    **call_kwargs,
+                )
+
+            response_content = provider.extract_response_content(response)
+
+            # Prefer a native finish call; fall back to the full text.
+            answer = ""
+            native_tool_call = _extract_native_tool_call(
+                response if isinstance(response, dict) else None
+            )
+            if native_tool_call is not None and native_tool_call.name in _finish_tool_names(
+                convergence
+            ):
+                answer = _finish_answer_from_arguments(native_tool_call.arguments)
+            if not answer.strip():
+                answer = str(response_content or "").strip()
+
+            if not _finish_answer_acceptable(answer, convergence):
+                logger.error("Forced finalization produced an empty answer (%s)", reason.value)
+                agent_state.termination_reason = TerminationReason.ERROR.value
+                return False
+
+            agent_state.final_answer = answer
+            agent_state.is_finished = True
+            agent_state.termination_reason = reason.value
+            logger.info("Forced finalization succeeded (%s)", reason.value)
+            return True
+
+        except Exception as exc:
+            # The exhaustion position must never raise — record the failure
+            # and let the caller fall through to the legacy terminal paths.
+            logger.error("Forced finalization failed (%s): %s", reason.value, exc, exc_info=True)
+            agent_state.termination_reason = TerminationReason.ERROR.value
+            return False
+
+    def _finish_tool_definitions(self, convergence: Any | None = None) -> list[Any]:
+        """Return the finish tool definition(s) for the finalize provider call."""
+        names = _finish_tool_names(convergence)
+        if not names:
+            return []
+        try:
+            definitions = self.tool_manager.get_tool_definitions(names)
+        except TypeError:  # legacy managers without subset support
+            try:
+                definitions = [
+                    tool
+                    for tool in self.tool_manager.get_tool_definitions()
+                    if str(getattr(tool, "name", "")) in names
+                ]
+            except Exception:
+                logger.debug("Unable to load finish tool definitions", exc_info=True)
+                return []
+        except Exception:
+            logger.debug("Unable to load finish tool definitions", exc_info=True)
+            return []
+        return list(definitions) if isinstance(definitions, list) else []
+
+    def _build_history(
+        self,
+        agent_state: EnhancedAgentState,
+        *,
+        max_iterations: int | None = None,
+        max_observation_chars: int | None = None,
+    ) -> str:
         """
         Build a bounded JSON history summary from recent iterations.
 
         Tool results and observations are truncated before serialization, so the
         returned value remains valid JSON and can be parsed by downstream callers.
+        The instance bounds apply unless a caller (e.g. ``_force_finalize``)
+        raises them explicitly.
         """
+        effective_iterations = (
+            self.max_history_iterations if max_iterations is None else max(1, int(max_iterations))
+        )
+        effective_observation_chars = (
+            self.max_history_observation_chars
+            if max_observation_chars is None
+            else max(1, int(max_observation_chars))
+        )
         summaries = agent_state.recent_history_summaries(
-            max_iterations=self.max_history_iterations,
-            max_observation_chars=self.max_history_observation_chars,
-            max_tool_result_chars=self.max_history_observation_chars,
+            max_iterations=effective_iterations,
+            max_observation_chars=effective_observation_chars,
+            max_tool_result_chars=effective_observation_chars,
         )
         if not summaries:
             return "No previous actions"

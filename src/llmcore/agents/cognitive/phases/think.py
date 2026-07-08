@@ -773,6 +773,9 @@ def _generate_thinking_messages(
             "history": think_input.history or "No previous actions.",
             "context": think_input.context or "",
             "tools": _format_tools(think_input.available_tools),
+            "remaining_steps": "unlimited"
+            if think_input.remaining_steps is None
+            else str(think_input.remaining_steps),
         },
     )
 

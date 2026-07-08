@@ -363,6 +363,10 @@ class ThinkInput(BaseModel):
     available_tools: list[dict[str, Any]] = Field(
         default_factory=list, description="Available tools for the agent"
     )
+    remaining_steps: int | None = Field(
+        default=None,
+        description="Iterations remaining in the run's budget (None = unlimited/unknown)",
+    )
 
 
 class ThinkOutput(BaseModel):

@@ -317,6 +317,13 @@ class ConvergenceConfig(BaseModel):
     iteration budget runs out an in-cycle forced-finalize synthesis pass
     produces the best answer from the accumulated observations instead of
     returning "task incomplete".
+
+    Forced finalize and exhaustion synthesis require the budget to leave
+    room for at least one normal iteration
+    (``max_iterations > max(1, finalize_when_remaining)``): single-iteration
+    budgets — the bounded ``run(max_iterations=1)`` outer-loop driving
+    pattern — keep legacy semantics because the outer driver owns
+    convergence there.
     """
 
     finish_tool_names: list[str] = Field(
