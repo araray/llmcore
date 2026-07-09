@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
 from ...activities.parser import ActivityRequestParser
 from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 logger = logging.getLogger(__name__)
 
@@ -310,6 +311,7 @@ async def think_phase(
                 tool_manager=tool_manager,
                 convergence=convergence,
             )
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 5. Update agent state
             if output.proposed_action:

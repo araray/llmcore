@@ -56,6 +56,7 @@ from .think import (
     think_phase,
 )
 from .update import update_phase
+from .usage import extract_usage
 from .validate import deterministic_precheck, validate_phase
 
 if TYPE_CHECKING:
@@ -103,6 +104,7 @@ class StreamingIterationResult:
         plan_step: Current plan step being worked on
         error: Error message if iteration failed
         tokens_used: Tokens used in this iteration
+        cost: Provider cost tracked for this iteration (2.7)
         duration_ms: Duration of this iteration in milliseconds
         stop_reason: Reason for stopping (if stopped early)
         termination_reason: Why the run terminated (TerminationReason value),
@@ -125,6 +127,7 @@ class StreamingIterationResult:
     plan_step: str | None = None
     error: str | None = None
     tokens_used: int = 0
+    cost: float = 0.0
     duration_ms: float = 0.0
     stop_reason: str | None = None
     termination_reason: str | None = None
@@ -998,9 +1001,10 @@ class CognitiveCycle:
                 actual_iterations = iteration_num + 1
                 last_error = None  # Clear error on success
 
-                # Track cost if available
-                if hasattr(iteration, "total_cost") and iteration.total_cost:
-                    accumulated_cost += iteration.total_cost
+                # Track cost (2.7): per-iteration delta for the breaker,
+                # running total for messages/telemetry.
+                iteration_cost = float(getattr(iteration, "total_cost", 0.0) or 0.0)
+                accumulated_cost += iteration_cost
 
                 # =================================================================
                 # G3 Phase 5: Circuit Breaker Check After Successful Iteration
@@ -1021,7 +1025,9 @@ class CognitiveCycle:
                         iteration=actual_iterations,
                         progress=progress,
                         error=None,
-                        cost=accumulated_cost,
+                        # Per-iteration delta — check() accumulates
+                        # internally; a running total would double-count.
+                        cost=iteration_cost,
                         step_completed=step_completed,
                     )
 
@@ -1090,7 +1096,9 @@ class CognitiveCycle:
                         iteration=actual_iterations,
                         progress=progress,
                         error=last_error,
-                        cost=accumulated_cost,
+                        # A failed iteration tracked no new cost; check()
+                        # accumulates internally (2.7).
+                        cost=0.0,
                     )
 
                     if cb_result.tripped:
@@ -1313,9 +1321,12 @@ class CognitiveCycle:
                     remaining_iterations=remaining_iterations,
                 )
 
-                # Track cost if available
-                if hasattr(iteration_result, "total_cost") and iteration_result.total_cost:
-                    accumulated_cost += iteration_result.total_cost
+                # Track cost (2.7): per-iteration delta for the breaker,
+                # running total for messages/telemetry.
+                iteration_cost = float(
+                    getattr(iteration_result, "total_cost", 0.0) or 0.0
+                )
+                accumulated_cost += iteration_cost
 
             except Exception as e:
                 logger.error(f"Iteration {iteration_num + 1} failed: {e}")
@@ -1328,7 +1339,9 @@ class CognitiveCycle:
                         iteration=iteration_num + 1,
                         progress=progress,
                         error=error_msg,
-                        cost=accumulated_cost,
+                        # A failed iteration tracked no new cost; check()
+                        # accumulates internally (2.7).
+                        cost=0.0,
                     )
 
                     if cb_result.tripped:
@@ -1442,7 +1455,9 @@ class CognitiveCycle:
                     iteration=actual_iteration,
                     progress=progress,
                     error=None,
-                    cost=accumulated_cost,
+                    # Per-iteration delta — check() accumulates internally;
+                    # a running total would double-count (2.7).
+                    cost=iteration_cost,
                     step_completed=cb_step_completed,
                 )
 
@@ -1536,6 +1551,7 @@ class CognitiveCycle:
                 step_completed=step_completed,
                 plan_step=plan_step,
                 tokens_used=iteration_result.total_tokens_used,
+                cost=iteration_cost,
                 duration_ms=iteration_result.duration_ms,
                 stop_reason=stop_reason
                 or (agent_state.termination_reason if is_final else None),
@@ -1679,6 +1695,14 @@ class CognitiveCycle:
                 )
 
             response_content = provider.extract_response_content(response)
+
+            # Usage accounting (2.7): the finalize pass has no phase output
+            # to carry usage, so it rolls straight into the state totals.
+            finalize_usage = extract_usage(response, provider.get_name(), target_model)
+            if finalize_usage is not None:
+                agent_state.total_tokens_used += finalize_usage.total_tokens
+                if finalize_usage.cost:
+                    agent_state.total_cost += finalize_usage.cost
 
             # Prefer a native finish call; fall back to the full text.
             answer = ""

@@ -230,6 +230,30 @@ class TerminationReason(str, Enum):
 
 
 # =============================================================================
+# PHASE USAGE (2.7)
+# =============================================================================
+
+
+class PhaseUsage(BaseModel):
+    """Token/cost usage captured from one phase's provider call (2.7).
+
+    Defined here (not in ``phases/usage.py``) because the phase output
+    models below reference it and the phases package imports this module —
+    ``phases.usage`` re-exports it alongside ``extract_usage``.
+    """
+
+    prompt_tokens: int = Field(default=0, ge=0, description="Prompt/input tokens")
+    completion_tokens: int = Field(default=0, ge=0, description="Completion/output tokens")
+    total_tokens: int = Field(default=0, ge=0, description="Total tokens")
+    cost: float | None = Field(
+        default=None,
+        description="Cost from model-card pricing (None when pricing is unknown)",
+    )
+    provider: str | None = Field(default=None, description="Provider name")
+    model: str | None = Field(default=None, description="Model id")
+
+
+# =============================================================================
 # PHASE INPUT/OUTPUT MODELS
 # =============================================================================
 
@@ -314,6 +338,9 @@ class PlanOutput(BaseModel):
         default_factory=list, description="Potential risks or challenges identified"
     )
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @model_validator(mode="before")
@@ -403,6 +430,9 @@ class ThinkOutput(BaseModel):
             "successful result of the proposed action looks like (2.6)"
         ),
     )
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
 
 
 class ValidateInput(BaseModel):
@@ -428,6 +458,9 @@ class ValidateOutput(BaseModel):
         default=None, description="Prompt to show to human if approval needed"
     )
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
 
 
 class ActInput(BaseModel):
@@ -508,6 +541,9 @@ class ReflectOutput(BaseModel):
     step_completed: bool = Field(default=False, description="Whether current step is complete")
     next_focus: str | None = Field(default=None, description="What to prioritize next")
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
 
 
 class UpdateInput(BaseModel):
@@ -573,6 +609,15 @@ class CycleIteration(BaseModel):
 
     # Metadata
     total_tokens_used: int = Field(default=0, description="Total tokens in this iteration")
+    total_prompt_tokens: int = Field(
+        default=0, description="Total prompt tokens across phase usage records (2.7)"
+    )
+    total_completion_tokens: int = Field(
+        default=0, description="Total completion tokens across phase usage records (2.7)"
+    )
+    total_cost: float = Field(
+        default=0.0, description="Total provider cost for this iteration (2.7)"
+    )
     total_time_ms: float = Field(default=0.0, description="Total time in milliseconds")
     error: str | None = Field(default=None, description="Error if failed")
 
@@ -623,7 +668,12 @@ class CycleIteration(BaseModel):
         return completed
 
     def update_token_totals_from_phases(self) -> int:
-        """Set and return total provider tokens captured by phase outputs."""
+        """Set and return total provider tokens captured by phase outputs.
+
+        The legacy per-phase token fields drive ``total_tokens_used``; typed
+        ``PhaseUsage`` records (2.7) additionally drive the prompt/completion
+        splits and the iteration cost.
+        """
         total = sum(
             token_count
             for token_count in (
@@ -635,6 +685,26 @@ class CycleIteration(BaseModel):
             if token_count is not None
         )
         self.total_tokens_used = total
+
+        prompt_total = 0
+        completion_total = 0
+        cost_total = 0.0
+        for usage in (
+            self.plan_output.usage if self.plan_output else None,
+            self.think_output.usage if self.think_output else None,
+            self.validate_output.usage if self.validate_output else None,
+            self.reflect_output.usage if self.reflect_output else None,
+        ):
+            if usage is None:
+                continue
+            prompt_total += usage.prompt_tokens
+            completion_total += usage.completion_tokens
+            if usage.cost:
+                cost_total += usage.cost
+        self.total_prompt_tokens = prompt_total
+        self.total_completion_tokens = completion_total
+        self.total_cost = cost_total
+
         return total
 
     def to_history_summary(
@@ -721,6 +791,9 @@ class CycleIteration(BaseModel):
                 else None,
             },
             "total_tokens_used": self.total_tokens_used,
+            "total_prompt_tokens": self.total_prompt_tokens,
+            "total_completion_tokens": self.total_completion_tokens,
+            "total_cost": self.total_cost,
             "duration_ms": self.duration_ms,
             "error": self.error,
         }
@@ -800,6 +873,9 @@ class EnhancedAgentState(AgentState):
 
     # Metrics
     total_tokens_used: int = Field(default=0, description="Total tokens used across all iterations")
+    total_cost: float = Field(
+        default=0.0, description="Total provider cost (USD) across all iterations (2.7)"
+    )
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
 
     # Metadata for extensibility
@@ -956,6 +1032,7 @@ class EnhancedAgentState(AgentState):
                 "successful_iterations": self.successful_iterations,
                 "failed_iterations": self.failed_iterations,
                 "total_tokens_used": self.total_tokens_used,
+                "total_cost": self.total_cost,
                 "total_tool_calls": self.total_tool_calls,
                 "average_iteration_time_ms": self.average_iteration_time_ms,
             },
@@ -1028,6 +1105,7 @@ class EnhancedAgentState(AgentState):
             * state._resume_iteration_count_offset
         )
         state.total_tokens_used = int(metrics.get("total_tokens_used") or 0)
+        state.total_cost = _coerce_nonnegative_float(metrics.get("total_cost"))
         state.total_tool_calls = int(metrics.get("total_tool_calls") or 0)
         prior_resume_iterations = state.metadata.get("_resume_snapshot_iterations")
         state.metadata["_resume_snapshot_schema_version"] = snapshot.get("schema_version")
@@ -1110,8 +1188,10 @@ class EnhancedAgentState(AgentState):
         """
         self.iterations.append(iteration)
 
-        # Update metrics
+        # Update metrics: iteration token AND cost totals roll into the
+        # state totals here (complete_iteration routes through this).
         self.total_tokens_used += iteration.total_tokens_used
+        self.total_cost += float(iteration.total_cost or 0.0)
         if iteration.act_output:
             self.total_tool_calls += 1
 
@@ -1274,6 +1354,7 @@ __all__ = [
     "ObserveOutput",
     "PerceiveInput",
     "PerceiveOutput",
+    "PhaseUsage",
     "PlanInput",
     "PlanOutput",
     "PlanStepSpec",

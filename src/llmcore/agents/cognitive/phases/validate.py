@@ -30,6 +30,7 @@ from ..models import (
     ValidationResult,
 )
 from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 if TYPE_CHECKING:
     from ....models import Message
@@ -168,6 +169,7 @@ async def validate_phase(
                 response_text=response_content, validate_input=validate_input
             )
             output.tokens_used = total_tokens
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 6. Update agent state
             agent_state.pending_validation = validate_input

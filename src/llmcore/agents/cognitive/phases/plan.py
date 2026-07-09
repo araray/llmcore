@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..models import EnhancedAgentState, PlanInput, PlanOutput
 from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 if TYPE_CHECKING:
     from ....models import Message
@@ -127,6 +128,7 @@ async def plan_phase(
             # 3. Parse response
             output = _parse_plan_response(response_text=response_content, plan_input=plan_input)
             output.tokens_used = total_tokens
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 4. Update agent state
             agent_state.plan = output.step_descriptions

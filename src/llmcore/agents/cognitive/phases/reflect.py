@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, ReflectInput, ReflectOutput
 from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
@@ -158,6 +159,7 @@ async def reflect_phase(
                     response_text=response_content, reflect_input=reflect_input
                 )
             output.tokens_used = total_tokens
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 4. Grounding overrides (2.6): external signals beat
             #    self-judgment. Applied BEFORE the state progress update.

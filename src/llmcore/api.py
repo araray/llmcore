@@ -1765,6 +1765,89 @@ class LLMCore:
     # =========================================================================
     # Statistics & Introspection
     # =========================================================================
+    async def record_agent_usage(self, session_id: str, records: list[dict]) -> None:
+        """
+        Append Darwin agent usage records to a session's interaction log.
+
+        The enhanced cognitive cycle captures per-phase token/cost usage
+        (``PhaseUsage``, 2.7) but agent runs bypass the chat path that
+        normally records ``session.metadata["interactions"]`` — so
+        :meth:`get_session_token_stats` reported zero for Darwin turns.
+        Hosts driving agent runs call this once per run (or per stream
+        segment) with the usage they accumulated; the stats method then
+        aggregates Darwin turns like any other interaction.
+
+        Each record is normalized to::
+
+            {timestamp, provider, model, prompt_tokens, completion_tokens,
+             total_tokens, cost, source: "darwin"}
+
+        Args:
+            session_id: Session to record usage against (created if the
+                backend supports it, mirroring ``get_session_token_stats``).
+            records: Usage dicts. Recognized keys: ``timestamp`` (ISO 8601,
+                defaults to now), ``provider``/``model`` (default
+                ``"unknown"``), ``prompt_tokens``/``completion_tokens``/
+                ``total_tokens`` (default 0; a missing total is computed),
+                and ``cost`` (None when pricing is unknown). Non-dict
+                entries are skipped.
+
+        Raises:
+            SessionNotFoundError: If the session cannot be loaded or created.
+
+        Example:
+            >>> await llm.record_agent_usage(
+            ...     "darwin-session",
+            ...     [{"provider": "openai", "model": "gpt-4o",
+            ...       "prompt_tokens": 1200, "completion_tokens": 300,
+            ...       "cost": 0.006}],
+            ... )
+            >>> stats = await llm.get_session_token_stats("darwin-session")
+            >>> stats.total_tokens
+            1500
+        """
+        session = await self._session_manager.load_or_create_session(session_id)
+
+        if session is None:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        def _tokens(value: Any) -> int:
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        interactions = session.metadata.setdefault("interactions", [])
+        now_iso = datetime.now(UTC).isoformat()
+        for record in records:
+            if not isinstance(record, dict):
+                logger.debug("record_agent_usage: skipping non-dict record %r", record)
+                continue
+            prompt_tokens = _tokens(record.get("prompt_tokens"))
+            completion_tokens = _tokens(record.get("completion_tokens"))
+            total_tokens = _tokens(record.get("total_tokens"))
+            if total_tokens == 0:
+                total_tokens = prompt_tokens + completion_tokens
+            raw_cost = record.get("cost")
+            try:
+                cost = float(raw_cost) if raw_cost is not None else None
+            except (TypeError, ValueError):
+                cost = None
+            interactions.append(
+                {
+                    "timestamp": str(record.get("timestamp") or now_iso),
+                    "provider": str(record.get("provider") or "unknown"),
+                    "model": str(record.get("model") or "unknown"),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "cost": cost,
+                    "source": "darwin",
+                }
+            )
+
+        await self._session_manager.save_session(session)
+
     async def get_session_token_stats(self, session_id: str) -> SessionTokenStats:
         """
         Get cumulative token usage statistics for a session.
