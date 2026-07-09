@@ -306,6 +306,23 @@ warns.
 
 # Part IV — Prompts, Tools, Skills & Grimoire (the control plane)
 
+> **2026-07-09 update — §§11-14 are now HISTORICAL.** The July 2026 overhaul
+> (llmcore 0.52.0 `8997e19`+`fe6356a`, wairu 0.3.0 `a617867`..`f0eb8df`,
+> grimoire 0.4.0 `a538e1e`) shipped the control plane for real:
+> **grimoire is a hard llmcore dependency**; a packaged `llmcore-builtin`
+> spell pack covers EVERY agent prompt (all cognitive phases incl. the new
+> `finalize`, activity protocol, classifier, fast-path, personas, darwin
+> arbiter/TDD, goal decomposition) and loads with zero config; the f-string
+> fallbacks are **deleted** and the registry is **required + fail-loud**
+> (a broken override aborts startup naming spell/layer/cause — never a
+> silent fallback); builtin tools are **catalog-driven from rune contracts**
+> (`GrimoireToolCatalog`) with real parameter schemas; wairu ships its own
+> `wairu-core` pack and composes `llmcore-builtin < wairu-core < user`
+> layers through one shared `GrimoireRuntime`, with plugin/MCP tools
+> registered as runes via the single `RuneCatalog` path. Prompts and tool
+> contracts are now grimoire-managed everywhere; the sections below are kept
+> as the record of what the 2026-07-08 investigation found.
+
 This is the part most likely to surprise the team: **the assumed control plane
 is almost entirely inert by default.**
 
@@ -489,6 +506,23 @@ four defects immediately:
 ---
 
 # Part VII — Improvement Directions (brainstorm material)
+
+> **2026-07-09 update — SHIPPED items.** The July 2026 overhaul landed:
+> **A1** finish-tool convergence + real `finish(answer)` schema (llmcore
+> `4e6c5af`); **A2** structured JSON REFLECT with grounding overrides
+> (`bfbc0fe`); **A3** grace retired — in-cycle forced finalize +
+> `termination_reason` telemetry (llmcore `c699718`, wairu `f0eb8df`);
+> **B1** direct-answer instruction in the pack's THINK/PLAN spells
+> (`8997e19`); **C1** the bundled cognitive-cycle spell pack, parser
+> contracts pinned by tests (`8997e19`); **C2** structured REFLECT + native
+> finish tool-calls (`bfbc0fe`, `4e6c5af`); **C3** fail-loud registry —
+> fallbacks deleted, startup validation names spell/layer/cause
+> (`fe6356a`); **E1** deterministic guards under `skip_validation`
+> (`c70a95d`); **E2** ONE `build_darwin_tool_handler` pipeline for all three
+> wairu surfaces (wairu `565d11b`). Also shipped from this list: D1 token
+> capture (`0c334ec`), E3 expected_outcome (`bfbc0fe`), G1/G3 restraint
+> scoring + trials in the harness. The un-marked items (B2/B3, D2-D4, E4,
+> F1-F3, G2/G4) remain open. Benchmark re-run pending.
 
 Grouped by theme, roughly ranked within each. These come from reading the
 current source; the external-research synthesis (Part VIII) will map field-proven
@@ -808,6 +842,22 @@ When the practitioners who *built* the frameworks and the researchers who
 *measured* the failure modes agree this precisely, the path is clear.
 
 ## 21. Consensus → Darwin action map (ranked, unified)
+
+> **2026-07-09 update — SHIPPED (plan Phase 2, llmcore 0.52.0).** The action
+> map was executed as plan items 2.1-2.8: **#1** finish-tool stop path
+> (`4e6c5af`, 2.1); **#2** in-cycle forced finalize, grace retired
+> (`c699718`, 2.2; wairu `f0eb8df`); **#3** `remaining_steps` +
+> `termination_reason` (`c699718`/`4e6c5af`); **#4** direct-answer THINK
+> spell + fast-path promptlets (`8997e19`); **#5** conditional PLAN + replan
+> budget (`9dec343`, 2.5); **#6** redundant-call detector (`cd75caf`, 2.4);
+> **#8** externally-grounded structured REFLECT + reflect gating (`bfbc0fe`,
+> 2.6); **#9** partially — REFLECT is JSON and finish is a native tool-call
+> (PLAN still text, contract-pinned); **#10** reflect `mode=on_action`
+> gating (`bfbc0fe`). Deterministic guards under `skip_validation`
+> (`c70a95d`, 2.3) and end-to-end token/cost accounting + restraint-aware
+> harness (`0c334ec`, 2.7; wairu Commit B) round it out. **#7** (activation
+> probe, self-hosted) not attempted; loop consolidation (2.8) deferred.
+> The "then measure" re-run is still pending.
 
 Synthesizing Part VII + §18 (framework source) + §20 (literature). Each item
 cites its dual evidence — *what mature frameworks build* and *what the research

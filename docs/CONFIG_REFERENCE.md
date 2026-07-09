@@ -1146,6 +1146,41 @@ Context prioritization strategy: recency_relevance — balance recency and seman
 - `relevance_only`: Relevance Only
 - `recency_only`: Recency Only
 
+## 🪄 Grimoire Control Plane
+
+The grimoire control plane (0.52.0) supplying EVERY agent prompt (spells) and
+the builtin tool contracts (runes). Grimoire is a **hard dependency**: with no
+configuration the packaged `llmcore-builtin` pack loads as the base layer and
+agents work out of the box. Overlay layers compose lowest → highest precedence
+as `bundled < extra packs < admin < user…` (highest layer defining a spell id
+wins). **Fail-loud**: overlay layers load strict, and startup validation
+renders every required template — a broken override raises `ConfigError`
+naming the template, spell, winning layer, and cause. There is never a silent
+fallback (the pre-0.52 f-string fallbacks are deleted).
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `grimoire.admin_repo_path` | string |  | `""` | Optional read-only admin overlay layer (above bundled/extra packs, below user) |
+| `grimoire.user_repo_paths` | list[string] |  | `[]` | Ordered user overlay roots, lowest → highest precedence; the LAST one is the writable layer |
+| `grimoire.extra_pack_paths` | list[string] |  | `[]` | Additional read-only packs layered ABOVE bundled and BELOW admin/user (hosts like wairu register their bundled packs here) |
+| `grimoire.prompt_map` | table |  | `{}` | llmcore template id → spell id overrides (merged over the built-in `DEFAULT_TEMPLATE_MAP`) |
+| `grimoire.strict` | boolean |  | `True` | Strict conjure — a missing required variable raises instead of rendering blank |
+| `grimoire.validate_on_startup` | boolean |  | `True` | With overlays configured, render every required template at init and hard-fail on any error |
+| `grimoire.metrics.enabled` | boolean |  | `False` | Persist prompt-usage telemetry to JSONL |
+| `grimoire.metrics.path` | string |  | `""` | JSONL path (default: `~/.local/state/llmcore/prompt_usage.jsonl`) |
+
+```toml
+[grimoire]
+# Zero config → bundled pack only. Add an overlay to override prompts by id:
+user_repo_paths = ["~/.config/llmcore/grimoire"]
+strict = true
+validate_on_startup = true
+# prompt_map = { thinking_prompt = "my/cognitive/think" }
+
+[grimoire.metrics]
+enabled = false
+```
+
 ## 🤖 Agents: Core
 
 Agent execution limits and sandbox mode selection.
