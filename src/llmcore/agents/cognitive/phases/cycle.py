@@ -169,6 +169,92 @@ def _resolve_redundancy(agents_config: Any) -> Any:
 REDUNDANCY_FORCE_FINALIZE_KEY = "redundancy_force_finalize"
 
 
+def _resolve_planning(agents_config: Any) -> Any:
+    """Return a real ``PlanningConfig`` from a config object.
+
+    Mock/legacy config objects without a typed ``planning`` section get the
+    defaults — same rationale as :func:`_resolve_convergence`.
+    """
+    from ....config.agents_config import PlanningConfig
+
+    planning = getattr(agents_config, "planning", None)
+    if isinstance(planning, PlanningConfig):
+        return planning
+    return PlanningConfig()
+
+
+def _goal_complexity(agent_state: EnhancedAgentState) -> str:
+    """Return the run's goal complexity, classifying + caching when unset.
+
+    SingleAgentMode stamps ``goal_complexity`` into working memory; hosts
+    driving the cycle directly (wairu) get the heuristic ``GoalClassifier``
+    — never an LLM call — cached back into working memory for the run.
+    """
+    complexity = agent_state.get_working_memory("goal_complexity")
+    if isinstance(complexity, str) and complexity:
+        return complexity
+
+    from ..goal_classifier import GoalClassifier
+
+    classification = GoalClassifier().classify(agent_state.goal or "")
+    complexity = classification.complexity.value
+    agent_state.set_working_memory("goal_complexity", complexity)
+    return complexity
+
+
+def _should_plan(
+    agent_state: EnhancedAgentState,
+    iteration_number: int,
+    agents_config: Any,
+) -> bool:
+    """Decide whether this iteration runs the PLAN phase (2.5).
+
+    Modes (``PlanningConfig.mode``, a str enum — compared by value):
+
+    - ``always``/``first``: the legacy predicate — first iteration OR empty
+      plan OR the working-memory ``plan_needs_update`` flag.
+    - ``complex_only`` (default): the legacy predicate, additionally gated
+      on goal complexity ∈ {moderate, complex} (plan-before-observe hurts
+      simple/knowledge tasks).
+    - ``on_failure``: plan only when a replan was requested
+      (``plan_needs_update``) or the last action failed
+      (``last_action_failed``, stamped after OBSERVE).
+
+    With ``plan_on_failure_escalation`` enabled, ``first``/``complex_only``
+    ALSO trigger one PLAN after a failed observation while the plan is
+    empty — self-limiting, since the resulting plan closes the condition.
+    """
+    planning = _resolve_planning(agents_config)
+    mode = str(getattr(planning.mode, "value", planning.mode))
+
+    plan_needs_update = bool(agent_state.get_working_memory("plan_needs_update", False))
+    last_action_failed = bool(agent_state.get_working_memory("last_action_failed", False))
+    legacy_predicate = (
+        iteration_number == 1 or len(agent_state.plan) == 0 or plan_needs_update
+    )
+
+    if mode in ("always", "first"):
+        should = legacy_predicate
+    elif mode == "on_failure":
+        should = plan_needs_update or last_action_failed
+    else:  # complex_only (default)
+        should = legacy_predicate and _goal_complexity(agent_state) in (
+            "moderate",
+            "complex",
+        )
+
+    if (
+        not should
+        and planning.plan_on_failure_escalation
+        and mode in ("first", "complex_only")
+        and len(agent_state.plan) == 0
+        and last_action_failed
+    ):
+        should = True
+
+    return should
+
+
 def _redundant_action_observation(action: Any, entry: dict[str, Any]) -> ObserveOutput:
     """Build the corrective observation for a repeated identical action."""
     preview = entry.get("result_preview") or "(no recorded result)"
@@ -392,15 +478,9 @@ class CognitiveCycle:
                 )
 
                 # ============================================================
-                # Phase 2: PLAN (first iteration or if plan needs update)
+                # Phase 2: PLAN (gated by PlanningConfig.mode, 2.5)
                 # ============================================================
-                should_plan = (
-                    iteration_number == 1
-                    or len(agent_state.plan) == 0
-                    or agent_state.get_working_memory("plan_needs_update", False)
-                )
-
-                if should_plan:
+                if _should_plan(agent_state, iteration_number, self.agents_config):
                     plan_input = PlanInput(
                         goal=agent_state.goal,
                         context="\n".join(iteration.perceive_output.retrieved_context),
@@ -416,6 +496,13 @@ class CognitiveCycle:
                         provider_name=provider_name,
                         model_name=model_name,
                     )
+
+                    # Replan-budget baseline (2.5): the version after the
+                    # FIRST plan anchors update_phase's max_replans cap.
+                    if agent_state.get_working_memory("initial_plan_version") is None:
+                        agent_state.set_working_memory(
+                            "initial_plan_version", agent_state.plan_version
+                        )
 
                 # ============================================================
                 # Phase 3: THINK
@@ -609,6 +696,12 @@ class CognitiveCycle:
                         agent_state=agent_state, observe_input=observe_input, tracer=self.tracer
                     )
 
+                    # Conditional PLAN (2.5): on_failure mode and the failure
+                    # escalation key off the LAST observed action's outcome.
+                    agent_state.set_working_memory(
+                        "last_action_failed", not iteration.act_output.success
+                    )
+
                     # Redundancy (2.4): remember executed signatures with a
                     # short result preview for future corrective observations.
                     # Rejected / approval-paused actions never executed, so
@@ -665,6 +758,7 @@ class CognitiveCycle:
                     storage_manager=self.storage_manager,
                     session_id=session_id,
                     tracer=self.tracer,
+                    agents_config=self.agents_config,
                 )
 
                 # ============================================================

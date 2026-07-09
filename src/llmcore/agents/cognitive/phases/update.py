@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from ..models import EnhancedAgentState, TerminationReason, UpdateInput, UpdateOutput
 
 if TYPE_CHECKING:
+    from ....config.agents_config import AgentsConfig
     from ....storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ async def update_phase(
     storage_manager: Optional["StorageManager"] = None,
     session_id: str | None = None,
     tracer: Any | None = None,
+    agents_config: Optional["AgentsConfig"] = None,
 ) -> UpdateOutput:
     """
     Execute the UPDATE phase of the cognitive cycle.
@@ -58,6 +60,9 @@ async def update_phase(
         storage_manager: Optional storage manager for episodic memory
         session_id: Optional session ID for memory
         tracer: Optional OpenTelemetry tracer
+        agents_config: Optional agents configuration; its
+            ``planning.max_replans`` caps reflection-driven replans (2.5).
+            Defaults apply when None.
 
     Returns:
         UpdateOutput with applied changes
@@ -88,15 +93,22 @@ async def update_phase(
         memory_updates = []
         working_memory_updates = {}
 
-        # 1. Update plan if needed
+        # 1. Update plan if needed (capped by planning.max_replans, 2.5)
         if reflection.plan_needs_update and reflection.updated_plan:
-            agent_state.update_plan(
-                new_plan=reflection.updated_plan, reasoning="Plan updated based on reflection"
-            )
-            state_updates["plan_updated"] = True
-            state_updates["new_plan_version"] = agent_state.plan_version
+            if _replan_allowed(agent_state, agents_config):
+                agent_state.update_plan(
+                    new_plan=reflection.updated_plan, reasoning="Plan updated based on reflection"
+                )
+                state_updates["plan_updated"] = True
+                state_updates["new_plan_version"] = agent_state.plan_version
 
-            logger.info(f"Plan updated to version {agent_state.plan_version}")
+                logger.info(f"Plan updated to version {agent_state.plan_version}")
+            else:
+                logger.warning(
+                    "Replan budget exhausted (plan_version=%s) — keeping the current plan",
+                    agent_state.plan_version,
+                )
+                agent_state.set_working_memory("replan_budget_exhausted", True)
 
         # 2. Mark step as complete if needed
         if reflection.step_completed:
@@ -208,6 +220,29 @@ async def update_phase(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+
+def _replan_allowed(agent_state: EnhancedAgentState, agents_config: Any) -> bool:
+    """Check the replan budget (2.5).
+
+    Reflection-driven plan rewrites apply only while
+    ``plan_version < initial_plan_version + planning.max_replans``.
+    ``initial_plan_version`` is stamped into working memory when the first
+    PLAN runs; a plan seeded outside the PLAN phase gets the current version
+    as its baseline (lazily recorded here), so the budget still applies.
+    """
+    from ....config.agents_config import PlanningConfig
+
+    planning = getattr(agents_config, "planning", None)
+    if not isinstance(planning, PlanningConfig):
+        planning = PlanningConfig()
+
+    initial_version = agent_state.get_working_memory("initial_plan_version")
+    if not isinstance(initial_version, int) or isinstance(initial_version, bool):
+        initial_version = agent_state.plan_version
+        agent_state.set_working_memory("initial_plan_version", initial_version)
+
+    return agent_state.plan_version < initial_version + max(0, planning.max_replans)
 
 
 def _create_episode_content(

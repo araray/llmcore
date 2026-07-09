@@ -19,6 +19,7 @@ The configuration hierarchy:
     ├── ConvergenceConfig    - Finish-tool convergence and forced finalize
     ├── ValidationConfig     - VALIDATE phase deterministic guards
     ├── RedundancyConfig     - Redundant-call detection
+    ├── PlanningConfig       - Conditional PLAN gating + replan budget
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -391,6 +392,58 @@ class ValidationConfig(BaseModel):
 
 
 # =============================================================================
+# PLANNING CONFIG
+# =============================================================================
+
+
+class PlanMode(str, Enum):
+    """When the PLAN phase runs (see PlanningConfig)."""
+
+    ALWAYS = "always"  # Legacy predicate (kept for explicit opt-in)
+    FIRST = "first"  # Legacy predicate: first iteration / empty plan / replan
+    COMPLEX_ONLY = "complex_only"  # Like first, gated on moderate/complex goals
+    ON_FAILURE = "on_failure"  # Only after a failed action or replan request
+
+
+class PlanningConfig(BaseModel):
+    """
+    Configuration for conditional planning (2.5, BOLAA/ADaPT-informed).
+
+    Plan-before-observe measurably hurts simple/knowledge tasks, so the PLAN
+    phase is gated by ``mode``:
+
+    - ``always``/``first``: legacy behavior — plan on the first iteration,
+      when the plan is empty, or when a replan was requested.
+    - ``complex_only`` (default): like ``first`` but only for goals whose
+      complexity is moderate/complex. Complexity comes from working memory
+      (``goal_complexity``, stamped by SingleAgentMode) or the heuristic
+      ``GoalClassifier`` — never an LLM call.
+    - ``on_failure``: plan only after a failed action or a replan request.
+
+    ``max_replans`` caps reflection-driven plan rewrites per run (UPDATE
+    phase); ``plan_on_failure_escalation`` lets first/complex_only recover a
+    plan after a failed observation while the plan is still empty.
+    """
+
+    mode: PlanMode = Field(
+        default=PlanMode.COMPLEX_ONLY,
+        description="When the PLAN phase runs",
+    )
+    max_replans: int = Field(
+        default=3,
+        ge=0,
+        description="Maximum reflection-driven replans per run",
+    )
+    plan_on_failure_escalation: bool = Field(
+        default=True,
+        description=(
+            "first/complex_only also plan once after a failed observation "
+            "while the plan is empty"
+        ),
+    )
+
+
+# =============================================================================
 # REDUNDANCY CONFIG
 # =============================================================================
 
@@ -615,6 +668,10 @@ class AgentsConfig(BaseModel):
     redundancy: RedundancyConfig = Field(
         default_factory=RedundancyConfig,
         description="Redundant-call detection settings",
+    )
+    planning: PlanningConfig = Field(
+        default_factory=PlanningConfig,
+        description="Conditional PLAN gating and replan budget",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -885,6 +942,7 @@ ToolInventoryConfig.model_rebuild()
 ConvergenceConfig.model_rebuild()
 ValidationConfig.model_rebuild()
 RedundancyConfig.model_rebuild()
+PlanningConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -898,6 +956,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "TimeoutPolicy",
     "RoutingStrategy",
     "RiskLevel",
+    "PlanMode",
     # Config classes
     "GoalsConfig",
     "FastPathConfig",
@@ -907,6 +966,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "ConvergenceConfig",
     "ValidationConfig",
     "RedundancyConfig",
+    "PlanningConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",
