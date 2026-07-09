@@ -123,6 +123,8 @@ class TestFormatContracts:
         assert "call the `finish` tool" in text
         assert "call `finish` immediately" in text
         assert "You have 3 step(s) remaining" in text
+        # Phase-2 §2.6: the ReAct block teaches the optional Expected line.
+        assert "Expected:" in text
 
     def test_think_remaining_steps_defaults_to_unlimited(self, bundled_adapter):
         text = bundled_adapter.render(
@@ -160,8 +162,11 @@ class TestFormatContracts:
                 "last_action": "x()",
                 "observation": "ok",
                 "iteration": "1",
+                "action_success": "true",
+                "matches_expectation": "false",
             },
         )
+        # The labeled-text contract stays as the no-JSON fallback.
         for label in (
             "EVALUATION:",
             "PROGRESS:",
@@ -171,6 +176,12 @@ class TestFormatContracts:
             "NEXT_FOCUS:",
         ):
             assert label in text
+        # Phase-2 §2.6: grounding lines + the preferred JSON output contract.
+        assert "ACTION SUCCEEDED: true" in text
+        assert "MATCHED EXPECTATION: false" in text
+        assert '"evaluation"' in text
+        assert '"progress"' in text
+        assert "If you cannot emit JSON" in text
 
     def test_activity_final_answer_param_is_answer(self, bundled_adapter):
         """The executor requires parameters['answer'] — the pack documents

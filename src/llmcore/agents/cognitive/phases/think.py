@@ -869,6 +869,17 @@ def _parse_think_response(
     if thought_match:
         thought = thought_match.group(1).strip()
 
+    # Extract the optional Expected line (2.6) — what a successful result
+    # looks like. Native tool-call responses usually lack it; None is fine.
+    expected_match = re.search(
+        r"Expected:\s*(.+?)(?=\n(?:Thought|Action|Final Answer)|\Z)",
+        response_text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    expected_outcome = expected_match.group(1).strip() if expected_match else None
+    if not expected_outcome:
+        expected_outcome = None
+
     native_tool_call = _extract_native_tool_call(response_dict)
     if native_tool_call is not None and native_tool_call.name in _finish_tool_names(convergence):
         # Convergence: a native finish call terminates the run — it must
@@ -902,8 +913,12 @@ def _parse_think_response(
             # Extract Action
             action_match = re.search(r"Action:\s*(.+?)(?=\n|$)", response_text, re.IGNORECASE)
 
+            # Stop at the optional Expected line (2.6) so it is never
+            # swallowed into the JSON arguments.
             action_input_match = re.search(
-                r"Action Input:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
+                r"Action Input:\s*(.+?)(?=\nExpected:|\Z)",
+                response_text,
+                re.DOTALL | re.IGNORECASE,
             )
 
             if action_match:
@@ -948,6 +963,7 @@ def _parse_think_response(
         final_answer_source=final_answer_source,
         confidence=confidence,
         reasoning_tokens=reasoning_tokens,
+        expected_outcome=expected_outcome,
     )
 
 

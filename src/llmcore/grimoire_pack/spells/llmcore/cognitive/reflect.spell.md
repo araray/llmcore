@@ -1,7 +1,7 @@
 ---
 id: llmcore/cognitive/reflect
 name: Cognitive REFLECT phase
-version: 1.0.0
+version: 1.1.0
 tags: [llmcore.builtin, cognitive, reflect]
 description: Self-evaluation of the last action, progress estimate, plan updates.
 variables:
@@ -62,6 +62,9 @@ LAST ACTION:
 OBSERVATION:
 {{ observation }}
 
+ACTION SUCCEEDED: {{ action_success }}
+MATCHED EXPECTATION: {{ matches_expectation }}
+
 ITERATION: {{ iteration }}
 
 REFLECTION QUESTIONS:
@@ -71,7 +74,10 @@ REFLECTION QUESTIONS:
 4. What have we learned that could help in future iterations?
 5. Is the current step complete?
 
-PROVIDE:
+Respond with ONLY a JSON object of this exact shape:
+{"evaluation": "<assessment of the action's effectiveness>", "progress": <integer 0-100>, "step_completed": <true|false>, "plan_needs_update": <true|false>, "updated_plan": <array of step strings, or null>, "insights": <array of strings>, "next_focus": "<what to prioritize next, or null>"}
+
+If you cannot emit JSON, use this labeled format instead:
 - EVALUATION: Assess the action's effectiveness (success/partial/failure)
 - PROGRESS: Estimate overall progress toward goal (0-100%)
 - INSIGHTS: Key learnings from this iteration

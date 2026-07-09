@@ -396,6 +396,13 @@ class ThinkOutput(BaseModel):
             "or 'activity' (XML activity protocol)"
         ),
     )
+    expected_outcome: str | None = Field(
+        default=None,
+        description=(
+            "Optional 'Expected:' line parsed from the ReAct text — what a "
+            "successful result of the proposed action looks like (2.6)"
+        ),
+    )
 
 
 class ValidateInput(BaseModel):
@@ -470,6 +477,18 @@ class ReflectInput(BaseModel):
     )
     observation: str = Field(..., description="Observation from OBSERVE phase")
     iteration_number: int = Field(..., description="Current iteration number")
+    action_success: bool | None = Field(
+        default=None,
+        description="Whether the executed action succeeded (None = no action executed)",
+    )
+    matches_expectation: bool | None = Field(
+        default=None,
+        description="Whether the observation matched THINK's expected outcome",
+    )
+    follow_up_needed: bool | None = Field(
+        default=None,
+        description="Whether OBSERVE flagged follow-up work",
+    )
 
 
 class ReflectOutput(BaseModel):

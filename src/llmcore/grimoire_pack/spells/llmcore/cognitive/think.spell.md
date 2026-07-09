@@ -1,7 +1,7 @@
 ---
 id: llmcore/cognitive/think
 name: Cognitive THINK phase
-version: 1.1.0
+version: 1.2.0
 tags: [llmcore.builtin, cognitive, think]
 description: ReAct-style decision — a thought plus a tool call or a final answer.
 variables:
@@ -62,6 +62,7 @@ Use the ReAct format:
 Thought: [Your reasoning about what to do next]
 Action: [Tool name]
 Action Input: [Tool arguments]
+Expected: [One line — what a successful result will look like]
 
 OR if the task is complete:
 

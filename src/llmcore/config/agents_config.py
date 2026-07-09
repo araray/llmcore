@@ -20,6 +20,7 @@ The configuration hierarchy:
     ├── ValidationConfig     - VALIDATE phase deterministic guards
     ├── RedundancyConfig     - Redundant-call detection
     ├── PlanningConfig       - Conditional PLAN gating + replan budget
+    ├── ReflectionConfig     - REFLECT gating, structured output, grounding
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -444,6 +445,51 @@ class PlanningConfig(BaseModel):
 
 
 # =============================================================================
+# REFLECTION CONFIG
+# =============================================================================
+
+
+class ReflectMode(str, Enum):
+    """When the REFLECT phase calls the LLM (see ReflectionConfig)."""
+
+    ALWAYS = "always"  # Legacy behavior: reflect every iteration
+    ON_ACTION = "on_action"  # Skip the LLM call on no-action iterations
+    ON_FAILURE = "on_failure"  # LLM reflection only after a failed action
+
+
+class ReflectionConfig(BaseModel):
+    """
+    Configuration for the REFLECT phase (2.6).
+
+    - ``mode``: when the reflection LLM call runs. ``on_action`` (default)
+      skips it for iterations where THINK proposed no action; ``on_failure``
+      reserves it for failed actions; ``always`` keeps legacy behavior.
+      Skipped calls synthesize a deterministic ReflectOutput advanced from
+      external signals only (act success + observe follow-up).
+    - ``use_structured_output``: request ``response_format={"type":
+      "json_object"}`` (temperature 0.3) from providers that whitelist it
+      in ``get_supported_parameters`` (openai/deepseek/kimi/zai); the
+      strict-JSON parse falls back to the labeled-text parser.
+    - ``ground_in_observations``: never trust self-judgment over a failed
+      action — force ``step_completed=False`` and clamp the progress
+      estimate; an iteration that set a final answer is 100% done.
+    """
+
+    mode: ReflectMode = Field(
+        default=ReflectMode.ON_ACTION,
+        description="When the reflection LLM call runs",
+    )
+    use_structured_output: bool = Field(
+        default=True,
+        description="Request JSON reflection output from capable providers",
+    )
+    ground_in_observations: bool = Field(
+        default=True,
+        description="Override reflection self-judgment with external action signals",
+    )
+
+
+# =============================================================================
 # REDUNDANCY CONFIG
 # =============================================================================
 
@@ -672,6 +718,10 @@ class AgentsConfig(BaseModel):
     planning: PlanningConfig = Field(
         default_factory=PlanningConfig,
         description="Conditional PLAN gating and replan budget",
+    )
+    reflection: ReflectionConfig = Field(
+        default_factory=ReflectionConfig,
+        description="REFLECT phase gating, structured output, and grounding",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -943,6 +993,7 @@ ConvergenceConfig.model_rebuild()
 ValidationConfig.model_rebuild()
 RedundancyConfig.model_rebuild()
 PlanningConfig.model_rebuild()
+ReflectionConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -957,6 +1008,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "RoutingStrategy",
     "RiskLevel",
     "PlanMode",
+    "ReflectMode",
     # Config classes
     "GoalsConfig",
     "FastPathConfig",
@@ -967,6 +1019,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "ValidationConfig",
     "RedundancyConfig",
     "PlanningConfig",
+    "ReflectionConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

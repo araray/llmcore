@@ -47,7 +47,7 @@ from .act import act_phase
 from .observe import observe_phase
 from .perceive import perceive_phase
 from .plan import plan_phase
-from .reflect import reflect_phase
+from .reflect import _resolve_reflection_config, reflect_phase
 from .think import (
     _extract_native_tool_call,
     _finish_answer_acceptable,
@@ -267,6 +267,53 @@ def _redundant_action_observation(action: Any, entry: dict[str, Any]) -> Observe
         matches_expectation=None,
         insights=["Repeated identical action skipped — reuse the earlier result"],
         follow_up_needed=False,
+    )
+
+
+def _reflect_skip_reason(
+    reflection_config: Any,
+    proposed_action: Any,
+    action_success: bool | None,
+) -> str | None:
+    """Return why the reflection LLM call is skipped (None = run it, 2.6).
+
+    ``on_action`` skips no-action iterations; ``on_failure`` reserves the
+    LLM for failed actions; ``always`` never skips.
+    """
+    mode = str(getattr(reflection_config.mode, "value", reflection_config.mode))
+    if mode == "on_action":
+        return None if proposed_action is not None else "no action"
+    if mode == "on_failure":
+        if action_success is False:
+            return None
+        return "no action" if proposed_action is None else "action succeeded"
+    return None  # always
+
+
+def _deterministic_reflect_output(
+    agent_state: EnhancedAgentState,
+    iteration: CycleIteration,
+    skip_reason: str,
+) -> Any:
+    """Synthesize REFLECT output from external signals only (no LLM, 2.6).
+
+    Progress stays unchanged; ``step_completed`` advances purely from the
+    executed action's success and OBSERVE's follow-up flag.
+    """
+    from ..models import ReflectOutput
+
+    act_success = bool(iteration.act_output.success) if iteration.act_output else False
+    follow_up = (
+        bool(iteration.observe_output.follow_up_needed)
+        if iteration.observe_output
+        else False
+    )
+    return ReflectOutput(
+        evaluation=f"(reflection skipped: {skip_reason})",
+        progress_estimate=agent_state.progress_estimate,
+        insights=[],
+        plan_needs_update=False,
+        step_completed=act_success and not follow_up,
     )
 
 
@@ -686,10 +733,16 @@ class CognitiveCycle:
                     # ========================================================
                     # Phase 6: OBSERVE
                     # ========================================================
+                    # THINK's optional Expected: line grounds the observation
+                    # (2.6). The isinstance guard keeps mock-based think
+                    # outputs from leaking non-string sentinels in.
+                    think_expected = iteration.think_output.expected_outcome
                     observe_input = ObserveInput(
                         action_taken=iteration.think_output.proposed_action,
                         action_result=iteration.act_output.tool_result,
-                        expected_outcome=None,  # Could extract from think_output
+                        expected_outcome=think_expected
+                        if isinstance(think_expected, str)
+                        else None,
                     )
 
                     iteration.observe_output = await observe_phase(
@@ -720,30 +773,57 @@ class CognitiveCycle:
                     logger.warning("No action proposed by THINK phase")
 
                 # ============================================================
-                # Phase 7: REFLECT
+                # Phase 7: REFLECT (gated by ReflectionConfig.mode, 2.6)
                 # ============================================================
-                reflect_input = ReflectInput(
-                    goal=agent_state.goal,
-                    plan=agent_state.plan,
-                    current_step_index=agent_state.current_plan_step_index,
-                    last_action=iteration.think_output.proposed_action
-                    if iteration.think_output.proposed_action
-                    else agent_state.pending_tool_call,
-                    observation=iteration.observe_output.observation
-                    if iteration.observe_output
-                    else "No observation",
-                    iteration_number=iteration_number,
+                reflection_config = _resolve_reflection_config(self.agents_config)
+                action_success = (
+                    bool(iteration.act_output.success)
+                    if iteration.act_output is not None
+                    else None
+                )
+                reflect_skip_reason = _reflect_skip_reason(
+                    reflection_config,
+                    iteration.think_output.proposed_action,
+                    action_success,
                 )
 
-                iteration.reflect_output = await reflect_phase(
-                    agent_state=agent_state,
-                    reflect_input=reflect_input,
-                    provider_manager=self.provider_manager,
-                    prompt_registry=self.prompt_registry,
-                    tracer=self.tracer,
-                    provider_name=provider_name,
-                    model_name=model_name,
-                )
+                if reflect_skip_reason is not None:
+                    # No reflection LLM call: synthesize a deterministic
+                    # output advanced from external signals only.
+                    iteration.reflect_output = _deterministic_reflect_output(
+                        agent_state, iteration, reflect_skip_reason
+                    )
+                else:
+                    reflect_input = ReflectInput(
+                        goal=agent_state.goal,
+                        plan=agent_state.plan,
+                        current_step_index=agent_state.current_plan_step_index,
+                        last_action=iteration.think_output.proposed_action
+                        if iteration.think_output.proposed_action
+                        else agent_state.pending_tool_call,
+                        observation=iteration.observe_output.observation
+                        if iteration.observe_output
+                        else "No observation",
+                        iteration_number=iteration_number,
+                        action_success=action_success,
+                        matches_expectation=iteration.observe_output.matches_expectation
+                        if iteration.observe_output
+                        else None,
+                        follow_up_needed=iteration.observe_output.follow_up_needed
+                        if iteration.observe_output
+                        else None,
+                    )
+
+                    iteration.reflect_output = await reflect_phase(
+                        agent_state=agent_state,
+                        reflect_input=reflect_input,
+                        provider_manager=self.provider_manager,
+                        prompt_registry=self.prompt_registry,
+                        tracer=self.tracer,
+                        provider_name=provider_name,
+                        model_name=model_name,
+                        agents_config=self.agents_config,
+                    )
 
                 # ============================================================
                 # Phase 8: UPDATE
