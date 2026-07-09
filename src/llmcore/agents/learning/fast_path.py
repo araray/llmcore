@@ -93,53 +93,77 @@ class FastPathResult:
 
 
 # =============================================================================
-# Response Templates
+# Response Templates (grimoire promptlets)
 # =============================================================================
 
+#: Promptlet id prefix for canned fast-path responses. The bundled pack ships
+#: one promptlet per intent (greeting, greeting_morning, greeting_afternoon,
+#: greeting_evening, thanks, goodbye, acknowledgment); user layers may add or
+#: override intents without touching code.
+FAST_PATH_PROMPTLET_PREFIX = "llmcore/fast_path/"
 
-# Templates for common trivial responses
-RESPONSE_TEMPLATES: dict[str, str] = {
-    "greeting": "Hello! How can I help you today?",
-    "greeting_morning": "Good morning! How can I assist you?",
-    "greeting_afternoon": "Good afternoon! What can I do for you?",
-    "greeting_evening": "Good evening! How may I help you?",
-    "thanks": "You're welcome! Is there anything else I can help you with?",
-    "goodbye": "Goodbye! Feel free to return if you need any assistance.",
-    "acknowledgment": "I understand. Please let me know how I can help.",
-}
+
+def _fast_path_promptlets(grimoire: Any) -> dict[str, str]:
+    """Map intent key → canned response from ``llmcore/fast_path/*`` promptlets."""
+    # The facade does not surface promptlet listing (grimoire 0.4.x); the
+    # repo view (single-root or layered composite) does.
+    source = grimoire if hasattr(grimoire, "list_promptlets") else grimoire._repo
+    prefix = FAST_PATH_PROMPTLET_PREFIX
+    return {
+        p.id[len(prefix):]: str(p.content).strip()
+        for p in source.list_promptlets()
+        if p.id.startswith(prefix)
+    }
 
 
 def get_template_response(
     intent: str,
     context: dict[str, Any] | None = None,
+    *,
+    grimoire: Any | None = None,
 ) -> str | None:
-    """Get a template response if available."""
+    """Get a canned response for an intent from grimoire promptlets.
+
+    Canned fast-path responses live as ``llmcore/fast_path/<intent>``
+    promptlets (bundled pack; user layers can override). Matching keeps the
+    historical semantics over the promptlet id tails: exact intent match
+    first, then partial containment either way.
+
+    Args:
+        intent: Classified intent (e.g. ``"greeting"``).
+        context: Unused; kept for call-site compatibility.
+        grimoire: Grimoire facade to read promptlets from. When None, the
+            bundled-only registry's instance is used.
+
+    Returns:
+        The canned response text, or None when no promptlet matches.
+    """
+    del context
+    if grimoire is None:
+        from llmcore.grimoire_runtime import bundled_prompt_registry
+
+        grimoire = bundled_prompt_registry().grimoire
+
+    try:
+        templates = _fast_path_promptlets(grimoire)
+    except Exception as exc:
+        # Canned responses are an optimization: an unusable promptlet source
+        # (e.g. a non-grimoire object) means "no template" — the caller then
+        # takes the direct LLM path, which renders fail-loud.
+        logger.debug("Fast-path promptlet lookup unavailable: %s", exc)
+        return None
     intent_lower = intent.lower()
 
     # Check for direct match
-    if intent_lower in RESPONSE_TEMPLATES:
-        return RESPONSE_TEMPLATES[intent_lower]
+    if intent_lower in templates:
+        return templates[intent_lower]
 
-    # Check for partial match
-    for key, template in RESPONSE_TEMPLATES.items():
+    # Check for partial match (over promptlet id tails)
+    for key, template in sorted(templates.items()):
         if key in intent_lower or intent_lower in key:
             return template
 
     return None
-
-
-# =============================================================================
-# Fast-Path Prompts
-# =============================================================================
-
-
-FAST_PATH_SYSTEM_PROMPT = """You are a helpful AI assistant. Provide a direct,
-concise response to the user's message. Do not over-explain or add unnecessary
-context. Keep your response natural and friendly."""
-
-FAST_PATH_USER_PROMPT = """User message: {goal}
-
-Respond directly and concisely."""
 
 
 # =============================================================================
@@ -282,21 +306,26 @@ class FastPathExecutor:
 
     Execution order:
     1. Check response cache
-    2. Check response templates
+    2. Check response templates (grimoire promptlets)
     3. Direct LLM call (no tools)
 
     Args:
         llm_provider: LLM provider for direct calls
         config: Fast-path configuration
+        prompt_registry: Prompt registry rendering the ``fast_path`` template
+            and (via its grimoire) the canned-response promptlets. When None,
+            the bundled-only adapter is self-built lazily.
     """
 
     def __init__(
         self,
         llm_provider: BaseLLMProvider | None = None,
         config: FastPathConfig | None = None,
+        prompt_registry: Any | None = None,
     ):
         self.llm_provider = llm_provider
         self.config = config or FastPathConfig()
+        self._prompt_registry = prompt_registry
 
         self._cache = ResponseCache() if self.config.use_cache else None
         self._stats = {
@@ -343,10 +372,14 @@ class FastPathExecutor:
                         from_cache=True,
                     )
 
-            # Strategy 2: Check templates
+            # Strategy 2: Check templates (grimoire promptlets)
             if self.config.use_templates:
                 intent = classification.intent.value if classification else "unknown"
-                template_response = get_template_response(intent, {"goal": goal})
+                template_response = get_template_response(
+                    intent,
+                    {"goal": goal},
+                    grimoire=getattr(self._ensure_prompt_registry(), "grimoire", None),
+                )
                 if template_response:
                     self._stats["template_hits"] += 1
                     duration_ms = int((time.time() - start_time) * 1000)
@@ -427,19 +460,37 @@ class FastPathExecutor:
                 error=str(e),
             )
 
+    def _ensure_prompt_registry(self) -> Any:
+        """Return the injected registry, self-building the bundled adapter once."""
+        if self._prompt_registry is None:
+            from llmcore.grimoire_runtime import bundled_prompt_registry
+
+            self._prompt_registry = bundled_prompt_registry()
+        return self._prompt_registry
+
     async def _call_llm(
         self,
         goal: str,
         context: str | None = None,
     ) -> str:
-        """Make direct LLM call."""
+        """Make direct LLM call.
+
+        The SYSTEM + USER contract renders atomically from the ``fast_path``
+        template (grimoire spell ``llmcore/learning/fast_path``) — fail-loud,
+        no inline fallback. Caller-supplied context is prepended to the USER
+        message (dynamic block, stays code-composed).
+        """
         if not self.llm_provider:
             raise ValueError("No LLM provider configured")
 
-        # Build prompt
-        user_content = FAST_PATH_USER_PROMPT.format(goal=goal)
+        messages = self._ensure_prompt_registry().render_messages(
+            "fast_path", {"goal": goal}
+        )
         if context:
-            user_content = f"{context}\n\n{user_content}"
+            for message in messages:
+                if message.get("role") == "user":
+                    message["content"] = f"{context}\n\n{message['content']}"
+                    break
 
         # Set timeout
         timeout = self.config.max_response_time_ms / 1000.0
@@ -447,10 +498,7 @@ class FastPathExecutor:
         try:
             response = await asyncio.wait_for(
                 self.llm_provider.chat_async(
-                    messages=[
-                        {"role": "system", "content": FAST_PATH_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content},
-                    ],
+                    messages=messages,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
                 ),
@@ -561,4 +609,5 @@ __all__ = [
     "should_use_fast_path",
     "execute_fast_path",
     "get_template_response",
+    "FAST_PATH_PROMPTLET_PREFIX",
 ]

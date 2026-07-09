@@ -538,93 +538,17 @@ class TestGenerator:
     """
     __test__ = False  # not a pytest test class
 
-    SPEC_GENERATION_PROMPT = """You are an expert test engineer. Generate comprehensive test specifications for the following requirements.
-
-Requirements:
-{requirements}
-
-Language: {language}
-Test Framework: {framework}
-Minimum Tests: {min_tests}
-
-Generate test specifications covering:
-1. Happy path / normal operation (at least 2 tests)
-2. Edge cases (empty inputs, large inputs, boundary values) (at least 2 tests)
-3. Error handling (invalid inputs, exceptions) (at least 1 test)
-4. Integration scenarios (if applicable)
-
-For each test, provide a JSON object with:
-- name: A descriptive test name starting with test_ (e.g., test_add_positive_numbers)
-- description: What the test verifies
-- test_type: One of "unit", "integration", "edge_case", "error"
-- inputs: The test inputs as a dict (e.g., {{"a": 1, "b": 2}})
-- expected_output: What the function should return (can be null for void functions)
-- expected_behavior: Any side effects or state changes to verify
-- expected_exception: Exception type if testing error handling (e.g., "ValueError")
-- priority: 1 (must pass), 2 (should pass), or 3 (nice to have)
-
-Output as a JSON array of test specifications. Output ONLY valid JSON, no explanations or markdown.
-"""
-
-    TEST_GENERATION_PROMPT = """Generate executable test code for the following specification.
-
-Specification:
-- Name: {name}
-- Description: {description}
-- Type: {test_type}
-- Inputs: {inputs}
-- Expected Output: {expected_output}
-- Expected Behavior: {expected_behavior}
-- Expected Exception: {expected_exception}
-
-Language: {language}
-Framework: {framework}
-
-Generate a complete, runnable test function. Include:
-1. All necessary imports at the top
-2. Any required fixtures or setup
-3. The test function with clear assertions
-4. Helpful error messages on assertion failure
-
-For pytest:
-- Use pytest.raises() for exception testing
-- Use descriptive assertion messages
-- Use fixtures where appropriate
-
-Output only the Python code, no explanations or markdown backticks.
-"""
-
-    IMPLEMENTATION_PROMPT = """Generate implementation code that passes the following tests.
-
-Requirements:
-{requirements}
-
-Test File Content:
-```{language}
-{test_file}
-```
-
-Previous Implementation (if any):
-{previous_implementation}
-
-Test Failures (if any):
-{test_failures}
-
-Generate implementation code that:
-1. Satisfies all the requirements
-2. Passes all the tests above
-3. Follows best practices for {language}
-4. Includes proper error handling
-5. Has clear docstrings/comments
-
-Output only the implementation code, no explanations or markdown backticks.
-"""
+    # Prompt bodies live in the grimoire control plane (bundled pack spells
+    # ``llmcore/darwin/tdd/{spec_generation,test_generation,implementation}``),
+    # rendered via the ``darwin_tdd_*`` template ids. The former inline
+    # class prompt constants were deleted in 0.52.0.
 
     def __init__(
         self,
         llm_callable: Callable | None = None,
         default_framework: str = "pytest",
         min_tests: int = 5,
+        prompt_registry: Any | None = None,
     ):
         """
         Initialize test generator.
@@ -633,10 +557,22 @@ Output only the implementation code, no explanations or markdown backticks.
             llm_callable: Async callable for LLM generation (takes messages, returns response)
             default_framework: Default test framework to use
             min_tests: Minimum number of tests to generate
+            prompt_registry: Prompt registry rendering the ``darwin_tdd_*``
+                templates (grimoire control plane). When None, the
+                bundled-only adapter is self-built lazily.
         """
         self._llm_callable = llm_callable
         self.default_framework = default_framework
         self.min_tests = min_tests
+        self._prompt_registry = prompt_registry
+
+    def _registry(self) -> Any:
+        """Return the injected registry, self-building the bundled adapter once."""
+        if self._prompt_registry is None:
+            from llmcore.grimoire_runtime import bundled_prompt_registry
+
+            self._prompt_registry = bundled_prompt_registry()
+        return self._prompt_registry
 
     def set_llm_callable(self, llm_callable: Callable) -> None:
         """Set the LLM callable for generation."""
@@ -674,23 +610,19 @@ Output only the implementation code, no explanations or markdown backticks.
         min_tests = min_tests or self.min_tests
         task_id = task_id or f"task_{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d%H%M%S%f')[:18]}"
 
-        prompt = self.SPEC_GENERATION_PROMPT.format(
-            requirements=requirements,
-            language=language,
-            framework=framework,
-            min_tests=min_tests,
+        # SYSTEM+USER spell rendered atomically via render_messages().
+        messages = self._registry().render_messages(
+            "darwin_tdd_spec_generation",
+            {
+                "requirements": requirements,
+                "language": language,
+                "framework": framework,
+                "min_tests": str(min_tests),
+            },
         )
 
         try:
-            response = await self._llm_callable(
-                [
-                    {
-                        "role": "system",
-                        "content": "You are an expert test engineer. Output valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ]
-            )
+            response = await self._llm_callable(messages)
 
             # Extract content from response
             content = self._extract_content(response)
@@ -784,30 +716,27 @@ Output only the implementation code, no explanations or markdown backticks.
         tests = []
 
         for spec in suite.specifications:
-            prompt = self.TEST_GENERATION_PROMPT.format(
-                name=spec.name,
-                description=spec.description,
-                test_type=spec.test_type,
-                inputs=json.dumps(spec.inputs),
-                expected_output=json.dumps(spec.expected_output)
-                if spec.expected_output is not None
-                else "None",
-                expected_behavior=spec.expected_behavior or "N/A",
-                expected_exception=spec.expected_exception or "None",
-                language=suite.language,
-                framework=suite.framework,
+            # SYSTEM+USER spell rendered atomically via render_messages()
+            # (the system line interpolates the language).
+            messages = self._registry().render_messages(
+                "darwin_tdd_test_generation",
+                {
+                    "name": spec.name,
+                    "description": spec.description,
+                    "test_type": spec.test_type,
+                    "inputs": json.dumps(spec.inputs),
+                    "expected_output": json.dumps(spec.expected_output)
+                    if spec.expected_output is not None
+                    else "None",
+                    "expected_behavior": spec.expected_behavior or "N/A",
+                    "expected_exception": spec.expected_exception or "None",
+                    "language": suite.language,
+                    "framework": suite.framework,
+                },
             )
 
             try:
-                response = await self._llm_callable(
-                    [
-                        {
-                            "role": "system",
-                            "content": f"You are an expert {suite.language} developer. Output only code.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ]
-                )
+                response = await self._llm_callable(messages)
 
                 # Extract code
                 code = self._extract_content(response)
@@ -882,23 +811,20 @@ Output only the implementation code, no explanations or markdown backticks.
             if failure_lines:
                 failure_text = "\n".join(failure_lines)
 
-        prompt = self.IMPLEMENTATION_PROMPT.format(
-            requirements=requirements,
-            language=language,
-            test_file=test_file_content,
-            previous_implementation=previous_implementation or "None",
-            test_failures=failure_text,
+        # SYSTEM+USER spell rendered atomically via render_messages()
+        # (the system line interpolates the language).
+        messages = self._registry().render_messages(
+            "darwin_tdd_implementation",
+            {
+                "requirements": requirements,
+                "language": language,
+                "test_file": test_file_content,
+                "previous_implementation": previous_implementation or "None",
+                "test_failures": failure_text,
+            },
         )
 
-        response = await self._llm_callable(
-            [
-                {
-                    "role": "system",
-                    "content": f"You are an expert {language} developer. Output only implementation code.",
-                },
-                {"role": "user", "content": prompt},
-            ]
-        )
+        response = await self._llm_callable(messages)
 
         code = self._extract_content(response)
         code = self._clean_code_block(code)
@@ -1199,6 +1125,7 @@ class TDDManager:
         max_iterations: int = 3,
         llm_callable: Callable | None = None,
         sandbox_executor: Callable | None = None,
+        prompt_registry: Any | None = None,
     ):
         """
         Initialize TDD manager.
@@ -1213,6 +1140,9 @@ class TDDManager:
             max_iterations: Maximum TDD cycle iterations
             llm_callable: Async callable for LLM generation
             sandbox_executor: Async callable for sandbox execution
+            prompt_registry: Prompt registry for the ``darwin_tdd_*``
+                templates, forwarded to the ``TestGenerator`` (bundled-only
+                adapter self-built when None).
 
         Raises:
             ValueError: If backend is invalid or required config is missing
@@ -1227,6 +1157,7 @@ class TDDManager:
             llm_callable=llm_callable,
             default_framework=default_framework,
             min_tests=min_tests,
+            prompt_registry=prompt_registry,
         )
         self._test_file_builder = TestFileBuilder()
         self._sandbox_executor = sandbox_executor

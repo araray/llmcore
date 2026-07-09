@@ -597,17 +597,22 @@ class PromptRegistry:
     @classmethod
     def with_defaults(cls) -> "PromptRegistry":
         """
-        Create a registry with built-in default templates and snippets.
+        Create a registry with the built-in default snippets.
+
+        NOTE (0.52.0): the four cognitive default templates were deleted —
+        agent prompts render from the grimoire control plane. This factory
+        now only seeds the generic reusable snippets; hosts add their own
+        templates on top.
 
         Returns:
-            Registry with default prompts loaded
+            Registry with default snippets loaded
         """
         from .template_loader import load_default_templates
 
         registry = cls()
         load_default_templates(registry)
 
-        logger.info("Created registry with default templates")
+        logger.info("Created registry with default snippets")
         return registry
 
 

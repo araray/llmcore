@@ -129,6 +129,16 @@ class GrimoirePromptRegistryAdapter:
         self._metrics: dict[str, PromptMetrics] = {}
         self._usage_store = usage_store
 
+    @property
+    def grimoire(self) -> Any:
+        """The underlying Grimoire facade (read-only).
+
+        Exposed so registry consumers can reach non-spell artifacts from the
+        SAME composed layers — e.g. fast-path canned responses (promptlets)
+        and persona definitions (spell ``attributes``).
+        """
+        return self._grimoire
+
     def resolve_template_id(self, template_id: str) -> str:
         """Resolve an llmcore template ID to a Grimoire spell ID."""
         return self._template_map.get(template_id, template_id)

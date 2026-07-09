@@ -241,16 +241,34 @@ class SingleAgentMode:
         else:
             self._agents_config = agents_config
 
-        # Initialize persona manager
-        self.persona_manager = PersonaManager()
+        # Initialize persona manager — grimoire-sourced when the registry is
+        # the grimoire adapter (builtin fallback only for legacy registries;
+        # the registry-derived grimoire is a heuristic, so a load failure
+        # degrades to the builtins rather than aborting construction).
+        persona_grimoire = getattr(prompt_registry, "grimoire", None)
+        if persona_grimoire is None:
+            self.persona_manager = PersonaManager()
+        else:
+            try:
+                self.persona_manager = PersonaManager(grimoire=persona_grimoire)
+            except Exception as persona_exc:
+                logger.debug(
+                    "Registry-derived grimoire unusable for personas (%s); "
+                    "using builtin definitions",
+                    persona_exc,
+                )
+                self.persona_manager = PersonaManager()
 
-        # Initialize goal classifier (G3)
-        self.goal_classifier = GoalClassifier()
+        # Initialize goal classifier (G3) — LLM fallback renders through the
+        # same control plane as every other prompt.
+        self.goal_classifier = GoalClassifier(prompt_registry=prompt_registry)
 
         # Initialize fast-path executor (G3)
         # Use the default provider for fast-path calls
         default_provider = provider_manager.get_provider()
-        self.fast_path_executor = FastPathExecutor(llm_provider=default_provider)
+        self.fast_path_executor = FastPathExecutor(
+            llm_provider=default_provider, prompt_registry=prompt_registry
+        )
 
         # Initialize capability checker (G3 Phase 4)
         self.capability_checker = CapabilityChecker()

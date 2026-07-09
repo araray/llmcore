@@ -32,7 +32,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Use Pydantic if available, otherwise use dataclasses
 try:
@@ -251,6 +251,9 @@ class GoalClassifier:
         use_llm_fallback: Whether to use LLM for uncertain classifications
         llm_provider: LLM provider for fallback classification
         confidence_threshold: Minimum confidence for heuristic result (default: 0.85)
+        prompt_registry: Prompt registry rendering the ``goal_classifier``
+            template (grimoire control plane). When None, a bundled-only
+            adapter is self-built lazily on first LLM classification.
     """
 
     def __init__(
@@ -258,10 +261,12 @@ class GoalClassifier:
         use_llm_fallback: bool = False,
         llm_provider: BaseLLMProvider | None = None,
         confidence_threshold: float = 0.85,
+        prompt_registry: Any | None = None,
     ):
         self.use_llm_fallback = use_llm_fallback
         self.llm_provider = llm_provider
         self.confidence_threshold = confidence_threshold
+        self._prompt_registry = prompt_registry
 
         # Compile patterns for performance
         self._trivial_patterns = [
@@ -480,34 +485,27 @@ class GoalClassifier:
             classification_method="default",
         )
 
+    def _ensure_prompt_registry(self) -> Any:
+        """Return the injected registry, self-building the bundled adapter once."""
+        if self._prompt_registry is None:
+            from llmcore.grimoire_runtime import bundled_prompt_registry
+
+            self._prompt_registry = bundled_prompt_registry()
+        return self._prompt_registry
+
     async def _classify_with_llm(self, goal: str) -> GoalClassification:
         """
         Use LLM for classification (for uncertain cases).
 
-        This is called when heuristic confidence is below threshold.
+        This is called when heuristic confidence is below threshold. The
+        prompt renders from the ``goal_classifier`` template (grimoire spell
+        ``llmcore/cognitive/goal_classifier``) — fail-loud, no inline
+        fallback; ``classify_async`` handles errors at the phase level.
         """
         if not self.llm_provider:
             raise ValueError("LLM provider not configured")
 
-        prompt = f"""Classify the following user goal by complexity.
-
-User Goal: "{goal}"
-
-Respond with exactly one line in this format:
-COMPLEXITY: [TRIVIAL|SIMPLE|MODERATE|COMPLEX|AMBIGUOUS]
-INTENT: [GREETING|FAREWELL|QUESTION|TASK|CREATIVE|ANALYSIS|META|UNKNOWN]
-CONFIDENCE: [0.0-1.0]
-REQUIRES_TOOLS: [true|false]
-MAX_ITERATIONS: [number 1-25]
-
-Classification guidelines:
-- TRIVIAL: Greetings, thanks, simple acknowledgments (no tools needed)
-- SIMPLE: Single file read, simple search, basic question (1-3 iterations)
-- MODERATE: Multi-step task, comparison, debugging (5-15 iterations)
-- COMPLEX: Research, analysis with report, building something (15-25 iterations)
-- AMBIGUOUS: Unclear what user wants, needs clarification
-
-Respond only with the classification, no explanation."""
+        prompt = self._ensure_prompt_registry().render("goal_classifier", {"goal": goal})
 
         # Call LLM
         response = await self.llm_provider.complete(

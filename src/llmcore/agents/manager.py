@@ -24,6 +24,7 @@ DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
 
 import logging
 import time
+import warnings
 from enum import Enum
 from typing import Any
 
@@ -233,7 +234,21 @@ class AgentManager:
         Raises:
             LLMCoreError: If the agent loop fails.
             SandboxError: If use_sandbox=True but sandbox not initialized.
+
+        .. deprecated:: 0.52.0
+            The legacy ``cognitive_cycle``/``prompt_utils`` loop is outside
+            the grimoire control plane (hardcoded prompts). Use
+            ``EnhancedAgentManager.run()`` (SINGLE mode); removal is planned
+            for the next minor release.
         """
+        warnings.warn(
+            "AgentManager.run_agent_loop() and the legacy cognitive_cycle/"
+            "prompt_utils stack are deprecated (0.52.0) and will be removed "
+            "in the next minor release; use EnhancedAgentManager.run() — its "
+            "prompts come from the grimoire control plane.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Determine if we should use sandbox
         should_use_sandbox = self._should_use_sandbox(use_sandbox)
 
@@ -806,7 +821,29 @@ class EnhancedAgentManager(AgentManager):
             from .persona import PersonaManager
             from .single_agent import SingleAgentMode
 
-            self.persona_manager = PersonaManager()
+            # Personas come from the control plane when a grimoire is
+            # reachable (explicit instance, or the one under the self-built
+            # adapter); the hardcoded builtins remain only for legacy
+            # construction with a non-grimoire registry. An EXPLICIT grimoire
+            # must load (fail-loud); one merely inferred from an injected
+            # registry is a heuristic and degrades to the builtins.
+            persona_grimoire = grimoire if grimoire is not None else getattr(
+                prompt_registry, "grimoire", None
+            )
+            if persona_grimoire is None:
+                self.persona_manager = PersonaManager()
+            else:
+                try:
+                    self.persona_manager = PersonaManager(grimoire=persona_grimoire)
+                except Exception as persona_exc:
+                    if grimoire is not None:
+                        raise
+                    logger.debug(
+                        "Registry-derived grimoire unusable for personas (%s); "
+                        "using builtin definitions",
+                        persona_exc,
+                    )
+                    self.persona_manager = PersonaManager()
             self.memory_integrator = CognitiveMemoryIntegrator(
                 memory_manager=memory_manager,
                 storage_manager=storage_manager,

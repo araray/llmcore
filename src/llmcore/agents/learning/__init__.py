@@ -32,7 +32,7 @@ from .failure_memory import (
 )
 from .fast_path import (
     # Constants
-    RESPONSE_TEMPLATES,
+    FAST_PATH_PROMPTLET_PREFIX,
     FastPathConfig,
     FastPathExecutor,
     # Data models
@@ -43,6 +43,7 @@ from .fast_path import (
     ResponseCache,
     execute_fast_path,
     # Convenience functions
+    get_template_response,
     should_use_fast_path,
 )
 from .reflection_bridge import (
@@ -83,5 +84,6 @@ __all__ = [
     "FastPathExecutor",
     "should_use_fast_path",
     "execute_fast_path",
-    "RESPONSE_TEMPLATES",
+    "get_template_response",
+    "FAST_PATH_PROMPTLET_PREFIX",
 ]

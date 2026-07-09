@@ -1,6 +1,15 @@
 # src/llmcore/agents/cognitive_cycle.py
 """
-Core cognitive cycle implementation for LLMCore agents.
+Core cognitive cycle implementation for LLMCore agents (LEGACY).
+
+.. deprecated:: 0.52.0
+    This module (with its ``prompt_utils`` companion) is the pre-Darwin
+    agent loop and sits OUTSIDE the grimoire control plane — its prompts are
+    hardcoded and were deliberately NOT migrated to spells. It is scheduled
+    for removal in the next minor release. Use the Darwin Layer 2 stack
+    (``EnhancedAgentManager.run()`` / ``agents.cognitive.phases``), whose
+    prompts render from the bundled grimoire pack.
+    ``AgentManager.run_agent_loop()`` emits a ``DeprecationWarning`` at entry.
 
 This module contains the standalone functions that execute the primary steps
 of an agent's operation: Plan, Think, Act, Observe, and Reflect. It also

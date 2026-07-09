@@ -68,7 +68,6 @@ Usage - Multi-Attempt Arbiter:
 from .arbiter import (
     ArbiterConfig,
     ArbiterDecision,
-    ArbiterPrompts,
     Candidate,
     CandidateScore,
     EvaluationCriteria,
@@ -128,8 +127,6 @@ __all__ = [
     "CandidateScore",
     "ArbiterDecision",
     "ArbiterConfig",
-    # Prompts
-    "ArbiterPrompts",
     # High-level manager
     "MultiAttemptArbiter",
 ]

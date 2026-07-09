@@ -261,83 +261,12 @@ class ArbiterConfig(BaseModel):
 
 
 # =============================================================================
-# PROMPT TEMPLATES
-# =============================================================================
-
-
-class ArbiterPrompts:
-    """Prompt templates for the arbiter system."""
-
-    GENERATION_PROMPT = """You are an expert software developer.
-
-Task: {task}
-
-Context: {context}
-
-{additional_instructions}
-
-Generate high-quality, production-ready code. Include:
-1. Clear, readable implementation
-2. Proper error handling
-3. Helpful comments where needed
-4. Type hints (if applicable)
-
-Output only the code, no explanations or markdown code fences."""
-
-    EVALUATION_PROMPT = """You are an expert code reviewer. Evaluate the following code candidate.
-
-Task: {task}
-
-Code:
-```
-{code}
-```
-
-Evaluate on these criteria (score 0-10 for each):
-
-{criteria_list}
-
-For each criterion, provide:
-- Score (0-10)
-- Brief justification (1 sentence)
-
-Output as JSON:
-{{
-    "scores": {{
-        "criterion_name": {{"score": N, "justification": "..."}},
-        ...
-    }},
-    "overall_feedback": "Brief overall assessment"
-}}
-
-Output ONLY valid JSON, no explanations or markdown."""
-
-    SELECTION_PROMPT = """You are selecting the best code candidate from multiple options.
-
-Task: {task}
-
-Candidates and their scores:
-{candidates_summary}
-
-Based on the scores and the task requirements, select the best candidate.
-Consider:
-- Weighted scores (higher weight = more important)
-- Overall quality and adherence to requirements
-- Trade-offs between candidates
-
-Output as JSON:
-{{
-    "selected_id": "candidate_X",
-    "reasoning": "Why this candidate is best",
-    "confidence": 0.X
-}}
-
-Output ONLY valid JSON, no explanations or markdown."""
-
-
-# =============================================================================
 # MULTI-ATTEMPT ARBITER
 # =============================================================================
+# Prompt bodies live in the grimoire control plane (bundled pack spells
+# ``llmcore/darwin/arbiter/{generation,evaluation,selection}``), rendered via
+# the prompt-registry template ids ``darwin_arbiter_*``. The former inline
+# ``ArbiterPrompts`` constants were deleted in 0.52.0.
 
 
 class MultiAttemptArbiter:
@@ -371,6 +300,7 @@ class MultiAttemptArbiter:
         self,
         llm_client: Callable | None = None,
         config: ArbiterConfig | None = None,
+        prompt_registry: Any | None = None,
     ):
         """
         Initialize the multi-attempt arbiter.
@@ -380,10 +310,21 @@ class MultiAttemptArbiter:
                         Signature: async (messages: List[Dict], **kwargs) -> response
                         Response should have a `.content` attribute or be a string.
             config: Arbiter configuration (uses defaults if not provided)
+            prompt_registry: Prompt registry rendering the
+                ``darwin_arbiter_*`` templates (grimoire control plane).
+                When None, the bundled-only adapter is self-built lazily.
         """
         self._llm_client = llm_client
         self.config = config or ArbiterConfig()
-        self._prompts = ArbiterPrompts()
+        self._prompt_registry = prompt_registry
+
+    def _registry(self) -> Any:
+        """Return the injected registry, self-building the bundled adapter once."""
+        if self._prompt_registry is None:
+            from llmcore.grimoire_runtime import bundled_prompt_registry
+
+            self._prompt_registry = bundled_prompt_registry()
+        return self._prompt_registry
 
     def set_llm_client(self, llm_client: Callable) -> None:
         """Set the LLM client for generation and evaluation."""
@@ -574,10 +515,14 @@ class MultiAttemptArbiter:
         """Generate a single candidate."""
         start_time = _utc_now()
 
-        prompt = self._prompts.GENERATION_PROMPT.format(
-            task=task,
-            context=context,
-            additional_instructions=variant,
+        # USER-only spell: render() returns the user text.
+        prompt = self._registry().render(
+            "darwin_arbiter_generation",
+            {
+                "task": task,
+                "context": context,
+                "additional_instructions": variant,
+            },
         )
 
         try:
@@ -659,22 +604,20 @@ class MultiAttemptArbiter:
             [f"- {c.name}: {c.description} (weight: {c.weight})" for c in self.config.criteria]
         )
 
-        prompt = self._prompts.EVALUATION_PROMPT.format(
-            task=task,
-            code=candidate.content,
-            criteria_list=criteria_list,
+        # SYSTEM+USER spell rendered atomically via render_messages().
+        messages = self._registry().render_messages(
+            "darwin_arbiter_evaluation",
+            {
+                "task": task,
+                "code": candidate.content,
+                "criteria_list": criteria_list,
+            },
         )
 
         try:
             response = await asyncio.wait_for(
                 self._llm_client(
-                    [
-                        {
-                            "role": "system",
-                            "content": "You are an expert code reviewer. Output valid JSON only.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
+                    messages,
                     temperature=0.3,
                 ),
                 timeout=self.config.timeout_per_evaluation_s,
@@ -762,17 +705,18 @@ class MultiAttemptArbiter:
                 parts.append(f"  Feedback: {score.arbiter_feedback}")
             summary_parts.append("\n".join(parts))
 
-        prompt = self._prompts.SELECTION_PROMPT.format(
-            task=task,
-            candidates_summary="\n".join(summary_parts),
+        # SYSTEM+USER spell rendered atomically via render_messages().
+        messages = self._registry().render_messages(
+            "darwin_arbiter_selection",
+            {
+                "task": task,
+                "candidates_summary": "\n".join(summary_parts),
+            },
         )
 
         try:
             response = await self._llm_client(
-                [
-                    {"role": "system", "content": "Output valid JSON only."},
-                    {"role": "user", "content": prompt},
-                ],
+                messages,
                 temperature=0.3,
             )
 
@@ -901,8 +845,6 @@ __all__ = [
     "CandidateScore",
     "ArbiterDecision",
     "ArbiterConfig",
-    # Prompts
-    "ArbiterPrompts",
     # Main class
     "MultiAttemptArbiter",
 ]

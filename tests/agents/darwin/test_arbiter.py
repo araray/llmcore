@@ -15,7 +15,6 @@ import pytest
 from llmcore.agents.darwin.arbiter import (
     ArbiterConfig,
     ArbiterDecision,
-    ArbiterPrompts,
     Candidate,
     CandidateScore,
     EvaluationCriteria,
@@ -814,38 +813,56 @@ class TestJsonParsing:
 
 
 class TestPrompts:
-    """Tests for prompt templates."""
+    """Tests for the grimoire-rendered arbiter prompts (0.52.0).
 
-    def test_generation_prompt_format(self):
-        """Test generation prompt formatting."""
-        prompt = ArbiterPrompts.GENERATION_PROMPT.format(
-            task="Test task",
-            context="Test context",
-            additional_instructions="Be concise",
+    The inline ``ArbiterPrompts`` constants were deleted; the templates
+    render via the prompt registry from the bundled pack spells.
+    """
+
+    def test_generation_prompt_render(self, bundled_prompt_registry):
+        """Generation renders as USER-only text with all variables."""
+        prompt = bundled_prompt_registry.render(
+            "darwin_arbiter_generation",
+            {
+                "task": "Test task",
+                "context": "Test context",
+                "additional_instructions": "Be concise",
+            },
         )
         assert "Test task" in prompt
         assert "Test context" in prompt
         assert "Be concise" in prompt
 
-    def test_evaluation_prompt_format(self):
-        """Test evaluation prompt formatting."""
-        prompt = ArbiterPrompts.EVALUATION_PROMPT.format(
-            task="Test task",
-            code="def foo(): pass",
-            criteria_list="- correctness: Is it correct?",
+    def test_evaluation_prompt_render(self, bundled_prompt_registry):
+        """Evaluation renders SYSTEM+USER atomically with all variables."""
+        messages = bundled_prompt_registry.render_messages(
+            "darwin_arbiter_evaluation",
+            {
+                "task": "Test task",
+                "code": "def foo(): pass",
+                "criteria_list": "- correctness: Is it correct?",
+            },
         )
-        assert "Test task" in prompt
-        assert "def foo(): pass" in prompt
-        assert "correctness" in prompt
+        assert messages[0]["role"] == "system"
+        assert "JSON" in messages[0]["content"]
+        user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+        assert "Test task" in user_text
+        assert "def foo(): pass" in user_text
+        assert "correctness" in user_text
 
-    def test_selection_prompt_format(self):
-        """Test selection prompt formatting."""
-        prompt = ArbiterPrompts.SELECTION_PROMPT.format(
-            task="Test task",
-            candidates_summary="candidate_0: score 8.0\ncandidate_1: score 7.0",
+    def test_selection_prompt_render(self, bundled_prompt_registry):
+        """Selection renders SYSTEM+USER atomically with all variables."""
+        messages = bundled_prompt_registry.render_messages(
+            "darwin_arbiter_selection",
+            {
+                "task": "Test task",
+                "candidates_summary": "candidate_0: score 8.0\ncandidate_1: score 7.0",
+            },
         )
-        assert "Test task" in prompt
-        assert "candidate_0" in prompt
+        assert messages[0]["role"] == "system"
+        user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+        assert "Test task" in user_text
+        assert "candidate_0" in user_text
 
 
 class TestIntegrationWithOtherComponents:

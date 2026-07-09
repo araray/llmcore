@@ -1,6 +1,13 @@
 # src/llmcore/agents/prompt_utils.py
 """
-Prompt management utilities for the LLMCore agent system.
+Prompt management utilities for the LLMCore agent system (LEGACY).
+
+.. deprecated:: 0.52.0
+    This module serves only the legacy ``cognitive_cycle`` loop and sits
+    OUTSIDE the grimoire control plane — its prompt templates are hardcoded
+    and were deliberately NOT migrated to spells. It is scheduled for
+    removal in the next minor release together with ``cognitive_cycle``.
+    Darwin Layer 2 phases render from the bundled grimoire pack instead.
 
 This module provides helper functions for loading prompt templates,
 building the comprehensive prompt sent to the LLM during the agent's

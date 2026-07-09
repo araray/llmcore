@@ -228,6 +228,32 @@ def build_grimoire(cfg: "GrimoireConfig") -> Any:
         raise ConfigError(f"Grimoire control-plane layers failed to load: {exc}") from exc
 
 
+_BUNDLED_PROMPT_REGISTRY: Any | None = None
+
+
+def bundled_prompt_registry() -> "GrimoirePromptRegistryAdapter":
+    """Shared bundled-only prompt-registry adapter (lazily built, cached).
+
+    The self-build escape hatch for consumers constructed WITHOUT an injected
+    registry (direct construction of ``GoalClassifier``, ``FastPathExecutor``,
+    ``MultiAttemptArbiter``, ``TestGenerator``, ``GoalManager``, ...): they
+    render against the packaged ``llmcore-builtin`` pack alone. Mirrors
+    ``EnhancedAgentManager``'s self-build pattern; grimoire is a hard
+    dependency so this always succeeds on a healthy install. Fail-loud: any
+    load/render error propagates — there is no inline-prompt fallback left.
+    """
+    global _BUNDLED_PROMPT_REGISTRY
+    if _BUNDLED_PROMPT_REGISTRY is None:
+        from grimoire import Grimoire
+
+        from llmcore.agents.prompts.grimoire_adapter import GrimoirePromptRegistryAdapter
+
+        _BUNDLED_PROMPT_REGISTRY = GrimoirePromptRegistryAdapter(
+            Grimoire(bundled_pack_path())
+        )
+    return _BUNDLED_PROMPT_REGISTRY
+
+
 def build_prompt_registry(
     grimoire: Any, cfg: "GrimoireConfig"
 ) -> "GrimoirePromptRegistryAdapter":
@@ -325,5 +351,6 @@ __all__ = [
     "build_grimoire",
     "build_prompt_registry",
     "bundled_pack_path",
+    "bundled_prompt_registry",
     "validate_grimoire_startup",
 ]
