@@ -713,3 +713,66 @@ class TestProviderRegistration:
         from llmcore.providers.manager import _OPENAI_COMPATIBLE_DEFAULTS
 
         assert "deepseek" not in _OPENAI_COMPATIBLE_DEFAULTS
+
+
+class TestDSMLNormalization:
+    """Bug 3 (Darwin-vs-Lite eval): deepseek-v4 sometimes emits tool calls as
+    DSML text markup in message.content instead of the structured field.
+    chat_completion normalizes at the provider boundary."""
+
+    #: U+FF5C fullwidth bars, built via escapes (ruff RUF001-clean).
+    _B = "\uff5c\uff5c"
+    LEAK = (
+        f"<{_B}DSML{_B}tool_calls>\n"
+        f'<{_B}DSML{_B}invoke name="list_dir">\n'
+        f'<{_B}DSML{_B}parameter name="path" string="true">.</{_B}DSML{_B}parameter>\n'
+        f'<{_B}DSML{_B}parameter name="include_hidden" string="false">false'
+        f"</{_B}DSML{_B}parameter>\n"
+        f"</{_B}DSML{_B}invoke>\n"
+        f"</{_B}DSML{_B}tool_calls>"
+    )
+
+    def test_markup_only_content_normalized(self, provider):
+        import json as _json
+
+        r = {
+            "choices": [
+                {"finish_reason": "stop", "message": {"role": "assistant", "content": self.LEAK}}
+            ]
+        }
+        m = provider._normalize_dsml_tool_calls(r)["choices"][0]["message"]
+        assert m["content"] is None
+        assert m["tool_calls"][0]["function"]["name"] == "list_dir"
+        assert _json.loads(m["tool_calls"][0]["function"]["arguments"]) == {
+            "path": ".",
+            "include_hidden": False,
+        }
+        assert r["choices"][0]["finish_reason"] == "tool_calls"
+        # And the standard extractor now sees the calls.
+        calls = provider.extract_tool_calls(r)
+        assert [c.name for c in calls] == ["list_dir"]
+
+    def test_prose_kept_and_multiple_invokes_ascii_pipes(self, provider):
+        mixed = (
+            "Checking.\n<||DSML||tool_calls>"
+            '<||DSML||invoke name="a"><||DSML||parameter name="x">1'
+            "</||DSML||parameter></||DSML||invoke>"
+            '<||DSML||invoke name="b"></||DSML||invoke>'
+            "</||DSML||tool_calls>\nDone."
+        )
+        r = {"choices": [{"finish_reason": "stop", "message": {"content": mixed}}]}
+        m = provider._normalize_dsml_tool_calls(r)["choices"][0]["message"]
+        assert m["content"] == "Checking.\n\nDone."
+        assert [c["function"]["name"] for c in m["tool_calls"]] == ["a", "b"]
+
+    def test_structured_field_wins_no_double_parse(self, provider):
+        r = {"choices": [{"message": {"content": self.LEAK, "tool_calls": [{"id": "t1"}]}}]}
+        m = provider._normalize_dsml_tool_calls(r)["choices"][0]["message"]
+        assert m["content"] == self.LEAK
+        assert len(m["tool_calls"]) == 1
+
+    def test_plain_content_untouched(self, provider):
+        r = {"choices": [{"finish_reason": "stop", "message": {"content": "just an answer"}}]}
+        m = provider._normalize_dsml_tool_calls(r)["choices"][0]["message"]
+        assert m["content"] == "just an answer"
+        assert "tool_calls" not in m

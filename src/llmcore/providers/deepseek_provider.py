@@ -35,6 +35,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
@@ -82,6 +83,41 @@ from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# DSML text-format tool calls (defensive normalization)
+# =============================================================================
+# deepseek-v4 models occasionally emit tool calls as DSML MARKUP inside
+# message.content instead of the structured tool_calls field, e.g. (bars are
+# U+FF5C FULLWIDTH VERTICAL LINE, deepseek's special-token style):
+#
+#   <|.|DSML|.|tool_calls>            (|.| = U+FF5C shown as ASCII here)
+#   <|.|DSML|.|invoke name="list_dir">
+#   <|.|DSML|.|parameter name="path" string="true">.</|.|DSML|.|parameter>
+#   </|.|DSML|.|invoke>
+#   </|.|DSML|.|tool_calls>
+#
+# Observed on multi-round tool turns (wairu Darwin-vs-Lite benchmark, bug 3):
+# without normalization the markup leaks to every consumer as the final
+# answer text. chat_completion() normalizes such responses into standard
+# OpenAI shape (structured tool_calls + stripped content) at the provider
+# boundary, so llmcore phases, host dispatchers, and extract_tool_calls all
+# see a normal response. ASCII pipes are tolerated defensively.
+
+_DSML_BAR = "[\uff5c|]{1,2}"
+_DSML_BLOCK_RE = re.compile(
+    rf"<{_DSML_BAR}DSML{_DSML_BAR}tool_calls>(.*?)</{_DSML_BAR}DSML{_DSML_BAR}tool_calls>",
+    re.DOTALL,
+)
+_DSML_INVOKE_RE = re.compile(
+    rf'<{_DSML_BAR}DSML{_DSML_BAR}invoke\s+name="([^"]+)"\s*>(.*?)</{_DSML_BAR}DSML{_DSML_BAR}invoke>',
+    re.DOTALL,
+)
+_DSML_PARAM_RE = re.compile(
+    rf'<{_DSML_BAR}DSML{_DSML_BAR}parameter\s+name="([^"]+)"'
+    rf'(?:\s+string="(true|false)")?\s*>(.*?)</{_DSML_BAR}DSML{_DSML_BAR}parameter>',
+    re.DOTALL,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -428,6 +464,75 @@ class DeepSeekProvider(BaseProvider):
 
         return msg_dict
 
+    @staticmethod
+    def _parse_dsml_arguments(body: str) -> dict[str, Any]:
+        """Parse one DSML invoke body into an arguments dict.
+
+        ``string="true"`` params stay raw strings; anything else is
+        JSON-parsed when possible (booleans/numbers/objects), else kept raw.
+        """
+        args: dict[str, Any] = {}
+        for pname, is_string, raw in _DSML_PARAM_RE.findall(body):
+            value = raw.strip()
+            if is_string == "true":
+                args[pname] = value
+            else:
+                try:
+                    args[pname] = json.loads(value)
+                except (ValueError, TypeError):
+                    args[pname] = value
+        return args
+
+    def _normalize_dsml_tool_calls(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Rewrite DSML text-format tool calls into structured tool_calls.
+
+        No-op when the structured field is already populated (never
+        double-parse) or when the content carries no DSML block. Mutates and
+        returns ``response``; any parser error passes the response through
+        untouched (defensive normalization must never break a reply).
+        """
+        try:
+            for choice in response.get("choices") or []:
+                message = choice.get("message")
+                if not isinstance(message, dict) or message.get("tool_calls"):
+                    continue
+                content = message.get("content")
+                if not content or "DSML" not in content:
+                    continue
+
+                calls: list[dict[str, Any]] = []
+                for block in _DSML_BLOCK_RE.finditer(content):
+                    for name, body in _DSML_INVOKE_RE.findall(block.group(1)):
+                        calls.append(
+                            {
+                                "id": f"dsml_call_{len(calls)}",
+                                "type": "function",
+                                "function": {
+                                    "name": name.strip(),
+                                    "arguments": json.dumps(
+                                        self._parse_dsml_arguments(body)
+                                    ),
+                                },
+                            }
+                        )
+                if not calls:
+                    continue
+                stripped = _DSML_BLOCK_RE.sub("", content)
+                message["tool_calls"] = calls
+                message["content"] = stripped.strip() or None
+                if choice.get("finish_reason") == "stop":
+                    choice["finish_reason"] = "tool_calls"
+                # Deliberately visible: this is model/API misbehavior we paper
+                # over, and its frequency is worth tracking.
+                logger.warning(
+                    "DeepSeek emitted %d DSML text-format tool call(s); "
+                    "normalized into structured tool_calls",
+                    len(calls),
+                )
+        except Exception as e:
+            logger.error("DSML normalization failed (response passed through): %s", e)
+        return response
+
     async def chat_completion(
         self,
         context: ContextPayload,
@@ -574,7 +679,10 @@ class DeepSeekProvider(BaseProvider):
                         "RAW DEEPSEEK RESPONSE: %s",
                         json.dumps(response_dict, indent=2, default=str),
                     )
-                return response_dict
+                # Bug 3 (Darwin-vs-Lite eval): normalize DSML text-format
+                # tool calls into the structured field at the provider
+                # boundary so no consumer ever sees the raw markup.
+                return self._normalize_dsml_tool_calls(response_dict)
 
         except OpenAIAPIStatusError as e:
             status = e.status_code
