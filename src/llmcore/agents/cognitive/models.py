@@ -19,6 +19,7 @@ References:
     - Dossier: Step 2.4 (Cognitive Cycle Models)
 """
 
+import hashlib
 import json
 import math
 import uuid
@@ -33,6 +34,8 @@ from ...models import AgentState, ToolCall, ToolResult
 
 STATE_SNAPSHOT_VERSION = "llmcore.enhanced_agent_state.v1"
 _CONTEXT_COMPRESSION_KEY = "_context_compression"
+#: Working-memory key holding recorded action signatures (redundancy, 2.4).
+ACTION_SIGNATURES_KEY = "action_signatures"
 
 
 def _truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
@@ -1162,6 +1165,66 @@ class EnhancedAgentState(AgentState):
             it.duration_ms for it in self.iterations
         )
         return total_time / self.iteration_count
+
+    @staticmethod
+    def compute_action_signature(tool_call: ToolCall) -> str:
+        """Return the canonical sha256 signature for a tool call.
+
+        The signature covers the tool NAME and its ARGUMENTS only (never the
+        call id): arguments are serialized with ``sort_keys=True`` so two
+        semantically identical calls hash identically regardless of dict key
+        order. Non-JSON-serializable argument values stringify (``default=str``).
+        """
+        arguments = tool_call.arguments if isinstance(tool_call.arguments, dict) else {}
+        payload = f"{tool_call.name}:{json.dumps(arguments, sort_keys=True, default=str)}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def record_action_signature(
+        self, tool_call: ToolCall, *, result_preview: str | None = None
+    ) -> int:
+        """Record an action signature in working memory (redundancy, 2.4).
+
+        Entries live under ``working_memory["action_signatures"]`` as
+        ``{signature: {count, iteration, result_preview}}`` — plain JSON-safe
+        values, so they survive ``to_resume_snapshot`` round-trips.
+
+        Args:
+            tool_call: The proposed/executed tool call.
+            result_preview: Optional short excerpt of the action's observed
+                result. ``None`` keeps any previously recorded preview.
+
+        Returns:
+            How many times this signature has now been recorded.
+        """
+        signatures = self.working_memory.get(ACTION_SIGNATURES_KEY)
+        if not isinstance(signatures, dict):
+            signatures = {}
+            self.working_memory[ACTION_SIGNATURES_KEY] = signatures
+
+        iteration_number = (
+            self.current_iteration.iteration_number
+            if self.current_iteration is not None
+            else self.iteration_count + 1
+        )
+        signature = self.compute_action_signature(tool_call)
+        entry = signatures.get(signature)
+        if not isinstance(entry, dict):
+            entry = {"count": 0, "iteration": iteration_number, "result_preview": None}
+            signatures[signature] = entry
+
+        entry["count"] = _coerce_nonnegative_int(entry.get("count")) + 1
+        entry["iteration"] = iteration_number
+        if result_preview is not None:
+            entry["result_preview"] = str(result_preview)
+        return int(entry["count"])
+
+    def lookup_action_signature(self, tool_call: ToolCall) -> dict[str, Any] | None:
+        """Return the recorded entry for this tool call's signature, if any."""
+        signatures = self.working_memory.get(ACTION_SIGNATURES_KEY)
+        if not isinstance(signatures, dict):
+            return None
+        entry = signatures.get(self.compute_action_signature(tool_call))
+        return entry if isinstance(entry, dict) else None
 
     def get_working_memory(self, key: str, default: Any = None) -> Any:
         """Get value from working memory."""

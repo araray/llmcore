@@ -18,6 +18,7 @@ The configuration hierarchy:
     ├── ToolInventoryConfig  - Lightweight tool inventory and schema selection
     ├── ConvergenceConfig    - Finish-tool convergence and forced finalize
     ├── ValidationConfig     - VALIDATE phase deterministic guards
+    ├── RedundancyConfig     - Redundant-call detection
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -390,6 +391,34 @@ class ValidationConfig(BaseModel):
 
 
 # =============================================================================
+# REDUNDANCY CONFIG
+# =============================================================================
+
+
+class RedundancyConfig(BaseModel):
+    """
+    Configuration for the redundant-call detector (post-THINK choke point).
+
+    Re-proposing a tool call whose name+arguments signature already executed
+    is wasted budget: the detector skips VALIDATE/ACT for the repeat and
+    feeds a corrective observation into REFLECT instead. Once one signature
+    has been seen ``force_finalize_after`` times the run routes to forced
+    finalization (subject to the same budget guard as ConvergenceConfig —
+    single-iteration budgets keep legacy semantics).
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Detect repeated identical tool calls and skip re-execution",
+    )
+    force_finalize_after: int = Field(
+        default=3,
+        ge=1,
+        description="Force finalization once one action signature is seen this many times",
+    )
+
+
+# =============================================================================
 # CAPABILITY CHECK CONFIG
 # =============================================================================
 
@@ -582,6 +611,10 @@ class AgentsConfig(BaseModel):
     validation: ValidationConfig = Field(
         default_factory=ValidationConfig,
         description="VALIDATE phase settings (deterministic guards)",
+    )
+    redundancy: RedundancyConfig = Field(
+        default_factory=RedundancyConfig,
+        description="Redundant-call detection settings",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -851,6 +884,7 @@ ActivitiesConfig.model_rebuild()
 ToolInventoryConfig.model_rebuild()
 ConvergenceConfig.model_rebuild()
 ValidationConfig.model_rebuild()
+RedundancyConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -872,6 +906,7 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "ToolInventoryConfig",
     "ConvergenceConfig",
     "ValidationConfig",
+    "RedundancyConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

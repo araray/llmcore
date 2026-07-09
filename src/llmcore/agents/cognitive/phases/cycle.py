@@ -28,6 +28,7 @@ from ..models import (
     CycleIteration,
     EnhancedAgentState,
     ObserveInput,
+    ObserveOutput,
     # Phase inputs
     PerceiveInput,
     PlanInput,
@@ -147,6 +148,40 @@ def _resolve_convergence(agents_config: Any) -> Any:
     if isinstance(convergence, ConvergenceConfig):
         return convergence
     return ConvergenceConfig()
+
+
+def _resolve_redundancy(agents_config: Any) -> Any:
+    """Return a real ``RedundancyConfig`` from a config object.
+
+    Mock/legacy config objects without a typed ``redundancy`` section get the
+    defaults — same rationale as :func:`_resolve_convergence`.
+    """
+    from ....config.agents_config import RedundancyConfig
+
+    redundancy = getattr(agents_config, "redundancy", None)
+    if isinstance(redundancy, RedundancyConfig):
+        return redundancy
+    return RedundancyConfig()
+
+
+#: Working-memory flag raised when one action signature exhausts the
+#: redundancy budget; both loops route it to ``_force_finalize``.
+REDUNDANCY_FORCE_FINALIZE_KEY = "redundancy_force_finalize"
+
+
+def _redundant_action_observation(action: Any, entry: dict[str, Any]) -> ObserveOutput:
+    """Build the corrective observation for a repeated identical action."""
+    preview = entry.get("result_preview") or "(no recorded result)"
+    return ObserveOutput(
+        observation=(
+            f"REPEATED ACTION: you already ran {action.name} with identical "
+            f"arguments in iteration {entry.get('iteration')}; its result was: "
+            f"{preview}. Use that observation or call finish."
+        ),
+        matches_expectation=None,
+        insights=["Repeated identical action skipped — reuse the earlier result"],
+        follow_up_needed=False,
+    )
 
 
 def _provider_accepts_tool_choice(provider: Any) -> bool:
@@ -438,9 +473,47 @@ class CognitiveCycle:
                     return iteration
 
                 # ============================================================
+                # Redundancy choke point (2.4): a proposed non-finish action
+                # whose signature already ran is never re-executed — skip
+                # VALIDATE/ACT, feed a corrective observation into REFLECT.
+                # Sits post-THINK so it covers native, plan-step, and
+                # activity-protocol ToolCalls alike.
+                # ============================================================
+                redundancy = _resolve_redundancy(self.agents_config)
+                proposed_action = iteration.think_output.proposed_action
+                repeated_entry = None
+                if (
+                    redundancy.enabled
+                    and proposed_action is not None
+                    and proposed_action.name
+                    not in _finish_tool_names(_resolve_convergence(self.agents_config))
+                ):
+                    repeated_entry = agent_state.lookup_action_signature(proposed_action)
+
+                if proposed_action is not None and repeated_entry is not None:
+                    iteration.observe_output = _redundant_action_observation(
+                        proposed_action, repeated_entry
+                    )
+                    repeat_count = agent_state.record_action_signature(proposed_action)
+                    if repeat_count >= max(1, int(redundancy.force_finalize_after)):
+                        agent_state.set_working_memory(REDUNDANCY_FORCE_FINALIZE_KEY, True)
+                    # ACT normally consumes pending activity state; a skipped
+                    # repeat must not leave it stale for the next iteration.
+                    if agent_state.get_working_memory("using_activity_fallback", False):
+                        agent_state.set_working_memory("using_activity_fallback", False)
+                        agent_state.set_working_memory("pending_activities_text", None)
+                        agent_state.set_working_memory("parsed_activity_requests", None)
+                    logger.info(
+                        "Redundant action skipped: %s already ran with identical "
+                        "arguments (seen %d time(s))",
+                        proposed_action.name,
+                        repeat_count,
+                    )
+
+                # ============================================================
                 # Phase 4: VALIDATE
                 # ============================================================
-                if iteration.think_output.proposed_action:
+                elif iteration.think_output.proposed_action:
                     if skip_validation:
                         # skip_validation skips only the LLM judge (2.3): the
                         # deterministic guards (registry membership + dangerous
@@ -535,6 +608,21 @@ class CognitiveCycle:
                     iteration.observe_output = await observe_phase(
                         agent_state=agent_state, observe_input=observe_input, tracer=self.tracer
                     )
+
+                    # Redundancy (2.4): remember executed signatures with a
+                    # short result preview for future corrective observations.
+                    # Rejected / approval-paused actions never executed, so
+                    # recording them would poison a legitimate retry.
+                    if (
+                        redundancy.enabled
+                        and iteration.observe_output is not None
+                        and iteration.validate_output is not None
+                        and iteration.validate_output.result == ValidationResult.APPROVED
+                    ):
+                        agent_state.record_action_signature(
+                            iteration.think_output.proposed_action,
+                            result_preview=iteration.observe_output.observation[:200],
+                        )
                 else:
                     logger.warning("No action proposed by THINK phase")
 
@@ -776,6 +864,26 @@ class CognitiveCycle:
                             f"Iterations completed: {actual_iterations}\n"
                             f"Progress: {progress:.1%}"
                         )
+
+                # Redundancy (2.4): one action signature exhausted its repeat
+                # budget — finalize now instead of churning the remaining
+                # iterations (subject to the same budget guard as 2.2).
+                if (
+                    convergence_active
+                    and not finalize_attempted
+                    and not agent_state.is_finished
+                    and agent_state.get_working_memory(REDUNDANCY_FORCE_FINALIZE_KEY, False)
+                ):
+                    finalize_attempted = True
+                    logger.info("Redundant-call budget exhausted — forcing finalization")
+                    await self._force_finalize(
+                        agent_state,
+                        reason=TerminationReason.FORCED_FINALIZE,
+                        convergence=convergence,
+                        provider_name=provider_name,
+                        model_name=model_name,
+                    )
+                    break
 
                 # Check if we should stop
                 if iteration.update_output and not iteration.update_output.should_continue:
@@ -1203,6 +1311,30 @@ class CognitiveCycle:
                 if await self._force_finalize(
                     agent_state,
                     reason=TerminationReason.SYNTHESIS_FALLBACK,
+                    convergence=convergence,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                ):
+                    is_complete = True
+                    progress = 1.0
+                    message = agent_state.final_answer or "Task completed"
+                    stop_reason = agent_state.termination_reason
+
+            # Redundancy (2.4): one action signature exhausted its repeat
+            # budget — finalize now instead of churning the remaining
+            # iterations (subject to the same budget guard as 2.2).
+            if (
+                convergence_active
+                and not is_complete
+                and not should_stop
+                and not finalize_attempted
+                and agent_state.get_working_memory(REDUNDANCY_FORCE_FINALIZE_KEY, False)
+            ):
+                finalize_attempted = True
+                logger.info("Redundant-call budget exhausted — forcing finalization")
+                if await self._force_finalize(
+                    agent_state,
+                    reason=TerminationReason.FORCED_FINALIZE,
                     convergence=convergence,
                     provider_name=provider_name,
                     model_name=model_name,
