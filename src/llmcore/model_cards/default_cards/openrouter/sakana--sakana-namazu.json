@@ -1,0 +1,40 @@
+{
+  "model_id": "sakana/sakana-namazu",
+  "display_name": "Sakana: Sakana Namazu",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.95,
+      "output": 4.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-11"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sakana Namazu is a Japanese-specialized reasoning model from Sakana AI, based on Kimi K2.6 with additional training for Japanese language and business contexts. It is suited for Japanese instruction following,...",
+  "tags": [],
+  "source": "generated"
+}

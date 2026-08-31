@@ -1,12 +1,12 @@
 {
   "model_id": "deepseek/deepseek-v4-pro",
-  "display_name": "DeepSeek: DeepSeek V4 Pro",
+  "display_name": "DeepSeek: DeepSeek V4 Pro 0423",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 384000
+    "max_output_tokens": 393216
   },
   "capabilities": {
     "streaming": true,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.435,
-      "output": 0.87
+      "input": 1.6,
+      "output": 3.2
     }
   },
   "lifecycle": {

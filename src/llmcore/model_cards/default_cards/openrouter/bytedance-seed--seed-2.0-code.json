@@ -1,18 +1,18 @@
 {
-  "model_id": "poolside/laguna-m.1:free",
-  "display_name": "Poolside: Laguna M.1 (free)",
+  "model_id": "bytedance-seed/seed-2.0-code",
+  "display_name": "ByteDance Seed: Seed-2.0-Code",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 32768
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -20,15 +20,21 @@
     "video_input": false,
     "reasoning": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.5,
+      "output": 3.0
+    }
+  },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-04-28"
+    "release_date": "2026-08-12"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Laguna M.1 is the flagship coding agent model from [Poolside](https://poolside.ai/), optimized for complex software engineering tasks. Designed for agentic coding workflows, it supports tool calling and reasoning, with a 256K...",
+  "description": "Seed 2.0 Code is a model from ByteDance Seed optimized for agentic coding. It is suited for frontend development, multilingual programming tasks, and coding-agent workflows in tools such as Claude...",
   "tags": [],
   "source": "generated"
 }

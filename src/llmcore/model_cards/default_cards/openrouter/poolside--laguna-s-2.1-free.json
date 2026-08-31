@@ -1,12 +1,12 @@
 {
-  "model_id": "tencent/hy3:free",
-  "display_name": "Tencent: Hy3 (free)",
+  "model_id": "poolside/laguna-s-2.1:free",
+  "display_name": "Poolside: Laguna S 2.1 (free)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 262144
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
@@ -23,12 +23,12 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-07-06"
+    "release_date": "2026-07-21"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
+  "description": "Laguna S 2.1 is the latest coding agent model from [Poolside](<https://poolside.ai/>). Laguna S 2.1 is a 118B total parameter model with 8B active parameters, scoring 70.2% on Terminal-Bench 2.1 and...",
   "tags": [],
   "source": "generated"
 }

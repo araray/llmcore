@@ -1,0 +1,40 @@
+{
+  "model_id": "kwaipilot/kat-coder-air-v2.5",
+  "display_name": "Kwaipilot: KAT-Coder-Air V2.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 256000,
+    "max_output_tokens": 80000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.6
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-10"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "KAT-Coder-Air V2.5 is a flagship-level Agentic Coding model that can directly hand over an entire issue or an entire business workflow to it, allowing it to autonomously locate and make...",
+  "tags": [],
+  "source": "generated"
+}

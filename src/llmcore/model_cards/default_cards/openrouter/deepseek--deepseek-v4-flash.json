@@ -1,12 +1,12 @@
 {
   "model_id": "deepseek/deepseek-v4-flash",
-  "display_name": "DeepSeek: DeepSeek V4 Flash",
+  "display_name": "DeepSeek: DeepSeek V4 Flash 0423",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 65536
+    "max_output_tokens": 384000
   },
   "capabilities": {
     "streaming": true,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.09,
-      "output": 0.18
+      "input": 0.0886,
+      "output": 0.1772
     }
   },
   "lifecycle": {

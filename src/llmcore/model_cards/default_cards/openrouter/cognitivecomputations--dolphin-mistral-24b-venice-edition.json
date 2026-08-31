@@ -1,0 +1,40 @@
+{
+  "model_id": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+  "display_name": "Venice: Uncensored",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.9
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-07-09"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Venice Uncensored Dolphin Mistral 24B Venice Edition is a fine-tuned variant of Mistral-Small-24B-Instruct-2501, developed by dphn.ai in collaboration with Venice.ai. This model is designed as an “uncensored” instruct-tuned LLM, preserving...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,40 @@
+{
+  "model_id": "~deepseek/deepseek-v4-flash-latest",
+  "display_name": "DeepSeek V4 Flash Latest",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1310720,
+    "max_output_tokens": 393216
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.03,
+      "output": 0.16
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-01"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
+  "tags": [],
+  "source": "generated"
+}

@@ -6,13 +6,13 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 131072
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.2,
-      "output": 0.8
+      "input": 0.132,
+      "output": 0.528
     }
   },
   "lifecycle": {

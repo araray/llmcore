@@ -1,0 +1,40 @@
+{
+  "model_id": "anthropic/claude-sonnet-4.6:batch",
+  "display_name": "Anthropic: Claude Sonnet 4.6 (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.5,
+      "output": 7.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-02-17"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sonnet 4.6 is Anthropic's most capable Sonnet-class model yet, with frontier performance across coding, agents, and professional work. It excels at iterative development, complex codebase navigation, end-to-end project management with...",
+  "tags": [],
+  "source": "generated"
+}

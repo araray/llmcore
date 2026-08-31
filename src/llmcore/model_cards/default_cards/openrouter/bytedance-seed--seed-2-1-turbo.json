@@ -1,0 +1,40 @@
+{
+  "model_id": "bytedance-seed/seed-2-1-turbo",
+  "display_name": "ByteDance Seed: Seed 2.1 Turbo",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.5,
+      "output": 2.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seed 2.1 Turbo is a multimodal model from ByteDance Seed for coding and long-horizon agent workflows. It is suited for end-to-end software delivery, multi-step task execution, and understanding visual and...",
+  "tags": [],
+  "source": "generated"
+}
