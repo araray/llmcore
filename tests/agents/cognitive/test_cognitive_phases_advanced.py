@@ -48,7 +48,7 @@ class TestValidatePhase:
     """Tests for VALIDATE phase implementation."""
 
     @pytest.mark.asyncio
-    async def test_validate_phase_approved(self):
+    async def test_validate_phase_approved(self, bundled_prompt_registry):
         """Test VALIDATE phase approving a safe action."""
         # Mock provider manager
         provider_manager = Mock()
@@ -85,7 +85,10 @@ SUGGESTIONS: None
 
         # Execute phase
         output = await validate_phase(
-            agent_state=state, validate_input=validate_input, provider_manager=provider_manager
+            agent_state=state,
+            validate_input=validate_input,
+            provider_manager=provider_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify
@@ -188,7 +191,7 @@ SUGGESTIONS: None
         provider_manager.get_provider.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_validate_phase_low_confidence(self):
+    async def test_validate_phase_low_confidence(self, bundled_prompt_registry):
         """Test VALIDATE phase with low confidence requiring HITL."""
         provider_manager = Mock()
         provider = Mock()
@@ -223,7 +226,10 @@ SUGGESTIONS:
         )
 
         output = await validate_phase(
-            agent_state=state, validate_input=validate_input, provider_manager=provider_manager
+            agent_state=state,
+            validate_input=validate_input,
+            provider_manager=provider_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Low confidence should trigger HITL
@@ -364,7 +370,7 @@ class TestReflectPhase:
     """Tests for REFLECT phase implementation."""
 
     @pytest.mark.asyncio
-    async def test_reflect_phase_progress(self):
+    async def test_reflect_phase_progress(self, bundled_prompt_registry):
         """Test REFLECT phase evaluating progress."""
         provider_manager = Mock()
         provider = Mock()
@@ -404,7 +410,10 @@ NEXT_FOCUS: Move to next step in plan
         )
 
         output = await reflect_phase(
-            agent_state=state, reflect_input=reflect_input, provider_manager=provider_manager
+            agent_state=state,
+            reflect_input=reflect_input,
+            provider_manager=provider_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify
@@ -415,7 +424,7 @@ NEXT_FOCUS: Move to next step in plan
         assert output.next_focus is not None
 
     @pytest.mark.asyncio
-    async def test_reflect_phase_plan_update(self):
+    async def test_reflect_phase_plan_update(self, bundled_prompt_registry):
         """Test REFLECT phase recommending plan update."""
         provider_manager = Mock()
         provider = Mock()
@@ -460,7 +469,10 @@ UPDATED PLAN:
         )
 
         output = await reflect_phase(
-            agent_state=state, reflect_input=reflect_input, provider_manager=provider_manager
+            agent_state=state,
+            reflect_input=reflect_input,
+            provider_manager=provider_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify
@@ -557,6 +569,30 @@ class TestUpdatePhase:
         assert not output.should_continue
         assert state.is_finished
 
+    async def test_update_phase_empty_plan_does_not_vacuously_complete(self):
+        """Regression: an EMPTY plan_steps_status must NOT be treated as
+        'all steps completed' (``all([])`` is vacuously True), which would
+        stop the cycle after iteration 1 before the model synthesizes an
+        answer from its tool observation."""
+        state = EnhancedAgentState(goal="Find the answer with a tool")
+        state.plan = []
+        state.plan_steps_status = []  # PLAN produced no explicit steps
+
+        reflect_output = ReflectOutput(
+            evaluation="Ran a tool; not done yet",
+            progress_estimate=0.4,
+            insights=["tool output gathered"],
+            plan_needs_update=False,
+            step_completed=False,
+        )
+        update_input = UpdateInput(reflection=reflect_output, current_state=state)
+
+        output = await update_phase(agent_state=state, update_input=update_input)
+
+        # The cycle must CONTINUE so THINK can synthesize a final answer.
+        assert output.should_continue
+        assert not state.is_finished
+
 
 # =============================================================================
 # COGNITIVE CYCLE ORCHESTRATOR TESTS
@@ -567,7 +603,7 @@ class TestCognitiveCycle:
     """Tests for CognitiveCycle orchestrator."""
 
     @pytest.mark.asyncio
-    async def test_cognitive_cycle_initialization(self):
+    async def test_cognitive_cycle_initialization(self, bundled_prompt_registry):
         """Test CognitiveCycle initialization."""
         provider_manager = Mock()
         memory_manager = Mock()
@@ -579,6 +615,7 @@ class TestCognitiveCycle:
             memory_manager=memory_manager,
             storage_manager=storage_manager,
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         assert cycle.provider_manager == provider_manager
@@ -587,7 +624,18 @@ class TestCognitiveCycle:
         assert cycle.tool_manager == tool_manager
 
     @pytest.mark.asyncio
-    async def test_cognitive_cycle_single_iteration(self):
+    async def test_cognitive_cycle_requires_prompt_registry(self):
+        """CognitiveCycle without a registry fails loudly (0.52.0)."""
+        with pytest.raises(ValueError, match="prompt_registry is required"):
+            CognitiveCycle(
+                provider_manager=Mock(),
+                memory_manager=Mock(),
+                storage_manager=Mock(),
+                tool_manager=Mock(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_cognitive_cycle_single_iteration(self, bundled_prompt_registry):
         """Test running a single cognitive iteration."""
         # Create comprehensive mocks
         provider_manager = self._create_mock_provider_manager()
@@ -600,6 +648,7 @@ class TestCognitiveCycle:
             memory_manager=memory_manager,
             storage_manager=storage_manager,
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         state = EnhancedAgentState(goal="Calculate 2+2", session_id="test_session")

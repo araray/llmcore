@@ -1,6 +1,15 @@
 # src/llmcore/agents/cognitive_cycle.py
 """
-Core cognitive cycle implementation for LLMCore agents.
+Core cognitive cycle implementation for LLMCore agents (LEGACY).
+
+.. deprecated:: 0.52.0
+    This module (with its ``prompt_utils`` companion) is the pre-Darwin
+    agent loop and sits OUTSIDE the grimoire control plane — its prompts are
+    hardcoded and were deliberately NOT migrated to spells. It is scheduled
+    for removal in the next minor release. Use the Darwin Layer 2 stack
+    (``EnhancedAgentManager.run()`` / ``agents.cognitive.phases``), whose
+    prompts render from the bundled grimoire pack.
+    ``AgentManager.run_agent_loop()`` emits a ``DeprecationWarning`` at entry.
 
 This module contains the standalone functions that execute the primary steps
 of an agent's operation: Plan, Think, Act, Observe, and Reflect. It also
@@ -380,13 +389,6 @@ async def act_step(
                 return ToolResult(tool_call_id=tool_call.id, content="PAUSED_FOR_APPROVAL")
 
             result = await tool_manager.execute_tool(tool_call, session_id)
-
-            # Record tool execution metrics
-            try:
-                status = "success" if not result.content.startswith("ERROR:") else "error"
-                record_tool_execution(tenant_id=tenant_id, tool_name=tool_call.name, status=status)
-            except Exception as e:
-                logger.debug(f"Failed to record tool execution metrics: {e}")
 
             if span:
                 add_span_attributes(

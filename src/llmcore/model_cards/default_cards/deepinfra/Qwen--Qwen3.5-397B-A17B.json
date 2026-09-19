@@ -23,9 +23,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.49,
-      "output": 3.6,
-      "cached_input": 0.3
+      "input": 0.45,
+      "output": 3.0,
+      "cached_input": 0.22
     }
   },
   "lifecycle": {

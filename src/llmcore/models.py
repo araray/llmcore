@@ -64,6 +64,10 @@ class Message(BaseModel):
         content: The textual content of the message.
         timestamp: The date and time when the message was created or recorded.
         tool_call_id: For messages with role 'tool', the ID of the tool call this is a response to.
+        tool_calls: For assistant messages, the tool calls requested by the model. Each entry
+            is a provider-agnostic dict (OpenAI-normalized ``{"id", "type": "function",
+            "function": {"name", "arguments"}}`` is the canonical shape; providers also accept
+            their native shapes). ``None`` for messages that carry no tool calls.
         tokens: An optional count of tokens for the message content.
         metadata: An optional dictionary for storing additional, unstructured information.
     """
@@ -84,6 +88,10 @@ class Message(BaseModel):
     )
     tool_call_id: str | None = Field(
         default=None, description="For role 'tool', the ID of the corresponding tool call."
+    )
+    tool_calls: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="For role 'assistant', the tool calls requested by the model.",
     )
     tokens: int | None = Field(
         default=None, description="Optional token count for the message content."

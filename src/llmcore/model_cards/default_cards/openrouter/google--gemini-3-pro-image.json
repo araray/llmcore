@@ -1,0 +1,40 @@
+{
+  "model_id": "google/gemini-3-pro-image",
+  "display_name": "Google: Nano Banana Pro (Gemini 3 Pro Image)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-18"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
+  "tags": [],
+  "source": "generated"
+}

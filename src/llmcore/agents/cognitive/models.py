@@ -19,6 +19,7 @@ References:
     - Dossier: Step 2.4 (Cognitive Cycle Models)
 """
 
+import hashlib
 import json
 import math
 import uuid
@@ -33,6 +34,8 @@ from ...models import AgentState, ToolCall, ToolResult
 
 STATE_SNAPSHOT_VERSION = "llmcore.enhanced_agent_state.v1"
 _CONTEXT_COMPRESSION_KEY = "_context_compression"
+#: Working-memory key holding recorded action signatures (redundancy, 2.4).
+ACTION_SIGNATURES_KEY = "action_signatures"
 
 
 def _truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
@@ -206,6 +209,50 @@ class ConfidenceLevel(str, Enum):
     HIGH = "high"  # 70-100%
 
 
+class TerminationReason(str, Enum):
+    """Why an agent run stopped.
+
+    Stamped on ``EnhancedAgentState.termination_reason`` at every stop site
+    so callers (and benchmarks) can distinguish native convergence from
+    rescued or aborted runs.
+    """
+
+    FINISH_TOOL = "finish_tool"  # Model called the finish tool natively
+    FINAL_ANSWER_TEXT = "final_answer_text"  # Parsed from text/activity protocol
+    FORCED_FINALIZE = "forced_finalize"  # In-loop finalize at budget edge
+    SYNTHESIS_FALLBACK = "synthesis_fallback"  # Exhaustion synthesis pass
+    PLAN_COMPLETE = "plan_complete"  # UPDATE flipped is_finished (plan/progress done)
+    UPDATE_STOPPED = "update_stopped"  # UPDATE stopped the loop un-finished
+    HUMAN_APPROVAL_REQUIRED = "human_approval_required"  # Paused for HITL
+    CIRCUIT_BREAKER = "circuit_breaker"  # Circuit breaker tripped
+    MAX_ITERATIONS = "max_iterations"  # Budget exhausted without an answer
+    ERROR = "error"  # Hard error aborted the run
+
+
+# =============================================================================
+# PHASE USAGE (2.7)
+# =============================================================================
+
+
+class PhaseUsage(BaseModel):
+    """Token/cost usage captured from one phase's provider call (2.7).
+
+    Defined here (not in ``phases/usage.py``) because the phase output
+    models below reference it and the phases package imports this module —
+    ``phases.usage`` re-exports it alongside ``extract_usage``.
+    """
+
+    prompt_tokens: int = Field(default=0, ge=0, description="Prompt/input tokens")
+    completion_tokens: int = Field(default=0, ge=0, description="Completion/output tokens")
+    total_tokens: int = Field(default=0, ge=0, description="Total tokens")
+    cost: float | None = Field(
+        default=None,
+        description="Cost from model-card pricing (None when pricing is unknown)",
+    )
+    provider: str | None = Field(default=None, description="Provider name")
+    model: str | None = Field(default=None, description="Model id")
+
+
 # =============================================================================
 # PHASE INPUT/OUTPUT MODELS
 # =============================================================================
@@ -291,6 +338,9 @@ class PlanOutput(BaseModel):
         default_factory=list, description="Potential risks or challenges identified"
     )
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @model_validator(mode="before")
@@ -343,6 +393,10 @@ class ThinkInput(BaseModel):
     available_tools: list[dict[str, Any]] = Field(
         default_factory=list, description="Available tools for the agent"
     )
+    remaining_steps: int | None = Field(
+        default=None,
+        description="Iterations remaining in the run's budget (None = unlimited/unknown)",
+    )
 
 
 class ThinkOutput(BaseModel):
@@ -360,6 +414,24 @@ class ThinkOutput(BaseModel):
     reasoning_tokens: int | None = Field(default=None, description="Tokens used in reasoning")
     using_activity_fallback: bool = Field(
         default=False, description="Whether activity fallback was used instead of native tools"
+    )
+    final_answer_source: str | None = Field(
+        default=None,
+        description=(
+            "How the final answer was produced when is_final_answer is True: "
+            "'finish_tool' (native finish call), 'text' (Final Answer: parse), "
+            "or 'activity' (XML activity protocol)"
+        ),
+    )
+    expected_outcome: str | None = Field(
+        default=None,
+        description=(
+            "Optional 'Expected:' line parsed from the ReAct text — what a "
+            "successful result of the proposed action looks like (2.6)"
+        ),
+    )
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
     )
 
 
@@ -386,6 +458,9 @@ class ValidateOutput(BaseModel):
         default=None, description="Prompt to show to human if approval needed"
     )
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
 
 
 class ActInput(BaseModel):
@@ -435,6 +510,18 @@ class ReflectInput(BaseModel):
     )
     observation: str = Field(..., description="Observation from OBSERVE phase")
     iteration_number: int = Field(..., description="Current iteration number")
+    action_success: bool | None = Field(
+        default=None,
+        description="Whether the executed action succeeded (None = no action executed)",
+    )
+    matches_expectation: bool | None = Field(
+        default=None,
+        description="Whether the observation matched THINK's expected outcome",
+    )
+    follow_up_needed: bool | None = Field(
+        default=None,
+        description="Whether OBSERVE flagged follow-up work",
+    )
 
 
 class ReflectOutput(BaseModel):
@@ -454,6 +541,9 @@ class ReflectOutput(BaseModel):
     step_completed: bool = Field(default=False, description="Whether current step is complete")
     next_focus: str | None = Field(default=None, description="What to prioritize next")
     tokens_used: int | None = Field(default=None, description="Provider tokens used")
+    usage: PhaseUsage | None = Field(
+        default=None, description="Typed provider usage for this phase's LLM call (2.7)"
+    )
 
 
 class UpdateInput(BaseModel):
@@ -519,6 +609,15 @@ class CycleIteration(BaseModel):
 
     # Metadata
     total_tokens_used: int = Field(default=0, description="Total tokens in this iteration")
+    total_prompt_tokens: int = Field(
+        default=0, description="Total prompt tokens across phase usage records (2.7)"
+    )
+    total_completion_tokens: int = Field(
+        default=0, description="Total completion tokens across phase usage records (2.7)"
+    )
+    total_cost: float = Field(
+        default=0.0, description="Total provider cost for this iteration (2.7)"
+    )
     total_time_ms: float = Field(default=0.0, description="Total time in milliseconds")
     error: str | None = Field(default=None, description="Error if failed")
 
@@ -569,7 +668,12 @@ class CycleIteration(BaseModel):
         return completed
 
     def update_token_totals_from_phases(self) -> int:
-        """Set and return total provider tokens captured by phase outputs."""
+        """Set and return total provider tokens captured by phase outputs.
+
+        The legacy per-phase token fields drive ``total_tokens_used``; typed
+        ``PhaseUsage`` records (2.7) additionally drive the prompt/completion
+        splits and the iteration cost.
+        """
         total = sum(
             token_count
             for token_count in (
@@ -581,6 +685,26 @@ class CycleIteration(BaseModel):
             if token_count is not None
         )
         self.total_tokens_used = total
+
+        prompt_total = 0
+        completion_total = 0
+        cost_total = 0.0
+        for usage in (
+            self.plan_output.usage if self.plan_output else None,
+            self.think_output.usage if self.think_output else None,
+            self.validate_output.usage if self.validate_output else None,
+            self.reflect_output.usage if self.reflect_output else None,
+        ):
+            if usage is None:
+                continue
+            prompt_total += usage.prompt_tokens
+            completion_total += usage.completion_tokens
+            if usage.cost:
+                cost_total += usage.cost
+        self.total_prompt_tokens = prompt_total
+        self.total_completion_tokens = completion_total
+        self.total_cost = cost_total
+
         return total
 
     def to_history_summary(
@@ -667,6 +791,9 @@ class CycleIteration(BaseModel):
                 else None,
             },
             "total_tokens_used": self.total_tokens_used,
+            "total_prompt_tokens": self.total_prompt_tokens,
+            "total_completion_tokens": self.total_completion_tokens,
+            "total_cost": self.total_cost,
             "duration_ms": self.duration_ms,
             "error": self.error,
         }
@@ -746,12 +873,21 @@ class EnhancedAgentState(AgentState):
 
     # Metrics
     total_tokens_used: int = Field(default=0, description="Total tokens used across all iterations")
+    total_cost: float = Field(
+        default=0.0, description="Total provider cost (USD) across all iterations (2.7)"
+    )
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
 
     # Metadata for extensibility
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Arbitrary metadata for extensibility and goal tracking"
     )
+    # Termination tracking (see TerminationReason)
+    termination_reason: str | None = Field(
+        default=None,
+        description="Why the run stopped (TerminationReason value), stamped at stop sites",
+    )
+
     # === P0 FIX: Added missing fields ===
     # Fix #1: Final answer storage when task completes
     final_answer: str | None = Field(default=None, description="Final answer when task is complete")
@@ -844,6 +980,7 @@ class EnhancedAgentState(AgentState):
             "progress_estimate": self.progress_estimate,
             "overall_confidence": self.overall_confidence.value,
             "is_finished": self.is_finished,
+            "termination_reason": self.termination_reason,
             "final_answer": _truncate_text(self.final_answer, max_string_chars)[0]
             if self.final_answer
             else None,
@@ -895,6 +1032,7 @@ class EnhancedAgentState(AgentState):
                 "successful_iterations": self.successful_iterations,
                 "failed_iterations": self.failed_iterations,
                 "total_tokens_used": self.total_tokens_used,
+                "total_cost": self.total_cost,
                 "total_tool_calls": self.total_tool_calls,
                 "average_iteration_time_ms": self.average_iteration_time_ms,
             },
@@ -921,6 +1059,10 @@ class EnhancedAgentState(AgentState):
             state.overall_confidence = ConfidenceLevel.MEDIUM
 
         state.final_answer = snapshot.get("final_answer")
+        raw_termination_reason = snapshot.get("termination_reason")
+        state.termination_reason = (
+            str(raw_termination_reason) if raw_termination_reason else None
+        )
         state.awaiting_human_approval = bool(snapshot.get("awaiting_human_approval", False))
         state.pending_approval_prompt = snapshot.get("pending_approval_prompt")
         pending_tool_call = snapshot.get("pending_tool_call")
@@ -963,6 +1105,7 @@ class EnhancedAgentState(AgentState):
             * state._resume_iteration_count_offset
         )
         state.total_tokens_used = int(metrics.get("total_tokens_used") or 0)
+        state.total_cost = _coerce_nonnegative_float(metrics.get("total_cost"))
         state.total_tool_calls = int(metrics.get("total_tool_calls") or 0)
         prior_resume_iterations = state.metadata.get("_resume_snapshot_iterations")
         state.metadata["_resume_snapshot_schema_version"] = snapshot.get("schema_version")
@@ -1045,8 +1188,10 @@ class EnhancedAgentState(AgentState):
         """
         self.iterations.append(iteration)
 
-        # Update metrics
+        # Update metrics: iteration token AND cost totals roll into the
+        # state totals here (complete_iteration routes through this).
         self.total_tokens_used += iteration.total_tokens_used
+        self.total_cost += float(iteration.total_cost or 0.0)
         if iteration.act_output:
             self.total_tool_calls += 1
 
@@ -1120,6 +1265,66 @@ class EnhancedAgentState(AgentState):
         )
         return total_time / self.iteration_count
 
+    @staticmethod
+    def compute_action_signature(tool_call: ToolCall) -> str:
+        """Return the canonical sha256 signature for a tool call.
+
+        The signature covers the tool NAME and its ARGUMENTS only (never the
+        call id): arguments are serialized with ``sort_keys=True`` so two
+        semantically identical calls hash identically regardless of dict key
+        order. Non-JSON-serializable argument values stringify (``default=str``).
+        """
+        arguments = tool_call.arguments if isinstance(tool_call.arguments, dict) else {}
+        payload = f"{tool_call.name}:{json.dumps(arguments, sort_keys=True, default=str)}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def record_action_signature(
+        self, tool_call: ToolCall, *, result_preview: str | None = None
+    ) -> int:
+        """Record an action signature in working memory (redundancy, 2.4).
+
+        Entries live under ``working_memory["action_signatures"]`` as
+        ``{signature: {count, iteration, result_preview}}`` — plain JSON-safe
+        values, so they survive ``to_resume_snapshot`` round-trips.
+
+        Args:
+            tool_call: The proposed/executed tool call.
+            result_preview: Optional short excerpt of the action's observed
+                result. ``None`` keeps any previously recorded preview.
+
+        Returns:
+            How many times this signature has now been recorded.
+        """
+        signatures = self.working_memory.get(ACTION_SIGNATURES_KEY)
+        if not isinstance(signatures, dict):
+            signatures = {}
+            self.working_memory[ACTION_SIGNATURES_KEY] = signatures
+
+        iteration_number = (
+            self.current_iteration.iteration_number
+            if self.current_iteration is not None
+            else self.iteration_count + 1
+        )
+        signature = self.compute_action_signature(tool_call)
+        entry = signatures.get(signature)
+        if not isinstance(entry, dict):
+            entry = {"count": 0, "iteration": iteration_number, "result_preview": None}
+            signatures[signature] = entry
+
+        entry["count"] = _coerce_nonnegative_int(entry.get("count")) + 1
+        entry["iteration"] = iteration_number
+        if result_preview is not None:
+            entry["result_preview"] = str(result_preview)
+        return int(entry["count"])
+
+    def lookup_action_signature(self, tool_call: ToolCall) -> dict[str, Any] | None:
+        """Return the recorded entry for this tool call's signature, if any."""
+        signatures = self.working_memory.get(ACTION_SIGNATURES_KEY)
+        if not isinstance(signatures, dict):
+            return None
+        entry = signatures.get(self.compute_action_signature(tool_call))
+        return entry if isinstance(entry, dict) else None
+
     def get_working_memory(self, key: str, default: Any = None) -> Any:
         """Get value from working memory."""
         return self.working_memory.get(key, default)
@@ -1149,11 +1354,13 @@ __all__ = [
     "ObserveOutput",
     "PerceiveInput",
     "PerceiveOutput",
+    "PhaseUsage",
     "PlanInput",
     "PlanOutput",
     "PlanStepSpec",
     "ReflectInput",
     "ReflectOutput",
+    "TerminationReason",
     "ThinkInput",
     "ThinkOutput",
     "UpdateInput",

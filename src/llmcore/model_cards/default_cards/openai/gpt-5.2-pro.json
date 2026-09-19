@@ -46,7 +46,7 @@
   ],
   "provider_openai": {
     "supports_reasoning": true,
-    "reasoning_effort": "high"
+    "reasoning_effort": "xhigh"
   },
   "source": "builtin"
 }

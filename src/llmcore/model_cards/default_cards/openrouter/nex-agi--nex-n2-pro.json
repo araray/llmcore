@@ -1,0 +1,40 @@
+{
+  "model_id": "nex-agi/nex-n2-pro",
+  "display_name": "Nex AGI: Nex-N2-Pro",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.25,
+      "output": 1.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nex-N2-Pro is an agentic mixture-of-experts model from Nex AGI, with 17B active parameters out of 397B total. Built on the Qwen3.5 architecture, it accepts text and image input and produces...",
+  "tags": [],
+  "source": "generated"
+}

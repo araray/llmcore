@@ -1,0 +1,40 @@
+{
+  "model_id": "thinkingmachines/inkling",
+  "display_name": "Thinking Machines: Inkling",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 471859
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 4.05
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-17"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
+  "tags": [],
+  "source": "generated"
+}

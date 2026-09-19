@@ -21,9 +21,10 @@ References:
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import EnhancedAgentState, UpdateInput, UpdateOutput
+from ..models import EnhancedAgentState, TerminationReason, UpdateInput, UpdateOutput
 
 if TYPE_CHECKING:
+    from ....config.agents_config import AgentsConfig
     from ....storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ async def update_phase(
     storage_manager: Optional["StorageManager"] = None,
     session_id: str | None = None,
     tracer: Any | None = None,
+    agents_config: Optional["AgentsConfig"] = None,
 ) -> UpdateOutput:
     """
     Execute the UPDATE phase of the cognitive cycle.
@@ -58,6 +60,9 @@ async def update_phase(
         storage_manager: Optional storage manager for episodic memory
         session_id: Optional session ID for memory
         tracer: Optional OpenTelemetry tracer
+        agents_config: Optional agents configuration; its
+            ``planning.max_replans`` caps reflection-driven replans (2.5).
+            Defaults apply when None.
 
     Returns:
         UpdateOutput with applied changes
@@ -88,15 +93,22 @@ async def update_phase(
         memory_updates = []
         working_memory_updates = {}
 
-        # 1. Update plan if needed
+        # 1. Update plan if needed (capped by planning.max_replans, 2.5)
         if reflection.plan_needs_update and reflection.updated_plan:
-            agent_state.update_plan(
-                new_plan=reflection.updated_plan, reasoning="Plan updated based on reflection"
-            )
-            state_updates["plan_updated"] = True
-            state_updates["new_plan_version"] = agent_state.plan_version
+            if _replan_allowed(agent_state, agents_config):
+                agent_state.update_plan(
+                    new_plan=reflection.updated_plan, reasoning="Plan updated based on reflection"
+                )
+                state_updates["plan_updated"] = True
+                state_updates["new_plan_version"] = agent_state.plan_version
 
-            logger.info(f"Plan updated to version {agent_state.plan_version}")
+                logger.info(f"Plan updated to version {agent_state.plan_version}")
+            else:
+                logger.warning(
+                    "Replan budget exhausted (plan_version=%s) — keeping the current plan",
+                    agent_state.plan_version,
+                )
+                agent_state.set_working_memory("replan_budget_exhausted", True)
 
         # 2. Mark step as complete if needed
         if reflection.step_completed:
@@ -140,9 +152,18 @@ async def update_phase(
 
                     episode = Episode(
                         session_id=session_id,
-                        episode_type=EpisodeType.TOOL_USE,
-                        content=episode_content,
-                        metadata={
+                        # The Episode model requires `event_type` + `data`
+                        # (models.py) — NOT episode_type/content/metadata.
+                        # EpisodeType has no TOOL_USE member (THOUGHT/ACTION/
+                        # OBSERVATION/USER_INTERACTION/AGENT_REFLECTION); an
+                        # iteration's tool-use episode is an ACTION.  The prior
+                        # code passed the wrong field NAMES *and* enum, so
+                        # Episode(...) raised (AttributeError, then
+                        # ValidationError) every UPDATE phase — swallowed by the
+                        # except below — and no Darwin episode was ever recorded.
+                        event_type=EpisodeType.ACTION,
+                        data={
+                            "content": episode_content,
                             "iteration": agent_state.iteration_count + 1,
                             "progress": reflection.progress_estimate,
                             "insights_count": len(reflection.insights),
@@ -154,7 +175,7 @@ async def update_phase(
                     memory_updates.append(
                         {
                             "type": "episode",
-                            "episode_type": EpisodeType.TOOL_USE.value,
+                            "episode_type": EpisodeType.ACTION.value,
                             "iteration": agent_state.iteration_count + 1,
                         }
                     )
@@ -199,6 +220,29 @@ async def update_phase(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+
+def _replan_allowed(agent_state: EnhancedAgentState, agents_config: Any) -> bool:
+    """Check the replan budget (2.5).
+
+    Reflection-driven plan rewrites apply only while
+    ``plan_version < initial_plan_version + planning.max_replans``.
+    ``initial_plan_version`` is stamped into working memory when the first
+    PLAN runs; a plan seeded outside the PLAN phase gets the current version
+    as its baseline (lazily recorded here), so the budget still applies.
+    """
+    from ....config.agents_config import PlanningConfig
+
+    planning = getattr(agents_config, "planning", None)
+    if not isinstance(planning, PlanningConfig):
+        planning = PlanningConfig()
+
+    initial_version = agent_state.get_working_memory("initial_plan_version")
+    if not isinstance(initial_version, int) or isinstance(initial_version, bool):
+        initial_version = agent_state.plan_version
+        agent_state.set_working_memory("initial_plan_version", initial_version)
+
+    return agent_state.plan_version < initial_version + max(0, planning.max_replans)
 
 
 def _create_episode_content(
@@ -268,11 +312,21 @@ def _should_continue(
     # Don't continue if progress is at 100%
     if reflection.progress_estimate >= 1.0:
         agent_state.is_finished = True
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.PLAN_COMPLETE.value
         return False
 
-    # Don't continue if all steps are completed
-    if all(status == "completed" for status in agent_state.plan_steps_status):
+    # Don't continue if all steps are completed — but only when there ARE
+    # steps.  ``all([])`` is vacuously True, which would falsely mark a
+    # plan-less task (PLAN produced no explicit steps, common for simple
+    # tool tasks) "complete" after its FIRST iteration — stopping the cycle
+    # before THINK ever synthesizes a final answer from the tool observation.
+    if agent_state.plan_steps_status and all(
+        status == "completed" for status in agent_state.plan_steps_status
+    ):
         agent_state.is_finished = True
+        if not agent_state.termination_reason:
+            agent_state.termination_reason = TerminationReason.PLAN_COMPLETE.value
         return False
 
     # Otherwise, continue

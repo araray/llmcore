@@ -550,38 +550,36 @@ class TestPromptRegistry:
 class TestTemplateLoader:
     """Tests for TemplateLoader."""
 
-    def test_load_default_templates(self):
-        """Test loading built-in templates."""
+    def test_load_defaults_registers_no_cognitive_templates(self):
+        """0.52.0: the four cognitive default templates are DELETED.
+
+        They were the variable-mismatch source; the cognitive cycle renders
+        exclusively from the grimoire control plane. ``with_defaults()`` now
+        seeds snippets only.
+        """
         registry = PromptRegistry.with_defaults()
 
-        # Should have loaded planning, thinking, reflection, validation templates
-        templates = registry.list_templates()
+        template_ids = [t.id for t in registry.list_templates()]
 
-        # At minimum, should have some templates loaded
-        assert len(templates) > 0
+        assert "planning_prompt" not in template_ids
+        assert "thinking_prompt" not in template_ids
+        assert "reflection_prompt" not in template_ids
+        assert "validation_prompt" not in template_ids
 
-        # Check for expected template IDs
-        template_ids = [t.id for t in templates]
-
-        # These are defined in our TOML files
-        assert "planning_prompt" in template_ids
-        assert "thinking_prompt" in template_ids
-        assert "reflection_prompt" in template_ids
-        assert "validation_prompt" in template_ids
-
-    def test_loaded_templates_have_variables(self):
-        """Test that loaded templates have proper variable definitions."""
-        registry = PromptRegistry.with_defaults()
-
-        template = registry.get_template("planning_prompt")
-        version = template.active_version
-
-        assert version is not None
-        assert len(version.variables) > 0
-
-        # Should have 'goal' variable
-        var_names = [v.name for v in version.variables]
-        assert "goal" in var_names
+    def test_cognitive_templates_render_from_bundled_pack(
+        self, bundled_prompt_registry
+    ):
+        """The cognitive prompts render via the grimoire adapter instead."""
+        rendered = bundled_prompt_registry.render(
+            "planning_prompt",
+            {
+                "goal": "Sample goal",
+                "context": "",
+                "constraints": "",
+                "existing_plan_section": "",
+            },
+        )
+        assert "Sample goal" in rendered
 
     def test_loaded_snippets_available(self):
         """Test that snippets are loaded and available."""

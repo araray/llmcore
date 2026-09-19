@@ -13,6 +13,7 @@ import logging
 import os
 import pathlib
 import re  # For validating preset names as filenames
+import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,7 @@ from ..models import (
     Episode,
 )
 from .base_session import BaseSessionStorage
+from .constants import is_in_memory_path
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class JsonSessionStorage(BaseSessionStorage):
     _file_extension: str
     _presets_dir_name: str = "context_presets"  # Standardized subdirectory name
     _episodes_dir_name: str = "episodes"  # Standardized subdirectory name for episodes
+    _temp_dir: "tempfile.TemporaryDirectory | None" = None  # Backing dir for ':memory:' mode
 
     async def initialize(self, config: dict[str, Any]) -> None:
         """
@@ -67,7 +70,18 @@ class JsonSessionStorage(BaseSessionStorage):
         if not storage_path_str:
             raise ConfigError("JSON session storage 'path' not specified in configuration.")
 
-        self._storage_dir = pathlib.Path(os.path.expanduser(storage_path_str))
+        if is_in_memory_path(storage_path_str):
+            # ':memory:' is the SQLite-style "do not persist" token. JSON storage is
+            # inherently file-based, so back it with an ephemeral temporary directory
+            # (removed on close) instead of creating a literal ':memory:/' directory.
+            self._temp_dir = tempfile.TemporaryDirectory(prefix="llmcore-json-session-")
+            self._storage_dir = pathlib.Path(self._temp_dir.name)
+            logger.info(
+                "JSON session storage configured with ':memory:'; using ephemeral "
+                f"temporary directory: {self._storage_dir}"
+            )
+        else:
+            self._storage_dir = pathlib.Path(os.path.expanduser(storage_path_str))
         self._presets_dir = self._storage_dir / self._presets_dir_name
         self._episodes_dir = self._storage_dir / self._episodes_dir_name
         self._file_extension = config.get("file_extension", ".json")
@@ -695,9 +709,20 @@ class JsonSessionStorage(BaseSessionStorage):
 
     async def close(self) -> None:
         """
-        Clean up resources. For JSON storage, no explicit closing action is typically needed.
+        Clean up resources.
+
+        For directory-backed storage no action is needed; in ':memory:' mode the
+        ephemeral temporary directory backing the storage is removed.
         """
-        logger.debug(
-            "JSONSessionStorage (including presets and episodes) closed (no specific action needed)."
-        )
-        pass
+        if self._temp_dir is not None:
+            temp_path = self._temp_dir.name
+            try:
+                self._temp_dir.cleanup()
+                logger.debug(f"Removed ephemeral ':memory:' storage directory: {temp_path}")
+            except OSError as e:
+                logger.warning(
+                    f"Failed to remove ephemeral ':memory:' storage directory '{temp_path}': {e}"
+                )
+            finally:
+                self._temp_dir = None
+        logger.debug("JSONSessionStorage (including presets and episodes) closed.")

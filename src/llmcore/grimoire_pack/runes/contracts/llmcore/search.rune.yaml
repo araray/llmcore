@@ -1,0 +1,47 @@
+---
+id: llmcore/search
+name: Memory search
+version: 1.0.0
+description: Semantic (vector-store) and episodic (experience log) search tools.
+tags: [llmcore.builtin, search, memory]
+risk_level: low
+commands:
+  - name: semantic_search
+    summary: Search the knowledge base for relevant information
+    params:
+      - name: query
+        type: string
+        required: true
+        description: The search query
+      - name: top_k
+        type: integer
+        required: false
+        default: 5
+        description: Number of results to return
+      - name: collection_name
+        type: string
+        required: false
+        description: Optional collection to search
+    side_effects: []
+  - name: episodic_search
+    summary: Search past experiences in episodic memory
+    params:
+      - name: query
+        type: string
+        required: true
+        description: The search query
+      - name: session_id
+        type: string
+        required: false
+        description: Optional session to filter by
+      - name: limit
+        type: integer
+        required: false
+        default: 10
+        description: Maximum results to return
+    side_effects: []
+mappings:
+  llmcore.tool_name.semantic_search: semantic_search
+  llmcore.implementation_key.semantic_search: llmcore.tools.search.semantic
+  llmcore.tool_name.episodic_search: episodic_search
+  llmcore.implementation_key.episodic_search: llmcore.tools.search.episodic

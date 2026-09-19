@@ -48,7 +48,9 @@ class TestActivityFallback:
         )
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_on_tool_error(self, agents_config, mock_provider, agent_state):
+    async def test_activity_fallback_on_tool_error(
+        self, agents_config, mock_provider, agent_state, bundled_prompt_registry
+    ):
         """Test that activity fallback activates on tool support error."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -120,6 +122,7 @@ class TestActivityFallback:
             provider_manager=mock_provider_manager,
             memory_manager=mock_memory_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -130,7 +133,7 @@ class TestActivityFallback:
 
     @pytest.mark.asyncio
     async def test_activity_protocol_can_call_loaded_tool(
-        self, agents_config, mock_provider, agent_state
+        self, agents_config, mock_provider, agent_state, bundled_prompt_registry
     ):
         """XML fallback can name a loaded ToolManager tool and execute it normally."""
         from llmcore.agents.cognitive.models import ActInput, ThinkInput, ValidationResult
@@ -202,6 +205,7 @@ class TestActivityFallback:
             provider_manager=provider_manager,
             memory_manager=MagicMock(),
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -228,7 +232,9 @@ class TestActivityFallback:
         assert act_output.tool_result.content == "inspected README.md"
 
     @pytest.mark.asyncio
-    async def test_activity_fallback_disabled(self, mock_provider, agent_state):
+    async def test_activity_fallback_disabled(
+        self, mock_provider, agent_state, bundled_prompt_registry
+    ):
         """Test that activity fallback doesn't activate when disabled."""
         from llmcore.agents.cognitive.models import ThinkInput
         from llmcore.agents.cognitive.phases.think import think_phase
@@ -258,6 +264,7 @@ class TestActivityFallback:
             provider_manager=mock_provider_manager,
             memory_manager=MagicMock(),
             tool_manager=MagicMock(),
+            prompt_registry=bundled_prompt_registry,
             agents_config=config,
         )
 
@@ -321,33 +328,43 @@ class TestActivityFallback:
 
 
 class TestActivityPrompts:
-    """Test activity prompt generation."""
+    """Test activity prompts rendered from the grimoire control plane.
 
-    def test_activity_system_prompt(self):
-        """Test that activity system prompt contains required elements."""
-        from llmcore.agents.activities.prompts import ACTIVITY_SYSTEM_PROMPT
+    The former ``activities.prompts`` module was deleted in 0.52.0; the
+    activity protocol prompts render via the prompt registry (template ids
+    ``activity_system`` / ``activity_execute``).
+    """
+
+    def test_activity_system_prompt(self, bundled_prompt_registry):
+        """Test that the activity system spell contains required elements."""
+        prompt = "\n".join(
+            m["content"]
+            for m in bundled_prompt_registry.render_messages("activity_system", {})
+        )
 
         # Should contain XML format instructions
-        assert "<activity_request>" in ACTIVITY_SYSTEM_PROMPT
-        assert "<activity>" in ACTIVITY_SYSTEM_PROMPT
-        assert "<parameters>" in ACTIVITY_SYSTEM_PROMPT
-        assert "<reasoning>" in ACTIVITY_SYSTEM_PROMPT
+        assert "<activity_request>" in prompt
+        assert "<activity>" in prompt
+        assert "<parameters>" in prompt
+        assert "<reasoning>" in prompt
 
         # Should list available activities
-        assert "file_read" in ACTIVITY_SYSTEM_PROMPT
-        assert "file_write" in ACTIVITY_SYSTEM_PROMPT
-        assert "python_exec" in ACTIVITY_SYSTEM_PROMPT
-        assert "final_answer" in ACTIVITY_SYSTEM_PROMPT
+        assert "file_read" in prompt
+        assert "file_write" in prompt
+        assert "python_exec" in prompt
+        assert "final_answer" in prompt
 
-    def test_generate_activity_prompt(self):
-        """Test activity prompt generation."""
-        from llmcore.agents.activities.prompts import generate_activity_prompt
-
-        prompt = generate_activity_prompt(
-            goal="Find Python files",
-            current_step="Search directory",
-            history="Previous: Listed directory",
-            context="Working in /home/user",
+    def test_generate_activity_prompt(self, bundled_prompt_registry):
+        """Test the per-iteration activity execution render."""
+        prompt = bundled_prompt_registry.render(
+            "activity_execute",
+            {
+                "goal": "Find Python files",
+                "current_step": "Search directory",
+                "activities_section": "\nAVAILABLE ACTIVITIES: file_search\n",
+                "history_section": "\n\nRECENT HISTORY:\nPrevious: Listed directory",
+                "context_section": "\n\nRELEVANT CONTEXT:\nWorking in /home/user",
+            },
         )
 
         assert "Find Python files" in prompt

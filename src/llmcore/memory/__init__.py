@@ -31,6 +31,7 @@ from .backends import (
     MemoryConsolidationBackendProtocol,
     MemoryRecord,
     SemantiscanMemoryBackend,
+    create_semantiscan_memory_backend,
 )
 from .hierarchical import HierarchicalMemoryManager, MemoryItem, MemoryTier
 from .manager import MemoryManager
@@ -46,4 +47,5 @@ __all__ = [
     "MemoryRecord",
     "MemoryTier",
     "SemantiscanMemoryBackend",
+    "create_semantiscan_memory_backend",
 ]

@@ -1,0 +1,50 @@
+{
+  "model_id": "mistral-code-fim-latest",
+  "display_name": "codestral-2508",
+  "provider": "mistral",
+  "model_type": "code",
+  "architecture": {
+    "family": "mistral"
+  },
+  "context": {
+    "max_input_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "codestral-2508",
+    "codestral-latest",
+    "mistral-code-latest"
+  ],
+  "description": "Our cutting-edge language model for coding released August 2025.",
+  "tags": [
+    "code",
+    "fim"
+  ],
+  "source": "generated",
+  "provider_mistral": {
+    "open_weights": false,
+    "fill_in_middle": true,
+    "guardrails": {
+      "system_prompt": false
+    },
+    "default_temperature": 0.3
+  }
+}

@@ -40,6 +40,7 @@ from .models import (
     PlanStepSpec,
     ReflectInput,
     ReflectOutput,
+    TerminationReason,
     ThinkInput,
     ThinkOutput,
     UpdateInput,
@@ -60,10 +61,11 @@ from .phases import (
 )
 from .phases.cycle import CognitiveCycle, StreamingIterationResult
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - keep grouped by public API category
     # Enums
     "CognitivePhase",
     "IterationStatus",
+    "TerminationReason",
     "ValidationResult",
     "ConfidenceLevel",
     # Phase I/O

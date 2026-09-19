@@ -236,6 +236,81 @@ class TestGetModelsDetails:
         assert len(details) == 1
         assert details[0].id == "gemma3:4b"
 
+    @pytest.mark.asyncio
+    async def test_capability_fetches_run_concurrently(self, ollama_provider):
+        """show() calls overlap instead of running one-by-one.
+
+        A sequential scan multiplies the per-request timeout by the number of
+        local models (91 models x 30s stalled real runs for tens of minutes).
+        """
+        model_entries = [_make_list_response_model(f"model-{i}") for i in range(8)]
+        list_resp = SimpleNamespace(models=model_entries)
+        ollama_provider._client.list = AsyncMock(return_value=list_resp)
+
+        in_flight = 0
+        max_in_flight = 0
+
+        async def slow_show(model_name):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.01)
+            in_flight -= 1
+            return _make_show_response(["tools"])
+
+        ollama_provider._client.show = slow_show
+
+        details = await ollama_provider.get_models_details()
+
+        assert len(details) == 8
+        assert all(d.supports_tools for d in details)
+        assert max_in_flight > 1
+
+    @pytest.mark.asyncio
+    async def test_models_details_cached_within_ttl(self, ollama_provider):
+        """A second call within the TTL reuses the cached inventory."""
+        list_resp = SimpleNamespace(models=[_make_list_response_model("gemma3:4b")])
+        ollama_provider._client.list = AsyncMock(return_value=list_resp)
+        ollama_provider._client.show = AsyncMock(return_value=_make_show_response(["tools"]))
+
+        first = await ollama_provider.get_models_details()
+        second = await ollama_provider.get_models_details()
+
+        assert [d.id for d in first] == [d.id for d in second] == ["gemma3:4b"]
+        assert ollama_provider._client.list.await_count == 1
+        assert ollama_provider._client.show.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_models_cache_disabled_with_zero_ttl(self):
+        """models_cache_ttl <= 0 re-queries the server on every call."""
+        with (
+            patch("llmcore.providers.ollama_provider.ollama_available", True),
+            patch("llmcore.providers.ollama_provider.tiktoken_available", False),
+            patch("llmcore.providers.ollama_provider.AsyncClient") as mock_cls,
+        ):
+            mock_client = AsyncMock()
+            mock_cls.return_value = mock_client
+
+            from llmcore.providers.ollama_provider import OllamaProvider
+
+            provider = OllamaProvider(
+                {
+                    "default_model": "gemma3:4b",
+                    "host": "http://localhost:11434",
+                    "models_cache_ttl": 0,
+                }
+            )
+            provider._client = mock_client
+
+        list_resp = SimpleNamespace(models=[_make_list_response_model("gemma3:4b")])
+        provider._client.list = AsyncMock(return_value=list_resp)
+        provider._client.show = AsyncMock(return_value=_make_show_response())
+
+        await provider.get_models_details()
+        await provider.get_models_details()
+
+        assert provider._client.list.await_count == 2
+
 
 # ===========================================================================
 # Tests: Message Building

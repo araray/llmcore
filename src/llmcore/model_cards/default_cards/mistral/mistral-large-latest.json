@@ -33,11 +33,13 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
+  "aliases": [
+    "mistral-large-2512"
+  ],
   "description": "Official mistral-large-2512 Mistral AI model",
   "tags": [
     "multimodal"

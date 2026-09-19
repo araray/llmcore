@@ -80,6 +80,14 @@ def _with_tool_calls(message: T, tool_calls: list[Any]) -> T:
             copied["metadata"] = metadata
         return copied  # type: ignore[return-value]
 
+    # First-class ``tool_calls`` field (e.g. llmcore Message) takes precedence
+    # over the legacy ``metadata["tool_calls"]`` channel.
+    if getattr(message, "tool_calls", None) is not None:
+        if hasattr(message, "model_copy"):
+            return message.model_copy(update={"tool_calls": tool_calls})  # type: ignore[return-value]
+        message.tool_calls = tool_calls  # type: ignore[attr-defined]
+        return message
+
     metadata = getattr(message, "metadata", None)
     if isinstance(metadata, dict):
         new_metadata = dict(metadata)
@@ -100,13 +108,19 @@ def _without_tool_calls(message: T) -> T:
             copied["metadata"] = metadata
         return copied  # type: ignore[return-value]
 
+    updates: dict[str, Any] = {}
+    if getattr(message, "tool_calls", None) is not None:
+        updates["tool_calls"] = None
     metadata = getattr(message, "metadata", None)
     if isinstance(metadata, dict) and "tool_calls" in metadata:
         new_metadata = dict(metadata)
         new_metadata.pop("tool_calls", None)
+        updates["metadata"] = new_metadata
+    if updates:
         if hasattr(message, "model_copy"):
-            return message.model_copy(update={"metadata": new_metadata})  # type: ignore[return-value]
-        message.metadata = new_metadata  # type: ignore[attr-defined]
+            return message.model_copy(update=updates)  # type: ignore[return-value]
+        for name, value in updates.items():
+            setattr(message, name, value)
     return message
 
 

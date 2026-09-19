@@ -1,0 +1,34 @@
+{
+  "model_id": "glm-4.5-n",
+  "display_name": "glm-4.5-n",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 131000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM-4.5 Series Models are foundation models specifically engineered for intelligent agents. The flagship GLM-4.5 integrates 355 billion total parameters (32 billion active), unifying reasoning, coding, and agent capabilities to address complex application demands.\nAs a hybrid reasoning system, it offers dual operational modes:\n- Thinking Mode: Enables complex reasoning, tool invocation, and strategic planning\n- Non-Thinking Mode: Delivers low-latency responses for real-time interactions\nThis architecture bridges high-performance AI with adaptive functionality for dynamic agent environments.\n\nFile Support: Text, Markdown and PDF files\nContext window: 131k tokens",
+  "tags": [],
+  "source": "generated"
+}

@@ -5,6 +5,77 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.52.0
+
+### Changed — Grimoire is THE control plane (breaking)
+
+- **Hard dependency on `grimoire>=0.4.0`.** llmcore ships a packaged
+  `llmcore-builtin` grimoire pack (`src/llmcore/grimoire_pack/`) covering
+  EVERY agent prompt as spells — the cognitive phases (`plan`, `think`,
+  `validate`, `reflect`, plus the new `finalize`), the activity (XML) protocol,
+  the goal classifier, the fast path (+ canned responses as
+  `llmcore/fast_path/*` promptlets), the five builtin personas (definitions in
+  spell `attributes.persona`), the Darwin arbiter/TDD prompts, and autonomous
+  goal decomposition. Zero config → the bundled pack loads; user layers
+  override by id.
+- **Fail-loud, no silent fallbacks (breaking).** Every inline/f-string prompt
+  fallback is DELETED. `prompt_registry` is required by
+  `SingleAgentMode`/`CognitiveCycle` (raise on `None`);
+  `EnhancedAgentManager` self-builds a bundled-only adapter when constructed
+  directly. New `[grimoire]` config section (layers, prompt_map, strict,
+  metrics) with startup validation that renders every required template and
+  raises `ConfigError` naming template, spell, winning layer, and cause.
+- **Prompt-consumer tail routed through the registry**: goal classifier LLM
+  fallback, fast-path executor (system+user via `render_messages`; canned
+  responses via promptlets), `PersonaManager.load_from_grimoire()` (spells
+  tagged `llmcore.persona`; hardcoded builtins remain only for legacy
+  no-grimoire construction), `MultiAttemptArbiter` + `TestGenerator`/
+  `TDDManager` (`darwin_arbiter_*`/`darwin_tdd_*` templates; the
+  `ArbiterPrompts` class and TDD prompt constants are gone),
+  `GoalManager._decompose_goal` (`goal_decomposition` — also fixes a latent
+  `MessageRole` ImportError that silently disabled LLM decomposition),
+  `agents/activities/prompts.py` DELETED (activity prompts render via
+  `activity_system`/`activity_execute`), and the four cognitive default
+  templates removed from `template_loader` (the variable-mismatch source;
+  `PromptRegistry.with_defaults()` now seeds snippets only).
+- **Builtin tools are catalog-driven**: `GrimoireToolCatalog` builds the five
+  builtins (`finish`, `human_approval`, `semantic_search`, `episodic_search`,
+  `calculator`) from bundled rune contracts with real parameter schemas and
+  risk/approval/OWASP metadata; unbound runes are visible in `contracts()`
+  but never registered.
+- **Deprecations**: the legacy `agents/cognitive_cycle.py` + `prompt_utils.py`
+  stack (outside the control plane) — `AgentManager.run_agent_loop()` now
+  emits a `DeprecationWarning`; removal next minor. Unwired
+  `reasoning/react.py`/`reflexion.py` carry deprecation notes.
+
+### Added/Fixed — Darwin convergence & accounting (plan Phase 2)
+
+- **Finish-tool convergence** (2.1): native `finish`/`final_answer` tool calls
+  terminate THINK (with act-phase defense in depth); `finish` gets a real
+  `{answer}` schema; new `TerminationReason` enum stamped at every stop site
+  and mirrored on streaming results (`termination_reason`).
+- **`remaining_steps` + in-cycle forced finalize** (2.2): the cycle can no
+  longer exit un-converged on budget paths — a tool-less finalize pass (new
+  `finalize_prompt` spell, `tool_choice="required"` where supported) or the
+  synthesis fallback guarantees an answer; hosts' "grace" crutches are
+  redundant.
+- **Deterministic guards under `skip_validation`** (2.3): tool-registry +
+  dangerous-pattern prechecks always run; only the LLM judge is skipped
+  (`ValidationConfig.deterministic_guards` escape hatch).
+- **Redundant-call detector** (2.4): repeated tool signatures skip
+  VALIDATE/ACT with a corrective observation; ≥3 repeats → forced finalize.
+- **Conditional PLAN** (2.5): `PlanningConfig.mode`
+  (`always|first|complex_only|on_failure`, default `complex_only`) + replan
+  budget — planning no longer precedes observation on knowledge tasks.
+- **Grounded structured REFLECT** (2.6): JSON reflection (where the provider
+  supports it) with text fallback; `action_success=False` clamps
+  self-judgment; reflection gated to action iterations; THINK's
+  `expected_outcome` finally reaches OBSERVE.
+- **End-to-end token/cost accounting** (2.7): `PhaseUsage` per LLM phase,
+  iteration/state totals, circuit-breaker cost double-count fixed, and new
+  `api.record_agent_usage(session_id, records)` so `get_session_token_stats`
+  covers agent runs (hosts flush per run/segment).
+
 ## v0.51.0
 
 ### Added — Z.ai (GLM) provider

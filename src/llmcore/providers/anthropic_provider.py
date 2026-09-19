@@ -457,7 +457,7 @@ class AnthropicProvider(BaseProvider):
         - System prompt extraction (first message if role==SYSTEM)
         - User / assistant message conversion
         - Tool result messages (role==TOOL → tool_result content blocks in user msg)
-        - Assistant messages with tool_calls in metadata
+        - Assistant messages with tool_calls (first-class field or metadata)
         - Multimodal content (images, documents)
         - Consecutive same-role message merging
 
@@ -532,13 +532,17 @@ class AnthropicProvider(BaseProvider):
 
             metadata = msg.metadata or {}
 
+            # First-class Message.tool_calls (R-2) takes precedence over the
+            # legacy metadata["tool_calls"] channel.
+            tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+
             # Build content blocks
-            if role_str == "assistant" and "tool_calls" in metadata:
+            if role_str == "assistant" and tool_calls:
                 # Assistant message with tool calls — construct tool_use blocks
                 content_blocks: list[dict[str, Any]] = []
                 if msg.content:
                     content_blocks.append({"type": "text", "text": msg.content})
-                for tc in metadata["tool_calls"]:
+                for tc in tool_calls:
                     # Accept both OpenAI-normalized and Anthropic-native formats
                     if tc.get("type") == "function":
                         # OpenAI-normalized format from extract_tool_calls

@@ -17,10 +17,44 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 # Import models for type hinting
-from ..models import Message, ModelDetails, Tool
+from ..models import Message, ModelDetails, Role, Tool
 
 # Define a type alias for the context payload that can be passed to providers.
 ContextPayload = list[Message]
+
+
+def flatten_tool_messages_for_text_protocol(messages: list[Message]) -> list[Message]:
+    """Downgrade tool-protocol messages for providers without native support.
+
+    Fallback for providers whose wire format has no tool role (R-2): each
+    ``role="tool"`` message is rendered as a plain user-role text message, and
+    assistant messages keep their text content (structured ``tool_calls`` are
+    not re-rendered — providers without native tool calling never see them).
+    Messages that carry no tool-protocol data are passed through unchanged, so
+    this is a no-op for existing callers.
+
+    Args:
+        messages: The prepared context payload.
+
+    Returns:
+        A new list with tool-role messages rewritten as user-role text.
+    """
+    flattened: list[Message] = []
+    for msg in messages:
+        if msg.role == Role.TOOL:
+            call_id = msg.tool_call_id or "unknown"
+            flattened.append(
+                msg.model_copy(
+                    update={
+                        "role": Role.USER,
+                        "content": f"[Tool result for call {call_id}]:\n{msg.content}",
+                        "tool_call_id": None,
+                    }
+                )
+            )
+        else:
+            flattened.append(msg)
+    return flattened
 
 
 class BaseProvider(abc.ABC):
@@ -78,6 +112,29 @@ class BaseProvider(abc.ABC):
         lifecycle is additive for all existing providers.
         """
         return None
+
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """Whether this provider can attach a native web-search/grounding config.
+
+        Providers with a first-class, server-side web search surface — OpenAI's
+        ``web_search_options``, Google Gemini's Google Search grounding tool, or
+        xAI Live Search (``search_parameters``) — override this to return
+        ``True`` so the additive ``native_search=True`` chat option can route
+        the request to that surface (plan §4/F9 dependency).
+
+        The base implementation returns ``False`` so ``native_search`` is a safe
+        no-op for every provider without such a surface: the option is dropped
+        (logged at debug level by the caller) and never raises.
+
+        Args:
+            model: The model that would service the request. Providers may use
+                it to refine support per model; the base signature accepts it so
+                overrides can be model-aware without changing the contract.
+
+        Returns:
+            ``True`` if this provider can attach a native search config.
+        """
+        return False
 
     @abc.abstractmethod
     async def get_models_details(self) -> list[ModelDetails]:
@@ -411,48 +468,6 @@ class BaseProvider(abc.ABC):
     # NEW: Observability Instrumentation Methods
     # ============================================================================
 
-    def _record_llm_metrics(
-        self,
-        model: str,
-        duration: float,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-        error: str | None = None,
-        tenant_id: str | None = None,
-    ) -> None:
-        """
-        Record metrics for an LLM API request.
-
-        This method should be called by concrete provider implementations
-        to record observability metrics for each API call.
-
-        Args:
-            model: Model name used for the request
-            duration: Request duration in seconds
-            input_tokens: Number of input tokens
-            output_tokens: Number of output tokens
-            error: Error type if request failed
-            tenant_id: Tenant identifier if available
-        """
-        try:
-            # Extract tenant_id from current request context if not provided
-            if tenant_id is None:
-                record_llm_request(
-                    provider=self.get_name(),
-                    model=model,
-                    tenant_id=tenant_id,
-                    duration=duration,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    error=error,
-                )
-        except Exception as e:
-            # Don't fail the main operation if metrics recording fails
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Failed to record LLM metrics: {e}")
-
     def _create_llm_span(self, operation: str, model: str, **attributes):
         """
         Create a tracing span for an LLM operation.
@@ -561,15 +576,7 @@ class BaseProvider(abc.ABC):
                     record_span_exception(span, e)
                 raise
             finally:
-                # Record metrics
                 duration = time.time() - start_time
-                self._record_llm_metrics(
-                    model=actual_model,
-                    duration=duration,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    error=error,
-                )
 
                 # Add span attributes
                 if span:

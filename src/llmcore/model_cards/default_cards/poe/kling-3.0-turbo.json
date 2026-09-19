@@ -1,0 +1,34 @@
+{
+  "model_id": "kling-3.0-turbo",
+  "display_name": "kling-3.0-turbo",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kling 3.0 Turbo is a fast video generation model that produces high-quality videos with synchronized native audio, at 720p or 1080p resolution. It supports Text-to-Video and Image-to-Video, with multi-shot prompting for up to 6 sequential scenes in a single clip.\n\nMulti-Shot Mode\n- Generate up to 6 sequential shots in one video by formatting the prompt as `shot 1, <seconds>, <description>; shot 2, <seconds>, <description>;` — separate shots with a semicolon\n- n: shot sequence number (1 to 6 shots)\n- m: shot duration; each shot is at least 1 second, and the sum of shot durations equals the total video duration\n- words: the prompt for that shot, up to 512 characters\n- Per-shot timing is treated as guidance, so cuts may not land on the exact frame\n- Text-to-Video only\n\nPrompting\n- There is no separate negative prompt. To steer away from unwanted elements, describe them directly in your prompt, for example: a calm forest at dawn, avoid blurry motion, no on-screen text\n\nInput Limits & Requirements\n- Prompt length: up to 3,072 characters (2,500 recommended). Positive and negative descriptions can both go in the prompt\n- Resolution: 720p or 1080p. Duration: 3 to 15 seconds\n- Aspect ratio: 16:9, 9:16, or 1:1 for Text-to-Video; Image-to-Video follows the source image\n- Image inputs (Image-to-Video): JPEG or PNG only, up to 50MB. Width and height must each be at least 300px, and the aspect ratio must fall within 1:2.5 to 2.5:1\n- Native audio is generated automatically\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

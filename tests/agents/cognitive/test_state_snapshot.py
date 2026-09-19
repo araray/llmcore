@@ -105,7 +105,9 @@ def test_resume_snapshot_rehydrates_core_state() -> None:
     assert restored.metadata["_resume_snapshot_iterations"]
 
 
-def test_resume_snapshot_preserves_compressed_history_across_checkpoints() -> None:
+def test_resume_snapshot_preserves_compressed_history_across_checkpoints(
+    bundled_prompt_registry,
+) -> None:
     state = EnhancedAgentState(goal="Do resumable work", session_id="session-resume")
     state.add_iteration(_iteration("prior " + "A" * 200))
     state.mark_context_compressed(reason="history_budget", tokens_before=3000, tokens_after=900)
@@ -126,6 +128,7 @@ def test_resume_snapshot_preserves_compressed_history_across_checkpoints() -> No
         memory_manager=MagicMock(),
         storage_manager=MagicMock(),
         tool_manager=MagicMock(),
+        prompt_registry=bundled_prompt_registry,
         max_history_iterations=2,
         max_history_observation_chars=60,
     )
@@ -192,7 +195,7 @@ def test_context_compression_cooldown_prevents_thrashing() -> None:
     assert state.should_compress_context(min_iterations_between=2) is True
 
 
-def test_cognitive_cycle_history_is_valid_bounded_json() -> None:
+def test_cognitive_cycle_history_is_valid_bounded_json(bundled_prompt_registry) -> None:
     state = EnhancedAgentState(goal="History")
     state.add_iteration(_iteration("B" * 500))
     cycle = CognitiveCycle(
@@ -200,6 +203,7 @@ def test_cognitive_cycle_history_is_valid_bounded_json() -> None:
         memory_manager=MagicMock(),
         storage_manager=MagicMock(),
         tool_manager=MagicMock(),
+        prompt_registry=bundled_prompt_registry,
         max_history_observation_chars=50,
     )
 
@@ -263,7 +267,9 @@ def test_agent_result_iteration_summaries_include_restored_history() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cognitive_cycle_passes_tool_inventory_to_think(monkeypatch) -> None:
+async def test_cognitive_cycle_passes_tool_inventory_to_think(
+    monkeypatch, bundled_prompt_registry
+) -> None:
     from llmcore.agents.cognitive.phases import cycle as cycle_module
 
     tool_manager = ToolManager(MagicMock(), MagicMock())
@@ -305,6 +311,7 @@ async def test_cognitive_cycle_passes_tool_inventory_to_think(monkeypatch) -> No
         memory_manager=MagicMock(),
         storage_manager=MagicMock(),
         tool_manager=tool_manager,
+        prompt_registry=bundled_prompt_registry,
         agents_config=agents_config,
     )
 
@@ -324,7 +331,9 @@ async def test_cognitive_cycle_passes_tool_inventory_to_think(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_think_phase_can_cap_native_provider_tool_schemas() -> None:
+async def test_think_phase_can_cap_native_provider_tool_schemas(
+    bundled_prompt_registry,
+) -> None:
     from llmcore.agents.cognitive.phases.think import think_phase
 
     provider_manager = MagicMock()
@@ -371,6 +380,7 @@ async def test_think_phase_can_cap_native_provider_tool_schemas() -> None:
         provider_manager=provider_manager,
         memory_manager=MagicMock(),
         tool_manager=tool_manager,
+        prompt_registry=bundled_prompt_registry,
         agents_config=agents_config,
     )
 

@@ -625,14 +625,17 @@ class GoalManager:
         storage: GoalStorageProtocol,
         llm_provider: Any | None = None,
         decomposition_model: str | None = None,
+        prompt_registry: Any | None = None,
     ) -> None:
         self.storage = storage
         self.llm_provider = llm_provider
         self.decomposition_model = decomposition_model
+        self._prompt_registry = prompt_registry
 
         self._goals: dict[str, Goal] = {}
         self._lock = asyncio.Lock()
         self._initialized = False
+        self._warned_no_decompose_provider = False
 
         # Config-driven defaults (overridden by from_config)
         self._default_auto_decompose: bool = True
@@ -651,6 +654,7 @@ class GoalManager:
         llm_provider: Any | None = None,
         decomposition_model: str | None = None,
         storage: GoalStorageProtocol | None = None,
+        prompt_registry: Any | None = None,
     ) -> GoalManager:
         """
         Create a GoalManager from a GoalsAutonomousConfig.
@@ -664,6 +668,9 @@ class GoalManager:
             llm_provider: Optional LLM provider for goal decomposition.
             decomposition_model: Specific model to use for decomposition.
             storage: Optional storage override (default: GoalStore from config).
+            prompt_registry: Prompt registry rendering the
+                ``goal_decomposition`` template (grimoire control plane);
+                bundled-only adapter self-built when None.
 
         Returns:
             A fully configured GoalManager.
@@ -681,6 +688,7 @@ class GoalManager:
             storage=storage,
             llm_provider=llm_provider,
             decomposition_model=decomposition_model,
+            prompt_registry=prompt_registry,
         )
 
         # Wire config-driven defaults
@@ -778,14 +786,34 @@ class GoalManager:
                 logger.info("Decomposed goal into %d sub-goals", len(sub_goals))
             except Exception as e:
                 logger.warning("Goal decomposition failed: %s", e)
+        elif should_decompose and not self._warned_no_decompose_provider:
+            self._warned_no_decompose_provider = True
+            logger.warning(
+                "auto_decompose is enabled but no LLM provider is configured; "
+                "goals will not be decomposed into sub-goals. Pass llm_provider= "
+                "to GoalManager (or GoalManager.from_config) to enable decomposition."
+            )
 
         return goal
 
     # ----- decomposition ------------------------------------------------------
 
+    def _ensure_prompt_registry(self) -> Any:
+        """Return the injected registry, self-building the bundled adapter once."""
+        if self._prompt_registry is None:
+            from llmcore.grimoire_runtime import bundled_prompt_registry
+
+            self._prompt_registry = bundled_prompt_registry()
+        return self._prompt_registry
+
     async def _decompose_goal(self, goal: Goal) -> list[Goal]:
         """
         Use LLM to decompose a high-level goal into sub-goals.
+
+        The SYSTEM + USER contract renders atomically from the
+        ``goal_decomposition`` template (grimoire spell
+        ``llmcore/autonomous/goal_decomposition``) — fail-loud, no inline
+        fallback; the caller handles decomposition errors at the phase level.
 
         Args:
             goal: The goal to decompose.
@@ -796,34 +824,24 @@ class GoalManager:
         if not self.llm_provider:
             return []
 
-        prompt = (
-            "You are an expert planner. Decompose this high-level goal "
-            "into 3-5 actionable sub-goals.\n\n"
-            f"GOAL: {goal.description}\n\n"
-            f"CONTEXT:\n{json.dumps(goal.context, indent=2) if goal.context else 'None'}\n\n"
-            "For each sub-goal, provide:\n"
-            "1. A clear, actionable description\n"
-            "2. Success criteria (measurable condition)\n"
-            "3. Priority: critical, high, normal, or low\n"
-            "4. Estimated difficulty: easy, medium, or hard\n\n"
-            "Respond with a JSON array:\n"
-            "[\n"
-            '  {{\n    "description": "...",\n    "success_criteria": "...",\n'
-            '    "priority": "normal",\n    "difficulty": "medium"\n  }},\n'
-            "  ...\n]\n\n"
-            "Only output the JSON array, nothing else."
-        )
-
         try:
-            from llmcore.providers.base import Message, MessageRole
+            # NOTE: the pre-0.52.0 code imported a nonexistent ``MessageRole``
+            # here, so LLM decomposition silently no-op'd under the blanket
+            # except below. Fixed together with the registry migration.
+            from llmcore.models import Message, Role
 
+            rendered = self._ensure_prompt_registry().render_messages(
+                "goal_decomposition",
+                {
+                    "goal_description": goal.description,
+                    "context_json": json.dumps(goal.context, indent=2)
+                    if goal.context
+                    else "None",
+                },
+            )
             response = await self.llm_provider.complete(
                 messages=[
-                    Message(
-                        role=MessageRole.SYSTEM,
-                        content="You are a goal decomposition expert.",
-                    ),
-                    Message(role=MessageRole.USER, content=prompt),
+                    Message(role=Role(m["role"]), content=m["content"]) for m in rendered
                 ],
                 model=self.decomposition_model,
                 temperature=0.3,

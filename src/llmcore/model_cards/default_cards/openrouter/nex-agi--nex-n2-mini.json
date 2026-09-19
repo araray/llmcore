@@ -1,0 +1,40 @@
+{
+  "model_id": "nex-agi/nex-n2-mini",
+  "display_name": "Nex AGI: Nex-N2-Mini",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.025,
+      "output": 0.1
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-24"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nex-N2-Mini is an open-source agentic mixture-of-experts model from Nex AGI, the smaller sibling in the Nex-N2 series. It accepts text and image input and is built for coding, tool use,...",
+  "tags": [],
+  "source": "generated"
+}

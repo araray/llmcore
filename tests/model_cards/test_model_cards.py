@@ -392,6 +392,43 @@ class TestProviderExtensions:
         assert ext.owned_by == "openai"
         assert ext.supports_predicted_outputs is True
 
+    @pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh"])
+    def test_openai_extension_reasoning_effort_tiers(self, effort):
+        """All canonical reasoning-effort tiers (incl. xhigh) should validate."""
+        ext = OpenAIExtension(supports_reasoning=True, reasoning_effort=effort)
+        assert ext.reasoning_effort == effort
+
+    def test_openai_extension_invalid_reasoning_effort(self):
+        """Unknown effort tiers should be rejected (wire spelling is not canonical)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            OpenAIExtension(reasoning_effort="x-high")
+
+    def test_builtin_gpt_5_2_pro_card_round_trip(self):
+        """The builtin gpt-5.2-pro card should validate and round-trip with xhigh."""
+        import llmcore.model_cards as mc_pkg
+
+        card_path = (
+            Path(mc_pkg.__file__).parent / "default_cards" / "openai" / "gpt-5.2-pro.json"
+        )
+        card = ModelCard.model_validate_json(card_path.read_text())
+        assert card.provider_openai is not None
+        assert card.provider_openai.reasoning_effort == "xhigh"
+
+        restored = ModelCard.model_validate_json(card.model_dump_json())
+        assert restored.provider_openai is not None
+        assert restored.provider_openai.reasoning_effort == "xhigh"
+
+    def test_builtin_poe_gpt_5_2_pro_card_reasoning_effort(self):
+        """The builtin Poe gpt-5.2-pro card should carry xhigh in its extension."""
+        import llmcore.model_cards as mc_pkg
+
+        card_path = Path(mc_pkg.__file__).parent / "default_cards" / "poe" / "gpt-5.2-pro.json"
+        card = ModelCard.model_validate_json(card_path.read_text())
+        assert card.provider_extension is not None
+        assert card.provider_extension["reasoning_effort"] == "xhigh"
+
 
 # =============================================================================
 # REGISTRY TESTS
@@ -781,6 +818,80 @@ class TestRegistryConfig:
         # _get_configured_user_path should return None
         configured = registry._get_configured_user_path()
         assert configured is None
+
+
+# =============================================================================
+# NATIVE SEARCH CAPABILITY HELPER
+# =============================================================================
+
+
+class TestModelSupportsNativeSearch:
+    """Tests for model_supports_native_search() routing helper (plan §4/F9)."""
+
+    def _base_card(self, **kwargs):
+        from llmcore.model_cards import ModelCapabilities
+
+        defaults = {
+            "model_id": "m",
+            "provider": "openai",
+            "model_type": "chat",
+            "context": ModelContext(max_input_tokens=8192),
+            "capabilities": ModelCapabilities(),
+        }
+        defaults.update(kwargs)
+        return ModelCard(**defaults)
+
+    def test_none_card_is_false(self):
+        from llmcore.model_cards import model_supports_native_search
+
+        assert model_supports_native_search(None) is False
+
+    def test_web_search_capability_true(self):
+        from llmcore.model_cards import ModelCapabilities, model_supports_native_search
+
+        card = self._base_card(capabilities=ModelCapabilities(web_search=True))
+        assert model_supports_native_search(card) is True
+
+    def test_default_capabilities_false(self):
+        from llmcore.model_cards import model_supports_native_search
+
+        assert model_supports_native_search(self._base_card()) is False
+
+    def test_xai_server_tools_search_true(self):
+        from llmcore.model_cards import XAIExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="xai",
+            provider_xai=XAIExtension(server_tools=["web_search", "code_execution"]),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_xai_live_search_true(self):
+        from llmcore.model_cards import XAIExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="xai",
+            provider_xai=XAIExtension(live_search={"enabled": True}),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_google_grounding_google_search_true(self):
+        from llmcore.model_cards import GoogleExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="google",
+            provider_google=GoogleExtension(grounding={"google_search": True}),
+        )
+        assert model_supports_native_search(card) is True
+
+    def test_google_grounding_without_search_false(self):
+        from llmcore.model_cards import GoogleExtension, model_supports_native_search
+
+        card = self._base_card(
+            provider="google",
+            provider_google=GoogleExtension(grounding={"maps": True}),
+        )
+        assert model_supports_native_search(card) is False
 
 
 # =============================================================================

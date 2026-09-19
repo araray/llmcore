@@ -1,0 +1,40 @@
+{
+  "model_id": "inclusionai/ling-3.0-flash",
+  "display_name": "Ling-3.0-flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.021,
+      "output": 0.063
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-23"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "*Ling-3.0-flash* is a *124B-parameter Mixture-of-Experts (MoE) model*, with approximately *5.1B parameters activated per token*. The model is designed with *token efficiency and production-scale agentic inference* as key priorities, enabling developers...",
+  "tags": [],
+  "source": "generated"
+}

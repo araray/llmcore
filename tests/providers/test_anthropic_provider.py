@@ -352,6 +352,81 @@ class TestMessageConversion:
         assert asst["content"][1]["name"] == "search"
         assert asst["content"][1]["input"] == {"q": "test"}
 
+    def test_assistant_first_class_tool_calls_field(self, provider: AnthropicProvider):
+        """Message.tool_calls (R-2) produces tool_use blocks without metadata."""
+        msgs = [
+            Message(role=LLMCoreRole.USER, content="Hi"),
+            Message(
+                role=LLMCoreRole.ASSISTANT,
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc_field",
+                        "type": "function",
+                        "function": {"name": "search", "arguments": '{"q": "field"}'},
+                    }
+                ],
+            ),
+        ]
+        _, api_msgs = provider._convert_llmcore_msgs_to_anthropic(msgs)
+
+        asst = api_msgs[1]
+        assert asst["role"] == "assistant"
+        assert asst["content"][0]["type"] == "tool_use"
+        assert asst["content"][0]["id"] == "tc_field"
+        assert asst["content"][0]["input"] == {"q": "field"}
+
+    def test_first_class_tool_calls_precede_metadata(self, provider: AnthropicProvider):
+        """The first-class field wins over the legacy metadata channel."""
+        msgs = [
+            Message(role=LLMCoreRole.USER, content="Hi"),
+            Message(
+                role=LLMCoreRole.ASSISTANT,
+                content="",
+                tool_calls=[{"type": "tool_use", "id": "tc_field", "name": "a", "input": {}}],
+                metadata={
+                    "tool_calls": [{"type": "tool_use", "id": "tc_meta", "name": "b", "input": {}}]
+                },
+            ),
+        ]
+        _, api_msgs = provider._convert_llmcore_msgs_to_anthropic(msgs)
+
+        assert api_msgs[1]["content"][0]["id"] == "tc_field"
+
+    def test_multi_tool_turn_round_trip_id_pairing(self, provider: AnthropicProvider):
+        """A multi-call turn keeps tool_use/tool_result ids paired (R-2)."""
+        msgs = [
+            Message(role=LLMCoreRole.USER, content="Weather in NYC and SF?"),
+            Message(
+                role=LLMCoreRole.ASSISTANT,
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call_nyc",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city": "NYC"}'},
+                    },
+                    {
+                        "id": "call_sf",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city": "SF"}'},
+                    },
+                ],
+            ),
+            Message(role=LLMCoreRole.TOOL, content='{"temp": 72}', tool_call_id="call_nyc"),
+            Message(role=LLMCoreRole.TOOL, content='{"temp": 65}', tool_call_id="call_sf"),
+        ]
+        _, api_msgs = provider._convert_llmcore_msgs_to_anthropic(msgs)
+
+        assert len(api_msgs) == 3
+        tool_uses = [b for b in api_msgs[1]["content"] if b["type"] == "tool_use"]
+        assert [b["id"] for b in tool_uses] == ["call_nyc", "call_sf"]
+        # All results grouped into ONE user message, ids matching the calls
+        results = api_msgs[2]["content"]
+        assert api_msgs[2]["role"] == "user"
+        assert [r["tool_use_id"] for r in results] == ["call_nyc", "call_sf"]
+        assert all(r["type"] == "tool_result" for r in results)
+
 
 # ====================================================================
 # Multimodal Content Tests

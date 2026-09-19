@@ -1,0 +1,34 @@
+{
+  "model_id": "glm-5.2",
+  "display_name": "glm-5.2",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM-5.2 is Z.AI's latest flagship model, meticulously engineered for long-horizon autonomous tasks. Capable of working continuously on a single assignment for up to 8 hours, it autonomously manages the entire workflow—from initial planning and execution to iterative optimization and the delivery of production-grade results. With coding and agentic capabilities that rival leading proprietary frontier models, it excels particularly in sustained execution, complex engineering optimization, and real-world development scenarios. Its context window has been expanded from 200K to 1M tokens, making it an ideal foundational model for powering advanced autonomous agents and long-horizon coding assistants.\n\nFile Support: Text, Markdown and PDF files\nContext window: 1M tokens",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,11 +1,12 @@
 {
   "model_id": "x-ai/grok-build-0.1",
-  "display_name": "xAI: Grok Build 0.1",
+  "display_name": "SpaceXAI: Grok Build 0.1",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 256000
+    "max_input_tokens": 256000,
+    "max_output_tokens": 230400
   },
   "capabilities": {
     "streaming": true,
@@ -33,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
+  "description": "Grok Build 0.1 is SpaceXAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
   "tags": [],
   "source": "generated"
 }

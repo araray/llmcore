@@ -14,6 +14,7 @@ Reference: UNIFIED_IMPLEMENTATION_PLAN.md Phase 1, Task 1.4
 """
 
 import json
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from llmcore.observability.cost_tracker import (
     create_cost_tracker,
     get_price_per_million_tokens,
 )
+from llmcore.shared_events import correlation_context
 
 # =============================================================================
 # PRICING DATA TESTS
@@ -528,3 +530,176 @@ class TestUsageSummary:
 
         assert "openai" in summary.by_provider
         assert summary.by_provider["openai"]["count"] == 5
+
+
+# =============================================================================
+# CORRELATION TRACKING TESTS (S-3 event spine)
+# =============================================================================
+
+
+class TestCorrelationTracking:
+    """Tests for correlation-id capture and summary_by_correlation()."""
+
+    def test_explicit_correlation_id_persisted(self, tmp_path: Path) -> None:
+        """An explicitly passed correlation id lands on the record and in SQLite."""
+        tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
+
+        record = tracker.record(
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=1000,
+            output_tokens=500,
+            correlation_id="corr-explicit",
+        )
+        assert record.correlation_id == "corr-explicit"
+
+        summary = tracker.summary_by_correlation()
+        assert "corr-explicit" in summary
+        assert summary["corr-explicit"]["call_count"] == 1
+        tracker.close()
+
+    def test_ambient_correlation_captured_from_contextvar(self, tmp_path: Path) -> None:
+        """Records capture the shared_events contextvar correlation id."""
+        tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
+
+        with correlation_context("corr-ambient"):
+            record = tracker.record(
+                provider="openai",
+                model="gpt-4o",
+                input_tokens=100,
+                output_tokens=50,
+            )
+        assert record.correlation_id == "corr-ambient"
+
+        outside = tracker.record(
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=100,
+            output_tokens=50,
+        )
+        assert outside.correlation_id is None
+        tracker.close()
+
+    def test_explicit_correlation_wins_over_contextvar(self, tmp_path: Path) -> None:
+        """An explicit correlation id overrides the ambient contextvar."""
+        tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
+
+        with correlation_context("corr-ambient"):
+            record = tracker.record(
+                provider="openai",
+                model="gpt-4o",
+                input_tokens=10,
+                output_tokens=5,
+                correlation_id="corr-explicit",
+            )
+        assert record.correlation_id == "corr-explicit"
+        tracker.close()
+
+    def test_summary_by_correlation_aggregates(self, tmp_path: Path) -> None:
+        """summary_by_correlation() groups cost/tokens per correlation id."""
+        tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
+
+        for _ in range(2):
+            tracker.record(
+                provider="openai",
+                model="gpt-4o",
+                input_tokens=1000,
+                output_tokens=500,
+                correlation_id="corr-a",
+            )
+        tracker.record(
+            provider="anthropic",
+            model="claude-3-haiku",
+            input_tokens=200,
+            output_tokens=100,
+            correlation_id="corr-b",
+        )
+        # Uncorrelated record must be excluded.
+        tracker.record(
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=999,
+            output_tokens=999,
+        )
+
+        summary = tracker.summary_by_correlation()
+        assert set(summary) == {"corr-a", "corr-b"}
+        assert summary["corr-a"]["call_count"] == 2
+        assert summary["corr-a"]["input_tokens"] == 2000
+        assert summary["corr-a"]["output_tokens"] == 1000
+        assert summary["corr-a"]["total_tokens"] == 3000
+        expected_a = 2 * ((1000 / 1_000_000 * 2.50) + (500 / 1_000_000 * 10.00))
+        assert summary["corr-a"]["total_cost_usd"] == pytest.approx(expected_a, abs=1e-6)
+        assert summary["corr-b"]["call_count"] == 1
+
+        # Filter to a single correlation id.
+        only_b = tracker.summary_by_correlation(correlation_id="corr-b")
+        assert set(only_b) == {"corr-b"}
+        tracker.close()
+
+    def test_disabled_tracker_still_captures_correlation(self) -> None:
+        """Disabled tracker returns a record carrying the ambient correlation id."""
+        tracker = CostTracker(enabled=False)
+
+        with correlation_context("corr-disabled"):
+            record = tracker.record(
+                provider="openai",
+                model="gpt-4o",
+                input_tokens=10,
+                output_tokens=5,
+            )
+        assert record.correlation_id == "corr-disabled"
+
+    def test_migration_adds_column_to_old_db(self, tmp_path: Path) -> None:
+        """A pre-correlation database is migrated in place (ALTER TABLE)."""
+        db_path = tmp_path / "old.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            CREATE TABLE usage_records (
+                id TEXT PRIMARY KEY,
+                timestamp INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL,
+                total_tokens INTEGER NOT NULL,
+                estimated_cost_usd REAL NOT NULL,
+                latency_ms INTEGER,
+                session_id TEXT,
+                user_id TEXT,
+                metadata TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+        tracker = CostTracker(db_path=str(db_path))
+        record = tracker.record(
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=100,
+            output_tokens=50,
+            correlation_id="corr-migrated",
+        )
+        assert record.correlation_id == "corr-migrated"
+        assert "corr-migrated" in tracker.summary_by_correlation()
+        tracker.close()
+
+    def test_export_includes_correlation_id(self, tmp_path: Path) -> None:
+        """JSON export carries the correlation_id field."""
+        tracker = CostTracker(db_path=str(tmp_path / "costs.db"))
+        tracker.record(
+            provider="openai",
+            model="gpt-4o",
+            input_tokens=10,
+            output_tokens=5,
+            correlation_id="corr-export",
+        )
+
+        out = tmp_path / "export.json"
+        count = tracker.export_to_json(str(out))
+        assert count == 1
+        exported = json.loads(out.read_text())
+        assert exported[0]["correlation_id"] == "corr-export"
+        tracker.close()

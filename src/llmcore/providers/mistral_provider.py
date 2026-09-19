@@ -434,11 +434,15 @@ class MistralProvider(BaseProvider):
             if "name" in metadata:
                 msg_dict["name"] = metadata["name"]
 
-        # Assistant tool calls for multi-turn
-        if role_str == "assistant" and "tool_calls" in metadata:
-            msg_dict["tool_calls"] = metadata["tool_calls"]
-            if not msg.content:
-                msg_dict["content"] = ""
+        # Assistant tool calls for multi-turn. First-class Message.tool_calls
+        # (R-2) takes precedence over the legacy metadata["tool_calls"] channel
+        # so a native tool-role result has its preceding assistant tool_calls.
+        if role_str == "assistant":
+            tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+            if tool_calls:
+                msg_dict["tool_calls"] = tool_calls
+                if not msg.content:
+                    msg_dict["content"] = ""
 
         name = metadata.get("name")
         if name and role_str != "tool":

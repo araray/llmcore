@@ -1,0 +1,49 @@
+{
+  "model_id": "voxtral-mini-2507",
+  "display_name": "voxtral-mini-2507",
+  "provider": "mistral",
+  "model_type": "chat",
+  "architecture": {
+    "family": "mistral",
+    "architecture_type": "dense",
+    "parameter_count": "4B"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "voxtral-mini-latest"
+  ],
+  "description": "A mini audio understanding model released in July 2025",
+  "tags": [
+    "audio"
+  ],
+  "source": "generated",
+  "provider_mistral": {
+    "open_weights": false,
+    "fill_in_middle": false,
+    "guardrails": {
+      "system_prompt": false
+    },
+    "default_temperature": 0.2
+  }
+}

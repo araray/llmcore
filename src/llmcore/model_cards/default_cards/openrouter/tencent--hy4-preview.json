@@ -1,0 +1,40 @@
+{
+  "model_id": "tencent/hy4-preview",
+  "display_name": "Tencent: Hy4 preview",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.834,
+      "output": 2.501
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-28"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Tencent: Hy4 preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that...",
+  "tags": [],
+  "source": "generated"
+}

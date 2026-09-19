@@ -105,6 +105,7 @@ class TestCognitiveCycleInitialization:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
     ) -> None:
         """CognitiveCycle initializes without synthesizer (legacy mode)."""
         cycle = CognitiveCycle(
@@ -112,6 +113,7 @@ class TestCognitiveCycleInitialization:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         assert cycle.context_synthesizer is None
@@ -124,6 +126,7 @@ class TestCognitiveCycleInitialization:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
         mock_context_synthesizer: MagicMock,
     ) -> None:
         """CognitiveCycle initializes with synthesizer (synthesis mode)."""
@@ -132,6 +135,7 @@ class TestCognitiveCycleInitialization:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=mock_context_synthesizer,
         )
 
@@ -240,6 +244,7 @@ class TestCognitiveCyclePerceiveIntegration:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
         mock_context_synthesizer: MagicMock,
         agent_state: EnhancedAgentState,
     ) -> None:
@@ -249,6 +254,7 @@ class TestCognitiveCyclePerceiveIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=mock_context_synthesizer,
         )
 
@@ -308,6 +314,7 @@ class TestCognitiveCyclePerceiveIntegration:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
         agent_state: EnhancedAgentState,
     ) -> None:
         """run_iteration without synthesizer uses legacy MemoryManager mode."""
@@ -316,6 +323,7 @@ class TestCognitiveCyclePerceiveIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             # No context_synthesizer
         )
 
@@ -380,6 +388,7 @@ class TestCognitiveCycleWithFactory:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
     ) -> None:
         """CognitiveCycle works with factory-created synthesizer."""
         # Create synthesizer with factory (minimal - no dependencies)
@@ -390,6 +399,7 @@ class TestCognitiveCycleWithFactory:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=synthesizer,
         )
 
@@ -402,6 +412,7 @@ class TestCognitiveCycleWithFactory:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
     ) -> None:
         """CognitiveCycle with synthesizer including GoalManager source."""
         mock_goal_manager = MagicMock()
@@ -417,10 +428,12 @@ class TestCognitiveCycleWithFactory:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=synthesizer,
         )
 
         # Verify goals source was registered
+        assert cycle.context_synthesizer is synthesizer
         assert "goals" in synthesizer._sources
 
     def test_create_cycle_with_factory_full_sources(
@@ -429,6 +442,7 @@ class TestCognitiveCycleWithFactory:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
     ) -> None:
         """CognitiveCycle with synthesizer including all context sources."""
         mock_goal_manager = MagicMock()
@@ -451,10 +465,12 @@ class TestCognitiveCycleWithFactory:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=synthesizer,
         )
 
         # Verify sources were registered
+        assert cycle.context_synthesizer is synthesizer
         assert "goals" in synthesizer._sources
         assert "skills" in synthesizer._sources
         assert "semantic" in synthesizer._sources
@@ -475,6 +491,7 @@ class TestCognitiveCycleStreamingWithSynthesis:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
         mock_context_synthesizer: MagicMock,
         agent_state: EnhancedAgentState,
     ) -> None:
@@ -484,6 +501,7 @@ class TestCognitiveCycleStreamingWithSynthesis:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=mock_context_synthesizer,
         )
 
@@ -537,6 +555,7 @@ class TestCognitiveCycleTracingWithSynthesis:
         mock_memory_manager: MagicMock,
         mock_storage_manager: MagicMock,
         mock_tool_manager: MagicMock,
+        bundled_prompt_registry,
         mock_context_synthesizer: MagicMock,
         agent_state: EnhancedAgentState,
     ) -> None:
@@ -551,6 +570,7 @@ class TestCognitiveCycleTracingWithSynthesis:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             context_synthesizer=mock_context_synthesizer,
             tracer=mock_tracer,
         )

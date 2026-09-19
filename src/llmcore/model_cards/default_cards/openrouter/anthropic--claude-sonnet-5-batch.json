@@ -1,0 +1,40 @@
+{
+  "model_id": "anthropic/claude-sonnet-5:batch",
+  "display_name": "Anthropic: Claude Sonnet 5 (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 5.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sonnet 5 is Anthropic's most capable Sonnet-class model, with frontier performance across coding, agents, and professional work. It supports adaptive thinking with selectable reasoning effort levels (low, medium, high, max,...",
+  "tags": [],
+  "source": "generated"
+}

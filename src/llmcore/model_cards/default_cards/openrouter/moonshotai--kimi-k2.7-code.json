@@ -1,0 +1,40 @@
+{
+  "model_id": "moonshotai/kimi-k2.7-code",
+  "display_name": "MoonshotAI: Kimi K2.7 Code",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.66,
+      "output": 3.4
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MoonshotAI: Kimi K2.7 Code is a coding-focused model in Moonshot AI's Kimi K2 family, built to complete end-to-end programming tasks reliably over long contexts. It uses a native multimodal mixture-of-experts...",
+  "tags": [],
+  "source": "generated"
+}

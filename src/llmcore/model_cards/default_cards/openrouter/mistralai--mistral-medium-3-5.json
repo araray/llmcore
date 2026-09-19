@@ -5,7 +5,8 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 209715
   },
   "capabilities": {
     "streaming": true,

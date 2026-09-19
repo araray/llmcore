@@ -26,11 +26,13 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
+  "aliases": [
+    "voxtral-mini-2602"
+  ],
   "description": "Official voxtral-mini-2602 Mistral AI model",
   "tags": [
     "audio"

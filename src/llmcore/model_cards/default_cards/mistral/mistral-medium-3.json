@@ -1,6 +1,6 @@
 {
   "model_id": "mistral-medium-3",
-  "display_name": "mistral-medium-3-5",
+  "display_name": "mistral-medium-latest",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
@@ -25,12 +25,20 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [],
-  "description": "Official mistral-medium-3-5 Mistral AI model",
+  "aliases": [
+    "mistral-medium-latest",
+    "mistral-medium",
+    "mistral-medium-3-5",
+    "mistral-medium-3.5",
+    "mistral-medium-2604",
+    "mistral-vibe-cli-latest",
+    "mistral-vibe-cli-with-tools"
+  ],
+  "description": "Official mistral-medium-latest Mistral AI model",
   "tags": [
     "multimodal"
   ],

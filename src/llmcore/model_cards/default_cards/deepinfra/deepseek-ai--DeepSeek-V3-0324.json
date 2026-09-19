@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.2,
-      "output": 0.77,
+      "input": 0.24,
+      "output": 0.9,
       "cached_input": 0.135
     }
   },

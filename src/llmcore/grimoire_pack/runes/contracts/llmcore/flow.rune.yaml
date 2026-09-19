@@ -1,0 +1,38 @@
+---
+id: llmcore/flow
+name: Agent flow control
+version: 1.0.0
+description: >
+  Flow-control tools for the cognitive cycle: finish terminates the run with
+  a final answer; human_approval pauses for a human decision.
+tags: [llmcore.builtin, flow, control]
+risk_level: low
+commands:
+  - name: finish
+    summary: Complete the task with a final answer
+    params:
+      - name: answer
+        type: string
+        required: true
+        description: The complete final answer to the goal
+    side_effects: []
+  - name: human_approval
+    summary: Request human approval for sensitive actions
+    params:
+      - name: prompt
+        type: string
+        required: true
+        description: The question/request to present to the human operator
+      - name: pending_action
+        type: string
+        required: true
+        description: JSON representation of the tool call that needs approval
+    side_effects: []
+# Per-command runtime hints (RuneSpec.mappings is rune-level: dotted keys
+# namespace each command; the GrimoireToolCatalog resolves
+# `llmcore.<hint>.<command>` first, then `llmcore.<hint>`).
+mappings:
+  llmcore.tool_name.finish: finish
+  llmcore.implementation_key.finish: llmcore.tools.flow.finish
+  llmcore.tool_name.human_approval: human_approval
+  llmcore.implementation_key.human_approval: llmcore.tools.flow.human_approval

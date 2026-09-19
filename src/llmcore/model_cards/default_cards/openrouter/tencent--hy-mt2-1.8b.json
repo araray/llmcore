@@ -1,0 +1,40 @@
+{
+  "model_id": "tencent/hy-mt2-1.8b",
+  "display_name": "Tencent: Hy-MT2-1.8B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.044,
+      "output": 0.177
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-20"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Hy-MT2-1.8B is a compact 1.8B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided...",
+  "tags": [],
+  "source": "generated"
+}

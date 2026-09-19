@@ -4,7 +4,8 @@
   "provider": "huggingface",
   "model_type": "stt",
   "architecture": {
-    "family": "whisper"
+    "family": "whisper",
+    "parameter_count": "809M"
   },
   "context": {
     "max_input_tokens": 128000

@@ -73,7 +73,7 @@ from ..exceptions import ConfigError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool
 from ..models import Role as LLMCoreRole
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, flatten_tool_messages_for_text_protocol
 
 # Inherit from OpenAIProvider for the OpenAI-compatible path.
 try:
@@ -459,6 +459,10 @@ class PoeProvider(OpenAIProvider):
             OpenAI-normalised response dict or async generator.
         """
         bot_name = model or self.default_model
+
+        # Poe's protocol has no tool role — render tool results as user text
+        # (R-2 fallback). The OpenAI-compatible path maps them natively.
+        context = flatten_tool_messages_for_text_protocol(list(context))
 
         # Convert LLMCore messages → Poe ProtocolMessages
         poe_messages: list[Any] = []

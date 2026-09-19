@@ -28,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "The Max model, the largest and most capable variant in the Qwen3.6 series, is now available in a preview version. At present, only its plain-text capabilities are open for experimentation. Compared with the previously released Qwen3-Max and Qwen3.6-Plus, this model features enhanced vibe coding abilities, more efficient coding agent execution, and significantly improved front-end development skills. Additionally, its long-tail knowledge retention has been further upgraded.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Pricing is ~1.5x when input tokens >128k\n- Context Window: 256k\n- Supported input modalities: Text, Image (non-native), Documents\n\nThis bot supports optional parameters for additional customization.",
+  "description": "This model is retiring on 2026-09-08. Please switch to: https://poe.com/Qwen3.7-Max\nThe Max model, the largest and most capable variant in the Qwen3.6 series, is now available in a preview version. At present, only its plain-text capabilities are open for experimentation. Compared with the previously released Qwen3-Max and Qwen3.6-Plus, this model features enhanced vibe coding abilities, more efficient coding agent execution, and significantly improved front-end development skills. Additionally, its long-tail knowledge retention has been further upgraded.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Pricing is ~1.5x when input tokens >128k\n- Context Window: 256k\n- Supported input modalities: Text, Image (non-native), Documents\n\nThis bot supports optional parameters for additional customization.",
   "tags": [],
   "source": "generated"
 }

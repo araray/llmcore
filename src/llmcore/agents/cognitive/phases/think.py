@@ -24,19 +24,35 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import ConfidenceLevel, EnhancedAgentState, PlanStepSpec, ThinkInput, ThinkOutput
+from ..models import (
+    ConfidenceLevel,
+    EnhancedAgentState,
+    PlanStepSpec,
+    TerminationReason,
+    ThinkInput,
+    ThinkOutput,
+)
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
     from ....memory.manager import MemoryManager
+    from ....models import Message
     from ....providers.manager import ProviderManager
     from ...tools import ToolManager
     from ..models import EnhancedAgentState
 
 from ...activities.parser import ActivityRequestParser
-from ...activities.prompts import ACTIVITY_SYSTEM_PROMPT, generate_activity_prompt
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 logger = logging.getLogger(__name__)
+
+
+#: Deterministic corrective thought fed back when a finish call carries no
+#: usable answer — the model is re-prompted instead of silently looping.
+FINISH_WITHOUT_ANSWER_THOUGHT = (
+    "finish called without an answer — provide the complete answer in the `answer` argument"
+)
 
 
 # =============================================================================
@@ -76,7 +92,8 @@ async def think_phase(
         provider_manager: Provider manager for LLM calls
         memory_manager: Memory manager for context
         tool_manager: Tool manager for available tools
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — raises
+            ValueError when None; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
@@ -103,7 +120,6 @@ async def think_phase(
         >>> if output.proposed_action:
         ...     print(f"Proposed: {output.proposed_action.name}")
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     # Load agents config if not provided (G3)
@@ -113,35 +129,73 @@ async def think_phase(
         agents_config = AgentsConfig()
 
     with create_span(tracer, "cognitive.think") as span:
-        try:
-            logger.debug("Starting THINK phase")
+        require_prompt_registry(prompt_registry, "THINK")
+        logger.debug("Starting THINK phase")
 
-            structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
-            if structured_action is not None:
+        convergence = getattr(agents_config, "convergence", None)
+
+        structured_action = _tool_call_from_plan_step(think_input.current_step_spec)
+        if structured_action is not None and structured_action.name in _finish_tool_names(
+            convergence
+        ):
+            # A finish-named plan step is a terminal answer, not a tool call.
+            answer = _finish_answer_from_arguments(structured_action.arguments)
+            if _finish_answer_acceptable(answer, convergence):
                 output = ThinkOutput(
-                    thought=(
-                        "Using the structured tool intent supplied by the current plan step."
-                    ),
-                    proposed_action=structured_action,
+                    thought="The current plan step provides the final answer directly.",
+                    proposed_action=None,
+                    is_final_answer=True,
+                    final_answer=answer,
+                    final_answer_source="finish_tool",
                     confidence=ConfidenceLevel.HIGH,
                 )
-                agent_state.pending_tool_call = structured_action
+                agent_state.is_finished = True
+                agent_state.final_answer = answer
+                agent_state.termination_reason = TerminationReason.FINISH_TOOL.value
                 agent_state.overall_confidence = output.confidence
                 if span:
                     add_span_attributes(
                         span,
                         {
                             "think.structured_plan_step": True,
-                            "think.proposed_tool": structured_action.name,
+                            "think.is_final": True,
+                            "think.final_answer_source": "finish_tool",
                         },
                     )
                 return output
+            # Empty finish answer in the plan step: fall through to a normal
+            # THINK so the model produces a real answer.
+            logger.info("Plan-step finish call without an answer — running normal THINK")
+            structured_action = None
 
-            # 1. Generate thinking prompt
-            thinking_prompt = _generate_thinking_prompt(
-                think_input=think_input, agent_state=agent_state, prompt_registry=prompt_registry
+        if structured_action is not None:
+            output = ThinkOutput(
+                thought=(
+                    "Using the structured tool intent supplied by the current plan step."
+                ),
+                proposed_action=structured_action,
+                confidence=ConfidenceLevel.HIGH,
             )
+            agent_state.pending_tool_call = structured_action
+            agent_state.overall_confidence = output.confidence
+            if span:
+                add_span_attributes(
+                    span,
+                    {
+                        "think.structured_plan_step": True,
+                        "think.proposed_tool": structured_action.name,
+                    },
+                )
+            return output
 
+        # 1. Render the THINK messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        messages = _generate_thinking_messages(
+            think_input=think_input, agent_state=agent_state, prompt_registry=prompt_registry
+        )
+
+        try:
             # 2. Build provider-native tool definitions
             tool_definitions = _select_native_tool_definitions(
                 tool_manager=tool_manager,
@@ -152,15 +206,6 @@ async def think_phase(
             # 3. Call LLM
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
-
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are an autonomous AI agent using the ReAct framework. "
-                    "Think step-by-step and use tools effectively.",
-                ),
-                Message(role=Role.USER, content=thinking_prompt),
-            ]
 
             # Convert Tool objects to provider-compatible format
             tools_param = tool_definitions if tool_definitions else None
@@ -264,7 +309,9 @@ async def think_phase(
                 response_text=response_content,
                 response_dict=response,
                 tool_manager=tool_manager,
+                convergence=convergence,
             )
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 5. Update agent state
             if output.proposed_action:
@@ -273,24 +320,23 @@ async def think_phase(
             if output.is_final_answer:
                 agent_state.is_finished = True
                 agent_state.final_answer = output.final_answer
+                agent_state.termination_reason = (
+                    TerminationReason.FINISH_TOOL.value
+                    if output.final_answer_source == "finish_tool"
+                    else TerminationReason.FINAL_ANSWER_TEXT.value
+                )
 
             agent_state.overall_confidence = output.confidence
 
-            # 6. Record metrics
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    template = prompt_registry.get_template("thinking_prompt")
-                    if template.active_version:
-                        # Extract token usage from response dict
-                        usage = response.get("usage", {}) if isinstance(response, dict) else None
-                        total_tokens = usage.get("total_tokens") if usage else None
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=output.proposed_action is not None or output.is_final_answer,
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 6. Record prompt usage metrics (best-effort)
+            usage = response.get("usage", {}) if isinstance(response, dict) else None
+            total_tokens = usage.get("total_tokens") if usage else None
+            record_template_use(
+                prompt_registry,
+                "thinking_prompt",
+                success=output.proposed_action is not None or output.is_final_answer,
+                tokens=total_tokens,
+            )
 
             # 7. Add tracing
             if span:
@@ -299,6 +345,7 @@ async def think_phase(
                     {
                         "think.has_action": output.proposed_action is not None,
                         "think.is_final": output.is_final_answer,
+                        "think.final_answer_source": output.final_answer_source or "",
                         "think.confidence": output.confidence.value,
                         "think.provider": provider.get_name(),
                         "think.model": target_model,
@@ -339,7 +386,7 @@ async def _think_phase_with_activities(
     provider_manager: "ProviderManager",
     provider: Any,
     target_model: str,
-    prompt_registry: Any | None,
+    prompt_registry: Any,
     tool_manager: "ToolManager",
     agents_config: "AgentsConfig",
     tracer: Any | None,
@@ -349,7 +396,9 @@ async def _think_phase_with_activities(
     Fallback think phase using activity system instead of native tools.
 
     This prompts the model to output activities in XML format instead of
-    using native function calling.
+    using native function calling. Both the activity system prompt and the
+    per-iteration execution prompt come from the prompt registry (rendering
+    errors propagate — no inline fallback).
 
     Args:
         agent_state: Current agent state
@@ -357,7 +406,7 @@ async def _think_phase_with_activities(
         provider_manager: Provider manager for retry-aware LLM calls
         provider: LLM provider
         target_model: Target model name
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
         agents_config: Agents configuration
         tracer: Optional tracer
         span: Optional tracing span
@@ -372,22 +421,34 @@ async def _think_phase_with_activities(
     # Get built-in activity names plus runtime tools registered for this run.
     available_activities = _activity_protocol_names(tool_manager)
 
-    # Generate activity-aware prompt with available activities
-    activity_prompt = generate_activity_prompt(
-        goal=think_input.goal,
-        current_step=think_input.current_step,
-        history=think_input.history,
-        context=think_input.context,
-        available_activities=available_activities,
+    # Pre-formatted prompt sections; the spell interpolates them verbatim.
+    activities_section = ""
+    if available_activities:
+        activities_section = (
+            f"\nAVAILABLE ACTIVITIES: {', '.join(available_activities)}\n"
+            "IMPORTANT: You MUST use one of the activities listed above. "
+            "Do not invent activity names.\n"
+        )
+    history_section = f"\n\nRECENT HISTORY:\n{think_input.history}" if think_input.history else ""
+    context_section = f"\n\nRELEVANT CONTEXT:\n{think_input.context}" if think_input.context else ""
+
+    system_messages = messages_from_registry(prompt_registry, "activity_system", {})
+    user_messages = messages_from_registry(
+        prompt_registry,
+        "activity_execute",
+        {
+            "goal": think_input.goal,
+            "current_step": think_input.current_step,
+            "activities_section": activities_section,
+            "history_section": history_section,
+            "context_section": context_section,
+        },
     )
 
     # Build messages with activity system prompt
     messages = [
-        Message(
-            role=Role.SYSTEM,
-            content=ACTIVITY_SYSTEM_PROMPT,
-        ),
-        Message(role=Role.USER, content=activity_prompt),
+        Message(role=Role.SYSTEM, content=system_messages[0].content),
+        *user_messages,
     ]
 
     # Call LLM without tools
@@ -424,6 +485,7 @@ async def _think_phase_with_activities(
         final_answer_text = parser.extract_final_answer(response_content)
         agent_state.is_finished = True
         agent_state.final_answer = final_answer_text
+        agent_state.termination_reason = TerminationReason.FINAL_ANSWER_TEXT.value
 
     # Runtime tools can use the same XML protocol, then execute through the
     # normal ToolManager ACT path.
@@ -475,6 +537,7 @@ async def _think_phase_with_activities(
         proposed_action=proposed_action,
         is_final_answer=is_final,
         final_answer=final_answer_text,
+        final_answer_source="activity" if is_final else None,
         confidence=ConfidenceLevel.MEDIUM,
         using_activity_fallback=True,
     )
@@ -684,73 +747,39 @@ def _tool_call_from_plan_step(step_spec: PlanStepSpec | None):
     )
 
 
-def _generate_thinking_prompt(
-    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Any | None
-) -> str:
+def _generate_thinking_messages(
+    think_input: ThinkInput, agent_state: EnhancedAgentState, prompt_registry: Any
+) -> list["Message"]:
     """
-    Generate the thinking prompt using prompt library or fallback.
+    Render the THINK phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         think_input: Thinking input configuration
         agent_state: Current agent state
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted thinking prompt
+        Role-structured messages for the LLM call
     """
-    # Format tool definitions as string
-    tools_str = _format_tools(think_input.available_tools)
+    del agent_state  # Reserved for future state-aware prompt variables.
 
-    # Try to use prompt library
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="thinking_prompt",
-                variables={
-                    "goal": think_input.goal,
-                    "current_step": think_input.current_step,
-                    "history": think_input.history or "No previous actions.",
-                    "context": think_input.context or "",
-                    "tools": tools_str,
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back")
-
-    # Fallback prompt
-    prompt = f"""You are solving this task:
-
-GOAL: {think_input.goal}
-
-CURRENT STEP: {think_input.current_step}
-"""
-
-    if think_input.history:
-        prompt += f"\n\nRECENT HISTORY:\n{think_input.history}"
-
-    if think_input.context:
-        prompt += f"\n\nRELEVANT CONTEXT:\n{think_input.context}"
-
-    prompt += f"""
-
-AVAILABLE TOOLS:
-{tools_str}
-
-Use the ReAct format:
-
-Thought: [Your reasoning about what to do next]
-Action: [Tool name]
-Action Input: [Tool arguments]
-
-OR if the task is complete:
-
-Thought: [Final reasoning]
-Final Answer: [Complete answer to the goal]
-
-Respond now:
-"""
-
-    return prompt
+    return messages_from_registry(
+        prompt_registry,
+        "thinking_prompt",
+        {
+            "goal": think_input.goal,
+            "current_step": think_input.current_step,
+            "history": think_input.history or "No previous actions.",
+            "context": think_input.context or "",
+            "tools": _format_tools(think_input.available_tools),
+            "remaining_steps": "unlimited"
+            if think_input.remaining_steps is None
+            else str(think_input.remaining_steps),
+        },
+    )
 
 
 def _format_tools(tool_definitions: list[dict[str, Any]]) -> str:
@@ -808,6 +837,7 @@ def _parse_think_response(
     response_text: str,
     response_dict: dict[str, Any] | None,
     tool_manager: "ToolManager",
+    convergence: Any | None = None,
 ) -> ThinkOutput:
     """
     Parse the LLM response into structured ThinkOutput.
@@ -816,6 +846,8 @@ def _parse_think_response(
         response_text: Extracted text content from the LLM response
         response_dict: Original response dict for token usage extraction
         tool_manager: Tool manager for validation
+        convergence: Optional ``ConvergenceConfig`` governing finish-tool
+            interception (defaults apply when None)
 
     Returns:
         Parsed ThinkOutput
@@ -826,6 +858,7 @@ def _parse_think_response(
     proposed_action = None
     is_final_answer = False
     final_answer = None
+    final_answer_source = None
     confidence = ConfidenceLevel.MEDIUM
 
     # Extract Thought
@@ -838,8 +871,33 @@ def _parse_think_response(
     if thought_match:
         thought = thought_match.group(1).strip()
 
+    # Extract the optional Expected line (2.6) — what a successful result
+    # looks like. Native tool-call responses usually lack it; None is fine.
+    expected_match = re.search(
+        r"Expected:\s*(.+?)(?=\n(?:Thought|Action|Final Answer)|\Z)",
+        response_text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    expected_outcome = expected_match.group(1).strip() if expected_match else None
+    if not expected_outcome:
+        expected_outcome = None
+
     native_tool_call = _extract_native_tool_call(response_dict)
-    if native_tool_call is not None:
+    if native_tool_call is not None and native_tool_call.name in _finish_tool_names(convergence):
+        # Convergence: a native finish call terminates the run — it must
+        # never surface as a proposed action for VALIDATE/ACT to churn on.
+        answer = _finish_answer_from_arguments(native_tool_call.arguments)
+        if _finish_answer_acceptable(answer, convergence):
+            is_final_answer = True
+            final_answer = answer
+            final_answer_source = "finish_tool"
+            confidence = ConfidenceLevel.HIGH
+        else:
+            # Empty/too-short answer: stay non-final with a deterministic
+            # corrective thought so the next iteration re-prompts properly.
+            thought = FINISH_WITHOUT_ANSWER_THOUGHT
+            confidence = ConfidenceLevel.LOW
+    elif native_tool_call is not None:
         proposed_action = native_tool_call
         confidence = _determine_confidence(thought, response_text)
     else:
@@ -851,13 +909,18 @@ def _parse_think_response(
         if final_answer_match:
             is_final_answer = True
             final_answer = final_answer_match.group(1).strip()
+            final_answer_source = "text"
             confidence = ConfidenceLevel.HIGH
         else:
             # Extract Action
             action_match = re.search(r"Action:\s*(.+?)(?=\n|$)", response_text, re.IGNORECASE)
 
+            # Stop at the optional Expected line (2.6) so it is never
+            # swallowed into the JSON arguments.
             action_input_match = re.search(
-                r"Action Input:\s*(.+)", response_text, re.DOTALL | re.IGNORECASE
+                r"Action Input:\s*(.+?)(?=\nExpected:|\Z)",
+                response_text,
+                re.DOTALL | re.IGNORECASE,
             )
 
             if action_match:
@@ -899,9 +962,49 @@ def _parse_think_response(
         proposed_action=proposed_action,
         is_final_answer=is_final_answer,
         final_answer=final_answer,
+        final_answer_source=final_answer_source,
         confidence=confidence,
         reasoning_tokens=reasoning_tokens,
+        expected_outcome=expected_outcome,
     )
+
+
+def _finish_tool_names(convergence: Any | None) -> list[str]:
+    """Return the configured finish-tool names (defaults without a real config)."""
+    names = getattr(convergence, "finish_tool_names", None)
+    if isinstance(names, (list, tuple, set)):
+        return [str(name) for name in names]
+    return ["finish", "final_answer"]
+
+
+def _finish_answer_from_arguments(arguments: Any) -> str:
+    """Extract the final answer from finish-tool arguments.
+
+    Prefers the schema's ``answer`` key, falling back to ``input`` because
+    ``_coerce_tool_arguments`` wraps bare-string arguments as ``{"input": ...}``.
+    """
+    if not isinstance(arguments, dict):
+        return "" if arguments is None else str(arguments)
+    answer = arguments.get("answer")
+    if answer is None:
+        answer = arguments.get("input")
+    if answer is None:
+        return ""
+    return answer if isinstance(answer, str) else str(answer)
+
+
+def _finish_answer_acceptable(answer: str, convergence: Any | None) -> bool:
+    """Check a finish answer against the convergence config's minimums."""
+    require_nonempty = getattr(convergence, "require_nonempty_answer", True)
+    if not isinstance(require_nonempty, bool):
+        require_nonempty = True
+    if not require_nonempty:
+        return True
+    try:
+        min_chars = max(1, int(getattr(convergence, "min_answer_chars", 1)))
+    except (TypeError, ValueError):
+        min_chars = 1
+    return len(answer.strip()) >= min_chars
 
 
 def _extract_native_tool_call(response_dict: dict[str, Any] | None) -> Any | None:

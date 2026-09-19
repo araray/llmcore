@@ -76,3 +76,37 @@ def test_sanitizer_handles_llmcore_message_models() -> None:
     assert isinstance(sanitized[0], Message)
     assert sanitized[0].metadata["tool_calls"][0]["id"] == "call-1"
     assert sanitized[1].tool_call_id == "call-1"
+
+
+def test_sanitizer_handles_first_class_tool_calls_field() -> None:
+    assistant = Message(
+        role=Role.ASSISTANT,
+        content="",
+        tool_calls=[
+            {"id": "call-kept", "function": {"name": "search"}},
+            {"id": "call-dropped", "function": {"name": "read_file"}},
+        ],
+    )
+    tool_result = Message(role=Role.TOOL, content="ok", tool_call_id="call-kept")
+
+    sanitized = sanitize_tool_message_pairs([assistant, tool_result])
+
+    assert len(sanitized) == 2
+    assert isinstance(sanitized[0], Message)
+    assert sanitized[0].tool_calls == [{"id": "call-kept", "function": {"name": "search"}}]
+    assert sanitized[1].tool_call_id == "call-kept"
+
+
+def test_sanitizer_clears_dangling_first_class_tool_calls() -> None:
+    assistant = Message(
+        role=Role.ASSISTANT,
+        content="I will inspect that.",
+        tool_calls=[{"id": "call-missing", "function": {"name": "inspect"}}],
+    )
+    follow_up = Message(role=Role.USER, content="continue")
+
+    sanitized = sanitize_tool_message_pairs([assistant, follow_up])
+
+    assert len(sanitized) == 2
+    assert sanitized[0].tool_calls is None
+    assert sanitized[0].content == "I will inspect that."

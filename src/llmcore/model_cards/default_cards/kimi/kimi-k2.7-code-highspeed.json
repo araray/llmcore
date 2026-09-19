@@ -1,0 +1,40 @@
+{
+  "model_id": "kimi-k2.7-code-highspeed",
+  "display_name": "Kimi K2.7 Code Highspeed",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Kimi",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 262144
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-06"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kimi model: kimi-k2.7-code-highspeed",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "supports_video_in": true,
+    "thinking_mode": false
+  }
+}

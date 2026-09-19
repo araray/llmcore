@@ -1,0 +1,40 @@
+{
+  "model_id": "upstage/solar-pro4",
+  "display_name": "Upstage: Solar Pro 4",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 524288,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.03,
+      "output": 0.12
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-10"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Solar Pro 4 is Upstage's cost-efficient large language model, featuring a 524K context window. It is built for long-horizon tasks and agentic workflows, with strong capabilities in office productivity, document-intensive...",
+  "tags": [],
+  "source": "generated"
+}

@@ -304,7 +304,7 @@ class TestSingleAgentMode:
     """Tests for SingleAgentMode."""
 
     @pytest.fixture
-    def mock_components(self):
+    def mock_components(self, bundled_prompt_registry):
         """Create mock components for SingleAgentMode."""
         provider_manager = Mock()
         memory_manager = Mock()
@@ -320,6 +320,7 @@ class TestSingleAgentMode:
             "memory_manager": memory_manager,
             "storage_manager": storage_manager,
             "tool_manager": tool_manager,
+            "prompt_registry": bundled_prompt_registry,
         }
 
     def test_single_agent_initialization(self, mock_components):
@@ -332,6 +333,13 @@ class TestSingleAgentMode:
         assert agent.tool_manager is not None
         assert agent.persona_manager is not None
         assert agent.cognitive_cycle is not None
+
+    def test_single_agent_requires_prompt_registry(self, mock_components):
+        """SingleAgentMode without a registry fails loudly (0.52.0)."""
+        components = {**mock_components, "prompt_registry": None}
+
+        with pytest.raises(ValueError, match="prompt_registry is required"):
+            SingleAgentMode(**components)
 
     @pytest.mark.asyncio
     async def test_run_basic(self, mock_components):

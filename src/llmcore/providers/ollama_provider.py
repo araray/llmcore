@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -154,6 +155,14 @@ class OllamaProvider(BaseProvider):
         timeout_val = config.get("timeout")
         self.timeout = float(timeout_val) if timeout_val is not None else None
         self.default_keep_alive = config.get("keep_alive")
+        # Model discovery is expensive (one show() per local model); cache the
+        # result briefly so per-request context-length lookups don't re-scan
+        # the whole model inventory. TTL <= 0 disables the cache.
+        try:
+            self._models_cache_ttl = float(config.get("models_cache_ttl", 60.0))
+        except (TypeError, ValueError):
+            self._models_cache_ttl = 60.0
+        self._models_details_cache: tuple[float, list[ModelDetails]] | None = None
 
         try:
             client_args: dict[str, Any] = {}
@@ -204,22 +213,50 @@ class OllamaProvider(BaseProvider):
 
         Uses ``client.list()`` for the model inventory and, where possible,
         ``client.show()`` to obtain per-model capability flags (tools, vision,
-        thinking).
+        thinking). The ``show()`` calls run concurrently: with many local
+        models a sequential scan multiplies the per-request timeout (N models
+        x timeout on an unresponsive server), which stalled callers for tens
+        of minutes. Results are cached for ``models_cache_ttl`` seconds.
         """
         if not self._client:
             raise ProviderError(self.get_name(), "Ollama client not initialized.")
+        if self._models_details_cache is not None:
+            cached_at, cached = self._models_details_cache
+            if time.monotonic() - cached_at < self._models_cache_ttl:
+                return list(cached)
         try:
             list_response = await self._client.list()
             # ListResponse.models is Sequence[ListResponse.Model]
             # Each model has: .model, .size, .digest, .modified_at, .details
             model_list = list_response.models if list_response else []
 
+            # The model identifier is in the `model` attribute, not `name`.
+            model_entries = [entry for entry in model_list if getattr(entry, "model", None)]
+
+            async def _fetch_capabilities(model_name: str) -> tuple[bool, bool, bool]:
+                """Best-effort capability flags via show(); defaults on failure."""
+                try:
+                    show_response = await self._client.show(model_name)
+                    capabilities = getattr(show_response, "capabilities", None) or []
+                    return (
+                        "tools" in capabilities,
+                        "vision" in capabilities,
+                        "thinking" in capabilities,
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Could not fetch capabilities for '{model_name}': {e}. Using defaults."
+                    )
+                    return False, False, False
+
+            capability_flags = await asyncio.gather(
+                *(_fetch_capabilities(entry.model) for entry in model_entries)
+            )
+
             details_list = []
-            for model_entry in model_list:
-                # The model identifier is in the `model` attribute, not `name`.
+            for model_entry, flags in zip(model_entries, capability_flags, strict=True):
                 model_name = model_entry.model
-                if not model_name:
-                    continue
+                supports_tools, supports_vision, supports_reasoning = flags
 
                 # Extract rich details from the ListResponse.Model.details
                 entry_details = model_entry.details
@@ -232,24 +269,6 @@ class OllamaProvider(BaseProvider):
                     getattr(entry_details, "quantization_level", None) if entry_details else None
                 )
                 file_size = getattr(model_entry, "size", None)
-
-                # Default capability flags — will be refined via show() if possible
-                supports_tools = False
-                supports_vision = False
-                supports_reasoning = False
-
-                # Attempt to get capabilities from show() API (non-blocking)
-                try:
-                    show_response = await self._client.show(model_name)
-                    capabilities = getattr(show_response, "capabilities", None) or []
-                    if capabilities:
-                        supports_tools = "tools" in capabilities
-                        supports_vision = "vision" in capabilities
-                        supports_reasoning = "thinking" in capabilities
-                except Exception as e:
-                    logger.debug(
-                        f"Could not fetch capabilities for '{model_name}': {e}. Using defaults."
-                    )
 
                 details = ModelDetails(
                     id=model_name,
@@ -271,6 +290,8 @@ class OllamaProvider(BaseProvider):
                 details_list.append(details)
 
             logger.info(f"Discovered {len(details_list)} local Ollama models.")
+            if self._models_cache_ttl > 0:
+                self._models_details_cache = (time.monotonic(), list(details_list))
             return details_list
         except ResponseError as e:
             logger.error(

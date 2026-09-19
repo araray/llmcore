@@ -75,6 +75,7 @@ class TestCapabilityCheckIntegration:
         mock_storage_manager,
         mock_tool_manager,
         agents_config,
+        bundled_prompt_registry,
     ):
         """Test that capability check fails for models without tool support."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -85,6 +86,7 @@ class TestCapabilityCheckIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -109,6 +111,7 @@ class TestCapabilityCheckIntegration:
         mock_storage_manager,
         mock_tool_manager,
         agents_config,
+        bundled_prompt_registry,
     ):
         """Test that capability check passes for tool-capable models."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -119,6 +122,7 @@ class TestCapabilityCheckIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=agents_config,
         )
 
@@ -140,6 +144,7 @@ class TestCapabilityCheckIntegration:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that capability check can be disabled."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -155,6 +160,7 @@ class TestCapabilityCheckIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=config,
         )
 
@@ -165,7 +171,7 @@ class TestCapabilityCheckIntegration:
         ) as mock_run:
             mock_run.return_value = "Task complete"
 
-            result = await agent.run(
+            await agent.run(
                 goal="Search for files",
                 model_name="gemma3:4b",
                 skip_goal_classification=True,
@@ -181,6 +187,7 @@ class TestCapabilityCheckIntegration:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Test that non-strict mode only warns but continues."""
         from llmcore.agents.single_agent import SingleAgentMode
@@ -197,6 +204,7 @@ class TestCapabilityCheckIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
             agents_config=config,
         )
 
@@ -206,7 +214,7 @@ class TestCapabilityCheckIntegration:
         ) as mock_run:
             mock_run.return_value = "Task complete via activity fallback"
 
-            result = await agent.run(
+            await agent.run(
                 goal="Search for files",
                 model_name="gemma3:4b",
                 skip_goal_classification=True,

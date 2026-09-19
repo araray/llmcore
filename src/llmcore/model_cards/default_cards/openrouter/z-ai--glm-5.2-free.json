@@ -1,0 +1,34 @@
+{
+  "model_id": "z-ai/glm-5.2:free",
+  "display_name": "Z.ai: GLM 5.2 (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 256000,
+    "max_output_tokens": 230400
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-16"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
+  "tags": [],
+  "source": "generated"
+}

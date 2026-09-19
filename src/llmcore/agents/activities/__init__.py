@@ -65,13 +65,11 @@ from .parser import (
     parse_activity_requests,
 )
 
-# Prompts (G3 Phase 6)
-from .prompts import (
-    ACTIVITY_SYSTEM_PROMPT,
-    generate_activity_prompt,
-    get_activity_system_prompt,
-)
-
+# Prompts: the former `activities.prompts` module (ACTIVITY_SYSTEM_PROMPT,
+# generate_activity_prompt) was DELETED in 0.52.0 — the activity protocol
+# prompts render from the grimoire control plane via the prompt registry
+# (template ids `activity_system` / `activity_execute`; bundled spells
+# `llmcore/activity/{system,execute}`). See cognitive.phases.think.
 # Registry
 from .registry import (
     ActivityHandler,
@@ -131,10 +129,6 @@ __all__ = [
     "ActivityRequestParser",
     "parse_activity_requests",
     "has_activity_request",
-    # Prompts (G3 Phase 6)
-    "ACTIVITY_SYSTEM_PROMPT",
-    "generate_activity_prompt",
-    "get_activity_system_prompt",
     # Registry
     "ActivityRegistry",
     "RegisteredActivity",

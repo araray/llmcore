@@ -24,12 +24,13 @@
   "pricing": null,
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "mistral-ocr-latest"
+    "mistral-ocr-3-0",
+    "mistral-ocr-3"
   ],
   "description": "Official mistral-ocr-2512 Mistral AI model",
   "tags": [

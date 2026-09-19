@@ -31,12 +31,14 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "codestral-latest"
+    "codestral-latest",
+    "mistral-code-latest",
+    "mistral-code-fim-latest"
   ],
   "description": "Our cutting-edge language model for coding released August 2025.",
   "tags": [

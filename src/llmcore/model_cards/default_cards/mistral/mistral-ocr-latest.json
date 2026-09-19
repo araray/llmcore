@@ -1,6 +1,6 @@
 {
   "model_id": "mistral-ocr-latest",
-  "display_name": "mistral-ocr-2512",
+  "display_name": "mistral-ocr-latest",
   "provider": "mistral",
   "model_type": "ocr",
   "architecture": {
@@ -30,14 +30,15 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "mistral-ocr-2512"
+    "mistral-ocr-4-0",
+    "mistral-ocr-4"
   ],
-  "description": "Official mistral-ocr-2512 Mistral AI model",
+  "description": "Official mistral-ocr-latest Mistral AI model",
   "tags": [
     "multimodal"
   ],

@@ -1,0 +1,40 @@
+{
+  "model_id": "anthropic/claude-opus-4.7:batch",
+  "display_name": "Anthropic: Claude Opus 4.7 (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.5,
+      "output": 12.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-16"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Opus 4.7 is the next generation of Anthropic's Opus family, built for long-running, asynchronous agents. Building on the coding and agentic strengths of Opus 4.6, it delivers stronger performance on...",
+  "tags": [],
+  "source": "generated"
+}

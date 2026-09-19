@@ -1,0 +1,40 @@
+{
+  "model_id": "openai/gpt-oss-120b:batch",
+  "display_name": "OpenAI: gpt-oss-120b (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 117964
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.6
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-08-05"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
+  "tags": [],
+  "source": "generated"
+}

@@ -10,10 +10,13 @@ llmcore imports.
 from __future__ import annotations
 
 import inspect
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -618,6 +621,34 @@ def _float_or_none(value: Any) -> float | None:
         return None
 
 
+def create_semantiscan_memory_backend(**kwargs: Any) -> SemantiscanMemoryBackend | None:
+    """Construct a ``SemantiscanMemoryBackend``, degrading to ``None`` without semantiscan.
+
+    ``SemantiscanMemoryBackend`` itself stays strict: it hard-fails on first use
+    when the optional ``semantiscan`` package is absent and no ``retrieve_fn``
+    was injected. Config-driven wiring should call this factory instead — when
+    the optional dependency cannot be imported it emits a single structured
+    warning and returns ``None`` so callers can skip the feature.
+
+    Args:
+        **kwargs: Passed through unchanged to ``SemantiscanMemoryBackend``.
+
+    Returns:
+        A backend instance, or ``None`` when semantiscan is required but missing.
+    """
+    if kwargs.get("retrieve_fn") is None:
+        try:
+            import semantiscan.api  # noqa: F401
+        except ImportError as exc:
+            logger.warning("memory backend disabled: semantiscan not installed (%s)", exc)
+            return None
+    try:
+        return SemantiscanMemoryBackend(**kwargs)
+    except ImportError as exc:
+        logger.warning("memory backend disabled: semantiscan not installed (%s)", exc)
+        return None
+
+
 __all__ = [
     "Citation",
     "ConsolidationReport",
@@ -625,4 +656,5 @@ __all__ = [
     "MemoryConsolidationBackendProtocol",
     "MemoryRecord",
     "SemantiscanMemoryBackend",
+    "create_semantiscan_memory_backend",
 ]

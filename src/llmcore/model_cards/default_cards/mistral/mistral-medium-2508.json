@@ -31,15 +31,11 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-05-30"
+    "release_date": "2026-07-08"
   },
   "license": null,
   "open_weights": false,
-  "aliases": [
-    "mistral-medium-latest",
-    "mistral-medium",
-    "mistral-vibe-cli-with-tools"
-  ],
+  "aliases": [],
   "description": "Update on Mistral Medium 3 with improved capabilities.",
   "tags": [
     "multimodal"

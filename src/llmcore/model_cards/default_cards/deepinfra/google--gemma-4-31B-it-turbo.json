@@ -13,8 +13,8 @@
     "function_calling": true,
     "tool_use": true,
     "json_mode": true,
-    "structured_output": false,
-    "vision": false,
+    "structured_output": true,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
@@ -36,6 +36,7 @@
   "description": "Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
   "tags": [
     "text",
+    "image",
     "output:text"
   ],
   "source": "generated",
@@ -43,7 +44,8 @@
     "hugging_face_id": "google/gemma-4-31B-it-turbo",
     "quantization": "fp4",
     "input_modalities": [
-      "text"
+      "text",
+      "image"
     ],
     "output_modalities": [
       "text"
@@ -52,6 +54,7 @@
       "tools",
       "json_mode",
       "reasoning",
+      "structured_outputs",
       "logprobs"
     ],
     "datacenters": [

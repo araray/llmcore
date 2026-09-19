@@ -8,6 +8,7 @@ or depend on grimoire unless the adapter is explicitly instantiated.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,11 +16,42 @@ from typing import Any
 from .models import PromptMetrics
 from .registry import TemplateNotFoundError
 
+logger = logging.getLogger(__name__)
+
+#: llmcore template id → bundled-pack spell id. Template ids are the STABLE
+#: registry keys consumers use; spell ids are namespaced pack artifacts. A
+#: user-supplied ``template_map`` (or ``[grimoire] prompt_map`` config)
+#: overrides per-key; unmapped ids resolve by identity.
 DEFAULT_TEMPLATE_MAP: dict[str, str] = {
-    "planning_prompt": "planning_prompt",
-    "thinking_prompt": "thinking_prompt",
-    "validation_prompt": "validation_prompt",
-    "reflection_prompt": "reflection_prompt",
+    # Cognitive cycle phases
+    "planning_prompt": "llmcore/cognitive/plan",
+    "thinking_prompt": "llmcore/cognitive/think",
+    "validation_prompt": "llmcore/cognitive/validate",
+    "reflection_prompt": "llmcore/cognitive/reflect",
+    "finalize_prompt": "llmcore/cognitive/finalize",
+    # Activity fallback (models without native tool support)
+    "activity_system": "llmcore/activity/system",
+    "activity_execute": "llmcore/activity/execute",
+    # Classifier / fast path / autonomous goals
+    "goal_classifier": "llmcore/cognitive/goal_classifier",
+    "fast_path": "llmcore/learning/fast_path",
+    "goal_decomposition": "llmcore/autonomous/goal_decomposition",
+    # Darwin evolutionary subsystem
+    "darwin_arbiter_generation": "llmcore/darwin/arbiter/generation",
+    "darwin_arbiter_evaluation": "llmcore/darwin/arbiter/evaluation",
+    "darwin_arbiter_selection": "llmcore/darwin/arbiter/selection",
+    "darwin_tdd_spec_generation": "llmcore/darwin/tdd/spec_generation",
+    "darwin_tdd_test_generation": "llmcore/darwin/tdd/test_generation",
+    "darwin_tdd_implementation": "llmcore/darwin/tdd/implementation",
+}
+
+#: Grimoire block roles → chat roles ("developer" folds into system for
+#: providers without a developer role; prefill maps to assistant).
+_ROLE_MAP: dict[str, str] = {
+    "system": "system",
+    "developer": "system",
+    "user": "user",
+    "assistant_prefill": "assistant",
 }
 
 
@@ -62,6 +94,7 @@ class GrimoirePromptRegistryAdapter:
         template_map: dict[str, str] | None = None,
         include_role_headers: bool = False,
         strict: bool = True,
+        usage_store: Any | None = None,
     ) -> None:
         """Initialize the adapter.
 
@@ -75,13 +108,17 @@ class GrimoirePromptRegistryAdapter:
                 ``[ROLE]`` headers. Defaults to plain content joins, matching
                 ``PromptRegistry.render()`` expectations.
             strict: Passed through to Grimoire conjure calls.
+            usage_store: Optional persistence hook for ``record_use`` — any
+                object with a ``record(**fields)`` method (see
+                ``agents.prompts.usage_store``). Failures are swallowed:
+                telemetry must never break a phase.
         """
         if grimoire is None:
             try:
                 from grimoire import Grimoire
             except ImportError as exc:  # pragma: no cover - depends on optional package
                 raise ImportError(
-                    "GrimoirePromptRegistryAdapter requires the optional grimoire package"
+                    "GrimoirePromptRegistryAdapter requires the grimoire package"
                 ) from exc
             grimoire = Grimoire(repo_path)
 
@@ -90,6 +127,17 @@ class GrimoirePromptRegistryAdapter:
         self._include_role_headers = include_role_headers
         self._strict = strict
         self._metrics: dict[str, PromptMetrics] = {}
+        self._usage_store = usage_store
+
+    @property
+    def grimoire(self) -> Any:
+        """The underlying Grimoire facade (read-only).
+
+        Exposed so registry consumers can reach non-spell artifacts from the
+        SAME composed layers — e.g. fast-path canned responses (promptlets)
+        and persona definitions (spell ``attributes``).
+        """
+        return self._grimoire
 
     def resolve_template_id(self, template_id: str) -> str:
         """Resolve an llmcore template ID to a Grimoire spell ID."""
@@ -121,15 +169,8 @@ class GrimoirePromptRegistryAdapter:
             ),
         )
 
-    def render(
-        self,
-        template_id: str,
-        variables: dict[str, Any] | None = None,
-        version_id: str | None = None,
-        validate: bool = True,
-    ) -> str:
-        """Render a mapped Grimoire spell as a plain prompt string."""
-        del version_id  # Grimoire spell versioning is selected by repository state.
+    def _conjure(self, template_id: str, variables: dict[str, Any] | None, validate: bool) -> Any:
+        """Conjure the mapped spell, normalizing errors to TemplateNotFoundError."""
         spell_id = self.resolve_template_id(template_id)
         try:
             result = self._grimoire.conjure_spell(
@@ -150,7 +191,63 @@ class GrimoirePromptRegistryAdapter:
 
         if isinstance(result, list):
             raise ValueError(f"Grimoire artifact {spell_id!r} rendered as a ritual, not a prompt")
+        return result
+
+    def render(
+        self,
+        template_id: str,
+        variables: dict[str, Any] | None = None,
+        version_id: str | None = None,
+        validate: bool = True,
+    ) -> str:
+        """Render a mapped Grimoire spell as a plain prompt string.
+
+        For multi-role spells (SYSTEM + USER blocks), only the USER-side
+        blocks are returned — legacy string callers wrap ``render()`` output
+        as the user message and supply their own system message, so including
+        the spell's SYSTEM block here would double-inject it. Use
+        :meth:`render_messages` to get the full role-structured contract.
+        """
+        del version_id  # Grimoire spell versioning is selected by repository state.
+        result = self._conjure(template_id, variables, validate)
         return self._conjured_to_text(result)
+
+    def render_messages(
+        self,
+        template_id: str,
+        variables: dict[str, Any] | None = None,
+        validate: bool = True,
+    ) -> list[dict[str, str]]:
+        """Render a mapped Grimoire spell as role-structured chat messages.
+
+        One spell carries the SYSTEM + USER contract atomically (a user layer
+        overriding the spell overrides both halves together). Grimoire roles
+        map: SYSTEM→system, DEVELOPER→system, USER→user,
+        ASSISTANT_PREFILL→assistant.
+
+        Returns:
+            Non-empty ``[{"role": ..., "content": ...}]`` list.
+
+        Raises:
+            TemplateNotFoundError: If the spell is missing, fails to render,
+                or renders to no content.
+        """
+        result = self._conjure(template_id, variables, validate)
+        messages: list[dict[str, str]] = []
+        for block in getattr(result, "blocks", []) or []:
+            content = str(getattr(block, "content", "") or "").strip()
+            if not content:
+                continue
+            role_raw = getattr(block, "role", "user")
+            role_value = str(getattr(role_raw, "value", role_raw) or "user").lower()
+            messages.append(
+                {"role": _ROLE_MAP.get(role_value, "user"), "content": content}
+            )
+        if not messages:
+            raise TemplateNotFoundError(
+                f"Template {template_id!r} rendered to no message content"
+            )
+        return messages
 
     def get_metrics(self, version_id: str) -> PromptMetrics:
         """Return in-memory usage metrics for a Grimoire-backed prompt version."""
@@ -167,7 +264,7 @@ class GrimoirePromptRegistryAdapter:
         latency_ms: float | None = None,
         quality_score: float | None = None,
     ) -> None:
-        """Record in-memory usage metrics for cognitive phase compatibility."""
+        """Record usage metrics (in-memory, plus the optional persistent store)."""
         self.get_metrics(version_id).record_use(
             success=success,
             iterations=iterations,
@@ -175,6 +272,18 @@ class GrimoirePromptRegistryAdapter:
             latency_ms=latency_ms,
             quality_score=quality_score,
         )
+        if self._usage_store is not None:
+            try:
+                self._usage_store.record(
+                    version_id=version_id,
+                    success=success,
+                    iterations=iterations,
+                    tokens=tokens,
+                    latency_ms=latency_ms,
+                    quality_score=quality_score,
+                )
+            except Exception as exc:  # telemetry must never break a phase
+                logger.debug("Prompt usage store record failed: %s", exc)
 
     def _conjured_to_text(self, result: Any) -> str:
         blocks = getattr(result, "blocks", None)
@@ -184,14 +293,25 @@ class GrimoirePromptRegistryAdapter:
                 return str(to_text())
             return str(result)
 
+        def _role_of(block: Any) -> str:
+            role = getattr(block, "role", "")
+            return str(getattr(role, "value", role) or "").lower()
+
+        # Multi-role spells: plain render() returns only the USER-side blocks
+        # (see render() docstring). Single-role spells pass through whole.
+        selected = list(blocks)
+        if not self._include_role_headers:
+            user_blocks = [b for b in blocks if _role_of(b) == "user"]
+            if user_blocks and len(user_blocks) < len(selected):
+                selected = user_blocks
+
         parts: list[str] = []
-        for block in blocks:
+        for block in selected:
             content = str(getattr(block, "content", ""))
             if not content:
                 continue
             if self._include_role_headers:
-                role = getattr(block, "role", "")
-                role_value = str(getattr(role, "value", role) or "").upper()
+                role_value = _role_of(block).upper()
                 parts.append(f"[{role_value}]\n{content}" if role_value else content)
             else:
                 parts.append(content)
@@ -212,9 +332,48 @@ class GrimoirePromptRegistryAdapter:
         return f"grimoire:{template_id}:{spell_id}:{version}:{content_hash}"
 
 
+def create_grimoire_prompt_registry(
+    grimoire: Any | None = None,
+    *,
+    repo_path: str | Path | None = None,
+    template_map: dict[str, str] | None = None,
+    include_role_headers: bool = False,
+    strict: bool = True,
+) -> GrimoirePromptRegistryAdapter | None:
+    """Construct a ``GrimoirePromptRegistryAdapter``, degrading to ``None`` without grimoire.
+
+    The adapter constructor stays strict and raises ``ImportError`` when the
+    optional ``grimoire`` package is absent. Config-driven wiring should call
+    this factory instead — on ImportError-rooted failure it emits a single
+    structured warning and returns ``None`` so callers can skip the feature.
+
+    Args:
+        grimoire: Existing Grimoire facade; when omitted, ``repo_path`` is used.
+        repo_path: Grimoire repository root for lazy construction.
+        template_map: Mapping from llmcore template IDs to Grimoire spell IDs.
+        include_role_headers: See ``GrimoirePromptRegistryAdapter``.
+        strict: See ``GrimoirePromptRegistryAdapter``.
+
+    Returns:
+        An adapter instance, or ``None`` when grimoire is required but missing.
+    """
+    try:
+        return GrimoirePromptRegistryAdapter(
+            grimoire,
+            repo_path=repo_path,
+            template_map=template_map,
+            include_role_headers=include_role_headers,
+            strict=strict,
+        )
+    except ImportError as exc:
+        logger.warning("grimoire prompt registry disabled: grimoire not installed (%s)", exc)
+        return None
+
+
 __all__ = [
     "DEFAULT_TEMPLATE_MAP",
     "GrimoirePromptRegistryAdapter",
     "GrimoirePromptTemplate",
     "GrimoirePromptVersion",
+    "create_grimoire_prompt_registry",
 ]

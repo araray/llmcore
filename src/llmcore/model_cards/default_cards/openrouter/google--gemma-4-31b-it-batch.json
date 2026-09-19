@@ -1,0 +1,40 @@
+{
+  "model_id": "google/gemma-4-31b-it:batch",
+  "display_name": "Google: Gemma 4 31B (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.39,
+      "output": 0.97
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-04-02"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with text output. Features a 256K token context window, configurable thinking/reasoning mode, native function...",
+  "tags": [],
+  "source": "generated"
+}

@@ -14,6 +14,13 @@ Research Reference:
     - Verbal self-reflection stored in episodic memory
     - Requires clear evaluation criteria
 
+
+NOTE (0.52.0): this reasoner is UNWIRED — no llmcore execution path
+constructs it — and its inline prompts are deliberately excluded from the
+grimoire control plane's required-spell set. Treat it as deprecated
+reference material; it may be removed or rebuilt on the control plane in a
+future release.
+
 Usage:
     from llmcore.agents.reasoning import ReflexionReasoner
 

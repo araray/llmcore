@@ -20,6 +20,8 @@ Phase: 4, Step 4.3
 Version: 0.25.0
 """
 
+import importlib.util
+
 import pytest
 
 from llmcore import LLMCore
@@ -27,6 +29,14 @@ from llmcore.models import ContextDocument, ContextPreparationDetails
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:`torch\\.jit\\.script` is deprecated.*:DeprecationWarning"
+)
+
+# Document ingestion (add_documents_to_vector_store) embeds via the default
+# 'all-MiniLM-L6-v2' model, which needs the optional sentence-transformers
+# backend (not installed in the lightweight unit CI).
+requires_sentence_transformers = pytest.mark.skipif(
+    importlib.util.find_spec("sentence_transformers") is None,
+    reason="requires the optional sentence-transformers embedding backend",
 )
 
 
@@ -212,6 +222,7 @@ class TestRAGIntegration:
         finally:
             await llm.close()
 
+    @requires_sentence_transformers
     @pytest.mark.asyncio
     async def test_rag_enabled_flag(self):
         """Test that rag_used is True when RAG is enabled."""
@@ -237,6 +248,7 @@ class TestRAGIntegration:
         finally:
             await llm.close()
 
+    @requires_sentence_transformers
     @pytest.mark.asyncio
     async def test_rag_documents_retrieved_count(self):
         """Test that rag_documents_retrieved reports correct count."""
@@ -266,6 +278,7 @@ class TestRAGIntegration:
         finally:
             await llm.close()
 
+    @requires_sentence_transformers
     @pytest.mark.asyncio
     async def test_rag_documents_used_structure(self):
         """Test the structure of rag_documents_used."""

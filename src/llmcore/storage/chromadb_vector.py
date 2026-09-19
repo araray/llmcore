@@ -12,6 +12,8 @@ import os
 import pathlib
 from typing import TYPE_CHECKING, Any
 
+from .constants import is_in_memory_path
+
 logger = logging.getLogger(__name__)
 
 # --- Conditional Import for ChromaDB ---
@@ -144,14 +146,19 @@ class ChromaVectorStorage(BaseVectorStorage):
         )
 
         try:
-            if self._storage_path:
+            if self._storage_path and not is_in_memory_path(self._storage_path):
                 expanded_path = os.path.expanduser(self._storage_path)
                 pathlib.Path(expanded_path).mkdir(parents=True, exist_ok=True)
                 self._client = _chromadb_module.PersistentClient(path=expanded_path)
                 logger.debug(f"ChromaDB persistent client initialized at: {expanded_path}")
             else:
+                # No path, or the SQLite-style ':memory:' token: use the in-memory
+                # client rather than creating a literal ':memory:/' directory.
                 self._client = _ChromaClient_class()  # In-memory client
-                logger.debug("ChromaDB in-memory client initialized.")
+                logger.debug(
+                    "ChromaDB in-memory client initialized"
+                    + (" (path was ':memory:')." if self._storage_path else ".")
+                )
 
             if self._client:
                 self._client.list_collections()

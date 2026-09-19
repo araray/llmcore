@@ -1,0 +1,34 @@
+{
+  "model_id": "nano-banana-2-lite",
+  "display_name": "nano-banana-2-lite",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Google"
+  },
+  "context": {
+    "max_input_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Google's fastest, most efficient Gemini Image model, delivering high-speed generation and editing at the lowest cost yet. It maintains strong character consistency, precise visual editing, and real-world knowledge—accelerated for rapid-fire creative exploration with dramatically reduced latency.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

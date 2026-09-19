@@ -11,7 +11,64 @@ import abc
 from typing import Any
 
 # Import ChatSession, ContextPreset, and Episode for type hinting
-from ..models import ChatSession, ContextPreset, Episode
+from ..models import ChatSession, ContextPreset, Episode, Message
+
+# Reserved metadata keys used to persist Message tool-protocol fields (R-2) in
+# backends whose message tables lack dedicated columns. They never surface on
+# loaded messages: load paths pop them back into the corresponding fields.
+TOOL_CALL_ID_METADATA_KEY = "__llmcore_tool_call_id"
+TOOL_CALLS_METADATA_KEY = "__llmcore_tool_calls"
+
+
+def embed_tool_fields_in_metadata(
+    message: Message, *, embed_tool_call_id: bool = True
+) -> dict[str, Any]:
+    """Return the message's metadata with tool-protocol fields folded in.
+
+    Storage backends without ``tool_call_id`` / ``tool_calls`` columns call
+    this when serializing a message so the fields survive a save/load
+    round-trip without a schema migration. Messages that carry no
+    tool-protocol data are returned with their metadata unchanged.
+
+    Args:
+        message: The message being persisted.
+        embed_tool_call_id: Set False for backends that already persist
+            ``tool_call_id`` in a dedicated column.
+
+    Returns:
+        A (copied) metadata dict, safe to serialize.
+    """
+    metadata = dict(message.metadata or {})
+    if embed_tool_call_id and message.tool_call_id is not None:
+        metadata[TOOL_CALL_ID_METADATA_KEY] = message.tool_call_id
+    if message.tool_calls is not None:
+        metadata[TOOL_CALLS_METADATA_KEY] = message.tool_calls
+    return metadata
+
+
+def extract_tool_fields_from_metadata(msg_dict: dict[str, Any]) -> dict[str, Any]:
+    """Inverse of :func:`embed_tool_fields_in_metadata` for load paths.
+
+    Pops the reserved metadata keys back into the ``tool_call_id`` /
+    ``tool_calls`` entries of ``msg_dict`` (in place) before model
+    validation. Existing top-level values (e.g. from a dedicated column)
+    are never overwritten.
+
+    Args:
+        msg_dict: A deserialized message dict whose ``metadata`` is a dict.
+
+    Returns:
+        The same dict, for chaining.
+    """
+    metadata = msg_dict.get("metadata")
+    if isinstance(metadata, dict):
+        tool_call_id = metadata.pop(TOOL_CALL_ID_METADATA_KEY, None)
+        if tool_call_id is not None and not msg_dict.get("tool_call_id"):
+            msg_dict["tool_call_id"] = tool_call_id
+        tool_calls = metadata.pop(TOOL_CALLS_METADATA_KEY, None)
+        if tool_calls is not None and not msg_dict.get("tool_calls"):
+            msg_dict["tool_calls"] = tool_calls
+    return msg_dict
 
 
 class BaseSessionStorage(abc.ABC):

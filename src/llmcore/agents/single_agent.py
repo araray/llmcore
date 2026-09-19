@@ -36,6 +36,7 @@ from .cognitive import (
     CognitiveCycle,
     EnhancedAgentState,
     StreamingIterationResult,
+    TerminationReason,
 )
 from .cognitive.goal_classifier import (
     GoalClassification,
@@ -180,7 +181,8 @@ class SingleAgentMode:
             memory_manager: Memory manager for context
             storage_manager: Storage manager for episodic memory
             tool_manager: Tool manager for actions
-            prompt_registry: Optional prompt registry
+            prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — the
+                grimoire-backed adapter supplying every phase prompt)
             tracer: Optional OpenTelemetry tracer
             agents_config: Optional agents configuration (uses defaults if not provided)
             context_synthesizer: Optional context synthesizer for PERCEIVE
@@ -188,7 +190,16 @@ class SingleAgentMode:
                 semantic context source when ``context_synthesizer`` is absent
             observability: Optional observability components passed to the
                 semantic context source when llmcore creates one.
+
+        Raises:
+            ValueError: When ``prompt_registry`` is None — the grimoire
+                control plane is mandatory (0.52.0).
         """
+        if prompt_registry is None:
+            raise ValueError(
+                "prompt_registry is required (0.52.0): llmcore agent prompts "
+                "come from the grimoire control plane"
+            )
         self.provider_manager = provider_manager
         self.memory_manager = memory_manager
         self.storage_manager = storage_manager
@@ -230,16 +241,34 @@ class SingleAgentMode:
         else:
             self._agents_config = agents_config
 
-        # Initialize persona manager
-        self.persona_manager = PersonaManager()
+        # Initialize persona manager — grimoire-sourced when the registry is
+        # the grimoire adapter (builtin fallback only for legacy registries;
+        # the registry-derived grimoire is a heuristic, so a load failure
+        # degrades to the builtins rather than aborting construction).
+        persona_grimoire = getattr(prompt_registry, "grimoire", None)
+        if persona_grimoire is None:
+            self.persona_manager = PersonaManager()
+        else:
+            try:
+                self.persona_manager = PersonaManager(grimoire=persona_grimoire)
+            except Exception as persona_exc:
+                logger.debug(
+                    "Registry-derived grimoire unusable for personas (%s); "
+                    "using builtin definitions",
+                    persona_exc,
+                )
+                self.persona_manager = PersonaManager()
 
-        # Initialize goal classifier (G3)
-        self.goal_classifier = GoalClassifier()
+        # Initialize goal classifier (G3) — LLM fallback renders through the
+        # same control plane as every other prompt.
+        self.goal_classifier = GoalClassifier(prompt_registry=prompt_registry)
 
         # Initialize fast-path executor (G3)
         # Use the default provider for fast-path calls
         default_provider = provider_manager.get_provider()
-        self.fast_path_executor = FastPathExecutor(llm_provider=default_provider)
+        self.fast_path_executor = FastPathExecutor(
+            llm_provider=default_provider, prompt_registry=prompt_registry
+        )
 
         # Initialize capability checker (G3 Phase 4)
         self.capability_checker = CapabilityChecker()
@@ -553,6 +582,8 @@ class SingleAgentMode:
                     agent_state=agent_state,
                     error=str(e),
                     classification=classification,
+                    termination_reason=getattr(agent_state, "termination_reason", None)
+                    or TerminationReason.ERROR.value,
                 )
 
             finally:
@@ -1101,6 +1132,7 @@ class AgentResult:
         error: Error message if failed
         classification: Goal classification result (G3)
         fast_path: Whether fast-path was used (G3)
+        termination_reason: Why the run stopped (TerminationReason value)
     """
 
     def __init__(
@@ -1118,6 +1150,7 @@ class AgentResult:
         error: str | None = None,
         classification: GoalClassification | None = None,
         fast_path: bool = False,
+        termination_reason: str | None = None,
     ):
         self.goal = goal
         self.final_answer = final_answer
@@ -1136,6 +1169,9 @@ class AgentResult:
         self.error = error
         self.classification = classification  # G3
         self.fast_path = fast_path  # G3
+        self.termination_reason = termination_reason or (
+            getattr(agent_state, "termination_reason", None) if agent_state else None
+        )
 
     def __str__(self) -> str:
         status = "✓" if self.success else "✗"
@@ -1158,6 +1194,7 @@ class AgentResult:
             "persona_used": self.persona_used,
             "error": self.error,
             "fast_path": self.fast_path,
+            "termination_reason": self.termination_reason,
             "iteration_summaries": self.iteration_summaries,
         }
 
@@ -1240,6 +1277,8 @@ class IterationUpdate:
         tokens_used: Tokens used in this iteration
         duration_ms: Duration in milliseconds
         stop_reason: Reason for stopping (if stopped early)
+        termination_reason: Why the run terminated (TerminationReason value),
+            populated on final updates
 
     Example:
         >>> async for update in agent.run_streaming(goal="Process files"):
@@ -1271,6 +1310,7 @@ class IterationUpdate:
         tokens_used: int = 0,
         duration_ms: float = 0.0,
         stop_reason: str | None = None,
+        termination_reason: str | None = None,
     ):
         self.iteration = iteration
         self.max_iterations = max_iterations
@@ -1288,6 +1328,7 @@ class IterationUpdate:
         self.tokens_used = tokens_used
         self.duration_ms = duration_ms
         self.stop_reason = stop_reason
+        self.termination_reason = termination_reason
 
     def __repr__(self) -> str:
         return (
@@ -1323,6 +1364,7 @@ class IterationUpdate:
             tokens_used=result.tokens_used,
             duration_ms=result.duration_ms,
             stop_reason=result.stop_reason,
+            termination_reason=getattr(result, "termination_reason", None),
         )
 
 

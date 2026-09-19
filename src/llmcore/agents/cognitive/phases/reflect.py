@@ -18,13 +18,18 @@ References:
     - Dossier: Step 2.7 (Cognitive Phases - REFLECT)
 """
 
+import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import EnhancedAgentState, ReflectInput, ReflectOutput
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 if TYPE_CHECKING:
+    from ....config.agents_config import AgentsConfig
+    from ....models import Message
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -43,6 +48,7 @@ async def reflect_phase(
     tracer: Any | None = None,
     provider_name: str | None = None,
     model_name: str | None = None,
+    agents_config: Optional["AgentsConfig"] = None,
 ) -> ReflectOutput:
     """
     Execute the REFLECT phase of the cognitive cycle.
@@ -59,10 +65,14 @@ async def reflect_phase(
         agent_state: Current enhanced agent state
         reflect_input: Input with action and observation
         provider_manager: Provider manager for LLM calls
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 — raises
+            ValueError when None; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
+        agents_config: Optional agents configuration; its ``reflection``
+            section controls structured JSON output and grounding overrides
+            (2.6). Defaults apply when None.
 
     Returns:
         ReflectOutput with evaluation and recommendations
@@ -86,30 +96,35 @@ async def reflect_phase(
         >>> print(f"Progress: {output.progress_estimate:.1%}")
         >>> print(f"Update plan: {output.plan_needs_update}")
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "cognitive.reflect") as span:
+        require_prompt_registry(prompt_registry, "REFLECT")
+        logger.debug(f"Starting REFLECT phase (iteration {reflect_input.iteration_number})")
+
+        # 1. Render the REFLECT messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        messages = _generate_reflection_messages(
+            reflect_input=reflect_input, prompt_registry=prompt_registry
+        )
+
         try:
-            logger.debug(f"Starting REFLECT phase (iteration {reflect_input.iteration_number})")
-
-            # 1. Generate reflection prompt
-            reflection_prompt = _generate_reflection_prompt(
-                reflect_input=reflect_input, prompt_registry=prompt_registry
-            )
-
             # 2. Call LLM for reflection
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
 
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are a reflective AI agent. Honestly evaluate your actions, "
-                    "identify learnings, and recommend improvements.",
-                ),
-                Message(role=Role.USER, content=reflection_prompt),
-            ]
+            reflection_config = _resolve_reflection_config(agents_config)
+            use_structured = bool(
+                reflection_config.use_structured_output
+            ) and _provider_supports_json_response(provider, target_model)
+            call_kwargs: dict[str, Any] = {}
+            temperature = 0.7  # Some creativity in legacy text reflection
+            if use_structured:
+                # Providers that whitelist response_format get the strict
+                # JSON contract at a lower temperature (2.6).
+                call_kwargs["response_format"] = {"type": "json_object"}
+                temperature = 0.3
 
             if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
                 response = await provider_manager.chat_completion_with_retry(
@@ -119,14 +134,16 @@ async def reflect_phase(
                     stream=False,
                     tracer=tracer,
                     operation="cognitive.reflect",
-                    temperature=0.7,  # Some creativity in reflection
+                    temperature=temperature,
+                    **call_kwargs,
                 )
             else:
                 response = await provider.chat_completion(
                     context=messages,
                     model=target_model,
                     stream=False,
-                    temperature=0.7,
+                    temperature=temperature,
+                    **call_kwargs,
                 )
 
             # Extract response content
@@ -134,29 +151,33 @@ async def reflect_phase(
             usage = response.get("usage", {}) if isinstance(response, dict) else None
             total_tokens = usage.get("total_tokens") if usage else None
 
-            # 3. Parse reflection response
-            output = _parse_reflection_response(
-                response_text=response_content, reflect_input=reflect_input
-            )
+            # 3. Parse reflection response: strict JSON first (the spell asks
+            #    for it even without provider JSON mode), labeled-text fallback.
+            output = _parse_reflection_json(response_content)
+            if output is None:
+                output = _parse_reflection_response(
+                    response_text=response_content, reflect_input=reflect_input
+                )
             output.tokens_used = total_tokens
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
-            # 4. Update agent state progress
+            # 4. Grounding overrides (2.6): external signals beat
+            #    self-judgment. Applied BEFORE the state progress update.
+            if reflection_config.ground_in_observations:
+                _apply_grounding_overrides(output, reflect_input, agent_state)
+
+            # 5. Update agent state progress
             agent_state.progress_estimate = output.progress_estimate
 
-            # 5. Record metrics
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    template = prompt_registry.get_template("reflection_prompt")
-                    if template.active_version:
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=True,  # Reflection always "succeeds"
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 6. Record prompt usage metrics (best-effort)
+            record_template_use(
+                prompt_registry,
+                "reflection_prompt",
+                success=True,  # Reflection always "succeeds"
+                tokens=total_tokens,
+            )
 
-            # 6. Add tracing
+            # 7. Add tracing
             if span:
                 add_span_attributes(
                     span,
@@ -198,16 +219,142 @@ async def reflect_phase(
 # =============================================================================
 
 
-def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: Any | None) -> str:
+def _resolve_reflection_config(agents_config: Any) -> Any:
+    """Return a real ``ReflectionConfig`` from a config object.
+
+    Mock/legacy config objects without a typed ``reflection`` section get
+    the defaults — gating and grounding must not depend on duck-typed
+    attributes evaluating truthy.
     """
-    Generate the reflection prompt using prompt library or fallback.
+    from ....config.agents_config import ReflectionConfig
+
+    reflection = getattr(agents_config, "reflection", None)
+    if isinstance(reflection, ReflectionConfig):
+        return reflection
+    return ReflectionConfig()
+
+
+def _provider_supports_json_response(provider: Any, model: str | None) -> bool:
+    """Whether the provider whitelists ``response_format`` for this model.
+
+    openai/deepseek/kimi/zai declare ``response_format`` in their
+    ``get_supported_parameters`` schemas (and accept the kwarg); providers
+    without the entry (ollama/anthropic/gemini/...) never receive it.
+    """
+    getter = getattr(provider, "get_supported_parameters", None)
+    if not callable(getter):
+        return False
+    try:
+        supported = getter(model)
+    except Exception:
+        logger.debug("get_supported_parameters failed", exc_info=True)
+        return False
+    return isinstance(supported, dict) and "response_format" in supported
+
+
+def _strip_code_fences(text: str) -> str:
+    """Return the content of the first ``` fence, or the stripped text."""
+    stripped = text.strip()
+    match = re.search(r"```(?:json)?\s*(.*?)```", stripped, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+def _parse_reflection_json(response_text: str) -> ReflectOutput | None:
+    """Strictly parse the JSON reflection contract (2.6).
+
+    Expected keys: ``evaluation`` (non-empty str), ``progress`` (number
+    0-100), ``step_completed``/``plan_needs_update`` (bool),
+    ``updated_plan`` (array|null), ``insights`` (array), ``next_focus``
+    (str|null). Code fences are stripped first. Returns None whenever the
+    contract is not met so the caller falls back to the labeled-text parser.
+    """
+    text = _strip_code_fences(response_text or "")
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    evaluation = data.get("evaluation")
+    progress = data.get("progress")
+    if not isinstance(evaluation, str) or not evaluation.strip():
+        return None
+    if isinstance(progress, bool) or not isinstance(progress, (int, float)):
+        return None
+    progress_estimate = max(0.0, min(100.0, float(progress))) / 100.0
+
+    updated_plan_raw = data.get("updated_plan")
+    updated_plan = None
+    if isinstance(updated_plan_raw, list):
+        updated_plan = [str(step) for step in updated_plan_raw if str(step).strip()]
+        if not updated_plan:
+            updated_plan = None
+
+    insights_raw = data.get("insights")
+    insights = (
+        [str(item) for item in insights_raw if str(item).strip()]
+        if isinstance(insights_raw, list)
+        else []
+    )
+
+    next_focus = data.get("next_focus")
+    if not isinstance(next_focus, str) or not next_focus.strip():
+        next_focus = None
+
+    return ReflectOutput(
+        evaluation=evaluation.strip(),
+        progress_estimate=progress_estimate,
+        insights=insights,
+        plan_needs_update=bool(data.get("plan_needs_update", False)),
+        updated_plan=updated_plan,
+        step_completed=bool(data.get("step_completed", False)),
+        next_focus=next_focus,
+    )
+
+
+def _apply_grounding_overrides(
+    output: ReflectOutput,
+    reflect_input: ReflectInput,
+    agent_state: EnhancedAgentState,
+) -> None:
+    """Apply external-signal overrides to a parsed reflection (2.6).
+
+    A failed action can never be a completed step, and its progress claim
+    is clamped to the state's current progress (never trust self-judgment
+    over a failed action). An iteration that already set a final answer is
+    100% done by definition.
+    """
+    if reflect_input.action_success is False:
+        if output.step_completed:
+            logger.info("Grounding override: a failed action cannot complete a step")
+        output.step_completed = False
+        output.progress_estimate = min(
+            output.progress_estimate, agent_state.progress_estimate
+        )
+    if agent_state.is_finished and agent_state.final_answer:
+        output.progress_estimate = 1.0
+
+
+def _generate_reflection_messages(
+    reflect_input: ReflectInput, prompt_registry: Any
+) -> list["Message"]:
+    """
+    Render the REFLECT phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         reflect_input: Reflection input
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted reflection prompt
+        Role-structured messages for the LLM call
     """
     # Format plan
     plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(reflect_input.plan))
@@ -220,66 +367,33 @@ def _generate_reflection_prompt(reflect_input: ReflectInput, prompt_registry: An
         action_str = "(no action proposed)"
         logger.warning("REFLECT: No last_action available - THINK phase may have failed")
 
-    # Try to use prompt library
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="reflection_prompt",
-                variables={
-                    "goal": reflect_input.goal,
-                    "plan": plan_str,
-                    "last_action": action_str,
-                    "observation": reflect_input.observation,
-                    "iteration": str(reflect_input.iteration_number),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back")
-
-    # Fallback prompt
+    # Format current step display, e.g. "2. Read the file"
     current_step = (
         reflect_input.plan[reflect_input.current_step_index]
         if reflect_input.current_step_index < len(reflect_input.plan)
         else "Unknown"
     )
+    current_step_display = f"{reflect_input.current_step_index + 1}. {current_step}"
 
-    prompt = f"""Reflect on your recent action and its outcome.
+    return messages_from_registry(
+        prompt_registry,
+        "reflection_prompt",
+        {
+            "goal": reflect_input.goal,
+            "plan": plan_str,
+            "current_step_display": current_step_display,
+            "last_action": action_str,
+            "observation": reflect_input.observation,
+            "iteration": str(reflect_input.iteration_number),
+            "action_success": _bool_variable(reflect_input.action_success),
+            "matches_expectation": _bool_variable(reflect_input.matches_expectation),
+        },
+    )
 
-ORIGINAL GOAL:
-{reflect_input.goal}
 
-CURRENT PLAN:
-{plan_str}
-
-CURRENT STEP: {reflect_input.current_step_index + 1}. {current_step}
-
-LAST ACTION:
-{action_str}
-
-OBSERVATION:
-{reflect_input.observation}
-
-ITERATION: {reflect_input.iteration_number}
-
-REFLECTION QUESTIONS:
-1. Did the action produce the expected result?
-2. Are we making progress toward the goal?
-3. Should we continue with the current plan or adjust?
-4. What have we learned that could help in future iterations?
-5. Is the current step complete?
-
-PROVIDE:
-- EVALUATION: Assess the action's effectiveness (success/partial/failure)
-- PROGRESS: Estimate overall progress toward goal (0-100%)
-- INSIGHTS: Key learnings from this iteration
-- PLAN_UPDATE: Whether plan needs modification (yes/no)
-- STEP_COMPLETED: Is current step done (yes/no)
-- NEXT_FOCUS: What to prioritize in the next iteration
-
-Be honest and critical in your self-assessment.
-"""
-
-    return prompt
+def _bool_variable(value: bool | None) -> str:
+    """Render an optional grounding flag for the spell ('' when unknown)."""
+    return "" if value is None else str(bool(value)).lower()
 
 
 def _parse_reflection_response(response_text: str, reflect_input: ReflectInput) -> ReflectOutput:

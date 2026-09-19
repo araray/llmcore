@@ -24,6 +24,7 @@ DARWIN LAYER 2: Added EnhancedAgentManager that extends AgentManager with:
 
 import logging
 import time
+import warnings
 from enum import Enum
 from typing import Any
 
@@ -78,6 +79,7 @@ class AgentManager:
         memory_manager: MemoryManager,
         storage_manager: StorageManager,
         observability: ObservabilityComponents | None = None,
+        tool_catalog: Any | None = None,
     ):
         """
         Initialize the AgentManager with required dependencies.
@@ -88,11 +90,15 @@ class AgentManager:
             storage_manager: The StorageManager for episodic memory logging.
             observability: Optional observability components (Phase 8 integration).
                           If None, observability is disabled for this manager.
+            tool_catalog: Optional ``GrimoireToolCatalog`` — when present the
+                ToolManager sources default tools from grimoire rune contracts.
         """
         self._provider_manager = provider_manager
         self._memory_manager = memory_manager
         self._storage_manager = storage_manager
-        self._tool_manager = ToolManager(memory_manager, storage_manager)
+        self._tool_manager = ToolManager(
+            memory_manager, storage_manager, tool_catalog=tool_catalog
+        )
 
         # NEW: Sandbox integration (optional, initialized separately)
         self._sandbox_integration: SandboxIntegration | None = None
@@ -228,7 +234,21 @@ class AgentManager:
         Raises:
             LLMCoreError: If the agent loop fails.
             SandboxError: If use_sandbox=True but sandbox not initialized.
+
+        .. deprecated:: 0.52.0
+            The legacy ``cognitive_cycle``/``prompt_utils`` loop is outside
+            the grimoire control plane (hardcoded prompts). Use
+            ``EnhancedAgentManager.run()`` (SINGLE mode); removal is planned
+            for the next minor release.
         """
+        warnings.warn(
+            "AgentManager.run_agent_loop() and the legacy cognitive_cycle/"
+            "prompt_utils stack are deprecated (0.52.0) and will be removed "
+            "in the next minor release; use EnhancedAgentManager.run() — its "
+            "prompts come from the grimoire control plane.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Determine if we should use sandbox
         should_use_sandbox = self._should_use_sandbox(use_sandbox)
 
@@ -728,6 +748,7 @@ class EnhancedAgentManager(AgentManager):
         agents_config: Any | None = None,  # G3: AgentsConfig for capability/activity settings
         context_synthesizer: Any | None = None,
         memory_backend: Any | None = None,
+        grimoire: Any | None = None,
     ):
         """
         Initialize the enhanced agent manager.
@@ -744,13 +765,44 @@ class EnhancedAgentManager(AgentManager):
             memory_backend: Optional external memory backend used to build a
                 semantic context source when ``context_synthesizer`` is absent
         """
+        # Control plane (0.52.0): with a grimoire instance, builtin tools are
+        # sourced from the pack's rune contracts via the catalog.
+        tool_catalog = None
+        if grimoire is not None:
+            try:
+                from .grimoire_tool_catalog import GrimoireToolCatalog, bind_builtin_tools
+
+                tool_catalog = GrimoireToolCatalog(grimoire)
+                bind_builtin_tools(tool_catalog)
+            except Exception as e:
+                logger.warning(f"Grimoire tool catalog unavailable: {e}")
+                tool_catalog = None
+
         # Initialize parent class (original AgentManager)
         super().__init__(
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             storage_manager=storage_manager,
             observability=observability,
+            tool_catalog=tool_catalog,
         )
+        self._grimoire = grimoire
+        self._tool_catalog = tool_catalog
+
+        # Control plane (0.52.0): the prompt registry is mandatory. When the
+        # caller did not inject one (direct construction), self-build the
+        # grimoire-backed adapter — over the provided grimoire instance when
+        # given, else over the bundled pack alone. Grimoire is a hard
+        # dependency, so this always succeeds on a healthy install.
+        if prompt_registry is None:
+            from grimoire import Grimoire as _Grimoire
+
+            from ..grimoire_runtime import bundled_pack_path
+            from .prompts.grimoire_adapter import GrimoirePromptRegistryAdapter
+
+            prompt_registry = GrimoirePromptRegistryAdapter(
+                grimoire if grimoire is not None else _Grimoire(bundled_pack_path())
+            )
 
         # Store additional components
         self.prompt_registry = prompt_registry
@@ -769,7 +821,29 @@ class EnhancedAgentManager(AgentManager):
             from .persona import PersonaManager
             from .single_agent import SingleAgentMode
 
-            self.persona_manager = PersonaManager()
+            # Personas come from the control plane when a grimoire is
+            # reachable (explicit instance, or the one under the self-built
+            # adapter); the hardcoded builtins remain only for legacy
+            # construction with a non-grimoire registry. An EXPLICIT grimoire
+            # must load (fail-loud); one merely inferred from an injected
+            # registry is a heuristic and degrades to the builtins.
+            persona_grimoire = grimoire if grimoire is not None else getattr(
+                prompt_registry, "grimoire", None
+            )
+            if persona_grimoire is None:
+                self.persona_manager = PersonaManager()
+            else:
+                try:
+                    self.persona_manager = PersonaManager(grimoire=persona_grimoire)
+                except Exception as persona_exc:
+                    if grimoire is not None:
+                        raise
+                    logger.debug(
+                        "Registry-derived grimoire unusable for personas (%s); "
+                        "using builtin definitions",
+                        persona_exc,
+                    )
+                    self.persona_manager = PersonaManager()
             self.memory_integrator = CognitiveMemoryIntegrator(
                 memory_manager=memory_manager,
                 storage_manager=storage_manager,

@@ -282,16 +282,27 @@ class ToolManager:
         _tool_metadata: Host/runtime metadata keyed by tool name
     """
 
-    def __init__(self, memory_manager: MemoryManager, storage_manager: StorageManager):
+    def __init__(
+        self,
+        memory_manager: MemoryManager,
+        storage_manager: StorageManager,
+        *,
+        tool_catalog: Any | None = None,
+    ):
         """
         Initialize the ToolManager with required dependencies.
 
         Args:
             memory_manager: The MemoryManager instance for memory-related tools.
             storage_manager: The StorageManager instance for storage-related tools.
+            tool_catalog: Optional ``GrimoireToolCatalog`` (0.52.0 control
+                plane). When present, ``load_default_tools`` sources the
+                builtin tools from grimoire rune CONTRACTS (schema + policy)
+                instead of the legacy hardcoded list.
         """
         self._memory_manager = memory_manager
         self._storage_manager = storage_manager
+        self._tool_catalog = tool_catalog
 
         # These will be populated dynamically per run
         self._tool_definitions: list[Tool] = []
@@ -437,33 +448,94 @@ class ToolManager:
         self._implementation_map.clear()
         self._tool_metadata.clear()
 
+        # Control plane path (0.52.0): the builtin tools' schemas + policy
+        # come from the bundled pack's rune CONTRACTS. A missing builtin rune
+        # or unbound handler raises (pack-completeness enforcement).
+        if self._tool_catalog is not None:
+            registered = self._tool_catalog.apply_to(
+                self, tags=["llmcore.builtin"], require_bound=True
+            )
+            logger.info(f"Loaded {len(registered)} default tools from grimoire catalog")
+            return
+
+        # Legacy path (no catalog — deprecated AgentManager construction).
+        # Real parameter schemas: providers previously saw parameters={} —
+        # models calling finish natively had no `answer` contract to fill.
+        _STR = {"type": "string"}
         default_tools = [
             (
                 "semantic_search",
                 "Search the knowledge base for relevant information",
                 "llmcore.tools.search.semantic",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {**_STR, "description": "The search query"},
+                        "top_k": {"type": "integer", "description": "Number of results"},
+                        "collection_name": {**_STR, "description": "Optional collection"},
+                    },
+                    "required": ["query"],
+                },
             ),
             (
                 "episodic_search",
                 "Search past experiences in episodic memory",
                 "llmcore.tools.search.episodic",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {**_STR, "description": "The search query"},
+                        "session_id": {**_STR, "description": "Optional session filter"},
+                        "limit": {"type": "integer", "description": "Maximum results"},
+                    },
+                    "required": ["query"],
+                },
             ),
             (
                 "calculator",
                 "Perform mathematical calculations",
                 "llmcore.tools.calculation.calculator",
+                {
+                    "type": "object",
+                    "properties": {
+                        "expression": {**_STR, "description": "The expression to evaluate"},
+                    },
+                    "required": ["expression"],
+                },
             ),
-            ("finish", "Complete the task with a final answer", "llmcore.tools.flow.finish"),
+            (
+                "finish",
+                "Complete the task with a final answer",
+                "llmcore.tools.flow.finish",
+                {
+                    "type": "object",
+                    "properties": {
+                        "answer": {
+                            **_STR,
+                            "description": "The complete final answer to the goal",
+                        },
+                    },
+                    "required": ["answer"],
+                },
+            ),
             (
                 "human_approval",
                 "Request human approval for sensitive actions",
                 "llmcore.tools.flow.human_approval",
+                {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {**_STR, "description": "Request shown to the human"},
+                        "pending_action": {**_STR, "description": "JSON of the pending call"},
+                    },
+                    "required": ["prompt", "pending_action"],
+                },
             ),
         ]
 
-        for name, desc, impl_key in default_tools:
+        for name, desc, impl_key, parameters in default_tools:
             if impl_key in _IMPLEMENTATION_REGISTRY:
-                tool = Tool(name=name, description=desc, parameters={})
+                tool = Tool(name=name, description=desc, parameters=parameters)
                 self._tool_definitions.append(tool)
                 self._implementation_map[name] = impl_key
 

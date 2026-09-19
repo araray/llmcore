@@ -139,6 +139,7 @@ class LLMCoreProtocol(Protocol):
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -149,6 +150,10 @@ class LLMCoreProtocol(Protocol):
         - Pass via 'message' parameter
         - Set enable_rag=False to prevent double-RAG
         - Optionally stage additional context via explicitly_staged_items
+
+        For native tool-calling loops (R-2):
+        - Submit an assistant-tool_calls + role="tool" results sequence via
+          'extra_messages'; they are appended before this turn's user message.
         """
         ...
 
@@ -212,6 +217,24 @@ class LLMCore:
         self._runtime_config_dirty = False
         self._original_config_dict = {}
         self._observability = None
+        # Grimoire control plane (populated by _initialize_from_config)
+        self._grimoire: Any | None = None
+        self._grimoire_config: Any | None = None
+        self._prompt_registry: Any | None = None
+
+    @property
+    def grimoire(self) -> Any:
+        """The composed Grimoire control-plane facade (read-only access).
+
+        Hosts (e.g. wairu) use this to render their own spells and register
+        runtime runes against the SAME instance the agent subsystem reads.
+        """
+        return self._grimoire
+
+    @property
+    def prompt_registry(self) -> Any:
+        """The instance-level prompt registry (grimoire-backed adapter)."""
+        return self._prompt_registry
 
     @classmethod
     async def create(
@@ -220,6 +243,7 @@ class LLMCore:
         config_file_path: str | None = None,
         env_prefix: str | None = "LLMCORE",
         observability: Any | None = None,
+        grimoire_instance: Any | None = None,
     ) -> "LLMCore":
         """
         Asynchronously creates and initializes an LLMCore instance.
@@ -235,12 +259,20 @@ class LLMCore:
             observability: Optional observability object. If it or its ``logger``
                 exposes ``log_event()``, provider and embedding lifecycle events
                 are emitted through that logger.
+            grimoire_instance: Optional pre-built ``grimoire.Grimoire`` facade
+                (typically a LAYERED one from a host like wairu). When given it
+                becomes this instance's control plane — the bundled pack must
+                be one of its layers — and no separate grimoire is constructed.
+                When omitted, llmcore composes its own from ``[grimoire]``
+                config (bundled pack as the base layer; zero config works).
 
         Returns:
             Fully initialized LLMCore instance
 
         Raises:
             ConfigError: If configuration is invalid or cannot be loaded
+                (including a grimoire overlay that fails fail-loud startup
+                validation)
             StorageError: If storage backends cannot be initialized
         """
         instance = cls()
@@ -249,6 +281,7 @@ class LLMCore:
             config_file_path,
             env_prefix,
             observability=observability,
+            grimoire_instance=grimoire_instance,
         )
         return instance
 
@@ -286,6 +319,12 @@ class LLMCore:
         Raises:
             RuntimeError: If this instance was not initialized via ``LLMCore.create()``.
         """
+        # Control plane: the instance-level grimoire prompt registry is the
+        # default — an explicit prompt_registry argument still wins (hosts may
+        # inject a customized adapter).
+        if prompt_registry is None:
+            prompt_registry = getattr(self, "_prompt_registry", None)
+
         required_managers = {
             "provider_manager": getattr(self, "_provider_manager", None),
             "memory_manager": getattr(self, "_memory_manager", None),
@@ -317,6 +356,7 @@ class LLMCore:
             memory_manager=required_managers["memory_manager"],
             storage_manager=required_managers["storage_manager"],
             prompt_registry=prompt_registry,
+            grimoire=getattr(self, "_grimoire", None),
             tracer=tracer,
             default_mode=default_mode or AgentMode.SINGLE,
             observability=observability,
@@ -361,6 +401,7 @@ class LLMCore:
         config_file_path: str | None,
         env_prefix: str | None,
         observability: Any | None = None,
+        grimoire_instance: Any | None = None,
     ) -> None:
         """
         Initializes or re-initializes all components from a configuration.
@@ -492,6 +533,40 @@ class LLMCore:
                 provider_manager=self._provider_manager,
                 embedding_manager=self._embedding_manager,
                 storage_manager=self._storage_manager,
+            )
+
+            # --- Grimoire control plane (0.52.0: hard dependency) ---
+            # ALL agent prompts come from grimoire spells. The bundled pack is
+            # the base layer (zero-config startup); [grimoire] config adds
+            # overlays; a host (wairu) may inject its own layered instance.
+            # Fail-loud: a configured overlay that breaks a required template
+            # aborts init here — never a silent fallback.
+            logger.debug("Initializing Grimoire control plane...")
+            from llmcore.config.grimoire_config import load_grimoire_config
+            from llmcore.grimoire_runtime import (
+                build_grimoire,
+                build_prompt_registry,
+                validate_grimoire_startup,
+            )
+
+            grimoire_cfg = load_grimoire_config(config=self.config)
+            self._grimoire_config = grimoire_cfg
+            if grimoire_instance is not None:
+                self._grimoire = grimoire_instance
+            else:
+                self._grimoire = build_grimoire(grimoire_cfg)
+            self._prompt_registry = build_prompt_registry(self._grimoire, grimoire_cfg)
+            overlays_present = bool(
+                grimoire_instance is not None
+                or grimoire_cfg.user_repo_paths
+                or grimoire_cfg.admin_repo_path
+                or grimoire_cfg.extra_pack_paths
+            )
+            validate_grimoire_startup(
+                self._grimoire,
+                self._prompt_registry,
+                grimoire_cfg,
+                overlays_present=overlays_present,
             )
 
             logger.debug("LLMCore initialization complete")
@@ -970,6 +1045,8 @@ class LLMCore:
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
+        native_search: bool = False,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -1084,6 +1161,45 @@ class LLMCore:
 
             tool_choice: Optional tool choice strategy ('auto', 'required', or specific tool name).
 
+            extra_messages: Optional list of fully-formed Message objects appended to the
+                session history *before* this turn's user message. This is the additive
+                hook for native tool-calling loops (R-2): after executing tool calls, a
+                caller (e.g. wairu) submits the assistant message carrying ``tool_calls``
+                plus the matching ``role="tool"`` result messages here, and lets
+                ``message`` carry the follow-up user text. Example::
+
+                    await llm.chat(
+                        message="Answer using the tool results above.",
+                        session_id=sid,
+                        extra_messages=[
+                            Message(role=Role.ASSISTANT, content="",
+                                    tool_calls=[{"id": "call_1", "type": "function",
+                                                 "function": {"name": "f",
+                                                              "arguments": "{}"}}]),
+                            Message(role=Role.TOOL, content='{"ok": true}',
+                                    tool_call_id="call_1"),
+                        ],
+                    )
+
+                The extra messages are stored in the session like any others (and
+                persisted when ``save_session=True``). Providers with a native tool
+                protocol (OpenAI-compatible, Anthropic, Gemini, Mistral, Ollama) map
+                them to their wire format; others render tool results as user-role
+                text. Note the prepared payload always ends with this turn's user
+                message, so ``message`` should be non-empty.
+
+            native_search: If ``True``, request that the provider attach its
+                *native* server-side web-search / grounding config to this call
+                (plan §4/F9 dependency): OpenAI's ``web_search_options``, Google
+                Gemini's Google Search grounding tool, or xAI Live Search. This
+                is fully additive and conservative — it is only honoured when the
+                resolved provider exposes such a surface
+                (``provider.supports_native_search(model)``); for every other
+                provider it is a silent no-op (logged at debug level), never an
+                error. Use :func:`llmcore.model_cards.model_supports_native_search`
+                on the resolved model card to decide whether to set it. Defaults
+                to ``False`` (today's behaviour, byte-identical).
+
             **provider_kwargs: Additional provider-specific parameters (e.g., temperature=0.7,
                 max_tokens=1000). These vary by provider - see provider documentation.
 
@@ -1162,6 +1278,17 @@ class LLMCore:
         if prompt_template_values:
             user_message_metadata["prompt_template_values"] = list(prompt_template_values.keys())
 
+        # R-2 tool-role protocol: append caller-provided turn messages (e.g. an
+        # assistant message carrying tool_calls plus the matching role="tool"
+        # results) to the session before this turn's user message. They are
+        # stored — and persisted via save_session — like any other message.
+        if extra_messages:
+            for extra in extra_messages:
+                if extra.session_id != chat_session.id:
+                    extra = extra.model_copy(update={"session_id": chat_session.id})
+                chat_session.messages.append(extra)
+            chat_session.updated_at = datetime.now(UTC)
+
         # Add user message to session with metadata
         chat_session.add_message(message, Role.USER, metadata=user_message_metadata)
 
@@ -1223,6 +1350,21 @@ class LLMCore:
         context_details.safety_margin_tokens = budget.safety_margin_tokens
         context_details.available_context_tokens = budget.prompt_tokens_available
 
+        # F9 dependency: provider-native web-search routing. Additive and
+        # conservative — only forwarded to providers that expose a native search
+        # surface, so it is a clean no-op (never an error) everywhere else.
+        native_search_call_kwargs: dict[str, Any] = {}
+        if native_search:
+            if active_provider.supports_native_search(actual_model):
+                native_search_call_kwargs["native_search"] = True
+            else:
+                logger.debug(
+                    "native_search requested but provider '%s' (model '%s') has "
+                    "no native search surface; ignoring.",
+                    active_provider.get_name(),
+                    actual_model,
+                )
+
         # Call provider
         response_data = await active_provider.chat_completion(
             context=context_payload,
@@ -1230,6 +1372,7 @@ class LLMCore:
             stream=stream,
             tools=tools,
             tool_choice=tool_choice,
+            **native_search_call_kwargs,
             **provider_kwargs,
         )
 
@@ -1295,6 +1438,8 @@ class LLMCore:
         prompt_template_values: dict[str, str] | None = None,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        extra_messages: list[Message] | None = None,
+        native_search: bool = False,
         **provider_kwargs,
     ) -> tuple[str, ChatUsage]:
         """Send a message and return both the response text and its usage.
@@ -1350,6 +1495,12 @@ class LLMCore:
             prompt_template_values: Custom RAG prompt template values.
             tools: Optional tools available to the LLM for function calling.
             tool_choice: Optional tool choice strategy.
+            extra_messages: Optional fully-formed Message objects appended
+                before this turn's user message (tool-calling feedback turns;
+                see :meth:`chat`).
+            native_search: Forwarded verbatim to :meth:`chat`; requests
+                provider-native web-search/grounding when supported and is a
+                silent no-op otherwise. Defaults to ``False``.
             **provider_kwargs: Additional provider-specific parameters
                 (e.g. ``temperature``). ``stream`` is not accepted here.
 
@@ -1403,6 +1554,8 @@ class LLMCore:
                 prompt_template_values=prompt_template_values,
                 tools=tools,
                 tool_choice=tool_choice,
+                extra_messages=extra_messages,
+                native_search=native_search,
                 **provider_kwargs,
             )
             # stream=False guarantees a str, but coerce defensively.
@@ -1612,6 +1765,89 @@ class LLMCore:
     # =========================================================================
     # Statistics & Introspection
     # =========================================================================
+    async def record_agent_usage(self, session_id: str, records: list[dict]) -> None:
+        """
+        Append Darwin agent usage records to a session's interaction log.
+
+        The enhanced cognitive cycle captures per-phase token/cost usage
+        (``PhaseUsage``, 2.7) but agent runs bypass the chat path that
+        normally records ``session.metadata["interactions"]`` — so
+        :meth:`get_session_token_stats` reported zero for Darwin turns.
+        Hosts driving agent runs call this once per run (or per stream
+        segment) with the usage they accumulated; the stats method then
+        aggregates Darwin turns like any other interaction.
+
+        Each record is normalized to::
+
+            {timestamp, provider, model, prompt_tokens, completion_tokens,
+             total_tokens, cost, source: "darwin"}
+
+        Args:
+            session_id: Session to record usage against (created if the
+                backend supports it, mirroring ``get_session_token_stats``).
+            records: Usage dicts. Recognized keys: ``timestamp`` (ISO 8601,
+                defaults to now), ``provider``/``model`` (default
+                ``"unknown"``), ``prompt_tokens``/``completion_tokens``/
+                ``total_tokens`` (default 0; a missing total is computed),
+                and ``cost`` (None when pricing is unknown). Non-dict
+                entries are skipped.
+
+        Raises:
+            SessionNotFoundError: If the session cannot be loaded or created.
+
+        Example:
+            >>> await llm.record_agent_usage(
+            ...     "darwin-session",
+            ...     [{"provider": "openai", "model": "gpt-4o",
+            ...       "prompt_tokens": 1200, "completion_tokens": 300,
+            ...       "cost": 0.006}],
+            ... )
+            >>> stats = await llm.get_session_token_stats("darwin-session")
+            >>> stats.total_tokens
+            1500
+        """
+        session = await self._session_manager.load_or_create_session(session_id)
+
+        if session is None:
+            raise SessionNotFoundError(f"Session not found: {session_id}")
+
+        def _tokens(value: Any) -> int:
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        interactions = session.metadata.setdefault("interactions", [])
+        now_iso = datetime.now(UTC).isoformat()
+        for record in records:
+            if not isinstance(record, dict):
+                logger.debug("record_agent_usage: skipping non-dict record %r", record)
+                continue
+            prompt_tokens = _tokens(record.get("prompt_tokens"))
+            completion_tokens = _tokens(record.get("completion_tokens"))
+            total_tokens = _tokens(record.get("total_tokens"))
+            if total_tokens == 0:
+                total_tokens = prompt_tokens + completion_tokens
+            raw_cost = record.get("cost")
+            try:
+                cost = float(raw_cost) if raw_cost is not None else None
+            except (TypeError, ValueError):
+                cost = None
+            interactions.append(
+                {
+                    "timestamp": str(record.get("timestamp") or now_iso),
+                    "provider": str(record.get("provider") or "unknown"),
+                    "model": str(record.get("model") or "unknown"),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "cost": cost,
+                    "source": "darwin",
+                }
+            )
+
+        await self._session_manager.save_session(session)
+
     async def get_session_token_stats(self, session_id: str) -> SessionTokenStats:
         """
         Get cumulative token usage statistics for a session.

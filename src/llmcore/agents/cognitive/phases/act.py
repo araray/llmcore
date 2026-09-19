@@ -23,7 +23,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..models import ActInput, ActOutput, EnhancedAgentState, ValidationResult
+from ..models import ActInput, ActOutput, EnhancedAgentState, TerminationReason, ValidationResult
+from .think import _finish_answer_acceptable, _finish_answer_from_arguments, _finish_tool_names
 
 if TYPE_CHECKING:
     from ....config.agents_config import AgentsConfig
@@ -104,6 +105,42 @@ async def act_phase(
                     sandbox=sandbox,
                     tracer=tracer,
                     span=span,
+                )
+
+            # =================================================================
+            # Convergence defense-in-depth: a finish-named call reaching ACT
+            # (stale/resumed/activity-protocol paths that bypass the THINK
+            # intercept) terminates the run — never execute_tool churn.
+            # =================================================================
+            convergence = getattr(agents_config, "convergence", None)
+            if act_input.tool_call.name in _finish_tool_names(convergence):
+                answer = _finish_answer_from_arguments(act_input.tool_call.arguments)
+                if _finish_answer_acceptable(answer, convergence):
+                    logger.info("Finish call reached ACT — setting final state directly")
+                    agent_state.is_finished = True
+                    agent_state.final_answer = answer
+                    agent_state.termination_reason = TerminationReason.FINISH_TOOL.value
+                else:
+                    logger.warning("Finish call reached ACT without an answer — not finishing")
+                if span:
+                    add_span_attributes(
+                        span,
+                        {
+                            "act.tool_name": act_input.tool_call.name,
+                            "act.finish_short_circuit": True,
+                            "act.is_final": agent_state.is_finished,
+                        },
+                    )
+                return ActOutput(
+                    tool_result=ToolResult(
+                        tool_call_id=act_input.tool_call.id,
+                        content=answer
+                        or "finish called without an answer — provide the complete "
+                        "answer in the `answer` argument",
+                        is_error=False,
+                    ),
+                    execution_time_ms=0.0,
+                    success=True,
                 )
 
             # =================================================================

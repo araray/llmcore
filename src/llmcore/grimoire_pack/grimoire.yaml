@@ -1,0 +1,12 @@
+name: llmcore-builtin
+version: 0.52.0
+description: >
+  Bundled llmcore control-plane pack: every llmcore agent prompt as a spell
+  and the builtin tool contracts as runes. Loaded as the BASE layer of the
+  layered Grimoire llmcore auto-wires; override any artifact by shipping the
+  same id in a higher layer (wairu pack / user repo).
+authors: [llmcore]
+spell_paths: [spells/]
+rune_paths: [runes/contracts/]
+promptlet_paths: [spells/promptlets/]
+vars_path: vars/defaults.yaml

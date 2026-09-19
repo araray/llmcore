@@ -53,10 +53,11 @@ class _Role:
 
 
 class _Message:
-    def __init__(self, role, content, tool_call_id=None, metadata=None):
+    def __init__(self, role, content, tool_call_id=None, metadata=None, tool_calls=None):
         self.role = _Role(role)
         self.content = content
         self.tool_call_id = tool_call_id
+        self.tool_calls = tool_calls
         self.metadata = metadata or {}
 
     def __repr__(self):
@@ -596,6 +597,66 @@ class TestBuildMessagePayload:
         assert result["content"] == "Let me calculate that."
         assert result["tool_calls"] == tool_calls
 
+    def test_assistant_with_first_class_tool_calls_field(self):
+        """Message.tool_calls (R-2) maps to the native assistant tool_calls entry."""
+        provider = self._make_provider_stub()
+        tool_calls = [
+            {
+                "id": "call_789",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"city": "SF"}'},
+            }
+        ]
+        msg = _Message(role="assistant", content="", tool_calls=tool_calls)
+        result = provider._build_message_payload(msg, "gpt-4o")
+        assert result["role"] == "assistant"
+        assert result["tool_calls"] == tool_calls
+        assert result["content"] is None
+
+    def test_first_class_tool_calls_precede_metadata(self):
+        """The first-class field wins over the legacy metadata channel."""
+        provider = self._make_provider_stub()
+        field_calls = [
+            {"id": "call_field", "type": "function", "function": {"name": "a", "arguments": "{}"}}
+        ]
+        meta_calls = [
+            {"id": "call_meta", "type": "function", "function": {"name": "b", "arguments": "{}"}}
+        ]
+        msg = _Message(
+            role="assistant",
+            content="",
+            tool_calls=field_calls,
+            metadata={"tool_calls": meta_calls},
+        )
+        result = provider._build_message_payload(msg, "gpt-4o")
+        assert result["tool_calls"] == field_calls
+
+    def test_real_llmcore_message_tool_protocol(self):
+        """Real llmcore Message objects drive the native tool wire format."""
+        from llmcore.models import Message, Role
+
+        provider = self._make_provider_stub()
+        calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": '{"q": "x"}'},
+            }
+        ]
+        assistant = Message(role=Role.ASSISTANT, content="", tool_calls=calls)
+        tool_msg = Message(role=Role.TOOL, content='{"answer": 42}', tool_call_id="call_1")
+
+        assistant_payload = provider._build_message_payload(assistant, "gpt-4o")
+        assert assistant_payload["tool_calls"] == calls
+        assert assistant_payload["content"] is None
+
+        tool_payload = provider._build_message_payload(tool_msg, "gpt-4o")
+        assert tool_payload == {
+            "role": "tool",
+            "content": '{"answer": 42}',
+            "tool_call_id": "call_1",
+        }
+
     def test_multimodal_inline_images(self):
         provider = self._make_provider_stub()
         msg = _Message(
@@ -709,6 +770,11 @@ class TestGetSupportedParameters:
         assert "max_tokens" not in params
         assert "max_completion_tokens" in params
 
+    def test_reasoning_effort_enum_includes_xhigh(self):
+        provider = self._make_provider_stub()
+        params = provider.get_supported_parameters()
+        assert params["reasoning_effort"]["enum"] == ["low", "medium", "high", "xhigh"]
+
     def test_has_new_parameters(self):
         provider = self._make_provider_stub()
         params = provider.get_supported_parameters()
@@ -727,6 +793,49 @@ class TestGetSupportedParameters:
         assert "store" in params
         assert "metadata" in params
         assert "user" in params
+
+
+class TestReasoningEffortWireMapping:
+    """Tests that reasoning_effort tiers pass through to the wire unchanged.
+
+    OpenAI's API spells the top tier "xhigh" (same as llmcore's canonical
+    spelling), so no rewrite must ever happen on the way out.
+    """
+
+    def _make_provider_stub(self, default_model="gpt-5.2-pro"):
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        provider = object.__new__(OpenAIProvider)
+        provider.log_raw_payloads_enabled = False
+        provider._provider_instance_name = "openai"
+        provider.default_model = default_model
+        provider._client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.model_dump.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_resp)
+        return provider
+
+    @pytest.mark.asyncio
+    async def test_all_tiers_pass_through_unchanged(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub()
+        for tier in ("low", "medium", "high", "xhigh"):
+            await provider.chat_completion(
+                [Message(role="user", content="hi")], reasoning_effort=tier
+            )
+            call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["reasoning_effort"] == tier
+
+    @pytest.mark.asyncio
+    async def test_absent_reasoning_effort_not_injected(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub()
+        await provider.chat_completion([Message(role="user", content="hi")])
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert "reasoning_effort" not in call_kwargs
 
 
 class TestExtractResponseContent:
@@ -927,3 +1036,114 @@ class TestModelNotFoundError:
         ]
         for msg, pattern in zip(test_messages, patterns):
             assert pattern in msg.lower(), f"Pattern '{pattern}' not found in '{msg}'"
+
+
+class TestNativeSearch:
+    """Tests for provider-native web-search routing (plan §4/F9 dependency).
+
+    ``native_search=True`` must attach OpenAI's ``web_search_options`` or, for
+    the xAI instance served through this OpenAI-compatible provider, Live Search
+    via ``search_parameters`` in ``extra_body``. It must be a byte-identical
+    no-op by default and a clean no-op on instances without a native surface.
+    """
+
+    def _make_provider_stub(self, instance_name="openai", default_model="gpt-4o"):
+        from llmcore.providers.openai_provider import OpenAIProvider
+
+        provider = object.__new__(OpenAIProvider)
+        provider.log_raw_payloads_enabled = False
+        provider._provider_instance_name = instance_name
+        provider.default_model = default_model
+        provider._client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.model_dump.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_resp)
+        return provider
+
+    def test_supports_native_search_openai_and_xai(self):
+        assert self._make_provider_stub("openai").supports_native_search("gpt-4o") is True
+        assert self._make_provider_stub("xai").supports_native_search("grok-4") is True
+
+    def test_supports_native_search_false_for_other_instances(self):
+        for name in ("groq", "together", "deepseek"):
+            assert self._make_provider_stub(name).supports_native_search() is False
+
+    @pytest.mark.asyncio
+    async def test_openai_native_search_attaches_web_search_options(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub("openai")
+        await provider.chat_completion(
+            [Message(role="user", content="latest news?")], native_search=True
+        )
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["web_search_options"] == {}
+        assert "extra_body" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_openai_native_search_preserves_caller_web_search_options(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub("openai")
+        await provider.chat_completion(
+            [Message(role="user", content="hi")],
+            native_search=True,
+            web_search_options={"search_context_size": "high"},
+        )
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["web_search_options"] == {"search_context_size": "high"}
+
+    @pytest.mark.asyncio
+    async def test_default_off_is_byte_identical(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub("openai")
+        await provider.chat_completion([Message(role="user", content="hi")])
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert "web_search_options" not in call_kwargs
+        assert "extra_body" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_xai_native_search_attaches_live_search_extra_body(self):
+        from llmcore.models import Message
+
+        provider = self._make_provider_stub("xai", default_model="grok-4")
+        await provider.chat_completion(
+            [Message(role="user", content="what happened today?")], native_search=True
+        )
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
+        assert "web_search_options" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_unsupported_instance_native_search_is_noop(self):
+        from llmcore.models import Message
+
+        # groq has no native search surface: forcing native_search must not add
+        # any grounding config and must not raise.
+        provider = self._make_provider_stub("groq", default_model="llama-3.3-70b")
+        await provider.chat_completion(
+            [Message(role="user", content="hi")], native_search=True
+        )
+
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert "web_search_options" not in call_kwargs
+        assert "extra_body" not in call_kwargs
+
+    def test_apply_native_search_preserves_existing_extra_body(self):
+        # Direct helper check: merging must not clobber caller extra_body keys.
+        provider = self._make_provider_stub("xai")
+        api_kwargs = {"extra_body": {"foo": "bar"}}
+        provider._apply_native_search(api_kwargs)
+        assert api_kwargs["extra_body"]["foo"] == "bar"
+        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
+
+    def test_apply_native_search_does_not_override_existing_search_parameters(self):
+        provider = self._make_provider_stub("xai")
+        api_kwargs = {"extra_body": {"search_parameters": {"mode": "on"}}}
+        provider._apply_native_search(api_kwargs)
+        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "on"}

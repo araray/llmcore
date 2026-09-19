@@ -11,6 +11,7 @@ Covers:
 """
 
 import json
+import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -875,3 +876,65 @@ class TestGoalManagerFromConfig:
 
         # LLM should NOT have been called because config says False
         mock_llm.complete.assert_not_called()
+
+
+class TestAutoDecomposeNoProviderWarning:
+    """Tests for the warning emitted when auto_decompose has no LLM provider."""
+
+    def _warning_records(self, caplog):
+        return [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "no LLM provider" in r.getMessage()
+        ]
+
+    @pytest.mark.asyncio
+    async def test_warns_once_per_manager_instance(self, goal_store, caplog):
+        """auto_decompose without a provider should warn once, not per call."""
+        manager = GoalManager(goal_store)  # llm_provider=None, auto_decompose defaults True
+        await manager.initialize()
+
+        with caplog.at_level(logging.WARNING, logger="llmcore.autonomous.goals"):
+            goal = await manager.set_primary_goal("first goal")
+            await manager.set_primary_goal("second goal")
+
+        assert len(self._warning_records(caplog)) == 1
+        # No decomposition happened — behavior unchanged
+        assert goal.sub_goal_ids == []
+
+    @pytest.mark.asyncio
+    async def test_fresh_manager_warns_again(self, goal_store, caplog):
+        """The once-only latch is per manager instance."""
+        with caplog.at_level(logging.WARNING, logger="llmcore.autonomous.goals"):
+            manager1 = GoalManager(goal_store)
+            await manager1.initialize()
+            await manager1.set_primary_goal("goal one")
+
+            manager2 = GoalManager(goal_store)
+            await manager2.initialize()
+            await manager2.set_primary_goal("goal two")
+
+        assert len(self._warning_records(caplog)) == 2
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_auto_decompose_disabled(self, goal_store, caplog):
+        """No warning when decomposition was not requested."""
+        manager = GoalManager(goal_store)
+        await manager.initialize()
+
+        with caplog.at_level(logging.WARNING, logger="llmcore.autonomous.goals"):
+            await manager.set_primary_goal("no decompose", auto_decompose=False)
+
+        assert self._warning_records(caplog) == []
+
+    @pytest.mark.asyncio
+    async def test_no_warning_with_provider(self, goal_store, caplog):
+        """No warning when an LLM provider is configured."""
+        manager = GoalManager(goal_store, llm_provider=MagicMock())
+        await manager.initialize()
+        manager._decompose_goal = AsyncMock(return_value=[])
+
+        with caplog.at_level(logging.WARNING, logger="llmcore.autonomous.goals"):
+            await manager.set_primary_goal("with provider")
+
+        assert self._warning_records(caplog) == []

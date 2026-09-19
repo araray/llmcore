@@ -138,7 +138,6 @@ _OPENAI_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
 _warned_unknown_models: set[str] = set()
 DEFAULT_MODEL = "gpt-4o"
 
-
 def _is_reasoning_model(model: str) -> bool:
     """Check if model is an o-series reasoning model."""
     return any(model.startswith(p) for p in ("o1", "o3", "o4"))
@@ -232,6 +231,44 @@ class OpenAIProvider(BaseProvider):
     def get_name(self) -> str:
         return self._provider_instance_name or "openai"
 
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """Whether this instance exposes a native web-search surface.
+
+        Only the genuine OpenAI and xAI instances served through this
+        OpenAI-compatible provider have one: OpenAI via the Chat Completions
+        ``web_search_options`` field, xAI via Live Search
+        (``search_parameters`` in ``extra_body``). Other OpenAI-compatible
+        instances (groq, together, openrouter, deepinfra, vllm, poe, …) report
+        ``False`` so ``native_search`` stays a clean no-op for them.
+        """
+        return self.get_name() in ("openai", "xai")
+
+    def _apply_native_search(self, api_kwargs: dict[str, Any]) -> None:
+        """Attach the instance's native web-search config to ``api_kwargs``.
+
+        Additive and non-destructive: any caller-supplied ``web_search_options``
+        or ``extra_body`` is preserved. Unknown instances are a logged no-op so
+        this can never raise even if called directly.
+        """
+        name = self.get_name()
+        if name == "xai":
+            # xAI Live Search: search_parameters is a non-OpenAI body field, so
+            # it must ride along in extra_body. mode="auto" lets the model
+            # decide whether to search.
+            extra_body = dict(api_kwargs.get("extra_body") or {})
+            extra_body.setdefault("search_parameters", {"mode": "auto"})
+            api_kwargs["extra_body"] = extra_body
+        elif name == "openai":
+            # OpenAI Chat Completions native web search: an empty options object
+            # enables it with provider defaults.
+            api_kwargs.setdefault("web_search_options", {})
+        else:  # pragma: no cover - guarded by supports_native_search
+            logger.debug(
+                "native_search requested for OpenAI-compatible instance '%s' "
+                "without a native search surface; ignoring.",
+                name,
+            )
+
     async def get_models_details(self) -> list[ModelDetails]:
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
@@ -305,7 +342,7 @@ class OpenAIProvider(BaseProvider):
             "stream_options": {"type": "object"},
             "modalities": {"type": "array", "items": {"type": "string"}},
             "audio": {"type": "object"},
-            "reasoning_effort": {"type": "string", "enum": ["low", "medium", "high"]},
+            "reasoning_effort": {"type": "string", "enum": ["low", "medium", "high", "xhigh"]},
             "prediction": {"type": "object"},
             "service_tier": {"type": "string"},
             "store": {"type": "boolean"},
@@ -406,8 +443,11 @@ class OpenAIProvider(BaseProvider):
         if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
             msg_dict["tool_call_id"] = msg.tool_call_id
 
-        if role_str == "assistant" and "tool_calls" in metadata:
-            msg_dict["tool_calls"] = metadata["tool_calls"]
+        # First-class Message.tool_calls (R-2) takes precedence over the
+        # legacy metadata["tool_calls"] channel.
+        tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+        if role_str == "assistant" and tool_calls:
+            msg_dict["tool_calls"] = tool_calls
             if not msg.content:
                 msg_dict["content"] = None
 
@@ -427,6 +467,7 @@ class OpenAIProvider(BaseProvider):
         stream: bool = False,
         tools: list[Tool] | None = None,
         tool_choice: str | None = None,
+        native_search: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
         if not self._client:
@@ -454,6 +495,9 @@ class OpenAIProvider(BaseProvider):
             api_kwargs["tools"] = tools_payload_api
         if tool_choice:
             api_kwargs["tool_choice"] = tool_choice
+
+        if native_search:
+            self._apply_native_search(api_kwargs)
 
         if _is_reasoning_model(model_name) and "max_tokens" in api_kwargs:
             if "max_completion_tokens" not in api_kwargs:

@@ -47,6 +47,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from ...shared_events import emit as _spine_emit
+from ...shared_events import has_sinks as _spine_has_sinks
+from ...shared_events import new_event as _spine_new_event
 from .events import (
     ActivityEvent,
     ActivityEventType,
@@ -622,6 +625,24 @@ class EventLogger:
                 await sink.write(event)
             except Exception as e:
                 self._logger.error(f"Failed to write to sink {sink.name}: {e}")
+
+        # Forward to the cross-repo shared-events spine (S-3). The has_sinks()
+        # guard keeps this a near-free no-op when nobody is listening, and any
+        # failure here must never affect local logging.
+        if _spine_has_sinks():
+            try:
+                # category may be an enum (frozen defaults skip use_enum_values).
+                category = getattr(event.category, "value", event.category)
+                _spine_emit(
+                    _spine_new_event(
+                        source="llmcore",
+                        event_type=f"{category}.{event.event_type}",
+                        payload=event.to_dict(),
+                        correlation_id=event.correlation_id,
+                    )
+                )
+            except Exception:
+                self._logger.debug("shared_events forwarding failed", exc_info=True)
 
         return event
 

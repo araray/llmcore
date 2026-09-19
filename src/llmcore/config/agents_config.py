@@ -16,6 +16,11 @@ The configuration hierarchy:
     ├── CircuitBreakerConfig - Circuit breaker settings
     ├── ActivitiesConfig     - Activity system settings
     ├── ToolInventoryConfig  - Lightweight tool inventory and schema selection
+    ├── ConvergenceConfig    - Finish-tool convergence and forced finalize
+    ├── ValidationConfig     - VALIDATE phase deterministic guards
+    ├── RedundancyConfig     - Redundant-call detection
+    ├── PlanningConfig       - Conditional PLAN gating + replan budget
+    ├── ReflectionConfig     - REFLECT gating, structured output, grounding
     ├── CapabilityCheckConfig- Model capability checking
     ├── HITLConfig           - Human-in-the-loop settings
     ├── RoutingConfig        - Model routing settings
@@ -303,6 +308,216 @@ class ToolInventoryConfig(BaseModel):
 
 
 # =============================================================================
+# CONVERGENCE CONFIG
+# =============================================================================
+
+
+class ConvergenceConfig(BaseModel):
+    """
+    Configuration for agent convergence (finish-tool + forced finalize).
+
+    Convergence guarantees the cognitive cycle exits with a final answer:
+    native ``finish``-tool calls terminate the run directly, and when the
+    iteration budget runs out an in-cycle forced-finalize synthesis pass
+    produces the best answer from the accumulated observations instead of
+    returning "task incomplete".
+
+    Forced finalize and exhaustion synthesis require the budget to leave
+    room for at least one normal iteration
+    (``max_iterations > max(1, finalize_when_remaining)``): single-iteration
+    budgets — the bounded ``run(max_iterations=1)`` outer-loop driving
+    pattern — keep legacy semantics because the outer driver owns
+    convergence there.
+    """
+
+    finish_tool_names: list[str] = Field(
+        default_factory=lambda: ["finish", "final_answer"],
+        description="Tool names treated as the terminal finish signal",
+    )
+    require_nonempty_answer: bool = Field(
+        default=True,
+        description="Reject finish calls whose answer argument is empty",
+    )
+    min_answer_chars: int = Field(
+        default=1,
+        ge=0,
+        description="Minimum answer length (chars) for a finish call to terminate",
+    )
+    forced_finalize_enabled: bool = Field(
+        default=True,
+        description="Replace the last budgeted iteration with a finalize synthesis pass",
+    )
+    finalize_when_remaining: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "Force finalize when this many iterations remain (0 disables the "
+            "in-loop trigger; exhaustion synthesis still applies)"
+        ),
+    )
+    synthesis_on_exhaustion: bool = Field(
+        default=True,
+        description=(
+            "Synthesize a final answer when the loop exits un-finished "
+            "(max-iterations / update-stopped exits only)"
+        ),
+    )
+    finalize_temperature: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=2.0,
+        description="LLM temperature for the forced-finalize synthesis call",
+    )
+
+
+# =============================================================================
+# VALIDATION CONFIG
+# =============================================================================
+
+
+class ValidationConfig(BaseModel):
+    """
+    Configuration for the VALIDATE phase.
+
+    ``deterministic_guards`` keeps the no-LLM safety checks (tool-registry
+    membership + dangerous-pattern scan) active even when a caller skips the
+    LLM validation judge (``skip_validation=True``): dangerous arguments
+    pause for human approval and unknown tools are rejected. Disable it to
+    restore the pre-0.52 blanket auto-approve behavior.
+    """
+
+    deterministic_guards: bool = Field(
+        default=True,
+        description="Run deterministic registry/danger guards even under skip_validation",
+    )
+
+
+# =============================================================================
+# PLANNING CONFIG
+# =============================================================================
+
+
+class PlanMode(str, Enum):
+    """When the PLAN phase runs (see PlanningConfig)."""
+
+    ALWAYS = "always"  # Legacy predicate (kept for explicit opt-in)
+    FIRST = "first"  # Legacy predicate: first iteration / empty plan / replan
+    COMPLEX_ONLY = "complex_only"  # Like first, gated on moderate/complex goals
+    ON_FAILURE = "on_failure"  # Only after a failed action or replan request
+
+
+class PlanningConfig(BaseModel):
+    """
+    Configuration for conditional planning (2.5, BOLAA/ADaPT-informed).
+
+    Plan-before-observe measurably hurts simple/knowledge tasks, so the PLAN
+    phase is gated by ``mode``:
+
+    - ``always``/``first``: legacy behavior — plan on the first iteration,
+      when the plan is empty, or when a replan was requested.
+    - ``complex_only`` (default): like ``first`` but only for goals whose
+      complexity is moderate/complex. Complexity comes from working memory
+      (``goal_complexity``, stamped by SingleAgentMode) or the heuristic
+      ``GoalClassifier`` — never an LLM call.
+    - ``on_failure``: plan only after a failed action or a replan request.
+
+    ``max_replans`` caps reflection-driven plan rewrites per run (UPDATE
+    phase); ``plan_on_failure_escalation`` lets first/complex_only recover a
+    plan after a failed observation while the plan is still empty.
+    """
+
+    mode: PlanMode = Field(
+        default=PlanMode.COMPLEX_ONLY,
+        description="When the PLAN phase runs",
+    )
+    max_replans: int = Field(
+        default=3,
+        ge=0,
+        description="Maximum reflection-driven replans per run",
+    )
+    plan_on_failure_escalation: bool = Field(
+        default=True,
+        description=(
+            "first/complex_only also plan once after a failed observation "
+            "while the plan is empty"
+        ),
+    )
+
+
+# =============================================================================
+# REFLECTION CONFIG
+# =============================================================================
+
+
+class ReflectMode(str, Enum):
+    """When the REFLECT phase calls the LLM (see ReflectionConfig)."""
+
+    ALWAYS = "always"  # Legacy behavior: reflect every iteration
+    ON_ACTION = "on_action"  # Skip the LLM call on no-action iterations
+    ON_FAILURE = "on_failure"  # LLM reflection only after a failed action
+
+
+class ReflectionConfig(BaseModel):
+    """
+    Configuration for the REFLECT phase (2.6).
+
+    - ``mode``: when the reflection LLM call runs. ``on_action`` (default)
+      skips it for iterations where THINK proposed no action; ``on_failure``
+      reserves it for failed actions; ``always`` keeps legacy behavior.
+      Skipped calls synthesize a deterministic ReflectOutput advanced from
+      external signals only (act success + observe follow-up).
+    - ``use_structured_output``: request ``response_format={"type":
+      "json_object"}`` (temperature 0.3) from providers that whitelist it
+      in ``get_supported_parameters`` (openai/deepseek/kimi/zai); the
+      strict-JSON parse falls back to the labeled-text parser.
+    - ``ground_in_observations``: never trust self-judgment over a failed
+      action — force ``step_completed=False`` and clamp the progress
+      estimate; an iteration that set a final answer is 100% done.
+    """
+
+    mode: ReflectMode = Field(
+        default=ReflectMode.ON_ACTION,
+        description="When the reflection LLM call runs",
+    )
+    use_structured_output: bool = Field(
+        default=True,
+        description="Request JSON reflection output from capable providers",
+    )
+    ground_in_observations: bool = Field(
+        default=True,
+        description="Override reflection self-judgment with external action signals",
+    )
+
+
+# =============================================================================
+# REDUNDANCY CONFIG
+# =============================================================================
+
+
+class RedundancyConfig(BaseModel):
+    """
+    Configuration for the redundant-call detector (post-THINK choke point).
+
+    Re-proposing a tool call whose name+arguments signature already executed
+    is wasted budget: the detector skips VALIDATE/ACT for the repeat and
+    feeds a corrective observation into REFLECT instead. Once one signature
+    has been seen ``force_finalize_after`` times the run routes to forced
+    finalization (subject to the same budget guard as ConvergenceConfig —
+    single-iteration budgets keep legacy semantics).
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Detect repeated identical tool calls and skip re-execution",
+    )
+    force_finalize_after: int = Field(
+        default=3,
+        ge=1,
+        description="Force finalization once one action signature is seen this many times",
+    )
+
+
+# =============================================================================
 # CAPABILITY CHECK CONFIG
 # =============================================================================
 
@@ -487,6 +702,26 @@ class AgentsConfig(BaseModel):
     tool_inventory: ToolInventoryConfig = Field(
         default_factory=ToolInventoryConfig,
         description="Lightweight tool inventory and native schema selection",
+    )
+    convergence: ConvergenceConfig = Field(
+        default_factory=ConvergenceConfig,
+        description="Finish-tool convergence and forced-finalize settings",
+    )
+    validation: ValidationConfig = Field(
+        default_factory=ValidationConfig,
+        description="VALIDATE phase settings (deterministic guards)",
+    )
+    redundancy: RedundancyConfig = Field(
+        default_factory=RedundancyConfig,
+        description="Redundant-call detection settings",
+    )
+    planning: PlanningConfig = Field(
+        default_factory=PlanningConfig,
+        description="Conditional PLAN gating and replan budget",
+    )
+    reflection: ReflectionConfig = Field(
+        default_factory=ReflectionConfig,
+        description="REFLECT phase gating, structured output, and grounding",
     )
     capability_check: CapabilityCheckConfig = Field(
         default_factory=CapabilityCheckConfig, description="Capability checking settings"
@@ -754,6 +989,11 @@ FastPathConfig.model_rebuild()
 CircuitBreakerConfig.model_rebuild()
 ActivitiesConfig.model_rebuild()
 ToolInventoryConfig.model_rebuild()
+ConvergenceConfig.model_rebuild()
+ValidationConfig.model_rebuild()
+RedundancyConfig.model_rebuild()
+PlanningConfig.model_rebuild()
+ReflectionConfig.model_rebuild()
 CapabilityCheckConfig.model_rebuild()
 HITLConfig.model_rebuild()
 RoutingTiersConfig.model_rebuild()
@@ -767,12 +1007,19 @@ __all__ = [  # noqa: RUF022 - keep grouped by public API category
     "TimeoutPolicy",
     "RoutingStrategy",
     "RiskLevel",
+    "PlanMode",
+    "ReflectMode",
     # Config classes
     "GoalsConfig",
     "FastPathConfig",
     "CircuitBreakerConfig",
     "ActivitiesConfig",
     "ToolInventoryConfig",
+    "ConvergenceConfig",
+    "ValidationConfig",
+    "RedundancyConfig",
+    "PlanningConfig",
+    "ReflectionConfig",
     "CapabilityCheckConfig",
     "HITLConfig",
     "RoutingConfig",

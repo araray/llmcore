@@ -399,7 +399,7 @@ class TestPlanPhase:
     """Tests for enhanced PLAN phase implementation."""
 
     @pytest.mark.asyncio
-    async def test_plan_phase_basic(self):
+    async def test_plan_phase_basic(self, bundled_prompt_registry):
         """Test basic PLAN phase execution."""
         # Mock provider manager
         provider_manager = Mock()
@@ -436,7 +436,10 @@ RISKS:
 
         # Execute phase
         output = await plan_phase(
-            agent_state=state, plan_input=plan_input, provider_manager=provider_manager
+            agent_state=state,
+            plan_input=plan_input,
+            provider_manager=provider_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify
@@ -448,12 +451,44 @@ RISKS:
         assert state.metadata["plan_step_specs"][0]["description"] == output.plan_steps[0].description
         assert state.plan_version == 1
 
+    @pytest.mark.asyncio
+    async def test_plan_phase_requires_prompt_registry(self):
+        """PLAN without a registry fails loudly — no f-string fallback (0.52.0)."""
+        provider_manager = Mock()
+
+        with pytest.raises(ValueError, match="prompt_registry is required"):
+            await plan_phase(
+                agent_state=EnhancedAgentState(goal="Test"),
+                plan_input=PlanInput(goal="Calculate factorial"),
+                provider_manager=provider_manager,
+            )
+        provider_manager.get_provider.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_plan_phase_template_render_error_propagates(self):
+        """A broken template aborts the phase instead of degrading it (0.52.0)."""
+
+        class BrokenRegistry:
+            def render_messages(self, template_id, variables):
+                raise RuntimeError("template exploded")
+
+        provider_manager = Mock()
+
+        with pytest.raises(RuntimeError, match="template exploded"):
+            await plan_phase(
+                agent_state=EnhancedAgentState(goal="Test"),
+                plan_input=PlanInput(goal="Calculate factorial"),
+                provider_manager=provider_manager,
+                prompt_registry=BrokenRegistry(),
+            )
+        provider_manager.get_provider.assert_not_called()
+
 
 class TestThinkPhase:
     """Tests for enhanced THINK phase implementation."""
 
     @pytest.mark.asyncio
-    async def test_think_phase_uses_structured_plan_step_tool(self):
+    async def test_think_phase_uses_structured_plan_step_tool(self, bundled_prompt_registry):
         """THINK uses a typed plan step tool intent without another LLM call."""
         provider_manager = Mock()
         memory_manager = Mock()
@@ -477,6 +512,7 @@ class TestThinkPhase:
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         assert output.proposed_action is not None
@@ -487,7 +523,7 @@ class TestThinkPhase:
         provider_manager.get_provider.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_think_phase_with_action(self):
+    async def test_think_phase_with_action(self, bundled_prompt_registry):
         """Test THINK phase proposing an action."""
         # Mock provider manager
         provider_manager = Mock()
@@ -534,6 +570,7 @@ Action Input: {"expression": "10!"}
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify
@@ -544,7 +581,7 @@ Action Input: {"expression": "10!"}
         assert state.pending_tool_call == output.proposed_action
 
     @pytest.mark.asyncio
-    async def test_think_phase_with_final_answer(self):
+    async def test_think_phase_with_final_answer(self, bundled_prompt_registry):
         """Test THINK phase providing final answer."""
         provider_manager = Mock()
         provider = Mock()
@@ -580,6 +617,7 @@ Final Answer: The factorial of 10 is 3,628,800
             provider_manager=provider_manager,
             memory_manager=memory_manager,
             tool_manager=tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
         # Verify

@@ -203,6 +203,120 @@ chromadb = "WARNING"
 posthog = "ERROR"
 
 # ==============================================================================
+# [grimoire] - Prompt/Tool/Skill Control Plane (0.52.0+, HARD dependency)
+# ==============================================================================
+# ALL llmcore agent prompts are grimoire spells. The bundled pack
+# (llmcore/grimoire_pack) is ALWAYS the base layer, so agents work with zero
+# configuration. Overlay layers compose ABOVE it with deterministic
+# precedence (highest wins):
+#
+#     llmcore-builtin  <  extra packs  <  admin  <  user...
+#
+# FAIL-LOUD: overlay layers load strict; when any overlay is configured,
+# every required prompt template is rendered once at init and ANY failure
+# aborts startup naming the template, spell, and layer. There is no silent
+# fallback (the pre-0.52 f-string fallbacks are gone).
+[grimoire]
+
+# Additional read-only packs layered ABOVE the bundled pack and BELOW
+# admin/user overlays. Hosts (e.g. wairu) point this at their own bundled
+# packs when not injecting a pre-built Grimoire instance.
+# Default Value: []
+extra_pack_paths = []
+
+# Optional read-only admin overlay repo.
+# Default Value: ""
+admin_repo_path = ""
+
+# Ordered user overlay roots (lowest -> highest precedence). The LAST entry
+# is the writable layer (scaffolded on demand). Override any bundled spell,
+# rune, promptlet, ritual, or skilldoc by shipping the same id here.
+# Default Value: []
+user_repo_paths = []
+
+# llmcore template id -> spell id overrides, merged over the built-in map
+# (e.g. thinking_prompt = "my/company/think").
+# Default Value: {}
+prompt_map = {}
+
+# Strict conjure: a spell referencing a missing REQUIRED variable raises
+# instead of leaving the placeholder unfilled.
+# Default Value: true
+strict = true
+
+# Render every required template at init when overlays are configured.
+# Default Value: true
+validate_on_startup = true
+
+# Persistent prompt-usage telemetry (JSONL). In-memory metrics always run;
+# this adds the durable sink for cross-process prompt optimization work.
+[grimoire.metrics]
+# Default Value: false
+enabled = false
+# Default Value: "" (=> ~/.local/state/llmcore/prompt_usage.jsonl)
+path = ""
+
+# ==============================================================================
+# [moderation] - Content Moderation Gateway (SF-1 / DDS-06)
+# ==============================================================================
+# Two-stage moderation: a gateway (e.g. OpenAI's /moderations endpoint)
+# scores text per category, then a policy applies thresholds and decides
+# allow / warn / block. Consumers (e.g. wairu's ToolDispatcher) opt in.
+#
+# SAFETY: with fail_safe = true (the default), a gateway error while
+# moderation is ENABLED results in a BLOCK decision — never a silent allow.
+[moderation]
+
+# Master switch. Moderation is OFF by default; enabling it requires a
+# working gateway (API key for the configured provider).
+# Default Value: false
+# Environment Variable: LLMCORE_MODERATION__ENABLED
+enabled = false
+
+# Gateway backend: "openai" (the /moderations endpoint) or "noop"
+# (never flags anything — dry-run wiring only).
+# Default Value: "openai"
+# Environment Variable: LLMCORE_MODERATION__PROVIDER
+provider = "openai"
+
+# Moderation model (OpenAI provider). The omni models accept text today;
+# see https://platform.openai.com/docs/guides/moderation for options.
+# Default Value: "omni-moderation-latest"
+model = "omni-moderation-latest"
+
+# Fail-safe: when true, a gateway exception (timeout, auth, transport)
+# while moderation is enabled yields BLOCK. Setting this to false
+# (fail-open) is an explicit, logged opt-out — not recommended.
+# Default Value: true
+fail_safe = true
+
+# What to do when content triggers the policy: "block" or "warn"
+# ("warn" still allows the content through but surfaces the decision).
+# Default Value: "block"
+default_action = "block"
+
+# Request timeout (seconds) and SDK-level retries for the gateway call.
+timeout = 30.0
+max_retries = 2
+
+# API key resolution (OpenAI provider): [moderation].api_key, then
+# api_key_env_var, then the OPENAI_API_KEY environment variable.
+# api_key_env_var = "OPENAI_API_KEY"
+
+# Optional score threshold applied to categories NOT listed in
+# [moderation.thresholds]. When unset, unlisted categories defer to the
+# provider's own per-category flag.
+# default_threshold = 0.9
+
+# Optional per-category thresholds (inclusive, 0.0-1.0). A category listed
+# here triggers purely on its score, overriding the provider's flag for
+# that category. Category names are snake_case (e.g. self_harm_intent,
+# harassment_threatening, violence_graphic).
+# [moderation.thresholds]
+# violence = 0.8
+# self_harm = 0.5
+
+# ==============================================================================
 # [providers] - LLM Provider Configurations
 # ==============================================================================
 # This section is where all individual LLM provider instances are defined.

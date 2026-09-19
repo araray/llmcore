@@ -46,6 +46,7 @@
   },
   "provider_extension": {
     "owned_by": "OpenAI",
+    "reasoning_effort": "xhigh",
     "input_modalities": [
       "text",
       "image"

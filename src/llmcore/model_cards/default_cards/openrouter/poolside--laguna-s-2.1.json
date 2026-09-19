@@ -1,0 +1,40 @@
+{
+  "model_id": "poolside/laguna-s-2.1",
+  "display_name": "Poolside: Laguna S 2.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.09,
+      "output": 0.18
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-21"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Laguna S 2.1 is the latest coding agent model from [Poolside](<https://poolside.ai/>). Laguna S 2.1 is a 118B total parameter model with 8B active parameters, scoring 70.2% on Terminal-Bench 2.1 and...",
+  "tags": [],
+  "source": "generated"
+}

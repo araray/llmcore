@@ -51,6 +51,7 @@ class TestCircuitBreakerIntegration:
         mock_memory_manager,
         mock_storage_manager,
         mock_tool_manager,
+        bundled_prompt_registry,
     ):
         """Create a cognitive cycle instance."""
         from llmcore.agents.cognitive.phases.cycle import CognitiveCycle
@@ -60,6 +61,7 @@ class TestCircuitBreakerIntegration:
             memory_manager=mock_memory_manager,
             storage_manager=mock_storage_manager,
             tool_manager=mock_tool_manager,
+            prompt_registry=bundled_prompt_registry,
         )
 
     @pytest.fixture

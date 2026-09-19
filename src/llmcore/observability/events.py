@@ -76,6 +76,10 @@ from typing import (
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
+from ..shared_events import emit as _spine_emit
+from ..shared_events import has_sinks as _spine_has_sinks
+from ..shared_events import new_event as _spine_new_event
+
 logger = logging.getLogger(__name__)
 
 
@@ -728,6 +732,23 @@ class ObservabilityLogger:
             self._buffer.add(event)
         elif self._writer:
             self._writer.write([event])
+
+        # Forward to the cross-repo shared-events spine (S-3). The has_sinks()
+        # guard keeps this a near-free no-op when nobody is listening, and any
+        # failure here must never affect local logging.
+        if _spine_has_sinks():
+            try:
+                # category may be an enum (defaults can bypass use_enum_values).
+                category = getattr(event.category, "value", event.category)
+                _spine_emit(
+                    _spine_new_event(
+                        source="llmcore",
+                        event_type=f"{category}.{event.event_type}",
+                        payload=event.to_dict(),
+                    )
+                )
+            except Exception:
+                logger.debug("shared_events forwarding failed", exc_info=True)
 
     def _write_events(self, events: list[Event]) -> None:
         """Write events to file (callback for buffer)."""

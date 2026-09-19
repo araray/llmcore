@@ -83,6 +83,7 @@ from .schema import (
     RateLimits,
     TokenPricing,
     XAIExtension,
+    model_supports_native_search,
 )
 
 # =============================================================================
@@ -117,6 +118,8 @@ __all__ = [
     # Main models
     "ModelCard",
     "ModelCardSummary",
+    # Capability helpers
+    "model_supports_native_search",
     # Registry
     "ModelCardRegistry",
     "get_model_card_registry",

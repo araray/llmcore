@@ -67,13 +67,77 @@ class PersonaManager:
         ... )
     """
 
-    def __init__(self):
-        """Initialize the persona manager."""
+    #: Spells carrying persona definitions are tagged with this in the pack.
+    PERSONA_SPELL_TAG = "llmcore.persona"
+
+    def __init__(self, grimoire: Any | None = None):
+        """Initialize the persona manager.
+
+        Args:
+            grimoire: Grimoire facade to load persona definitions from
+                (spells tagged ``llmcore.persona``; bundled pack ships the
+                five builtins). When None — legacy no-grimoire construction
+                ONLY — the hardcoded builtin definitions load as a fallback.
+        """
         self.personas: dict[str, AgentPersona] = {}
-        self._load_builtin_personas()
+        if grimoire is not None:
+            self.load_from_grimoire(grimoire)
+        else:
+            self._load_builtin_personas()
+
+    def load_from_grimoire(self, grimoire: Any) -> int:
+        """Load personas from grimoire spells tagged ``llmcore.persona``.
+
+        Persona definitions travel in each spell's ``attributes.persona``
+        mapping (grimoire's opaque app-metadata field); the spell body is
+        informational only. Fail-loud: a tagged spell with a missing or
+        malformed persona payload raises — a control-plane layer that
+        advertises personas must produce valid ones.
+
+        Args:
+            grimoire: Grimoire facade (single-pack or layered).
+
+        Returns:
+            Number of personas loaded.
+
+        Raises:
+            ValueError: If no persona spells exist or a payload is invalid.
+        """
+        spells = grimoire.list_spells(tags=[self.PERSONA_SPELL_TAG])
+        if not spells:
+            raise ValueError(
+                f"No spells tagged {self.PERSONA_SPELL_TAG!r} found in grimoire — "
+                "broken pack? The bundled llmcore pack ships the builtin personas."
+            )
+
+        loaded = 0
+        for spell in spells:
+            payload = (getattr(spell, "attributes", None) or {}).get("persona")
+            if not isinstance(payload, dict):
+                raise ValueError(
+                    f"Persona spell {spell.id!r} has no attributes.persona mapping"
+                )
+            try:
+                persona = AgentPersona.model_validate(payload)
+            except Exception as exc:
+                raise ValueError(
+                    f"Persona spell {spell.id!r} carries an invalid persona payload: {exc}"
+                ) from exc
+            self.personas[persona.id] = persona
+            loaded += 1
+
+        logger.info(f"Loaded {loaded} personas from grimoire")
+        return loaded
 
     def _load_builtin_personas(self) -> None:
-        """Load built-in personas."""
+        """Load built-in personas.
+
+        .. deprecated:: 0.52.0
+            Legacy fallback for no-grimoire construction only. Grimoire-backed
+            managers source personas from ``llmcore.persona`` spells; these
+            hardcoded definitions mirror the bundled pack and will be removed
+            once the no-grimoire constructor goes away.
+        """
         builtin = [
             self._create_assistant_persona(),
             self._create_analyst_persona(),
@@ -88,11 +152,11 @@ class PersonaManager:
         logger.info(f"Loaded {len(builtin)} built-in personas")
 
     # =========================================================================
-    # BUILT-IN PERSONAS
+    # BUILT-IN PERSONAS (deprecated 0.52.0 — legacy no-grimoire fallback only)
     # =========================================================================
 
     def _create_assistant_persona(self) -> AgentPersona:
-        """Create the default Assistant persona."""
+        """Create the default Assistant persona (deprecated 0.52.0: bundled-pack spells are the source of truth)."""
         return AgentPersona(
             id="assistant",
             name="Assistant",
@@ -118,7 +182,7 @@ class PersonaManager:
         )
 
     def _create_analyst_persona(self) -> AgentPersona:
-        """Create the Analyst persona."""
+        """Create the Analyst persona (deprecated 0.52.0: bundled-pack spells are the source of truth)."""
         return AgentPersona(
             id="analyst",
             name="Data Analyst",
@@ -150,7 +214,7 @@ class PersonaManager:
         )
 
     def _create_developer_persona(self) -> AgentPersona:
-        """Create the Developer persona."""
+        """Create the Developer persona (deprecated 0.52.0: bundled-pack spells are the source of truth)."""
         return AgentPersona(
             id="developer",
             name="Software Developer",
@@ -184,7 +248,7 @@ class PersonaManager:
         )
 
     def _create_researcher_persona(self) -> AgentPersona:
-        """Create the Researcher persona."""
+        """Create the Researcher persona (deprecated 0.52.0: bundled-pack spells are the source of truth)."""
         return AgentPersona(
             id="researcher",
             name="Researcher",
@@ -218,7 +282,7 @@ class PersonaManager:
         )
 
     def _create_creative_persona(self) -> AgentPersona:
-        """Create the Creative persona."""
+        """Create the Creative persona (deprecated 0.52.0: bundled-pack spells are the source of truth)."""
         return AgentPersona(
             id="creative",
             name="Creative Thinker",

@@ -1,0 +1,40 @@
+{
+  "model_id": "poolside/laguna-xs-2.1",
+  "display_name": "Poolside: Laguna XS 2.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.06,
+      "output": 0.12
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-02"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Laguna XS 2.1 is the latest coding agent model in the 33B-A3B category from [Poolside](https://poolside.ai/) and a step forward from their Laguna XS.2 model (released in April 2026). It combines...",
+  "tags": [],
+  "source": "generated"
+}

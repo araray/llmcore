@@ -29,8 +29,11 @@ from ..models import (
     ValidateOutput,
     ValidationResult,
 )
+from ._prompting import messages_from_registry, record_template_use, require_prompt_registry
+from .usage import extract_usage
 
 if TYPE_CHECKING:
+    from ....models import Message
     from ....providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -78,7 +81,9 @@ async def validate_phase(
         agent_state: Current enhanced agent state
         validate_input: Input with action to validate
         provider_manager: Provider manager for LLM calls
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (REQUIRED as of 0.52.0 for the LLM
+            validation step — the deterministic registry/danger pre-checks
+            still run without it; a render failure aborts the phase)
         tracer: Optional OpenTelemetry tracer
         provider_name: Optional provider override
         model_name: Optional model override
@@ -104,61 +109,37 @@ async def validate_phase(
         >>> if output.result == ValidationResult.APPROVED:
         ...     # Proceed with action
     """
-    from ....models import Message, Role
     from ....tracing import add_span_attributes, create_span, record_span_exception
 
     with create_span(tracer, "cognitive.validate") as span:
+        logger.debug(
+            f"Starting VALIDATE phase for action: {validate_input.proposed_action.name}"
+        )
+
+        # 1-2. Deterministic pre-checks (tool-registry membership, then
+        # dangerous patterns) — no LLM, no prompt registry. Public so the
+        # cycle can run the same guards when the LLM judge is skipped.
+        precheck_output = deterministic_precheck(
+            validate_input.proposed_action,
+            tool_manager,
+            goal=validate_input.goal,
+            reasoning=validate_input.reasoning,
+        )
+        if precheck_output is not None:
+            return precheck_output
+
+        # 3. Render the VALIDATE messages (system + user) from the registry.
+        #    Built BEFORE the LLM try/except: a broken template must abort
+        #    the phase (fail-loud), never degrade it.
+        require_prompt_registry(prompt_registry, "VALIDATE")
+        messages = _generate_validation_messages(
+            validate_input=validate_input, prompt_registry=prompt_registry
+        )
+
         try:
-            logger.debug(
-                f"Starting VALIDATE phase for action: {validate_input.proposed_action.name}"
-            )
-
-            # 1. Ensure the proposed tool is available for this run before
-            # asking the model or a human to judge safety.
-            registry_check = _check_tool_registry(
-                validate_input.proposed_action,
-                tool_manager,
-            )
-            if registry_check:
-                logger.warning("Tool registry validation failed: %s", registry_check)
-                return ValidateOutput(
-                    result=ValidationResult.REJECTED,
-                    confidence=ConfidenceLevel.HIGH,
-                    concerns=[registry_check],
-                    suggestions=["Choose a loaded tool before validation and execution."],
-                    requires_human_approval=False,
-                )
-
-            # 2. Check for dangerous patterns.
-            dangerous_check = _check_dangerous_patterns(validate_input.proposed_action)
-            if dangerous_check:
-                logger.warning(f"Dangerous pattern detected: {dangerous_check}")
-                return ValidateOutput(
-                    result=ValidationResult.REQUIRES_HUMAN_APPROVAL,
-                    confidence=ConfidenceLevel.HIGH,
-                    concerns=[f"Dangerous pattern detected: {dangerous_check}"],
-                    suggestions=["Request human approval before executing"],
-                    requires_human_approval=True,
-                    approval_prompt=_generate_approval_prompt(validate_input, dangerous_check),
-                )
-
-            # 3. Generate validation prompt
-            validation_prompt = _generate_validation_prompt(
-                validate_input=validate_input, prompt_registry=prompt_registry
-            )
-
             # 4. Call LLM for validation
             provider = provider_manager.get_provider(provider_name)
             target_model = model_name or provider.default_model
-
-            messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content="You are a safety validation agent. Carefully evaluate proposed actions "
-                    "for safety, appropriateness, and effectiveness.",
-                ),
-                Message(role=Role.USER, content=validation_prompt),
-            ]
 
             if callable(getattr(type(provider_manager), "chat_completion_with_retry", None)):
                 response = await provider_manager.chat_completion_with_retry(
@@ -188,6 +169,7 @@ async def validate_phase(
                 response_text=response_content, validate_input=validate_input
             )
             output.tokens_used = total_tokens
+            output.usage = extract_usage(response, provider.get_name(), target_model)
 
             # 6. Update agent state
             agent_state.pending_validation = validate_input
@@ -197,18 +179,13 @@ async def validate_phase(
                 agent_state.awaiting_human_approval = True
                 agent_state.pending_approval_prompt = output.approval_prompt
 
-            # 7. Record metrics
-            if prompt_registry and hasattr(prompt_registry, "record_use"):
-                try:
-                    template = prompt_registry.get_template("validation_prompt")
-                    if template.active_version:
-                        prompt_registry.record_use(
-                            version_id=template.active_version.id,
-                            success=output.result != ValidationResult.REJECTED,
-                            tokens=total_tokens,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to record prompt metrics: {e}")
+            # 7. Record prompt usage metrics (best-effort)
+            record_template_use(
+                prompt_registry,
+                "validation_prompt",
+                success=output.result != ValidationResult.REJECTED,
+                tokens=total_tokens,
+            )
 
             # 8. Add tracing
             if span:
@@ -246,6 +223,68 @@ async def validate_phase(
                 requires_human_approval=True,
                 approval_prompt=f"Validation failed with error. Review action: {validate_input.proposed_action.name}",
             )
+
+
+# =============================================================================
+# DETERMINISTIC PRE-CHECK (public — shared with the cycle's skip_validation path)
+# =============================================================================
+
+
+def deterministic_precheck(
+    proposed_action: Any,
+    tool_manager: Any | None,
+    *,
+    goal: str = "",
+    reasoning: str = "",
+) -> ValidateOutput | None:
+    """Run the deterministic validation guards (no LLM, no prompt registry).
+
+    Order matters and is pinned by tests: the tool-registry membership check
+    runs first (an unloaded tool is REJECTED instead of raising an unusable
+    HITL request), then the dangerous-pattern scan (REQUIRES_HUMAN_APPROVAL
+    with a generated approval prompt).
+
+    Args:
+        proposed_action: The ToolCall to check.
+        tool_manager: Optional concrete tool registry; when None the
+            membership check is skipped (the danger scan still runs).
+        goal: Optional goal text, used only to build the approval prompt.
+        reasoning: Optional reasoning text, used only to build the approval
+            prompt.
+
+    Returns:
+        A terminal ``ValidateOutput`` when a guard fires, or ``None`` when
+        the action passes both checks.
+    """
+    registry_check = _check_tool_registry(proposed_action, tool_manager)
+    if registry_check:
+        logger.warning("Tool registry validation failed: %s", registry_check)
+        return ValidateOutput(
+            result=ValidationResult.REJECTED,
+            confidence=ConfidenceLevel.HIGH,
+            concerns=[registry_check],
+            suggestions=["Choose a loaded tool before validation and execution."],
+            requires_human_approval=False,
+        )
+
+    dangerous_check = _check_dangerous_patterns(proposed_action)
+    if dangerous_check:
+        logger.warning(f"Dangerous pattern detected: {dangerous_check}")
+        approval_input = ValidateInput(
+            goal=goal or "",
+            proposed_action=proposed_action,
+            reasoning=reasoning or "",
+        )
+        return ValidateOutput(
+            result=ValidationResult.REQUIRES_HUMAN_APPROVAL,
+            confidence=ConfidenceLevel.HIGH,
+            concerns=[f"Dangerous pattern detected: {dangerous_check}"],
+            suggestions=["Request human approval before executing"],
+            requires_human_approval=True,
+            approval_prompt=_generate_approval_prompt(approval_input, dangerous_check),
+        )
+
+    return None
 
 
 # =============================================================================
@@ -349,73 +388,37 @@ def _unknown_tool_message(tool_name: str, available_tool_names: set[str] | None)
     return f"Tool '{tool_name}' is not loaded for this run."
 
 
-def _generate_validation_prompt(validate_input: ValidateInput, prompt_registry: Any | None) -> str:
+def _generate_validation_messages(
+    validate_input: ValidateInput, prompt_registry: Any
+) -> list["Message"]:
     """
-    Generate the validation prompt using prompt library or fallback.
+    Render the VALIDATE phase messages (system + user) from the prompt registry.
+
+    Rendering errors propagate — a broken template aborts the phase instead
+    of degrading it (0.52.0 control plane, no silent fallback).
 
     Args:
         validate_input: Validation input
-        prompt_registry: Optional prompt registry
+        prompt_registry: Prompt registry (grimoire adapter)
 
     Returns:
-        Formatted validation prompt
+        Role-structured messages for the LLM call
     """
     # Format proposed action
     action_str = (
         f"{validate_input.proposed_action.name}({validate_input.proposed_action.arguments})"
     )
 
-    # Try to use prompt library
-    if prompt_registry:
-        try:
-            return prompt_registry.render(
-                template_id="validation_prompt",
-                variables={
-                    "goal": validate_input.goal,
-                    "proposed_action": action_str,
-                    "reasoning": validate_input.reasoning,
-                    "risk_tolerance": validate_input.risk_tolerance,
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to use prompt registry: {e}, falling back")
-
-    # Fallback prompt
-    prompt = f"""Validate the following proposed action:
-
-OBJECTIVE: {validate_input.goal}
-
-PROPOSED ACTION: {action_str}
-
-REASONING: {validate_input.reasoning}
-
-RISK TOLERANCE: {validate_input.risk_tolerance}
-
-VALIDATION CRITERIA:
-1. SAFETY: Is this action safe to execute?
-   - Will it harm systems or data?
-   - Are there potential side effects?
-
-2. APPROPRIATENESS: Is this action suitable for the goal?
-   - Does it align with the objective?
-   - Is it the right tool for the task?
-
-3. EFFECTIVENESS: Is this action likely to succeed?
-   - Do we have necessary context/data?
-   - Are the parameters correct?
-
-4. REVERSIBILITY: Can we undo this if needed?
-
-Provide your assessment:
-APPROVED: yes/no
-CONFIDENCE: low/medium/high
-CONCERNS: [list any issues]
-SUGGESTIONS: [improvements if needed]
-
-If confidence is LOW or concerns are CRITICAL, recommend human approval.
-"""
-
-    return prompt
+    return messages_from_registry(
+        prompt_registry,
+        "validation_prompt",
+        {
+            "goal": validate_input.goal,
+            "proposed_action": action_str,
+            "reasoning": validate_input.reasoning,
+            "risk_tolerance": validate_input.risk_tolerance,
+        },
+    )
 
 
 def _parse_validation_response(response_text: str, validate_input: ValidateInput) -> ValidateOutput:
@@ -545,4 +548,4 @@ Do you approve this action? (yes/no)
 # EXPORTS
 # =============================================================================
 
-__all__ = ["validate_phase"]
+__all__ = ["deterministic_precheck", "validate_phase"]

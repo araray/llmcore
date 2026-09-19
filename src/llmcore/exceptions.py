@@ -269,6 +269,45 @@ class SearchProviderError(LLMCoreError):
 
 
 # =============================================================================
+# MODERATION EXCEPTIONS (plan SF-1 / DDS-06)
+# =============================================================================
+
+
+class ModerationError(LLMCoreError):
+    """Raised when a moderation gateway cannot produce a verdict.
+
+    Covers transport faults, timeouts, authentication failures, and
+    malformed responses from the moderation backend. When moderation is
+    *enabled*, callers must treat this fail-safe: the policy converts it
+    into a BLOCK decision rather than silently allowing the content.
+
+    Attributes:
+        provider_name: Name of the moderation gateway that raised the error.
+    """
+
+    def __init__(self, provider_name: str = "Unknown", message: str = "Moderation error."):
+        self.provider_name = provider_name
+        super().__init__(f"Error with moderation gateway '{provider_name}': {message}")
+
+
+class ModerationBlockedError(LLMCoreError):
+    """Raised when content was blocked by a moderation decision.
+
+    Carries the :class:`llmcore.moderation.ModerationDecision` that caused
+    the block so callers can render categories/reason. llmcore itself does
+    not raise this on any hot path; it is the shared typed error consumers
+    (e.g. wairu's ToolDispatcher) raise when a BLOCK decision stops a turn.
+
+    Attributes:
+        decision: The blocking decision (``allowed=False``), when available.
+    """
+
+    def __init__(self, message: str = "Content blocked by moderation.", decision: Any = None):
+        self.decision = decision
+        super().__init__(message)
+
+
+# =============================================================================
 # STORAGE EXCEPTIONS
 # =============================================================================
 

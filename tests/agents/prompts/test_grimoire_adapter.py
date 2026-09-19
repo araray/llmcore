@@ -47,8 +47,17 @@ def test_grimoire_adapter_renders_mapped_spell() -> None:
 
     rendered = adapter.render("planning_prompt", {"goal": "ship tests"})
 
-    assert rendered == "Plan {{ goal }}\n\nGoal: ship tests"
+    # 0.52.0 contract: render() returns USER-side blocks only for multi-role
+    # spells (legacy string callers supply their own system message);
+    # render_messages() carries the full atomic SYSTEM+USER contract.
+    assert rendered == "Goal: ship tests"
     assert grimoire.calls == [("agent/planning", {"goal": "ship tests"}, True)]
+
+    messages = adapter.render_messages("planning_prompt", {"goal": "ship tests"})
+    assert messages == [
+        {"role": "system", "content": "Plan {{ goal }}"},
+        {"role": "user", "content": "Goal: ship tests"},
+    ]
 
 
 def test_grimoire_adapter_get_template_returns_active_version_facade() -> None:
@@ -104,3 +113,43 @@ def test_grimoire_adapter_can_include_role_headers() -> None:
     rendered = adapter.render("planning_prompt", {"goal": "ship tests"})
 
     assert rendered == "[SYSTEM]\nPlan {{ goal }}\n\n[USER]\nGoal: ship tests"
+
+
+def test_create_grimoire_prompt_registry_degrades_without_grimoire(monkeypatch, caplog) -> None:
+    import logging
+    import sys
+
+    from llmcore.agents.prompts import create_grimoire_prompt_registry
+
+    for name in list(sys.modules):
+        if name == "grimoire" or name.startswith("grimoire."):
+            monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setitem(sys.modules, "grimoire", None)
+
+    logger_name = "llmcore.agents.prompts.grimoire_adapter"
+    with caplog.at_level(logging.WARNING, logger=logger_name):
+        registry = create_grimoire_prompt_registry(repo_path="/nonexistent/grimoire-repo")
+
+    assert registry is None
+    warnings = [
+        record
+        for record in caplog.records
+        if "grimoire prompt registry disabled" in record.getMessage()
+    ]
+    assert len(warnings) == 1
+
+
+def test_create_grimoire_prompt_registry_uses_provided_facade(caplog) -> None:
+    import logging
+
+    from llmcore.agents.prompts import create_grimoire_prompt_registry
+
+    with caplog.at_level(logging.WARNING):
+        registry = create_grimoire_prompt_registry(
+            FakeGrimoire(),
+            template_map={"planning_prompt": "agent/planning"},
+        )
+
+    assert isinstance(registry, GrimoirePromptRegistryAdapter)
+    assert registry.render("planning_prompt", {"goal": "ship tests"})
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
