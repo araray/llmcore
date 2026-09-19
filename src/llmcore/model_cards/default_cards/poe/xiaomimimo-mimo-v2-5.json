@@ -1,0 +1,34 @@
+{
+  "model_id": "xiaomimimo-mimo-v2-5",
+  "display_name": "xiaomimimo-mimo-v2-5",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Xiaomi's native omni-modal model (text / image / video / audio understanding) with Pro-level agentic performance at ~half the inference cost and a 1M-token context — built for cost-efficient, perception-rich agent workflows.\n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 1M tokens",
+  "tags": [],
+  "source": "generated"
+}

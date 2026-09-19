@@ -1,6 +1,6 @@
 {
   "model_id": "anthropic/claude-opus-5",
-  "display_name": "Claude Opus 5",
+  "display_name": "Anthropic: Claude Opus 5",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,

@@ -4,10 +4,10 @@
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
-    "family": "Novita AI"
+    "family": "Moonshot AI"
   },
   "context": {
-    "max_input_tokens": 262000
+    "max_input_tokens": 256000
   },
   "capabilities": {
     "streaming": true,
@@ -28,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Kimi K2.7 Code is MoonshotAI's strongest coding & agentic model — a 1T-parameter MoE (32B activated) , 256K context and interleaved thinking with multi-step tool calling. It delivers major gains on long-horizon coding tasks while cutting thinking-token usage by ~30% vs K2.6, and accepts text, image and video inputs for vision-driven development workflows.\n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 262k tokens",
+  "description": "Moonshot AI Kimi K2.7 Code is a coding model for agent performance, instruction following, reasoning efficiency, and long-horizon development.",
   "tags": [],
   "source": "generated"
 }

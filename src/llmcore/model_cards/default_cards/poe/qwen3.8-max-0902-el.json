@@ -1,0 +1,34 @@
+{
+  "model_id": "qwen3.8-max-0902-el",
+  "display_name": "qwen3.8-max-0902-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Qwen3.8 Max 0902 is the upgraded September 2026 snapshot of Alibaba's flagship Qwen3.8 Max, with stronger coding, steadier multi-tool agent work, and sharper chart and document understanding. It accepts text, image, and video input with a 1M token context, and supports deep thinking, function calling, and structured JSON output.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

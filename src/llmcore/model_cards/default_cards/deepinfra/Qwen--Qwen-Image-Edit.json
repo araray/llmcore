@@ -1,0 +1,47 @@
+{
+  "model_id": "Qwen/Qwen-Image-Edit",
+  "display_name": "Qwen-Image-Edit",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Qwen-Image-Edit is a next-generation image editing model built on top of Qwen-Image, designed for both semantic and appearance-level edits. It excels at tasks like precise text modifications, style transfers, viewpoint transformations, and element adjustments while preserving overall visual consistency.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
+    "output:{'type': 'image', 'supported_parameters': {'width': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'height': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'num_inference_steps': {'type': 'integer', 'min': 1, 'max': 50}, 'guidance_scale': {'type': 'range', 'min': 0, 'max': 20}, 'n': {'type': 'integer', 'min': 1, 'max': 4}, 'seed': {'type': 'boolean'}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0250000000'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Qwen/Qwen-Image-Edit",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': []}"
+    ],
+    "output_modalities": [
+      "{'type': 'image', 'supported_parameters': {'width': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'height': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'num_inference_steps': {'type': 'integer', 'min': 1, 'max': 50}, 'guidance_scale': {'type': 'range', 'min': 0, 'max': 20}, 'n': {'type': 'integer', 'min': 1, 'max': 4}, 'seed': {'type': 'boolean'}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0250000000'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

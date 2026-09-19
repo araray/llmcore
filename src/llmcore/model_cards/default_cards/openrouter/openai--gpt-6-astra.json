@@ -1,0 +1,40 @@
+{
+  "model_id": "openai/gpt-6-astra",
+  "display_name": "OpenAI: GPT-6 Astra",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1050000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 10.0,
+      "output": 50.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-04"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-6 Astra is OpenAI's flagship model for demanding end-to-end work. It is suited for advanced analysis, software engineering, deep research, scientific work, and document creation, with particular strengths in long-horizon...",
+  "tags": [],
+  "source": "generated"
+}

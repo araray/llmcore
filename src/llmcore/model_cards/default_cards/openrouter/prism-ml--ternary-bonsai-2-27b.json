@@ -1,0 +1,40 @@
+{
+  "model_id": "prism-ml/ternary-bonsai-2-27b",
+  "display_name": "PrismML: Ternary Bonsai 2 27B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.075,
+      "output": 0.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-18"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Bonsai 2 27B is a 27B-parameter reasoning model from PrismML derived from Qwen3.8-27B. It supports coding, mathematics, tool calling, and image understanding with a 262K-token context window. Ternary compression shrinks...",
+  "tags": [],
+  "source": "generated"
+}

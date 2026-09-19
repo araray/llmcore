@@ -1,0 +1,48 @@
+{
+  "model_id": "nvidia/Nemotron-3-Embed-1B-BF16",
+  "display_name": "Nemotron-3-Embed-1B-BF16",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Nemotron-3-Embed-1B-BF16 is a compact multilingual text embedding model from NVIDIA, pruned and distilled from Ministral-3 to ~1B parameters, that maps text into 2048-dimensional dense vectors for retrieval and semantic similarity. Spanning 34 languages, it delivers state-of-the-art quality among similarly sized models for RAG and multilingual question-answering while keeping compute cost low.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000150'}]}",
+    "output:{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "nvidia/Nemotron-3-Embed-1B-BF16",
+    "quantization": "fp16",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000150'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

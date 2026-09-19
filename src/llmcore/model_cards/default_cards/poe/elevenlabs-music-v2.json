@@ -1,0 +1,34 @@
+{
+  "model_id": "elevenlabs-music-v2",
+  "display_name": "elevenlabs-music-v2",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "ElevenLabs"
+  },
+  "context": {
+    "max_input_tokens": 2000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "ElevenLabs Music v2 is an advanced AI music generation model that creates original songs, instrumentals, and tracks with vocals from text prompts. Describe the music you want—genre, mood, tempo, key signature, instruments, or lyrics—and the model composes a royalty-free track tailored to your needs.\n\nKey capabilities:\n- Better vocals, instrumentation, and arrangement across every genre\n- Mid-track genre transitions and complex vocal delivery, including fast rap\n- Sound effects embedded within tracks\n- Multilingual lyrics and vocals (English, Spanish, French, German, Japanese, and more)\n\nGenerated tracks are trained on licensed data and cleared for commercial use. Music length ranges from 3 seconds to 5 minutes.",
+  "tags": [],
+  "source": "generated"
+}

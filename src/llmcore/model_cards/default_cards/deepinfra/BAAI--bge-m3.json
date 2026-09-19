@@ -1,0 +1,48 @@
+{
+  "model_id": "BAAI/bge-m3",
+  "display_name": "bge-m3",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "BGE-M3 is a versatile text embedding model that supports multi-functionality, multi-linguality, and multi-granularity, allowing it to perform dense retrieval, multi-vector retrieval, and sparse retrieval in over 100 languages and with input sizes up to 8192 tokens. The model can be used in a retrieval pipeline with hybrid retrieval and re-ranking to achieve higher accuracy and stronger generalization capabilities. BGE-M3 has shown state-of-the-art performance on several benchmarks, including MKQA, MLDR, and NarritiveQA, and can be used as a drop-in replacement for other embedding models like DPR and BGE-v1.5.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}",
+    "output:{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "BAAI/bge-m3",
+    "quantization": "fp32",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

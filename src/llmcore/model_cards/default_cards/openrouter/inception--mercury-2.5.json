@@ -1,0 +1,40 @@
+{
+  "model_id": "inception/mercury-2.5",
+  "display_name": "Inception: Mercury 2.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 260000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.04,
+      "output": 0.15
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mercury 2.5 is the fastest reasoning LLM, and the latest diffusion LLM (dLLM) from Inception. Instead of generating tokens sequentially, Mercury 2.5 produces and refines multiple tokens in parallel, achieving...",
+  "tags": [],
+  "source": "generated"
+}

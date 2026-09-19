@@ -5,8 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 163840,
-    "max_output_tokens": 16384
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -14,19 +13,13 @@
     "tool_use": false,
     "json_mode": false,
     "structured_output": false,
-    "vision": true,
+    "vision": false,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
     "reasoning": false
   },
-  "pricing": {
-    "currency": "USD",
-    "per_million_tokens": {
-      "input": 0.18,
-      "output": 0.18
-    }
-  },
+  "pricing": null,
   "lifecycle": {
     "status": "active"
   },
@@ -35,23 +28,20 @@
   "aliases": [],
   "description": "Llama Guard 4 is a natively multimodal safety classifier with 12 billion parameters trained jointly on text and multiple images. Llama Guard 4 is a dense architecture pruned from the Llama 4 Scout pre-trained model and fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM inputs (prompt classification) and in LLM responses (response classification). It itself acts as an LLM: it generates text in its output that indicates whether a given prompt or response is safe or unsafe, and if unsafe, it also lists the content categories violated.",
   "tags": [
-    "text",
-    "image",
-    "output:text"
+    "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 163840, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000001800'}]}",
+    "{'type': 'image', 'supported_inputs': {'sources': {'type': 'enum', 'values': ['url', 'base64']}, 'formats': {'type': 'enum', 'values': ['image/png', 'image/jpeg', 'image/webp', 'image/gif']}, 'max_content_size_bytes': {'value': 20971520, 'unit': 'byte'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000001800'}]}",
+    "output:{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'unit': 'token'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000001800'}]}"
   ],
   "source": "generated",
   "provider_extension": {
     "hugging_face_id": "meta-llama/Llama-Guard-4-12B",
-    "quantization": "bfloat16",
+    "quantization": "bf16",
     "input_modalities": [
-      "text",
-      "image"
+      "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 163840, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000001800'}]}",
+      "{'type': 'image', 'supported_inputs': {'sources': {'type': 'enum', 'values': ['url', 'base64']}, 'formats': {'type': 'enum', 'values': ['image/png', 'image/jpeg', 'image/webp', 'image/gif']}, 'max_content_size_bytes': {'value': 20971520, 'unit': 'byte'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000001800'}]}"
     ],
     "output_modalities": [
-      "text"
-    ],
-    "supported_features": [
-      "logprobs"
+      "{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'unit': 'token'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000001800'}]}"
     ],
     "datacenters": [
       "US"

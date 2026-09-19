@@ -1,0 +1,47 @@
+{
+  "model_id": "intfloat/multilingual-e5-large-instruct",
+  "display_name": "multilingual-e5-large-instruct",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "The Multilingual-E5 models, initialized from XLM-RoBERTa, support up to 512 tokens per input — any longer text will be silently truncated. To ensure optimal performance, always prefix inputs with “query:” or “passage:”, as the model was explicitly trained with this format.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}",
+    "output:{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "intfloat/multilingual-e5-large-instruct",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

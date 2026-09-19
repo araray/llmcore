@@ -4,10 +4,10 @@
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
-    "family": "EmpirioLabs AI"
+    "family": "Xiaomi"
   },
   "context": {
-    "max_input_tokens": 1000000
+    "max_input_tokens": 1048576
   },
   "capabilities": {
     "streaming": true,
@@ -28,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "MiMo-V2.5-Pro is Xiaomi’s most capable model, designed for advanced agentic workflows, complex software engineering, and long-horizon tasks with strong instruction following and coherence across very long contexts. It can sustain complex autonomous work over more than a thousand tool calls while delivering frontier-level capability with strong token efficiency.\n\nNotes: \n- Pricing is 2x when input tokens >256k\n- Context window: 1M\n\nThis bot supports optional parameters for additional customization.",
+  "description": "Xiaomi MiMo V2.5 Pro is a reasoning model for agentic workflows, software engineering, and long-horizon tasks.",
   "tags": [],
   "source": "generated"
 }

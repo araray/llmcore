@@ -1,0 +1,40 @@
+{
+  "model_id": "unbiased/pareto",
+  "display_name": "Pareto",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.5,
+      "output": 7.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-17"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Pareto is a multimodal composite model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks.",
+  "tags": [],
+  "source": "generated"
+}

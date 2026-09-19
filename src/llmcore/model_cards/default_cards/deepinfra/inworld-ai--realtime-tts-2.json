@@ -1,0 +1,47 @@
+{
+  "model_id": "inworld-ai/realtime-tts-2",
+  "display_name": "realtime-tts-2",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Realtime TTS 2.0 is a low-latency text-to-speech model with natural language steering, allowing you to control tone and emotion directly in the prompt (e.g., “[be happy and upbeat] Hello!”). It supports cross-lingual voices and multiple languages, enabling the same voice to speak consistently across different languages. This is an early access preview ahead of full launch, with ongoing improvements to voice quality and steering.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
+    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000350000'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "inworld-ai/realtime-tts-2",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': []}"
+    ],
+    "output_modalities": [
+      "{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000350000'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

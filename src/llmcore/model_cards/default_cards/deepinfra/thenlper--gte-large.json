@@ -1,0 +1,47 @@
+{
+  "model_id": "thenlper/gte-large",
+  "display_name": "gte-large",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "The GTE models are trained by Alibaba DAMO Academy. They are mainly based on the BERT framework and currently offer three different sizes of models, including GTE-large, GTE-base, and GTE-small. The GTE models are trained on a large-scale corpus of relevance text pairs, covering a wide range of domains and scenarios. This enables the GTE models to be applied to various downstream tasks of text embeddings, including information retrieval, semantic textual similarity, text reranking, etc.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}",
+    "output:{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "thenlper/gte-large",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000100'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

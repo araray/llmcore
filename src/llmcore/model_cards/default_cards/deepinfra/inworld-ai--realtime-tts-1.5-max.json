@@ -1,0 +1,47 @@
+{
+  "model_id": "inworld-ai/realtime-tts-1.5-max",
+  "display_name": "realtime-tts-1.5-max",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "High-quality multilingual text-to-speech model by Inworld AI with 130+ preset voices across 15 languages. Supports voice cloning, word-level timestamps, and streaming. Optimized for natural, expressive speech with <250ms time-to-first-audio.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
+    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000500000'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "inworld-ai/realtime-tts-1.5-max",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': []}"
+    ],
+    "output_modalities": [
+      "{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000500000'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

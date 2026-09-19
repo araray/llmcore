@@ -12,7 +12,7 @@
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": true,
+    "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,

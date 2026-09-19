@@ -1,0 +1,40 @@
+{
+  "model_id": "inclusionai/ling-3.0-flash-vl",
+  "display_name": "inclusionAI: Ling 3.0 Flash VL",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.06,
+      "output": 0.18
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-10"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+  "tags": [],
+  "source": "generated"
+}

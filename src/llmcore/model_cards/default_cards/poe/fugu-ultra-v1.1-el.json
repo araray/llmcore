@@ -1,0 +1,34 @@
+{
+  "model_id": "fugu-ultra-v1.1-el",
+  "display_name": "fugu-ultra-v1.1-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Fugu Ultra v1.1 is Sakana AI's multi-agent conductor with a 1M token context window, built for hard reasoning, coding, and research. It accepts text and image input and coordinates expert agents to produce one answer.\n\nNotes:\n- Responses can take from a few seconds to a few minutes to complete.\n- The full answer arrives at once rather than token by token (ie. streaming is not available), because the model finishes its internal work before it replies.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

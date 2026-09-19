@@ -1,0 +1,47 @@
+{
+  "model_id": "sentence-transformers/clip-ViT-B-32-multilingual-v1",
+  "display_name": "clip-ViT-B-32-multilingual-v1",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "This model is a multilingual version of the OpenAI CLIP-ViT-B32 model, which maps text and images to a common dense vector space. It includes a text embedding model that works for 50+ languages and an image encoder from CLIP. The model was trained using Multilingual Knowledge Distillation, where a multilingual DistilBERT model was trained as a student model to align the vector space of the original CLIP image encoder across many languages.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000050'}]}",
+    "output:{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "sentence-transformers/clip-ViT-B-32-multilingual-v1",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000050'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'embeddings', 'supported_parameters': {'encoding_format': {'type': 'enum', 'values': ['float', 'base64']}, 'input_type': {'type': 'enum', 'values': ['query', 'passage', 'document']}}, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

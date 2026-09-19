@@ -1,0 +1,40 @@
+{
+  "model_id": "sakana/fugu-ultra-v2",
+  "display_name": "Sakana: Fugu Ultra v2",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 5.0,
+      "output": 30.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-11"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Fugu Ultra v2 is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to...",
+  "tags": [],
+  "source": "generated"
+}

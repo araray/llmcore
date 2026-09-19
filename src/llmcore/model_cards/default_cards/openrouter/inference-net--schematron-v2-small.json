@@ -1,0 +1,40 @@
+{
+  "model_id": "inference-net/schematron-v2-small",
+  "display_name": "Inference.net: Schematron V2 Small",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.05,
+      "output": 0.23
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Schematron V2 Small is a 3B-parameter HTML-to-JSON extraction model from Inference.net. It prioritizes extraction quality for complex schemas and long pages. Extraction instructions must be supplied through a JSON schema...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,48 @@
+{
+  "model_id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+  "display_name": "DeepSeek-V4-Flash-0731",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "DeepSeek-V4-Flash-0731 is the official release of DeepSeek-V4-Flash, superseding the preview version, with substantially enhanced agentic capabilities. DeepSeek-V4-Flash-0731 outperforms DeepSeek-V4-Pro (Preview) on benchmarks listed below despite its far smaller activated parameter count, and is broadly competitive with the strongest proprietary models available.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 1048576, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000600'}, {'type': 'cached_prompt', 'unit': 'token', 'cost_usd': '0.0000000150', 'implicit': true}]}",
+    "output:{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'max': 384000, 'unit': 'token'}, 'tools': {'type': 'boolean'}, 'tool_choice': {'type': 'unknown'}, 'response_format': {'type': 'unknown'}, 'structured_outputs': {'type': 'boolean'}, 'reasoning': {'type': 'boolean'}, 'include_reasoning': {'type': 'boolean'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'max_length': {'value': 384000, 'unit': 'token'}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000001800'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "quantization": "fp8",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 1048576, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000600'}, {'type': 'cached_prompt', 'unit': 'token', 'cost_usd': '0.0000000150', 'implicit': true}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'max': 384000, 'unit': 'token'}, 'tools': {'type': 'boolean'}, 'tool_choice': {'type': 'unknown'}, 'response_format': {'type': 'unknown'}, 'structured_outputs': {'type': 'boolean'}, 'reasoning': {'type': 'boolean'}, 'include_reasoning': {'type': 'boolean'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'max_length': {'value': 384000, 'unit': 'token'}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000001800'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}
