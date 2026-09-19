@@ -1,6 +1,6 @@
 {
   "model_id": "inclusionai/ling-3.0-flash-fin:free",
-  "display_name": "Ling 3.0 Flash Fin (free)",
+  "display_name": "inclusionAI: Ling 3.0 Flash Fin (free)",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,

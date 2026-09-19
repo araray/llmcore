@@ -1,0 +1,34 @@
+{
+  "model_id": "seedance-2.5-el",
+  "display_name": "seedance-2.5-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Seedance 2.5 is ByteDance's next-generation video model. It generates a coherent clip of up to 30 seconds in a single request, draws on up to 50 reference assets at once, and edits or extends video you already have.\n\nModes (auto-detected)\n- Text to video: a prompt on its own.\n- Image to video: attach one image for a first frame, or two for a first and last frame.\n- Multimodal reference: attach up to 30 images, 10 videos, and 10 audio clips together. Audio works on its own, with no visual input.\n- Video edit: attach a clip and say what to change. Add, remove, or replace something in the footage.\n- Video extend: attach a clip and ask to continue it.\n\nAddressing references\nWith several assets attached, point the prompt at a specific one by index: @Image1, @Image2, @Video1, @Audio1. Attachments are numbered in the order you send them, per type.\n\nInput limits\n- Images: jpeg, png, webp, bmp, tiff, gif, heic, heif. 300 to 6000 px per side, under 30 MB each.\n- Videos: MP4 or MOV, 2 to 30 seconds each and 30 seconds in total, under 200 MB each.\n- Audio: WAV or MP3, 2 to 30 seconds each and 30 seconds in total, under 15 MB each.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

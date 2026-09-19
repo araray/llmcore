@@ -4,8 +4,7 @@
   "provider": "huggingface",
   "model_type": "chat",
   "architecture": {
-    "family": "deepseek",
-    "parameter_count": "685B"
+    "family": "deepseek"
   },
   "context": {
     "max_input_tokens": 128000

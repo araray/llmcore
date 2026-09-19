@@ -1,6 +1,6 @@
 {
   "model_id": "~anthropic/claude-haiku-latest",
-  "display_name": "Anthropic Claude Haiku Latest",
+  "display_name": "Anthropic: Claude Haiku Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "This model always redirects to the latest model in the Anthropic Claude Haiku family.",
+  "description": "This model always redirects to the latest model in the Claude Haiku family.",
   "tags": [],
   "source": "generated"
 }

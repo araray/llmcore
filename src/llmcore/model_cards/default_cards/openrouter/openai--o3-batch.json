@@ -1,0 +1,40 @@
+{
+  "model_id": "openai/o3:batch",
+  "display_name": "OpenAI: o3 (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 100000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 4.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-04-16"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "o3 is a well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following....",
+  "tags": [],
+  "source": "generated"
+}

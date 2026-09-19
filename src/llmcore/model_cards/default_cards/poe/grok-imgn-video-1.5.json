@@ -28,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Grok Imagine Video 1.5 is an image-to-video model that animates a source image with prompt-guided motion, up to 15 seconds at 480p or 720p across seven aspect ratios.\n\nThis bot supports optional parameters for additional customization.",
+  "description": "Grok Imagine Video 1.5 supports text-to-video, image-to-video, and reference-to-video generation with up to seven reference images for consistent characters, up to 15 seconds at 1080p.\n\nNotes:\n- Attach 2 to 7 images to keep those characters consistent in a new scene, up to 720p. Refer to them in your prompt as <IMAGE_1>, <IMAGE_2>, and so on\n\nThis bot supports optional parameters for additional customization.",
   "tags": [],
   "source": "generated"
 }

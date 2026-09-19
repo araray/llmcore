@@ -1,6 +1,6 @@
 {
   "model_id": "~moonshotai/kimi-latest",
-  "display_name": "MoonshotAI Kimi Latest",
+  "display_name": "MoonshotAI: Kimi Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 2.55,
-      "output": 12.75
+      "input": 2.0695,
+      "output": 11.5892
     }
   },
   "lifecycle": {
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
+  "description": "This model always redirects to the latest model in the Kimi family.",
   "tags": [],
   "source": "generated"
 }

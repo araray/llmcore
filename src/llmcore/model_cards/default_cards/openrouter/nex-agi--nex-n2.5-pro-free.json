@@ -1,0 +1,34 @@
+{
+  "model_id": "nex-agi/nex-n2.5-pro:free",
+  "display_name": "Nex AGI: Nex-N2.5-Pro (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can explore codebases, implement multi-file...",
+  "tags": [],
+  "source": "generated"
+}

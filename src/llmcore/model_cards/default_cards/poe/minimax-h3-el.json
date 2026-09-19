@@ -1,0 +1,34 @@
+{
+  "model_id": "minimax-h3-el",
+  "display_name": "minimax-h3-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 200000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiniMax H3 is a multimodal video generation model that produces 4 to 15 second clips at 768p or 2K, 24 fps, each with a native stereo audio track. It supports Text-to-Video, Image-to-Video, First/Last Frame, and Reference-to-Video, auto-detected from your attachments or set manually.\n\nInput Limits & Requirements\n- Prompt: up to 7,000 characters. Can describe action, camera work, dialogue, sound effects, and on-screen text\n- Images: JPEG, PNG, WEBP, or HEIC. 256 to 5760px per side, aspect ratio within 1:2.5-2.5:1, max 30MB each\n- Videos: MP4, MOV, MKV, or WEBM. 2 to 15 seconds each, max 50MB each\n- Audio: WAV or MP3. 2 to 15 seconds each, max 15MB each, and requires an accompanying image or video reference\n- Image-to-Video: 1 image (the opening frame). First/Last Frame: exactly 2 images\n- Reference-to-Video: max 9 images, 3 videos, and 3 audio clips, 12 files total\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

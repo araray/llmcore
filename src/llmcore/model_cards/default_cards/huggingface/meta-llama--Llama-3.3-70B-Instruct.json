@@ -5,7 +5,7 @@
   "model_type": "chat",
   "architecture": {
     "family": "llama",
-    "parameter_count": "71B"
+    "parameter_count": "70B"
   },
   "context": {
     "max_input_tokens": 128000

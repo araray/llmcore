@@ -1,0 +1,40 @@
+{
+  "model_id": "openai/gpt-4.1-nano:batch",
+  "display_name": "OpenAI: GPT-4.1 Nano (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1047576,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.05,
+      "output": 0.2
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-04-14"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "For tasks that demand low latency, GPT‑4.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
+  "tags": [],
+  "source": "generated"
+}

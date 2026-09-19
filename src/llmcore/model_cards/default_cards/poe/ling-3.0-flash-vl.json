@@ -1,0 +1,34 @@
+{
+  "model_id": "ling-3.0-flash-vl",
+  "display_name": "ling-3.0-flash-vl",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Novita AI"
+  },
+  "context": {
+    "max_input_tokens": 262000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Ling-3.0-flash-VL builds on Ling-3.0-flash, further strengthening its language capabilities while adding native visual perception and advanced visual agent capabilities. \n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 262k tokens",
+  "tags": [],
+  "source": "generated"
+}

@@ -27,7 +27,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Auto Router (Beta) is a task-aware router from OpenRouter. It classifies each request, then routes it the [most popular model](/rankings#task-spend) for that task based on aggregate spend, filtered by your...",
+  "description": "The experimental version of our Auto Router where we test new improvements. Use it to get the latest and greatest version of our general purpose auto router, but expect beta...",
   "tags": [],
   "source": "generated"
 }

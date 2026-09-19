@@ -5,14 +5,14 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 256000,
-    "max_output_tokens": 230400
+    "max_input_tokens": 32768,
+    "max_output_tokens": 29491
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": true,
+    "json_mode": false,
     "structured_output": false,
     "vision": false,
     "audio_input": false,

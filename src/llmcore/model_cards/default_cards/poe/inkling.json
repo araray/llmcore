@@ -1,0 +1,34 @@
+{
+  "model_id": "inkling",
+  "display_name": "inkling",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Thinking Machines"
+  },
+  "context": {
+    "max_input_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Inkling is Thinking Machines’ multimodal reasoning model, built for deep analysis, coding, and tool-driven work across text, images, and documents. It uses a 975B-parameter mixture-of-experts architecture with 41B active parameters and a 256K-token context window.",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,34 @@
+{
+  "model_id": "kimi-k3",
+  "display_name": "kimi-k3",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "Moonshot AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kimi’s flagship model for long-horizon coding and end-to-end knowledge work, with a 1M-token context window.",
+  "tags": [],
+  "source": "generated"
+}

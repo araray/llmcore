@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 393216
+    "max_output_tokens": 384000
   },
   "capabilities": {
     "streaming": true,
@@ -23,8 +23,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.6,
-      "output": 3.2
+      "input": 0.6454,
+      "output": 1.2907
     }
   },
   "lifecycle": {

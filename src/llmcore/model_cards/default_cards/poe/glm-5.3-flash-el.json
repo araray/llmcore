@@ -1,0 +1,34 @@
+{
+  "model_id": "glm-5.3-flash-el",
+  "display_name": "glm-5.3-flash-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM 5.3 Flash is Z.ai's natively multimodal flash model, a 320B-A18B mixture-of-experts released under the MIT license that approaches the larger GLM 5.3 on coding and agentic work. It accepts text, image, and video input with a 1M token context, always-on reasoning at low, high, or max effort, native web search, and function calling.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

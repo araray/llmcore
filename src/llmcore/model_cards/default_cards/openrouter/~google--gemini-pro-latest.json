@@ -1,6 +1,6 @@
 {
   "model_id": "~google/gemini-pro-latest",
-  "display_name": "Google Gemini Pro Latest",
+  "display_name": "Google: Gemini Pro Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "This model always redirects to the latest model in the Google Gemini Pro family.",
+  "description": "This model always redirects to the latest model in the Gemini Pro family.",
   "tags": [],
   "source": "generated"
 }

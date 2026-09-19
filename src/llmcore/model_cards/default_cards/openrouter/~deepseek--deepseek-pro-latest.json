@@ -1,0 +1,40 @@
+{
+  "model_id": "~deepseek/deepseek-pro-latest",
+  "display_name": "DeepSeek: DeepSeek Pro Latest",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 393216
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.5782,
+      "output": 1.7345
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-14"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,34 @@
+{
+  "model_id": "wan-3.0",
+  "display_name": "wan-3.0",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 4096
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Wan 3.0 generates video clips of 2 to 30 seconds with synchronized native audio, with Standard and Prime (faster) tiers.\n\nGeneration modes\n- Text-to-video from a prompt alone\n- Animate one image, or two images as first and last frame\n- Reference mode: combine up to 10 images, 5 video clips, and 5 audio clips, and address them in your prompt as Image 1, Video 1, Audio 1\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

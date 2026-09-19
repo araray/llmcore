@@ -1,6 +1,6 @@
 {
   "model_id": "inclusionai/ling-3.0-flash",
-  "display_name": "Ling-3.0-flash",
+  "display_name": "inclusionAI: Ling 3.0 Flash",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,

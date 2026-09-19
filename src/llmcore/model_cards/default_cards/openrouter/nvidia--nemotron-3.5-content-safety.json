@@ -1,0 +1,40 @@
+{
+  "model_id": "nvidia/nemotron-3.5-content-safety",
+  "display_name": "NVIDIA: Nemotron 3.5 Content Safety",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 117964
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.2,
+      "output": 0.2
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-06-04"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "NVIDIA Nemotron 3.5 Content Safety is a compact 4B-parameter multimodal guardrail model from NVIDIA, fine-tuned from Google Gemma-3-4B. It moderates both inputs to and responses from LLMs and VLMs, accepting...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,47 @@
+{
+  "model_id": "bosonai/HiggsAudioV2.5",
+  "display_name": "HiggsAudioV2.5",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "HiggsAudioV2.5 is a high-quality neural text-to-speech (TTS) model designed for natural-sounding voice generation across a wide range of use cases. It focuses on clarity, stable prosody, and consistent pacing, making it suitable for both short prompts and longer narration.",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
+    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000200000'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "bosonai/HiggsAudioV2.5",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': []}"
+    ],
+    "output_modalities": [
+      "{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000200000'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

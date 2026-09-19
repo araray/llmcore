@@ -1,6 +1,6 @@
 {
   "model_id": "~google/gemini-flash-latest",
-  "display_name": "Google Gemini Flash Latest",
+  "display_name": "Google: Gemini Flash Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "This model always redirects to the latest model in the Google Gemini Flash family.",
+  "description": "This model always redirects to the latest model in the Gemini Flash family.",
   "tags": [],
   "source": "generated"
 }

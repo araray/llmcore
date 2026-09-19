@@ -1,0 +1,47 @@
+{
+  "model_id": "ResembleAI/chatterbox-turbo",
+  "display_name": "chatterbox-turbo",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Chatterbox is a family of three state-of-the-art, open-source text-to-speech models by Resemble AI.  We are excited to introduce Chatterbox-Turbo, our most efficient model yet. Built on a streamlined 350M parameter architecture, Turbo delivers high-quality speech with less compute and VRAM than our previous models. We have also distilled the speech-token-to-mel decoder, previously a bottleneck, reducing generation from 10 steps to just one, while retaining high-fidelity audio output.  Paralinguistic tags are now native to the Turbo model, allowing you to use [cough], [laugh], [chuckle], and more to add distinct realism. While Turbo was built primarily for low-latency voice agents, it excels at narration and creative workflows.  If you like the model but need to scale or tune it for higher accuracy, check out our competitively priced TTS service (link).",
+  "tags": [
+    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
+    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000010000'}]}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "ResembleAI/chatterbox-turbo",
+    "input_modalities": [
+      "{'type': 'text', 'supported_inputs': {}, 'pricing': []}"
+    ],
+    "output_modalities": [
+      "{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000010000'}]}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

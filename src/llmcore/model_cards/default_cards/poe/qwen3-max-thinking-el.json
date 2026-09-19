@@ -1,0 +1,34 @@
+{
+  "model_id": "qwen3-max-thinking-el",
+  "display_name": "qwen3-max-thinking-el",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 252000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "This model is retiring on 2026-10-10. Please switch to: https://poe.com/Qwen3.7-Max\nQwen3-Max-Thinking is a flagship reasoning model that integrates adaptive tool use, autonomously employing search, memory, and code interpretation to address complex tasks. It further optimizes performance through test-time scaling, a strategy that allocates additional computation during inference to improve reasoning accuracy and context efficiency.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Context window: 256K\n- Pricing is 2x when input tokens >32K, 2.5x when input tokens >128K\n- Save 10% on input tokens and 8% on output tokens compared to standard API rates.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

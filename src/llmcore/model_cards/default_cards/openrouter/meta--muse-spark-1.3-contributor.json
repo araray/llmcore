@@ -1,0 +1,40 @@
+{
+  "model_id": "meta/muse-spark-1.3-contributor",
+  "display_name": "Meta: Muse Spark 1.3 Contributor",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 943718
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.2
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-02"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Muse Spark 1.3 Contributor is the cost-efficient contributor tier of Meta’s multimodal reasoning model for experimentation, learning, and early-stage agentic, multi-agent, and coding workflows. It is designed to track information...",
+  "tags": [],
+  "source": "generated"
+}

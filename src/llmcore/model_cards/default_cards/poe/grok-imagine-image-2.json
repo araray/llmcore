@@ -1,0 +1,34 @@
+{
+  "model_id": "grok-imagine-image-2",
+  "display_name": "grok-imagine-image-2",
+  "provider": "poe",
+  "model_type": "chat",
+  "architecture": {
+    "family": "EmpirioLabs AI"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok Imagine Image 2.0 generates images from a text prompt and edits up to five attached images from a plain-language instruction, with selectable quality, 1K or 2K output, and fifteen aspect ratios.\n\nWith more than one image, refer to them in your prompt as IMAGE_0, IMAGE_1, and so on.\n\nThis bot supports optional parameters for additional customization.",
+  "tags": [],
+  "source": "generated"
+}

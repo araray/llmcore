@@ -1,6 +1,6 @@
 {
   "model_id": "~openai/gpt-mini-latest",
-  "display_name": "OpenAI GPT Mini Latest",
+  "display_name": "OpenAI: GPT Mini Latest",
   "provider": "openrouter",
   "model_type": "chat",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "This model always redirects to the latest model in the OpenAI GPT Mini family.",
+  "description": "This model always redirects to the latest model in the GPT Mini family.",
   "tags": [],
   "source": "generated"
 }
