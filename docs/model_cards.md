@@ -159,6 +159,8 @@ src/llmcore/model_cards/default_cards/
 │   └── ...
 ├── openai/
 ├── qwen/
+├── typesafe/
+│   └── jev-1.13.0.json      # model_type "decision"; aliases jev-latest, jev-preview
 └── xai/
 ```
 
@@ -253,9 +255,15 @@ class ModelType(str, Enum):
     COMPLETION = "completion"  # Text completion (legacy)
     EMBEDDING = "embedding"    # Vector embeddings
     RERANK = "rerank"          # Re-ranking models
+    CODE = "code"              # Code-focused models (e.g. Codestral FIM)
     IMAGE_GENERATION = "image-generation"
     AUDIO = "audio"
     MULTIMODAL = "multimodal"
+    OCR = "ocr"                # Document OCR models
+    MODERATION = "moderation"  # Content moderation/classification models
+    TTS = "tts"                # Text-to-speech models
+    STT = "stt"                # Speech-to-text models
+    DECISION = "decision"      # Typed-judgment / structured-decision models (TypeSafe Jev)
 ```
 
 #### ArchitectureType
@@ -1324,7 +1332,7 @@ Cards created for older versions remain compatible:
 `openai`, `anthropic`, `google`, `ollama`, `deepseek`, `qwen`, `kimi`, `xai`, `mistral`, `cohere`, `together`, `fireworks`, `replicate`, `perplexity`, `ai21`, `groq`, `local`
 
 ### ModelType Values
-`chat`, `completion`, `embedding`, `rerank`, `image-generation`, `audio`, `multimodal`
+`chat`, `completion`, `embedding`, `rerank`, `code`, `image-generation`, `audio`, `multimodal`, `ocr`, `moderation`, `tts`, `stt`, `decision`
 
 ### ArchitectureType Values
 `transformer`, `moe`, `ssm`, `hybrid`
@@ -1334,4 +1342,4 @@ Cards created for older versions remain compatible:
 
 ---
 
-*Document generated for llmcore v0.50.0*
+*Document generated for llmcore v0.53.0*
