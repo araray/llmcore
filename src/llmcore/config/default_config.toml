@@ -1069,6 +1069,53 @@ max_retries = 2
   type  = "deepgram"
   model = "aura-2-thalia-en"
 
+  # --- TypeSafe.ai Provider (System One typed judgments) ---
+  # NOT a chat model. TypeSafe's System One models (Jev) evaluate a `state`
+  # (string / JSON object / array) against typed questions and return
+  # structured, calibrated answers:
+  #   noul   — yes/no probability
+  #   choice — pick one option; per-option probabilities + confidence
+  #   score  — rubric level; per-level probabilities + confidence
+  # Use provider.system_one(state, questions) directly, or the chat bridge:
+  #   llm.chat(msg, provider_name="typesafe", questions={...}) -> JSON string.
+  # Streaming and tool calling are not supported (ProviderError 400).
+  # Requires: pip install llmcore[typesafe]   (httpx only, no vendor SDK)
+  # Docs: https://docs.typesafe.ai  (API: https://docs.typesafe.ai/api)
+  [providers.typesafe]
+  # type = "typesafe"  # auto-detected from the section name (alias: jev)
+
+  # --- Authentication (environment variable strongly preferred) ---
+  # API key: env LLMCORE_PROVIDERS__TYPESAFE__API_KEY or TYPESAFE_API_KEY (auto-detected)
+  # api_key = "..."
+  # api_key_env_var = "TYPESAFE_API_KEY"
+
+  # --- Endpoint ---
+  # Override the API root (env TYPESAFE_BASE_URL is honoured when unset).
+  # base_url = "https://api.typesafe.ai"
+
+  # Default model (env TYPESAFE_DEFAULT_MODEL is honoured when unset).
+  # Aliases move with releases: jev-latest / jev-preview -> jev-1.13.0 today.
+  # Pin the versioned id (e.g. "jev-1.13.0") if you tuned confidence thresholds.
+  default_model = "jev-latest"
+
+  # --- Transport / retries ---
+  # Seconds per HTTP operation (the official SDK defaults to 10; 30 leaves room
+  # for large states near the 64k-token budget).
+  timeout = 30
+  # In-provider retries for 408 / 429 / 5xx / 529 (honours Retry-After and
+  # retry-after-ms), plus timeouts and connection errors. 0 disables retries.
+  max_retries = 2
+  # Exponential backoff window in seconds (initial doubles up to max, with jitter).
+  retry_backoff_initial = 0.5
+  retry_backoff_max = 5.0
+
+  # --- Limits (Jev 1.13) ---
+  # 64k tokens per request (state + all questions); 32k for the state plus the
+  # single longest question. Reported by get_max_context_length() when no model
+  # card matches the requested model.
+  fallback_context_length = 65536
+
+
 
 # ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations
