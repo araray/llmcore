@@ -1,0 +1,49 @@
+# tools/cardctl/enrichments/typesafe.toml
+# Manual enrichment overlay for the TypeSafe.ai provider (System One / Jev).
+#
+# GET /v1/models lists only the aliases an account may send (jev-latest,
+# jev-preview) with a description and release date — no versioned ids, context
+# limits, pricing, or capabilities. The TypeSafeAdapter collapses aliases onto
+# the versioned id and carries the static facts; this overlay pins the values
+# that must survive regeneration and documents their source.
+#
+# Canonical provider key: "typesafe"  (default_cards/typesafe/).
+# Service docs:    https://docs.typesafe.ai
+# Models page:     https://docs.typesafe.ai/models
+# Last updated:    2026-09-19
+
+[context]
+# 64k tokens per request (state + all questions); 32k for state + the single
+# longest question (recorded in provider_extension).
+"jev-1.13.0" = { max_input_tokens = 65536 }
+
+[architecture]
+"jev" = { family = "jev", type = "transformer" }
+
+[overrides]
+"jev-1.13.0" = { display_name = "Jev 1.13" }
+
+[aliases]
+# Aliases move when a new release ships; /v1/systemone echoes the versioned id.
+"jev-1.13.0" = ["jev-latest", "jev-preview"]
+
+[provider_extension."jev-1.13.0"]
+endpoint = "/v1/systemone"
+question_types = ["noul", "choice", "score"]
+state_plus_longest_question_max_tokens = 32768
+tokens_per_second_limit = 250000
+requests_per_minute_limit = 1200
+input_modalities = ["text"]
+primary_language = "en"
+output_tokens_billed = false
+alias_resolution = { "jev-latest" = "jev-1.13.0", "jev-preview" = "jev-1.13.0" }
+pricing_source = "https://docs.typesafe.ai/models"
+pricing_as_of = "2026-09-19"
+
+[pricing]
+# Source: https://docs.typesafe.ai/models — $42 per billion input tokens
+# ($0.042 per million). Output tokens are free. Last verified: 2026-09-19.
+"jev-1.13.0" = { input = 0.042, output = 0.0 }
+
+[exclude]
+patterns = []

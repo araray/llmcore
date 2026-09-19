@@ -26,6 +26,9 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "zhipu": "zai_adapter.ZaiAdapter",
     "zhipuai": "zai_adapter.ZaiAdapter",
     "bigmodel": "zai_adapter.ZaiAdapter",
+    "typesafe": "typesafe_adapter.TypeSafeAdapter",
+    # Alias: "jev" (the model family) → TypeSafe.
+    "jev": "typesafe_adapter.TypeSafeAdapter",
     "deepinfra": "deepinfra_adapter.DeepInfraAdapter",
     "ollama": "ollama_adapter.OllamaAdapter",
     "openrouter": "openrouter_adapter.OpenRouterAdapter",
