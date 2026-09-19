@@ -42,6 +42,10 @@ small calls and skip providers whose required environment is incomplete.
 - `gemini_example.py` - Gemini chat, streaming, sessions, and RAG.
 - `hosted_providers_example.py` - Poe, OpenRouter, DeepSeek, Kimi, DeepInfra,
   and Mistral from one LLMCore instance.
+- `zai_example.py` - Z.ai (GLM) chat, thinking mode, and streaming.
+- `typesafe_example.py` - TypeSafe.ai System One typed judgments
+  (`system_one()` with Noul/Choice/Score questions, confidence-gated routing,
+  and the `llm.chat(..., questions=...)` bridge). Requires `TYPESAFE_API_KEY`.
 
 ## Search Provider Examples
 

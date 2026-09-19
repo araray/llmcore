@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmcore"
-version = "0.52.0"
+version = "0.53.0"
 description = "A unified, flexible, and extensible interface for interacting with various Large Language Models (LLMs)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -70,6 +70,11 @@ deepgram = ["deepgram-sdk>=7.0.0", "websockets>=12.0"]
 # mode) and/or direct 'httpx' calls (native media endpoints: image/audio/OCR/
 # video generation, web search). Install with: pip install llmcore[zai]
 zai = ["zai-sdk>=0.2.0", "openai>=2.31.0", "httpx>=0.27.0"]
+# TypeSafe.ai (System One typed judgments: noul/choice/score questions with
+# calibrated probabilities). NOT a chat API. The provider talks to the two REST
+# endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
+# required. Install with: pip install llmcore[typesafe]
+typesafe = ["httpx>=0.27.0"]
 
 # ----------------------------------------------------------------------------
 # Search providers (web / data search — optional, parallel to LLM providers)
@@ -174,6 +179,7 @@ all = [
     "llmcore[deepinfra]",
     "llmcore[deepgram]",
     "llmcore[zai]",
+    "llmcore[typesafe]",
     "llmcore[brightdata]",
     "llmcore[serper]",
     "llmcore[serpapi]",

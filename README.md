@@ -31,7 +31,7 @@
 
 | Category | Features |
 |----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram |
+| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram, TypeSafe.ai (System One typed judgments) |
 | **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling, per-call usage via `chat_with_usage()` |
 | **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
 | **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
@@ -171,6 +171,12 @@ pip install llmcore[ollama]
 
 # Deepgram voice/audio support (STT, TTS, Voice Agent)
 pip install llmcore[deepgram]
+
+# Z.ai (GLM) support
+pip install llmcore[zai]
+
+# TypeSafe.ai System One typed judgments (noul/choice/score; httpx only)
+pip install llmcore[typesafe]
 
 # Search providers
 pip install llmcore[brightdata]
@@ -322,6 +328,13 @@ thinking = "enabled"            # "enabled" | "disabled"
 reasoning_effort = "high"       # none|minimal|low|medium|high|xhigh|max
 timeout = 300
 
+[providers.typesafe]
+# TypeSafe.ai System One (typed judgments, NOT chat). API key via TYPESAFE_API_KEY.
+# Use provider.system_one(state, questions) or llm.chat(..., provider_name="typesafe", questions={...}).
+default_model = "jev-latest"    # alias -> jev-1.13.0; pin the version if you tune thresholds
+timeout = 30
+max_retries = 2                 # 408/429/5xx/529 retried, honours Retry-After
+
 [storage.session]
 type = "sqlite"
 path = "~/.llmcore/sessions.db"
@@ -370,6 +383,7 @@ export LLMCORE_STORAGE__SESSION__DB_URL="postgresql://user:pass@localhost/llmcor
 # Logging
 export LLMCORE_LOG_LEVEL="DEBUG"
 export LLMCORE_LOG_RAW_PAYLOADS="true"
+export TYPESAFE_API_KEY="..."          # TypeSafe.ai System One
 ```
 
 ---
@@ -392,6 +406,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
 | **DeepInfra** | DeepSeek, Llama, Qwen, Mistral, FLUX, Whisper, Kokoro (100+ open models) | Streaming, Tools, Vision, Reasoning, TTS, STT, Image, Embeddings |
 | **Deepgram** | Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent | Streaming STT/TTS, Flux turn-taking, Voice Agent, Text Intelligence |
+| **TypeSafe.ai** | Jev 1.13 (`jev-latest`, `jev-preview`, `jev-1.13.0`) | System One typed judgments: `noul` (yes/no probability), `choice` (pick-one + probabilities + confidence), `score` (rubric level + probabilities + confidence); `system_one()` + chat bridge; no streaming/tools |
 
 ### Switching Providers
 
@@ -791,6 +806,7 @@ Built-in model cards for:
 - **xAI**: Grok-4, Grok-4-Heavy
 - **DeepInfra**: DeepSeek-V3/R1, Llama 3.x, Qwen, Mistral, FLUX (image), Whisper (STT), Kokoro (TTS), embeddings
 - **Deepgram**: Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent
+- **TypeSafe.ai**: Jev 1.13 (`decision` model type; aliases `jev-latest`, `jev-preview`)
 
 ### Custom Model Cards
 
@@ -1043,6 +1059,7 @@ from llmcore import (
 - [Search providers usage](docs/Search_providers_usage.md)
 - [Search providers rationale](docs/Search_providers_rationale.md)
 - [Deepgram provider usage](docs/Deepgram_provider_usage.md)
+- [TypeSafe.ai provider usage](docs/TypeSafe_provider_usage.md)
 - [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md)
 - [Model cards](docs/model_cards.md)
 - [Agentic system guide](docs/Agentic_System_Guide.md)

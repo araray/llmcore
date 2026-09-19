@@ -66,7 +66,7 @@ jobs:
           # unit tests mock the openai/httpx fallback transport, and the SDK
           # transport would bypass those mocks and hit the live API.
           # numpy is used by embedding-shaped unit tests.
-          pip install -e ".[dev,bridge,openai,anthropic,gemini,ollama,deepinfra,deepgram,brightdata,serper,serpapi,semanticscholar,postgres,chromadb]"
+          pip install -e ".[dev,bridge,openai,anthropic,gemini,ollama,deepinfra,deepgram,typesafe,brightdata,serper,serpapi,semanticscholar,postgres,chromadb]"
           pip install numpy
 
       - name: Version drift guard

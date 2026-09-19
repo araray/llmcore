@@ -901,3 +901,61 @@ class TestModelSupportsNativeSearch:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# =============================================================================
+# BUILTIN TYPESAFE (DECISION) CARD
+# =============================================================================
+
+
+class TestBuiltinTypeSafeCard:
+    """The builtin TypeSafe Jev card validates, uses ModelType.DECISION, and resolves aliases."""
+
+    def _card_path(self) -> Path:
+        import llmcore.model_cards as mc_pkg
+
+        return Path(mc_pkg.__file__).parent / "default_cards" / "typesafe" / "jev-1.13.0.json"
+
+    def test_card_validates_with_decision_type(self):
+        card = ModelCard.model_validate_json(self._card_path().read_text())
+        assert card.model_id == "jev-1.13.0"
+        assert card.provider == "typesafe"
+        assert card.model_type == ModelType.DECISION.value
+        assert card.aliases == ["jev-latest", "jev-preview"]
+        assert card.context.max_input_tokens == 65536
+        assert card.capabilities.structured_output is True
+        assert card.capabilities.streaming is False
+        assert card.capabilities.tool_use is False
+        assert card.pricing is not None
+        assert card.pricing.per_million_tokens.input == 0.042
+        assert card.pricing.per_million_tokens.output == 0.0
+        assert card.provider_extension["question_types"] == ["noul", "choice", "score"]
+        assert card.provider_extension["state_plus_longest_question_max_tokens"] == 32768
+
+        restored = ModelCard.model_validate_json(card.model_dump_json())
+        assert restored.model_type == "decision"
+
+    def test_decision_enum_member(self):
+        assert ModelType.DECISION.value == "decision"
+        assert ModelType("decision") is ModelType.DECISION
+
+    def test_builtin_registry_resolves_aliases_and_type_filter(self):
+        ModelCardRegistry.reset_instance()
+        clear_model_card_cache()
+        try:
+            registry = ModelCardRegistry.get_instance()
+            registry.load(user_path=Path("/nonexistent"), force_reload=True)
+
+            direct = registry.get("typesafe", "jev-1.13.0")
+            assert direct is not None and direct.model_id == "jev-1.13.0"
+            via_alias = registry.get("typesafe", "jev-latest")
+            assert via_alias is not None and via_alias.model_id == "jev-1.13.0"
+            assert registry.get("typesafe", "jev-preview").model_id == "jev-1.13.0"
+
+            decisions = registry.list_cards(model_type=ModelType.DECISION)
+            assert {c.model_id for c in decisions} >= {"jev-1.13.0"}
+            assert all(c.model_type == "decision" for c in decisions)
+            assert registry.list_cards(provider="typesafe", model_type="chat") == []
+        finally:
+            ModelCardRegistry.reset_instance()
+            clear_model_card_cache()

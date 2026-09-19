@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "app": {
     "name": "LLMCore",
-    "version": "0.51.0",
+    "version": "0.53.0",
     "description": "Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution",
     "url": "https://github.com/araray/llmcore",
     "maintainer": "araray"
@@ -2422,6 +2422,143 @@
           "validation": {
             "min": 10,
             "max": 600
+          }
+        }
+      ]
+    },
+    {
+      "id": "provider_typesafe",
+      "title": "Provider: TypeSafe.ai (System One)",
+      "description": "TypeSafe.ai System One typed-judgment provider (Jev models). NOT a chat API: POST /v1/systemone evaluates a state (string / JSON object / array) against typed questions — noul (yes/no probability), choice (pick one option; per-option probabilities + confidence), score (rubric level; per-level probabilities + confidence) — and returns structured, calibrated answers. Use provider.system_one(...) or the chat bridge llm.chat(..., provider_name=\"typesafe\", questions={...}). Streaming and tool calling are not supported. Alias: jev. Install with: pip install llmcore[typesafe] (httpx only). Docs: https://docs.typesafe.ai",
+      "icon": "🎯",
+      "order": 14,
+      "fields": [
+        {
+          "key": "providers.typesafe.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "description": "TypeSafe.ai API key (console.typesafe.ai/settings/keys). Strongly recommended to set via the TYPESAFE_API_KEY environment variable.",
+          "placeholder": "...",
+          "recommendation": "Set via TYPESAFE_API_KEY or LLMCORE_PROVIDERS__TYPESAFE__API_KEY environment variable.",
+          "tags": [
+            "security",
+            "credentials"
+          ],
+          "required": false
+        },
+        {
+          "key": "providers.typesafe.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the TypeSafe.ai API key. type = \"typesafe\" (auto-detected from section name).",
+          "default": "TYPESAFE_API_KEY"
+        },
+        {
+          "key": "providers.typesafe.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "description": "API root. Leave empty for https://api.typesafe.ai (the TYPESAFE_BASE_URL environment variable is honoured when unset).",
+          "placeholder": "https://api.typesafe.ai",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.typesafe.default_model",
+          "title": "Default Model",
+          "type": "enum",
+          "required": false,
+          "description": "Default model id or alias (the TYPESAFE_DEFAULT_MODEL environment variable is honoured when unset). Aliases move with releases (jev-latest / jev-preview -> jev-1.13.0 today); pin the versioned id if you tuned confidence thresholds against it.",
+          "default": "jev-latest",
+          "options": [
+            {
+              "value": "jev-latest",
+              "label": "jev-latest (stable alias, default)"
+            },
+            {
+              "value": "jev-preview",
+              "label": "jev-preview (newest build alias)"
+            },
+            {
+              "value": "jev-1.13.0",
+              "label": "Jev 1.13 (pinned version)"
+            }
+          ],
+          "discover": {
+            "id": "typesafe_decision_cards",
+            "command": "python3 << 'PYEOF'\nimport json, os, sys\nP = 'typesafe'\ndirs = [os.path.join('src', 'llmcore')]\ndirs += [os.path.join(p, 'llmcore') for p in sys.path if os.path.isdir(os.path.join(p, 'llmcore', 'model_cards'))]\nfor b in [os.path.join(d, 'model_cards', 'default_cards', P) for d in dirs]:\n    if not os.path.isdir(b): continue\n    r = []\n    for f in sorted(os.listdir(b)):\n        if not f.endswith('.json'): continue\n        try:\n            d = json.load(open(os.path.join(b, f)))\n            if d.get('model_type') != 'decision': continue\n            if d.get('lifecycle', {}).get('status') in ('retired', 'deprecated'): continue\n            ctx = d.get('context', {}).get('max_input_tokens', '?')\n            pi = d.get('pricing', {}).get('per_million_tokens', {}).get('input', '?')\n            r.append({'value': d['model_id'], 'label': d.get('display_name', d['model_id']), 'description': f'{ctx} ctx, ${pi}/M in'})\n            for a in d.get('aliases', []):\n                r.append({'value': a, 'label': f\"{a} -> {d['model_id']}\", 'description': 'alias (moves with releases)'})\n        except Exception: pass\n    print(json.dumps(r))\n    sys.exit()\nprint('[]')\nPYEOF",
+            "description": "Load available typesafe decision models (and aliases) from llmcore model cards",
+            "parse": "json",
+            "populate": "options",
+            "merge": "replace",
+            "on_failure": "use_static",
+            "cache": true,
+            "timeout": 5
+          }
+        },
+        {
+          "key": "providers.typesafe.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Seconds per HTTP operation. The official SDK defaults to 10; 30 leaves room for large states near the 64k-token budget.",
+          "default": 30,
+          "validation": {
+            "min": 1,
+            "max": 300
+          }
+        },
+        {
+          "key": "providers.typesafe.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "In-provider retries after the first attempt for 408 / 429 / 5xx / 529 responses (honours Retry-After and retry-after-ms), timeouts and connection errors. 0 disables retries.",
+          "default": 2,
+          "validation": {
+            "min": 0,
+            "max": 10
+          }
+        },
+        {
+          "key": "providers.typesafe.retry_backoff_initial",
+          "title": "Retry Backoff Initial",
+          "type": "number",
+          "required": false,
+          "description": "First retry delay in seconds; doubles each attempt up to retry_backoff_max (with jitter). Server Retry-After headers take precedence.",
+          "default": 0.5,
+          "validation": {
+            "min": 0,
+            "max": 60
+          }
+        },
+        {
+          "key": "providers.typesafe.retry_backoff_max",
+          "title": "Retry Backoff Max",
+          "type": "number",
+          "required": false,
+          "description": "Maximum backoff delay in seconds between retries.",
+          "default": 5.0,
+          "validation": {
+            "min": 0,
+            "max": 60
+          }
+        },
+        {
+          "key": "providers.typesafe.fallback_context_length",
+          "title": "Fallback Context Length",
+          "type": "integer",
+          "required": false,
+          "description": "Token budget reported by get_max_context_length() when no model card matches. Jev 1.13: 64k tokens per request (state + all questions); 32k for the state plus the single longest question.",
+          "default": 65536,
+          "validation": {
+            "min": 1024,
+            "max": 1048576
           }
         }
       ]

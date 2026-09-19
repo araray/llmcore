@@ -50,6 +50,7 @@ class ModelType(str, Enum):
     MODERATION = "moderation"  # Content moderation/classification models
     TTS = "tts"  # Text-to-speech models
     STT = "stt"  # Speech-to-text models
+    DECISION = "decision"  # Typed-judgment / structured-decision models (e.g. TypeSafe Jev)
 
 
 class ArchitectureType(str, Enum):

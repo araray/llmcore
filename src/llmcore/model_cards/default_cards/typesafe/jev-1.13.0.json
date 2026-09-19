@@ -1,0 +1,78 @@
+{
+  "model_id": "jev-1.13.0",
+  "display_name": "Jev 1.13",
+  "provider": "typesafe",
+  "model_type": "decision",
+  "architecture": {
+    "family": "jev",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": null
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "reasoning": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.042,
+      "output": 0.0
+    }
+  },
+  "rate_limits": {
+    "default": {
+      "requests_per_minute": 1200
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "jev-latest",
+    "jev-preview"
+  ],
+  "description": "TypeSafe Jev 1.13 — the first System One model. Not a chat model: POST /v1/systemone evaluates a text/JSON `state` against typed questions (noul = yes/no probability, choice = pick one option with per-option probabilities + confidence, score = rubric level with per-level probabilities + confidence) and returns calibrated, structured answers. Text input only; English is the primary training language. Billed per input token; output tokens are free.",
+  "tags": [
+    "decision",
+    "classification",
+    "scoring",
+    "calibrated-probabilities",
+    "text",
+    "output:json"
+  ],
+  "source": "builtin",
+  "provider_extension": {
+    "endpoint": "/v1/systemone",
+    "question_types": [
+      "noul",
+      "choice",
+      "score"
+    ],
+    "state_plus_longest_question_max_tokens": 32768,
+    "tokens_per_second_limit": 250000,
+    "requests_per_minute_limit": 1200,
+    "input_modalities": [
+      "text"
+    ],
+    "primary_language": "en",
+    "output_tokens_billed": false,
+    "alias_resolution": {
+      "jev-latest": "jev-1.13.0",
+      "jev-preview": "jev-1.13.0"
+    },
+    "pricing_source": "https://docs.typesafe.ai/models",
+    "pricing_as_of": "2026-09-19"
+  }
+}

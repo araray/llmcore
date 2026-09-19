@@ -38,6 +38,7 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .openrouter_provider import OpenRouterProvider
 from .poe_provider import PoeProvider
+from .typesafe_provider import TypeSafeProvider
 from .vllm_provider import VLLMProvider
 from .zai_provider import ZaiProvider
 
@@ -66,6 +67,11 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "zai": ZaiProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
+    # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
+    # not a chat API; the real surface is TypeSafeProvider.system_one().
+    "typesafe": TypeSafeProvider,
+    # Alias for TypeSafe: jev (the model family).
+    "jev": TypeSafeProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
     # Aliases for Z.ai: glm (brand) and zhipu/zhipuai/bigmodel (vendor).
@@ -94,6 +100,7 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "zhipu": "zai",
     "zhipuai": "zai",
     "bigmodel": "zai",
+    "jev": "typesafe",
 }
 
 # Well-known defaults for providers that reuse OpenAIProvider.
