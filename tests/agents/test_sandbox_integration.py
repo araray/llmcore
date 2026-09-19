@@ -668,6 +668,7 @@ class TestSandboxCleanup:
 class TestSandboxIntegrationWithRun:
     """Integration tests for sandbox with run() method."""
 
+    @pytest.mark.docker  # SandboxIntegration.initialize() needs a Docker daemon
     @pytest.mark.asyncio
     async def test_run_with_sandbox_creates_and_cleans_up(
         self,

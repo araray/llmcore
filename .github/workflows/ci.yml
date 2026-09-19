@@ -92,5 +92,5 @@ jobs:
           python -m pytest tests \
             --ignore=tests/integration \
             --ignore=tests/adhoc_checks \
-            -m "not slow and not integration and not docker and not vm and not sandbox and not requires_postgres and not requires_pgvector" \
+            -m "not slow and not integration and not docker and not vm and not sandbox and not requires_postgres and not requires_pgvector and not requires_ollama" \
             -q

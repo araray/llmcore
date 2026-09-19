@@ -253,8 +253,16 @@ async def test_get_models_details_falls_back_on_http_error(provider, monkeypatch
 # Context-length resolution chain
 # ---------------------------------------------------------------------------
 def test_get_max_context_length_from_registry(provider):
-    # Seed card deepseek-ai/DeepSeek-V3 ships in default_cards/deepinfra.
-    assert provider.get_max_context_length("deepseek-ai/DeepSeek-V3") == 163840
+    # Seed card deepseek-ai/DeepSeek-V3 ships in default_cards/deepinfra; the
+    # provider must return whatever the card says (the value tracks DeepInfra's
+    # live /models listing and changes on card refreshes).
+    from llmcore.model_cards.registry import get_model_card_registry
+
+    registry = get_model_card_registry()
+    registry.load()
+    card = registry.get("deepinfra", "deepseek-ai/DeepSeek-V3")
+    assert card is not None
+    assert provider.get_max_context_length("deepseek-ai/DeepSeek-V3") == card.context.max_input_tokens
 
 
 def test_get_max_context_length_from_cache(provider):

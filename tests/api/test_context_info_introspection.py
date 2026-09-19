@@ -27,9 +27,12 @@ import pytest
 from llmcore import LLMCore
 from llmcore.models import ContextDocument, ContextPreparationDetails
 
-pytestmark = pytest.mark.filterwarnings(
+pytestmark = [
+    pytest.mark.requires_ollama,  # LLMCore.create() defaults to a live Ollama
+    pytest.mark.filterwarnings(
     "ignore:`torch\\.jit\\.script` is deprecated.*:DeprecationWarning"
-)
+),
+]
 
 # Document ingestion (add_documents_to_vector_store) embeds via the default
 # 'all-MiniLM-L6-v2' model, which needs the optional sentence-transformers
