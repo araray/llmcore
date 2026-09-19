@@ -3,7 +3,7 @@
 Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embeddings, observability, and sandbox execution
 
 **Schema version**: 1.0.0  
-**App version**: 0.50.0
+**App version**: 0.53.0
 **Output format**: toml
 
 ---
@@ -668,6 +668,46 @@ print('[]')
 PYEOF`
   - Populates: options
   - Merge: replace
+
+## 🎯 Provider: TypeSafe.ai (System One)
+
+TypeSafe.ai System One typed-judgment provider (Jev models). **Not a chat API**: `POST /v1/systemone` evaluates a state (string / JSON object / array) against typed questions — `noul` (yes/no probability), `choice` (pick one option; per-option probabilities + confidence), `score` (rubric level; per-level probabilities + confidence) — and returns structured, calibrated answers. Use `provider.system_one(...)` or the chat bridge `llm.chat(..., provider_name="typesafe", questions={...})`. Streaming and tool calling are not supported. Alias: `jev`. Install with `pip install llmcore[typesafe]` (httpx only). See [TypeSafe provider usage](TypeSafe_provider_usage.md).
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `providers.typesafe.api_key` | secret |  | — | TypeSafe.ai API key. Strongly recommended to set via the `TYPESAFE_API_KEY` environment variable. |
+| `providers.typesafe.api_key_env_var` | string |  | `TYPESAFE_API_KEY` | Environment variable holding the API key. type = "typesafe" (auto-detected from section name). |
+| `providers.typesafe.base_url` | url |  | — | API root. Leave empty for `https://api.typesafe.ai` (`TYPESAFE_BASE_URL` is honoured when unset). |
+| `providers.typesafe.default_model` | enum |  | `jev-latest` | Default model id or alias (`TYPESAFE_DEFAULT_MODEL` is honoured when unset). |
+| `providers.typesafe.timeout` | integer |  | `30` | Seconds per HTTP operation. |
+| `providers.typesafe.max_retries` | integer |  | `2` | In-provider retries for 408 / 429 / 5xx / 529, timeouts and connection errors. |
+| `providers.typesafe.retry_backoff_initial` | number |  | `0.5` | First retry delay in seconds (doubles up to `retry_backoff_max`, with jitter). |
+| `providers.typesafe.retry_backoff_max` | number |  | `5.0` | Maximum backoff delay in seconds. |
+| `providers.typesafe.fallback_context_length` | integer |  | `65536` | Token budget reported when no model card matches. |
+
+### `providers.typesafe.api_key`
+
+TypeSafe.ai API key from https://console.typesafe.ai/settings/keys. Prefer `TYPESAFE_API_KEY` or `LLMCORE_PROVIDERS__TYPESAFE__API_KEY` over a value in the file.
+
+### `providers.typesafe.default_model`
+
+Aliases move with releases (`jev-latest` / `jev-preview` → `jev-1.13.0` today) and `/v1/systemone` responses echo the versioned id that answered. Pin the versioned id if you tuned confidence thresholds against it.
+
+**Options:**
+
+- `jev-latest`: stable alias (default)
+- `jev-preview`: newest build alias (currently the same model)
+- `jev-1.13.0`: Jev 1.13 (pinned version)
+
+**Dynamic discovery** (`typesafe_decision_cards`): loads `model_type == "decision"` cards (and their aliases) from `model_cards/default_cards/typesafe/`.
+
+### `providers.typesafe.timeout`
+
+The official SDK defaults to 10 s; 30 s leaves room for large states near the 64k-token budget (32k for the state plus the single longest question).
+
+### `providers.typesafe.max_retries`
+
+Retries honour `Retry-After` (seconds or HTTP-date) and `retry-after-ms`; `0` disables retries. `429` (rate limit) and `529` (overloaded) are the statuses you will actually see.
 
 ## 💾 Storage: Session & Vector
 

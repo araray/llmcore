@@ -5,6 +5,65 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.53.0
+
+### Added — TypeSafe.ai (System One) provider
+
+- **TypeSafe.ai provider**: first-class `TypeSafeProvider` for TypeSafe's
+  System One typed-judgment API (Jev models). It is **not a chat model**:
+  `POST /v1/systemone` evaluates a `state` (string / JSON object / array)
+  against typed questions and returns calibrated, structured answers —
+  `noul` (yes/no probability), `choice` (pick one option; per-option
+  probabilities + `confidence`), `score` (rubric level; per-level
+  probabilities + `confidence`).
+- **Typed surface**: `await provider.system_one(state, questions, model=…)`
+  with the `Noul` / `Choice` / `Score` builders (raw dicts accepted;
+  `normalize_questions()` validates locally), a `SystemOneResult` with
+  `.nouls` / `.choices` / `.scores` accessors, `usage`, `request_id`
+  (`x-typesafe-request-id`) and `raw`; `await provider.list_models()`
+  (`GET /v1/models`).
+- **Chat bridge**: `llm.chat(msg, provider_name="typesafe", questions={…})`
+  sends the conversation as the state (or an explicit `state=`) and returns
+  the answers as a JSON string; usage flows into cost tracking. Streaming
+  and tool calling raise a non-retryable `ProviderError` (400).
+- **Transport**: plain `httpx` against the two REST endpoints (no vendor
+  SDK). In-provider retries for `408/429/5xx/529`, timeouts and connection
+  errors with exponential backoff honouring `Retry-After` / `retry-after-ms`;
+  errors map to `ProviderError` with `status_code`, `retryable`,
+  `retry_after_seconds`, the request id and the server's validation detail.
+- **Config**: new `[providers.typesafe]` section (`api_key`/`api_key_env_var`
+  → `TYPESAFE_API_KEY`, `base_url` ← `TYPESAFE_BASE_URL`, `default_model`
+  ← `TYPESAFE_DEFAULT_MODEL`, `timeout`, `max_retries`,
+  `retry_backoff_initial`/`_max`, `fallback_context_length`) in
+  `default_config.toml`, with a matching `provider_typesafe` section in the
+  confy schema (whose `app.version` now tracks the package again).
+- **Model cards**: new `ModelType.DECISION` (`"decision"`) and a builtin
+  `typesafe/jev-1.13.0` card carrying the `jev-latest` / `jev-preview`
+  aliases, the 64k-per-request / 32k state+longest-question budget, the
+  $0.042 per 1M input tokens price (output free), rate limits and question
+  types. `get_models_details()` lists the versioned id and its aliases.
+- **cardctl**: `TypeSafeAdapter` (collapses the listed aliases onto the
+  versioned id; registered as `typesafe` / `jev`) and a `typesafe.toml`
+  enrichment overlay so regenerated cards match the builtin one.
+- **Packaging**: `llmcore[typesafe]` extra (`httpx`), included in
+  `llmcore[all]`; `typesafe` registered in `ProviderManager` with the `jev`
+  alias.
+- **Docs & examples**: `docs/TypeSafe_provider_usage.md` (surface, builders,
+  answers, confidence-gated routing, chat bridge, errors/retries, limits),
+  README / `CONFIG_REFERENCE.md` / `model_cards.md` updates, and
+  `examples/typesafe_example.py`.
+- **Tests**: 92-test offline provider suite (config/env precedence, builders,
+  `system_one`, error mapping + retry loop, `list_models`, model cards, chat
+  bridge, tokens, lifecycle, registration), builtin-card + registry alias
+  tests, cardctl adapter tests, and a key-gated live smoke
+  (`tests/integration/test_typesafe_live.py`).
+
+### Fixed
+
+- DeepSeek DSML text-format tool calls are normalized at the provider
+  boundary; OpenRouter model cards refreshed (both landed after the 0.52.0
+  entry was written).
+
 ## v0.52.0
 
 ### Changed — Grimoire is THE control plane (breaking)

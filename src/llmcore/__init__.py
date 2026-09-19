@@ -9,7 +9,8 @@ and orchestrating autonomous agents via the Darwin cognitive cycle.
 
 Key subsystems:
     - **Providers**: OpenAI, Anthropic, Google/Gemini, Ollama, DeepInfra,
-      Deepgram voice/audio, and OpenAI-compatible providers
+      DeepSeek, Mistral, Kimi, Z.ai, Deepgram voice/audio, TypeSafe.ai
+      (System One typed judgments), and OpenAI-compatible providers
     - **Agents**: 8-phase Darwin cognitive cycle, personas, HITL, sandboxing
     - **Memory**: Volatile / Session / Semantic / Episodic tiers
     - **Storage**: SQLite, PostgreSQL, ChromaDB, pgvector backends
@@ -34,7 +35,7 @@ For advanced or less-common types, import from sub-packages::
     from llmcore.agents.hitl import HITLManager
     from llmcore.autonomous import AutonomousScheduler
 
-Version: 0.51.0
+Version: 0.53.0
 """
 
 from importlib.metadata import PackageNotFoundError, version
