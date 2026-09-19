@@ -29,3 +29,38 @@ def bundled_prompt_registry():
     in-memory usage metrics, so one instance can serve the whole session.
     """
     return make_bundled_prompt_registry()
+
+
+# ---------------------------------------------------------------------------
+# requires_ollama: skip live-Ollama tests when no server answers
+# ---------------------------------------------------------------------------
+_OLLAMA_REACHABLE: bool | None = None
+
+
+def _ollama_reachable() -> bool:
+    global _OLLAMA_REACHABLE
+    if _OLLAMA_REACHABLE is None:
+        import os
+        import urllib.request
+
+        base = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+        if not base.startswith("http"):
+            base = f"http://{base}"
+        try:
+            with urllib.request.urlopen(f"{base}/api/tags", timeout=1.5) as resp:
+                _OLLAMA_REACHABLE = resp.status == 200
+        except Exception:
+            _OLLAMA_REACHABLE = False
+    return _OLLAMA_REACHABLE
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip ``requires_ollama`` tests unless an Ollama server answers."""
+    if not any("requires_ollama" in item.keywords for item in items):
+        return
+    if _ollama_reachable():
+        return
+    skip = pytest.mark.skip(reason="requires a live Ollama server (start ollama or set OLLAMA_HOST)")
+    for item in items:
+        if "requires_ollama" in item.keywords:
+            item.add_marker(skip)

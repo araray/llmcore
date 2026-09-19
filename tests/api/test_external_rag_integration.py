@@ -16,6 +16,8 @@ from typing import Dict, List
 
 import pytest
 
+pytestmark = pytest.mark.requires_ollama  # the llmcore_instance fixture needs a live Ollama
+
 from llmcore.api import LLMCore, LLMCoreProtocol
 from llmcore.exceptions import LLMCoreError, SessionNotFoundError
 from llmcore.models import (

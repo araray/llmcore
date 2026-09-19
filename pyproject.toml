@@ -281,6 +281,7 @@ markers = [
     "vm: marks tests that require VM/SSH access",
     "asyncio: mark test as an asyncio test",
     "requires_postgres: Tests that require PostgreSQL database",
+    "requires_ollama: Tests that need a live Ollama server (auto-skipped when unreachable)",
     "requires_pgvector: Tests that require pgvector extension",
 ]
 

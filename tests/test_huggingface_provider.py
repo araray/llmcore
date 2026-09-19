@@ -571,7 +571,23 @@ class TestTokenCounting:
 class TestContextLength:
     """Tests for get_max_context_length."""
 
-    def test_known_model_fallback_table(self):
+    def test_known_model_fallback_table(self, monkeypatch):
+        """The static DEFAULT_HF_TOKEN_LIMITS table is consulted when no card matches.
+
+        The builtin registry ships a card for this model (128k), so the registry
+        lookup is neutralised here; otherwise the outcome depends on whether an
+        earlier test already loaded the registry singleton.
+        """
+        import llmcore.providers.huggingface_provider as hf_mod
+
+        class _EmptyRegistry:
+            def load(self, *a, **k):
+                return None
+
+            def get(self, *a, **k):
+                return None
+
+        monkeypatch.setattr(hf_mod, "get_model_card_registry", lambda: _EmptyRegistry())
         provider = _make_provider()
         ctx = provider.get_max_context_length(
             "meta-llama/Llama-3.3-70B-Instruct"
