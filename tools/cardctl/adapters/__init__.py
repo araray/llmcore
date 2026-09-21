@@ -20,6 +20,9 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "kimi": "kimi_adapter.KimiAdapter",
     # Back-compat alias: "moonshot" → Kimi adapter (canonical key is "kimi").
     "moonshot": "kimi_adapter.KimiAdapter",
+    "friendli": "friendli_adapter.FriendliAdapter",
+    # Alias: "friendliai" (brand spelling) -> Friendli.
+    "friendliai": "friendli_adapter.FriendliAdapter",
     "zai": "zai_adapter.ZaiAdapter",
     # Aliases: "glm" (brand) and "zhipu"/"zhipuai"/"bigmodel" (vendor) → Z.ai.
     "glm": "zai_adapter.ZaiAdapter",

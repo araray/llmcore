@@ -1,0 +1,46 @@
+# tools/cardctl/enrichments/friendli.toml
+# Manual enrichment overlay for the FriendliAI provider (Model APIs catalog).
+#
+# Friendli's GET /serverless/v1/models is unusually rich: context length, max
+# completion tokens, per-token pricing, a capability block, modalities,
+# reasoning options, base model, serving mode, and deprecation date all come
+# from the API and are mapped by FriendliAdapter.  This overlay therefore only
+# carries what the API cannot know:
+#
+#   - architecture family / type for the open-weight checkpoints Friendli hosts
+#   - short display names (the API repeats the full "owner/Model" id)
+#   - extra aliases
+#
+# Pricing is deliberately NOT pinned here: Friendli adjusts per-token rates and
+# the live catalog is authoritative.  Add a [pricing] entry only to correct the
+# API (enrichment wins over live data).
+#
+# Canonical provider key: "friendli"  (default_cards/friendli/).
+# Service docs:    https://friendli.ai/docs/llms.txt
+# Catalog/pricing: https://friendli.ai/docs/guides/model-apis/pricing
+# Last updated:    2026-09-20
+
+[architecture]
+"zai-org/GLM-5.3"           = { family = "GLM", type = "moe" }
+"zai-org/GLM-5.3-Flash"     = { family = "GLM", type = "moe" }
+"zai-org/GLM-5.2"           = { family = "GLM", type = "moe" }
+"zai-org/GLM-5.1"           = { family = "GLM", type = "moe" }
+"deepseek-ai/DeepSeek-V3.2" = { family = "DeepSeek", type = "moe" }
+"MiniMaxAI/MiniMax-M2.5"    = { family = "MiniMax", type = "moe" }
+"google/gemma-4-31B-it"     = { family = "Gemma", type = "dense", parameter_count = "31B" }
+
+[overrides]
+"zai-org/GLM-5.3"           = { display_name = "GLM-5.3 (Friendli)" }
+"zai-org/GLM-5.3-Flash"     = { display_name = "GLM-5.3-Flash (Friendli)" }
+"zai-org/GLM-5.2"           = { display_name = "GLM-5.2 (Friendli)" }
+"zai-org/GLM-5.1"           = { display_name = "GLM-5.1 (Friendli)" }
+"deepseek-ai/DeepSeek-V3.2" = { display_name = "DeepSeek-V3.2 (Friendli)" }
+"MiniMaxAI/MiniMax-M2.5"    = { display_name = "MiniMax-M2.5 (Friendli)" }
+"google/gemma-4-31B-it"     = { display_name = "Gemma 4 31B Instruct (Friendli)" }
+
+[aliases]
+# Friendli model ids are case-sensitive on the wire; these aliases let callers
+# use the shorter brand spelling with llm.chat(model_name=...).
+"zai-org/GLM-5.3"       = ["friendli/glm-5.3"]
+"zai-org/GLM-5.3-Flash" = ["friendli/glm-5.3-flash"]
+"zai-org/GLM-5.2"       = ["friendli/glm-5.2"]
