@@ -43,6 +43,10 @@ small calls and skip providers whose required environment is incomplete.
 - `hosted_providers_example.py` - Poe, OpenRouter, DeepSeek, Kimi, DeepInfra,
   and Mistral from one LLMCore instance.
 - `zai_example.py` - Z.ai (GLM) chat, thinking mode, and streaming.
+- `friendli_example.py` - FriendliAI Model APIs: catalog discovery, chat,
+  reasoning controls with parsed chain of thought, streaming, a tool-calling
+  round trip, the native tokenizer, and Suite team usage. Requires
+  `FRIENDLI_TOKEN` (or `FRIENDLIAI_API_KEY`).
 - `typesafe_example.py` - TypeSafe.ai System One typed judgments
   (`system_one()` with Noul/Choice/Score questions, confidence-gated routing,
   and the `llm.chat(..., questions=...)` bridge). Requires `TYPESAFE_API_KEY`.
