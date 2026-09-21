@@ -234,6 +234,11 @@
               "value": "poe",
               "label": "Poe",
               "description": "Gateway to models and community bots"
+            },
+            {
+              "value": "friendli",
+              "label": "FriendliAI",
+              "description": "Model APIs catalog, Dedicated Endpoints, Container"
             }
           ],
           "see_also": [
@@ -2559,6 +2564,246 @@
           "validation": {
             "min": 1024,
             "max": 1048576
+          }
+        }
+      ]
+    },
+    {
+      "id": "provider_friendli",
+      "title": "Provider: FriendliAI",
+      "description": "FriendliAI provider covering all three inference surfaces through one section: Friendli Model APIs (serverless, pay-per-token catalog), Friendli Dedicated Endpoints (your own GPU deployments; the model field is the endpoint ID), and Friendli Container (self-hosted Friendli Engine; base_url required). The chat endpoint is OpenAI-compatible plus Friendli extensions: reasoning_effort / reasoning_budget / parse_reasoning / include_reasoning, chat_template_kwargs (enable_thinking, clear_thinking), Friendli Engine sampling (top_k, min_p, min_tokens, repetition_penalty, eos_token, XTC), regex-constrained structured output, and an exact /tokenize endpoint. Transport is selectable via 'backend': the openai SDK in compatibility mode (default), direct httpx, or the official friendli SDK. Aliases: friendliai, friendli_ai. Install with: pip install llmcore[friendli]. Docs: https://friendli.ai/docs/llms.txt",
+      "icon": "⚡",
+      "order": 14,
+      "fields": [
+        {
+          "key": "providers.friendli.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "description": "Friendli Personal API key (starts with 'flp_'); create one at https://friendli.ai/suite/~/setting/keys. Strongly recommended to set via an environment variable. Optional when endpoint_type = \"container\" and the container runs without auth.",
+          "placeholder": "flp_...",
+          "recommendation": "Set via FRIENDLI_TOKEN, FRIENDLIAI_API_KEY, or LLMCORE_PROVIDERS__FRIENDLI__API_KEY environment variable.",
+          "tags": [
+            "security",
+            "credentials"
+          ],
+          "required": false
+        },
+        {
+          "key": "providers.friendli.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the Friendli API key. When unset the provider checks FRIENDLI_TOKEN (the official SDK's variable), then FRIENDLIAI_API_KEY (the spelling used in friendli.ai's documentation examples), then FRIENDLI_API_KEY. type = \"friendli\" (auto-detected from section name).",
+          "default": "FRIENDLI_TOKEN"
+        },
+        {
+          "key": "providers.friendli.team_id",
+          "title": "Team Id",
+          "type": "secret",
+          "description": "Friendli team to run requests as, sent as the X-Friendli-Team header and used by get_team_cost() / get_team_usage(). Falls back to FRIENDLI_TEAM_ID then FRIENDLIAI_TEAM_ID. Leave empty to use the default team in Friendli Suite.",
+          "placeholder": "...",
+          "recommendation": "Set via FRIENDLI_TEAM_ID or FRIENDLIAI_TEAM_ID environment variable.",
+          "tags": [
+            "security",
+            "credentials"
+          ],
+          "required": false
+        },
+        {
+          "key": "providers.friendli.team_id_env_var",
+          "title": "Team Id Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the Friendli team ID.",
+          "default": "FRIENDLI_TEAM_ID"
+        },
+        {
+          "key": "providers.friendli.endpoint_type",
+          "title": "Endpoint Type",
+          "type": "enum",
+          "required": false,
+          "description": "Which Friendli surface to talk to. Selects the default base_url and determines what the 'model' field means. Embeddings and image generation are served by dedicated/container only.",
+          "default": "serverless",
+          "options": [
+            {
+              "value": "serverless",
+              "label": "Model APIs (serverless catalog)"
+            },
+            {
+              "value": "dedicated",
+              "label": "Dedicated Endpoints (model = endpoint ID)"
+            },
+            {
+              "value": "container",
+              "label": "Friendli Container (base_url required)"
+            }
+          ]
+        },
+        {
+          "key": "providers.friendli.backend",
+          "title": "Transport Backend",
+          "type": "enum",
+          "required": false,
+          "description": "Transport: \"openai\" (openai SDK pointed at the Friendli base URL; the default), \"httpx\" (direct REST), or \"sdk\" (the official friendli SDK). Leave empty for auto-detection in order openai -> httpx -> sdk. The vendor SDK is last on purpose: its generated response models drop fields outside the published schema, so reasoning_content is lost on that backend.",
+          "default": "",
+          "options": [
+            {
+              "value": "",
+              "label": "Auto (openai -> httpx -> sdk)"
+            },
+            {
+              "value": "openai",
+              "label": "OpenAI-compatibility mode (preferred)"
+            },
+            {
+              "value": "httpx",
+              "label": "Direct REST (httpx)"
+            },
+            {
+              "value": "sdk",
+              "label": "Official friendli SDK (drops reasoning_content)"
+            }
+          ]
+        },
+        {
+          "key": "providers.friendli.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "description": "Inference root. Leave empty to use the default for endpoint_type: https://api.friendli.ai/serverless/v1 or https://api.friendli.ai/dedicated/v1. REQUIRED for endpoint_type = \"container\" (e.g. http://localhost:8000/v1).",
+          "placeholder": "https://api.friendli.ai/serverless/v1",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.friendli.suite_base_url",
+          "title": "Suite Base Url",
+          "type": "url",
+          "description": "Friendli Suite API root used by get_team_cost() / get_team_usage(). Distinct from the inference root. Leave empty for https://api.friendli.ai/v1.",
+          "placeholder": "https://api.friendli.ai/v1",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          },
+          "required": false
+        },
+        {
+          "key": "providers.friendli.default_model",
+          "title": "Default Model",
+          "type": "string",
+          "required": false,
+          "description": "Default model. On Model APIs this is a catalog model ID (zai-org/GLM-5.3, zai-org/GLM-5.3-Flash, zai-org/GLM-5.2, zai-org/GLM-5.1, google/gemma-4-31B-it, deepseek-ai/DeepSeek-V3.2, MiniMaxAI/MiniMax-M2.5). On Dedicated Endpoints it must be the endpoint ID (or ENDPOINT_ID:ADAPTER_ROUTE for Multi-LoRA). See the live catalog at https://friendli.ai/docs/guides/model-apis/pricing.",
+          "default": "zai-org/GLM-5.3"
+        },
+        {
+          "key": "providers.friendli.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Seconds per HTTP operation. 1M-context reasoning responses can take a while, so the default is generous.",
+          "default": 300,
+          "validation": {
+            "min": 1,
+            "max": 3600
+          }
+        },
+        {
+          "key": "providers.friendli.reasoning_effort",
+          "title": "Reasoning Effort",
+          "type": "enum",
+          "required": false,
+          "description": "Default reasoning effort tier. Leave empty to use each model's own default. The tiers a model accepts are advertised per-model in its /models entry (reasoning_options) and on its model card; unsupported tiers are rejected by the API.",
+          "default": "",
+          "options": [
+            {
+              "value": "",
+              "label": "Model default (unset)"
+            },
+            {
+              "value": "minimal",
+              "label": "minimal"
+            },
+            {
+              "value": "low",
+              "label": "low"
+            },
+            {
+              "value": "medium",
+              "label": "medium"
+            },
+            {
+              "value": "high",
+              "label": "high"
+            },
+            {
+              "value": "xhigh",
+              "label": "xhigh"
+            },
+            {
+              "value": "max",
+              "label": "max"
+            },
+            {
+              "value": "ultracode",
+              "label": "ultracode"
+            }
+          ]
+        },
+        {
+          "key": "providers.friendli.reasoning_budget",
+          "title": "Reasoning Budget",
+          "type": "integer",
+          "required": false,
+          "description": "Default hard cap (in tokens) on the chain of thought. Leave unset for no cap. Only effective for reasoning models.",
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "key": "providers.friendli.parse_reasoning",
+          "title": "Parse Reasoning",
+          "type": "boolean",
+          "required": false,
+          "description": "Split the chain of thought out of 'content' into 'reasoning_content', surfaced by extract_reasoning_content() and extract_delta_reasoning_content(). Requires the openai or httpx backend (the vendor SDK drops the field).",
+          "default": true
+        },
+        {
+          "key": "providers.friendli.include_reasoning",
+          "title": "Include Reasoning",
+          "type": "boolean",
+          "required": false,
+          "description": "When parsing is on, include the parsed reasoning in the response. Leave unset to use the Friendli default (true)."
+        },
+        {
+          "key": "providers.friendli.enable_thinking",
+          "title": "Enable Thinking",
+          "type": "boolean",
+          "required": false,
+          "description": "Default chat_template_kwargs.enable_thinking for controllable reasoning models (e.g. zai-org/GLM-5.2). Leave unset to let the model's chat template decide. 'clear_thinking' is accepted as a per-request kwarg."
+        },
+        {
+          "key": "providers.friendli.native_token_count",
+          "title": "Native Token Count",
+          "type": "boolean",
+          "required": false,
+          "description": "Count tokens with the model's own tokenizer via POST /tokenize instead of locally (tiktoken cl100k_base). Exact, but one API request per count, which consumes the Model APIs rate-limit budget - llmcore counts tokens on every turn. provider.tokenize() / detokenize() are available regardless.",
+          "default": false
+        },
+        {
+          "key": "providers.friendli.fallback_context_length",
+          "title": "Fallback Context Length",
+          "type": "integer",
+          "required": false,
+          "description": "Context window used when neither live catalog discovery nor a model card knows the model. Dedicated Endpoints and Containers expose no catalog, so this is the usual source there unless a model card matches.",
+          "default": 131072,
+          "validation": {
+            "min": 1024
           }
         }
       ]
