@@ -691,10 +691,9 @@ class DeepSeekProvider(BaseProvider):
 
             if status == 400 and "context_length" in msg.lower():
                 raise ContextLengthError(
-                    provider_name=self.get_name(),
-                    model=model_name,
-                    max_tokens=self.get_max_context_length(model_name),
-                    requested_tokens=None,
+                    model_name=model_name,
+                    limit=self.get_max_context_length(model_name),
+                    actual=0,
                     message=msg,
                 )
             if status == 400 and any(

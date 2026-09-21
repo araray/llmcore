@@ -28,6 +28,7 @@ from .base import BaseProvider, ContextPayload
 from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
+from .friendli_provider import FriendliProvider
 from .gemini_provider import GeminiProvider
 from .huggingface_provider import HuggingFaceProvider
 from .kimi_provider import KimiProvider
@@ -65,6 +66,8 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "deepinfra": DeepInfraProvider,
     # Z.ai (Zhipu AI) — GLM family of models.
     "zai": ZaiProvider,
+    # FriendliAI: Model APIs (serverless), Dedicated Endpoints, and Container.
+    "friendli": FriendliProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
@@ -74,6 +77,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "jev": TypeSafeProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
+    # Aliases for FriendliAI: friendliai (brand) / friendli_ai.
+    "friendliai": FriendliProvider,
+    "friendli_ai": FriendliProvider,
     # Aliases for Z.ai: glm (brand) and zhipu/zhipuai/bigmodel (vendor).
     "glm": ZaiProvider,
     "zhipu": ZaiProvider,
@@ -101,6 +107,8 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "zhipuai": "zai",
     "bigmodel": "zai",
     "jev": "typesafe",
+    "friendliai": "friendli",
+    "friendli_ai": "friendli",
 }
 
 # Well-known defaults for providers that reuse OpenAIProvider.

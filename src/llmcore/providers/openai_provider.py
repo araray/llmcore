@@ -554,10 +554,9 @@ class OpenAIProvider(BaseProvider):
             logger.error(f"OpenAI status error ({status}): {msg}", exc_info=True)
             if status == 400 and "context_length" in msg.lower():
                 raise ContextLengthError(
-                    provider_name=self.get_name(),
-                    model=model_name,
-                    max_tokens=self.get_max_context_length(model_name),
-                    requested_tokens=None,
+                    model_name=model_name,
+                    limit=self.get_max_context_length(model_name),
+                    actual=0,
                     message=msg,
                 )
             # Detect model-not-found errors and provide actionable info.

@@ -5,6 +5,105 @@ All notable changes to **llmcore** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added — FriendliAI provider
+
+- **FriendliAI provider**: first-class `FriendliProvider` covering all three
+  Friendli inference surfaces through one `[providers.friendli]` section,
+  selected with `endpoint_type`:
+  `"serverless"` (Friendli Model APIs — the hosted pay-per-token catalog),
+  `"dedicated"` (Dedicated Endpoints; the `model` field is the **endpoint ID**,
+  or `ENDPOINT_ID:ADAPTER_ROUTE` for Multi-LoRA), and `"container"`
+  (self-hosted Friendli Engine; `base_url` required, API key optional).
+- **Dual transport**: `backend = "openai" | "httpx" | "sdk"`, auto-resolving
+  **openai → httpx → sdk**. The vendor `friendli` SDK is supported but ranked
+  last on purpose: its generated response models ignore unknown fields, so
+  `reasoning_content` / `reasoning` are silently dropped and there is no
+  `extra_body` escape hatch. The provider warns at startup when `backend =
+  "sdk"` is combined with `parse_reasoning`.
+- **Reasoning controls**: `reasoning_effort`
+  (`minimal|low|medium|high|xhigh|max|ultracode`), `reasoning_budget`,
+  `parse_reasoning`, `include_reasoning`, plus the chat-template switches
+  `enable_thinking` / `clear_thinking` folded into `chat_template_kwargs`.
+  Parsed chains of thought are surfaced by `extract_reasoning_content()` and
+  `extract_delta_reasoning_content()` in both streaming and non-streaming mode.
+- **Friendli Engine sampling**: `top_k`, `min_p`, `min_tokens`,
+  `repetition_penalty`, `eos_token`, and XTC (`xtc_threshold` /
+  `xtc_probability`) routed through `extra_body`; mutually exclusive body
+  fields (`tools` vs `min_tokens`/`response_format`) are dropped with a warning
+  instead of 422-ing.
+- **Structured output** including Friendli's `regex` `response_format`, tool
+  calling with first-class `Message.tool_calls` (R-2), and multimodal input via
+  `metadata["inline_images"|"inline_audio"|"inline_videos"|"content_parts"]`.
+- **Rich model discovery**: `GET /models` reports context length, max completion
+  tokens, per-token pricing, a `functionality` block, modalities, reasoning
+  options, `base_model` and `mode`; the catalog is cached, primed by
+  `warm_up()`, and drives `get_max_context_length()`.
+- **Auxiliary surfaces**: `tokenize()` / `detokenize()` / `render_chat()`,
+  `text_completion()`, `transcribe_audio()`, and — on dedicated/container only
+  — `create_embeddings()` / `generate_image()`, each gated with an actionable
+  error on the wrong endpoint type. `get_team_cost()` / `get_team_usage()` read
+  the Friendli Suite billing APIs for the configured team.
+- **Team scoping**: `team_id` (or `FRIENDLI_TEAM_ID` / `FRIENDLIAI_TEAM_ID`) is
+  sent as `X-Friendli-Team` on every request.
+- **Token counting**: local by default (tiktoken `cl100k_base`, then a
+  character-ratio estimate); `native_token_count = true` routes counts through
+  Friendli's exact `/tokenize` endpoint at the cost of one API request per
+  count, with a local fallback when that call fails.
+- **Config**: new `[providers.friendli]` section in `default_config.toml`
+  (`api_key`/`api_key_env_var` → `FRIENDLI_TOKEN` → `FRIENDLIAI_API_KEY` →
+  `FRIENDLI_API_KEY`, `team_id`/`team_id_env_var`, `endpoint_type`, `backend`,
+  `base_url`, `suite_base_url`, `default_model`, `timeout`, the reasoning
+  defaults, `native_token_count`, `fallback_context_length`) and a matching
+  `provider_friendli` section in the confy schema.
+- **Model cards**: `FriendliAdapter` for cardctl derives context, pricing,
+  capabilities, modalities and reasoning options straight from the live
+  catalog, with a `friendli.toml` enrichment overlay for architecture and
+  display names; seven generated cards under
+  `model_cards/default_cards/friendli/`.
+- **Packaging**: `llmcore[friendli]` extra (`openai`, `httpx`, and the optional
+  `friendli` SDK), included in `llmcore[all]`; `friendli` registered in
+  `ProviderManager` with the `friendliai` / `friendli_ai` aliases.
+- **Errors**: 401/403/404/429 map to actionable `ProviderError`s (429 marked
+  retryable so `chat_completion_with_retry` applies), and context-overflow
+  wording on 400/422 maps to `ContextLengthError`.
+- **Docs, examples & tests**: `docs/Friendli_provider_usage.md`,
+  `examples/friendli_example.py`, README updates, and a 120-test offline suite
+  (`tests/providers/test_friendli_provider.py`) covering credential/backend
+  resolution, parameter splitting, payload building, both direct backends,
+  discovery, tokenization, endpoint gating, Suite APIs and error mapping.
+
+### Fixed — `ContextLengthError` construction in three providers
+
+- **OpenAI, DeepSeek and Z.ai raised `TypeError` instead of
+  `ContextLengthError` on every context overflow.** All three constructed the
+  exception with a keyword set it has never accepted
+  (`provider_name` / `model` / `max_tokens` / `requested_tokens`) rather than
+  its real signature `(model_name, limit, actual, message)`, so the `raise`
+  statement itself blew up inside `__init__`. Callers catching
+  `ContextLengthError` — including llmcore's own context-management and agent
+  retry paths — never saw it, and the user got an opaque `TypeError` with no
+  model or limit attached. Fixing `OpenAIProvider` also fixes its subclasses
+  (DeepInfra, vLLM, Poe, OpenRouter). Anthropic, Mistral, Gemini, Kimi and the
+  new Friendli provider already used the correct signature.
+- **Regression coverage** (`tests/providers/test_context_length_error_mapping.py`):
+  a static AST check asserts that *every* `ContextLengthError(...)` call site
+  in `src/llmcore` uses keywords the constructor accepts — covering providers
+  with no error-path tests and any added later — plus behavioural tests that
+  drive the real `chat_completion()` failure path of each fixed provider and
+  assert the mapped exception carries the model name and context limit. Both
+  guards were verified to fail against the pre-fix code.
+
+### Notes
+
+- Friendli's documented `/detokenize` and `/chat/render` routes currently
+  return 404 on Model APIs (verified 2026-09-20); they are implemented and work
+  on Dedicated Endpoints / Container, and every caller degrades gracefully.
+- Model APIs rate limits are tier-based; tier 0 is "adaptive" and in practice
+  allows only a couple of requests per minute, which is why native token
+  counting is opt-in and `examples/friendli_example.py` paces its calls.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider
