@@ -342,7 +342,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M4** ✅ | **Google** media: images (dual transport), **Veo** video (async job), native TTS, embeddings | Landed 2026-09-30, 52 tests. Live: Veo job submitted + polled through `MediaJobManager`; 2 MB image; 112 KB PCM TTS. **`MediaJob` validated against a real vendor — no changes to the abstraction were needed.** |
 | **M5** ✅ | **fal** — queue lifecycle, URL inputs, video, SFX, music, FILM interpolation; 9 capabilities, all async-job | Landed 2026-09-30, 79 tests. Live: image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. **The provider-neutrality test passed — no core type changed.** See §5.2 |
 | **M6** ✅ | **ElevenLabs** — TTS, streaming TTS, batch STT, SFX, music, voice design | Landed 2026-09-30, 69 tests. Live: TTS + consent, streaming TTS, STT round trip, SFX. Music/voice design are **plan-gated on the current account** — implemented and unit-tested, not live-validated. **Consent is now first-class: new `VoiceConsent` type and `VoiceDesignProvider` protocol.** Realtime STT deferred — see §5.3 |
-| **M7** | **Replicate** — one generic prediction adapter + model-schema descriptors | Explicitly *not* a class per model |
+| **M7** ✅ | **Replicate** — one generic prediction adapter + model-schema descriptors | Landed 2026-09-30, 70 tests. Live: schema-driven field mapping, image generation, community-model ASR, cancel. **One adapter, seven capabilities, zero per-model classes.** See §5.5 |
 | **M8** | **Hugging Face Inference Endpoints** — configurable endpoint/schema adapter | Custom weights / private repos path |
 | **M9a** ✅ | **Webhook receiver** — signed single-use tokens, generic ASGI app, fal callback parsing | Landed 2026-09-30, 38 tests. Polling stays the fallback; webhook/poll equivalence tested |
 | **M9b** | Direct specialists (BFL, Luma, Stability) when justified: lower unit cost, first-party-only feature, data contract, or pre-aggregator access | Otherwise fal/Replicate already cover it |
@@ -539,6 +539,51 @@ an artifact to work that was never submitted. An unknown or spent token gets
 tells an unauthenticated caller something they should not learn.
 
 ---
+
+### 5.5 What M7 proved about the generic-adapter bet
+
+The spec's requirement — *one generic prediction adapter, explicitly not a class
+per model* — only works if a model can describe itself. Replicate's do: every
+model publishes an OpenAPI schema naming its own inputs and outputs.
+`flux-schnell` requires `prompt` and returns an array of URIs; `whisper`
+requires `audio` and returns an object with a `transcription` field.
+
+So the adapter maps llmcore's canonical protocol arguments onto whatever each
+model actually calls them, read from that model's schema. Verified live: `n`
+became `num_outputs` for flux while `audio` stayed `audio` for whisper, with
+neither hardcoded. A model llmcore has never heard of works, and a model that
+renames `image` to `input_image` next week keeps working.
+
+Three supporting decisions:
+
+1. **Explicit keyword arguments always win** over the mapping, because the
+   caller knows their model better than a candidate list does.
+2. **A schema lookup failure degrades, it does not raise.** The schema is an
+   optimization for field naming; losing it falls back to canonical spellings
+   and lets the API answer. A 422 naming the field is far more useful than a
+   silently dropped input.
+3. **An unrecognised output shape yields no artifacts rather than an error**,
+   with the untouched payload kept on the job — the same tolerance fal needed.
+
+Two provider-level findings, both from live calls:
+
+1. **Replicate has two creation routes and the reference does not say which.**
+   *Official* models run unversioned at `/v1/models/{owner}/{name}/predictions`;
+   *community* models `404` there and must be run by version at
+   `/v1/predictions`. `openai/whisper` is the second kind. The obvious fix —
+   try the first, fall back on the 404 — **costs two creation requests**, and
+   Replicate throttles accounts under $5 of credit to a burst of **1**, so the
+   fallback reliably turned a working call into a `429`. The version is
+   therefore resolved from the model lookup already made for the schema, which
+   is a `GET` and does not count against prediction-creation limits.
+   *Generalizable: a retry-based fallback is not free when the thing you are
+   retrying is the rate-limited operation.*
+2. **Output URLs frequently carry no file extension**, so MIME detection came
+   back `None`. Rather than guessing a format, the adapter falls back to the
+   `output_format` that was *requested* — grounded in the call rather than
+   invented — and stays `None` when neither is available, because callers key
+   decode paths off this field and a plausible lie is worse than an honest
+   unknown.
 
 ## 6. Corrections and additions to the research
 

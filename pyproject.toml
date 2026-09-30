@@ -118,6 +118,10 @@ fal = ["httpx>=0.27.0", "fal-client>=1.0.0"]
 # official 'elevenlabs' SDK is an optional second backend (backend = "sdk").
 # Install with: pip install llmcore[elevenlabs]
 elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.70.0"]
+# Replicate — one generic prediction adapter for the whole catalog, driven by
+# each model's published OpenAPI schema rather than a class per model.
+# Install with: pip install llmcore[replicate]
+replicate = ["httpx>=0.27.0", "replicate>=1.0.7"]
 # TypeSafe.ai (System One typed judgments: noul/choice/score questions with
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
@@ -230,6 +234,7 @@ all = [
     "llmcore[friendli]",
     "llmcore[fal]",
     "llmcore[elevenlabs]",
+    "llmcore[replicate]",
     "llmcore[typesafe]",
     "llmcore[mistral]",
     "llmcore[kimi]",
