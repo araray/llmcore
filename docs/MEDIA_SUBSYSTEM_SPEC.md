@@ -3,8 +3,9 @@
 Generative image, audio and video as a first-class `llmcore` subsystem, plus the
 provider adapters that sit behind it.
 
-- **Status:** **M1–M3 implemented** (core subsystem; Deepgram and OpenAI
-  migrated behind the protocols). M4 onward not started — see §5.
+- **Status:** **M1–M4 implemented** (core subsystem; Deepgram, OpenAI and
+  Gemini migrated behind the protocols, including the first async-job
+  provider). M5 onward not started — see §5.
 - **Written:** 2026-09-29
 - **Primary input:** `/av/data/repos/docs/llmcore/researches/image-audio-video_providers_2026september.md`
   (the provider survey and priority matrix; this document is the llmcore-side design)
@@ -336,7 +337,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M1** ✅ | `llmcore.media` core: types, protocols, routers, `MediaJobManager` (poll only), `ArtifactStore`, config section, fake adapter + tests. *Card schema blocks deferred to M2, where the first real adapter needs them.* | Landed 2026-09-30, 134 tests |
 | **M2** ✅ | Refactor **Deepgram** behind the audio protocols; keep its public methods. Added the `models_multimodal` ↔ `MediaArtifact` bridge (§4.3). | Landed 2026-09-30, 74 tests. Live: TTS → artifact → ASR round trip, plus streaming TTS |
 | **M3** ✅ | **OpenAI** media: images generate/edit, TTS (+streaming), ASR, and provider-level embeddings. Realtime audio deferred to a later phase with Gemini Live. | Landed 2026-09-30, 42 tests. Live: TTS → artifact → ASR round trip, streaming TTS, embeddings |
-| **M4** | **Google** media: Imagen/Nano-Banana images, **Veo** video (async job), native TTS | First true async-job provider; validates §2.8 |
+| **M4** ✅ | **Google** media: images (dual transport), **Veo** video (async job), native TTS, embeddings | Landed 2026-09-30, 52 tests. Live: Veo job submitted + polled through `MediaJobManager`; 2 MB image; 112 KB PCM TTS. **`MediaJob` validated against a real vendor — no changes to the abstraction were needed.** |
 | **M5** | **fal** — queue/webhook lifecycle, URL inputs, video, SFX, FILM interpolation | The provider-neutrality test: if the abstraction bends here, fix the abstraction |
 | **M6** | **ElevenLabs** — batch + realtime STT, TTS, SFX, music, voice design | Consent/provenance as first-class metadata |
 | **M7** | **Replicate** — one generic prediction adapter + model-schema descriptors | Explicitly *not* a class per model |
@@ -345,6 +346,30 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 
 Runway stays on the watchlist — the research run could not verify its current
 API contract, and the doc is explicit about not freezing a guessed model id.
+
+---
+
+### 5.1 What M4 changed about the design
+
+Nothing in the core abstraction. `MediaJob`, `MediaJobManager` and the polling
+protocol absorbed a real vendor's long-running-operation shape unmodified,
+which is the main thing this phase was meant to find out.
+
+Three provider-level facts did emerge, all from live calls rather than docs:
+
+1. **Imagen's dedicated endpoints are Vertex-only.** `generate_images`,
+   `edit_image` and `upscale_image` fail on the Gemini Developer API with
+   *"only supported in Gemini Enterprise Agent Platform mode"*. Capability
+   declaration is therefore **mode-aware**: `image_edit` / `image_upscale` are
+   advertised only when `vertex_ai = true`. This is the first provider whose
+   capability set depends on configuration rather than on the class.
+2. **Image generation needs two transports.** On Vertex it is Imagen; on the
+   Developer API it is `generate_content` with an `IMAGE` response modality.
+   Same capability, different call — which is exactly what the protocol
+   indirection is for, and the caller never sees the difference.
+3. **Veo cannot be cancelled.** `cancel_media_job()` raises rather than
+   reporting a cancellation that did not happen, because a false success would
+   let a caller believe billing had stopped.
 
 ---
 

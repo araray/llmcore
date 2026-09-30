@@ -660,9 +660,25 @@ max_retries = 2
   # Most current Gemini models support 1M tokens.
   fallback_context_length = 1048576
 
+  # --- Media models (image / video / speech / embeddings) ---
+  # Gemini is a media provider through `llm.media` as well as a chat provider.
+  # Per-capability model overrides (all optional):
+  # default_image_model = "gemini-2.5-flash-image"   # Developer API image path
+  #                       "imagen-4.0-generate-001"  # Vertex AI (Imagen)
+  # default_video_model = "veo-3.1-generate-preview"
+  # default_tts_model = "gemini-2.5-flash-preview-tts"
+  # default_embedding_model = "gemini-embedding-001"
+  #
+  # IMPORTANT: image EDITING and UPSCALING use Imagen's dedicated endpoints,
+  # which exist only on Vertex AI. With a Developer API key those capabilities
+  # are not advertised at all (verified live: the Developer API rejects them
+  # with "only supported in Gemini Enterprise Agent Platform mode"). Plain
+  # image GENERATION works in both modes via different transports.
+
   # --- Vertex AI mode ---
   # Set to true to use Vertex AI backend instead of the Gemini API.
   # Requires GCP authentication (Application Default Credentials or service account).
+  # Also unlocks the Imagen edit/upscale media capabilities above.
   # vertex_ai = false
   # project = "my-gcp-project"
   # location = "us-central1"
