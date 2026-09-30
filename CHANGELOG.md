@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — OpenAI media adapter (M3)
+
+- **OpenAI is now a media adapter** for `image_generate`, `image_edit`, `tts`,
+  `tts_stream` and `asr`. Image generation, TTS and ASR delegate to the existing
+  provider methods; **image editing (`POST /v1/images/edits`) and streaming TTS
+  are new**.
+- **`create_embeddings()` on the provider** — previously OpenAI embeddings were
+  reachable only through the separate `[embedding.openai]` subsystem, so a
+  caller holding a provider could not embed with it. Closes the gap recorded in
+  the support matrix.
+- **Sora is deliberately not offered.** `openai` 3.1 deprecated the video APIs,
+  so `video_generate` is absent and a test asserts it stays that way.
+- Parameters with no OpenAI equivalent (`seed`, `negative_prompt`,
+  `sample_rate_hz`) are dropped with a debug log rather than forwarded, where
+  forwarding would 400. Supplying `reference_images` routes to the edit
+  endpoint, which is how OpenAI expresses reference-conditioned generation.
+
+### Fixed — audio format was hard-coded on upload
+
+- **`OpenAIProvider.transcribe_audio()` labelled every raw-bytes upload
+  `audio.wav`.** OpenAI infers the container format from the upload filename, so
+  passing mp3 bytes was rejected with *"This model does not support the format
+  you provided"*. Found by feeding a TTS artifact straight back in as an ASR
+  input — the exact chaining the media subsystem makes natural.
+- `transcribe_audio()` gained an optional `filename` parameter (defaulting to
+  the previous `"audio.wav"`, so existing callers are unaffected), and the media
+  adapter derives the right name from the `MediaRef`'s mime type, filename or
+  URL.
+
+### Changed — capability-less providers are no longer registered as adapters
+
+- Four providers subclass `OpenAIProvider` and therefore inherit its media
+  protocol *methods* — but not the endpoints behind them. Each now declares its
+  own `_MEDIA_CAPABILITIES` (DeepInfra: image/TTS/ASR; vLLM, Poe and OpenRouter:
+  none), and a test asserts **every** subclass declares explicitly, so a future
+  one cannot silently inherit and advertise endpoints that 404.
+- `MediaManager.from_provider_manager()` now skips providers that implement the
+  protocols but declare no capabilities, so `adapter_names` keeps meaning "can
+  actually do something".
+
+Live-validated: TTS (55 KB mp3) → artifact → ASR round trip transcribed
+correctly, streaming TTS, and 256-dimension embeddings. 42 new tests; full unit
+suite 5410 passed.
+
 ### Added — Deepgram behind the media protocols (M2)
 
 - **Deepgram is now a media adapter**, implementing `MediaCapableProvider`,

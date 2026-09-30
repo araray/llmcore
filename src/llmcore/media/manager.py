@@ -121,8 +121,22 @@ class MediaManager:
             except Exception as e:
                 logger.debug("Skipping provider '%s' during media discovery: %s", name, e)
                 continue
-            if isinstance(provider, MediaCapableProvider):
-                adapters[name] = provider
+            if not isinstance(provider, MediaCapableProvider):
+                continue
+            # Implementing the protocols is not the same as serving anything.
+            # Four providers subclass OpenAIProvider and inherit its media
+            # methods without inheriting its endpoints, so they declare an
+            # empty capability set. Registering them would put a provider in
+            # `adapter_names` that can route nothing — so skip them here and
+            # keep the adapter list meaning "can actually do something".
+            if not _declares_any_capability(provider):
+                logger.debug(
+                    "Provider '%s' implements the media protocols but declares no "
+                    "capabilities; not registering it as an adapter.",
+                    name,
+                )
+                continue
+            adapters[name] = provider
 
         routing = cls._routing_from_config(get)
 
@@ -356,6 +370,14 @@ class MediaManager:
                 len(active),
                 ", ".join(j.id for j in active),
             )
+
+
+def _declares_any_capability(adapter: Any) -> bool:
+    """Whether *adapter* declares at least one media capability."""
+    try:
+        return bool(adapter.media_capabilities())
+    except Exception:  # noqa: BLE001 - a broken adapter is simply not registered
+        return False
 
 
 def _name_of(adapter: Any) -> str:

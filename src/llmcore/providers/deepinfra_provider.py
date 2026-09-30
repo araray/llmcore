@@ -170,6 +170,12 @@ class DeepInfraProvider(OpenAIProvider):
     ``Message.metadata["content_parts"]``.
     """
 
+    #: DeepInfra overrides generate_speech / transcribe_audio / generate_image /
+    #: create_embeddings with its own native endpoints, so it serves those. It
+    #: has no image-edit endpoint and no streaming TTS, so neither is declared.
+    _MEDIA_CAPABILITIES: frozenset[Any] = frozenset({"image_generate", "tts", "asr"})
+
+
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """Initialise the DeepInfra provider.
 
