@@ -26,9 +26,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
 from collections.abc import AsyncGenerator
-from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     from huggingface_hub import AsyncInferenceClient
@@ -69,6 +76,14 @@ from ..models_multimodal import (
 )
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..media.models import (
+        MediaCapability,
+        MediaExecution,
+        MediaRef,
+        MediaResult,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +134,32 @@ DEFAULT_HF_TOKEN_LIMITS: dict[str, int] = {
 # Approximate tokens-per-character ratio for rough estimation
 # when no tokenizer is available.
 _APPROX_CHARS_PER_TOKEN = 4.0
+
+
+#: Router root for serverless Inference Providers.
+_ROUTER_URL = "https://router.huggingface.co"
+
+#: Hub API, used to discover which inference provider serves a model.
+_HUB_URL = "https://huggingface.co"
+
+#: Per-capability default media models. Small on purpose: the Hub has hundreds
+#: of thousands of models and which ones are *served* changes constantly.
+_DEFAULT_MEDIA_MODELS: dict[str, str] = {
+    "image_generate": "black-forest-labs/FLUX.1-schnell",
+    "asr": "openai/whisper-large-v3-turbo",
+    "tts": "hexgrad/Kokoro-82M",
+}
+
+#: Capabilities whose request body is raw bytes rather than JSON. These need
+#: the caller's MIME type to reach the endpoint, so they always go direct.
+_BINARY_INPUT_CAPABILITIES: frozenset[str] = frozenset({"asr"})
+
+#: llmcore capability -> the Hub task name it corresponds to.
+_CAPABILITY_TASKS: dict[str, str] = {
+    "image_generate": "text-to-image",
+    "asr": "automatic-speech-recognition",
+    "tts": "text-to-speech",
+}
 
 
 class HuggingFaceProvider(BaseProvider):
@@ -176,6 +217,22 @@ class HuggingFaceProvider(BaseProvider):
 
         # Cache for dynamically discovered context lengths
         self._discovered_context_lengths: dict[str, int] = {}
+
+        # --- Media subsystem (spec phase M8) ---
+        self._media_models: dict[str, str] = {
+            **_DEFAULT_MEDIA_MODELS,
+            **{str(k): str(v) for k, v in (config.get("media_models") or {}).items()},
+        }
+        # Dedicated Inference Endpoints, per capability. This is the whole point
+        # of the M8 gate: a private repo or custom weights is not a model id on
+        # a shared router, it is a URL you deployed.
+        self._endpoints: dict[str, str] = {
+            str(k): str(v).rstrip("/") for k, v in (config.get("endpoints") or {}).items()
+        }
+        self._media_backend = str(config.get("media_backend") or "auto").lower()
+        self._http: Any = None
+        #: model id -> {task: provider} from the Hub's inferenceProviderMapping.
+        self._routing_cache: dict[str, dict[str, str]] = {}
 
         logger.info(
             "HuggingFace provider initialized (default_model=%s, provider=%s)",
@@ -590,6 +647,491 @@ class HuggingFaceProvider(BaseProvider):
     # ------------------------------------------------------------------
     # Multimodal: Speech-to-Text (STT / ASR)
     # ------------------------------------------------------------------
+
+    # ==================================================================
+    # Media subsystem adapter (spec phase M8)
+    # ==================================================================
+    #
+    # Hugging Face is structurally unlike the other media adapters. There is no
+    # single "Hugging Face model" that serves a capability: the same model id is
+    # routed to one of several third-party inference providers (fal-ai, nscale,
+    # deepinfra, together, or HF's own hf-inference), and which providers serve
+    # which *task* differs per model. `hexgrad/Kokoro-82M` is live for TTS on
+    # fal-ai and deepinfra but not on hf-inference, and asking the wrong one
+    # returns "Model not supported by provider".
+    #
+    # The Hub publishes that mapping, so this adapter reads it rather than
+    # guessing — the same move the Replicate adapter makes with input schemas.
+    #
+    # The gate for this phase is the **custom weights / private repo** path.
+    # That is not a model id on a shared router; it is a dedicated Inference
+    # Endpoint *you* deployed, at your own URL, possibly serving weights nobody
+    # else can see. Configure one per capability under
+    # ``[providers.huggingface.endpoints]`` and it is used verbatim, with no
+    # routing and no model id in the path.
+
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset(_CAPABILITY_TASKS)
+
+    def media_capabilities(self) -> "frozenset[MediaCapability]":
+        """Media capabilities this instance serves."""
+        from ..media.models import MediaCapability
+
+        return frozenset(MediaCapability(c) for c in self._MEDIA_CAPABILITIES)
+
+    def media_execution(
+        self, capability: "MediaCapability", model: str | None = None
+    ) -> "MediaExecution":
+        """Inference answers in one request; there is no queue to poll."""
+        from ..media.models import MediaExecution
+
+        return MediaExecution.REQUEST_RESPONSE
+
+    def _media_model_for(self, capability: str, model: str | None) -> str:
+        """Resolve the model id for *capability*."""
+        return model or self._media_models.get(capability, "")
+
+    def _get_media_http(self) -> Any:
+        """Return the lazily-built HTTP client for media calls."""
+        if not httpx_available:
+            raise ProviderError(
+                self.get_name(),
+                "The 'httpx' package is required for Hugging Face media calls.",
+            )
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                timeout=self._timeout,
+            )
+        return self._http
+
+    async def get_inference_routing(self, model: str) -> dict[str, tuple[str, str]]:
+        """Return ``{task: (provider, provider_model_id)}`` for *model*, cached.
+
+        Two things make this necessary rather than cosmetic. A model is not
+        served for every task by every provider — ``hexgrad/Kokoro-82M`` does
+        TTS on fal-ai and deepinfra but not on hf-inference, and asking the
+        wrong one returns *"Model not supported by provider"*. And each provider
+        knows the model by **its own id**: the Hub calls it
+        ``black-forest-labs/FLUX.1-schnell`` while fal-ai calls the same weights
+        ``fal-ai/flux/schnell``. Only the Hub's mapping knows both.
+
+        A failed lookup returns ``{}`` rather than raising: routing is an
+        optimization, and falling back to the configured provider is better
+        than failing the call outright.
+        """
+        if model in self._routing_cache:
+            return self._routing_cache[model]
+
+        routing: dict[str, tuple[str, str]] = {}
+        try:
+            resp = await self._get_media_http().get(
+                f"{_HUB_URL}/api/models/{model}",
+                params={"expand[]": "inferenceProviderMapping"},
+            )
+            if resp.status_code < 400:
+                mapping = resp.json().get("inferenceProviderMapping") or {}
+                entries = (
+                    [{"provider": k, **v} for k, v in mapping.items()]
+                    if isinstance(mapping, dict)
+                    else mapping
+                )
+                for entry in entries:
+                    task = entry.get("task")
+                    # Only providers reporting "live" are usable; one in "error"
+                    # state is listed but rejects the call.
+                    if task and entry.get("status", "live") == "live":
+                        routing.setdefault(
+                            str(task),
+                            (
+                                str(entry.get("provider")),
+                                str(entry.get("providerId") or model),
+                            ),
+                        )
+        except Exception as e:  # routing is an optimization, never a gate
+            logger.warning("HF routing lookup failed for %s: %s", model, e)
+
+        self._routing_cache[model] = routing
+        return routing
+
+    @staticmethod
+    def _router_url(provider: str, provider_model_id: str) -> str:
+        """Build a router URL for *provider*.
+
+        HF's own ``hf-inference`` serves models under ``/models/{id}``; the
+        third-party providers are addressed by their own id directly. Getting
+        this wrong yields ``400 Model not supported by provider``, which reads
+        like a routing failure rather than a URL-shape one.
+        """
+        if provider == "hf-inference":
+            return f"{_ROUTER_URL}/hf-inference/models/{provider_model_id}"
+        return f"{_ROUTER_URL}/{provider}/{provider_model_id}"
+
+    async def _media_url(self, capability: str, model: str) -> str:
+        """Return the URL to call for *capability*.
+
+        A configured dedicated **Inference Endpoint** wins outright: it is a
+        deployment the caller owns, possibly serving private weights, and
+        second-guessing it with router logic would defeat the point of having
+        deployed it. This is the M8 gate.
+        """
+        endpoint = self._endpoints.get(capability)
+        if endpoint:
+            return endpoint
+
+        task = _CAPABILITY_TASKS.get(capability, "")
+        routed = (await self.get_inference_routing(model)).get(task)
+
+        if self._hf_provider:
+            # An explicitly configured provider is honoured, but still needs
+            # that provider's own id for the model when the Hub knows one.
+            provider_model_id = model
+            if routed and routed[0] == self._hf_provider:
+                provider_model_id = routed[1]
+            return self._router_url(self._hf_provider, provider_model_id)
+
+        if routed:
+            return self._router_url(*routed)
+        return self._router_url("hf-inference", model)
+
+    def _raise_media_status(self, status: int, body: str, context: str) -> None:
+        """Map a Hugging Face inference failure onto a :class:`ProviderError`."""
+        logger.error("HF media error %s on %s: %s", status, context, body)
+        if status in (401, 403):
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face authentication failed. Check HF_TOKEN and that the token "
+                f"has inference permission. Error: {body}",
+                model_name=context,
+                status_code=status,
+            )
+        if status == 402:
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face rejected '{context}': the account has no inference credits "
+                f"left (the token is valid). Inference Providers are billed per call; PRO "
+                f"accounts include a monthly allowance. Error: {body}",
+                model_name=context,
+                status_code=status,
+                retryable=False,
+            )
+        if status == 404:
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face model or endpoint '{context}' not found. Error: {body}",
+                model_name=context,
+                status_code=status,
+            )
+        if status == 429:
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face rate limit reached. Error: {body}",
+                model_name=context,
+                status_code=status,
+                retryable=True,
+            )
+        if status == 503:
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face model '{context}' is loading or unavailable; retry shortly. "
+                f"Error: {body}",
+                model_name=context,
+                status_code=status,
+                retryable=True,
+            )
+        raise ProviderError(
+            self.get_name(),
+            f"Hugging Face inference error ({status}): {body}",
+            model_name=context,
+            status_code=status,
+            retryable=status >= 500,
+        )
+
+    def _use_sdk_for(self, capability: str) -> bool:
+        """Whether *capability* should go through ``huggingface_hub``.
+
+        llmcore's house rule is direct-REST-first, and every other media
+        adapter follows it. Hugging Face is the documented exception, for a
+        concrete reason found by live calls: **the router passes third-party
+        providers their own request shape**. ``hf-inference`` takes the HF task
+        schema ``{"inputs": ...}``, but the same model routed to fal-ai wants
+        ``{"prompt": ...}`` and answers ``422 Field required`` otherwise — and
+        that shape is the provider's, not Hugging Face's, so it changes on
+        their schedule.
+
+        Reimplementing that mapping in llmcore would mean tracking N
+        third-party schemas forever; absorbing it is the entire point of
+        ``huggingface_hub``. So router traffic defaults to the SDK.
+
+        A **dedicated Inference Endpoint** is the opposite case: it is the
+        caller's own deployment, speaking the standard HF task schema at a URL
+        they control, so direct HTTP is both simpler and more predictable.
+
+        So are the **binary-input tasks** such as ASR: they take raw bytes under
+        the standard schema, so there is no provider-specific body to translate,
+        and the SDK actively gets in the way by dropping the ``Content-Type``
+        the endpoint requires. ``media_backend`` overrides either way.
+        """
+        if self._media_backend == "sdk":
+            return True
+        if self._media_backend == "httpx":
+            return False
+        if capability in self._endpoints:
+            return False
+        # Binary-input tasks go direct. The SDK sends raw audio without a
+        # Content-Type, and hf-inference rejects that outright ("Content type
+        # \"None\" not supported") with a list of what it does accept. These
+        # tasks also take the standard HF schema rather than a provider-native
+        # body, so there is nothing for the SDK to translate anyway.
+        return capability not in _BINARY_INPUT_CAPABILITIES
+
+    async def _media_post(
+        self,
+        capability: str,
+        model: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        content: bytes | None = None,
+        content_type: str | None = None,
+    ) -> Any:
+        """POST to the resolved inference URL and return the raw response."""
+        url = await self._media_url(capability, model)
+        headers: dict[str, str] = {}
+        if content is not None:
+            # Binary inputs need an explicit media content type. Sending
+            # application/octet-stream is rejected outright with a list of what
+            # the task does accept, so the caller's MIME type has to survive
+            # all the way to the request.
+            headers["Content-Type"] = content_type or "application/octet-stream"
+        else:
+            headers["Content-Type"] = "application/json"
+
+        try:
+            resp = await self._get_media_http().post(
+                url, headers=headers, json=json_body, content=content
+            )
+        except Exception as e:
+            if isinstance(e, ProviderError):
+                raise
+            raise ProviderError(
+                self.get_name(),
+                f"Hugging Face transport error: {e}",
+                model_name=model,
+                retryable=True,
+            ) from e
+        if resp.status_code >= 400:
+            self._raise_media_status(resp.status_code, resp.text, model)
+        return resp
+
+    async def generate_image_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int | None = None,
+        size: str | None = None,
+        negative_prompt: str | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate an image from *prompt*."""
+        from ..media.models import (
+            MediaArtifact,
+            MediaCapability,
+            MediaKind,
+            MediaProvenance,
+            MediaResult,
+            MediaUsage,
+        )
+
+        model_id = self._media_model_for("image_generate", model)
+        parameters: dict[str, Any] = {k: v for k, v in kwargs.items() if v is not None}
+        if negative_prompt:
+            parameters["negative_prompt"] = negative_prompt
+        if size and "x" in size:
+            try:
+                width, height = (int(p) for p in size.split("x", 1))
+                parameters["width"], parameters["height"] = width, height
+            except ValueError:
+                pass
+
+        body: dict[str, Any] = {"inputs": prompt}
+        if parameters:
+            body["parameters"] = parameters
+
+        if self._use_sdk_for("image_generate"):
+            data, mime = await self._sdk_image(prompt, model_id, parameters)
+        else:
+            resp = await self._media_post("image_generate", model_id, json_body=body)
+            data = resp.content
+            mime = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+
+        artifact = MediaArtifact(
+            kind=MediaKind.IMAGE,
+            data=data,
+            mime_type=mime,
+            provenance=MediaProvenance(generator=model_id, provider_declared=True),
+            provider_metadata={"prompt": prompt, "parameters": parameters},
+        )
+        return MediaResult(
+            capability=MediaCapability.IMAGE_GENERATE,
+            provider=self.get_name(),
+            model=model_id,
+            artifacts=[artifact],
+            usage=MediaUsage(
+                provider=self.get_name(), model=model_id, basis="per_request"
+            ),
+        )
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: "MediaRef",
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Transcribe *audio*; the text lands on the artifact's ``text`` field."""
+        from ..media.models import (
+            MediaArtifact,
+            MediaCapability,
+            MediaKind,
+            MediaResult,
+            MediaUsage,
+        )
+
+        model_id = self._media_model_for("asr", model)
+        data, mime = await self._media_bytes(audio)
+        if self._use_sdk_for("asr"):
+            result = await self._client.automatic_speech_recognition(
+                audio=data, model=model_id
+            )
+            dump = getattr(result, "model_dump", None)
+            payload = dict(dump()) if callable(dump) else {"text": getattr(result, "text", "")}
+        else:
+            resp = await self._media_post("asr", model_id, content=data, content_type=mime)
+            payload = resp.json()
+        if isinstance(payload, list):
+            payload = payload[0] if payload else {}
+        text = payload.get("text") if isinstance(payload, dict) else str(payload)
+
+        artifact = MediaArtifact(
+            kind=MediaKind.TEXT,
+            text=text,
+            mime_type="text/plain",
+            provider_metadata={"chunks": (payload or {}).get("chunks")},
+        )
+        return MediaResult(
+            capability=MediaCapability.ASR,
+            provider=self.get_name(),
+            model=model_id,
+            artifacts=[artifact],
+            usage=MediaUsage(
+                provider=self.get_name(), model=model_id, basis="per_request"
+            ),
+            raw=payload if isinstance(payload, dict) else {},
+        )
+
+    async def synthesize_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        speed: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Synthesize *text* into a single audio artifact."""
+        from ..media.models import (
+            MediaArtifact,
+            MediaCapability,
+            MediaKind,
+            MediaProvenance,
+            MediaResult,
+            MediaUsage,
+        )
+
+        model_id = self._media_model_for("tts", model)
+        parameters: dict[str, Any] = {k: v for k, v in kwargs.items() if v is not None}
+        if voice:
+            parameters["voice"] = voice
+        body: dict[str, Any] = {"inputs": text}
+        if parameters:
+            body["parameters"] = parameters
+
+        if self._use_sdk_for("tts"):
+            data = await self._client.text_to_speech(
+                text, model=model_id, **({"extra_body": parameters} if parameters else {})
+            )
+            mime = "audio/mpeg"
+        else:
+            resp = await self._media_post("tts", model_id, json_body=body)
+            data = resp.content
+            mime = resp.headers.get("content-type", "audio/mpeg").split(";")[0]
+
+        artifact = MediaArtifact(
+            kind=MediaKind.AUDIO,
+            data=data,
+            mime_type=mime,
+            sample_rate_hz=sample_rate_hz,
+            # No consent record: HF serves open-weight voices rather than
+            # tracking per-voice consent the way a cloning vendor does, so
+            # claiming anything here would be inventing it.
+            provenance=MediaProvenance(generator=model_id, provider_declared=True),
+            provider_metadata={"text": text, "parameters": parameters},
+        )
+        return MediaResult(
+            capability=MediaCapability.TTS,
+            provider=self.get_name(),
+            model=model_id,
+            artifacts=[artifact],
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=model_id,
+                basis="per_character",
+                characters=len(text),
+            ),
+        )
+
+    async def _sdk_image(
+        self, prompt: str, model_id: str, parameters: dict[str, Any]
+    ) -> tuple[bytes, str]:
+        """Generate an image through the SDK and return PNG bytes."""
+        from io import BytesIO
+
+        image = await self._client.text_to_image(
+            prompt,
+            model=model_id,
+            **{k: v for k, v in parameters.items() if k in ("width", "height", "seed")},
+        )
+        if isinstance(image, bytes):
+            return image, "image/png"
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue(), "image/png"
+
+    @staticmethod
+    async def _media_bytes(ref: "MediaRef") -> tuple[bytes, str]:
+        """Return *ref*'s bytes and MIME type, fetching a remote ref if needed.
+
+        Unlike fal or Replicate, the inference API takes raw bytes rather than a
+        URL, so a remote reference has to be pulled down here.
+        """
+        if ref.is_remote and ref.url:
+            if not httpx_available:
+                raise ProviderError(
+                    "huggingface", "The 'httpx' package is required to fetch remote media."
+                )
+            async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+                got = await client.get(ref.url)
+                got.raise_for_status()
+                mime = ref.mime_type or got.headers.get(
+                    "content-type", "application/octet-stream"
+                ).split(";")[0]
+                return got.content, mime
+        return ref.read_bytes(), ref.mime_type or "application/octet-stream"
 
     async def transcribe_audio(
         self,

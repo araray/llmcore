@@ -1001,6 +1001,34 @@ max_retries = 2
 
 
   [providers.huggingface]
+
+  # --- Media subsystem (spec phase M8) ---
+  # Transport for media calls:
+  #   "auto"  (default) - the SDK for router traffic, direct HTTP for dedicated
+  #                       endpoints and for binary-input tasks like ASR
+  #   "sdk"   - always huggingface_hub
+  #   "httpx" - always direct HTTP
+  #
+  # NOTE: this is llmcore's ONE documented exception to direct-REST-first, and
+  # it is deliberate. HF's router hands third-party providers THEIR OWN request
+  # shape: hf-inference takes {"inputs": ...} while the same model on fal-ai
+  # wants {"prompt": ...}. Reimplementing that mapping would mean tracking every
+  # provider's schema forever - absorbing it is what huggingface_hub is for.
+  # media_backend = "auto"
+
+  # Per-capability media models on the shared router.
+  [providers.huggingface.media_models]
+  # image_generate = "black-forest-labs/FLUX.1-schnell"
+  # asr = "openai/whisper-large-v3-turbo"
+  # tts = "hexgrad/Kokoro-82M"
+
+  # Dedicated Inference Endpoints - THE custom-weights / private-repo path.
+  # A private repo is not a model id on a shared router; it is a deployment you
+  # own at your own URL. Set one and it is used verbatim: no provider routing,
+  # no model id in the path, and that capability switches to direct HTTP.
+  [providers.huggingface.endpoints]
+  # asr = "https://xxxxx.us-east-1.aws.endpoints.huggingface.cloud"
+
   # type = "huggingface"  # auto-detected from section name
   #
   # API Key: Set via environment variable for security.

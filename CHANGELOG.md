@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Hugging Face media adapter and Inference Endpoints (M8)
+
+- **The `huggingface` provider is now a media adapter** for `image_generate`,
+  `tts` and `asr`, behind the media protocols. It remains a chat provider too —
+  the first adapter to be both.
+- **Dedicated Inference Endpoints are the custom-weights / private-repo path**,
+  which is this phase's gate. A private model is not a model id on a shared
+  router; it is a deployment you own. Configure one under
+  `[providers.huggingface.endpoints]` and it is used verbatim — no routing
+  lookup, no model id in the path — and that capability switches to direct HTTP.
+- **Provider routing is discovered, not guessed.** A model is not served for
+  every task by every provider, and each provider knows the model by *its own
+  id*: the Hub says `black-forest-labs/FLUX.1-schnell`, fal-ai says
+  `fal-ai/flux/schnell`. llmcore reads the Hub's `inferenceProviderMapping`
+  (cached) and resolves provider, id and URL shape. A failed lookup degrades to
+  `hf-inference` rather than raising.
+- **TTS artifacts carry no `VoiceConsent`**: HF serves open-weight voices and
+  tracks no per-voice consent, so claiming anything there would be inventing it.
+
+### Changed — Hugging Face is llmcore's one exception to direct-REST-first
+
+Every other media adapter defaults to direct REST. Hugging Face defaults to the
+SDK for router traffic, and the reason was measured rather than assumed: **the
+router hands third-party providers their own request shape.** `hf-inference`
+takes `{"inputs": ...}`, while the same model routed to fal-ai wants
+`{"prompt": ...}` and answers `422 Field required` otherwise. That shape belongs
+to the provider and changes on their schedule, so reimplementing the mapping
+would mean tracking N third-party schemas forever — absorbing it is what
+`huggingface_hub` exists for.
+
+The dual approach is intact: both transports ship and `media_backend` selects.
+The split is per capability — SDK for router JSON bodies, direct HTTP for
+dedicated endpoints and for binary-input tasks such as ASR, where the SDK sends
+raw audio with **no `Content-Type`** and hf-inference rejects it outright.
+
 ### Added — Replicate provider: one adapter for the whole catalog (M7)
 
 - **New `replicate` provider**: image generate/edit/upscale, video generation,

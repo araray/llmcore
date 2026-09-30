@@ -142,7 +142,7 @@ vendor docs). Columns are the `BaseProvider` surface plus the media APIs.
 | kimi | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | ❌ | — | — | ✅ |
 | deepinfra | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
 | ollama | `sdk` | ✅ | ✅ | ✅ | ✅ | 🟡 | ✅ | — | — | — | — | ❌ | — | — | 🟡 |
-| huggingface | `sdk` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
+| huggingface | `sdk + httpx` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
 | openrouter | `openai (+sdk)` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | ❓ | ❌ |
 | poe | `openai (+native)` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❓ | ❓ | ❓ | ❓ | — | — | — | ❌ |
 | vllm | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | — | ❌ |
