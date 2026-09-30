@@ -689,3 +689,69 @@ class TestRouting:
         job = await media.images.generate("x", provider="replicate")
         assert job.artifacts[0].uri == "https://cdn/a.png"
         await provider.close()
+
+
+# ---------------------------------------------------------------------------
+# Integration with the webhook receiver (M9a)
+# ---------------------------------------------------------------------------
+
+
+class TestWebhookReceiverIntegration:
+    """The path neither M7 nor M9a could test alone.
+
+    Replicate declares ``accepts_webhook_url``; the router issues a single-use
+    token and binds it to the job the submission returns. This test covers the
+    seam between them, which only exists once both have landed.
+    """
+
+    @respx.mock
+    async def test_end_to_end_callback_delivery(self, provider):
+        from llmcore.media import WebhookRegistry
+        from llmcore.media.jobs import JobPolicy
+
+        _mock_schema(FLUX, {"prompt": {}})
+        route = respx.post(f"{API}/v1/predictions").mock(
+            return_value=httpx.Response(201, json=_prediction("starting"))
+        )
+        media = MediaManager(
+            {"replicate": provider},
+            job_policy=JobPolicy(
+                poll_initial_seconds=0.01, poll_max_seconds=0.01,
+                job_timeout_seconds=5, jitter=0,
+            ),
+            webhooks=WebhookRegistry("https://hooks.example.com", secret="s"),
+        )
+
+        job = await media.images.generate("a cat", provider="replicate")
+        body = json.loads(route.calls[0].request.content)
+
+        assert body["webhook"].startswith("https://hooks.example.com/media/jobs/")
+        assert body["webhook_events_filter"] == ["completed"]
+        assert "webhook" not in body["input"], "must not reach the model as a parameter"
+
+        token = next(iter(media.jobs.webhooks._tickets))
+        assert media.jobs.webhooks.verify(token) == job.id
+
+        delivery = await media.jobs.handle_webhook(
+            token, _prediction("succeeded", output=["https://cdn/a.png"])
+        )
+        assert delivery.accepted is True
+        finished = media.jobs.get(job.id)
+        assert finished.succeeded
+        assert finished.artifacts[0].uri == "https://cdn/a.png"
+
+        replay = await media.jobs.handle_webhook(token, _prediction("succeeded"))
+        assert replay.accepted is False
+        await provider.close()
+
+    @respx.mock
+    async def test_no_callback_is_registered_when_disabled(self, provider):
+        """Poll-only deployments must not send a webhook field at all."""
+        _mock_schema(FLUX, {"prompt": {}})
+        route = respx.post(f"{API}/v1/predictions").mock(
+            return_value=httpx.Response(201, json=_prediction("starting"))
+        )
+        media = MediaManager({"replicate": provider})
+        await media.images.generate("a cat", provider="replicate")
+        assert "webhook" not in json.loads(route.calls[0].request.content)
+        await provider.close()
