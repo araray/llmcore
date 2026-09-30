@@ -344,7 +344,8 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M6** ✅ | **ElevenLabs** — TTS, streaming TTS, batch STT, SFX, music, voice design | Landed 2026-09-30, 69 tests. Live: TTS + consent, streaming TTS, STT round trip, SFX. Music/voice design are **plan-gated on the current account** — implemented and unit-tested, not live-validated. **Consent is now first-class: new `VoiceConsent` type and `VoiceDesignProvider` protocol.** Realtime STT deferred — see §5.3 |
 | **M7** | **Replicate** — one generic prediction adapter + model-schema descriptors | Explicitly *not* a class per model |
 | **M8** | **Hugging Face Inference Endpoints** — configurable endpoint/schema adapter | Custom weights / private repos path |
-| **M9** | Webhook receiver, then direct specialists (BFL, Luma, Stability) when justified: lower unit cost, first-party-only feature, data contract, or pre-aggregator access | Otherwise fal/Replicate already cover it |
+| **M9a** ✅ | **Webhook receiver** — signed single-use tokens, generic ASGI app, fal callback parsing | Landed 2026-09-30, 38 tests. Polling stays the fallback; webhook/poll equivalence tested |
+| **M9b** | Direct specialists (BFL, Luma, Stability) when justified: lower unit cost, first-party-only feature, data contract, or pre-aggregator access | Otherwise fal/Replicate already cover it |
 
 Runway stays on the watchlist — the research run could not verify its current
 API contract, and the doc is explicit about not freezing a guessed model id.
@@ -431,10 +432,10 @@ Four provider-level facts emerged, all of them from live calls rather than docs:
    `ON_EXPIRY` should treat "provider known to expire artifacts, TTL unknown"
    as a third state rather than collapsing it into "no expiry".*
 
-One open consequence: fal supports **webhooks** (`?fal_webhook=`), which the
-adapter can already send but nothing in llmcore can yet receive. That receiver
-is M9, and until it exists webhook delivery is configuration a caller supplies
-and handles out-of-band.
+One open consequence, **since closed by M9a**: fal supports webhooks
+(`?fal_webhook=`), which the adapter could send but nothing in llmcore could
+receive. The generic receiver now issues fal a single-use callback URL per job
+and parses its delivery — see §5.4.
 
 ### 5.3 What M6 changed about the design
 
@@ -497,6 +498,45 @@ so it needs the session shape Deepgram already established, and doing it
 properly is its own piece of work rather than a sixth capability bolted onto
 this one. The adapter therefore does **not** declare `asr_stream`, so routing
 falls through to Deepgram instead of advertising something that would fail.
+
+### 5.4 What the webhook receiver settled
+
+Three decisions are worth recording, because each had a tempting wrong answer.
+
+**1. Polling is the fallback, not the backup plan.** `wait()` races the callback
+against its existing backoff sleep and then polls anyway. It would have been
+simpler to branch — await the callback when configured, poll when not — but that
+produces two code paths with two sets of bugs, and the webhook path would be the
+one nobody tests. Racing means a missing, late, duplicated or malformed delivery
+can only cost latency, never correctness, and it is why `webhook_base_url = ""`
+(the default) is a fully supported mode rather than a degraded one.
+
+**2. The callback URL is issued before the job exists.** Vendors want it *at
+submission*, but the job id only exists once submission returns. So a token is
+**reserved**, handed to the vendor, then **bound** to the job that comes back —
+and a delivery arriving in that window is refused, because there is nothing it
+could correctly report on. Tokens are HMAC-signed, verified in constant time and
+single-use; the token→job binding lives server-side, which is what stops a token
+being transplanted onto another job.
+
+**3. A callback URL is only offered to adapters that opt in.** Most media
+adapters forward unknown keyword arguments straight into the vendor payload —
+fal does exactly this, deliberately, so model-specific fields work without an
+llmcore change. Passing `webhook_url` blindly would therefore post our callback
+URL to a diffusion model as a generation parameter. Adapters set
+`accepts_webhook_url = True`; everything else is never offered one, and fal
+lifts the value out of its payload before the request is built.
+
+A fourth, smaller one: a provider that cannot *parse* its callback still
+benefits from receiving it, because the delivery says *when* to look even if not
+*what* happened. Those adapters fall back to a single poll, which is most of the
+latency win at no correctness cost.
+
+**Security posture.** A delivery may only report on a job llmcore already
+submitted. It cannot create a job, redirect one to another provider, or attach
+an artifact to work that was never submitted. An unknown or spent token gets
+`404` rather than `401`, because confirming that a token exists but is used
+tells an unauthenticated caller something they should not learn.
 
 ---
 

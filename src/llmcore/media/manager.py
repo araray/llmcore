@@ -28,6 +28,7 @@ from .jobs import JobPolicy, MediaJobManager
 from .models import MediaCapability, MediaJob, MediaResult
 from .protocols import CAPABILITY_PROTOCOLS, MediaCapableProvider
 from .routers import AudioRouter, ImageRouter, VideoRouter
+from .webhooks import WebhookRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,8 @@ class MediaManager:
         routing: Per-capability preference order, overriding :data:`DEFAULT_ROUTING`.
         artifact_store: Store for produced assets; a default is built when omitted.
         job_policy: Polling/timeout policy for long-running jobs.
+        webhooks: Callback registry. Disabled unless a base URL is set, in
+            which case jobs are polled — the documented default.
     """
 
     def __init__(
@@ -72,6 +75,7 @@ class MediaManager:
         routing: dict[MediaCapability, tuple[str, ...]] | None = None,
         artifact_store: ArtifactStore | None = None,
         job_policy: JobPolicy | None = None,
+        webhooks: WebhookRegistry | None = None,
     ) -> None:
         self._adapters: dict[str, MediaCapableProvider] = dict(adapters or {})
         self._routing: dict[MediaCapability, tuple[str, ...]] = {
@@ -79,7 +83,9 @@ class MediaManager:
             **(routing or {}),
         }
         self.artifacts = artifact_store or ArtifactStore()
-        self.jobs = MediaJobManager(self._adapters.get, policy=job_policy)
+        self.jobs = MediaJobManager(
+            self._adapters.get, policy=job_policy, webhooks=webhooks
+        )
 
         self.images = ImageRouter(self)
         self.audio = AudioRouter(self)
@@ -151,6 +157,10 @@ class MediaManager:
             routing=routing,
             artifact_store=store,
             job_policy=JobPolicy.from_config(get),
+            webhooks=WebhookRegistry(
+                get("media.jobs.webhook_base_url", "") or None,
+                secret=get("media.jobs.webhook_secret", None),
+            ),
         )
         logger.debug(
             "MediaManager initialized with %d adapter(s): %s",

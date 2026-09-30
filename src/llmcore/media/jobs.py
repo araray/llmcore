@@ -24,6 +24,7 @@ from typing import Any
 from ..exceptions import MediaJobError, MediaJobTimeoutError
 from .models import MediaJob, MediaJobStatus
 from .protocols import MediaJobPoller
+from .webhooks import WebhookDelivery, WebhookRegistry, apply_webhook_payload
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +111,12 @@ class MediaJobManager:
         self,
         resolver: Callable[[str], Any],
         policy: JobPolicy | None = None,
+        webhooks: WebhookRegistry | None = None,
     ) -> None:
         self._resolver = resolver
         self._policy = policy or JobPolicy()
         self._jobs: dict[str, MediaJob] = {}
+        self._webhooks = webhooks or WebhookRegistry()
 
     # --- registry ---
 
@@ -187,6 +190,8 @@ class MediaJobManager:
         updated = await self._poller_for(job).poll_media_job(job)
         updated.touch()
         self._jobs[updated.id] = updated
+        if updated.is_terminal:
+            self._webhooks.revoke(updated.id)
         return updated
 
     async def wait(
@@ -234,7 +239,19 @@ class MediaJobManager:
                         provider_name=job.provider,
                     )
                 delay = min(delay, remaining)
-            await asyncio.sleep(delay)
+            # Race the callback against the backoff sleep. A delivery simply
+            # ends the sleep early; the poll below still runs, so webhook and
+            # poll paths converge on one code path rather than two. That is why
+            # a missing, late or malformed callback can only cost latency, never
+            # correctness.
+            signal = self._webhooks.event_for(job.id)
+            if signal is not None:
+                try:
+                    await asyncio.wait_for(signal.wait(), timeout=delay)
+                except TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(delay)
             job = await self.poll(job)
             logger.debug(
                 "Polled media job %s: status=%s progress=%s", job.id, job.status, job.progress
@@ -249,6 +266,60 @@ class MediaJobManager:
                 capability=job.capability,
             )
         return job
+
+    # --- webhooks ---
+
+    @property
+    def webhooks(self) -> WebhookRegistry:
+        """The callback registry. Disabled unless a base URL is configured."""
+        return self._webhooks
+
+    def callback_url_for(self, job: MediaJob) -> str | None:
+        """Issue a single-use callback URL for *job*, or ``None`` if disabled.
+
+        Providers that support callbacks pass this to the vendor at submission.
+        A ``None`` is not an error — it means this deployment has no public
+        ingress, and llmcore polls instead.
+        """
+        return self._webhooks.issue(job)
+
+    async def handle_webhook(self, token: str, payload: dict[str, Any]) -> WebhookDelivery:
+        """Apply an inbound vendor callback identified by *token*.
+
+        A callback may only *report* on a job llmcore already submitted: an
+        unknown or spent token is refused outright, so a delivery can never
+        create a job or redirect one. The payload itself is handed to the
+        provider adapter, which is the only thing that knows that vendor's
+        result shape.
+        """
+        job_id = self._webhooks.consume(token)
+        if job_id is None:
+            logger.warning("Rejected media webhook with an invalid or spent token.")
+            return WebhookDelivery(
+                accepted=False, reason="unknown or expired token", status_code=404
+            )
+
+        job = self._jobs.get(job_id)
+        if job is None:
+            return WebhookDelivery(
+                accepted=False, job_id=job_id, reason="unknown job", status_code=404
+            )
+        if job.is_terminal:
+            # Not an error: the poll loop beat the callback. Report success so
+            # the vendor stops retrying a delivery we no longer need.
+            return WebhookDelivery(accepted=True, job_id=job_id)
+
+        try:
+            updated = await apply_webhook_payload(job, payload, self._poller_for(job))
+        except Exception as e:  # a bad callback must not take down the receiver
+            logger.exception("Failed to apply media webhook for job %s", job_id)
+            return WebhookDelivery(
+                accepted=False, job_id=job_id, reason=str(e), status_code=500
+            )
+
+        self._jobs[updated.id] = updated
+        logger.debug("Applied webhook for media job %s: status=%s", job_id, updated.status)
+        return WebhookDelivery(accepted=True, job_id=job_id)
 
     async def cancel(self, job: MediaJob) -> MediaJob:
         """Ask the vendor to cancel *job*.
