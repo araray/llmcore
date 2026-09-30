@@ -8,6 +8,36 @@ Self-hosted LLM provider abstraction layer with agentic capabilities, RAG, embed
 
 ---
 
+## 🔐 HTTP transport and TLS (applies to every provider)
+
+`openai` 3.x and `anthropic` 1.x build their HTTP layer on
+[`httpx2`](https://httpx2.pydantic.dev/) (Pydantic's maintained fork of `httpx`)
+and **no longer install `httpx` or `certifi` transitively**. Two consequences
+for deployments:
+
+1. **TLS trust store.** httpx2 verifies certificates against the **operating
+   system** trust store rather than the `certifi` bundle. This can break
+   certificate verification in minimal container images without system CA
+   certificates, behind TLS-inspecting corporate proxies, or where a customised
+   `certifi` bundle was relied on. Fix by installing CA certificates into the OS
+   trust store, or point the SDKs at an explicit bundle:
+
+   ```bash
+   export SSL_CERT_FILE=/path/to/ca-bundle.pem   # a single bundle
+   export SSL_CERT_DIR=/path/to/ca-directory     # or a directory of CAs
+   ```
+
+2. **`httpx` is an explicit dependency now.** llmcore's own REST transports
+   (mistral, kimi, poe, openrouter, vllm, deepinfra, zai, friendli, typesafe and
+   all search providers) still use `httpx`, and every extra that needs it
+   declares it. If you install llmcore without extras and call those providers,
+   install `httpx` yourself.
+
+llmcore never hands `httpx` objects to the vendor SDK clients (only numeric
+timeouts), so there is no per-provider transport configuration to migrate.
+
+---
+
 ## ⚙️ Core Settings
 
 Fundamental llmcore configuration — provider selection, embedding model, and diagnostics.
