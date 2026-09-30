@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Gemini media adapter, the first async-job provider (M4)
+
+- **Gemini is now a media adapter** for `image_generate`, `image_edit`,
+  `image_upscale`, `tts` and `video_generate`, plus provider-level embeddings.
+- **Veo makes it the first true async-job provider.** `generate_video_media()`
+  returns a `MediaJob`; `poll_media_job()` refreshes it through the
+  long-running-operations API. **The `MediaJob` abstraction absorbed a real
+  vendor's operation shape without modification** — which is what this phase
+  was meant to find out.
+- **Capability declaration is now mode-aware.** Imagen's `generate_images`,
+  `edit_image` and `upscale_image` are Vertex-only: the Developer API rejects
+  them with *"only supported in Gemini Enterprise Agent Platform mode"*
+  (verified live). `image_edit` / `image_upscale` are therefore advertised only
+  when `vertex_ai = true`. This is the first provider whose capability set
+  depends on configuration rather than on its class.
+- **Image generation has two transports.** Imagen on Vertex;
+  `generate_content` with an `IMAGE` response modality on the Developer API.
+  Same capability, different call, invisible to the caller.
+- **`cancel_media_job()` raises rather than lying.** Veo offers no
+  cancellation, and reporting success would let a caller believe billing had
+  stopped when it has not.
+- Uses google-genai's non-deprecated `source=` argument for `generate_videos`
+  (`prompt=`/`image=` are deprecated, removal no earlier than 2026-07-31).
+- Generated imagery and video carry `MediaProvenance(watermarked=True)`, since
+  Google watermarks its generative output.
+- Unlike OpenAI, Imagen supports `negative_prompt` natively, so it is forwarded
+  rather than dropped — the protocol parameter is honoured wherever the vendor
+  honours it.
+
+Live-validated: a 2 MB PNG through the Developer-API path, 112 KB of 24 kHz PCM
+from native TTS, 256-dimension embeddings, and a Veo job submitted and polled
+through `MediaJobManager`. 52 new tests; full unit suite 5470 passed.
+
 ### Added — OpenAI media adapter (M3)
 
 - **OpenAI is now a media adapter** for `image_generate`, `image_edit`, `tts`,

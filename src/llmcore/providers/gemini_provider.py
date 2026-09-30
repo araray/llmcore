@@ -21,7 +21,7 @@ import logging
 import os
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
@@ -37,6 +37,17 @@ APIError: type[Exception] = Exception
 PermissionDenied: type[Exception] = Exception
 InvalidArgument: type[Exception] = Exception
 _google_genai_import_attempted = False
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Sequence
+
+    from ..media.models import (
+        MediaCapability,
+        MediaExecution,
+        MediaJob,
+        MediaRef,
+        MediaResult,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +175,15 @@ class GeminiProvider(BaseProvider):
 
         # Vertex AI configuration
         self._vertex_ai = config.get("vertex_ai", False)
+        # Optional per-capability media model overrides:
+        #   default_image_model / default_video_model /
+        #   default_tts_model / default_embedding_model
+        self._media_model_config: dict[str, Any] = {
+            "image": config.get("default_image_model"),
+            "video": config.get("default_video_model"),
+            "tts": config.get("default_tts_model"),
+            "embed": config.get("default_embedding_model"),
+        }
         self._project = config.get("project")
         self._location = config.get("location")
 
@@ -1113,6 +1133,688 @@ class GeminiProvider(BaseProvider):
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
+
+
+    # ==================================================================
+    # Media subsystem adapter (llmcore.media protocols)
+    # ==================================================================
+    #
+    # Phase M4 of docs/MEDIA_SUBSYSTEM_SPEC.md. Gemini has the largest media
+    # surface llmcore curates, and Veo makes it the FIRST true async-job
+    # provider — so this is where the MediaJob lifecycle is validated against a
+    # real vendor rather than the in-repo fake.
+    #
+    # Veo returns a google-genai ``GenerateVideosOperation``; llmcore keeps the
+    # operation object in provider_metadata and refreshes it through
+    # ``client.aio.operations.get()``. MediaJobManager owns the backoff,
+    # timeout and cancellation policy — this adapter only reports state.
+
+    #: Capabilities available on BOTH the Gemini Developer API and Vertex AI.
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset(
+        {"image_generate", "tts", "video_generate"}
+    )
+
+    #: Capabilities that exist ONLY on Vertex AI. Verified live: the Developer
+    #: API rejects ``models.generate_images`` / ``edit_image`` / ``upscale_image``
+    #: with "This method is only supported in Gemini Enterprise Agent Platform
+    #: mode". Declaring them unconditionally would make the router call an
+    #: endpoint that always errors for Developer-API users.
+    _VERTEX_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
+        {"image_edit", "image_upscale"}
+    )
+
+    #: Default models per media capability, overridable per call and via config.
+    _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
+    _DEFAULT_DEV_IMAGE_MODEL = "gemini-2.5-flash-image"     # Developer API
+    _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-preview"
+    _DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+    _DEFAULT_EMBED_MODEL = "gemini-embedding-001"
+
+    def media_capabilities(self) -> "frozenset[MediaCapability]":
+        """Capabilities Gemini can serve in the CURRENT auth mode.
+
+        Image editing and upscaling go through Imagen's dedicated endpoints,
+        which exist only on Vertex AI, so they are declared only when
+        ``vertex_ai = true``.
+        """
+        from ..media.models import MediaCapability
+
+        names = set(self._MEDIA_CAPABILITIES)
+        if self._vertex_ai:
+            names |= self._VERTEX_ONLY_MEDIA_CAPABILITIES
+        return frozenset(MediaCapability(c) for c in names)
+
+    def media_execution(
+        self, capability: "MediaCapability", model: str | None = None
+    ) -> "MediaExecution":
+        """Return how *capability* completes.
+
+        Veo is a long-running operation; everything else answers synchronously.
+        """
+        from ..media.models import MediaCapability, MediaExecution
+
+        if capability is MediaCapability.VIDEO_GENERATE:
+            return MediaExecution.ASYNC_JOB
+        return MediaExecution.REQUEST_RESPONSE
+
+    # --- helpers ---
+
+    def _media_model(self, capability: str, model: str | None) -> str:
+        """Resolve the model for a media capability, honouring config."""
+        if model:
+            return model
+        configured = self._media_model_config.get(capability)
+        if configured:
+            return str(configured)
+        return {
+            "image": self._DEFAULT_IMAGE_MODEL,
+            "video": self._DEFAULT_VIDEO_MODEL,
+            "tts": self._DEFAULT_TTS_MODEL,
+            "embed": self._DEFAULT_EMBED_MODEL,
+        }[capability]
+
+    @staticmethod
+    async def _to_genai_image(ref: "MediaRef") -> Any:
+        """Convert a :class:`MediaRef` into a ``types.Image``."""
+        from google.genai import types as genai_types
+
+        if ref.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(ref.url or "")
+        else:
+            data = ref.read_bytes()
+        return genai_types.Image(image_bytes=data, mime_type=ref.mime_type or "image/png")
+
+    def _images_to_artifacts(self, generated: Any) -> list[Any]:
+        """Map ``GeneratedImage`` objects onto media artifacts."""
+        import hashlib
+
+        from ..media.models import MediaArtifact, MediaKind, MediaProvenance
+
+        artifacts: list[MediaArtifact] = []
+        for item in generated or []:
+            image = getattr(item, "image", None)
+            if image is None:
+                continue
+            data = getattr(image, "image_bytes", None)
+            artifacts.append(
+                MediaArtifact(
+                    kind=MediaKind.IMAGE,
+                    data=data,
+                    uri=getattr(image, "gcs_uri", None),
+                    mime_type=getattr(image, "mime_type", None) or "image/png",
+                    checksum_sha256=hashlib.sha256(data).hexdigest() if data else None,
+                    provenance=MediaProvenance(
+                        watermarked=True, generator="google", provider_declared=True
+                    ),
+                    provider_metadata={
+                        "enhanced_prompt": getattr(item, "enhanced_prompt", None),
+                        "rai_filtered_reason": getattr(item, "rai_filtered_reason", None),
+                    },
+                )
+            )
+        return artifacts
+
+    # --- image ---
+
+    async def generate_image_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        seed: int | None = None,
+        negative_prompt: str | None = None,
+        reference_images: "Sequence[MediaRef] | None" = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate images with Imagen.
+
+        Unlike OpenAI, Imagen supports ``negative_prompt`` natively, so it is
+        forwarded rather than dropped. ``size`` maps to ``image_size``; an
+        ``aspect_ratio`` kwarg is also accepted and passed through.
+        """
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if reference_images:
+            return await self.edit_image_media(
+                prompt, image=reference_images[0], model=model, n=n, size=size, **kwargs
+            )
+
+        if not self._vertex_ai:
+            # Developer API: Imagen's dedicated endpoint is unavailable, but the
+            # image-capable Gemini models generate through generate_content with
+            # an IMAGE response modality. Same capability, different transport.
+            return await self._generate_image_via_generate_content(
+                prompt, model=model, n=n, **kwargs
+            )
+
+        img_model = self._media_model("image", model)
+        config_kwargs: dict[str, Any] = {"number_of_images": n}
+        if size is not None:
+            config_kwargs["image_size"] = size
+        if negative_prompt is not None:
+            config_kwargs["negative_prompt"] = negative_prompt
+        if seed is not None:
+            logger.debug("Imagen does not expose a seed parameter; ignoring it.")
+        config_kwargs.update(kwargs)
+
+        try:
+            response = await self._client.aio.models.generate_images(
+                model=img_model,
+                prompt=prompt,
+                config=genai_types.GenerateImagesConfig(**config_kwargs),
+            )
+        except Exception as e:
+            self._raise_media_error(e, img_model, "image generation")
+
+        artifacts = self._images_to_artifacts(getattr(response, "generated_images", None))
+        return MediaResult(
+            capability=MediaCapability.IMAGE_GENERATE,
+            provider=self.get_name(),
+            model=img_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=img_model,
+                basis="per_image",
+                images=len(artifacts),
+            ),
+            raw={"generated": len(artifacts)},
+        )
+
+    async def _generate_image_via_generate_content(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate images on the Gemini Developer API.
+
+        Imagen's ``generate_images`` endpoint is Vertex-only, so on the
+        Developer API image generation runs through ``generate_content`` with an
+        ``IMAGE`` response modality. ``n`` is not supported on this path — the
+        model returns what it returns — so it is logged rather than faked.
+        """
+        import hashlib
+
+        from google.genai import types as genai_types
+
+        from ..media.models import (
+            MediaArtifact,
+            MediaCapability,
+            MediaKind,
+            MediaProvenance,
+            MediaResult,
+            MediaUsage,
+        )
+
+        img_model = model or self._media_model_config.get("image") or self._DEFAULT_DEV_IMAGE_MODEL
+        if n != 1:
+            logger.debug(
+                "The Gemini Developer API image path has no image-count parameter; "
+                "requested n=%d is advisory.",
+                n,
+            )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=img_model,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_modalities=["IMAGE"], **kwargs
+                ),
+            )
+        except Exception as e:
+            self._raise_media_error(e, img_model, "image generation")
+
+        artifacts: list[MediaArtifact] = []
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                data = getattr(inline, "data", None) if inline is not None else None
+                if not data:
+                    continue
+                artifacts.append(
+                    MediaArtifact(
+                        kind=MediaKind.IMAGE,
+                        data=data,
+                        mime_type=getattr(inline, "mime_type", None) or "image/png",
+                        checksum_sha256=hashlib.sha256(data).hexdigest(),
+                        provenance=MediaProvenance(
+                            watermarked=True, generator="google", provider_declared=True
+                        ),
+                    )
+                )
+
+        return MediaResult(
+            capability=MediaCapability.IMAGE_GENERATE,
+            provider=self.get_name(),
+            model=img_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=img_model,
+                basis="per_image",
+                images=len(artifacts),
+            ),
+            raw={"transport": "generate_content"},
+        )
+
+    async def edit_image_media(
+        self,
+        prompt: str,
+        *,
+        image: "MediaRef",
+        mask: "MediaRef | None" = None,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Edit an image with Imagen's edit surface."""
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        img_model = self._media_model("image", model)
+        reference: list[Any] = [
+            genai_types.RawReferenceImage(
+                reference_id=1, reference_image=await self._to_genai_image(image)
+            )
+        ]
+        if mask is not None:
+            reference.append(
+                genai_types.MaskReferenceImage(
+                    reference_id=2, reference_image=await self._to_genai_image(mask)
+                )
+            )
+        config_kwargs: dict[str, Any] = {"number_of_images": n, **kwargs}
+
+        try:
+            response = await self._client.aio.models.edit_image(
+                model=img_model,
+                prompt=prompt,
+                reference_images=reference,
+                config=genai_types.EditImageConfig(**config_kwargs),
+            )
+        except Exception as e:
+            self._raise_media_error(e, img_model, "image editing")
+
+        artifacts = self._images_to_artifacts(getattr(response, "generated_images", None))
+        return MediaResult(
+            capability=MediaCapability.IMAGE_EDIT,
+            provider=self.get_name(),
+            model=img_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=img_model,
+                basis="per_image",
+                images=len(artifacts),
+            ),
+        )
+
+    async def upscale_image_media(
+        self,
+        *,
+        image: "MediaRef",
+        model: str | None = None,
+        scale: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Upscale an image. Imagen accepts discrete factors such as ``x2``/``x4``."""
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        img_model = self._media_model("image", model)
+        factor = f"x{int(scale)}" if scale else "x2"
+        try:
+            response = await self._client.aio.models.upscale_image(
+                model=img_model,
+                image=await self._to_genai_image(image),
+                upscale_factor=factor,
+                config=genai_types.UpscaleImageConfig(**kwargs) if kwargs else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, img_model, "image upscaling")
+
+        artifacts = self._images_to_artifacts(getattr(response, "generated_images", None))
+        return MediaResult(
+            capability=MediaCapability.IMAGE_UPSCALE,
+            provider=self.get_name(),
+            model=img_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(), model=img_model, basis="per_image", images=len(artifacts)
+            ),
+        )
+
+    # --- audio ---
+
+    async def synthesize_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        speed: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Synthesize speech with Gemini's native TTS.
+
+        Gemini TTS runs through ``generate_content`` with an audio response
+        modality rather than a dedicated endpoint, and returns raw PCM
+        (24 kHz, 16-bit mono) — there is no container-format or speed
+        parameter, so those are ignored with a debug log.
+        """
+        import hashlib
+
+        from google.genai import types as genai_types
+
+        from ..media.models import (
+            MediaArtifact,
+            MediaCapability,
+            MediaKind,
+            MediaResult,
+            MediaUsage,
+        )
+
+        for unsupported, value in (("audio_format", audio_format), ("speed", speed)):
+            if value is not None:
+                logger.debug("Gemini TTS ignores '%s' (it returns raw PCM).", unsupported)
+
+        tts_model = self._media_model("tts", model)
+        speech_config = genai_types.SpeechConfig(
+            voice_config=genai_types.VoiceConfig(
+                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(
+                    voice_name=voice or "Kore"
+                )
+            )
+        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=tts_model,
+                contents=text,
+                config=genai_types.GenerateContentConfig(
+                    response_modalities=["AUDIO"], speech_config=speech_config, **kwargs
+                ),
+            )
+        except Exception as e:
+            self._raise_media_error(e, tts_model, "speech synthesis")
+
+        data = b""
+        mime = "audio/L16;rate=24000"
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    data = inline.data
+                    mime = getattr(inline, "mime_type", None) or mime
+                    break
+
+        artifact = MediaArtifact(
+            kind=MediaKind.AUDIO,
+            data=data,
+            mime_type=mime,
+            sample_rate_hz=sample_rate_hz or 24000,
+            checksum_sha256=hashlib.sha256(data).hexdigest() if data else None,
+        )
+        return MediaResult(
+            capability=MediaCapability.TTS,
+            provider=self.get_name(),
+            model=tts_model,
+            artifacts=(artifact,),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=tts_model,
+                basis="per_character",
+                characters=len(text),
+            ),
+        )
+
+    # --- video (async job) ---
+
+    async def generate_video_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        first_frame: "MediaRef | None" = None,
+        last_frame: "MediaRef | None" = None,
+        reference_images: "Sequence[MediaRef] | None" = None,
+        duration_seconds: float | None = None,
+        resolution: str | None = None,
+        aspect_ratio: str | None = None,
+        fps: float | None = None,
+        with_audio: bool | None = None,
+        seed: int | None = None,
+        **kwargs: Any,
+    ) -> "MediaJob":
+        """Submit a Veo video generation and return a job handle.
+
+        ``first_frame`` conditions the opening image; ``last_frame`` requests a
+        *generative transition* to that image — distinct from frame
+        interpolation, which fills between existing frames.
+        """
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaJob
+
+        video_model = self._media_model("video", model)
+        config_kwargs: dict[str, Any] = {}
+        if duration_seconds is not None:
+            config_kwargs["duration_seconds"] = int(duration_seconds)
+        if aspect_ratio is not None:
+            config_kwargs["aspect_ratio"] = aspect_ratio
+        if fps is not None:
+            config_kwargs["fps"] = int(fps)
+        if with_audio is not None:
+            config_kwargs["generate_audio"] = with_audio
+        if last_frame is not None:
+            config_kwargs["last_frame"] = await self._to_genai_image(last_frame)
+        if reference_images:
+            config_kwargs["reference_images"] = [
+                await self._to_genai_image(ref) for ref in reference_images
+            ]
+        if resolution is not None:
+            config_kwargs.setdefault("resolution", resolution)
+        if seed is not None:
+            logger.debug("Veo does not expose a seed parameter; ignoring it.")
+        config_kwargs.update(kwargs)
+
+        # ``prompt=``/``image=`` are deprecated in google-genai (removal no
+        # earlier than 2026-07-31); ``source=`` is the supported shape.
+        source_kwargs: dict[str, Any] = {"prompt": prompt}
+        if first_frame is not None:
+            source_kwargs["image"] = await self._to_genai_image(first_frame)
+        call_kwargs: dict[str, Any] = {
+            "model": video_model,
+            "source": genai_types.GenerateVideosSource(**source_kwargs),
+        }
+        if config_kwargs:
+            call_kwargs["config"] = genai_types.GenerateVideosConfig(**config_kwargs)
+
+        try:
+            operation = await self._client.aio.models.generate_videos(**call_kwargs)
+        except Exception as e:
+            self._raise_media_error(e, video_model, "video generation")
+
+        job = MediaJob(
+            capability=MediaCapability.VIDEO_GENERATE,
+            provider=self.get_name(),
+            model=video_model,
+            provider_job_id=getattr(operation, "name", None),
+        )
+        return self._apply_video_operation(job, operation)
+
+    def _apply_video_operation(self, job: "MediaJob", operation: Any) -> "MediaJob":
+        """Fold a Veo operation's state into *job*.
+
+        The live operation object is kept in ``provider_metadata`` because the
+        SDK's ``operations.get()`` takes the object, not just its name.
+        """
+        import hashlib
+
+        from ..media.models import (
+            MediaArtifact,
+            MediaJobStatus,
+            MediaKind,
+            MediaProvenance,
+            MediaUsage,
+        )
+
+        job.provider_metadata["operation"] = operation
+        job.provider_job_id = getattr(operation, "name", None) or job.provider_job_id
+        job.touch()
+
+        error = getattr(operation, "error", None)
+        if error:
+            job.status = MediaJobStatus.FAILED
+            job.error = str(getattr(error, "message", None) or error)
+            return job
+
+        if not getattr(operation, "done", False):
+            job.status = MediaJobStatus.RUNNING
+            return job
+
+        response = getattr(operation, "response", None) or getattr(operation, "result", None)
+        videos = getattr(response, "generated_videos", None) or []
+        artifacts: list[MediaArtifact] = []
+        for item in videos:
+            video = getattr(item, "video", None)
+            if video is None:
+                continue
+            data = getattr(video, "video_bytes", None)
+            artifacts.append(
+                MediaArtifact(
+                    kind=MediaKind.VIDEO,
+                    data=data,
+                    uri=getattr(video, "uri", None),
+                    mime_type=getattr(video, "mime_type", None) or "video/mp4",
+                    checksum_sha256=hashlib.sha256(data).hexdigest() if data else None,
+                    provenance=MediaProvenance(
+                        watermarked=True, generator="google", provider_declared=True
+                    ),
+                )
+            )
+
+        job.artifacts = artifacts
+        job.progress = 1.0
+        job.status = MediaJobStatus.SUCCEEDED
+        job.usage = MediaUsage(
+            provider=self.get_name(),
+            model=job.model,
+            basis="per_video",
+            seconds=artifacts[0].duration_seconds if artifacts else None,
+        )
+        return job
+
+    async def poll_media_job(self, job: "MediaJob") -> "MediaJob":
+        """Refresh a Veo job against the long-running-operations API."""
+        from ..media.models import MediaJobStatus
+
+        if job.is_terminal:
+            return job
+        operation = job.provider_metadata.get("operation")
+        if operation is None:
+            job.status = MediaJobStatus.FAILED
+            job.error = "Lost the Veo operation handle; the job cannot be polled."
+            return job
+        try:
+            refreshed = await self._client.aio.operations.get(operation)
+        except Exception as e:
+            self._raise_media_error(e, job.model, "video job polling")
+        return self._apply_video_operation(job, refreshed)
+
+    async def cancel_media_job(self, job: "MediaJob") -> "MediaJob":
+        """Veo exposes no cancellation, so report that honestly.
+
+        Returning a falsely-cancelled job would let a caller believe billing
+        stopped when it has not.
+        """
+        raise ProviderError(
+            self.get_name(),
+            "Veo video operations cannot be cancelled once submitted; the job "
+            "will run to completion and be billed.",
+            model_name=job.model,
+        )
+
+    # --- embeddings ---
+
+    async def create_embeddings(
+        self,
+        input_texts: str | list[str],
+        *,
+        model: str | None = None,
+        dimensions: int | None = None,
+        task_type: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Create text embeddings via ``models.embed_content``.
+
+        Args:
+            input_texts: A string or list of strings to embed.
+            model: Embedding model; defaults to ``gemini-embedding-001``.
+            dimensions: Output dimensionality, where the model supports it.
+            task_type: Google's retrieval task hint (e.g.
+                ``RETRIEVAL_DOCUMENT``), which materially changes the vectors.
+            **kwargs: Extra config fields.
+
+        Returns:
+            An OpenAI-shaped dict (``data``/``model``/``usage``) so callers can
+            treat embeddings uniformly across providers.
+        """
+        from google.genai import types as genai_types
+
+        embed_model = self._media_model("embed", model)
+        config_kwargs: dict[str, Any] = dict(kwargs)
+        if dimensions is not None:
+            config_kwargs["output_dimensionality"] = dimensions
+        if task_type is not None:
+            config_kwargs["task_type"] = task_type
+
+        try:
+            response = await self._client.aio.models.embed_content(
+                model=embed_model,
+                contents=input_texts,
+                config=genai_types.EmbedContentConfig(**config_kwargs)
+                if config_kwargs
+                else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, embed_model, "embeddings")
+
+        return {
+            "object": "list",
+            "model": embed_model,
+            "data": [
+                {"object": "embedding", "index": i, "embedding": list(item.values or [])}
+                for i, item in enumerate(getattr(response, "embeddings", None) or [])
+            ],
+            "usage": {},
+        }
+
+    def _raise_media_error(self, error: Exception, model: str, operation: str) -> None:
+        """Map a google-genai media failure onto a ProviderError.
+
+        Raises:
+            ProviderError: Always.
+        """
+        if isinstance(error, ProviderError):
+            raise error
+        logger.error("Gemini %s failed on %s: %s", operation, model, error, exc_info=True)
+        raise ProviderError(
+            self.get_name(), f"{operation.capitalize()} failed: {error}", model_name=model
+        )
 
     async def close(self) -> None:
         """Close the google-genai client.

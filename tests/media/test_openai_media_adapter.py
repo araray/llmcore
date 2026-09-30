@@ -125,13 +125,12 @@ class TestSubclassCapabilityDeclaration:
 
     @staticmethod
     def _subclasses() -> list[type]:
-        from llmcore.providers.openai_provider import OpenAIProvider
-
         # Import every module that defines one, then walk the tree.
-        import llmcore.providers.deepinfra_provider  # noqa: F401
-        import llmcore.providers.openrouter_provider  # noqa: F401
-        import llmcore.providers.poe_provider  # noqa: F401
+        import llmcore.providers.deepinfra_provider
+        import llmcore.providers.openrouter_provider
+        import llmcore.providers.poe_provider
         import llmcore.providers.vllm_provider  # noqa: F401
+        from llmcore.providers.openai_provider import OpenAIProvider
 
         found: list[type] = []
         stack = list(OpenAIProvider.__subclasses__())
