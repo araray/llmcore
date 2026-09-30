@@ -3,11 +3,14 @@
 Generative image, audio and video as a first-class `llmcore` subsystem, plus the
 provider adapters that sit behind it.
 
-- **Status:** **M1–M6 implemented** (core subsystem; Deepgram, OpenAI and
-  Gemini migrated behind the protocols, fal as the first marketplace adapter,
-  ElevenLabs as the first with consent metadata). M5's neutrality gate passed
-  unchanged; **M6 deliberately extended the core**, which is what its gate
-  asked for. M7 onward not started — see §5.
+- **Status:** **M1–M8 and M9a implemented** — the whole rollout except M9b.
+  Core subsystem; Deepgram, OpenAI and Gemini migrated behind the protocols;
+  fal as the first marketplace adapter; ElevenLabs as the first with consent
+  metadata; Replicate as one generic adapter for a whole catalog; Hugging Face
+  for custom weights; and the generic webhook receiver. M5's neutrality gate
+  passed unchanged, while **M6 and M8 each extended the core deliberately**,
+  which is what their gates asked for. **M9b** (direct specialists) remains
+  unjustified until one offers something fal or Replicate do not — see §5.
 - **Written:** 2026-09-29
 - **Primary input:** `/av/data/repos/docs/llmcore/researches/image-audio-video_providers_2026september.md`
   (the provider survey and priority matrix; this document is the llmcore-side design)
@@ -343,7 +346,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M5** ✅ | **fal** — queue lifecycle, URL inputs, video, SFX, music, FILM interpolation; 9 capabilities, all async-job | Landed 2026-09-30, 79 tests. Live: image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. **The provider-neutrality test passed — no core type changed.** See §5.2 |
 | **M6** ✅ | **ElevenLabs** — TTS, streaming TTS, batch STT, SFX, music, voice design | Landed 2026-09-30, 69 tests. Live: TTS + consent, streaming TTS, STT round trip, SFX. Music/voice design are **plan-gated on the current account** — implemented and unit-tested, not live-validated. **Consent is now first-class: new `VoiceConsent` type and `VoiceDesignProvider` protocol.** Realtime STT deferred — see §5.3 |
 | **M7** ✅ | **Replicate** — one generic prediction adapter + model-schema descriptors | Landed 2026-09-30, 70 tests. Live: schema-driven field mapping, image generation, community-model ASR, cancel. **One adapter, seven capabilities, zero per-model classes.** See §5.5 |
-| **M8** | **Hugging Face Inference Endpoints** — configurable endpoint/schema adapter | Custom weights / private repos path |
+| **M8** ✅ | **Hugging Face** — image generation, TTS, ASR behind the protocols, plus dedicated Inference Endpoints | Landed 2026-09-30, 40 tests. Live: image, TTS → ASR round trip, provider routing. **The custom-weights path is a configured endpoint URL, not a model id.** See §5.6 |
 | **M9a** ✅ | **Webhook receiver** — signed single-use tokens, generic ASGI app, fal callback parsing | Landed 2026-09-30, 38 tests. Polling stays the fallback; webhook/poll equivalence tested |
 | **M9b** | Direct specialists (BFL, Luma, Stability) when justified: lower unit cost, first-party-only feature, data contract, or pre-aggregator access | Otherwise fal/Replicate already cover it |
 
@@ -584,6 +587,57 @@ Two provider-level findings, both from live calls:
    invented — and stays `None` when neither is available, because callers key
    decode paths off this field and a plausible lie is worse than an honest
    unknown.
+
+### 5.6 What M8 changed — and llmcore's one exception to direct-REST-first
+
+Hugging Face is not a vendor in the sense the other adapters are. It is a
+**routing layer** over third-party inference providers, and that produces two
+problems no other adapter has.
+
+**1. A model is not served for every task by every provider.**
+`hexgrad/Kokoro-82M` does TTS on fal-ai and deepinfra but not on hf-inference,
+and asking the wrong one returns `400 Model not supported by provider`. Worse,
+**each provider knows the model by its own id**: the Hub calls it
+`black-forest-labs/FLUX.1-schnell` while fal-ai calls the same weights
+`fal-ai/flux/schnell`. Only the Hub's `inferenceProviderMapping` knows both, so
+the adapter reads it — the same move the Replicate adapter makes with input
+schemas, and for the same reason. URL shape differs too: hf-inference serves
+under `/hf-inference/models/{id}` while third-party providers are addressed
+directly at `/{provider}/{their-id}`.
+
+**2. The router hands third-party providers their own request shape.**
+hf-inference takes the HF task schema `{"inputs": ...}`; the same model routed
+to fal-ai wants `{"prompt": ...}` and answers `422 Field required` otherwise.
+That shape belongs to the provider, not to Hugging Face, and changes on their
+schedule.
+
+This is why **Hugging Face is llmcore's one documented exception to the
+direct-REST-first rule**. Reimplementing per-provider body mapping would mean
+tracking N third-party schemas forever; absorbing it is precisely what
+`huggingface_hub` exists to do. The dual approach is intact — both transports
+are available and `media_backend` selects — but the *default* inverts, and it
+inverts for a reason that was measured rather than assumed.
+
+The split is per capability rather than global:
+
+| Traffic | Backend | Why |
+|---|---|---|
+| Router, JSON body (image, TTS) | **SDK** | The body shape is the provider's, not HF's |
+| Binary input (ASR) | **direct** | The SDK sends raw audio with no `Content-Type` and hf-inference rejects it outright; there is also no provider-specific body to translate |
+| Dedicated Inference Endpoint | **direct** | The caller's own deployment, standard schema, URL they control |
+
+**The gate — custom weights and private repos — is that last row.** A private
+model is not a model id on a shared router; it is an endpoint you deployed.
+Configure one under `[providers.huggingface.endpoints]` and it is used verbatim:
+no routing lookup, no model id in the path, and that capability switches to
+direct HTTP. Everything else keeps routing.
+
+Two smaller decisions: TTS artifacts carry **no** `VoiceConsent`, because HF
+serves open-weight voices and tracks no per-voice consent — claiming anything
+there would be inventing it (contrast M6, where the vendor does track it). And
+a routing lookup failure **degrades to hf-inference** rather than raising, since
+routing is an optimization and a failed call is a worse outcome than a
+suboptimal provider.
 
 ## 6. Corrections and additions to the research
 
