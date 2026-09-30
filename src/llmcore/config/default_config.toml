@@ -682,6 +682,39 @@ max_retries = 2
   # --- Ollama Provider ---
   # For locally running models via Ollama.
 
+  # --- Replicate (one generic prediction adapter for the whole catalog) ---
+  [providers.replicate]
+  # type = "replicate"  # auto-detected from section name
+
+  # API token: set via environment variable for security.
+  # api_key_env_var = "REPLICATE_API_TOKEN"
+
+  # Transport backend: "httpx" (direct REST, default) or "sdk" (replicate).
+  # backend = "httpx"
+
+  # Predictions can be slow; the API does the waiting, but each poll needs
+  # headroom.
+  timeout = 300
+
+  # Resolve each model's real input field names from its published OpenAPI
+  # schema, so canonical arguments (prompt/image/audio/n/...) land on whatever
+  # that model actually calls them. This is what lets ONE adapter serve the
+  # whole catalog. Disable only to send canonical names literally.
+  # use_schema = true
+
+  # --- Per-capability models ---
+  # References are "owner/name" or "owner/name:version". Replicate's catalog is
+  # enormous and moves constantly, so llmcore ships a small starting set rather
+  # than a catalog. Browse https://replicate.com/explore
+  [providers.replicate.models]
+  # image_generate = "black-forest-labs/flux-schnell"
+  # image_edit = "black-forest-labs/flux-kontext-pro"
+  # image_upscale = "nightmareai/real-esrgan"
+  # video_generate = "minimax/video-01"
+  # asr = "openai/whisper"
+  # tts = "jaaari/kokoro-82m"
+  # music = "meta/musicgen"
+
   # --- ElevenLabs (voice/audio: TTS, streaming TTS, STT, SFX, music, voice design) ---
   [providers.elevenlabs]
   # type = "elevenlabs"  # auto-detected from section name (alias: eleven_labs)

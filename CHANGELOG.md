@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Replicate provider: one adapter for the whole catalog (M7)
+
+- **New `replicate` provider**: image generate/edit/upscale, video generation,
+  ASR, TTS and music — **seven capabilities, zero per-model classes**, which is
+  what the spec required. Media-only; `chat_completion()` raises.
+- **Model-schema descriptors are the design.** Replicate hosts tens of thousands
+  of community models, so nothing can be hardcoded. Every model publishes an
+  OpenAPI schema naming its own inputs, and the adapter maps llmcore's canonical
+  protocol arguments onto whatever that model actually calls them. Verified
+  live: `n` became `num_outputs` for `flux-schnell` while `audio` stayed `audio`
+  for `whisper`. A model llmcore has never heard of works.
+- Explicit keyword arguments always beat the mapping — the caller knows their
+  model better than a candidate list does. A schema lookup failure **degrades**
+  to canonical spellings rather than raising, because a 422 naming the field is
+  more useful than a silently dropped input.
+- **Ready for the webhook receiver**: declares `accepts_webhook_url` and parses
+  its own deliveries; a payload whose `id` does not match falls back to polling.
+- **Dual transport**: direct REST by default, `replicate` SDK opt-in. New
+  `replicate` extra.
+
+### Fixed — Replicate community models were unreachable
+
+Found by live validation: Replicate has **two** prediction-creation routes and
+the model reference does not say which one applies. *Official* models run
+unversioned at `/v1/models/{owner}/{name}/predictions`; *community* models —
+including `openai/whisper` — `404` there and must be run by version at
+`/v1/predictions`.
+
+The obvious fix, trying the first and falling back on the 404, costs **two**
+creation requests. Replicate throttles accounts under $5 of credit to a burst of
+**1**, so that fallback reliably turned a working call into a `429`. The version
+is now resolved from the model lookup already made for the input schema — a
+`GET`, which does not count against prediction-creation limits — so a community
+model runs in a single request. *A retry-based fallback is not free when the
+operation being retried is the rate-limited one.*
+
+Also: `402` is reported as a billing stop that states the token is valid, and
+`429` explains the under-$5 burst limit, which otherwise reads as a bug.
+
+### Changed — Replicate MIME types fall back to the requested format
+
+Replicate output URLs often carry no file extension, so MIME detection returned
+`None`. It now falls back to the `output_format` that was *requested* — grounded
+in the call rather than guessed — and stays `None` when neither is available,
+because callers key decode paths off this field and a plausible lie is worse
+than an honest unknown.
+
 ### Added — generic webhook receiver for media jobs (M9a)
 
 - **`llmcore.media.webhooks`**: a vendor-neutral callback receiver. `WebhookRegistry`

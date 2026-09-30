@@ -41,6 +41,7 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .openrouter_provider import OpenRouterProvider
 from .poe_provider import PoeProvider
+from .replicate_provider import ReplicateProvider
 from .typesafe_provider import TypeSafeProvider
 from .vllm_provider import VLLMProvider
 from .zai_provider import ZaiProvider
@@ -76,6 +77,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     # ElevenLabs: voice/audio provider (TTS, streaming TTS, STT, SFX, music,
     # voice design). Media-only — chat_completion() intentionally raises.
     "elevenlabs": ElevenLabsProvider,
+    # Replicate: one generic prediction adapter for the whole catalog, driven
+    # by each model's published schema. Media-only.
+    "replicate": ReplicateProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
