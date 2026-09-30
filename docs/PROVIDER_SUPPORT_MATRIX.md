@@ -8,6 +8,7 @@ provider's capabilities we actually expose.
 same commit as any provider change — see [Refreshing this document](#refreshing-this-document).
 
 - **Last full audit:** 2026-09-29
+- **Phase 0 landed:** 2026-09-29 — pins bumped to the majors below, extras corrected, live-validated
 - **llmcore version at audit:** 0.53.0
 - **Vendor SDK clones:** `/av/avalon/xrepos/<sdk-repo>` (paths in the table below)
 
@@ -42,16 +43,16 @@ dev venv. A pin that trails the upstream **major** version is a red flag.
 
 | Provider | SDK package | Clone (`/av/avalon/xrepos/…`) | Upstream tag | Upstream commit | Tag date | llmcore pin | Installed | Status |
 |---|---|---|---|---|---|---|---|:---:|
-| OpenAI | `openai` | `openai-python` | **v3.22.1** | `58aca1dcfd8d` | 2026-09-30 | `>=2.31.0` | 2.32.0 | 🔴 major behind |
-| Anthropic | `anthropic` | `anthropic-sdk-python` | **v1.9.0** | `a7285e919ab7` | 2026-09-28 | `>=0.94.0` | 0.97.0 | 🔴 major behind |
-| Google Gemini | `google-genai` | `python-genai` | **v2.25.0** | `f15d1482d747` | 2026-09-29 | `>=1.72.0` | 1.73.1 | 🔴 major behind |
+| OpenAI | `openai` | `openai-python` | **v3.22.1** | `58aca1dcfd8d` | 2026-09-30 | `>=3.0.0,<4` | 3.22.1 | ✅ current (live ✓) |
+| Anthropic | `anthropic` | `anthropic-sdk-python` | **v1.9.0** | `a7285e919ab7` | 2026-09-28 | `>=1,<2` | 1.9.0 | 🟡 current, **not live-validated** (no API key) |
+| Google Gemini | `google-genai` | `python-genai` | **v2.25.0** | `f15d1482d747` | 2026-09-29 | `>=2,<3` | 2.25.0 | ✅ current (live ✓, 47 models) |
 | Mistral | `mistralai` | `mistral-client-python` | **v3.0.0** | `e8dfa1c8a2d0` | 2026-09-28 | *(none — httpx only)* | not installed | 🟠 SDK unused |
 | OpenRouter | `openrouter` | `openrouter_python_sdk` | **v1.3.9** | `fd5ffce2995d` | 2026-09-30 | *(optional backend)* | not installed | 🟠 major behind + absent |
-| Ollama | `ollama` | `ollama-python` | v0.6.3 | `8785556559ec` | 2026-09-28 | `>=0.6.0` | 0.6.1 | 🟡 patch behind |
-| Deepgram | `deepgram-sdk` | `deepgram-python-sdk` | v7.11.0 | `a379a7f37b11` | 2026-09-28 | `>=7.0.0` | 7.3.1 | 🟡 minor behind |
-| Hugging Face | `huggingface-hub` | `huggingface_hub` | `main` @ v0.9.0.rc1 | `1092497a9b65` | 2026-09-29 | *(none)* | 1.12.0 | 🟠 unpinned |
-| Z.ai (GLM) | `zai-sdk` | `z-ai-sdk-python` | v0.2.3 | `ca5109c0aa9b` | 2026-06-16 | `>=0.2.0` | not installed | 🟡 SDK path untested |
-| FriendliAI | `friendli` | `friendli-python` | v0.15.1 (pyproject 0.15.2) | `f3039e22ec0d` | 2026-09-28 | `>=0.15.1` | 0.15.1 | ✅ current |
+| Ollama | `ollama` | `ollama-python` | v0.6.3 | `8785556559ec` | 2026-09-28 | `>=0.6.3` | 0.6.3 | ✅ current |
+| Deepgram | `deepgram-sdk` | `deepgram-python-sdk` | v7.11.0 | `a379a7f37b11` | 2026-09-28 | `>=7.11.0` | 7.11.0 | ✅ current |
+| Hugging Face | `huggingface-hub` | `huggingface_hub` | `main` @ v0.9.0.rc1 | `1092497a9b65` | 2026-09-29 | `>=1.12.0` | 1.12.0 | ✅ pinned |
+| Z.ai (GLM) | `zai-sdk` | `z-ai-sdk-python` | v0.2.3 | `ca5109c0aa9b` | 2026-06-16 | `>=0.2.3` | 0.2.3 | ✅ current (SDK backend live ✓) |
+| FriendliAI | `friendli` | `friendli-python` | v0.15.1 (repo pyproject reads 0.15.2, unreleased) | `f3039e22ec0d` | 2026-09-28 | `>=0.15.1` | 0.15.1 | ✅ current |
 | TypeSafe.ai | `typesafe-sdk` | `typesafe-sdk-python` | v0.7.2 | `f078f1e208a0` | 2026-09-26 | *(none — httpx only)* | not installed | ✅ by design |
 | Poe | `fastapi_poe` | `fastapi_poe` | 0.0.83 | `41ffd02e16f2` | 2026-01-21 | *(optional backend)* | not installed | 🟡 SDK path untested |
 | vLLM (self-hosted) | `vllm` (server) | `vllm` | v0.19.1rc0 | `219bb5b8c0dc` | 2026-04-16 | *(server, not a client dep)* | n/a | 🟡 clone stale |
@@ -77,7 +78,7 @@ What this means for llmcore, **verified against the source**:
 | Does llmcore use `httpx` for its *own* clients? | **Yes** — 9 providers (`deepinfra`, `poe`, `mistral`, `friendli`, `kimi`, `openrouter`, `vllm`, `zai`, `typesafe`) plus all search providers. These keep using `httpx` and are unaffected. |
 | Do `respx`-based tests break? | **No.** Every `respx` mock in `tests/` targets llmcore's own `httpx` clients, never traffic routed through a vendor SDK. (Upstream vendored `tests/respx2` for their own suite; we don't need it.) |
 | **`httpx` is no longer installed transitively by `openai`** | 🔴 **Action required** — see below. |
-| `certifi` is no longer installed by `openai`; httpx2 uses the **OS trust store** | 🔴 Deployment risk to document (minimal containers, TLS-inspecting proxies). Mitigate with `SSL_CERT_FILE` / `SSL_CERT_DIR`. |
+| `certifi` is no longer installed by `openai`; httpx2 uses the **OS trust store** | ✅ Documented in `CONFIG_REFERENCE.md` § HTTP transport and TLS. |
 
 **The concrete break:** six providers import `httpx` but have **no extra of
 their own**, so today they only work because `openai` happened to install
@@ -85,12 +86,12 @@ their own**, so today they only work because `openai` happened to install
 
 | Provider | Imports `httpx` | Own extra |
 |---|:---:|:---:|
-| `mistral` | yes | ❌ missing |
-| `kimi` | yes | ❌ missing |
-| `poe` | yes | ❌ missing |
-| `openrouter` | yes | ❌ missing |
-| `vllm` | yes | ❌ missing |
-| `huggingface` | — | ❌ missing |
+| `mistral` | yes | ✅ added (Phase 0) |
+| `kimi` | yes | ✅ added (Phase 0) |
+| `poe` | yes | ✅ added (Phase 0) |
+| `openrouter` | yes | ✅ added (Phase 0) |
+| `vllm` | yes | ✅ added (Phase 0) |
+| `huggingface` | — | ✅ added (Phase 0) |
 
 (`deepinfra`, `zai`, `friendli`, `typesafe` already declare `httpx` explicitly.)
 
@@ -251,7 +252,7 @@ native-SDK path).
 | vllm | ❌ `/v1/embeddings`, `/pooling`, `/score`, `/rerank`; clone is 5 months stale |
 | huggingface | 🟠 unpinned dep; ❌ provider-level rerank; ❓ Inference Providers routing surface |
 | deepgram | 🟡 SDK 7.3.1 vs 7.11.0 — review new surface |
-| zai | 🟡 `zai-sdk` never installed, so the preferred SDK backend is never exercised in CI |
+| zai | ✅ Phase 0 installed `zai-sdk` and made the tests backend-hermetic; the SDK backend is now exercised in CI and validated live |
 | friendli | ⚠️ `/detokenize` + `/chat/render` 404 on Model APIs (upstream gap, tracked) |
 
 ---

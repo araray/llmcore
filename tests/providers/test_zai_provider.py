@@ -29,12 +29,18 @@ from llmcore.models import Message, Role, Tool
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# ``backend`` is pinned so these tests exercise the AsyncOpenAI transport they
+# mock, whether or not the optional ``zai-sdk`` happens to be installed. Without
+# the pin, installing the SDK flips _resolve_backend() to "sdk" and every mock
+# below is bypassed. Backend resolution itself is tested separately, with the
+# availability flags patched explicitly.
 MINIMAL_CONFIG: dict[str, Any] = {
     "api_key": "test-zai-key-000",
     "default_model": "glm-5.2",
     "timeout": 30,
     "thinking": "enabled",
     "reasoning_effort": "high",
+    "backend": "openai",
 }
 
 
@@ -615,28 +621,58 @@ def _make_sdk_provider():
     return p, sdk_client
 
 
+def _availability(*, sdk: bool, openai: bool = True, httpx: bool = True):
+    """Patch the module-level SDK availability flags for backend resolution.
+
+    Resolution order is sdk -> openai -> httpx, so the outcome depends on what
+    is importable. Patching makes these assertions independent of whether the
+    optional ``zai-sdk`` is installed in the running environment.
+    """
+    return patch.multiple(
+        "llmcore.providers.zai_provider",
+        zai_sdk_available=sdk,
+        openai_available=openai,
+        httpx_available=httpx,
+    )
+
+
 class TestBackendResolution:
-    def test_auto_prefers_available(self):
+    def test_auto_prefers_sdk_when_available(self):
         from llmcore.providers.zai_provider import ZaiProvider
 
-        # In this environment zai-sdk is absent, openai present → "openai".
-        assert ZaiProvider._resolve_backend("auto") == "openai"
+        with _availability(sdk=True):
+            assert ZaiProvider._resolve_backend("auto") == "sdk"
+            assert ZaiProvider._resolve_backend(None) == "sdk"
+
+    def test_auto_prefers_openai_without_sdk(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        with _availability(sdk=False):
+            assert ZaiProvider._resolve_backend("auto") == "openai"
+
+    def test_auto_falls_through_to_httpx(self):
+        from llmcore.providers.zai_provider import ZaiProvider
+
+        with _availability(sdk=False, openai=False):
+            assert ZaiProvider._resolve_backend("auto") == "httpx"
 
     def test_explicit_httpx(self):
         from llmcore.providers.zai_provider import ZaiProvider
 
-        assert ZaiProvider._resolve_backend("httpx") == "httpx"
+        with _availability(sdk=True):
+            assert ZaiProvider._resolve_backend("httpx") == "httpx"
 
     def test_unavailable_sdk_falls_back(self):
         from llmcore.providers.zai_provider import ZaiProvider
 
-        # sdk unavailable here → falls through to openai
-        assert ZaiProvider._resolve_backend("sdk") == "openai"
+        with _availability(sdk=False):
+            assert ZaiProvider._resolve_backend("sdk") == "openai"
 
     def test_unknown_backend_uses_auto(self):
         from llmcore.providers.zai_provider import ZaiProvider
 
-        assert ZaiProvider._resolve_backend("bogus") == "openai"
+        with _availability(sdk=False):
+            assert ZaiProvider._resolve_backend("bogus") == "openai"
 
 
 class TestSDKBackend:

@@ -59,17 +59,21 @@ jobs:
           # grimoire (the control plane) is also GitHub-only.
           pip install "grimoire @ git+https://github.com/araray/grimoire.git@v0.4.0"
           # dev pulls in test (pytest, pytest-asyncio, respx, ...) and sandbox
-          # deps; the extras below are [all] minus [zai] and [friendli]:
-          # provider SDKs (openai, anthropic, ...), chromadb, and the bridge
-          # deps (grpcio/protobuf/starlette) that unit tests import at
-          # collection or fixture time. zai-sdk is deliberately NOT installed:
-          # the zai unit tests mock the openai/httpx fallback transport, and
-          # the SDK transport would bypass those mocks and hit the live API.
-          # The friendli SDK is likewise skipped: the provider auto-resolves to
-          # the openai backend (already installed) and its tests pin the
-          # backend explicitly, so the vendor SDK adds nothing offline.
-          # numpy is used by embedding-shaped unit tests.
-          pip install -e ".[dev,bridge,openai,anthropic,gemini,ollama,deepinfra,deepgram,typesafe,brightdata,serper,serpapi,semanticscholar,postgres,chromadb]"
+          # deps; [all] pulls every provider/search/storage extra plus the
+          # bridge deps (grpcio/protobuf/starlette) that unit tests import at
+          # collection or fixture time. Installing [all] rather than a
+          # hand-maintained subset means a new extra is exercised in CI the
+          # moment it is added to pyproject.
+          #
+          # Optional vendor SDKs (zai-sdk, friendli, ...) are installed on
+          # purpose: every provider test pins its `backend` explicitly, so the
+          # presence of a vendor SDK can no longer bypass the mocks and reach a
+          # live API. See docs/PROVIDER_MODERNIZATION_PLAN.md §9.
+          #
+          # NOTE: openai>=3 and anthropic>=1 are built on httpx2 and no longer
+          # install httpx/certifi transitively; the provider extras declare
+          # httpx explicitly where llmcore's own clients need it.
+          pip install -e ".[dev,all]"
           pip install numpy
 
       - name: Version drift guard

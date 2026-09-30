@@ -53,30 +53,61 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Dependencies for specific LLM providers
-openai = ["openai>=2.31.0"]
-anthropic = ["anthropic>=0.94.0"]
-gemini = ["google-genai>=1.72.0", "google-api-core>=2.30.0"]
-ollama = ["ollama>=0.6.0"]
+# ----------------------------------------------------------------------------
+# LLM providers
+# ----------------------------------------------------------------------------
+# NOTE on httpx: `openai` 3.x and `anthropic` 1.x moved their HTTP layer to
+# httpx2 (https://httpx2.pydantic.dev/) and NO LONGER install `httpx` or
+# `certifi` transitively. Every extra whose provider imports `httpx` directly
+# must therefore declare it explicitly — previously they got it for free from
+# `openai`. httpx2 also verifies TLS against the OS trust store rather than
+# certifi; see docs/CONFIG_REFERENCE.md if you deploy into minimal containers
+# or behind a TLS-inspecting proxy.
+openai = ["openai>=3.0.0,<4"]
+anthropic = ["anthropic>=1,<2"]
+gemini = ["google-genai>=2,<3", "google-api-core>=2.30.0"]
+ollama = ["ollama>=0.6.3"]
 # DeepInfra reuses the OpenAI SDK (OpenAI-compatible API) plus httpx for the
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
-deepinfra = ["openai>=2.31.0", "httpx>=0.27.0"]
+deepinfra = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+# Mistral: the provider talks to the REST API over httpx directly (no vendor
+# SDK today — `mistralai` v3.x is a candidate second backend, see
+# docs/PROVIDER_MODERNIZATION_PLAN.md).
+mistral = ["httpx>=0.27.0"]
+# Kimi (Moonshot AI): OpenAI-compatible chat plus httpx for the Moonshot-only
+# REST endpoints (token estimate, balance, file upload) and tiktoken for the
+# local token-count fallback. Moonshot publishes no Python SDK.
+kimi = ["openai>=3.0.0,<4", "httpx>=0.27.0", "tiktoken>=0.9.0"]
+# Poe: OpenAI-compatible gateway plus httpx; `fastapi-poe` enables the optional
+# native SSE backend (backend = "native").
+poe = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+# OpenRouter: OpenAI-compatible gateway plus httpx; the `openrouter` SDK
+# enables the optional native backend (backend = "sdk").
+openrouter = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+# vLLM (self-hosted server): OpenAI-compatible surface plus httpx for
+# /v1/models discovery of max_model_len. The `vllm` server itself is not a
+# client dependency.
+vllm = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+# Hugging Face Inference API / Inference Providers routing.
+huggingface = ["huggingface-hub>=1.12.0"]
 # Deepgram is a real-time voice/audio provider.  The official deepgram-sdk is
 # WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
 # and the Voice Agent.  Install with: pip install llmcore[deepgram]
-deepgram = ["deepgram-sdk>=7.0.0", "websockets>=12.0"]
+deepgram = ["deepgram-sdk>=7.11.0", "websockets>=12.0"]
 # Z.ai (Zhipu AI / GLM). The provider prefers the official 'zai-sdk' (SDK
 # backend, default), and falls back to the 'openai' SDK (OpenAI-compatibility
 # mode) and/or direct 'httpx' calls (native media endpoints: image/audio/OCR/
 # video generation, web search). Install with: pip install llmcore[zai]
-zai = ["zai-sdk>=0.2.0", "openai>=2.31.0", "httpx>=0.27.0"]
+zai = ["zai-sdk>=0.2.3", "openai>=3.0.0,<4", "httpx>=0.27.0"]
 # FriendliAI (Model APIs / Dedicated Endpoints / Container). The provider
 # prefers direct transports — the 'openai' SDK in OpenAI-compatibility mode
 # (default) or raw 'httpx' — because the official 'friendli' SDK's generated
 # response models drop fields outside the published schema (notably
 # reasoning_content). Install the vendor SDK too if you want backend = "sdk".
 # Install with: pip install llmcore[friendli]
-friendli = ["openai>=2.31.0", "httpx>=0.27.0", "friendli>=0.15.1"]
+# NOTE: the friendli-python repo's pyproject reads 0.15.2 but the newest
+# release on PyPI is 0.15.1 — keep the pin at what is installable.
+friendli = ["openai>=3.0.0,<4", "httpx>=0.27.0", "friendli>=0.15.1"]
 # TypeSafe.ai (System One typed judgments: noul/choice/score questions with
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
@@ -188,6 +219,12 @@ all = [
     "llmcore[zai]",
     "llmcore[friendli]",
     "llmcore[typesafe]",
+    "llmcore[mistral]",
+    "llmcore[kimi]",
+    "llmcore[poe]",
+    "llmcore[openrouter]",
+    "llmcore[vllm]",
+    "llmcore[huggingface]",
     "llmcore[brightdata]",
     "llmcore[serper]",
     "llmcore[serpapi]",

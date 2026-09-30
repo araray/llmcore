@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — provider SDK majors (Phase 0 of the modernization plan)
+
+- **`openai` `>=3.0.0,<4`** (was `>=2.31.0`), **`anthropic` `>=1,<2`** (was
+  `>=0.94.0`), **`google-genai` `>=2,<3`** (was `>=1.72.0`), plus
+  `ollama>=0.6.3`, `deepgram-sdk>=7.11.0`, `zai-sdk>=0.2.3`. All three majors
+  were adopted at once because `openai` 3.x and `anthropic` 1.x share the same
+  breaking change: their HTTP layer moved from `httpx` to **httpx2**.
+- **New extras for six providers that had none**: `mistral`, `kimi`, `poe`,
+  `openrouter`, `vllm`, `huggingface`. These import `httpx` but previously
+  worked only because `openai` installed it transitively — under `openai>=3`
+  they would have failed at import. All six are in `[all]`.
+- **TLS behaviour change documented**: httpx2 verifies against the OS trust
+  store, not `certifi`, which can break minimal containers and TLS-inspecting
+  proxies. `CONFIG_REFERENCE.md` gained an "HTTP transport and TLS" section
+  with the `SSL_CERT_FILE` / `SSL_CERT_DIR` escape hatches.
+- **No provider code changes were needed for httpx2**: llmcore only ever passes
+  numeric timeouts to the vendor clients, never `httpx` objects, and no `respx`
+  test routes traffic through a vendor SDK. Verified before bumping.
+- **Z.ai's native SDK backend is now exercised.** `zai-sdk` was never installed,
+  so the provider's preferred transport was dead code in CI. Its tests now pin
+  `backend` explicitly (the pattern the plan's §9 mandates) instead of depending
+  on what happens to be installed, so the SDK can be installed safely — and the
+  SDK backend is validated live for the first time.
+- **CI installs `.[dev,all]`** instead of a hand-maintained extras subset, so a
+  new extra is exercised the moment it is added. The previous `zai-sdk`
+  carve-out is gone, since tests can no longer be bypassed by an installed SDK.
+
+Live-validated after the upgrade: OpenAI (3.22.1), Google Gemini (2.25.0, 47
+models discovered), Z.ai (SDK backend), DeepSeek. Full unit suite green (5164
+passed). **Anthropic 1.9.0 is import- and test-verified but not live-validated —
+no `ANTHROPIC_API_KEY` is available in this environment.**
+
+### Added — provider audit documents
+
+- `docs/PROVIDER_SUPPORT_MATRIX.md` — the ongoing tracker: per provider, the
+  vendor SDK clone with tag/commit/date, our pin, the installed version, the
+  transport shape, and a capability matrix extracted from the provider classes.
+  Section 6 is a runnable refresh procedure.
+- `docs/PROVIDER_MODERNIZATION_PLAN.md` — the phased program that closes the
+  gaps, built on the dual-transport and one-contract principles.
+
 ### Added — FriendliAI provider
 
 - **FriendliAI provider**: first-class `FriendliProvider` covering all three
