@@ -53,6 +53,7 @@ dev venv. A pin that trails the upstream **major** version is a red flag.
 | Hugging Face | `huggingface-hub` | `huggingface_hub` | `main` @ v0.9.0.rc1 | `1092497a9b65` | 2026-09-29 | `>=1.12.0` | 1.12.0 | ✅ pinned |
 | Z.ai (GLM) | `zai-sdk` | `z-ai-sdk-python` | v0.2.3 | `ca5109c0aa9b` | 2026-06-16 | `>=0.2.3` | 0.2.3 | ✅ current (SDK backend live ✓) |
 | FriendliAI | `friendli` | `friendli-python` | v0.15.1 (repo pyproject reads 0.15.2, unreleased) | `f3039e22ec0d` | 2026-09-28 | `>=0.15.1` | 0.15.1 | ✅ current |
+| fal | `fal-client` | `fal` (monorepo: `projects/fal_client`) | **v1.0.3** | `ec46b79` | 2026-09-22 | `>=1.0.0` *(optional backend)* | 1.0.3 | ✅ current (live ✓, direct REST default) |
 | TypeSafe.ai | `typesafe-sdk` | `typesafe-sdk-python` | v0.7.2 | `f078f1e208a0` | 2026-09-26 | *(none — httpx only)* | not installed | ✅ by design |
 | Poe | `fastapi_poe` | `fastapi_poe` | 0.0.83 | `41ffd02e16f2` | 2026-01-21 | *(optional backend)* | not installed | 🟡 SDK path untested |
 | vLLM (self-hosted) | `vllm` (server) | `vllm` | v0.19.1rc0 | `219bb5b8c0dc` | 2026-04-16 | *(server, not a client dep)* | n/a | 🟡 clone stale |
@@ -143,6 +144,7 @@ vendor docs). Columns are the `BaseProvider` surface plus the media APIs.
 | openrouter | `openai (+sdk)` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | ❓ | ❌ |
 | poe | `openai (+native)` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❓ | ❓ | ❓ | ❓ | — | — | — | ❌ |
 | vllm | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | — | ❌ |
+| fal | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | — |
 | deepgram | `sdk` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — |
 | typesafe | `httpx` | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — |
 
@@ -312,6 +314,7 @@ Recorded per audit so "current" always means "we called it".
 | 2026-09-29 | DeepSeek | via `openai` 3.22.1 | ✅ completion + cache/reasoning usage |
 | 2026-09-29 | Mistral | httpx path | ✅ 46 models; `open-mistral-nemo` completion. `mistral-large-latest` → 403 (tier) |
 | 2026-09-29 | Anthropic | `anthropic` 1.9.0 | 🟡 auth + error mapping ✓ through the new major, but every request returns `invalid_request_error: credit balance is too low` — **no completion validated** |
+| 2026-09-30 | fal | direct REST (`httpx`) | ✅ image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. Found 3 real bugs: app-scoped queue paths, storage host + backend, FILM's input schema |
 | 2026-09-20 | FriendliAI | `openai`/`httpx`/`friendli` | ✅ all three backends, streaming, tools, team billing |
 
 ---
@@ -329,4 +332,5 @@ Recorded per audit so "current" always means "we called it".
   runtimes (Colab first), so a remotely served model is just another provider
 - Per-provider guides: [`Friendli_provider_usage.md`](Friendli_provider_usage.md),
   [`Deepgram_provider_usage.md`](Deepgram_provider_usage.md),
-  [`TypeSafe_provider_usage.md`](TypeSafe_provider_usage.md)
+  [`TypeSafe_provider_usage.md`](TypeSafe_provider_usage.md),
+  [`Fal_provider_usage.md`](Fal_provider_usage.md)

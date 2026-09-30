@@ -3,9 +3,10 @@
 Generative image, audio and video as a first-class `llmcore` subsystem, plus the
 provider adapters that sit behind it.
 
-- **Status:** **M1–M4 implemented** (core subsystem; Deepgram, OpenAI and
-  Gemini migrated behind the protocols, including the first async-job
-  provider). M5 onward not started — see §5.
+- **Status:** **M1–M5 implemented** (core subsystem; Deepgram, OpenAI and
+  Gemini migrated behind the protocols, plus fal as the first marketplace
+  adapter). The provider-neutrality gate at M5 passed: **the abstraction did
+  not have to bend.** M6 onward not started — see §5.
 - **Written:** 2026-09-29
 - **Primary input:** `/av/data/repos/docs/llmcore/researches/image-audio-video_providers_2026september.md`
   (the provider survey and priority matrix; this document is the llmcore-side design)
@@ -271,7 +272,7 @@ Async jobs need a callback path. A generic receiver — not per-provider:
 Reuse llmcore's storage layer rather than inventing one. `ArtifactStore`
 persists bytes to a configured backend (filesystem by default, with the existing
 SQLite/Postgres metadata store for the index), keyed by
-`checksum_sha256`. Policy: `materialize = "always" | "on_expiry" | "never"`.
+`checksum_sha256`. Policy: `artifact_materialize = "always" | "on_expiry" | "never"`.
 Default `on_expiry` — fetch and store before the provider URL dies.
 
 ---
@@ -338,7 +339,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M2** ✅ | Refactor **Deepgram** behind the audio protocols; keep its public methods. Added the `models_multimodal` ↔ `MediaArtifact` bridge (§4.3). | Landed 2026-09-30, 74 tests. Live: TTS → artifact → ASR round trip, plus streaming TTS |
 | **M3** ✅ | **OpenAI** media: images generate/edit, TTS (+streaming), ASR, and provider-level embeddings. Realtime audio deferred to a later phase with Gemini Live. | Landed 2026-09-30, 42 tests. Live: TTS → artifact → ASR round trip, streaming TTS, embeddings |
 | **M4** ✅ | **Google** media: images (dual transport), **Veo** video (async job), native TTS, embeddings | Landed 2026-09-30, 52 tests. Live: Veo job submitted + polled through `MediaJobManager`; 2 MB image; 112 KB PCM TTS. **`MediaJob` validated against a real vendor — no changes to the abstraction were needed.** |
-| **M5** | **fal** — queue/webhook lifecycle, URL inputs, video, SFX, FILM interpolation | The provider-neutrality test: if the abstraction bends here, fix the abstraction |
+| **M5** ✅ | **fal** — queue lifecycle, URL inputs, video, SFX, music, FILM interpolation; 9 capabilities, all async-job | Landed 2026-09-30, 79 tests. Live: image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. **The provider-neutrality test passed — no core type changed.** See §5.2 |
 | **M6** | **ElevenLabs** — batch + realtime STT, TTS, SFX, music, voice design | Consent/provenance as first-class metadata |
 | **M7** | **Replicate** — one generic prediction adapter + model-schema descriptors | Explicitly *not* a class per model |
 | **M8** | **Hugging Face Inference Endpoints** — configurable endpoint/schema adapter | Custom weights / private repos path |
@@ -370,6 +371,69 @@ Three provider-level facts did emerge, all from live calls rather than docs:
 3. **Veo cannot be cancelled.** `cancel_media_job()` raises rather than
    reporting a cancellation that did not happen, because a false success would
    let a caller believe billing had stopped.
+
+### 5.2 What M5 changed about the design
+
+**Nothing in the core abstraction** — which is the answer this phase existed to
+get. fal is structurally unlike the first four adapters: a marketplace rather
+than a first-party vendor, every capability queued rather than only the slow
+ones, inputs addressed by URL rather than by bytes, and output schemas that vary
+per model instead of following one house style. It needed no new field on
+`MediaJob`, no new `MediaExecution` member, and no change to `MediaJobManager`.
+
+Three existing design decisions did the work:
+
+1. **Execution class is per capability, not per provider.** `image_generate` is
+   `REQUEST_RESPONSE` on OpenAI and `ASYNC_JOB` on fal. Callers that use
+   `media.wait()` never notice, because the router already returns whichever of
+   `MediaResult` / `MediaJob` the provider reports.
+2. **`provider_metadata` absorbed everything fal-specific** — the endpoint path,
+   the raw submission, the result and cancel URLs, the cancellation caveat.
+   None of it leaked into the shared types.
+3. **`MediaRef` already distinguished remote from local.** A fal input that is
+   already a URL passes straight through; only local bytes are uploaded. No
+   artifact round-trips through the process just to be re-uploaded.
+
+Four provider-level facts emerged, all of them from live calls rather than docs:
+
+1. **The queue is namespaced by application, not by model path.** A request
+   submitted to `fal-ai/flux/schnell` is tracked at `fal-ai/flux/requests/{id}`;
+   polling the full model path returns `405`. The adapter therefore prefers the
+   absolute `status_url` / `response_url` / `cancel_url` that fal returns at
+   submission, and only falls back to a reconstructed, app-scoped path.
+   *Generalizable rule: when a provider hands back URLs, use them — do not
+   rebuild routes it owns.*
+2. **Storage is a separate host with two backends.** Uploads go to
+   `rest.fal.ai`, not `fal.run` (which reads `storage/upload` as an owner/app
+   pair and 404s). On that host, `storage_type=gcs` answers *"Invalid storage
+   type"* for newer accounts, which use `fal-cdn-v3`. The adapter mirrors the
+   official client and tries CDN v3 first, then the signed-URL flow, so it works
+   across account vintages rather than for whoever wrote it.
+3. **Cancellation is a request, not a guarantee.** fal answers
+   `202 CANCELLATION_REQUESTED` and may still complete work already running, and
+   a `400 ALREADY_COMPLETED` means the job finished — not that the call failed.
+   The adapter treats that 400 as success, fetches the result, and records the
+   caveat in `provider_metadata` rather than implying billing stopped. This is
+   the *third* distinct cancellation semantic across adapters (Gemini: refuses;
+   Deepgram: n/a; fal: best-effort) and the handle models all three.
+4. **Model input schemas are per model, not per capability.** FILM takes
+   `start_image_url` / `end_image_url`, not a frame list. Endpoint paths are
+   configurable per capability under `[providers.fal.models]` precisely because
+   the gallery moves faster than a release cycle.
+5. **The default `ON_EXPIRY` materialization policy does not protect fal
+   artifacts.** fal CDN URLs are not permanent, but fal does not publish a TTL,
+   so `MediaArtifact.expires_at` is `None` and the policy has nothing to fire
+   on. The adapter deliberately does **not** invent an expiry — a fabricated
+   timestamp is worse than a missing one, because callers would trust it.
+   Documented instead: pass `force=True` or set `artifact_materialize = "always"` when
+   fal output must survive. *Open design question for a later phase: whether
+   `ON_EXPIRY` should treat "provider known to expire artifacts, TTL unknown"
+   as a third state rather than collapsing it into "no expiry".*
+
+One open consequence: fal supports **webhooks** (`?fal_webhook=`), which the
+adapter can already send but nothing in llmcore can yet receive. That receiver
+is M9, and until it exists webhook delivery is configuration a caller supplies
+and handles out-of-band.
 
 ---
 

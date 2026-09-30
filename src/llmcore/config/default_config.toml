@@ -623,6 +623,62 @@ max_retries = 2
   # /detokenize and /chat/render are documented but currently return 404 on
   # Model APIs; they are available on Dedicated Endpoints / Container.
 
+  # --- fal.ai Provider (generative media) ---
+  # fal is a MODEL MARKETPLACE: every model is its own HTTP endpoint behind one
+  # durable queue, so a single adapter reaches image, video, audio, SFX and
+  # frame-interpolation families that would otherwise need a vendor each.
+  #
+  # Media-only by design: fal has no chat-completions API, so
+  # chat_completion() raises. The real surface is `llm.media`:
+  #   job = await llm.media.video.generate("a drone shot over dunes", provider="fal")
+  #   result = await llm.media.wait(job)
+  #
+  # EVERY fal request is queued — even image generation, which is
+  # request/response elsewhere. The provider therefore returns a MediaJob for
+  # every capability and reports ASYNC_JOB execution, so callers are never
+  # surprised by a job handle.
+  #
+  # Install with: pip install llmcore[fal]
+  # Docs: https://fal.ai/docs/llms.txt   Gallery: https://fal.ai/models
+  [providers.fal]
+  # type = "fal"  # auto-detected from section name (alias: fal_ai)
+
+  # API Key: set via environment variable for security.
+  # fal's own convention is FAL_KEY; FAL_API_KEY is also accepted.
+  # api_key = "..."
+  # api_key_env_var = "FAL_KEY"
+
+  # Transport backend: "httpx" (direct REST, default) or "sdk" (fal-client).
+  # The queue protocol is four endpoints, so the SDK is opt-in.
+  # backend = "httpx"
+
+  # Request timeout in seconds. Video jobs are long; the queue does the waiting,
+  # but each poll still needs headroom.
+  timeout = 300
+
+  # Optional webhook. When set, submissions register this callback with fal.
+  # NOTE: llmcore has no webhook receiver yet (spec phase M9), so you must run
+  # and reconcile the endpoint yourself. Polling is the supported path.
+  # webhook_url = "https://your-server.example.com/fal-webhook"
+
+  # Queue root (normally no need to change).
+  # base_url = "https://queue.fal.run"
+
+  # --- Per-capability endpoints ---
+  # fal model ids are ENDPOINT PATHS, and the gallery changes constantly, so
+  # llmcore ships only a small starting set rather than a catalog. Override any
+  # capability here, or per call with `model="owner/model/variant"`.
+  [providers.fal.models]
+  # image_generate = "fal-ai/flux/schnell"
+  # image_edit = "fal-ai/flux-pro/kontext"
+  # image_upscale = "fal-ai/clarity-upscaler"
+  # video_generate = "fal-ai/minimax-video"
+  # video_interpolate = "fal-ai/film"
+  # sfx = "fal-ai/mmaudio-v2"
+  # music = "fal-ai/stable-audio"
+  # tts = "fal-ai/kokoro"
+  # asr = "fal-ai/whisper"
+
   # --- Ollama Provider ---
   # For locally running models via Ollama.
   [providers.ollama]

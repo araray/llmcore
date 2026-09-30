@@ -28,6 +28,7 @@ from .base import BaseProvider, ContextPayload
 from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
+from .fal_provider import FalProvider
 from .friendli_provider import FriendliProvider
 from .gemini_provider import GeminiProvider
 from .huggingface_provider import HuggingFaceProvider
@@ -68,6 +69,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "zai": ZaiProvider,
     # FriendliAI: Model APIs (serverless), Dedicated Endpoints, and Container.
     "friendli": FriendliProvider,
+    # fal.ai: generative-media marketplace (image/video/audio) behind one
+    # queue. Media-only — chat_completion() intentionally raises.
+    "fal": FalProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
@@ -77,6 +81,8 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "jev": TypeSafeProvider,
     # Alias: moonshot → kimi (Moonshot AI is the vendor; Kimi is the brand).
     "moonshot": KimiProvider,
+    # Alias for fal.ai: fal_ai.
+    "fal_ai": FalProvider,
     # Aliases for FriendliAI: friendliai (brand) / friendli_ai.
     "friendliai": FriendliProvider,
     "friendli_ai": FriendliProvider,
@@ -107,6 +113,7 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "zhipuai": "zai",
     "bigmodel": "zai",
     "jev": "typesafe",
+    "fal_ai": "fal",
     "friendliai": "friendli",
     "friendli_ai": "friendli",
 }
