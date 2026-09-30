@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — media subsystem core (M1)
+
+- **`llmcore.media`**, reached through `llm.media`: a sibling subsystem to chat
+  providers and search providers for generative image, audio and video.
+  Implements phase M1 of `docs/MEDIA_SUBSYSTEM_SPEC.md`; no vendor adapters yet,
+  which is the gate the spec requires before any provider work lands.
+- **Three execution classes, not one** — `MediaResult` for request/response,
+  `AsyncIterator[bytes]` for streams, `MediaJob` for long-running work. Image
+  generation, TTS and video generation genuinely differ, and collapsing them
+  into one shape is the modelling mistake the design avoids.
+- **Types**: `MediaKind`, `MediaCapability` (19 capabilities), `MediaExecution`,
+  `MediaJobStatus`, `MediaRef` (url/path/bytes/artifact inputs, so callers never
+  hand-roll base64), `MediaArtifact` (with `expires_at` + `checksum_sha256`,
+  because every aggregator returns short-lived URLs), `MediaProvenance`,
+  `MediaUsage` (keeps the vendor's native billing units rather than inventing a
+  token count), `MediaResult` and `MediaJob`.
+- **Capability protocols** (`typing.Protocol`, runtime-checkable) — routers
+  discover what an adapter can do with `isinstance`, so routing logic never
+  names a provider. A capability declared but not backed by its protocol is
+  dropped with a warning rather than failing at call time.
+- **`MediaManager`** with per-modality routers (`images`, `audio`, `video`),
+  capability discovery (`capabilities()`, `who_can()`), and a documented
+  resolution order: explicit provider → explicit model → `[media.routing]` →
+  built-in defaults → any capable adapter. **Adapters are the chat providers**:
+  any `[providers.*]` instance implementing the protocols becomes a media
+  adapter, so there is one credential per vendor and nothing to duplicate.
+- **`MediaJobManager`** owns polling, capped exponential backoff with jitter,
+  timeouts and cancellation, so no adapter writes its own poll loop. A timeout
+  raises **without cancelling the job** — the handle stays valid and can be
+  waited on again, because an expensive video generation must not be discarded
+  over a client-side deadline.
+- **`ArtifactStore`** — content-addressed, sharded by SHA-256, atomic publish,
+  with `always` / `on_expiry` (default) / `never` materialization policies. The
+  byte fetcher is injected, so the store has no hard dependency on `httpx`.
+- **`FakeMediaProvider`** ships inside the package (not under `tests/`) so
+  downstream projects building adapters can use it too. It implements every
+  protocol, and is what the 134 new tests run against — no network, no account.
+- **`[media]` config section** (artifact policy/path, `[media.routing]`
+  preferences per capability, `[media.jobs]` poll/timeout policy). Entirely
+  optional: omit it and `llm.media` still works on built-in defaults.
+- **Backward compatible**: `BaseProvider`'s five media methods and the
+  `models_multimodal` result types are untouched. Providers gain routing when
+  they are migrated in M2 onward; until then `llm.media.adapter_names` is empty
+  and reports so honestly.
+
+### Added — dynamic provider registration
+
+- **`ProviderManager.register_instance()` / `unregister_instance()`** plus
+  `is_ephemeral()` / `ephemeral_instances`. Providers were previously only
+  constructible during `__init__`; subsystems that *create* endpoints need to
+  add one afterwards. This is the single capability shared by the media program
+  and the remote-runtime program (`docs/COLAB_RUNTIME_SPEC.md`), where a Colab
+  VM's OpenAI-compatible endpoint is registered as a `vllm` instance.
+- Guards that matter: a name collision raises unless `replace=True` (so a live
+  provider is never silently swapped out from under its callers), the configured
+  default provider cannot be unregistered, construction failures surface as
+  `ConfigError`, and a failing `close()` during unregister is logged rather than
+  blocking teardown.
+
+### Fixed
+
+- **Job-polling backoff could overflow.** `2 ** attempt` stops converting to
+  float past ~1024 polls, so the wait loop would die with `OverflowError` — a
+  multi-hour video job polled every few seconds would actually reach that. The
+  exponent is now capped; regression tested at 10,000 polls.
+
 ### Added — media and remote-runtime specifications
 
 - `docs/MEDIA_SUBSYSTEM_SPEC.md` — design and specification for a first-class

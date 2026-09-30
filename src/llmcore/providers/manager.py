@@ -145,6 +145,7 @@ class ProviderManager:
     """
 
     _providers: dict[str, BaseProvider]
+    _ephemeral_instances: set[str]
     _config: ConfyConfig
     _default_provider_name: str
     _event_logger: Any | None
@@ -175,6 +176,9 @@ class ProviderManager:
         """
         self._config = config
         self._providers = {}
+        # Instances registered at runtime by a subsystem (media adapters, remote
+        # compute runtimes) rather than loaded from [providers.*].
+        self._ephemeral_instances: set[str] = set()
         self._log_raw_payloads_override = log_raw_payloads
         self._event_logger = event_logger
         self._initialized = False
@@ -714,6 +718,121 @@ class ProviderManager:
 
         if not self._providers:
             logger.warning("No provider instances were successfully loaded.")
+
+    def register_instance(
+        self,
+        name: str,
+        provider_type: str,
+        config: dict[str, Any],
+        *,
+        ephemeral: bool = False,
+        replace: bool = False,
+    ) -> BaseProvider:
+        """Build and register a provider instance at runtime.
+
+        Providers are normally constructed during ``__init__`` from
+        ``[providers.*]``.  This adds one afterwards, which is what subsystems
+        that *create* endpoints need: a remote GPU runtime that has just booted
+        (see ``docs/COLAB_RUNTIME_SPEC.md``) or a media adapter discovered
+        dynamically.
+
+        Args:
+            name: Instance name callers will pass to ``get_provider()``.
+            provider_type: A key in :data:`PROVIDER_MAP`.
+            config: Provider configuration, as a ``[providers.<name>]`` section
+                would supply it.
+            ephemeral: Mark the instance as owned by a subsystem, so
+                ``close_providers()`` knows it was not user-configured. Purely
+                informational today; consumed by the runtimes subsystem.
+            replace: Allow replacing an existing instance of the same name.
+                Without it, a collision raises rather than silently swapping a
+                live provider out from under its callers.
+
+        Returns:
+            The constructed provider instance.
+
+        Raises:
+            ConfigError: If the type is unknown, the name collides without
+                *replace*, or construction fails.
+        """
+        key = name.lower()
+        provider_cls = PROVIDER_MAP.get(provider_type.lower())
+        if provider_cls is None:
+            raise ConfigError(
+                f"Cannot register provider '{key}': type '{provider_type}' is not supported. "
+                f"Known types: {', '.join(sorted(PROVIDER_MAP))}"
+            )
+        if key in self._providers and not replace:
+            raise ConfigError(
+                f"Provider instance '{key}' already exists. Pass replace=True to swap it."
+            )
+
+        instance_config = dict(config)
+        instance_config["_instance_name"] = key
+        log_raw = (
+            self._log_raw_payloads_override
+            if self._log_raw_payloads_override
+            else self._config.get("llmcore.log_raw_payloads", False)
+        )
+        try:
+            provider = provider_cls(instance_config, log_raw_payloads=log_raw)
+        except Exception as e:
+            raise ConfigError(f"Failed to register provider '{key}': {e}") from e
+
+        previous = self._providers.get(key)
+        self._providers[key] = provider
+        if ephemeral:
+            self._ephemeral_instances.add(key)
+        else:
+            self._ephemeral_instances.discard(key)
+        logger.info(
+            "Registered provider instance '%s' (type=%s, ephemeral=%s)%s.",
+            key,
+            provider_type,
+            ephemeral,
+            " replacing an existing instance" if previous is not None else "",
+        )
+        return provider
+
+    async def unregister_instance(self, name: str, *, close: bool = True) -> bool:
+        """Remove a dynamically registered provider instance.
+
+        Args:
+            name: The instance name.
+            close: Await the provider's ``close()`` before dropping it.
+
+        Returns:
+            ``True`` if an instance was removed, ``False`` if none existed.
+
+        Raises:
+            ConfigError: If *name* is the configured default provider, since
+                removing it would leave the manager unable to serve a default.
+        """
+        key = name.lower()
+        if key == self._default_provider_name:
+            raise ConfigError(
+                f"Refusing to unregister '{key}': it is the configured default provider."
+            )
+        provider = self._providers.pop(key, None)
+        self._ephemeral_instances.discard(key)
+        if provider is None:
+            return False
+        if close:
+            try:
+                await provider.close()
+            except Exception as e:  # noqa: BLE001 - teardown must not raise
+                logger.error("Error closing provider '%s' during unregister: %s", key, e)
+        logger.info("Unregistered provider instance '%s'.", key)
+        return True
+
+    def is_ephemeral(self, name: str) -> bool:
+        """Whether *name* was registered at runtime by a subsystem."""
+        return name.lower() in self._ephemeral_instances
+
+    @property
+    def ephemeral_instances(self) -> list[str]:
+        """Names of every runtime-registered instance."""
+        return sorted(self._ephemeral_instances)
 
     def get_provider(self, name: str | None = None) -> BaseProvider:
         """
