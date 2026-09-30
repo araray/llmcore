@@ -28,6 +28,7 @@ from .base import BaseProvider, ContextPayload
 from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
 from .deepseek_provider import DeepSeekProvider
+from .elevenlabs_provider import ElevenLabsProvider
 from .fal_provider import FalProvider
 from .friendli_provider import FriendliProvider
 from .gemini_provider import GeminiProvider
@@ -72,6 +73,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     # fal.ai: generative-media marketplace (image/video/audio) behind one
     # queue. Media-only — chat_completion() intentionally raises.
     "fal": FalProvider,
+    # ElevenLabs: voice/audio provider (TTS, streaming TTS, STT, SFX, music,
+    # voice design). Media-only — chat_completion() intentionally raises.
+    "elevenlabs": ElevenLabsProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
@@ -83,6 +87,8 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "moonshot": KimiProvider,
     # Alias for fal.ai: fal_ai.
     "fal_ai": FalProvider,
+    # Alias for ElevenLabs: eleven_labs.
+    "eleven_labs": ElevenLabsProvider,
     # Aliases for FriendliAI: friendliai (brand) / friendli_ai.
     "friendliai": FriendliProvider,
     "friendli_ai": FriendliProvider,
@@ -114,6 +120,7 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "bigmodel": "zai",
     "jev": "typesafe",
     "fal_ai": "fal",
+    "eleven_labs": "elevenlabs",
     "friendliai": "friendli",
     "friendli_ai": "friendli",
 }

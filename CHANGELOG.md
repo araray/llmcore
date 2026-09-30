@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — ElevenLabs provider, and consent as first-class metadata (M6)
+
+- **New `elevenlabs` provider** (alias `eleven_labs`): TTS, streaming TTS, batch
+  STT, sound effects, music and voice design. Media-only — `chat_completion()`
+  raises with a pointer to `llm.media`.
+- **New `VoiceConsent` type on `MediaProvenance`.** Synthetic speech raises a
+  question no other media kind does: a generated image resembles no one in
+  particular, but a cloned voice belongs to a person who either did or did not
+  agree to it. ElevenLabs tracks that state only on the *voice* resource, so
+  llmcore resolves it (cached per voice) and attaches it to the artifact —
+  a caller can refuse audio from an unverified clone without a second API call.
+- **`verification_satisfied` is deliberately tri-state.** `None` means *the
+  provider said nothing*, which is not `False`. Collapsing the two would force a
+  default — silently clearing unknown voices, or refusing audio from every
+  provider that reports nothing — and that is policy belonging to the caller.
+  The same reasoning drives three related choices: a failed consent lookup
+  yields `provider_declared=False` with `None` fields rather than raising (you
+  keep your audio, and the `None`s read as *we do not know*); designed voices
+  state `category="generated"` explicitly rather than leaving consent open; SFX
+  and music carry no consent record at all, because nothing there is a voice.
+- **New `VoiceDesignProvider` protocol.** `VOICE_DESIGN` had been mapped to
+  `TTSProvider` as a placeholder since M1. Voice design is not TTS — it returns
+  candidate *voices* from a description, each preview carrying the id needed to
+  keep it. The M1 protocol-coverage invariant caught the placeholder the moment
+  the real protocol landed.
+- **Dual transport**: direct REST against `api.elevenlabs.io` by default, with
+  the `elevenlabs` SDK as an opt-in backend. New `elevenlabs` extra.
+- Default models verified against the live `/v1/models` lineup rather than
+  assumed: `eleven_v4` for TTS (GA, standard rate, 85 languages), `scribe_v1`
+  for STT, `music_v2_5`, `eleven_text_to_sound_v2`, `eleven_ttv_v3`.
+
+### Fixed — ElevenLabs plan gating was reported as an authentication failure
+
+Found by live validation: a perfectly valid API key on a free plan returns
+`402 paid_plan_required` or `403 feature_not_available` for music and voice
+design. The first implementation mapped that 403 to *"authentication failed —
+check ELEVENLABS_API_KEY"*, which would send a caller hunting a credential
+problem they do not have. Both are now reported as plan gating, stating
+explicitly that the key is valid. A genuine `403` still reads as auth.
+
+### Changed — ElevenLabs SFX refuses a video reference rather than ignoring it
+
+The `SFXProvider` protocol accepts a `video` reference for video-conditioned
+foley; ElevenLabs sound generation is text-conditioned only. Passing one raises,
+because silently dropping it would return audio unrelated to the footage the
+caller supplied, with nothing to indicate why.
+
+### Not included — ElevenLabs realtime STT
+
+`ASR_STREAM` routing names ElevenLabs, but realtime transcription is duplex —
+the caller pushes audio *and* consumes events — and needs the session shape
+Deepgram established. The adapter deliberately does **not** declare
+`asr_stream`, so routing falls through to Deepgram rather than advertising a
+capability that would fail.
+
 ### Added — fal provider: the media marketplace adapter (M5)
 
 - **New `fal` provider** (alias `fal_ai`), llmcore's broadest single media

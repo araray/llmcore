@@ -34,6 +34,7 @@ from .models import (
     MediaRef,
     MediaResult,
     MediaUsage,
+    VoiceConsent,
 )
 from .protocols import (
     CAPABILITY_PROTOCOLS,
@@ -52,6 +53,7 @@ from .protocols import (
     VideoEditProvider,
     VideoGenerationProvider,
     VideoInterpolationProvider,
+    VoiceDesignProvider,
 )
 from .routers import AudioRouter, ImageRouter, VideoRouter
 
@@ -69,6 +71,7 @@ __all__ = [
     "MediaRef",
     "MediaArtifact",
     "MediaProvenance",
+    "VoiceConsent",
     "MediaUsage",
     "MediaResult",
     "MediaJob",
@@ -90,6 +93,7 @@ __all__ = [
     "ImageUpscaleProvider",
     "OCRMediaProvider",
     "TTSProvider",
+    "VoiceDesignProvider",
     "StreamingTTSProvider",
     "ASRProvider",
     "StreamingASRProvider",

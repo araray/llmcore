@@ -261,6 +261,23 @@ class FakeMediaProvider:
         self._record("generate_sfx_media", {"prompt": prompt, "model": model, **kwargs})
         return self._result(MediaCapability.SFX, prompt or "sfx", model=model, kind=MediaKind.AUDIO)
 
+    async def design_voice_media(
+        self,
+        description: str,
+        *,
+        model: str | None = None,
+        text: str | None = None,
+        **kwargs: Any,
+    ) -> MediaResult | MediaJob:
+        """Produce fake voice previews."""
+        self._record(
+            "design_voice_media",
+            {"description": description, "model": model, "text": text, **kwargs},
+        )
+        return self._result(
+            MediaCapability.VOICE_DESIGN, description, model=model, kind=MediaKind.AUDIO
+        )
+
     # --- video ---
 
     async def generate_video_media(
