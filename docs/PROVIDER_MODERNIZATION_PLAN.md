@@ -295,6 +295,26 @@ Per provider touched:
 
 ---
 
+## 11. Companion specifications
+
+Two capability programs are specified separately because they add subsystems
+rather than extending providers:
+
+- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — a first-class
+  `llmcore.media` subsystem (image/audio/video), the capability protocols
+  providers implement, async `MediaJob` lifecycle, capability-oriented model
+  cards, and the vendor rollout (Deepgram refactor → OpenAI → Google/Veo → fal →
+  ElevenLabs → Replicate → HF Endpoints). This **supersedes** Phase 4 of this
+  plan (Gemini media) and Phase 1.3's `generate_video()` placeholder, which
+  become M4 and part of M1 there.
+- [`COLAB_RUNTIME_SPEC.md`](COLAB_RUNTIME_SPEC.md) — a `llmcore.runtimes`
+  subsystem that provisions and controls remote GPU runtimes (Colab first) and
+  attaches the resulting OpenAI-compatible endpoint as a provider instance.
+  Requires the only new `ProviderManager` capability either program needs:
+  dynamic instance registration.
+
+---
+
 ## Appendix A — capability extraction script
 
 Regenerates matrix §4/§4.1 from the source rather than by hand:

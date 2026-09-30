@@ -44,9 +44,9 @@ dev venv. A pin that trails the upstream **major** version is a red flag.
 | Provider | SDK package | Clone (`/av/avalon/xrepos/…`) | Upstream tag | Upstream commit | Tag date | llmcore pin | Installed | Status |
 |---|---|---|---|---|---|---|---|:---:|
 | OpenAI | `openai` | `openai-python` | **v3.22.1** | `58aca1dcfd8d` | 2026-09-30 | `>=3.0.0,<4` | 3.22.1 | ✅ current (live ✓) |
-| Anthropic | `anthropic` | `anthropic-sdk-python` | **v1.9.0** | `a7285e919ab7` | 2026-09-28 | `>=1,<2` | 1.9.0 | 🟡 current, **not live-validated** (no API key) |
+| Anthropic | `anthropic` | `anthropic-sdk-python` | **v1.9.0** | `a7285e919ab7` | 2026-09-28 | `>=1,<2` | 1.9.0 | 🟡 transport ✓, **no completion** — account credit balance is zero |
 | Google Gemini | `google-genai` | `python-genai` | **v2.25.0** | `f15d1482d747` | 2026-09-29 | `>=2,<3` | 2.25.0 | ✅ current (live ✓, 47 models) |
-| Mistral | `mistralai` | `mistral-client-python` | **v3.0.0** | `e8dfa1c8a2d0` | 2026-09-28 | *(none — httpx only)* | not installed | 🟠 SDK unused |
+| Mistral | `mistralai` | `mistral-client-python` | **v3.0.0** | `e8dfa1c8a2d0` | 2026-09-28 | *(none — httpx only)* | not installed | 🟠 SDK unused (httpx path live ✓, 46 models) |
 | OpenRouter | `openrouter` | `openrouter_python_sdk` | **v1.3.9** | `fd5ffce2995d` | 2026-09-30 | *(optional backend)* | not installed | 🟠 major behind + absent |
 | Ollama | `ollama` | `ollama-python` | v0.6.3 | `8785556559ec` | 2026-09-28 | `>=0.6.3` | 0.6.3 | ✅ current |
 | Deepgram | `deepgram-sdk` | `deepgram-python-sdk` | v7.11.0 | `a379a7f37b11` | 2026-09-28 | `>=7.11.0` | 7.11.0 | ✅ current |
@@ -114,7 +114,7 @@ lookups, context budgets and cost estimates.
 | openrouter | `openai/gpt-4o-mini` | 🔴 stale |
 | poe | `GPT-4o-Mini` | 🔴 stale |
 | vllm | `meta-llama/Llama-3.1-8B-Instruct` | 🟡 example value, self-hosted |
-| mistral | `mistral-large-latest` | ✅ alias, self-updating |
+| mistral | `mistral-large-latest` | 🔴 alias resolves, but **403 — not in this account's tier**; `open-mistral-nemo` verified working |
 | huggingface | `meta-llama/Llama-3.3-70B-Instruct` | 🟡 stale example |
 | deepinfra | `deepseek-ai/DeepSeek-V3` | 🟡 V3.2 is served |
 | kimi | `kimi-k2.6` | ✅ current at last provider audit |
@@ -300,13 +300,33 @@ any provider change.
 
 ---
 
-## 7. Related documents
+## 7. Live validation log
+
+Recorded per audit so "current" always means "we called it".
+
+| Date | Provider | SDK | Result |
+|---|---|---|---|
+| 2026-09-29 | OpenAI | `openai` 3.22.1 | ✅ completion + usage |
+| 2026-09-29 | Google Gemini | `google-genai` 2.25.0 | ✅ completion; 47 models discovered |
+| 2026-09-29 | Z.ai | `zai-sdk` 0.2.3 (**native SDK backend**) | ✅ completion + reasoning tokens |
+| 2026-09-29 | DeepSeek | via `openai` 3.22.1 | ✅ completion + cache/reasoning usage |
+| 2026-09-29 | Mistral | httpx path | ✅ 46 models; `open-mistral-nemo` completion. `mistral-large-latest` → 403 (tier) |
+| 2026-09-29 | Anthropic | `anthropic` 1.9.0 | 🟡 auth + error mapping ✓ through the new major, but every request returns `invalid_request_error: credit balance is too low` — **no completion validated** |
+| 2026-09-20 | FriendliAI | `openai`/`httpx`/`friendli` | ✅ all three backends, streaming, tools, team billing |
+
+---
+
+## 8. Related documents
 
 - [`PROVIDER_MODERNIZATION_PLAN.md`](PROVIDER_MODERNIZATION_PLAN.md) — the phased
   plan that closes the gaps listed in §5
 - [`model_cards.md`](model_cards.md) — card schema, the canonical
   reasoning-effort vocabulary, and the cardctl workflow
 - [`CONFIG_REFERENCE.md`](CONFIG_REFERENCE.md) — every provider config key
+- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — design/spec for the
+  image/audio/video subsystem and its provider adapters
+- [`COLAB_RUNTIME_SPEC.md`](COLAB_RUNTIME_SPEC.md) — design/spec for remote GPU
+  runtimes (Colab first), so a remotely served model is just another provider
 - Per-provider guides: [`Friendli_provider_usage.md`](Friendli_provider_usage.md),
   [`Deepgram_provider_usage.md`](Deepgram_provider_usage.md),
   [`TypeSafe_provider_usage.md`](TypeSafe_provider_usage.md)

@@ -1079,6 +1079,8 @@ from llmcore import (
 - [FriendliAI provider usage](docs/Friendli_provider_usage.md)
 - [Provider support matrix](docs/PROVIDER_SUPPORT_MATRIX.md) — SDK/API versions we track per provider, plus the capability matrix
 - [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) — phased plan to close the gaps in that matrix
+- [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) — design for first-class image/audio/video generation
+- [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) — design for serving models on remote GPUs (Colab first)
 - [TypeSafe.ai provider usage](docs/TypeSafe_provider_usage.md)
 - [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md)
 - [Model cards](docs/model_cards.md)

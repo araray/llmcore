@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — media and remote-runtime specifications
+
+- `docs/MEDIA_SUBSYSTEM_SPEC.md` — design and specification for a first-class
+  `llmcore.media` subsystem: `MediaArtifact` / `MediaUsage` / `MediaJob`,
+  capability `Protocol`s per modality, the three execution classes
+  (request/response, byte stream, async job), capability-oriented model cards
+  with the aggregator sourcing split, generic webhooks with polling fallback,
+  an artifact store, a selection policy, and a nine-phase vendor rollout
+  (Deepgram refactor → OpenAI → Google/Veo → fal → ElevenLabs → Replicate → HF
+  Endpoints → direct specialists). Includes a backward-compatibility path that
+  keeps `BaseProvider`'s five media methods and the `models_multimodal` types
+  working. Notably corrects the source research: **OpenAI's Sora video APIs
+  were deprecated in `openai` 3.1**, so frontier video comes from Veo and
+  fal-hosted models instead.
+- `docs/COLAB_RUNTIME_SPEC.md` — design and specification for a
+  `llmcore.runtimes` subsystem that provisions and controls remote GPU runtimes
+  (Google Colab first) and attaches the resulting OpenAI-compatible endpoint as
+  a provider instance, so a remotely served model is reachable through the
+  normal `llm.chat(provider_name=...)` path. Built on the study of agent-lens's
+  implemented design and BellaVox's process; proposes that llmcore own the
+  abstraction and agent-lens delegate to it. Adds a spend-ceiling
+  (`max_lifetime_minutes`) on top of the reference idle reaper, since an idle
+  reaper does not protect against a busy runaway runtime.
+
+Both documents are specification only — no implementation.
+
 ### Changed — provider SDK majors (Phase 0 of the modernization plan)
 
 - **`openai` `>=3.0.0,<4`** (was `>=2.31.0`), **`anthropic` `>=1,<2`** (was
