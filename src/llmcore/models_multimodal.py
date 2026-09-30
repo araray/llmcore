@@ -8,10 +8,32 @@ media generation / transcription methods.
 
 from __future__ import annotations
 
+# Used by the media-subsystem bridge at the bottom of this module.
+import base64 as _base64
+import hashlib as _hashlib
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+_AUDIO_MIME_TYPES: dict[str, str] = {
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "linear16": "audio/wav",
+    "opus": "audio/opus",
+    "flac": "audio/flac",
+    "aac": "audio/aac",
+    "pcm": "audio/L16",
+    "mulaw": "audio/basic",
+    "alaw": "audio/basic",
+}
+_IMAGE_MIME_TYPES: dict[str, str] = {
+    "png": "image/png",
+    "jpeg": "image/jpeg",
+    "jpg": "image/jpeg",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
 
 # ---------------------------------------------------------------------------
 # Text-to-Speech (TTS) Result
@@ -440,3 +462,155 @@ class TextAnalysisResult(BaseModel):
     raw: dict[str, Any] = Field(
         default_factory=dict, description="Full provider response."
     )
+
+
+# =============================================================================
+# MEDIA SUBSYSTEM BRIDGE
+# =============================================================================
+#
+# The types above predate `llmcore.media` and are public API: seven providers
+# return them today. Rather than replace them, each gains a conversion to and
+# from `llmcore.media.MediaArtifact`, so the legacy provider methods and the
+# media routers describe the same asset. See docs/MEDIA_SUBSYSTEM_SPEC.md §4.3.
+#
+# Imports are local to each method so this module keeps no import-time
+# dependency on the media subsystem.
+
+
+def _media_artifact(kind: str, **fields: Any) -> Any:
+    """Build a :class:`~llmcore.media.MediaArtifact` without a module-level import."""
+    from .media.models import MediaArtifact, MediaKind
+
+    return MediaArtifact(kind=MediaKind(kind), **fields)
+
+
+def _speech_to_artifact(self: "SpeechResult") -> Any:
+    """Represent this speech result as a media artifact.
+
+    Returns:
+        A :class:`~llmcore.media.MediaArtifact` carrying the audio bytes, its
+        checksum, and the voice/format in ``provider_metadata``.
+    """
+    mime = _AUDIO_MIME_TYPES.get(self.format.lower(), f"audio/{self.format.lower()}")
+    return _media_artifact(
+        "audio",
+        data=self.audio_data,
+        mime_type=mime,
+        duration_seconds=self.duration_seconds,
+        checksum_sha256=_hashlib.sha256(self.audio_data).hexdigest()
+        if self.audio_data
+        else None,
+        provider_metadata={"voice": self.voice, "format": self.format, **self.metadata},
+    )
+
+
+def _transcription_to_artifact(self: "TranscriptionResult") -> Any:
+    """Represent this transcript as a text media artifact.
+
+    Segments are preserved in ``provider_metadata`` so diarization and timings
+    survive the round trip.
+    """
+    return _media_artifact(
+        "text",
+        text=self.text,
+        mime_type="text/plain",
+        duration_seconds=self.duration_seconds,
+        provider_metadata={
+            "language": self.language,
+            "segments": [seg.model_dump() for seg in self.segments],
+            **self.metadata,
+        },
+    )
+
+
+def _ocr_to_artifact(self: "OCRResult") -> Any:
+    """Represent this OCR result as a text media artifact."""
+    text = "\n".join(
+        str(page.get("markdown") or page.get("text") or "") for page in self.pages
+    ).strip()
+    return _media_artifact(
+        "text",
+        text=text,
+        mime_type="text/markdown",
+        provider_metadata={
+            "pages": self.pages,
+            "pages_processed": self.pages_processed,
+            "document_annotation": self.document_annotation,
+            **self.metadata,
+        },
+    )
+
+
+def _generated_image_to_artifact(self: "GeneratedImage") -> Any:
+    """Represent this generated image as a media artifact.
+
+    ``GeneratedImage.data`` is base64 text (the OpenAI ``b64_json`` shape), so it
+    is decoded into real bytes here — the media layer deals in bytes.
+    """
+    raw: bytes | None = None
+    if self.data:
+        try:
+            raw = _base64.b64decode(self.data)
+        except Exception:
+            raw = None
+    fmt = (self.format or "png").lower()
+    return _media_artifact(
+        "image",
+        data=raw,
+        uri=self.url,
+        mime_type=_IMAGE_MIME_TYPES.get(fmt, f"image/{fmt}"),
+        checksum_sha256=_hashlib.sha256(raw).hexdigest() if raw else None,
+        provider_metadata={"revised_prompt": self.revised_prompt, "format": fmt},
+    )
+
+
+def _image_result_to_artifacts(self: "ImageGenerationResult") -> list[Any]:
+    """Represent every produced image as a media artifact."""
+    return [img.to_artifact() for img in self.images]
+
+
+def _speech_from_artifact(cls: type["SpeechResult"], artifact: Any, **overrides: Any) -> "SpeechResult":
+    """Build a :class:`SpeechResult` from a media artifact.
+
+    Raises:
+        ValueError: If the artifact carries no inline audio bytes (a remote URI
+            must be materialized first — the legacy type has nowhere to put a URL).
+    """
+    if artifact.data is None:
+        raise ValueError(
+            "SpeechResult requires inline audio bytes; materialize the artifact first."
+        )
+    meta = dict(artifact.provider_metadata or {})
+    return cls(
+        audio_data=artifact.data,
+        format=overrides.get("format") or meta.get("format") or "mp3",
+        model=overrides.get("model") or meta.get("model") or "unknown",
+        voice=overrides.get("voice") or meta.get("voice") or "unknown",
+        duration_seconds=artifact.duration_seconds,
+        metadata=meta,
+    )
+
+
+def _transcription_from_artifact(
+    cls: type["TranscriptionResult"], artifact: Any, **overrides: Any
+) -> "TranscriptionResult":
+    """Build a :class:`TranscriptionResult` from a media artifact."""
+    meta = dict(artifact.provider_metadata or {})
+    segments = [TranscriptionSegment(**seg) for seg in meta.get("segments", []) or []]
+    return cls(
+        text=artifact.text or "",
+        language=overrides.get("language") or meta.get("language"),
+        duration_seconds=artifact.duration_seconds,
+        segments=segments,
+        model=overrides.get("model") or meta.get("model") or "unknown",
+        metadata=meta,
+    )
+
+
+SpeechResult.to_artifact = _speech_to_artifact  # type: ignore[attr-defined]
+SpeechResult.from_artifact = classmethod(_speech_from_artifact)  # type: ignore[attr-defined]
+TranscriptionResult.to_artifact = _transcription_to_artifact  # type: ignore[attr-defined]
+TranscriptionResult.from_artifact = classmethod(_transcription_from_artifact)  # type: ignore[attr-defined]
+OCRResult.to_artifact = _ocr_to_artifact  # type: ignore[attr-defined]
+GeneratedImage.to_artifact = _generated_image_to_artifact  # type: ignore[attr-defined]
+ImageGenerationResult.to_artifacts = _image_result_to_artifacts  # type: ignore[attr-defined]
