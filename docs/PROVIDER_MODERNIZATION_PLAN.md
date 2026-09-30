@@ -199,9 +199,31 @@ The audit found the widest divergence here. Split into reviewable PRs:
 5. **Refresh the default model** off `gpt-4o`, refresh cards.
 6. **Do not add Sora video** — deprecated upstream in `openai` 3.1.
 7. Evaluate the "Ultrafast" tier and structured MCP errors (both v3.1).
-8. **Add an `httpx` direct path** to `OpenAIProvider`. It is the base class for
-   `deepinfra`, `vllm`, `poe`, `openrouter`, so one direct backend gives five
-   providers a dual approach at once. Highest leverage item in this phase.
+8. **✅ Direct `httpx` transport on `OpenAIProvider`** — landed 2026-09-30.
+   It is the base class for `deepinfra`, `vllm`, `poe` and `openrouter`, so one
+   transport gave **five** providers a dual approach at once. Select per
+   instance with `transport = "httpx"`; the default stays `"sdk"`.
+
+   Three things worth recording:
+
+   - **The key is `transport`, not `backend`.** OpenRouter and Poe already use
+     `backend` for native-SDK-vs-OpenAI-compatible selection, and overloading
+     it would have made one of the two settings unreachable.
+   - **The default had to stay `sdk`.** Four subclasses' suites mock
+     `AsyncOpenAI`; flipping the default would have routed five providers past
+     their own tests — the same failure the Z.ai SDK backend caused when it
+     changed auto-resolution and broke 21 tests.
+   - **Interchangeability is the real requirement.** Every `extract_*` method
+     parses response *dicts*, so the direct path returns exactly what
+     `model_dump(exclude_none=True)` produces, and maps errors to the same
+     typed exceptions (`ContextLengthError`, the actionable model-not-found
+     `ProviderError`). Verified live: identical response keys, identical tool
+     calls, identical model listings, streaming on both.
+
+   Request shaping (parameter validation, native search, reasoning-model
+   parameter naming, tool payloads) happens *before* the transport branch, so
+   the direct path inherits it rather than reimplementing it — which is what
+   keeps the two from drifting.
 
 ---
 

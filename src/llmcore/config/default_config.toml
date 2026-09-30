@@ -327,6 +327,25 @@ max_retries = 2
   # --- OpenAI Provider ---
   # For official OpenAI models and any OpenAI-compatible API (e.g., Groq, Anyscale).
   [providers.openai]
+
+  # Transport for chat completions and model listing:
+  #   "sdk"   (default) - the official `openai` package
+  #   "httpx" - direct REST calls to the OpenAI-compatible endpoint
+  #
+  # NOTE the key is `transport`, NOT `backend`: OpenRouter and Poe already use
+  # `backend` to choose between their native vendor SDK and OpenAI-compatible
+  # mode, and overloading it would make one of the two settings unreachable.
+  #
+  # Both transports are interchangeable - they return identical response dicts,
+  # so every extract_*() helper and every downstream caller behaves the same.
+  # The SDK remains the default because it handles retries, and because this
+  # provider class is the base for deepinfra/vllm/poe/openrouter.
+  # transport = "sdk"
+
+  # Extra headers for the direct transport (the SDK client takes its own).
+  # [providers.openai.default_headers]
+  # X-Example = "value"
+
   # API Key: It is STRONGLY recommended to set this via an environment variable.
   # Environment Variable: LLMCORE_PROVIDERS__OPENAI__API_KEY or OPENAI_API_KEY
   # api_key = "sk-..."

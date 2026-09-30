@@ -157,6 +157,9 @@ class OpenRouterProvider(OpenAIProvider):
                 self._client = self._client.with_options(
                     default_headers=extra_headers
                 )
+                # The direct transport has to send these too, or the two
+                # transports would identify this app differently to OpenRouter.
+                self._direct_headers.update(extra_headers)
 
         # Optionally initialize the native OpenRouter SDK client
         if self._backend == "sdk":

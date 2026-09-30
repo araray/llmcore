@@ -16,8 +16,17 @@ import asyncio
 import json
 import logging
 import os
-from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any
+from types import MappingProxyType
+
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
+from collections.abc import AsyncGenerator, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar
 
 try:
     import openai
@@ -153,6 +162,37 @@ def _needs_developer_role(model: str) -> bool:
     return _is_reasoning_model(model)
 
 
+class _ModelList:
+    """Adapt a raw ``/models`` JSON payload to the SDK's listing shape.
+
+    The loop that consumes this reads ``.data`` and then ``m.id``, so the direct
+    transport returns objects with the same two accessors rather than branching
+    the caller.
+    """
+
+    __slots__ = ("data",)
+
+    def __init__(self, entries: list[dict[str, Any]]) -> None:
+        self.data = [_ModelEntry(e) for e in entries]
+
+
+class _ModelEntry:
+    """One model record from a raw ``/models`` payload."""
+
+    __slots__ = ("_raw", "id")
+
+    def __init__(self, raw: dict[str, Any]) -> None:
+        self._raw = raw
+        self.id = str(raw.get("id", ""))
+
+    def __getattr__(self, item: str) -> Any:
+        return self._raw.get(item)
+
+
+#: Public API root, used by the direct transport when no ``base_url`` is set.
+_OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+
 class OpenAIProvider(BaseProvider):
     """LLMCore provider for the OpenAI API.
 
@@ -167,6 +207,21 @@ class OpenAIProvider(BaseProvider):
     _client: AsyncOpenAI | None = None
     _encoding: Any | None = None
     _api_key_env_var: str | None = None
+
+    #: Transport for chat and model listing: ``"sdk"`` (default) or ``"httpx"``.
+    #: Declared at class level so instances built without ``__init__`` — which
+    #: tests do with ``object.__new__`` to stub the client — still resolve it.
+    _transport: str = "sdk"
+
+    #: Extra headers the direct transport sends, populated by subclasses.
+    #: The class-level default is immutable on purpose: a shared mutable dict
+    #: would let one instance's headers leak into every other, and an
+    #: accidental mutation of the default now raises instead of doing that
+    #: silently. ``__init__`` replaces it with a per-instance dict.
+    _direct_headers: ClassVar[Mapping[str, str]] = MappingProxyType({})
+
+    #: Lazily-built direct HTTP client.
+    _http: Any = None
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         super().__init__(config, log_raw_payloads)
@@ -210,7 +265,178 @@ class OpenAIProvider(BaseProvider):
         except Exception as e:
             raise ConfigError(f"OpenAI client initialization failed: {e}")
 
+        # --- Direct (httpx) transport ---------------------------------------
+        #
+        # The key name is ``transport``, not ``backend``: OpenRouter and Poe
+        # already use ``backend`` on their own configs to mean "native vendor
+        # SDK vs OpenAI-compatible", and silently overloading it would make one
+        # of the two settings unreachable.
+        #
+        # The default stays ``"sdk"`` deliberately. This class is the base for
+        # deepinfra, vllm, poe and openrouter, and their suites mock
+        # ``AsyncOpenAI``; flipping the default would route five providers past
+        # their own tests, which is exactly how the Z.ai SDK backend broke 21
+        # tests when it was introduced. Direct transport is opt-in per instance.
+        self._transport = str(config.get("transport") or "sdk").lower()
+        if self._transport not in ("sdk", "httpx"):
+            logger.warning(
+                "Unknown transport '%s' for %s; using the SDK.",
+                self._transport,
+                self.get_name(),
+            )
+            self._transport = "sdk"
+        if self._transport == "httpx" and not httpx_available:
+            logger.warning(
+                "Transport 'httpx' requested for %s but httpx is not installed; "
+                "using the SDK.",
+                self.get_name(),
+            )
+            self._transport = "sdk"
+
+        #: Extra headers the direct transport sends. Subclasses that customize
+        #: the SDK client's headers (OpenRouter's HTTP-Referer / X-Title) add
+        #: them here too, so both transports send the same request.
+        # A fresh dict per instance: mutating the class-level default would
+        # leak one provider's headers into every other instance.
+        self._direct_headers = dict(config.get("default_headers") or {})
+        self._http = None
+
         self._load_tokenizer(self.default_model)
+
+    # ------------------------------------------------------------------
+    # Direct transport
+    # ------------------------------------------------------------------
+
+    def _direct_base_url(self) -> str:
+        """Return the REST root for the direct transport."""
+        return str(self.base_url or _OPENAI_DEFAULT_BASE_URL).rstrip("/")
+
+    def _get_http(self) -> Any:
+        """Return the lazily-built direct HTTP client."""
+        if self._http is None:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                **self._direct_headers,
+            }
+            org = self.config.get("organization") if hasattr(self, "config") else None
+            if org:
+                headers["OpenAI-Organization"] = str(org)
+            self._http = httpx.AsyncClient(
+                base_url=self._direct_base_url(),
+                headers=headers,
+                timeout=self.timeout,
+            )
+        return self._http
+
+    def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
+        """Map a direct-transport HTTP failure onto llmcore's exceptions.
+
+        Deliberately mirrors the SDK branch below, including the
+        :class:`ContextLengthError` and model-not-found cases, so a caller sees
+        the same exception for the same condition whichever transport ran. A
+        dual transport that reports failures differently is not really dual.
+
+        Raises:
+            ContextLengthError: If the prompt exceeded the model's window.
+            ProviderError: For every other failure.
+        """
+        lowered = body.lower()
+        if status == 400 and "context_length" in lowered:
+            raise ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=body,
+            )
+        if status == 400 and any(
+            phrase in lowered
+            for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model")
+        ):
+            raise ProviderError(
+                self.get_name(),
+                f"Model '{model_name}' not found on provider '{self.get_name()}'. "
+                f"The provider's default model is '{self.default_model}'. Please verify "
+                f"the model name is correct for this provider's API. "
+                f"Original error: {body}",
+            )
+        raise ProviderError(self.get_name(), f"API Error ({status}): {body}")
+
+    async def _chat_via_httpx(
+        self,
+        model_name: str,
+        messages_payload: list[dict[str, Any]],
+        stream: bool,
+        api_kwargs: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Run a chat completion over the direct transport.
+
+        Returns exactly the shapes the SDK path returns — a plain response dict,
+        or an async generator of chunk dicts — because every ``extract_*``
+        method downstream parses those dicts. The transports have to be
+        interchangeable at that boundary or the choice leaks into callers.
+        """
+        body: dict[str, Any] = {
+            "model": model_name,
+            "messages": messages_payload,
+            "stream": stream,
+            **api_kwargs,
+        }
+        client = self._get_http()
+
+        if not stream:
+            try:
+                resp = await client.post("/chat/completions", json=body)
+            except httpx.TimeoutException as e:
+                raise ProviderError(self.get_name(), f"Timeout: {e}") from e
+            except httpx.HTTPError as e:
+                raise ProviderError(self.get_name(), f"Connection error: {e}") from e
+            if resp.status_code >= 400:
+                self._raise_direct_status(resp.status_code, resp.text, model_name)
+            response_dict = resp.json()
+            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "RAW LLM RESPONSE (%s, direct): %s",
+                    self.get_name(),
+                    json.dumps(response_dict, indent=2, default=str),
+                )
+            return response_dict
+
+        return self._stream_via_httpx(client, body, model_name)
+
+    async def _stream_via_httpx(
+        self, client: Any, body: dict[str, Any], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Yield chunk dicts from a server-sent-event stream."""
+        try:
+            async with client.stream("POST", "/chat/completions", json=body) as resp:
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    self._raise_direct_status(resp.status_code, resp.text, model_name)
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    # The terminator is a sentinel string, not JSON; parsing it
+                    # would raise on the last chunk of every successful stream.
+                    if payload == "[DONE]":
+                        return
+                    try:
+                        chunk = json.loads(payload)
+                    except ValueError:
+                        logger.warning("Skipping unparseable SSE chunk from %s.", self.get_name())
+                        continue
+                    if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            "RAW STREAM CHUNK (%s, direct): %s", self.get_name(), payload
+                        )
+                    yield chunk
+        except ProviderError:
+            raise
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}") from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}") from e
 
     def _load_tokenizer(self, model_name: str):
         if not tiktoken:
@@ -278,7 +504,13 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
         try:
-            models_response = await self._client.models.list()
+            if self._transport == "httpx":
+                resp = await self._get_http().get("/models")
+                if resp.status_code >= 400:
+                    self._raise_direct_status(resp.status_code, resp.text, "models")
+                models_response = _ModelList(resp.json().get("data") or [])
+            else:
+                models_response = await self._client.models.list()
             result = []
             provider_name = self.get_name()
             try:
@@ -526,6 +758,12 @@ class OpenAIProvider(BaseProvider):
                 ),
             )
 
+        if self._transport == "httpx":
+            # Every request-shaping decision above is transport-independent, so
+            # the direct path picks up native search, reasoning-model parameter
+            # renaming and tool payloads unchanged.
+            return await self._chat_via_httpx(model_name, messages_payload, stream, api_kwargs)
+
         try:
             resp = await self._client.chat.completions.create(
                 model=model_name, messages=messages_payload, stream=stream, **api_kwargs
@@ -734,6 +972,13 @@ class OpenAIProvider(BaseProvider):
         return n + 3
 
     async def close(self) -> None:
+        if self._http is not None:
+            try:
+                await self._http.aclose()
+            except Exception as e:  # closing must not mask the caller's work
+                logger.warning("Error closing direct HTTP client: %s", e)
+            finally:
+                self._http = None
         if self._client:
             try:
                 await self._client.close()
