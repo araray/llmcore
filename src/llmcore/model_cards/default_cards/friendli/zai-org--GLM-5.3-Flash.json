@@ -1,0 +1,96 @@
+{
+  "model_id": "zai-org/GLM-5.3-Flash",
+  "display_name": "GLM-5.3-Flash (Friendli)",
+  "provider": "friendli",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GLM",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.5,
+      "cached_input": 0.03
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-28"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [
+    "friendli/glm-5.3-flash"
+  ],
+  "description": "Native multimodal GLM model for efficient coding and long-horizon agent tasks",
+  "tags": [
+    "input:text",
+    "input:image",
+    "input:video",
+    "output:text",
+    "reasoning",
+    "tools",
+    "structured-output",
+    "million-context"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "endpoint_type": "serverless",
+    "base_model": "zhipuai/glm-5.3-flash",
+    "mode": "chat",
+    "interleaved": "reasoning_content",
+    "reasoning_options": [
+      {
+        "type": "effort",
+        "values": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      {
+        "type": "budget_tokens",
+        "min": -1,
+        "max": 1048576
+      }
+    ],
+    "reasoning_effort_levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "reasoning_toggle": false,
+    "functionality": {
+      "tool_call": true,
+      "parallel_tool_call": true,
+      "structured_output": true,
+      "tool_choice": true,
+      "system_messages": true
+    },
+    "default_params": {
+      "repetition_penalty": 1.0,
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "min_p": 0.0,
+      "top_k": 0
+    }
+  }
+}

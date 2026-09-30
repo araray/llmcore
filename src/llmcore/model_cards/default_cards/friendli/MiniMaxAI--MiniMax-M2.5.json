@@ -1,0 +1,78 @@
+{
+  "model_id": "MiniMaxAI/MiniMax-M2.5",
+  "display_name": "MiniMax-M2.5 (Friendli)",
+  "provider": "friendli",
+  "model_type": "chat",
+  "architecture": {
+    "family": "MiniMax",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 196608,
+    "max_output_tokens": 196608
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.06
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-02-19"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Prior MiniMax coding model for agent workflows, office edits, and automation",
+  "tags": [
+    "input:text",
+    "output:text",
+    "reasoning",
+    "tools",
+    "structured-output"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "endpoint_type": "serverless",
+    "base_model": "minimax/minimax-m2.5",
+    "mode": "chat",
+    "interleaved": "reasoning_content",
+    "reasoning_options": [
+      {
+        "type": "budget_tokens",
+        "min": -1,
+        "max": 196608
+      }
+    ],
+    "reasoning_toggle": false,
+    "functionality": {
+      "tool_call": true,
+      "parallel_tool_call": true,
+      "structured_output": true,
+      "tool_choice": true,
+      "system_messages": true
+    },
+    "default_params": {
+      "repetition_penalty": 1.0,
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "min_p": 0.0,
+      "top_k": 0
+    }
+  }
+}

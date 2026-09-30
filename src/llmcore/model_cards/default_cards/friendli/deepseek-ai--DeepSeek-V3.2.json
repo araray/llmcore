@@ -1,0 +1,80 @@
+{
+  "model_id": "deepseek-ai/DeepSeek-V3.2",
+  "display_name": "DeepSeek-V3.2 (Friendli)",
+  "provider": "friendli",
+  "model_type": "chat",
+  "architecture": {
+    "family": "DeepSeek",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 163840,
+    "max_output_tokens": 163840
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.5,
+      "output": 1.5,
+      "cached_input": 0.25
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-03-07"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "DeepSeek chat model for instruction following, coding, and analysis",
+  "tags": [
+    "input:text",
+    "output:text",
+    "reasoning",
+    "tools",
+    "structured-output"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "endpoint_type": "serverless",
+    "mode": "chat",
+    "interleaved": false,
+    "reasoning_options": [
+      {
+        "type": "toggle"
+      },
+      {
+        "type": "budget_tokens",
+        "min": -1,
+        "max": 163840
+      }
+    ],
+    "reasoning_toggle": true,
+    "functionality": {
+      "tool_call": true,
+      "parallel_tool_call": true,
+      "structured_output": true,
+      "tool_choice": true,
+      "system_messages": true
+    },
+    "default_params": {
+      "repetition_penalty": 1.0,
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "min_p": 0.0,
+      "top_k": 0
+    }
+  }
+}

@@ -151,6 +151,9 @@ src/llmcore/model_cards/default_cards/
 │   ├── claude-sonnet-4-5-20250929.json
 │   └── ...
 ├── deepseek/
+├── friendli/
+│   ├── zai-org--GLM-5.3.json    # generated live from the Friendli catalog
+│   └── ...
 ├── google/
 ├── mistral/
 ├── ollama/
@@ -597,6 +600,11 @@ providers, ordered weakest to strongest:
 none | minimal | low | medium | high | xhigh | max
 ```
 
+FriendliAI additionally exposes a coding-specialised tier, `ultracode`, above
+`max`. It sits outside the ordered scale above (it is a *mode*, not a rung), so
+it is accepted verbatim by the Friendli provider and is not mapped onto — or
+from — the canonical tiers by any other provider.
+
 Model cards, config files, and per-call `reasoning_effort` kwargs always use
 canonical spellings. Each provider is responsible for translating canonical
 values to whatever its wire protocol expects — **inside the provider module,
@@ -608,15 +616,15 @@ the tiers OpenAI-family reasoning models expose.
 
 #### Per-provider wire mapping (as implemented)
 
-| Canonical | OpenAI (`openai_provider.py`) | DeepSeek (`deepseek_provider.py`) | Z.ai (`zai_provider.py`) |
-|-----------|-------------------------------|-----------------------------------|--------------------------|
-| `none`    | — (not advertised)            | `high` (fold-to-default)          | `none`                   |
-| `minimal` | — (not advertised)            | `high` (fold-to-default)          | `minimal`                |
-| `low`     | `low`                         | `high`                            | `low`                    |
-| `medium`  | `medium`                      | `high`                            | `medium`                 |
-| `high`    | `high`                        | `high`                            | `high`                   |
-| `xhigh`   | `xhigh` (unchanged on wire)   | `max`                             | `xhigh`                  |
-| `max`     | — (not advertised)            | `max`                             | `max`                    |
+| Canonical | OpenAI (`openai_provider.py`) | DeepSeek (`deepseek_provider.py`) | Z.ai (`zai_provider.py`) | Friendli (`friendli_provider.py`) |
+|-----------|-------------------------------|-----------------------------------|--------------------------|-----------------------------------|
+| `none`    | — (not advertised)            | `high` (fold-to-default)          | `none`                   | — (omit the field instead)        |
+| `minimal` | — (not advertised)            | `high` (fold-to-default)          | `minimal`                | `minimal`                         |
+| `low`     | `low`                         | `high`                            | `low`                    | `low`                             |
+| `medium`  | `medium`                      | `high`                            | `medium`                 | `medium`                          |
+| `high`    | `high`                        | `high`                            | `high`                   | `high`                            |
+| `xhigh`   | `xhigh` (unchanged on wire)   | `max`                             | `xhigh`                  | `xhigh`                           |
+| `max`     | — (not advertised)            | `max`                             | `max`                    | `max`                             |
 
 Provider notes (verified against the code):
 
@@ -634,6 +642,16 @@ Provider notes (verified against the code):
   lowercases input, and passes it through **verbatim** (GLM-5.2+). Invalid
   values fall back to the configured default (`high`). Only sent when
   thinking mode is enabled.
+- **FriendliAI** — accepts `minimal | low | medium | high | xhigh | max`
+  plus the Friendli-only `ultracode`, lowercases input, and passes it through
+  **verbatim** via `extra_body`. There is no `none`: omitting
+  `reasoning_effort` (the default when neither the config nor the call sets
+  one) leaves the model's own default in place, and reasoning is turned off
+  through `chat_template_kwargs.enable_thinking` on controllable models.
+  Invalid values fall back to the configured default. Which tiers a given
+  model actually accepts is advertised per-model in the catalog
+  (`reasoning_options`) and mirrored onto its card as
+  `provider_extension.reasoning_effort_levels`.
 
 #### Adding a new provider
 

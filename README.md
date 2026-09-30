@@ -34,7 +34,7 @@
 
 | Category | Features |
 |----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram, TypeSafe.ai (System One typed judgments) |
+| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), FriendliAI, Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram, TypeSafe.ai (System One typed judgments) |
 | **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling, per-call usage via `chat_with_usage()` |
 | **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
 | **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
@@ -177,6 +177,9 @@ pip install llmcore[deepgram]
 
 # Z.ai (GLM) support
 pip install llmcore[zai]
+
+# FriendliAI support (Model APIs, Dedicated Endpoints, Container)
+pip install llmcore[friendli]
 
 # TypeSafe.ai System One typed judgments (noul/choice/score; httpx only)
 pip install llmcore[typesafe]
@@ -331,6 +334,15 @@ thinking = "enabled"            # "enabled" | "disabled"
 reasoning_effort = "high"       # none|minimal|low|medium|high|xhigh|max
 timeout = 300
 
+[providers.friendli]
+# FriendliAI. API key via FRIENDLI_TOKEN (FRIENDLIAI_API_KEY also accepted).
+# endpoint_type = "serverless"  # "serverless" | "dedicated" | "container"
+# backend = "openai"            # "openai" (default) | "httpx" | "sdk"
+default_model = "zai-org/GLM-5.3"
+parse_reasoning = true          # split reasoning into reasoning_content
+# reasoning_effort = "high"     # minimal|low|medium|high|xhigh|max|ultracode
+timeout = 300
+
 [providers.typesafe]
 # TypeSafe.ai System One (typed judgments, NOT chat). API key via TYPESAFE_API_KEY.
 # Use provider.system_one(state, questions) or llm.chat(..., provider_name="typesafe", questions={...}).
@@ -403,6 +415,7 @@ LLMCore supports multiple LLM providers through a unified interface:
 | **Ollama** | Llama 3.2/3.3, Gemma 3, Phi-3, Mistral | Streaming, Local |
 | **DeepSeek** | DeepSeek-R1, DeepSeek-V3.2, DeepSeek-Chat | Streaming, Reasoning |
 | **Z.ai (GLM)** | GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V, CogView, CogVideoX, GLM-TTS/ASR/OCR, Embedding-3 | Streaming, Tools, Reasoning, Vision, Embeddings, Image, Video, TTS, STT, OCR, Web Search |
+| **FriendliAI** | Model APIs catalog (GLM-5.3/5.3-Flash/5.2/5.1, DeepSeek-V3.2, Gemma 4 31B, MiniMax-M2.5) + your own Dedicated Endpoints / Container | Streaming, Tools, Reasoning (effort/budget/parse), Vision, Structured output incl. regex, Exact tokenizer, Embeddings & Images (dedicated), STT |
 | **Mistral** | Mistral Large 3 | Streaming, Tools |
 | **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
 | **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
@@ -804,6 +817,7 @@ Built-in model cards for:
 - **Ollama**: Llama 3.2/3.3, Gemma 3, Phi-3, Mistral, CodeLlama
 - **DeepSeek**: DeepSeek-R1, DeepSeek-V3.2
 - **Z.ai (GLM)**: GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V (vision), Embedding-3
+- **FriendliAI**: GLM-5.3, GLM-5.3-Flash, GLM-5.2, GLM-5.1, DeepSeek-V3.2, Gemma 4 31B, MiniMax-M2.5 (context, pricing, and reasoning options generated live from the Friendli catalog)
 - **Mistral**: Mistral Large 3
 - **Qwen**: Qwen 3 Max, Qwen3-Coder
 - **xAI**: Grok-4, Grok-4-Heavy
@@ -1062,6 +1076,7 @@ from llmcore import (
 - [Search providers usage](docs/Search_providers_usage.md)
 - [Search providers rationale](docs/Search_providers_rationale.md)
 - [Deepgram provider usage](docs/Deepgram_provider_usage.md)
+- [FriendliAI provider usage](docs/Friendli_provider_usage.md)
 - [TypeSafe.ai provider usage](docs/TypeSafe_provider_usage.md)
 - [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md)
 - [Model cards](docs/model_cards.md)

@@ -501,6 +501,128 @@ max_retries = 2
   # Override the endpoint chosen by `region`.
   # base_url = "https://api.z.ai/api/paas/v4"
 
+  # --- FriendliAI Provider ---
+  # Native provider for FriendliAI's three inference surfaces:
+  #   "serverless" — Friendli Model APIs, the hosted pay-per-token catalog
+  #                  (zai-org/GLM-5.3, deepseek-ai/DeepSeek-V3.2,
+  #                  google/gemma-4-31B-it, MiniMaxAI/MiniMax-M2.5, ...)
+  #   "dedicated"  — your own GPU deployments; `model` is the ENDPOINT ID
+  #                  (or "ENDPOINT_ID:ADAPTER_ROUTE" for Multi-LoRA)
+  #   "container"  — a self-hosted Friendli Engine; `base_url` is required
+  #
+  # The chat endpoint is OpenAI-compatible, plus Friendli extensions:
+  # reasoning_effort / reasoning_budget / parse_reasoning / include_reasoning,
+  # chat_template_kwargs (enable_thinking, clear_thinking), Friendli Engine
+  # sampling (top_k, min_p, min_tokens, repetition_penalty, eos_token, XTC),
+  # regex-constrained structured output, and an exact /tokenize endpoint.
+  #
+  # Transport is selectable via `backend`:
+  #   "openai" — openai SDK pointed at the Friendli base URL (DEFAULT)
+  #   "httpx"  — direct REST calls
+  #   "sdk"    — the official `friendli` Python SDK
+  # Omit/"auto" to auto-detect in order openai -> httpx -> sdk.  The vendor SDK
+  # is last on purpose: its generated response models drop fields outside the
+  # published schema, so `reasoning_content` is lost on that backend and there
+  # is no extra_body escape hatch.
+  # Install with: pip install llmcore[friendli]
+  #
+  # Docs:    https://friendli.ai/docs/llms.txt
+  # Pricing: https://friendli.ai/docs/guides/model-apis/pricing
+  [providers.friendli]
+  # type = "friendli"  # auto-detected from section name
+  # Aliases that map to this provider class: friendliai, friendli_ai.
+
+  # API Key: Set via environment variable for security.  A Friendli Personal
+  # API key looks like "flp_...".  The provider checks, in order:
+  #   api_key -> api_key_env_var -> FRIENDLI_TOKEN -> FRIENDLIAI_API_KEY
+  #   -> FRIENDLI_API_KEY
+  # (FRIENDLI_TOKEN is the official SDK's variable; FRIENDLIAI_API_KEY is the
+  # spelling used in friendli.ai's own documentation examples.)
+  # Not required when endpoint_type = "container" and the container has no auth.
+  # api_key = "flp_..."
+  # api_key_env_var = "FRIENDLI_TOKEN"
+
+  # Team scoping: sent as the X-Friendli-Team header on every request and used
+  # by get_team_cost() / get_team_usage().  Falls back to FRIENDLI_TEAM_ID then
+  # FRIENDLIAI_TEAM_ID.  Omit to use the default team in Friendli Suite.
+  # team_id = "..."
+  # team_id_env_var = "FRIENDLI_TEAM_ID"
+
+  # Which Friendli surface to talk to.
+  endpoint_type = "serverless"   # "serverless" | "dedicated" | "container"
+
+  # Transport backend: "openai" (default) | "httpx" | "sdk".  Omit for auto.
+  # backend = "openai"
+
+  # Default model.  On Model APIs this is a catalog model ID; on Dedicated
+  # Endpoints it must be the endpoint ID.
+  # Current Model APIs catalog (September 2026):
+  #   zai-org/GLM-5.3         — flagship; 1M context, reasoning + tools
+  #   zai-org/GLM-5.3-Flash   — fast + cheap; 1M context, text/image/video in
+  #   zai-org/GLM-5.2         — 1M context, reasoning toggle
+  #   zai-org/GLM-5.1         — 198K context
+  #   google/gemma-4-31B-it   — 256K context, text/image in
+  #   deepseek-ai/DeepSeek-V3.2 — 160K context
+  #   MiniMaxAI/MiniMax-M2.5  — 192K context
+  default_model = "zai-org/GLM-5.3"
+
+  # Request timeout in seconds.  1M-context reasoning responses can be slow.
+  timeout = 300
+
+  # --- Base URLs ---
+  # Inference root.  Defaults per endpoint_type:
+  #   serverless -> https://api.friendli.ai/serverless/v1
+  #   dedicated  -> https://api.friendli.ai/dedicated/v1
+  #   container  -> (no default; REQUIRED, e.g. http://localhost:8000/v1)
+  # base_url = "https://api.friendli.ai/serverless/v1"
+  #
+  # Friendli Suite root used by get_team_cost() / get_team_usage().
+  # suite_base_url = "https://api.friendli.ai/v1"
+
+  # --- Reasoning controls ---
+  # Friendli splits reasoning control across four request-body fields plus the
+  # chat template.  Per-request overrides go through chat_completion(...).
+  #
+  # reasoning_effort: minimal | low | medium | high | xhigh | max | ultracode
+  #   The tiers a model accepts are advertised in its /models entry
+  #   (reasoning_options); unset leaves the model's own default in place.
+  # reasoning_effort = "high"
+  #
+  # reasoning_budget: hard cap (in tokens) on the chain of thought.
+  # reasoning_budget = 10000
+  #
+  # parse_reasoning: split the chain of thought out of `content` into
+  #   `reasoning_content` (surfaced by extract_reasoning_content() and
+  #   extract_delta_reasoning_content()).  Requires backend "openai"/"httpx".
+  parse_reasoning = true
+  #
+  # include_reasoning: when parsing is on, include the parsed reasoning in the
+  #   response (Friendli defaults this to true).
+  # include_reasoning = true
+  #
+  # enable_thinking: default chat_template_kwargs.enable_thinking for
+  #   *controllable* reasoning models (e.g. zai-org/GLM-5.2).  Unset leaves it
+  #   to the model's template.  `clear_thinking` is accepted per-request.
+  # enable_thinking = true
+
+  # --- Token counting ---
+  # false (default): count locally with tiktoken cl100k_base.
+  # true: use the model's own tokenizer via POST /tokenize — exact, but one API
+  #   request per count, which consumes the Model APIs rate-limit budget.
+  # provider.tokenize() / detokenize() are always available regardless.
+  native_token_count = false
+
+  # Context window used when neither live discovery nor a model card knows the
+  # model (Dedicated Endpoints and Containers have no catalog).
+  fallback_context_length = 131072
+
+  # --- Endpoint-type notes ---
+  # Embeddings (create_embeddings) and image generation (generate_image) are
+  # served by Dedicated Endpoints / Container only — Model APIs has neither.
+  # Audio transcription (transcribe_audio) works on all three surfaces.
+  # /detokenize and /chat/render are documented but currently return 404 on
+  # Model APIs; they are available on Dedicated Endpoints / Container.
+
   # --- Ollama Provider ---
   # For locally running models via Ollama.
   [providers.ollama]

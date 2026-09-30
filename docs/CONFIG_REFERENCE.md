@@ -34,6 +34,7 @@ Specifies which provider instance (from [providers] below) to use by default whe
 - `mistral`: Mistral AI — Mistral Large, Codestral, Magistral
 - `vllm`: vLLM (self-hosted) — Self-hosted vLLM inference server
 - `poe`: Poe — Gateway to models and community bots
+- `friendli`: FriendliAI — Model APIs catalog, Dedicated Endpoints, Container
 
 ### `llmcore.default_embedding_model`
 
@@ -708,6 +709,64 @@ The official SDK defaults to 10 s; 30 s leaves room for large states near the 64
 ### `providers.typesafe.max_retries`
 
 Retries honour `Retry-After` (seconds or HTTP-date) and `retry-after-ms`; `0` disables retries. `429` (rate limit) and `529` (overloaded) are the statuses you will actually see.
+
+## ⚡ Provider: FriendliAI
+
+FriendliAI provider covering all three inference surfaces through one section: **Friendli Model APIs** (serverless, pay-per-token catalog), **Friendli Dedicated Endpoints** (your own GPU deployments; the `model` field is the endpoint ID), and **Friendli Container** (self-hosted Friendli Engine; `base_url` required). The chat endpoint is OpenAI-compatible plus Friendli extensions: `reasoning_effort` / `reasoning_budget` / `parse_reasoning` / `include_reasoning`, `chat_template_kwargs` (`enable_thinking`, `clear_thinking`), Friendli Engine sampling (`top_k`, `min_p`, `min_tokens`, `repetition_penalty`, `eos_token`, XTC), regex-constrained structured output, and an exact `/tokenize` endpoint. Transport is selectable via `backend`. Aliases: `friendliai`, `friendli_ai`. Install with `pip install llmcore[friendli]`. See [FriendliAI provider usage](Friendli_provider_usage.md).
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `providers.friendli.api_key` | secret |  | — | Friendli Personal API key (starts with `flp_`). Strongly recommended to set via `FRIENDLI_TOKEN` or `FRIENDLIAI_API_KEY`. Optional for `endpoint_type = "container"` without auth. |
+| `providers.friendli.api_key_env_var` | string |  | `FRIENDLI_TOKEN` | Environment variable holding the API key. When unset the provider checks `FRIENDLI_TOKEN`, `FRIENDLIAI_API_KEY`, then `FRIENDLI_API_KEY`. |
+| `providers.friendli.team_id` | secret |  | — | Team to run requests as, sent as the `X-Friendli-Team` header and used by the Suite billing reads. Falls back to `FRIENDLI_TEAM_ID` then `FRIENDLIAI_TEAM_ID`. |
+| `providers.friendli.team_id_env_var` | string |  | `FRIENDLI_TEAM_ID` | Environment variable holding the Friendli team ID. |
+| `providers.friendli.endpoint_type` | enum |  | `serverless` | Which Friendli surface to talk to: `serverless`, `dedicated`, or `container`. |
+| `providers.friendli.backend` | enum |  | — | Transport: `openai` (default), `httpx`, or `sdk`. Empty auto-detects openai → httpx → sdk. |
+| `providers.friendli.base_url` | url |  | — | Inference root. Empty uses the default for `endpoint_type`; **required** for `container`. |
+| `providers.friendli.suite_base_url` | url |  | — | Friendli Suite API root for `get_team_cost()` / `get_team_usage()`. Empty uses `https://api.friendli.ai/v1`. |
+| `providers.friendli.default_model` | string |  | `zai-org/GLM-5.3` | Catalog model ID (Model APIs) or endpoint ID (Dedicated Endpoints). |
+| `providers.friendli.timeout` | integer |  | `300` | Seconds per HTTP operation. |
+| `providers.friendli.reasoning_effort` | enum |  | — | Default effort tier: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultracode`. Empty leaves the model default. |
+| `providers.friendli.reasoning_budget` | integer |  | — | Default hard cap (tokens) on the chain of thought. |
+| `providers.friendli.parse_reasoning` | boolean |  | `True` | Split reasoning out of `content` into `reasoning_content`. |
+| `providers.friendli.include_reasoning` | boolean |  | — | With parsing on, include the parsed reasoning in the response. |
+| `providers.friendli.enable_thinking` | boolean |  | — | Default `chat_template_kwargs.enable_thinking` for controllable reasoning models. |
+| `providers.friendli.native_token_count` | boolean |  | `False` | Count tokens via the model's own tokenizer (`POST /tokenize`) instead of locally. |
+| `providers.friendli.fallback_context_length` | integer |  | `131072` | Context window used when neither the live catalog nor a model card knows the model. |
+
+### `providers.friendli.endpoint_type`
+
+Selects the default `base_url` and determines what the `model` field means.
+
+**Options:**
+
+- `serverless`: Friendli Model APIs — the hosted catalog; `model` is a catalog ID (default)
+- `dedicated`: Dedicated Endpoints — `model` is the **endpoint ID** (or `ENDPOINT_ID:ADAPTER_ROUTE` for Multi-LoRA)
+- `container`: Friendli Container — self-hosted; `base_url` is required, the API key is optional
+
+Embeddings (`create_embeddings`) and image generation (`generate_image`) are served by `dedicated` / `container` only. Audio transcription works on all three.
+
+### `providers.friendli.backend`
+
+**Options:**
+
+- `openai`: the `openai` SDK pointed at the Friendli base URL (default)
+- `httpx`: direct REST calls
+- `sdk`: the official `friendli` SDK
+
+The vendor SDK is ranked last on purpose: its generated response models ignore unknown fields, so `reasoning_content` and `reasoning` are silently dropped, and it has no `extra_body` escape hatch. The provider warns at startup when `backend = "sdk"` is combined with `parse_reasoning`.
+
+### `providers.friendli.default_model`
+
+Current Model APIs catalog: `zai-org/GLM-5.3`, `zai-org/GLM-5.3-Flash`, `zai-org/GLM-5.2`, `zai-org/GLM-5.1`, `google/gemma-4-31B-it`, `deepseek-ai/DeepSeek-V3.2`, `MiniMaxAI/MiniMax-M2.5`. The live list (with context, pricing and reasoning options) is at <https://friendli.ai/docs/guides/model-apis/pricing> and is mirrored into model cards by `python -m tools.cardctl generate friendli`.
+
+### `providers.friendli.reasoning_effort`
+
+The tiers a model accepts are advertised per-model in its `/models` entry (`reasoning_options`) and on its model card (`provider_extension.reasoning_effort_levels`); unsupported tiers are rejected by the API. Override per request with `chat_completion(reasoning_effort=...)`.
+
+### `providers.friendli.native_token_count`
+
+Exact, but one API request per count — and llmcore counts tokens on every turn for context budgeting. Model APIs rate limits are tier-based (tier 0 allows only a couple of requests per minute), so this stays off by default and a failed native count falls back locally. `provider.tokenize()` / `detokenize()` are available regardless.
 
 ## 💾 Storage: Session & Vector
 

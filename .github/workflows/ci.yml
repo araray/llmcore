@@ -59,12 +59,15 @@ jobs:
           # grimoire (the control plane) is also GitHub-only.
           pip install "grimoire @ git+https://github.com/araray/grimoire.git@v0.4.0"
           # dev pulls in test (pytest, pytest-asyncio, respx, ...) and sandbox
-          # deps; the extras below are [all] minus [zai]: provider SDKs
-          # (openai, anthropic, ...), chromadb, and the bridge deps
-          # (grpcio/protobuf/starlette) that unit tests import at collection
-          # or fixture time. zai-sdk is deliberately NOT installed: the zai
-          # unit tests mock the openai/httpx fallback transport, and the SDK
-          # transport would bypass those mocks and hit the live API.
+          # deps; the extras below are [all] minus [zai] and [friendli]:
+          # provider SDKs (openai, anthropic, ...), chromadb, and the bridge
+          # deps (grpcio/protobuf/starlette) that unit tests import at
+          # collection or fixture time. zai-sdk is deliberately NOT installed:
+          # the zai unit tests mock the openai/httpx fallback transport, and
+          # the SDK transport would bypass those mocks and hit the live API.
+          # The friendli SDK is likewise skipped: the provider auto-resolves to
+          # the openai backend (already installed) and its tests pin the
+          # backend explicitly, so the vendor SDK adds nothing offline.
           # numpy is used by embedding-shaped unit tests.
           pip install -e ".[dev,bridge,openai,anthropic,gemini,ollama,deepinfra,deepgram,typesafe,brightdata,serper,serpapi,semanticscholar,postgres,chromadb]"
           pip install numpy
