@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — fal provider: the media marketplace adapter (M5)
+
+- **New `fal` provider** (alias `fal_ai`), llmcore's broadest single media
+  adapter: `image_generate`, `image_edit`, `image_upscale`, `video_generate`,
+  `video_interpolate`, `sfx`, `music`, `tts` and `asr`. It is **media-only** —
+  `chat_completion()` raises with a pointer to `llm.media`.
+- **The provider-neutrality gate passed: no core type changed.** fal is
+  structurally unlike the first four adapters — a marketplace rather than a
+  vendor, everything queued rather than only the slow things, inputs addressed
+  by URL rather than by bytes, output schemas that vary per model. It needed no
+  new `MediaJob` field, no new `MediaExecution` member and no change to
+  `MediaJobManager`. See `MEDIA_SUBSYSTEM_SPEC.md` §5.2.
+- **Every capability is an async job**, including image generation. The same
+  `llm.media.images.generate(...)` call returns a `MediaResult` on OpenAI and a
+  `MediaJob` on fal; `llm.media.wait()` absorbs both, because execution class is
+  declared per capability rather than per provider.
+- **Per-capability endpoints are configurable** under `[providers.fal.models]`.
+  fal model ids are endpoint paths and the gallery moves faster than a release
+  cycle, so llmcore ships a small starting set rather than a catalog. Unknown
+  keyword arguments are forwarded verbatim, so model-specific fields work
+  without an llmcore change.
+- **Dual transport**: direct REST against `queue.fal.run` by default, with the
+  `fal-client` SDK as an opt-in backend. New `fal` extra.
+- **Cancellation is reported honestly.** fal answers `202
+  CANCELLATION_REQUESTED` and work already running may still complete and still
+  bill, so the job is marked cancelled *and* the caveat is recorded in
+  `provider_metadata`. A `400 ALREADY_COMPLETED` is treated as success — the
+  result is fetched and the job succeeds. This is the third distinct
+  cancellation semantic across adapters (Gemini refuses, Deepgram n/a, fal
+  best-effort) and the shared handle models all three.
+
+### Fixed — three fal API contract bugs, all found by live validation
+
+None of these were visible from the docs or from mocked tests:
+
+- **Queue routes are namespaced by application, not by model path.** A request
+  submitted to `fal-ai/flux/schnell` is tracked at `fal-ai/flux/requests/{id}`;
+  polling the full model path returns `405`. The adapter now prefers the
+  absolute `status_url` / `response_url` / `cancel_url` fal returns at
+  submission and only falls back to a reconstructed, app-scoped path.
+- **Uploads go to a different host, with two backends.** `fal.run` reads
+  `storage/upload` as an owner/app pair and 404s; storage lives at
+  `rest.fal.ai`. There, `storage_type=gcs` answers *"Invalid storage type"* for
+  newer accounts. The adapter now mirrors the official client: CDN v3 first,
+  signed-URL flow as fallback, both causes reported if both fail.
+- **FILM takes an explicit image pair**, not a frame list — a frames list
+  returned `422 Field required` for `start_image_url` / `end_image_url`.
+  `interpolate_video_media()` now maps the frames it is given onto that pair.
+
 ### Added — Gemini media adapter, the first async-job provider (M4)
 
 - **Gemini is now a media adapter** for `image_generate`, `image_edit`,
