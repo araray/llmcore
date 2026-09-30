@@ -269,6 +269,118 @@ class SearchProviderError(LLMCoreError):
 
 
 # =============================================================================
+# MEDIA SUBSYSTEM EXCEPTIONS
+# =============================================================================
+
+
+class MediaError(LLMCoreError):
+    """Base class for errors raised by the media subsystem.
+
+    The media-side analogue of :class:`ProviderError`.  Used by
+    :mod:`llmcore.media` for transport faults, unsupported operations, and
+    job-lifecycle failures.
+
+    Attributes:
+        provider_name: Media provider instance involved, when known.
+        capability: The media capability being attempted, when known.
+    """
+
+    def __init__(
+        self,
+        message: str = "Media error.",
+        *,
+        provider_name: str | None = None,
+        capability: str | None = None,
+    ):
+        self.provider_name = provider_name
+        self.capability = capability
+        bits = []
+        if provider_name:
+            bits.append(f"provider='{provider_name}'")
+        if capability:
+            bits.append(f"capability='{capability}'")
+        detail = f" ({', '.join(bits)})" if bits else ""
+        super().__init__(f"{message}{detail}")
+
+
+class MediaCapabilityError(MediaError):
+    """Raised when no configured provider can satisfy a media capability.
+
+    Carries the providers that *could* satisfy it if enabled, so the message can
+    tell the caller what to configure rather than just what failed.
+
+    Attributes:
+        candidates: Providers known to support the capability but not currently
+            usable (unconfigured, missing dependency, or excluded by a filter).
+    """
+
+    def __init__(
+        self,
+        message: str = "No provider satisfies this media capability.",
+        *,
+        capability: str | None = None,
+        candidates: list[str] | None = None,
+    ):
+        self.candidates = candidates or []
+        if self.candidates:
+            message = f"{message} Providers that could satisfy it: {', '.join(self.candidates)}."
+        super().__init__(message, capability=capability)
+
+
+class MediaJobError(MediaError):
+    """Raised when a long-running media job fails or is unrecoverable.
+
+    Attributes:
+        job_id: The llmcore-local job id.
+        status: Terminal status the job reached.
+    """
+
+    def __init__(
+        self,
+        message: str = "Media job failed.",
+        *,
+        job_id: str | None = None,
+        status: str | None = None,
+        provider_name: str | None = None,
+        capability: str | None = None,
+    ):
+        self.job_id = job_id
+        self.status = status
+        bits = []
+        if job_id:
+            bits.append(f"job={job_id}")
+        if status:
+            bits.append(f"status={status}")
+        prefix = f"[{', '.join(bits)}] " if bits else ""
+        super().__init__(
+            f"{prefix}{message}", provider_name=provider_name, capability=capability
+        )
+
+
+class MediaJobTimeoutError(MediaJobError):
+    """Raised when a media job does not reach a terminal state in time.
+
+    The job itself is *not* cancelled — the handle remains valid and can be
+    waited on again, so an expensive video generation is never thrown away just
+    because a client-side deadline elapsed.
+    """
+
+    def __init__(
+        self,
+        message: str = "Media job did not finish before the timeout.",
+        *,
+        job_id: str | None = None,
+        status: str | None = None,
+        timeout_seconds: float | None = None,
+        provider_name: str | None = None,
+    ):
+        self.timeout_seconds = timeout_seconds
+        if timeout_seconds is not None:
+            message = f"{message} Waited {timeout_seconds:g}s; the job is still live."
+        super().__init__(message, job_id=job_id, status=status, provider_name=provider_name)
+
+
+# =============================================================================
 # MODERATION EXCEPTIONS (plan SF-1 / DDS-06)
 # =============================================================================
 

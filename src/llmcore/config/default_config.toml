@@ -1240,6 +1240,71 @@ max_retries = 2
 
 
 # ==============================================================================
+# [media] - Generative Media (image / audio / video)
+# ==============================================================================
+# The media subsystem is the sibling of [providers] (chat) and
+# [search_providers] (web/data search).  It is reached through `llm.media`:
+#
+#   await llm.media.images.generate("an orange tabby")
+#   async for chunk in llm.media.audio.stream_tts("hello"): ...
+#   job = await llm.media.video.generate("a drone shot over dunes")
+#   result = await llm.media.wait(job)
+#
+# IMPORTANT: media adapters ARE the chat providers above.  Any provider
+# instance that implements the media protocols becomes an adapter, so there is
+# ONE credential per vendor and nothing to duplicate here.  This section only
+# configures routing, artifact handling and job policy.
+#
+# Media is entirely optional: omit this section and `llm.media` still works
+# with built-in defaults, reporting whatever the configured providers can do
+# (`llm.media.capabilities()` / `llm.media.who_can("video_generate")`).
+#
+# See docs/MEDIA_SUBSYSTEM_SPEC.md for the design.
+[media]
+
+  # --- Artifact handling ---
+  # Media vendors return SHORT-LIVED URLs.  Storing a URI instead of the bytes
+  # yields a dead link hours later, so artifacts can be materialized locally:
+  #   "on_expiry" (default) - fetch only artifacts whose URL carries an expiry
+  #   "always"              - fetch every remote artifact
+  #   "never"               - never fetch; you handle URIs yourself
+  artifact_materialize = "on_expiry"
+
+  # Content-addressed store for materialized bytes (sharded by SHA-256).
+  artifact_path = "~/.llmcore/media"
+
+  # --- Routing ---
+  # Preference order per capability.  The first CONFIGURED provider that
+  # supports the capability wins; unconfigured names are skipped, so a list can
+  # name providers you have not set up yet.  Omit a capability to use the
+  # built-in default order (see llmcore/media/manager.py: DEFAULT_ROUTING).
+  #
+  # Capability names: tts, tts_stream, asr, asr_stream, voice_agent, music,
+  # sfx, voice_design, image_generate, image_edit, image_upscale,
+  # image_variate, ocr, video_generate, video_edit, video_interpolate,
+  # video_reframe, video_upscale, video_extend.
+  [media.routing]
+  # tts = ["elevenlabs", "openai", "deepgram"]
+  # asr = ["deepgram", "openai", "elevenlabs"]
+  # image_generate = ["openai", "gemini", "fal"]
+  # video_generate = ["gemini", "fal", "replicate"]
+  # video_interpolate = ["fal", "replicate"]
+
+  # --- Long-running jobs ---
+  # Video generation and queue-based vendors are asynchronous: submit, then
+  # wait.  Polling is always available; webhooks (a later phase) only ever
+  # short-circuit the wait, so llmcore stays usable with no public ingress.
+  [media.jobs]
+  # First sleep after submission, in seconds.
+  poll_initial_seconds = 2
+  # Ceiling for the exponential backoff, in seconds.
+  poll_max_seconds = 30
+  # Default wall-clock budget for `llm.media.wait(job)`.  A timeout does NOT
+  # cancel the job - the handle stays valid and can be waited on again, so an
+  # expensive generation is never discarded over a client-side deadline.
+  job_timeout_seconds = 1800
+
+# ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations
 # ==============================================================================
 # This section defines web/data SEARCH provider instances.  They are the

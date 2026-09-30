@@ -3,7 +3,8 @@
 Generative image, audio and video as a first-class `llmcore` subsystem, plus the
 provider adapters that sit behind it.
 
-- **Status:** design + specification. Nothing implemented.
+- **Status:** **M1 implemented** (core types, protocols, routers, job manager,
+  artifact store, config, fake adapter). M2 onward not started — see §5.
 - **Written:** 2026-09-29
 - **Primary input:** `/av/data/repos/docs/llmcore/researches/image-audio-video_providers_2026september.md`
   (the provider survey and priority matrix; this document is the llmcore-side design)
@@ -332,7 +333,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **M1** | `llmcore.media` core: types, protocols, routers, `MediaJobManager` (poll only), `ArtifactStore`, card schema `media`/`sourcing`/`policy` blocks, config section, fake adapter + tests | No provider work lands before this |
+| **M1** ✅ | `llmcore.media` core: types, protocols, routers, `MediaJobManager` (poll only), `ArtifactStore`, config section, fake adapter + tests. *Card schema blocks deferred to M2, where the first real adapter needs them.* | Landed 2026-09-30, 134 tests |
 | **M2** | Refactor **Deepgram** behind the audio protocols; keep its public methods | Realtime + batch both pass through the abstraction |
 | **M3** | **OpenAI** media: images generate/edit, TTS, ASR, realtime audio | Lowest marginal cost — adapter already exists |
 | **M4** | **Google** media: Imagen/Nano-Banana images, **Veo** video (async job), native TTS | First true async-job provider; validates §2.8 |

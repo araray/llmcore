@@ -217,6 +217,7 @@ class LLMCore:
         self._runtime_config_dirty = False
         self._original_config_dict = {}
         self._observability = None
+        self._media_manager: Any | None = None
         # Grimoire control plane (populated by _initialize_from_config)
         self._grimoire: Any | None = None
         self._grimoire_config: Any | None = None
@@ -235,6 +236,35 @@ class LLMCore:
     def prompt_registry(self) -> Any:
         """The instance-level prompt registry (grimoire-backed adapter)."""
         return self._prompt_registry
+
+    @property
+    def media(self) -> Any:
+        """The media subsystem: generative image, audio and video.
+
+        Routers hang off this accessor::
+
+            await llm.media.images.generate("an orange tabby")
+            async for chunk in llm.media.audio.stream_tts("hello"):
+                ...
+            job = await llm.media.video.generate("a drone shot over dunes")
+            result = await llm.media.wait(job)
+
+        Adapters are the configured chat providers that implement the media
+        protocols, so no separate credentials are needed. Capability discovery
+        (``llm.media.capabilities()`` / ``llm.media.who_can(...)``) reports what
+        the current configuration can actually do.
+
+        Returns:
+            The :class:`~llmcore.media.MediaManager` for this instance.
+
+        Raises:
+            ConfigError: If accessed before ``LLMCore.create()`` finished.
+        """
+        if self._media_manager is None:
+            raise ConfigError(
+                "The media subsystem is not initialized. Use 'await LLMCore.create()'."
+            )
+        return self._media_manager
 
     @classmethod
     async def create(
@@ -516,6 +546,17 @@ class LLMCore:
             )
             await self._search_provider_manager.initialize()
 
+            logger.debug("Initializing MediaManager...")
+            # Media is an optional capability layered on the SAME provider
+            # instances as chat: any provider implementing the media protocols
+            # becomes an adapter, so there is one credential per vendor. Never
+            # fails when [media] is absent, so existing configs are unaffected.
+            from llmcore.media import MediaManager
+
+            self._media_manager = MediaManager.from_provider_manager(
+                self._provider_manager, self.config.get
+            )
+
             logger.debug("Initializing SessionManager...")
             self._session_manager = SessionManager(self._storage_manager.session_storage)
 
@@ -602,6 +643,12 @@ class LLMCore:
         """
         logger.info("Closing LLMCore instance...")
         try:
+            # Media holds no connections of its own (adapters are the chat
+            # providers), but it logs any job left running so an expensive
+            # generation is not silently abandoned.
+            media_mgr = getattr(self, "_media_manager", None)
+            if media_mgr is not None:
+                await media_mgr.close()
             await self._provider_manager.close_all()
             # Search manager may not exist if init failed very early; guard it.
             search_mgr = getattr(self, "_search_provider_manager", None)
