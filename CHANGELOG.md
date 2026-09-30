@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Deepgram behind the media protocols (M2)
+
+- **Deepgram is now a media adapter**, implementing `MediaCapableProvider`,
+  `ASRProvider`, `TTSProvider`, `StreamingTTSProvider` and
+  `StreamingASRProvider`. It declares exactly the five capabilities it can
+  serve (`asr`, `asr_stream`, `tts`, `tts_stream`, `voice_agent`) and no
+  execution class it does not have — Deepgram is request/response or live
+  stream only, never an async job.
+- Deepgram was chosen as the **reference migration** because it is the only
+  integration that already exercises batch STT, realtime WebSocket STT *and* a
+  bidirectional voice agent, so it stress-tests the hard parts of the
+  abstraction before any new vendor lands.
+- **The new methods delegate; they do not duplicate.** `transcribe_media`,
+  `synthesize_speech_media`, `stream_speech_media` and
+  `open_transcription_session` translate `MediaRef` in and `MediaArtifact` out,
+  then call the existing implementations — one code path per operation rather
+  than two that can drift. A remote `MediaRef` is handed to Deepgram's own
+  `transcribe_url` path rather than downloaded locally.
+- **All twelve provider-specific methods are untouched** and still return the
+  legacy types; the three existing Deepgram test suites pass unchanged.
+
+### Added — `models_multimodal` ↔ `MediaArtifact` bridge
+
+- `SpeechResult`, `TranscriptionResult`, `OCRResult`, `GeneratedImage` and
+  `ImageGenerationResult` gained `to_artifact()` / `to_artifacts()`, and the two
+  round-trippable ones gained `from_artifact()`. These types are public API
+  returned by seven providers, so they are **bridged, not replaced** (spec §4.3).
+- Data that must survive the conversion does: audio format → MIME type,
+  diarization segments and timings, `revised_prompt`, OCR page structure. Base64
+  image payloads are decoded to real bytes, because the media layer deals in
+  bytes; malformed base64 degrades to the URI path instead of raising.
+
+Live-validated end to end: TTS through the router produced 146 KB of WAV, the
+resulting artifact was fed straight back in as an ASR input via
+`MediaRef.from_artifact()` and transcribed correctly, and streaming TTS yielded
+39 chunks. 74 new tests; full unit suite 5372 passed.
+
 ### Added — media subsystem core (M1)
 
 - **`llmcore.media`**, reached through `llm.media`: a sibling subsystem to chat

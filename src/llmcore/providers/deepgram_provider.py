@@ -88,6 +88,12 @@ from .base import BaseProvider, ContextPayload
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 
+    from ..media.models import (
+        MediaCapability,
+        MediaExecution,
+        MediaRef,
+        MediaResult,
+    )
     from ..models import Tool
 
 logger = logging.getLogger(__name__)
@@ -2157,6 +2163,208 @@ class DeepgramProvider(BaseProvider):
 
     # ------------------------------------------------------------------
     # Escape hatch
+    # ------------------------------------------------------------------
+
+    # ==================================================================
+    # Media subsystem adapter (llmcore.media protocols)
+    # ==================================================================
+    #
+    # Deepgram is the reference migration for the media subsystem (see
+    # docs/MEDIA_SUBSYSTEM_SPEC.md §4.4): it is the only integration that
+    # already exercises batch STT, realtime WebSocket STT and a bidirectional
+    # voice agent, so it validates the hard parts of the abstraction before any
+    # new vendor lands.
+    #
+    # The twelve provider-specific methods above are UNCHANGED and remain the
+    # full-power surface. These adapters are thin: they translate MediaRef in
+    # and MediaArtifact out, and delegate to the existing implementations. That
+    # keeps one code path per operation rather than two that can drift.
+
+    def media_capabilities(self) -> "frozenset[MediaCapability]":
+        """Capabilities Deepgram can serve with the current configuration.
+
+        Deepgram is speech-only by design: no image, video, music or OCR.
+        """
+        from ..media.models import MediaCapability
+
+        return frozenset(
+            {
+                MediaCapability.ASR,
+                MediaCapability.ASR_STREAM,
+                MediaCapability.TTS,
+                MediaCapability.TTS_STREAM,
+                MediaCapability.VOICE_AGENT,
+            }
+        )
+
+    def media_execution(
+        self, capability: "MediaCapability", model: str | None = None
+    ) -> "MediaExecution":
+        """Return how *capability* completes on Deepgram.
+
+        Everything Deepgram does is either request/response or a live stream —
+        it has no asynchronous job surface, so ``ASYNC_JOB`` is never returned.
+        """
+        from ..media.models import MediaCapability, MediaExecution
+
+        streaming = {
+            MediaCapability.ASR_STREAM,
+            MediaCapability.TTS_STREAM,
+            MediaCapability.VOICE_AGENT,
+        }
+        return MediaExecution.STREAM if capability in streaming else MediaExecution.REQUEST_RESPONSE
+
+    @staticmethod
+    def _media_ref_to_audio(audio: "MediaRef") -> tuple[bytes | str, dict[str, Any]]:
+        """Translate a :class:`MediaRef` into ``transcribe_audio`` arguments.
+
+        Deepgram transcribes a remote URL natively, so a remote ref is passed
+        through as ``url=`` rather than downloaded locally.
+
+        Returns:
+            ``(audio_data, extra_kwargs)`` for ``transcribe_audio``.
+        """
+        if audio.is_remote:
+            # transcribe_url path: audio_data is unused but must be well-formed.
+            return b"", {"url": audio.url}
+        return audio.read_bytes(), {}
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: "MediaRef",
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Transcribe audio, returning a normalized media result.
+
+        Delegates to :meth:`transcribe_audio`; ``timestamps`` maps onto
+        Deepgram's ``utterances`` parameter, which is what produces per-segment
+        timings.
+        """
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        payload, extra = self._media_ref_to_audio(audio)
+        if diarize is not None:
+            extra["diarize"] = diarize
+        if timestamps is not None:
+            extra["utterances"] = timestamps
+
+        transcript = await self.transcribe_audio(
+            payload, model=model, language=language, **extra, **kwargs
+        )
+        artifact = transcript.to_artifact()
+        return MediaResult(
+            capability=MediaCapability.ASR,
+            provider=self.get_name(),
+            model=transcript.model,
+            artifacts=(artifact,),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=transcript.model,
+                basis="per_audio_minute",
+                audio_minutes=(transcript.duration_seconds / 60.0)
+                if transcript.duration_seconds
+                else None,
+                seconds=transcript.duration_seconds,
+            ),
+            raw=dict(transcript.metadata),
+        )
+
+    async def synthesize_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        speed: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Synthesize speech, returning a normalized media result.
+
+        In Deepgram the voice is encoded in the model id (``aura-2-thalia-en``);
+        :meth:`generate_speech` already reconciles ``voice``/``model``, so both
+        are forwarded unchanged.
+        """
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if sample_rate_hz is not None:
+            kwargs.setdefault("sample_rate", sample_rate_hz)
+        speech_kwargs: dict[str, Any] = {}
+        if voice is not None:
+            speech_kwargs["voice"] = voice
+        if audio_format is not None:
+            speech_kwargs["response_format"] = audio_format
+        if speed is not None:
+            speech_kwargs["speed"] = speed
+
+        speech = await self.generate_speech(text, model=model, **speech_kwargs, **kwargs)
+        artifact = speech.to_artifact()
+        return MediaResult(
+            capability=MediaCapability.TTS,
+            provider=self.get_name(),
+            model=speech.model,
+            artifacts=(artifact,),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=speech.model,
+                basis="per_character",
+                characters=len(text),
+                seconds=speech.duration_seconds,
+            ),
+            raw=dict(speech.metadata),
+        )
+
+    def stream_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[bytes]:
+        """Stream synthesized speech as it is produced.
+
+        Returns the async iterator directly (not a coroutine), matching
+        :class:`~llmcore.media.protocols.StreamingTTSProvider`.
+
+        Note ``voice`` is folded into ``model`` because Deepgram encodes the
+        voice in the model id; an explicit ``model`` wins.
+        """
+        return self.stream_speech(
+            text,
+            model=model or voice,
+            response_format=audio_format,
+            sample_rate=sample_rate_hz,
+            **kwargs,
+        )
+
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Open a realtime, bidirectional transcription session.
+
+        Returns the async context manager from
+        :meth:`open_transcription_socket`, so the caller keeps full duplex
+        control (``send_audio`` / ``finalize`` / ``keepalive`` interleaved with
+        iterating events) — realtime ASR is not expressible as an iterator.
+        """
+        return self.open_transcription_socket(
+            model=model, language=language, sample_rate=sample_rate_hz, **kwargs
+        )
+
     # ------------------------------------------------------------------
 
     @property
