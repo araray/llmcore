@@ -134,6 +134,9 @@ class FalProvider(BaseProvider):
 
     _MEDIA_CAPABILITIES: frozenset[str] = frozenset(_DEFAULT_MODELS)
 
+    #: fal accepts a per-request callback, so the router may offer one.
+    accepts_webhook_url: bool = True
+
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """Initialize the fal provider.
 
@@ -361,13 +364,22 @@ class FalProvider(BaseProvider):
             status_code=status,
         )
 
-    async def _submit(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Submit *payload* to *endpoint*'s queue and return the submission."""
+    async def _submit(
+        self, endpoint: str, payload: dict[str, Any], webhook_url: str | None = None
+    ) -> dict[str, Any]:
+        """Submit *payload* to *endpoint*'s queue and return the submission.
+
+        *webhook_url* is a per-job callback issued by the job manager. It
+        takes precedence over any statically configured URL, because a
+        single-use token bound to this job is strictly better than one
+        endpoint receiving every result.
+        """
         if self._backend == "sdk":
             handle = await self._sdk.submit(endpoint, arguments=payload)
             return {"request_id": handle.request_id}
 
-        params = {"fal_webhook": self._webhook_url} if self._webhook_url else None
+        hook = webhook_url or self._webhook_url
+        params = {"fal_webhook": hook} if hook else None
         client = self._get_http()
         try:
             resp = await client.post(f"/{endpoint}", json=payload, params=params)
@@ -513,14 +525,21 @@ class FalProvider(BaseProvider):
     # --- job plumbing ---
 
     async def _submit_job(
-        self, capability: str, model: str | None, payload: dict[str, Any]
+        self,
+        capability: str,
+        model: str | None,
+        payload: dict[str, Any],
+        webhook_url: str | None = None,
     ) -> "MediaJob":
         """Submit a queue request and wrap it in a tracked :class:`MediaJob`."""
         from ..media.models import MediaCapability, MediaJob, MediaJobStatus
 
         endpoint = self._endpoint_for(capability, model)
+        # Capability methods funnel **kwargs into the payload, so the callback
+        # URL arrives here and must be lifted out before it reaches the model.
+        webhook_url = payload.pop("webhook_url", None) or webhook_url
         clean = {k: v for k, v in payload.items() if v is not None}
-        submission = await self._submit(endpoint, clean)
+        submission = await self._submit(endpoint, clean, webhook_url)
 
         job = MediaJob(
             capability=MediaCapability(capability),
@@ -574,6 +593,43 @@ class FalProvider(BaseProvider):
             endpoint, request_id, job.provider_metadata.get("response_url")
         )
         return self._apply_result(job, result, status)
+
+    async def apply_webhook_payload(
+        self, job: "MediaJob", payload: dict[str, Any]
+    ) -> "MediaJob":
+        """Fold a fal queue callback into *job*.
+
+        fal posts ``{"request_id", "status", "payload", "error"}`` where
+        ``status`` is ``OK`` or ``ERROR``. The delivery is treated as a signal,
+        not as the truth: a mismatched ``request_id`` is ignored and the job is
+        polled instead, because anyone who learns a callback URL can POST to it
+        and a wrong artifact is worse than a slow one.
+        """
+        from ..media.models import MediaJobStatus
+
+        request_id = payload.get("request_id")
+        if request_id and job.provider_job_id and request_id != job.provider_job_id:
+            logger.warning(
+                "fal webhook request_id %s does not match job %s; polling instead.",
+                request_id,
+                job.id,
+            )
+            return await self.poll_media_job(job)
+
+        status = str(payload.get("status") or "").upper()
+        if status == "ERROR" or payload.get("error"):
+            job.status = MediaJobStatus.FAILED
+            job.error = str(payload.get("error") or payload.get("payload") or "fal job failed")
+            job.touch()
+            return job
+        if status != "OK":
+            # An intermediate or unrecognised event: fall back to the queue.
+            return await self.poll_media_job(job)
+
+        result = payload.get("payload")
+        if not isinstance(result, dict):
+            return await self.poll_media_job(job)
+        return self._apply_result(job, result, None)
 
     async def cancel_media_job(self, job: "MediaJob") -> "MediaJob":
         """Request cancellation of *job*.

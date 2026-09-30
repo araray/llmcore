@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — generic webhook receiver for media jobs (M9a)
+
+- **`llmcore.media.webhooks`**: a vendor-neutral callback receiver. `WebhookRegistry`
+  issues signed, single-use callback URLs; `create_webhook_app()` returns a plain
+  ASGI app (no web framework is imposed) that can be mounted anywhere.
+- **Polling remains the fallback, by design.** `wait()` races the callback
+  against its existing backoff sleep and polls anyway, so webhook and poll
+  delivery converge on one code path instead of two. A missing, late, duplicated
+  or malformed callback costs latency, never correctness — and
+  `webhook_base_url = ""` (the default, and the normal case with no public
+  ingress) stays a fully supported mode.
+- **Reserve-then-bind.** Vendors want the callback URL at submission, before the
+  job exists, so a token is reserved, handed over, then bound to the job that
+  comes back. A delivery arriving in that window is refused. Tokens are
+  HMAC-signed, verified in constant time, single-use, and bound server-side so
+  they cannot be transplanted onto another job.
+- **Callback URLs are only offered to adapters that opt in** via
+  `accepts_webhook_url`. Most media adapters forward unknown keyword arguments
+  into the vendor payload — fal does so deliberately — so passing one blindly
+  would post the callback URL to a model as a generation parameter.
+- **fal now parses its own callbacks** and receives a per-job URL. A delivery
+  whose `request_id` does not match falls back to polling: anyone who learns a
+  callback URL can POST to it, and a wrong artifact is worse than a slow one.
+- Providers that cannot parse a callback still fall back to a single poll — the
+  delivery says *when* to look even when it cannot say *what* happened.
+- New config: `media.jobs.webhook_base_url`, `media.jobs.webhook_secret`.
+
 ### Added — ElevenLabs provider, and consent as first-class metadata (M6)
 
 - **New `elevenlabs` provider** (alias `eleven_labs`): TTS, streaming TTS, batch

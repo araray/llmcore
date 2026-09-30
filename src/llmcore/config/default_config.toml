@@ -1414,6 +1414,25 @@ max_retries = 2
   # expensive generation is never discarded over a client-side deadline.
   job_timeout_seconds = 1800
 
+  # --- Webhooks (optional) ---
+  # Public base URL where vendors can POST job callbacks. Leave EMPTY to poll
+  # only, which is the default and the right answer whenever llmcore has no
+  # public ingress (local development, most CI). A callback is an optimization,
+  # never a requirement: `llm.media.wait()` races the callback against its poll
+  # loop, so a missing, late or malformed delivery costs latency, never
+  # correctness.
+  #
+  # Mount the receiver with:
+  #   from llmcore.media import create_webhook_app
+  #   app = create_webhook_app(llm.media.jobs, llm.media.jobs.webhooks)
+  # It is plain ASGI - no web framework is imposed on you.
+  webhook_base_url = ""
+
+  # HMAC key for the single-use callback tokens. Generated per process when
+  # unset, which means tokens do NOT survive a restart - set this explicitly if
+  # jobs must outlive the process that submitted them.
+  # webhook_secret = "..."
+
 # ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations
 # ==============================================================================

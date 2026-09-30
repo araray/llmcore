@@ -62,8 +62,33 @@ class _BaseRouter:
         """
         adapter = self._manager.resolve(capability, provider=provider, model=model)
         fn = getattr(adapter, method)
-        outcome = await fn(*args, model=model, **kwargs)
-        return self._manager._finalize(outcome)
+
+        # A callback URL is offered only to adapters that opt in. Most media
+        # adapters forward unknown keyword arguments straight into the vendor
+        # payload, so handing one to a provider that does not understand it
+        # would post our callback URL to a model as a generation parameter.
+        reserved = None
+        if getattr(adapter, "accepts_webhook_url", False):
+            reserved = self._manager.jobs.webhooks.reserve()
+            if reserved is not None:
+                kwargs["webhook_url"] = reserved[1]
+
+        try:
+            outcome = await fn(*args, model=model, **kwargs)
+        except Exception:
+            if reserved is not None:
+                self._manager.jobs.webhooks.release(reserved[0])
+            raise
+
+        finalized = self._manager._finalize(outcome)
+        if reserved is not None:
+            job_id = getattr(finalized, "id", None)
+            if job_id is not None and hasattr(finalized, "status"):
+                self._manager.jobs.webhooks.bind(reserved[0], job_id)
+            else:
+                # The call answered synchronously; nothing will ever call back.
+                self._manager.jobs.webhooks.release(reserved[0])
+        return finalized
 
     def _stream(
         self,

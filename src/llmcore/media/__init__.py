@@ -56,6 +56,7 @@ from .protocols import (
     VoiceDesignProvider,
 )
 from .routers import AudioRouter, ImageRouter, VideoRouter
+from .webhooks import WebhookDelivery, WebhookRegistry, create_webhook_app
 
 __all__ = [
     # manager + routers
@@ -71,6 +72,9 @@ __all__ = [
     "MediaRef",
     "MediaArtifact",
     "MediaProvenance",
+    "WebhookDelivery",
+    "WebhookRegistry",
+    "create_webhook_app",
     "VoiceConsent",
     "MediaUsage",
     "MediaResult",
