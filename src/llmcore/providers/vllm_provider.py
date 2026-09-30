@@ -211,6 +211,13 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
         default_model = "meta-llama/Llama-3.3-70B-Instruct"
     """
 
+    #: vLLM serves language models over an OpenAI-compatible surface. It has no
+    #: image, speech or audio endpoints, so it declares nothing — inheriting
+    #: OpenAI's declaration would make the router call endpoints that 404.
+    #: (Embeddings/rerank are a tracked gap; see PROVIDER_MODERNIZATION_PLAN §8.)
+    _MEDIA_CAPABILITIES: frozenset[Any] = frozenset()
+
+
     #: Per-model cache of ``max_model_len`` discovered from
     #: ``/v1/models``. Populated on :meth:`get_models_details` call;
     #: consulted by :meth:`get_max_context_length`. Process-local;

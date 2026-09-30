@@ -132,6 +132,12 @@ class PoeProvider(OpenAIProvider):
         timeout = 120
     """
 
+    #: Poe's media bots are reached as chat *bots*, not through /v1/images or
+    #: /v1/audio, so none of the OpenAI media endpoints exist here. Surfacing
+    #: them through the media routers is tracked separately.
+    _MEDIA_CAPABILITIES: frozenset[Any] = frozenset()
+
+
     # Poe-specific state
     _backend: str = "openai"
     _poe_api_key: str = ""

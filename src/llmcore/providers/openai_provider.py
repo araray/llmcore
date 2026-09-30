@@ -17,7 +17,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     import openai
@@ -77,6 +77,11 @@ from ..models import Role as LLMCoreRole
 from ..tokens import count_tokens as _count_tokens
 from ..tokens import get_counter as _get_token_counter
 from .base import BaseProvider, ContextPayload
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import AsyncIterator, Sequence
+
+    from ..media.models import MediaCapability, MediaExecution, MediaRef, MediaResult
 
 logger = logging.getLogger(__name__)
 
@@ -836,6 +841,7 @@ class OpenAIProvider(BaseProvider):
         response_format: str = "json",
         temperature: float | None = None,
         timestamp_granularities: list[str] | None = None,
+        filename: str | None = None,
         **kwargs: Any,
     ) -> Any:
         """Transcribe audio to text using OpenAI Whisper / GPT-4o-transcribe.
@@ -872,11 +878,17 @@ class OpenAIProvider(BaseProvider):
             file_obj: Any = open(file_path, "rb")
             file_name = file_path.name
         else:
-            # Raw bytes — wrap in a tuple for the SDK
+            # Raw bytes — wrap in a tuple for the SDK. The *name* is what tells
+            # OpenAI the container format: sending mp3 bytes labelled
+            # "audio.wav" is rejected with
+            # "This model does not support the format you provided".
             import io
+            import mimetypes
 
-            file_obj = ("audio.wav", io.BytesIO(audio_data), "audio/wav")
-            file_name = "audio.wav"
+            name = filename or "audio.wav"
+            mime = mimetypes.guess_type(name)[0] or "audio/wav"
+            file_obj = (name, io.BytesIO(audio_data), mime)
+            file_name = name
 
         api_kwargs: dict[str, Any] = {
             "file": file_obj,
@@ -972,6 +984,387 @@ class OpenAIProvider(BaseProvider):
     # Multimodal: Image Generation
     # ------------------------------------------------------------------
 
+
+    # ==================================================================
+    # Media subsystem adapter (llmcore.media protocols)
+    # ==================================================================
+    #
+    # Phase M3 of docs/MEDIA_SUBSYSTEM_SPEC.md. The image/speech methods above
+    # are unchanged; these adapters translate MediaRef in and MediaArtifact out
+    # and delegate, so there is one code path per operation.
+    #
+    # NOTE FOR SUBCLASSES: DeepInfra, vLLM, Poe and OpenRouter all extend this
+    # class and therefore INHERIT these methods — but not the endpoints behind
+    # them. vLLM has no image generation; OpenRouter is a chat gateway. Each
+    # subclass must set ``_MEDIA_CAPABILITIES`` to what IT can actually serve,
+    # and a test asserts every subclass does so explicitly. Inheriting the
+    # declaration would make the router confidently call an endpoint that
+    # returns 404.
+
+    #: Media capabilities this provider class serves. Subclasses MUST override.
+    #: Deliberately NOT inherited meaningfully: see the note above.
+    #: Sora video is excluded — openai 3.1 deprecated the video APIs.
+    _MEDIA_CAPABILITIES: frozenset[Any] = frozenset(
+        {
+            "image_generate",
+            "image_edit",
+            "tts",
+            "tts_stream",
+            "asr",
+        }
+    )
+
+    def media_capabilities(self) -> "frozenset[MediaCapability]":
+        """Capabilities this provider serves, declared per class."""
+        from ..media.models import MediaCapability
+
+        return frozenset(MediaCapability(c) for c in self._MEDIA_CAPABILITIES)
+
+    def media_execution(
+        self, capability: "MediaCapability", model: str | None = None
+    ) -> "MediaExecution":
+        """Return how *capability* completes.
+
+        Every OpenAI media surface is synchronous; only TTS has a stream.
+        """
+        from ..media.models import MediaCapability, MediaExecution
+
+        if capability is MediaCapability.TTS_STREAM:
+            return MediaExecution.STREAM
+        return MediaExecution.REQUEST_RESPONSE
+
+    # --- image ---
+
+    async def generate_image_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        seed: int | None = None,
+        negative_prompt: str | None = None,
+        reference_images: "Sequence[MediaRef] | None" = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate images, returning a normalized media result.
+
+        ``seed`` and ``negative_prompt`` have no OpenAI equivalent and are
+        ignored with a debug log rather than silently dropped. Supplying
+        ``reference_images`` routes to the *edit* endpoint, which is how
+        OpenAI expresses reference-conditioned generation.
+        """
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if reference_images:
+            return await self.edit_image_media(
+                prompt, image=reference_images[0], model=model, n=n, size=size, **kwargs
+            )
+        for unsupported, value in (("seed", seed), ("negative_prompt", negative_prompt)):
+            if value is not None:
+                logger.debug("OpenAI image generation ignores '%s'.", unsupported)
+
+        result = await self.generate_image(prompt, model=model, n=n, size=size, **kwargs)
+        return MediaResult(
+            capability=MediaCapability.IMAGE_GENERATE,
+            provider=self.get_name(),
+            model=result.model,
+            artifacts=tuple(result.to_artifacts()),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=result.model,
+                basis="per_image",
+                images=len(result.images),
+            ),
+            raw=dict(result.metadata),
+        )
+
+    async def edit_image_media(
+        self,
+        prompt: str,
+        *,
+        image: "MediaRef",
+        mask: "MediaRef | None" = None,
+        model: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Edit an image via ``POST /v1/images/edits``.
+
+        Args:
+            prompt: What the edit should produce.
+            image: The image to edit. A remote ref is fetched first, because the
+                edits endpoint takes an upload rather than a URL.
+            mask: Optional transparency mask restricting the edited region.
+            model: Image model; defaults to ``gpt-image-1``.
+            n: Number of variants.
+            size: Output dimensions.
+            **kwargs: Extra OpenAI parameters (``quality``, ``background``,
+                ``input_fidelity``, ``output_format`` …).
+
+        Returns:
+            A :class:`~llmcore.media.MediaResult` with the edited images.
+
+        Raises:
+            ProviderError: If the client is missing or the API call fails.
+        """
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+        from ..models_multimodal import GeneratedImage, ImageGenerationResult
+
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+
+        img_model = model or "gpt-image-1"
+        api_kwargs: dict[str, Any] = {
+            "prompt": prompt,
+            "model": img_model,
+            "n": n,
+            "image": await self._media_upload_tuple(image, "image.png"),
+        }
+        if mask is not None:
+            api_kwargs["mask"] = await self._media_upload_tuple(mask, "mask.png")
+        if size is not None:
+            api_kwargs["size"] = size
+        api_kwargs.update(kwargs)
+
+        try:
+            response = await self._client.images.edit(**api_kwargs)
+        except OpenAIAPIStatusError as e:
+            raise ProviderError(self.get_name(), f"Image edit error ({e.status_code}): {e}")
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"Image edit error: {e}")
+
+        images = [
+            GeneratedImage(
+                data=getattr(item, "b64_json", None),
+                url=getattr(item, "url", None),
+                revised_prompt=getattr(item, "revised_prompt", None),
+                format=kwargs.get("output_format", "png"),
+            )
+            for item in response.data
+        ]
+        result = ImageGenerationResult(
+            images=images,
+            model=img_model,
+            metadata={"created": getattr(response, "created", None)},
+        )
+        return MediaResult(
+            capability=MediaCapability.IMAGE_EDIT,
+            provider=self.get_name(),
+            model=img_model,
+            artifacts=tuple(result.to_artifacts()),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=img_model,
+                basis="per_image",
+                images=len(images),
+            ),
+            raw=dict(result.metadata),
+        )
+
+    async def _media_upload_tuple(self, ref: "MediaRef", fallback_name: str) -> Any:
+        """Turn a :class:`MediaRef` into an OpenAI file-upload tuple.
+
+        The images endpoints take an upload, not a URL, so a remote ref is
+        fetched here rather than handed through.
+        """
+        if ref.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(ref.url or "")
+        else:
+            data = ref.read_bytes()
+        return (ref.filename or fallback_name, data, ref.mime_type or "image/png")
+
+    # --- audio ---
+
+    async def synthesize_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        speed: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Synthesize speech, returning a normalized media result."""
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if sample_rate_hz is not None:
+            logger.debug("OpenAI TTS has no sample-rate parameter; ignoring it.")
+        speech_kwargs: dict[str, Any] = {}
+        if voice is not None:
+            speech_kwargs["voice"] = voice
+        if audio_format is not None:
+            speech_kwargs["response_format"] = audio_format
+        if speed is not None:
+            speech_kwargs["speed"] = speed
+
+        speech = await self.generate_speech(text, model=model, **speech_kwargs, **kwargs)
+        return MediaResult(
+            capability=MediaCapability.TTS,
+            provider=self.get_name(),
+            model=speech.model,
+            artifacts=(speech.to_artifact(),),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=speech.model,
+                basis="per_character",
+                characters=len(text),
+            ),
+            raw=dict(speech.metadata),
+        )
+
+    def stream_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[bytes]":
+        """Stream synthesized speech as it is produced.
+
+        Uses the SDK's streaming response so the first bytes arrive before
+        synthesis completes. Returns the iterator directly, not a coroutine.
+        """
+        client = self._client
+        provider_name = self.get_name()
+
+        async def _stream() -> "AsyncIterator[bytes]":
+            if not client:
+                raise ProviderError(provider_name, "Client not initialized.")
+            api_kwargs: dict[str, Any] = {
+                "model": model or "gpt-4o-mini-tts",
+                "voice": voice or "alloy",
+                "input": text,
+                "response_format": audio_format or "mp3",
+                **kwargs,
+            }
+            try:
+                async with client.audio.speech.with_streaming_response.create(
+                    **api_kwargs
+                ) as response:
+                    async for chunk in response.iter_bytes():
+                        yield chunk
+            except OpenAIAPIStatusError as e:
+                raise ProviderError(provider_name, f"TTS stream error ({e.status_code}): {e}")
+            except OpenAIError as e:
+                raise ProviderError(provider_name, f"TTS stream error: {e}")
+
+        return _stream()
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: "MediaRef",
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Transcribe audio, returning a normalized media result.
+
+        ``timestamps`` maps onto ``timestamp_granularities=["segment"]``.
+        ``diarize`` is only meaningful on the diarizing models, so it is passed
+        through rather than emulated.
+        """
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if audio.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            payload: bytes = await default_fetcher()(audio.url or "")
+        else:
+            payload = audio.read_bytes()
+
+        extra: dict[str, Any] = dict(kwargs)
+        if timestamps:
+            extra.setdefault("timestamp_granularities", ["segment"])
+        if diarize is not None:
+            extra.setdefault("diarize", diarize)
+
+        transcript = await self.transcribe_audio(
+            payload,
+            model=model,
+            language=language,
+            filename=_audio_filename_for(audio),
+            **extra,
+        )
+        return MediaResult(
+            capability=MediaCapability.ASR,
+            provider=self.get_name(),
+            model=transcript.model,
+            artifacts=(transcript.to_artifact(),),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=transcript.model,
+                basis="per_audio_minute",
+                audio_minutes=(transcript.duration_seconds / 60.0)
+                if transcript.duration_seconds
+                else None,
+                seconds=transcript.duration_seconds,
+            ),
+            raw=dict(transcript.metadata),
+        )
+
+    # --- embeddings ---
+
+    async def create_embeddings(
+        self,
+        input_texts: str | list[str],
+        *,
+        model: str | None = None,
+        dimensions: int | None = None,
+        encoding_format: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Create text embeddings via ``POST /v1/embeddings``.
+
+        Closes a long-standing gap: OpenAI embeddings were reachable only
+        through the separate ``[embedding.openai]`` subsystem, so callers
+        holding a provider could not embed with it.
+
+        Args:
+            input_texts: A string or list of strings to embed.
+            model: Embedding model; defaults to ``text-embedding-3-small``.
+            dimensions: Output dimensionality, where the model supports it.
+            encoding_format: ``"float"`` or ``"base64"``.
+            **kwargs: Extra API parameters.
+
+        Returns:
+            The raw API response dict with ``data``, ``model`` and ``usage``.
+
+        Raises:
+            ProviderError: If the client is missing or the API call fails.
+        """
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+
+        api_kwargs: dict[str, Any] = {
+            "model": model or "text-embedding-3-small",
+            "input": input_texts,
+            **kwargs,
+        }
+        if dimensions is not None:
+            api_kwargs["dimensions"] = dimensions
+        if encoding_format is not None:
+            api_kwargs["encoding_format"] = encoding_format
+
+        try:
+            response = await self._client.embeddings.create(**api_kwargs)
+        except OpenAIAPIStatusError as e:
+            raise ProviderError(self.get_name(), f"Embeddings error ({e.status_code}): {e}")
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"Embeddings error: {e}")
+        return response.model_dump(exclude_none=True)
+
     async def generate_image(
         self,
         prompt: str,
@@ -1066,3 +1459,26 @@ class OpenAIProvider(BaseProvider):
         except Exception as e:
             logger.error(f"Unexpected image error: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Image unexpected error: {e}")
+
+
+def _audio_filename_for(ref: "MediaRef") -> str:
+    """Pick an upload filename whose extension names the real audio format.
+
+    OpenAI infers the container from the filename, so an artifact chained in
+    from TTS (mp3 bytes) must not be uploaded as ``audio.wav``.
+    """
+    import mimetypes
+
+    if ref.filename:
+        return ref.filename
+    if ref.mime_type:
+        ext = mimetypes.guess_extension(ref.mime_type)
+        if ext:
+            return f"audio{ext}"
+    if ref.url:
+        from pathlib import Path as _Path
+
+        suffix = _Path(ref.url.split("?", 1)[0]).suffix
+        if suffix:
+            return f"audio{suffix}"
+    return "audio.wav"

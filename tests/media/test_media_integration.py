@@ -16,6 +16,7 @@ import pytest
 import llmcore
 from llmcore.exceptions import ConfigError
 from llmcore.media import MediaCapability, MediaManager
+from llmcore.media.protocols import MediaCapableProvider
 from llmcore.media.testing import FakeMediaProvider
 from llmcore.providers.manager import ProviderManager
 
@@ -201,9 +202,19 @@ class TestDynamicProviderRegistration:
 
 
 class TestManagerFromRealProviderManager:
-    def test_chat_only_providers_are_not_adapters(self):
-        """M1 adds the core only; no shipped provider implements the protocols yet."""
+    def test_capability_less_providers_are_not_adapters(self):
+        """Implementing the protocols is not the same as serving anything.
+
+        vLLM subclasses OpenAIProvider, so since M3 it *inherits* the media
+        protocol methods — but not the endpoints behind them, so it declares an
+        empty capability set. It must not appear as an adapter that can route
+        nothing.
+        """
         pm = ProviderManager(_config({"vllm": dict(VLLM)}))
+        provider = pm.get_provider("vllm")
+        assert isinstance(provider, MediaCapableProvider)  # has the methods
+        assert provider.media_capabilities() == frozenset()  # serves nothing
+
         media = MediaManager.from_provider_manager(pm, lambda k, d=None: d)
         assert media.adapter_names == []
         assert media.has_adapters() is False

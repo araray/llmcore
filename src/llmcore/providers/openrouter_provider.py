@@ -81,6 +81,11 @@ class OpenRouterProvider(OpenAIProvider):
         timeout = 120
     """
 
+    #: OpenRouter is a chat-completions gateway; it exposes no image or audio
+    #: endpoints of its own.
+    _MEDIA_CAPABILITIES: frozenset[Any] = frozenset()
+
+
     # OpenRouter-specific state
     _app_url: str | None = None
     _app_title: str | None = None
