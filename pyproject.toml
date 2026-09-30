@@ -113,6 +113,11 @@ friendli = ["openai>=3.0.0,<4", "httpx>=0.27.0", "friendli>=0.15.1"]
 # official 'fal-client' SDK is an optional second backend (backend = "sdk").
 # Install with: pip install llmcore[fal]
 fal = ["httpx>=0.27.0", "fal-client>=1.0.0"]
+# ElevenLabs — voice/audio (TTS, streaming TTS, STT, SFX, music, voice design).
+# The provider talks to api.elevenlabs.io over httpx directly (default); the
+# official 'elevenlabs' SDK is an optional second backend (backend = "sdk").
+# Install with: pip install llmcore[elevenlabs]
+elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.70.0"]
 # TypeSafe.ai (System One typed judgments: noul/choice/score questions with
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
@@ -224,6 +229,7 @@ all = [
     "llmcore[zai]",
     "llmcore[friendli]",
     "llmcore[fal]",
+    "llmcore[elevenlabs]",
     "llmcore[typesafe]",
     "llmcore[mistral]",
     "llmcore[kimi]",

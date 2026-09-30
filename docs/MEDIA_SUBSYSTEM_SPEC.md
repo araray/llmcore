@@ -3,10 +3,11 @@
 Generative image, audio and video as a first-class `llmcore` subsystem, plus the
 provider adapters that sit behind it.
 
-- **Status:** **M1–M5 implemented** (core subsystem; Deepgram, OpenAI and
-  Gemini migrated behind the protocols, plus fal as the first marketplace
-  adapter). The provider-neutrality gate at M5 passed: **the abstraction did
-  not have to bend.** M6 onward not started — see §5.
+- **Status:** **M1–M6 implemented** (core subsystem; Deepgram, OpenAI and
+  Gemini migrated behind the protocols, fal as the first marketplace adapter,
+  ElevenLabs as the first with consent metadata). M5's neutrality gate passed
+  unchanged; **M6 deliberately extended the core**, which is what its gate
+  asked for. M7 onward not started — see §5.
 - **Written:** 2026-09-29
 - **Primary input:** `/av/data/repos/docs/llmcore/researches/image-audio-video_providers_2026september.md`
   (the provider survey and priority matrix; this document is the llmcore-side design)
@@ -340,7 +341,7 @@ Order follows the research doc's rollout, with llmcore-specific gates.
 | **M3** ✅ | **OpenAI** media: images generate/edit, TTS (+streaming), ASR, and provider-level embeddings. Realtime audio deferred to a later phase with Gemini Live. | Landed 2026-09-30, 42 tests. Live: TTS → artifact → ASR round trip, streaming TTS, embeddings |
 | **M4** ✅ | **Google** media: images (dual transport), **Veo** video (async job), native TTS, embeddings | Landed 2026-09-30, 52 tests. Live: Veo job submitted + polled through `MediaJobManager`; 2 MB image; 112 KB PCM TTS. **`MediaJob` validated against a real vendor — no changes to the abstraction were needed.** |
 | **M5** ✅ | **fal** — queue lifecycle, URL inputs, video, SFX, music, FILM interpolation; 9 capabilities, all async-job | Landed 2026-09-30, 79 tests. Live: image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. **The provider-neutrality test passed — no core type changed.** See §5.2 |
-| **M6** | **ElevenLabs** — batch + realtime STT, TTS, SFX, music, voice design | Consent/provenance as first-class metadata |
+| **M6** ✅ | **ElevenLabs** — TTS, streaming TTS, batch STT, SFX, music, voice design | Landed 2026-09-30, 69 tests. Live: TTS + consent, streaming TTS, STT round trip, SFX. Music/voice design are **plan-gated on the current account** — implemented and unit-tested, not live-validated. **Consent is now first-class: new `VoiceConsent` type and `VoiceDesignProvider` protocol.** Realtime STT deferred — see §5.3 |
 | **M7** | **Replicate** — one generic prediction adapter + model-schema descriptors | Explicitly *not* a class per model |
 | **M8** | **Hugging Face Inference Endpoints** — configurable endpoint/schema adapter | Custom weights / private repos path |
 | **M9** | Webhook receiver, then direct specialists (BFL, Luma, Stability) when justified: lower unit cost, first-party-only feature, data contract, or pre-aggregator access | Otherwise fal/Replicate already cover it |
@@ -434,6 +435,68 @@ One open consequence: fal supports **webhooks** (`?fal_webhook=`), which the
 adapter can already send but nothing in llmcore can yet receive. That receiver
 is M9, and until it exists webhook delivery is configuration a caller supplies
 and handles out-of-band.
+
+### 5.3 What M6 changed about the design
+
+Unlike M5, this phase **did** extend the core — which is what its gate asked
+for. Two additions:
+
+**1. `VoiceConsent`, hung off `MediaProvenance`.** Synthetic speech raises a
+question no other media kind does. A generated image resembles no one in
+particular; a cloned voice belongs to a person who either did or did not agree
+to it. ElevenLabs tracks that state — `category`, `is_owner`, `safety_control`,
+`voice_verification` — but only on the *voice* resource, so a caller wanting to
+refuse audio from an unverified clone would have to know to make a second API
+call. The adapter resolves it (cached per voice) and attaches it to the
+artifact.
+
+The design decision worth recording is the **tri-state**.
+`verification_satisfied` returns `None` when the provider said nothing, which is
+*not* `False`. Collapsing the two would force a default: either silently
+treating unknown voices as cleared, or refusing audio from every provider that
+reports nothing. Both are policy, and policy belongs to the caller. The same
+reasoning drives two related choices:
+
+* A **failed consent lookup** yields `provider_declared=False` with every field
+  `None`, rather than raising. The caller asked for speech; losing the metadata
+  should not lose the audio, and the `None`s read correctly as *we do not know*.
+* **Designed voices** state `category="generated"`, `requires_verification=False`
+  explicitly instead of leaving consent `None` — "this imitates nobody" is a
+  known fact, not an unknown one.
+* **SFX and music** carry no consent record at all, because nothing there is
+  anyone's voice and an empty record would imply a question that does not apply.
+
+**2. `VoiceDesignProvider`.** `MediaCapability.VOICE_DESIGN` had been mapped to
+`TTSProvider` as a placeholder since M1. ElevenLabs is the first provider to
+actually implement it, and voice design is not TTS: it returns *candidate
+voices* from a description rather than speech from text, so the result is a set
+of previews each carrying the id needed to keep it. The M1 protocol-coverage
+invariant caught the placeholder immediately when the real protocol landed —
+the guard working as intended.
+
+Two provider-level findings, both from live calls:
+
+1. **Plan gating must not be reported as an auth failure.** A perfectly valid
+   key on a free plan returns `402 paid_plan_required` or `403
+   feature_not_available`. The first implementation reported the 403 as
+   *"authentication failed — check ELEVENLABS_API_KEY"*, which would send a
+   caller hunting a credential problem they do not have. Now mapped as plan
+   gating, explicitly stating the key is valid. *Generalizable: 403 is not
+   always about credentials.*
+2. **ElevenLabs sound generation is text-conditioned only.** The `SFXProvider`
+   protocol accepts a `video` reference for foley; ElevenLabs cannot use it. The
+   adapter **raises** rather than ignoring it, because silently dropping it
+   would return audio unrelated to the footage the caller passed. A capability
+   two providers both "have" can still differ in what it accepts, and the
+   honest move is to refuse the part that cannot be honoured.
+
+**Deferred: realtime STT.** ElevenLabs offers a realtime speech-to-text
+websocket, and `ASR_STREAM` routing already names it. It is not implemented
+here. Realtime ASR is duplex — the caller pushes audio *and* consumes events —
+so it needs the session shape Deepgram already established, and doing it
+properly is its own piece of work rather than a sixth capability bolted onto
+this one. The adapter therefore does **not** declare `asr_stream`, so routing
+falls through to Deepgram instead of advertising something that would fail.
 
 ---
 

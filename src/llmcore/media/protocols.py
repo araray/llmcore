@@ -55,6 +55,7 @@ __all__ = [
     "VideoEditProvider",
     "VideoGenerationProvider",
     "VideoInterpolationProvider",
+    "VoiceDesignProvider",
 ]
 
 
@@ -296,6 +297,36 @@ class StreamingASRProvider(Protocol):
 
 
 @runtime_checkable
+class VoiceDesignProvider(Protocol):
+    """Generate candidate *voices* from a description, not speech from text.
+
+    Distinct from TTS, which renders text in a voice that already exists. A
+    design call returns several **previews** — each a sample of a different
+    candidate voice — so the caller can audition them and keep one. The
+    artifacts therefore arrive as a set, and each carries the provider-side id
+    needed to create the voice for real.
+    """
+
+    async def design_voice_media(
+        self,
+        description: str,
+        *,
+        model: str | None = None,
+        text: str | None = None,
+        **kwargs: Any,
+    ) -> MediaResult | MediaJob:
+        """Generate voice previews matching *description*.
+
+        Args:
+            description: What the voice should sound like.
+            model: Provider voice-design model.
+            text: Sample text to speak in each preview. Providers that can
+                invent suitable text do so when this is omitted.
+        """
+        ...
+
+
+@runtime_checkable
 class MusicProvider(Protocol):
     """Text-to-music generation."""
 
@@ -428,5 +459,5 @@ CAPABILITY_PROTOCOLS: dict[MediaCapability, type] = {
     MediaCapability.VIDEO_EXTEND: VideoEditProvider,
     MediaCapability.VIDEO_REFRAME: VideoEditProvider,
     MediaCapability.VIDEO_UPSCALE: VideoEditProvider,
-    MediaCapability.VOICE_DESIGN: TTSProvider,
+    MediaCapability.VOICE_DESIGN: VoiceDesignProvider,
 }

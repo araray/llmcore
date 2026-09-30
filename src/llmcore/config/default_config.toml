@@ -681,6 +681,44 @@ max_retries = 2
 
   # --- Ollama Provider ---
   # For locally running models via Ollama.
+
+  # --- ElevenLabs (voice/audio: TTS, streaming TTS, STT, SFX, music, voice design) ---
+  [providers.elevenlabs]
+  # type = "elevenlabs"  # auto-detected from section name (alias: eleven_labs)
+
+  # API Key: set via environment variable for security.
+  # ELEVENLABS_API_KEY is checked first, then the older ELEVEN_API_KEY.
+  # api_key = "..."
+  # api_key_env_var = "ELEVENLABS_API_KEY"
+
+  # Transport backend: "httpx" (direct REST, default) or "sdk" (elevenlabs).
+  # backend = "httpx"
+
+  # Request timeout in seconds.
+  timeout = 120
+
+  # Default voice for TTS. The default is the premade "Sarah" voice, which
+  # needs no verification. List yours with GET /v1/voices.
+  # voice_id = "EXAVITQu4vr4xnSDxMaL"
+
+  # Audio encoding for every capability that returns audio.
+  # e.g. mp3_44100_128, pcm_24000, opus_48000_128, ulaw_8000
+  # output_format = "mp3_44100_128"
+
+  # Attach voice consent metadata (category, ownership, verification state) to
+  # synthesized audio, so callers can refuse output from an unverified clone
+  # without a second API call. One cached lookup per voice.
+  # resolve_consent = true
+
+  # --- Per-capability models ---
+  [providers.elevenlabs.models]
+  # tts = "eleven_v4"                     # GA, 85 languages
+  # tts_stream = "eleven_v4"
+  # asr = "scribe_v1"
+  # sfx = "eleven_text_to_sound_v2"
+  # music = "music_v2_5"
+  # voice_design = "eleven_ttv_v3"
+
   [providers.ollama]
   # Host URL of the running Ollama server.
   # The official `ollama` Python library uses this parameter.

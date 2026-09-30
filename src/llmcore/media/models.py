@@ -62,6 +62,7 @@ __all__ = [
     "MediaRef",
     "MediaResult",
     "MediaUsage",
+    "VoiceConsent",
 ]
 
 
@@ -340,6 +341,77 @@ def _guess_mime(name: str) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class VoiceConsent:
+    """Whose voice this is, and whether the provider says it may be used.
+
+    Synthetic speech raises a question no other media kind does: a generated
+    image resembles no one in particular, but a cloned voice belongs to a
+    person who either did or did not agree to it. Vendors that support voice
+    cloning therefore track consent state, and a caller acting on that state —
+    refusing to ship audio from an unverified clone, say — needs it on the
+    result rather than behind a second API call they may not know to make.
+
+    Every field is optional because most providers report none of this. A
+    ``None`` means *the provider did not say*, which is distinct from ``False``
+    (*the provider said no*). Code that gates on consent must treat the two
+    differently; see :meth:`verification_satisfied`.
+
+    Attributes:
+        voice_id: Provider-side identifier for the voice.
+        voice_name: Human-readable name, when the provider supplies one.
+        category: Provenance class of the voice — e.g. ``"premade"``,
+            ``"cloned"``, ``"professional"``, ``"generated"``. Vendor-specific;
+            not normalized, because collapsing these into a shared vocabulary
+            would lose the distinctions that matter legally.
+        requires_verification: Whether the provider requires this voice to be
+            verified before use.
+        is_verified: Whether the provider considers it verified.
+        verification_failures: Reasons verification did not pass.
+        is_owner: Whether the authenticated account owns the voice.
+        safety_control: Any moderation state the provider attaches to it.
+        provider_declared: Whether these facts came from the provider
+            (``True``) or were inferred locally (``False``).
+    """
+
+    voice_id: str | None = None
+    voice_name: str | None = None
+    category: str | None = None
+    requires_verification: bool | None = None
+    is_verified: bool | None = None
+    verification_failures: tuple[str, ...] = ()
+    is_owner: bool | None = None
+    safety_control: str | None = None
+    provider_declared: bool = True
+
+    @property
+    def is_cloned(self) -> bool | None:
+        """Whether this voice is a clone of a real person's voice.
+
+        Returns ``None`` when the provider did not report a category, rather
+        than guessing that an unknown voice is safe.
+        """
+        if self.category is None:
+            return None
+        return self.category.lower() in {"cloned", "professional", "famous"}
+
+    @property
+    def verification_satisfied(self) -> bool | None:
+        """Whether this voice may be used as far as the provider is concerned.
+
+        ``True`` when verification is not required, or is required and passed.
+        ``False`` when it is required and has not passed. ``None`` when the
+        provider said nothing — the caller must decide what to do with silence,
+        because treating "unknown" as "fine" is a policy choice, not a default
+        this library should make for them.
+        """
+        if self.requires_verification is None and self.is_verified is None:
+            return None
+        if not self.requires_verification:
+            return True
+        return bool(self.is_verified)
+
+
+@dataclass(frozen=True, slots=True)
 class MediaProvenance:
     """Content-credential / provenance metadata attached to generated media.
 
@@ -350,6 +422,9 @@ class MediaProvenance:
         watermarked: Whether the provider states the output is watermarked.
         c2pa_manifest: Raw C2PA manifest, when supplied.
         generator: Model or system credited with producing the asset.
+        consent: Whose voice produced the asset and whether the provider says
+            it may be used. Set only by providers that clone voices; see
+            :class:`VoiceConsent`.
         provider_declared: Whether these facts come from the provider (``True``)
             or were inferred locally (``False``).
     """
@@ -357,6 +432,7 @@ class MediaProvenance:
     watermarked: bool | None = None
     c2pa_manifest: Mapping[str, Any] | None = None
     generator: str | None = None
+    consent: VoiceConsent | None = None
     provider_declared: bool = True
 
 
