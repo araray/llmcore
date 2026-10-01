@@ -39,7 +39,17 @@ from tools.cardctl.core.common import (  # noqa: E402
 def _canonical_providers() -> set[str]:
     from llmcore.providers.manager import _PROVIDER_INSTANCE_ALIASES, PROVIDER_MAP
 
-    return {name for name in PROVIDER_MAP if name not in _PROVIDER_INSTANCE_ALIASES}
+    # Several tests inject doubles with `monkeypatch.setitem(PROVIDER_MAP, ...)`.
+    # Teardown normally removes them, but a guard that reads the live registry
+    # should not depend on that — so only classes that actually live in
+    # llmcore.providers count. A leaked "fake" provider then cannot make this
+    # report a missing adapter, while a real unadaptered provider still does.
+    return {
+        name
+        for name, cls in PROVIDER_MAP.items()
+        if name not in _PROVIDER_INSTANCE_ALIASES
+        and getattr(cls, "__module__", "").startswith("llmcore.providers")
+    }
 
 
 class TestEveryProviderHasAnAdapter:

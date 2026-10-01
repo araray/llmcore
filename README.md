@@ -5,55 +5,114 @@
   </picture>
 </p>
 <p align="center">
-  <strong>A Production-Ready Framework for LLM Applications, Autonomous Agents, and RAG Systems</strong>
+  <strong>An async Python framework for LLM applications: chat, agents, RAG,
+  generative media, and remote GPU runtimes — behind one interface.</strong>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg"/></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"/></a>
-  <a href="https://github.com/araray/llmcore"><img alt="Version" src="https://img.shields.io/badge/version-0.50.0-green.svg"/></a>
-  <a href="https://github.com/araray/llmcore/actions"><img alt="CI Status" src="https://img.shields.io/badge/CI-passing-brightgreen.svg"/></a>
-  <a href="https://codecov.io/gh/araray/llmcore"><img alt="Coverage" src="https://img.shields.io/badge/coverage-85%25-green.svg"/></a>
+  <a href="https://github.com/araray/llmcore"><img alt="Version" src="https://img.shields.io/badge/version-0.53.0-green.svg"/></a>
+  <a href="https://github.com/araray/llmcore/actions"><img alt="CI" src="https://img.shields.io/badge/CI-lint%20%2B%20py3.11%20%2B%20py3.12-brightgreen.svg"/></a>
+  <a href="#-at-a-glance"><img alt="Providers" src="https://img.shields.io/badge/providers-23-blue.svg"/></a>
+  <a href="#-model-cards"><img alt="Model cards" src="https://img.shields.io/badge/model%20cards-2319-blue.svg"/></a>
 </p>
 
 <p align="center">
-  <a href="#-features">Features</a> •
+  <a href="#-at-a-glance">At a glance</a> •
+  <a href="#-providers">Providers</a> •
   <a href="#-quickstart">Quickstart</a> •
+  <a href="#-generative-media">Media</a> •
+  <a href="#-remote-gpu-runtimes">Runtimes</a> •
   <a href="#-installation">Installation</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-documentation">Documentation</a>
+  <a href="#-architecture">Architecture</a>
 </p>
 
 ---
 
-**LLMCore** is a comprehensive Python library providing a unified, asynchronous interface for building production-grade LLM applications. From simple chat interactions to sophisticated autonomous agents with sandboxed code execution, LLMCore offers a complete toolkit for modern AI development.
+**llmcore** gives you one async interface over 23 model providers, plus the
+subsystems that usually get rebuilt per project: conversation persistence,
+retrieval, a generative-media layer (image/audio/video), tool-using agents with
+sandboxed execution, and provisioning for remotely served open-weights models.
+
+It is a library, not a service. There is no daemon, no broker, and no required
+infrastructure — `pip install llmcore[openai]` and a config file are enough. Every
+subsystem beyond chat is optional and off until configured.
+
+## 📊 At a glance
+
+Counts are measured from this repository, not estimated.
+
+| | |
+|---|---|
+| **Providers** | **23** behind one interface (plus 11 alias spellings) |
+| **Transport** | **21 of 23** have two transports — 17 direct-first with an SDK fallback, 4 SDK-first with direct available. The other 2 have no vendor SDK |
+| **Model cards** | **2,319** across 22 providers, generated from live APIs |
+| **Media capabilities** | **19** — image, video, speech, music, SFX, OCR, voice design |
+| **Install extras** | **35**, so you install only the providers you use |
+| **Tests** | **6,396** collected; 5,622 run in the default (no-infrastructure) profile |
+| **Coverage** | **66%** statement+branch, measured on that profile |
+| **Source** | ~156k lines across 318 modules |
+
+> Coverage is reported as measured. `pyproject.toml` sets a `fail_under` of 85%,
+> which the suite does not currently meet — that gate is a target, not a
+> description of today. CI runs the suite without the coverage gate, so this
+> number is informational rather than enforced.
+
+### What the model cards cover
+
+Cards carry context windows, capability flags, pricing and lifecycle for every
+model llmcore can reach, so cost and capability checks happen locally instead of
+by trial and error.
+
+| Model type | Cards | | Model type | Cards |
+|---|---:|---|---|---:|
+| chat | 1,716 | | audio | 71 |
+| image-generation | 156 | | stt | 58 |
+| tts | 125 | | multimodal | 13 |
+| embedding | 87 | | video-generation | 8 |
+| vision | 72 | | ocr / code / other | 13 |
+
+---
 
 ## ✨ Features
 
-### Core Capabilities
+| Category | What it does |
+|----------|--------------|
+| **🔌 Providers** | 23 vendors, one `chat()` call. Streaming, tool calling, structured output, reasoning extraction, vision, exact tokenizers where the vendor exposes one |
+| **🎨 Generative media** | `llm.media` — image generate/edit/upscale, video generate/interpolate, TTS (+streaming), ASR, music, SFX, voice design. Async jobs with polling, a webhook receiver, and a content-addressed artifact store |
+| **🖥️ Remote GPU runtimes** | `llm.runtimes` — size an open-weights model, provision compute, serve it, and attach the endpoint as a provider instance. Spend ceilings and idle reaping are enforced, not optional |
+| **💬 Sessions** | Persistent conversations over SQLite/PostgreSQL/JSON, transient sessions, per-call usage via `chat_with_usage()` |
+| **🔍 RAG** | ChromaDB/pgvector, semantic search, context injection, external-RAG bridge |
+| **🌐 Web search** | Bright Data, Serper.dev, SerpApi, Semantic Scholar (keyless) |
+| **🤖 Agents** | 8-phase cognitive cycle, goal classification, fast-path execution, circuit breaker, personas |
+| **🔒 Sandboxing** | Docker and VM/SSH isolation with security policies and output tracking |
+| **👤 Human-in-the-loop** | Risk assessment, approval workflows, audit logging |
+| **📊 Observability** | Structured events, metrics, execution replay, context diagnostics |
+| **📚 Model cards** | 2,319 cards with capability validation and cost estimation, refreshed by `cardctl` |
 
-| Category | Features |
-|----------|----------|
-| **🔌 Multi-Provider Support** | OpenAI, Anthropic, Google Gemini, Ollama, DeepSeek, Z.ai (GLM), FriendliAI, Mistral, Qwen, xAI, vLLM, DeepInfra, Deepgram, TypeSafe.ai (System One typed judgments) |
-| **💬 Chat Interface** | Unified `chat()` API, streaming responses, tool/function calling, per-call usage via `chat_with_usage()` |
-| **📦 Session Management** | Persistent conversations, SQLite/PostgreSQL backends, transient sessions |
-| **🔍 RAG System** | ChromaDB/pgvector storage, semantic search, context injection |
-| **🌐 Search Providers** | Bright Data, Serper.dev, SerpApi, Semantic Scholar |
-| **🤖 Autonomous Agents** | 8-phase cognitive cycle, goal classification, iterative reasoning |
-| **🔒 Sandboxed Execution** | Docker/VM isolation, security policies, output tracking |
-| **👤 Human-in-the-Loop** | Risk assessment, approval workflows, audit logging |
-| **📊 Observability** | Structured event logging, metrics collection, execution replay, context diagnostics |
-| **🎭 Persona System** | Customizable agent personalities and communication styles |
-| **📚 Model Card Library** | Comprehensive model metadata, capability validation, cost estimation |
+### Recent additions (v0.51 → v0.53)
 
-### What's New in v0.50.0
-
-- **Deepgram voice/audio provider**: Native SDK support for STT, TTS, Flux streaming, Voice Agent, text intelligence, token grants, and Deepgram model cards.
-- **Per-call usage accounting**: `LLMCore.chat_with_usage()` returns `ChatUsage` without requiring session persistence.
-- **Search subsystem maturity**: Bright Data, Serper.dev, SerpApi, and keyless Semantic Scholar providers are available through `llmcore.search`.
-- **Agent and context upgrades**: Objective-aware compression, semantic citation provenance, structured tool result summaries, iteration/phase token summaries, runtime permission metadata, and loaded-tool validation.
-- **Observability upgrades**: Semantic retrieval events, context diagnostics after agent runs, context failure diagnostics, and ecosystem federation telemetry.
-- **Test hygiene**: The suite now treats warning cleanup as part of release readiness; optional SDK and infrastructure tests are skipped only behind explicit environment gates.
+- **`llmcore.media`** — a first-class generative-media subsystem. Capability
+  protocols rather than per-vendor methods, so `llm.media.images.generate(...)`
+  routes to whichever configured provider can serve it. Execution class is
+  declared *per capability*, so the same call returns a result from OpenAI and a
+  pollable job from fal, and `media.wait()` absorbs the difference.
+- **Media adapters** for OpenAI, Google (Veo), Deepgram, ElevenLabs, fal,
+  Replicate, Hugging Face and Higgsfield.
+- **`VoiceConsent`** — synthetic speech carries whose voice it is and whether
+  the vendor considers it cleared, so callers can refuse unverified clones
+  without a second API call.
+- **Webhook receiver** — signed single-use callbacks for long jobs. Polling
+  stays the fallback, so no public ingress is required.
+- **`llmcore.runtimes`** — provision remote GPU compute and attach it as a
+  provider. Off by default; `up()` refuses without explicit spend confirmation.
+- **Dual transport** — 21 of 23 providers now call the vendor API directly with
+  the SDK as a fallback (or the reverse, where an SDK owns something llmcore
+  should not reimplement). See
+  [`PROVIDER_SUPPORT_MATRIX.md`](docs/PROVIDER_SUPPORT_MATRIX.md) §7.1.
+- **`cardctl doctor`** — audits that every registered provider has a card
+  adapter, so a new provider cannot ship without model cards.
 
 ---
 
@@ -147,6 +206,98 @@ async def agent_example():
 
 ---
 
+## 🎨 Generative media
+
+`llm.media` routes image, audio and video work to whichever configured provider
+can serve it. Adapters **are** the chat providers, so there is one credential per
+vendor and no separate media config tree.
+
+```python
+llm = await LLMCore.create(config)
+
+# Routed to the first configured provider that can do it
+image = await llm.media.images.generate("a calico cat asleep on books")
+speech = await llm.media.audio.speak("Consent is not an afterthought.")
+text = await llm.media.audio.transcribe(audio=MediaRef.from_path("call.mp3"))
+
+# Ask what the current configuration can actually do
+llm.media.capabilities()                      # every capability available
+llm.media.who_can(MediaCapability.VIDEO_GENERATE)   # ['gemini', 'fal', 'replicate']
+```
+
+### Execution class is per capability, not per provider
+
+Image generation answers in one request on OpenAI and is a queued job on fal. So
+a router call returns either a `MediaResult` or a pollable `MediaJob`, and
+`media.wait()` absorbs the difference — the same code works against both.
+
+```python
+job = await llm.media.video.generate("a drone shot over a fjord", provider="fal")
+result = await llm.media.wait(job, timeout=600)     # polls with capped backoff
+print(result.artifacts[0].uri)
+```
+
+Long jobs can also arrive by **webhook**: `media.jobs` issues signed, single-use
+callback URLs and `create_webhook_app()` returns a plain ASGI app to receive
+them. Polling remains the fallback, so no public ingress is required.
+
+### Capabilities
+
+| Group | Capabilities |
+|---|---|
+| **Image** | `image_generate`, `image_edit`, `image_upscale`, `image_variate` |
+| **Video** | `video_generate`, `video_edit`, `video_interpolate`, `video_reframe`, `video_upscale`, `video_extend` |
+| **Audio** | `tts`, `tts_stream`, `asr`, `asr_stream`, `music`, `sfx`, `voice_design`, `voice_agent` |
+| **Document** | `ocr` |
+
+Artifacts carry bytes or a URI, checksums, dimensions/duration, usage, and
+provenance. A content-addressed store can materialize remote artifacts before
+vendor URLs expire. For synthetic speech, provenance includes a `VoiceConsent`
+record: whose voice it is, whether it is a clone, and whether the vendor
+considers it cleared — with `None` meaning *the vendor did not say*, which is
+deliberately distinct from *no*.
+
+See [`MEDIA_SUBSYSTEM_SPEC.md`](docs/MEDIA_SUBSYSTEM_SPEC.md).
+
+---
+
+## 🖥️ Remote GPU runtimes
+
+`llm.runtimes` provisions compute elsewhere, serves an open-weights model on it,
+and registers the endpoint as a provider instance — so a remotely served model
+is reachable through the same `llm.chat()` as a hosted API.
+
+```python
+plan = await llm.runtimes.estimate("Qwen/Qwen3-30B-A3B-Instruct-2507", context_length=32768)
+print(plan.sku, plan.vram_required_gb, plan.fits)     # free; nothing is provisioned
+
+handle = await llm.runtimes.up(plan.spec.repo_id, name="qwen30", confirm_spend=True)
+answer = await llm.chat("Explain GQA briefly.", provider_name="qwen30")
+await llm.runtimes.down("qwen30")                      # unregister, then release
+```
+
+**This subsystem bills per minute from the moment compute is assigned**, which
+makes it unlike every other provider here. The safety rules are enforced in
+code, not left to the caller:
+
+- **off by default** — `LLMCore.create()` contacts no backend regardless of config;
+- **`up()` refuses** without explicit spend confirmation, while `estimate()` is
+  free and works even while the subsystem is disabled;
+- **state is written before provisioning returns**, as inspectable JSON under
+  `~/.llmcore/runtimes`, so a runtime can always be found and killed;
+- **bounded by default** — idle and hard-lifetime deadlines, plus an optional
+  compute-unit ceiling, because an idle reaper does not stop a runtime that is
+  busy in a loop;
+- **`close()` detaches but does not tear down** — a process exiting is not a
+  reason to destroy compute you are paying for. `down_all()` is explicit.
+
+Phase R1 (core, protocols, state, provider attachment) ships with a
+`FakeRuntime` for testing. The Colab backend is specified in
+[`COLAB_RUNTIME_SPEC.md`](docs/COLAB_RUNTIME_SPEC.md) and not yet implemented,
+so **nothing here can spend money today**.
+
+---
+
 ## 📦 Installation
 
 **Requires Python 3.11 or later.**
@@ -157,38 +308,38 @@ async def agent_example():
 pip install llmcore
 ```
 
-### With Specific Providers
+### Provider extras
+
+Each provider is its own extra, so you install only what you use. All 35 extras
+are listed in `pyproject.toml`.
 
 ```bash
-# OpenAI support
-pip install llmcore[openai]
+# Chat and reasoning
+pip install "llmcore[openai]"        # also covers groq, together, xai, deepseek, kimi
+pip install "llmcore[anthropic]"
+pip install "llmcore[gemini]"
+pip install "llmcore[mistral]"       # httpx + mistralai v3 fallback
+pip install "llmcore[zai]"           # GLM family
+pip install "llmcore[friendli]"
+pip install "llmcore[deepinfra]"
+pip install "llmcore[openrouter]"
+pip install "llmcore[poe]"
+pip install "llmcore[huggingface]"
+pip install "llmcore[ollama]"        # local, no API key
+pip install "llmcore[vllm]"          # self-hosted
 
-# Anthropic Claude support
-pip install llmcore[anthropic]
+# Media and voice
+pip install "llmcore[elevenlabs]"    # TTS, ASR, SFX, music, voice design
+pip install "llmcore[deepgram]"      # STT, TTS, Voice Agent
+pip install "llmcore[fal]"           # image, video, audio marketplace
+pip install "llmcore[replicate]"
+pip install "llmcore[higgsfield]"    # image + video
 
-# Google Gemini support
-pip install llmcore[gemini]
+# Typed judgment
+pip install "llmcore[typesafe]"
 
-# Local Ollama support
-pip install llmcore[ollama]
-
-# Deepgram voice/audio support (STT, TTS, Voice Agent)
-pip install llmcore[deepgram]
-
-# Z.ai (GLM) support
-pip install llmcore[zai]
-
-# FriendliAI support (Model APIs, Dedicated Endpoints, Container)
-pip install llmcore[friendli]
-
-# TypeSafe.ai System One typed judgments (noul/choice/score; httpx only)
-pip install llmcore[typesafe]
-
-# Search providers
-pip install llmcore[brightdata]
-pip install llmcore[serper]
-pip install llmcore[serpapi]
-pip install llmcore[semanticscholar]
+# Web search
+pip install "llmcore[brightdata]" "llmcore[serper]" "llmcore[serpapi]" "llmcore[semanticscholar]"
 ```
 
 ### With Storage Backends
@@ -246,11 +397,23 @@ pip install -e ".[dev]"
 │         │                 │                 │                 │           │
 │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐   │
 │  │  Providers   │  │   Storage    │  │    RAG       │  │  Embeddings  │   │
-│  │  • OpenAI    │  │  • SQLite    │  │  • ChromaDB  │  │  • Sentence  │   │
-│  │  • Anthropic │  │  • Postgres  │  │  • pgvector  │  │    Transform │   │
-│  │  • Gemini    │  │  • JSON      │  │              │  │  • OpenAI    │   │
-│  │  • Ollama    │  │              │  │              │  │  • Google    │   │
+│  │  23 vendors  │  │  • SQLite    │  │  • ChromaDB  │  │  • Sentence  │   │
+│  │  direct REST │  │  • Postgres  │  │  • pgvector  │  │    Transform │   │
+│  │  + SDK       │  │  • JSON      │  │  • external  │  │  • OpenAI    │   │
+│  │  fallbacks   │  │              │  │    bridge    │  │  • Google    │   │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘   │
+│                                                                           │
+│  ┌──────────────┐  ┌──────────────┐                                       │
+│  │    Media     │  │   Runtimes   │   optional subsystems, off until       │
+│  │   Manager    │  │   Manager    │   configured                          │
+│  └──────┬───────┘  └──────┬───────┘                                       │
+│         │                 │                                               │
+│  ┌──────┴───────┐  ┌──────┴───────┐                                       │
+│  │ image/audio/ │  │ size → up →  │                                       │
+│  │ video router │  │ attach as a  │                                       │
+│  │ jobs+webhook │  │ provider     │                                       │
+│  │ artifacts    │  │ reap/ceiling │                                       │
+│  └──────────────┘  └──────────────┘                                       │
 │                                                                           │
 ├───────────────────────────────────────────────────────────────────────────┤
 │                            Agent System (Darwin Layer 2)                  │
@@ -308,11 +471,11 @@ log_level = "INFO"
 
 [providers.openai]
 # API key via: LLMCORE_PROVIDERS__OPENAI__API_KEY or OPENAI_API_KEY
-default_model = "gpt-4o"
+default_model = "gpt-5.4"
 timeout = 60
 
 [providers.anthropic]
-default_model = "claude-sonnet-4-5-20250929"
+default_model = "claude-sonnet-5-5"
 timeout = 60
 
 [providers.ollama]
@@ -405,24 +568,53 @@ export TYPESAFE_API_KEY="..."          # TypeSafe.ai System One
 
 ## 🔌 Providers
 
-LLMCore supports multiple LLM providers through a unified interface:
+23 providers behind one interface. **Transport** shows which can call the vendor
+API directly and which fall back to a vendor SDK — llmcore prefers direct calls
+so an SDK lagging the API does not block you, and keeps the SDK where it owns
+something non-trivial. Full detail in
+[`PROVIDER_SUPPORT_MATRIX.md`](docs/PROVIDER_SUPPORT_MATRIX.md).
 
-| Provider | Models | Features |
-|----------|--------|----------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-5.2, o1, o3-mini | Streaming, Tools, Vision |
-| **Anthropic** | Claude Opus 4.5, Sonnet 4.5, Haiku 4.5 | Streaming, Tools, Vision |
-| **Google** | Gemini 2.5 Pro/Flash, Gemini 3 Preview | Streaming, Tools, Vision |
-| **Ollama** | Llama 3.2/3.3, Gemma 3, Phi-3, Mistral | Streaming, Local |
-| **DeepSeek** | DeepSeek-R1, DeepSeek-V3.2, DeepSeek-Chat | Streaming, Reasoning |
-| **Z.ai (GLM)** | GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V, CogView, CogVideoX, GLM-TTS/ASR/OCR, Embedding-3 | Streaming, Tools, Reasoning, Vision, Embeddings, Image, Video, TTS, STT, OCR, Web Search |
-| **FriendliAI** | Model APIs catalog (GLM-5.3/5.3-Flash/5.2/5.1, DeepSeek-V3.2, Gemma 4 31B, MiniMax-M2.5) + your own Dedicated Endpoints / Container | Streaming, Tools, Reasoning (effort/budget/parse), Vision, Structured output incl. regex, Exact tokenizer, Embeddings & Images (dedicated), STT |
-| **Mistral** | Mistral Large 3 | Streaming, Tools |
-| **Qwen** | Qwen 3 Max, Qwen3-Coder-480B | Streaming, Tools |
-| **xAI** | Grok-4, Grok-4-Heavy | Streaming, Tools |
-| **vLLM** | Any HuggingFace model (self-hosted) | Streaming, Tools, Vision, Structured Outputs, Guided Grammars |
-| **DeepInfra** | DeepSeek, Llama, Qwen, Mistral, FLUX, Whisper, Kokoro (100+ open models) | Streaming, Tools, Vision, Reasoning, TTS, STT, Image, Embeddings |
-| **Deepgram** | Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent | Streaming STT/TTS, Flux turn-taking, Voice Agent, Text Intelligence |
-| **TypeSafe.ai** | Jev 1.13 (`jev-latest`, `jev-preview`, `jev-1.13.0`) | System One typed judgments: `noul` (yes/no probability), `choice` (pick-one + probabilities + confidence), `score` (rubric level + probabilities + confidence); `system_one()` + chat bridge; no streaming/tools |
+### Chat and reasoning
+
+| Provider | Representative models *(from the card registry)* | Transport | Notable |
+|---|---|---|---|
+| **OpenAI** | `gpt-6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.5-pro`, `gpt-5.4`, `o4-mini` | direct + SDK | Streaming, tools, vision, images, TTS/ASR, embeddings, native search |
+| **Anthropic** | `claude-opus-5-5`, `claude-opus-5`, `claude-sonnet-5-5`, `claude-opus-4-8`, `claude-haiku-4-5-20251001` | SDK + direct | Streaming, tools, vision, extended thinking |
+| **Google Gemini** | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-2.5-pro` | SDK + direct | Tools, vision, Imagen, **Veo video**, native TTS, embeddings |
+| **xAI** | `grok-4.1-20251117`, `grok-4-heavy` | direct + SDK | Streaming, tools, Live Search |
+| **DeepSeek** | `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v3.2`, `deepseek-reasoner` | direct only¹ | Reasoning-content extraction, cache usage |
+| **Kimi (Moonshot)** | `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2-thinking` | direct only¹ | Reasoning, exact tokenizer |
+| **Z.ai (GLM)** | `glm-5.3`, `glm-5.2`, `glm-5.1`, `glm-4.7`, `glm-5.3-flash` | SDK → direct | Tools, vision, image/video, TTS/ASR/OCR, embeddings, web search |
+| **Mistral** | `mistral-large-3`, `mistral-large-2512`, `magistral-medium-latest`, `magistral-small-latest` | direct + SDK | Tools, vision, FIM, OCR, embeddings, audio |
+| **Qwen** | `qwen3-max`, `qwen3-coder-480b` | direct | Streaming, tools |
+| **Groq** | Llama, Qwen, Whisper, Kimi on LPU hardware | direct + SDK | Low-latency inference |
+| **Together** | Open-weights catalog (Llama, Qwen, DeepSeek, FLUX) | direct + SDK | Chat, images, embeddings |
+| **FriendliAI** | `zai-org/GLM-5.3`, `deepseek-ai/DeepSeek-V3.2` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
+| **DeepInfra** | `Qwen3-235B-A22B`, DeepSeek, Llama, FLUX, Whisper, Kokoro | direct + SDK | Chat, vision, TTS/ASR, images, embeddings |
+| **OpenRouter** | 620 cards spanning most vendors | direct + SDK | One key, many vendors |
+| **Poe** | 497 cards across Anthropic/OpenAI/Google and others | direct + SDK | Aggregated access |
+| **Hugging Face** | 305 cards; any Inference Provider model | SDK + direct | Chat, image, TTS, ASR, **private Inference Endpoints** |
+| **Ollama** | `qwen3-vl:4b`, `llama3.3:70b`, `gemma3:12b`, `qwen3-embedding:8b` | SDK + direct | Local, no API key |
+| **vLLM** | Anything you serve | direct + SDK | Self-hosted, guided grammars, structured output |
+
+¹ No official vendor Python SDK exists — their own docs point at the `openai`
+client, which llmcore already speaks. Verified against PyPI rather than assumed.
+
+### Media, voice and typed judgment
+
+| Provider | What it serves | Transport |
+|---|---|---|
+| **ElevenLabs** | TTS (+streaming), ASR, SFX, music, voice design — with voice-consent metadata | direct + SDK |
+| **Deepgram** | STT (Nova-3, Flux), TTS (Aura-2), Voice Agent, text intelligence | SDK + direct |
+| **fal** | 9 capabilities: FLUX image gen/edit/upscale, video, FILM interpolation, SFX, music, TTS, ASR | direct + SDK |
+| **Replicate** | One generic prediction adapter driven by each model's published schema | direct + SDK |
+| **Higgsfield** | Soul image generation, plus hosted Kling and MiniMax Hailuo video | direct + SDK |
+| **TypeSafe.ai** | `jev-1.13.0` (alias `jev-latest`) — typed judgments: `noul` (yes/no probability), `choice`, `score` | direct + SDK |
+
+> **Model names move fast.** The table shows what is in the bundled card
+> registry at this release. `cardctl generate <provider>` refreshes it from the
+> live API, and `llm.list_models()` reports what your keys can actually reach —
+> prefer that over anything written here.
 
 ### Switching Providers
 
@@ -434,14 +626,14 @@ response = await llm.chat("Hello!")
 response = await llm.chat(
     "Explain quantum computing",
     provider_name="anthropic",
-    model_name="claude-sonnet-4-5-20250929"
+    model_name="claude-sonnet-5-5"
 )
 
 # With provider-specific parameters
 response = await llm.chat(
     "Write a poem",
     provider_name="openai",
-    model_name="gpt-4o",
+    model_name="gpt-5.4",
     temperature=0.9,
     max_tokens=500
 )
@@ -772,9 +964,31 @@ Pre-built, security-hardened images organized by tier:
 
 ---
 
-## 📚 Model Card Library
+## 📚 Model cards
 
-Comprehensive metadata management for LLM models.
+**2,319 cards across 22 providers**, generated from live provider APIs and
+bundled with the package. Each carries context window, capability flags, pricing
+and lifecycle — so capability and cost questions are answered locally instead of
+by trial and error against a paid endpoint.
+
+### Keeping them current
+
+```bash
+python -m tools.cardctl doctor            # audit coverage — run this first
+python -m tools.cardctl generate openai   # refresh one provider from its API
+python -m tools.cardctl validate          # schema-check every card
+python -m tools.cardctl diff anthropic    # read-only: local cards vs live API
+python -m tools.cardctl stats             # coverage dashboard
+```
+
+`doctor` cross-checks llmcore's provider registry against cardctl's adapters and
+the cards on disk. It exists because three media providers once shipped with no
+adapter at all and nothing complained — `generate` only reports on the provider
+you name, and `stats` only sees providers that already have cards.
+
+Providers with no catalog endpoint (fal, Higgsfield, Replicate, vLLM) use a
+*curated* adapter and every such card is tagged `curated`, so a declared entry
+is never mistaken for a discovered one.
 
 ### Usage
 
@@ -785,7 +999,7 @@ from llmcore import get_model_card_registry, get_model_card
 registry = get_model_card_registry()
 
 # Lookup model card
-card = registry.get("openai", "gpt-4o")
+card = registry.get("openai", "gpt-5.4")
 print(f"Context: {card.get_context_length():,} tokens")
 print(f"Vision: {card.capabilities.vision}")
 print(f"Tools: {card.capabilities.tools}")
@@ -807,19 +1021,19 @@ for model in vision_models:
 card = registry.get("anthropic", "claude-4.5-sonnet")  # Resolves alias
 ```
 
-### Supported Providers
+### Cards per provider
 
-Built-in model cards for:
-
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-5.2, o1, o3-mini, embeddings
-- **Anthropic**: Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
-- **Google**: Gemini 2.5 Pro/Flash, Gemini 3 Preview
-- **Ollama**: Llama 3.2/3.3, Gemma 3, Phi-3, Mistral, CodeLlama
-- **DeepSeek**: DeepSeek-R1, DeepSeek-V3.2
-- **Z.ai (GLM)**: GLM-5.2, GLM-5.1, GLM-4.7, GLM-4.6V (vision), Embedding-3
-- **FriendliAI**: GLM-5.3, GLM-5.3-Flash, GLM-5.2, GLM-5.1, DeepSeek-V3.2, Gemma 4 31B, MiniMax-M2.5 (context, pricing, and reasoning options generated live from the Friendli catalog)
-- **Mistral**: Mistral Large 3
-- **Qwen**: Qwen 3 Max, Qwen3-Coder
+| Provider | Cards | | Provider | Cards |
+|---|---:|---|---|---:|
+| openrouter | 620 | | mistral | 66 |
+| poe | 497 | | anthropic | 19 |
+| huggingface | 305 | | kimi | 16 |
+| deepinfra | 229 | | zai | 13 |
+| ollama | 176 | | elevenlabs | 11 |
+| deepgram | 147 | | fal | 9 |
+| openai | 133 | | deepseek / friendli / replicate | 7 each |
+| google | 44 | | higgsfield | 6 |
+| | | | qwen · xai · typesafe | 3 · 3 · 1 |
 - **xAI**: Grok-4, Grok-4-Heavy
 - **DeepInfra**: DeepSeek-V3/R1, Llama 3.x, Qwen, Mistral, FLUX (image), Whisper (STT), Kokoro (TTS), embeddings
 - **Deepgram**: Nova-3, Nova-2, Whisper, Flux (STT); Aura-2 (TTS); Voice Agent
@@ -953,7 +1167,7 @@ await llm.add_documents_to_vector_store(
             "content": "LLMCore is a Python library...",
             "metadata": {
                 "source": "documentation",
-                "version": "0.50.0",
+                "version": "0.53.0",
                 "category": "overview"
             }
         },
@@ -1072,20 +1286,36 @@ from llmcore import (
 
 ## 📚 Documentation
 
-- [Configuration reference](docs/CONFIG_REFERENCE.md)
-- [Search providers usage](docs/Search_providers_usage.md)
-- [Search providers rationale](docs/Search_providers_rationale.md)
-- [Deepgram provider usage](docs/Deepgram_provider_usage.md)
-- [FriendliAI provider usage](docs/Friendli_provider_usage.md)
-- [Provider support matrix](docs/PROVIDER_SUPPORT_MATRIX.md) — SDK/API versions we track per provider, plus the capability matrix
-- [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) — phased plan to close the gaps in that matrix
-- [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) — design for first-class image/audio/video generation
-- [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) — design for serving models on remote GPUs (Colab first)
-- [TypeSafe.ai provider usage](docs/TypeSafe_provider_usage.md)
-- [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md)
-- [Model cards](docs/model_cards.md)
-- [Agentic system guide](docs/Agentic_System_Guide.md)
-- [External RAG integration](docs/External_RAG_integration_guide.md)
+**Reference**
+
+| Document | What it covers |
+|---|---|
+| [Configuration reference](docs/CONFIG_REFERENCE.md) | Every config key |
+| [Model cards](docs/model_cards.md) | Card schema, the `cardctl` workflow, `doctor` |
+| [`chat_with_usage` guide](docs/USAGE_chat_with_usage.md) | Per-call token and cost accounting |
+| [Agentic system guide](docs/Agentic_System_Guide.md) | Cognitive cycle, tools, HITL |
+| [External RAG integration](docs/External_RAG_integration_guide.md) | Bringing your own retrieval |
+
+**Design and status**
+
+| Document | What it covers |
+|---|---|
+| [Provider support matrix](docs/PROVIDER_SUPPORT_MATRIX.md) | Per provider: tracked SDK version and commit, transport duality, capability matrix, and a live-validation log recording what was actually called |
+| [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) | Phased plan for the remaining gaps in that matrix |
+| [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) | Design, the rollout, and what each vendor taught the abstraction |
+| [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) | Runtime safety model and the Colab backend design |
+
+**Per-provider guides**
+
+[fal](docs/Fal_provider_usage.md) ·
+[ElevenLabs](docs/ElevenLabs_provider_usage.md) ·
+[Replicate](docs/Replicate_provider_usage.md) ·
+[Hugging Face media](docs/HuggingFace_media_usage.md) ·
+[Deepgram](docs/Deepgram_provider_usage.md) ·
+[FriendliAI](docs/Friendli_provider_usage.md) ·
+[TypeSafe.ai](docs/TypeSafe_provider_usage.md) ·
+[Search providers](docs/Search_providers_usage.md)
+([rationale](docs/Search_providers_rationale.md))
 
 ---
 
@@ -1101,11 +1331,22 @@ llmcore/
 │   ├── config/               # Configuration system
 │   │   ├── default_config.toml
 │   │   └── models.py
-│   ├── providers/            # LLM provider implementations
-│   │   ├── openai_provider.py
+│   ├── providers/            # 23 provider adapters
+│   │   ├── openai_provider.py      # base for deepinfra/vllm/poe/openrouter
 │   │   ├── anthropic_provider.py
 │   │   ├── gemini_provider.py
-│   │   └── ollama_provider.py
+│   │   ├── fal_provider.py         # + elevenlabs, replicate, higgsfield,
+│   │   └── ...                     #   deepgram, zai, friendli, mistral, …
+│   ├── media/                # Generative media subsystem
+│   │   ├── manager.py        # routing + capability discovery
+│   │   ├── protocols.py      # 19 capability protocols
+│   │   ├── jobs.py           # async job polling
+│   │   ├── webhooks.py       # signed single-use callbacks
+│   │   └── artifacts.py      # content-addressed store
+│   ├── runtimes/             # Remote GPU runtimes
+│   │   ├── manager.py        # spend ceilings, attach/detach
+│   │   ├── protocols.py      # ComputeRuntime
+│   │   └── state.py          # inspectable on-disk records
 │   ├── storage/              # Storage backends
 │   │   ├── sqlite_session.py
 │   │   ├── postgres_session_storage.py
@@ -1130,6 +1371,7 @@ llmcore/
 │   │   ├── schema.py
 │   │   └── default_cards/
 │   └── memory/               # Memory management
+├── tools/cardctl/            # Model-card generator (adapters + doctor)
 ├── container_images/         # Sandbox Docker images
 ├── examples/                 # Usage examples
 ├── tests/                    # Test suite
@@ -1142,20 +1384,36 @@ llmcore/
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# The profile CI runs: no databases, containers, local servers or API keys
+pytest tests --ignore=tests/integration --ignore=tests/adhoc_checks \
+  -m "not slow and not integration and not docker and not vm and not sandbox \
+      and not requires_postgres and not requires_pgvector and not requires_ollama"
+
+# Everything (needs PostgreSQL + pgvector; Ollama for the local-model tests)
 pytest
 
-# Run with coverage
-pytest --cov=src/llmcore --cov-report=term-missing
-
-# Run specific test categories
-pytest -m "not slow"           # Skip slow tests
-pytest -m "not integration"    # Skip integration tests
-pytest -m sandbox              # Run sandbox tests only
-
-# Run specific test file
-pytest tests/agents/test_cognitive_system.py
+# Targeted
+pytest tests/providers          # provider adapters and transports
+pytest tests/media              # media subsystem
+pytest tests/runtimes           # runtime safety model
+pytest -m sandbox               # sandbox tests only
 ```
+
+Infrastructure-dependent tests are marked and excluded by default, so a clean
+checkout runs green without Postgres, Docker or a GPU. Tests that need those
+report *why* they skipped rather than silently passing.
+
+### Invariant guards
+
+A few suites exist to make whole-repository mistakes fail loudly rather than
+ship quietly:
+
+| Guard | What it enforces |
+|---|---|
+| `tests/providers/test_transport_duality.py` | Every provider either offers both transports or declares why not. A declared SDK backend must actually be constructed *and called* — written after one shipped that silently did nothing |
+| `tests/tools/test_cardctl_coverage.py` | Every registered provider has a `cardctl` adapter, so a new provider cannot ship without model cards |
+| `tests/media/test_media_subsystem.py` | Every declared media capability is backed by its protocol |
+| `tests/providers/test_context_length_error_mapping.py` | Static AST check that providers raise `ContextLengthError` with the right keywords |
 
 ---
 
