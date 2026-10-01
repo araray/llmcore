@@ -146,6 +146,16 @@ class TestDualTransportProvidersActuallyUseBoth:
 
     DUAL = ("fal", "elevenlabs", "replicate", "higgsfield", "typesafe", "mistral")
 
+    #: Providers whose *direct* path was added alongside an existing SDK path.
+    #: They are checked for a direct client and a selector, but not for
+    #: "direct is the default" — their SDKs own realtime sockets, ADC token
+    #: exchange, prompt-caching headers and retry policy, so the SDK remains the
+    #: default and direct is opt-in. That is a documented deviation rather than
+    #: an oversight, which is why it is listed here explicitly.
+    SDK_DEFAULT: ClassVar[tuple[str, ...]] = (
+        "anthropic", "gemini", "deepgram", "ollama",
+    )
+
     @pytest.mark.parametrize("provider", DUAL)
     def test_the_sdk_client_is_instantiated(self, provider):
         source = _module_source(provider)
@@ -179,6 +189,36 @@ class TestDualTransportProvidersActuallyUseBoth:
         assert match.group(1) == "httpx", (
             f"{provider} prefers {match.group(1)!r} over direct REST without being "
             f"the documented Hugging Face exception."
+        )
+
+
+class TestSdkDefaultProvidersStillHaveBothPaths:
+    """Providers where the SDK stays the default must still offer direct REST."""
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_a_direct_http_client_exists(self, provider):
+        assert _has_direct_http(_module_source(provider)), (
+            f"{provider} is listed as having a direct path but builds no "
+            f"httpx client."
+        )
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_the_transport_is_selectable(self, provider):
+        assert _has_transport_selector(_module_source(provider))
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_the_direct_path_maps_its_own_errors(self, provider):
+        """A direct path that raised raw httpx errors would make the two
+        transports report the same condition differently."""
+        assert "_raise_direct_status" in _module_source(provider), (
+            f"{provider}'s direct path has no error mapper, so failures would "
+            f"not match the SDK path's exceptions."
         )
 
 
