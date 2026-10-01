@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -469,6 +470,134 @@ class AnthropicProvider(BaseProvider):
                 )
             return details_list
 
+    # ------------------------------------------------------------------
+    # Extended thinking: what each model generation actually accepts
+    # ------------------------------------------------------------------
+
+    #: Generation at which `thinking.budget_tokens` stopped being accepted and
+    #: `{"type": "adaptive"}` took over. Claude 4.6 deprecated it; 5.x and
+    #: Fable 5.x **reject it with a 400**. Forwarding a caller's budget to one
+    #: of those models turns a reasonable request into an error, which is the
+    #: defect recorded in PROVIDER_MODERNIZATION_PLAN.md and the routing spec.
+    _ADAPTIVE_FROM = (4, 6)
+
+    #: llmcore's canonical reasoning-effort vocabulary mapped onto Anthropic's
+    #: `output_config.effort`, which has fewer rungs. `none`/`minimal` fold
+    #: down and `xhigh` folds up, because folding to the nearest supported rung
+    #: is the documented policy for an unsupported effort level -- dropping it
+    #: silently would lose the caller's intent entirely.
+    _EFFORT_TO_OUTPUT_CONFIG: dict[str, str] = {
+        # "none" never reaches this table -- it disables thinking outright.
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "high",
+        "max": "max",
+    }
+
+    #: For pre-4.6 models, which take a token budget instead of an effort
+    #: level. Anthropic requires >= 1024.
+    _EFFORT_TO_BUDGET: dict[str, int] = {
+        "none": 0,
+        "minimal": 1024,
+        "low": 2048,
+        "medium": 8192,
+        "high": 16384,
+        "xhigh": 24576,
+        "max": 32768,
+    }
+
+    @staticmethod
+    def _model_generation(model: str | None) -> tuple[int, int] | None:
+        """Extract ``(major, minor)`` from a model id, or ``None`` if unclear.
+
+        Ids look like ``claude-sonnet-4-6`` or ``claude-opus-5-5-20260101``.
+        Returning ``None`` for anything unrecognised matters: an unknown model
+        must not be assumed modern, because guessing wrong in that direction
+        sends `budget_tokens` to a model that rejects it.
+        """
+        if not model:
+            return None
+        match = re.search(r"-(\d+)-(\d+)(?:-|$)", model)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    @classmethod
+    def _supports_adaptive_thinking(cls, model: str | None) -> bool:
+        """Whether *model* takes ``{"type": "adaptive"}`` rather than a budget."""
+        generation = cls._model_generation(model)
+        if generation is None:
+            # Unknown id. Treat as modern, because every model Anthropic
+            # currently serves is: the pre-4.6 family is the shrinking set, so
+            # defaulting the other way would break new models by default.
+            return True
+        return generation >= cls._ADAPTIVE_FROM
+
+    @classmethod
+    def _normalize_thinking(
+        cls, thinking: Any, effort: str | None, model: str | None
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Map a caller's thinking/effort request onto what *model* accepts.
+
+        Returns ``(thinking_block, output_config_effort)``. Either may be
+        ``None``.
+
+        The whole point is that these two are not interchangeable across
+        generations: 4.6 and later express reasoning depth as
+        ``output_config.effort`` with ``thinking: {"type": "adaptive"}``, while
+        earlier models express it as ``thinking.budget_tokens``. A caller who
+        says ``effort="high"`` means the same thing in both cases and should
+        not have to know which.
+        """
+        adaptive = cls._supports_adaptive_thinking(model)
+        block: dict[str, Any] | None = dict(thinking) if isinstance(thinking, dict) else None
+        effort_key = str(effort).strip().lower() if effort else None
+
+        if adaptive:
+            if block and "budget_tokens" in block:
+                dropped = block.pop("budget_tokens")
+                logger.warning(
+                    "Dropping thinking.budget_tokens=%s: %s rejects it with a 400. "
+                    "Claude 4.6 and later take thinking={'type': 'adaptive'} plus "
+                    "output_config.effort. Pass effort= instead.",
+                    dropped,
+                    model,
+                )
+                block.setdefault("type", "adaptive")
+                if block.get("type") == "enabled":
+                    block["type"] = "adaptive"
+            if effort_key == "none":
+                # "none" means do not think, on either generation. Returning
+                # adaptive-at-low would quietly spend reasoning tokens the
+                # caller explicitly asked not to spend.
+                return {"type": "disabled"}, None
+            if effort_key:
+                if block is None:
+                    block = {"type": "adaptive"}
+                return block, cls._EFFORT_TO_OUTPUT_CONFIG.get(effort_key, "medium")
+            return block, None
+
+        # Pre-4.6: a budget, not an effort level.
+        if effort_key:
+            budget = cls._EFFORT_TO_BUDGET.get(effort_key, 8192)
+            if budget <= 0:
+                return {"type": "disabled"}, None
+            merged = block or {}
+            merged.setdefault("type", "enabled")
+            merged.setdefault("budget_tokens", budget)
+            return merged, None
+        if block and block.get("type") == "adaptive":
+            logger.warning(
+                "%s does not support adaptive thinking; converting to "
+                "{'type': 'enabled', 'budget_tokens': %d}.",
+                model,
+                cls._EFFORT_TO_BUDGET["medium"],
+            )
+            block = {"type": "enabled", "budget_tokens": cls._EFFORT_TO_BUDGET["medium"]}
+        return block, None
+
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported inference parameters for Anthropic models."""
         return {
@@ -481,7 +610,18 @@ class AnthropicProvider(BaseProvider):
                 "type": "object",
                 "description": (
                     "Extended thinking config: "
-                    "{type: enabled|adaptive|disabled, budget_tokens: int}"
+                    "{type: enabled|adaptive|disabled, budget_tokens: int}. "
+                    "budget_tokens is dropped for Claude 4.6+ models, which "
+                    "reject it; prefer `effort`."
+                ),
+            },
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": (
+                    "llmcore's canonical reasoning effort. Mapped to "
+                    "output_config.effort on Claude 4.6+ and to "
+                    "thinking.budget_tokens on earlier models."
                 ),
             },
             "output_config": {
@@ -967,13 +1107,21 @@ class AnthropicProvider(BaseProvider):
             if key in kwargs:
                 api_kwargs[key] = kwargs.pop(key)
 
-        # Extended thinking
-        thinking = kwargs.pop("thinking", None)
+        # Extended thinking and effort, mapped to what this model generation
+        # actually accepts (see _normalize_thinking).
+        thinking, mapped_effort = self._normalize_thinking(
+            kwargs.pop("thinking", None), kwargs.pop("effort", None), model_name
+        )
         if thinking:
             api_kwargs["thinking"] = thinking
 
         # Output config (structured output + effort)
         output_config = kwargs.pop("output_config", None)
+        if mapped_effort:
+            output_config = {**(output_config or {})}
+            # An explicit output_config.effort wins: the caller named
+            # Anthropic's own vocabulary, so they meant it literally.
+            output_config.setdefault("effort", mapped_effort)
         if output_config:
             api_kwargs["output_config"] = output_config
 

@@ -120,6 +120,34 @@ latency and balance. Every decision also emits a structured event.
 New skills in the bundled grimoire pack: `skills/llmcore/proxy`,
 `skills/llmcore/routing`, `skills/llmcore/cost`.
 
+### Fixed — Anthropic rejected `thinking.budget_tokens` with a 400
+
+Claude 4.6 deprecated `thinking.budget_tokens` and 5.x rejects it outright,
+while pre-4.6 models require it. llmcore forwarded whatever the caller passed,
+so a reasonable request became an API error purely because of which model
+served it. Recorded in `PROVIDER_MODERNIZATION_PLAN.md` and flagged again in
+the routing spec §6.4 -- pools make this routine, since members span
+generations.
+
+The provider now branches on the model generation parsed from its id, and
+`effort` is a first-class parameter that means the same thing either way:
+
+* **4.6 and later** get `thinking: {"type": "adaptive"}` plus
+  `output_config.effort`; a caller's `budget_tokens` is dropped with a warning
+  naming the 400 it would have caused.
+* **Earlier models** get `thinking: {"type": "enabled", "budget_tokens": N}`,
+  with the budget mapped from the effort level; a request for `adaptive` is
+  converted rather than failing.
+* **An unparseable model id is assumed modern**, because the pre-4.6 family is
+  the shrinking set and defaulting the other way would break new models.
+* `effort="none"` **disables** thinking on both generations rather than
+  requesting adaptive-at-low, which would quietly spend reasoning tokens the
+  caller explicitly asked not to spend.
+
+`xhigh` folds to `high` on 4.6+, following the documented policy of folding to
+the nearest supported rung rather than dropping an effort level and losing the
+caller's intent.
+
 ### Added — the Colab runtime backend (R2-R6)
 
 `llmcore.runtimes` can now actually provision: sizing, the Colab backend, a
