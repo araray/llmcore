@@ -120,33 +120,73 @@ latency and balance. Every decision also emits a structured event.
 New skills in the bundled grimoire pack: `skills/llmcore/proxy`,
 `skills/llmcore/routing`, `skills/llmcore/cost`.
 
-### Fixed — Anthropic rejected `thinking.budget_tokens` with a 400
+### Fixed — Anthropic thinking/effort, mapped per generation and verified live
 
-Claude 4.6 deprecated `thinking.budget_tokens` and 5.x rejects it outright,
-while pre-4.6 models require it. llmcore forwarded whatever the caller passed,
-so a reasonable request became an API error purely because of which model
-served it. Recorded in `PROVIDER_MODERNIZATION_PLAN.md` and flagged again in
-the routing spec §6.4 -- pools make this routine, since members span
-generations.
+Reasoning depth is expressed differently by different Claude generations, and
+llmcore forwarded whatever the caller passed -- so a reasonable request became
+an API error purely because of which model served it. Pools make that routine,
+since members span generations.
 
-The provider now branches on the model generation parsed from its id, and
-`effort` is a first-class parameter that means the same thing either way:
+`effort` is now a first-class Anthropic parameter and means the same thing
+everywhere; the provider maps it to whatever the target accepts.
 
-* **4.6 and later** get `thinking: {"type": "adaptive"}` plus
-  `output_config.effort`; a caller's `budget_tokens` is dropped with a warning
-  naming the 400 it would have caused.
-* **Earlier models** get `thinking: {"type": "enabled", "budget_tokens": N}`,
-  with the budget mapped from the effort level; a request for `adaptive` is
-  converted rather than failing.
-* **An unparseable model id is assumed modern**, because the pre-4.6 family is
-  the shrinking set and defaulting the other way would break new models.
-* `effort="none"` **disables** thinking on both generations rather than
-  requesting adaptive-at-low, which would quietly spend reasoning tokens the
-  caller explicitly asked not to spend.
+**The boundaries were measured against the live API**, one request per model,
+and there are **three of them, which do not coincide.** The first draft of this
+fix assumed a single cutoff at 4.6 and was wrong:
+
+| generation | `type=enabled` + `budget_tokens` | `type=adaptive` | `type=disabled` |
+|---|---|---|---|
+| ≤ 4.5 | 200 — the only option | **400** not supported | 200 |
+| **4.6** | 200 | 200 | 200 |
+| ≥ 4.7 | **400** not supported | 200 | **400** not supported |
+
+So:
+
+* **≥ 4.7** gets `{"type": "adaptive"}` plus `output_config.effort`; a caller's
+  `budget_tokens` is converted with a warning quoting the 400 it would have
+  caused.
+* **4.6 is an overlap where both forms work**, so a caller's explicit token
+  budget is *honoured* there rather than discarded. The single-cutoff draft
+  would have silently overridden a valid, deliberate choice.
+* **≤ 4.5** gets `{"type": "enabled", "budget_tokens": N}` mapped from the
+  effort level, and a request for `adaptive` is converted rather than failing.
+* **An unparseable model id gets the newest behaviour**, because the older
+  families are the shrinking set.
+
+Two further bugs the live run found, both of which would have 400'd:
+
+* **`{"type": "disabled"}` is rejected from 4.7**, and the API names the
+  replacement itself: *"To turn thinking off on this model, send
+  `thinking: {"type": "between_tools"}`"*. So `effort="none"` now sends
+  whichever spelling the target accepts. (It disables rather than requesting
+  adaptive-at-low, which would quietly spend reasoning tokens the caller
+  explicitly asked not to spend.)
+* **`max_tokens` must be *strictly* greater than `budget_tokens`** -- equal
+  values are a 400 -- and a budget below 1024 is rejected outright. So
+  `effort="high"` with `max_tokens=512` was unsendable. The budget is now
+  clamped to fit, and where no valid budget exists thinking is turned off with
+  a warning saying how to get it back, because sending a request that cannot
+  succeed is worse than answering without reasoning and saying so.
 
 `xhigh` folds to `high` on 4.6+, following the documented policy of folding to
 the nearest supported rung rather than dropping an effort level and losing the
 caller's intent.
+
+**Validated live**: 12 of 12 cases across `claude-haiku-4-5`,
+`claude-sonnet-4-6` and `claude-sonnet-5-5`, asserting both the response and
+the exact payload sent. Total cost under $0.02.
+
+### Fixed — every Anthropic call without a system message failed on the SDK transport
+
+Found while validating the above, and unrelated to it. The SDK path passed
+`system=system_prompt` unconditionally, so with no system message the SDK
+serialised `"system": null` into the body and the API answered 400 *"system:
+Input should be a valid array"*. The httpx path already omitted it when
+absent; the two transports have to agree, and now do.
+
+This is exactly the class of bug the dual-transport work exists to surface:
+the direct path is the default, so the SDK fallback was never exercised
+against a real account until credits were available.
 
 ### Added — a classifier evaluation harness, and the CLI to run it
 
