@@ -323,9 +323,29 @@ to save an API call is only worth it when the cheap signals are absent.
 | `vela` | `llm-semantic-router/Vela-1.0-Encoder-307M-{Domain,Guard,PII}` | local CPU | task-specific 307M encoders |
 | `llm` | ask any cheap llmcore target to classify | 1 cheap call | dogfoods the library; good default when a local model is unwanted |
 
-The two local options deserve emphasis because they make the feature *free at
-the margin*: a 307–350M encoder scoring a prompt against lane descriptions runs
-on CPU in milliseconds, so classification does not become a tax on every call.
+The two local options make classification free in *money* — no second vendor,
+no per-call charge, nothing leaving the machine. They are **not** free in
+latency, and the first draft of this spec was wrong about that.
+
+> **Measured during implementation** (8 CPU threads, no GPU,
+> `LFM2.5-Encoder-350M-Prompt-Router`): p50 **191 ms** for 2 lanes, **246 ms**
+> for 5, **314 ms** for 9, plus ~40 s once to load the model. The draft gate
+> below guessed "<50 ms"; the real figure is about 5x that. Lane count drives
+> it, since every lane is scored in the pass.
+>
+> So the honest positioning is: a local encoder earns its latency when routing
+> decides between calls that take seconds anyway, and in batch or agent
+> workloads. For interactive use the free classifiers remain the zero-latency
+> path, which is why they are first in the default chain.
+
+A second measured correction: the model returns a distribution over the lanes
+it was given, so a raw top score must be read against chance — 0.20 across
+five lanes is exactly uniform, i.e. *no opinion*, and taking it as a 20%
+confidence would route on noise. llmcore therefore reports confidence
+chance-corrected, `(top - 1/n) / (1 - 1/n)`, so one confidence floor means the
+same thing at any lane count. In testing, prompts that matched no lane
+produced precisely this uniform output and are now correctly abstentions that
+fall through to the next classifier.
 
 Local models are fetched through the **existing** Hugging Face provider and
 cached by `huggingface_hub`; no new download machinery is needed.
@@ -617,7 +637,7 @@ it pick that?", and the answer must not require reading logs.
 | **T3** | Card-driven strategies: `lowest_cost`, `lowest_latency`, `least_busy`; `ContextLengthError` → larger-window routing | Cost strategy picks the cheaper target on a mixed pool, verified against card pricing |
 | **T4** | `BalanceProbe` for Friendli + OpenRouter; `most_credits` with honest unknowns; insufficient-credit → long cooldown | Unknown balance never ranks as zero |
 | **T5** | Lanes, `RequestClassifier`, chain, and the free classifiers (`hint`, `magic_string`, `heuristic`, `script`) + `llm.routing.explain()` | Magic strings never reach a provider; `explain()` is accurate |
-| **T6** | `typesafe_jev` classifier; `local_encoder` (LFM2.5) via the HF provider; optional `local_router` (Arch-Router) and `vela` | Local classification adds <50 ms p50 on CPU — **measured, not assumed** |
+| **T6** | `typesafe_jev` classifier; `local_encoder` (LFM2.5) via the HF provider; optional `local_router` (Arch-Router) and `vela` | ~~Local classification adds <50 ms p50 on CPU~~ — **measured at 191–314 ms p50 depending on lane count** (§4.4). Gate restated: the cost is measured and documented, the model is loaded off the event loop, and a local classifier is never in the default chain |
 | **T7** | Cascade: `ResponseVerifier`, rungs, thresholds, `script`/`typesafe_jev`/`vela` verifiers, spend caps | A cheap-then-escalate run costs less than always-strong on an eval set |
 | **T8** | `PromptTransform`, `vela_pii` detector, `constrain` action, local-only pools, hashed audit findings | PII in a prompt provably does not reach a remote target |
 | **T9** | Proxy mode on the bridge: OpenAI-compatible endpoints, lanes in `/v1/models`, loopback-default auth, the three skills | An unmodified agent harness routes through llmcore |
@@ -639,6 +659,8 @@ compounds, and each needs measurement rather than assertion.
 | Autoprovision reaches an unbudgeted vendor | `autoprovision = false`; and autoprovision requires a credential to already be present |
 | Proxy mode concentrates every credential | Loopback by default; bearer token required for any other bind |
 | Local classifier adds a torch dependency | Optional extra; `local_encoder` is opt-in and the free classifiers cover the common case |
+| Local classifier costs 200–300 ms per call (measured, §4.4) | Off by default; the forward pass runs in a worker thread so it cannot stall the event loop; documented as a batch/agent feature rather than an interactive one |
+| `trust_remote_code=True` is required to load the router model | Pin `revision` to a commit sha; an unpinned load logs a warning naming the setting; `trust_remote_code = false` is honoured for deployments that forbid it |
 | PII redaction oversold as a guarantee | Documentation states plainly that `constrain` (routing) is the guarantee and redaction is defence in depth |
 
 **Open questions for you:**

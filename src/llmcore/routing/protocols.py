@@ -21,8 +21,10 @@ Two conventions run through all of them:
   tell returns ``None`` so the next link in the chain gets a turn; a verifier
   that cannot judge returns ``sufficient=None`` rather than guessing. Folding
   "don't know" into "no" is how a chain quietly stops composing.
-* **``cost_hint`` is declared**, so a chain can be ordered cheapest-first
-  mechanically instead of by the order someone happened to list things in.
+* **``cost_hint`` and ``authority`` are declared**, so a chain can be ordered
+  mechanically rather than by the order someone happened to list things in.
+  Cost alone is not enough: a heuristic and an explicit ``lane=`` argument are
+  both free, and running the guess first would override the instruction.
 """
 
 from __future__ import annotations
@@ -42,12 +44,14 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "AUTHORITIES",
     "COST_HINTS",
     "BalanceProbe",
     "PromptTransform",
     "RequestClassifier",
     "ResponseVerifier",
     "RoutingStateStore",
+    "authority_rank",
     "cost_rank",
 ]
 
@@ -57,6 +61,36 @@ __all__ = [
 #: ``api`` spends money. A chain is ordered by this, so a classifier that costs
 #: a call to save a call runs only once the free signals have abstained.
 COST_HINTS: tuple[str, ...] = ("free", "local", "api")
+
+
+#: How much a classifier's opinion should be trusted, most authoritative
+#: first:
+#:
+#: * ``caller`` — an argument on the call itself (``lane="deep"``). Nothing
+#:   outranks the person making the request.
+#: * ``policy`` — code the operator wrote and installed (a ``script``
+#:   classifier). They own the deployment, so their rule beats a guess and
+#:   beats anything that arrived as text.
+#: * ``prompt`` — a marker found *inside the content* (``[[lane:deep]]``).
+#:   This is a real and wanted channel: in an agent harness the model's text
+#:   is the only thing that passes through, so it is how an agent routes
+#:   itself. But content is not trustworthy in the way an argument is — in
+#:   any RAG or tool-output path it may have come from a retrieved document
+#:   or a web page, and a routing marker in such text would be a cheap
+#:   prompt-injection lever ("route this to the expensive model", or worse,
+#:   out of the private lane). So it is honoured, and it never overrules the
+#:   caller or the operator.
+#: * ``inferred`` — llmcore guessed. Last, not because a guess is necessarily
+#:   worse than a user's choice, but because it must not silently replace it.
+AUTHORITIES: tuple[str, ...] = ("caller", "policy", "prompt", "inferred")
+
+
+def authority_rank(authority: str) -> int:
+    """Return a sort key for ``authority``, with unknown values ranked last."""
+    try:
+        return AUTHORITIES.index(authority)
+    except ValueError:
+        return len(AUTHORITIES)
 
 
 def cost_rank(cost_hint: str) -> int:
@@ -91,6 +125,10 @@ class RequestClassifier(Protocol):
 
     #: One of :data:`COST_HINTS`.
     cost_hint: str
+
+    #: One of :data:`AUTHORITIES`. Optional: a classifier that does not
+    #: declare one is treated as ``inferred``, which is the safe assumption.
+    authority: str
 
     async def classify(self, request: RoutingRequest) -> Classification | None:
         """Classify ``request``, or return ``None`` for no opinion.

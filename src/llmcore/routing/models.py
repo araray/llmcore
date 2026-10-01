@@ -434,9 +434,13 @@ class RoutingRequest:
 
     Deliberately a copy rather than the live message list, so a classifier
     cannot mutate the request it is being asked about.
+
+    ``prompt`` is optional because ``chat(messages=[...])`` is a legitimate
+    call shape with no prompt at all, and a routing request that could not
+    represent it would simply not work for half of llmcore's callers.
     """
 
-    prompt: str
+    prompt: str | None = None
     messages: tuple[dict[str, Any], ...] = ()
     system: str | None = None
     session_id: str | None = None
@@ -452,7 +456,7 @@ class RoutingRequest:
         loading a tokenizer to decide whether to load a model would defeat the
         purpose.
         """
-        total = len(self.prompt) + len(self.system or "")
+        total = len(self.prompt or "") + len(self.system or "")
         for message in self.messages:
             content = message.get("content")
             if isinstance(content, str):
