@@ -24,6 +24,7 @@ resolves exactly as it did before routing existed.
 - [Effort, thinking and parameters](#effort-thinking-and-parameters)
 - [Proxy mode for agent harnesses](#proxy-mode-for-agent-harnesses)
 - [Inspecting what routing did](#inspecting-what-routing-did)
+- [Measuring a classifier](#measuring-a-classifier)
 - [Overriding anything, anywhere](#overriding-anything-anywhere)
 - [What this does not claim](#what-this-does-not-claim)
 
@@ -486,6 +487,79 @@ carries every candidate considered and why each was skipped, which is what makes
 
 ---
 
+## Measuring a classifier
+
+llmcore ships no accuracy numbers. Here is how to get your own, and the one
+thing the report insists on.
+
+**What you need to supply:** your prompts, each labelled with the lane it
+*should* go to. Nothing substitutes for it — a classifier that scores well on
+someone else's benchmark tells you nothing about your lanes, your prompts and
+your models. Fifty cases catch an obviously wrong chain; two hundred let you
+compare classifiers with some confidence.
+
+```jsonl
+{"prompt": "rename this variable", "expected": "trivial"}
+{"prompt": "prove this lemma", "expected": "deep", "note": "maths"}
+```
+
+[`docs/examples/lane_eval_starter.jsonl`](examples/lane_eval_starter.jsonl) is a
+29-case starting point so this is an edit rather than a blank page. It is not a
+benchmark and its README says so.
+
+```bash
+llmcore-routing eval my_traffic.jsonl \
+  --lane-order trivial,code,standard,deep \
+  --chain --show-misroutes 5
+```
+
+```
+heuristic
+  answered   29/29 (100% coverage, 0 abstentions)
+  agreement  10/29 (34%)
+  too cheap  11  <- these produce bad answers
+  too dear   8   <- these only cost money
+  latency    p50 0 ms, p95 0 ms
+```
+
+**Read the last two lines, not the percentage.** The two error directions are
+not interchangeable: routing too cheap produces a bad answer, routing too
+expensive only costs money. A classifier at 67% that never routes too cheap is
+usable; the same 67% erring downward may not be. `--show-misroutes` prints the
+individual prompts that went too cheap, which is where the information is.
+
+Two deliberate choices in the scoring:
+
+- **An abstention is not an error.** A classifier that declines is passing the
+  turn to the next one in the chain, which is the designed behaviour; counting
+  it as wrong would make the most honest classifier look like the worst.
+  Coverage is reported separately from accuracy.
+- **Without `--lane-order`, no direction is reported at all** rather than a
+  guessed one.
+
+You can also point it at unlabelled traffic (a `.txt` file, one prompt per
+line). That measures coverage and latency without anyone labelling anything,
+which is a reasonable way to decide whether labelling is worth it.
+
+### A worked example of why the direction matters
+
+Running the starter set found that the free `heuristic` routes
+
+> "Here is my patient record: John Doe, DOB 1971-03-02, diagnosed with
+> hypertension. Summarise it."
+
+to the **trivial** lane, because "summarise" is a simple-task verb and the
+heuristic is documented as not looking for personal data.
+
+That is survivable only because **the privacy guarantee does not depend on the
+classifier**: transforms run after target selection and change the destination,
+so the prompt is still constrained to a local-only pool before anything is
+sent. llmcore asserts this rather than assuming it — one test proves the
+classifier really does get it wrong, so the premise cannot rot silently, and
+another proves the prompt still cannot reach a remote target.
+
+---
+
 ## Overriding anything, anywhere
 
 Config is a **warm-up, not a cage**. Every setting resolves config →
@@ -508,9 +582,9 @@ A misspelled override raises rather than being silently dropped.
 ## What this does not claim
 
 - **No accuracy figure is given for any classifier.** None has been validated on
-  your traffic, and any number here would be invented. Measure the lane
-  assignments on your own prompts before trusting them with quality-sensitive
-  work; `explain()` exists for exactly that.
+  your traffic, and any number here would be invented. Measure it — see
+  [Measuring a classifier](#measuring-a-classifier) below, which exists
+  precisely so this gap can be closed with a number rather than an assurance.
 - **Cost estimates are estimates.** Output length is unknown before a call, so
   the estimate assumes a fixed output. Good for comparing targets, not for
   billing.

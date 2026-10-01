@@ -354,6 +354,13 @@ print(await llm.routing.why("summarise this file"))
 llm.routing.health()        # per-target cooldowns, latency, failures, balance
 ```
 
+**Measuring it.** llmcore publishes no accuracy figure for any classifier,
+because none has been validated on real traffic and any number would be
+invented. `llmcore-routing eval` closes that with your own labelled prompts,
+and reports the two error directions separately — routing too cheap produces a
+bad answer, routing too expensive only costs money, and a single percentage
+hides which one you are buying.
+
 Guide: [`Routing_usage.md`](docs/Routing_usage.md). Design:
 [`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md).
 

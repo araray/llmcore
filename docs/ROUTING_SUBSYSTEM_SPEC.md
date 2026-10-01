@@ -724,10 +724,13 @@ than no spec:
    in-process default, as specified. Nothing shares cooldowns between
    processes, so N workers each discover a rate limit independently. Worth
    building only if someone runs llmcore in several processes against one quota.
-2. **No classifier is validated on real traffic.** The evaluation harness is
-   `llm.routing.explain()` plus whatever prompts a user brings; there is no
-   labelled set and therefore no accuracy figure anywhere in the docs. This is
-   the largest honest gap in the subsystem.
+2. **No classifier is validated on real traffic.** Still true, and still the
+   largest honest gap. What has changed is that it is now *closable*:
+   `llmcore.routing.evaluation` and `llmcore-routing eval` measure a chain
+   against labelled prompts and report too-cheap and too-expensive separately,
+   since a single accuracy figure hides which error you are buying. A 29-case
+   starter set ships so the work is an edit rather than a blank page. What
+   nobody can supply but the user is the labelled traffic itself.
 3. **Anthropic effort mapping** (§6.4) still needs the model-generation branch;
    the account available during implementation had no credit to validate it
    against.
