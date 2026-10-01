@@ -55,19 +55,21 @@ def _module_source(provider: str) -> str:
 #: Providers that legitimately have one transport, and why. Anything not listed
 #: here is expected to offer both.
 SINGLE_TRANSPORT_REASONS: dict[str, str] = {
-    # --- No vendor SDK exists, so direct REST is the only option ----------
-    "deepseek": "OpenAI-compatible API; DeepSeek publishes no Python SDK.",
-    "kimi": "OpenAI-compatible API; Moonshot publishes no Python SDK.",
-    "typesafe": "Two REST endpoints; TypeSafe publishes no Python SDK.",
-    # --- Known gaps, tracked rather than hidden --------------------------
-    # These invert the house rule: they are SDK-only with no direct path, or
-    # direct-only with an SDK that exists and is unused. Each is a real gap and
-    # is listed in PROVIDER_MODERNIZATION_PLAN.md rather than silently accepted.
-    "anthropic": "GAP: anthropic SDK only, no direct REST path yet.",
-    "gemini": "GAP: google-genai SDK only, no direct REST path yet.",
-    "deepgram": "GAP: deepgram SDK only, no direct REST path yet.",
-    "ollama": "GAP: ollama SDK only, no direct REST path yet.",
-    "mistral": "GAP: direct REST only; the mistralai v3 SDK exists and is unused.",
+    # --- No *official* vendor SDK exists ----------------------------------
+    #
+    # Checked against PyPI rather than assumed, because an earlier version of
+    # this list claimed TypeSafe published no SDK when `typesafe-sdk` 0.7.2 is
+    # official and was already cloned in the vendor repos. The packages named
+    # below are the ones that turn up in a search and are *not* from the vendor.
+    "deepseek": (
+        "OpenAI-compatible API; DeepSeek publishes no Python SDK. The PyPI "
+        "names `deepseek` (Deskpai.com) and `deepseek-sdk` (Sifat Hasan) are "
+        "third-party, and DeepSeek's own docs direct users to the openai SDK."
+    ),
+    "kimi": (
+        "OpenAI-compatible API; Moonshot publishes no Python SDK. `kimi-sdk` on "
+        "PyPI names no author or repository and is not identifiably official."
+    ),
 }
 
 #: Markers that indicate a module can select between transports at runtime.
@@ -126,11 +128,7 @@ class TestTransportDualityIsRecorded:
         """An exemption is either 'no SDK exists' or an acknowledged GAP. Being
         explicit stops a temporary gap from reading like a design decision."""
         for provider, reason in SINGLE_TRANSPORT_REASONS.items():
-            acceptable = (
-                reason.startswith("GAP:")
-                or "no Python SDK" in reason
-                or "IS the openai SDK" in reason
-            )
+            acceptable = reason.startswith("GAP:") or "no Python SDK" in reason
             assert acceptable, (
                 f"{provider}: the reason should either state that no SDK exists or "
                 f"be marked 'GAP:' so it is tracked. Got: {reason!r}"
@@ -146,12 +144,15 @@ class TestDualTransportProvidersActuallyUseBoth:
     make that shape fail.
     """
 
-    DUAL = ("fal", "elevenlabs", "replicate", "higgsfield")
+    DUAL = ("fal", "elevenlabs", "replicate", "higgsfield", "typesafe", "mistral")
 
     @pytest.mark.parametrize("provider", DUAL)
     def test_the_sdk_client_is_instantiated(self, provider):
         source = _module_source(provider)
-        assert re.search(r"self\._sdk\s*=\s*\w+\.", source), (
+        # Accepts both `self._sdk = vendor_module.Client(...)` and
+        # `self._sdk = ImportedClient(...)`; the first version of this pattern
+        # only matched the dotted form and reported a false negative.
+        assert re.search(r"self\._sdk\s*=\s*_?[A-Za-z]\w*[.(]", source), (
             f"{provider} declares an SDK backend but never constructs a client, "
             f"so selecting it would silently fall through to the other transport."
         )
@@ -189,6 +190,8 @@ class TestSdkExtrasAreDeclared:
         "elevenlabs": "elevenlabs",
         "replicate": "replicate",
         "higgsfield": "higgsfield-client",
+        "typesafe": "typesafe-sdk",
+        "mistral": "mistralai",
     }
 
     @pytest.mark.parametrize(("provider", "package"), sorted(SDK_EXTRAS.items()))

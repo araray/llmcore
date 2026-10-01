@@ -102,6 +102,14 @@ except ImportError:  # pragma: no cover
     tiktoken = None  # type: ignore[assignment]
     tiktoken_available = False
 
+try:
+    import typesafe_sdk
+
+    typesafe_sdk_available = True
+except ImportError:
+    typesafe_sdk_available = False
+    typesafe_sdk = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -534,6 +542,31 @@ def _parse_retry_after(headers: Any) -> float | None:
 # =============================================================================
 
 
+class _SdkResponse:
+    """Adapt an SDK result to the tiny response interface the parsers use.
+
+    ``_parse_system_one`` and ``list_models`` both read ``.json()`` (and
+    ``.headers`` for the request id), so wrapping the SDK's pydantic result in
+    this shim means **neither parser changes**. Keeping one payload shape is
+    what lets the two transports stay interchangeable instead of growing two
+    sets of parsing bugs.
+    """
+
+    __slots__ = ("_payload", "headers", "status_code", "text")
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._payload = payload
+        # The SDK does not surface response headers, so the request id — which
+        # the REST path reads from `x-request-id` — is simply unavailable here.
+        # Reported as absent rather than invented.
+        self.headers: dict[str, str] = {}
+        self.status_code = 200
+        self.text = ""
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+
 class TypeSafeProvider(BaseProvider):
     """TypeSafe.ai System One provider (typed judgments, not chat).
 
@@ -588,6 +621,10 @@ class TypeSafeProvider(BaseProvider):
             )
         self._api_key: str = api_key
 
+        # --- Transport: direct REST first, official SDK as the fallback ------
+        self._backend = self._resolve_backend(config.get("backend"))
+        self._sdk: Any = None
+
         # --- Endpoint / model (config > env > default) ---
         base_url = config.get("base_url") or (os.environ.get(_ENV_BASE_URL) or "").strip()
         self._base_url: str = (base_url or _DEFAULT_BASE_URL).rstrip("/")
@@ -628,13 +665,100 @@ class TypeSafeProvider(BaseProvider):
             except Exception as exc:  # pragma: no cover - encoding download issues
                 logger.debug("tiktoken unavailable for TypeSafe token estimates: %s", exc)
 
+        if self._backend == "sdk":
+            self._sdk = typesafe_sdk.AsyncTypeSafeClient(
+                api_key=self._api_key,
+                base_url=self._base_url,
+                model=self.default_model,
+                timeout=self._timeout,
+            )
+
         logger.debug(
-            "TypeSafe provider initialised (instance=%s, base_url=%s, model=%s, retries=%d).",
+            "TypeSafe provider initialised (instance=%s, backend=%s, base_url=%s, "
+            "model=%s, retries=%d).",
             self._provider_instance_name or _PROVIDER_NAME,
+            self._backend,
             self._base_url,
             self.default_model,
             self._max_retries,
         )
+
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport, preferring direct REST.
+
+        TypeSafe publishes an official SDK (``typesafe-sdk``), so llmcore's
+        house rule applies: call the two REST endpoints directly by default, and
+        fall back to the SDK when asked. The direct path keeps retry policy,
+        request ids and error mapping in llmcore's hands; the SDK path exists so
+        a caller who already standardizes on the vendor client can use it.
+        """
+        available = {"httpx": httpx_available, "sdk": typesafe_sdk_available}
+        req = (requested or "auto").lower()
+        if req not in ("auto", "httpx", "sdk"):
+            logger.warning("Unknown TypeSafe backend '%s'; using auto-detection.", req)
+            req = "auto"
+        if req != "auto" and available.get(req):
+            return req
+        if req != "auto":
+            logger.warning(
+                "Requested TypeSafe backend '%s' is unavailable; falling back. "
+                "Install it with: pip install llmcore[typesafe]",
+                req,
+            )
+        for backend in ("httpx", "sdk"):
+            if available[backend]:
+                return backend
+        raise ConfigError("No usable TypeSafe transport is installed.")
+
+    async def _sdk_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        model: str | None = None,
+    ) -> Any:
+        """Serve a request through the official SDK, shaped like the REST reply.
+
+        Returns a :class:`_SdkResponse` so the existing parsers are untouched.
+
+        Raises:
+            ProviderError: If the SDK rejects the call, mapped to the same
+                exception type the direct path raises so a caller cannot tell
+                the transports apart from their failures.
+        """
+        try:
+            if path == _SYSTEM_ONE_PATH:
+                body = json_body or {}
+                result = await self._sdk.system_one(
+                    body.get("state"),
+                    body.get("questions") or {},
+                    model=body.get("model") or model,
+                )
+                payload = result.model_dump(mode="json")
+            elif path == _MODELS_PATH:
+                listing = await self._sdk.models.list()
+                dump = getattr(listing, "model_dump", None)
+                payload = (
+                    dump(mode="json") if callable(dump) else {"models": list(listing or [])}
+                )
+            else:  # pragma: no cover - no other paths exist
+                raise ProviderError(
+                    self.get_name(),
+                    f"The TypeSafe SDK backend does not implement {method} {path}.",
+                    retryable=False,
+                )
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise ProviderError(
+                self.get_name(),
+                f"TypeSafe SDK request failed: {exc}",
+                model_name=model,
+                retryable=True,
+            ) from exc
+        return _SdkResponse(payload)
 
     # ------------------------------------------------------------------
     # Config helpers
@@ -924,6 +1048,14 @@ class TypeSafeProvider(BaseProvider):
             ProviderError: For non-retryable statuses immediately, or the last
                 error once retries are exhausted.
         """
+        if self._backend == "sdk":
+            # One branch point serves both endpoints, and the SDK owns its own
+            # retries, so llmcore's retry loop is deliberately skipped here
+            # rather than wrapped around it.
+            return await self._sdk_request(
+                method, path, json_body=json_body, model=model
+            )
+
         client = self._get_http()
         attempts = self._max_retries + 1
         last_error: ProviderError | None = None
@@ -1355,4 +1487,10 @@ class TypeSafeProvider(BaseProvider):
             except Exception as exc:
                 logger.error("Error closing TypeSafe HTTP client: %s", exc)
             self._http = None
+        if self._sdk is not None:
+            try:
+                await self._sdk.aclose()
+            except Exception as exc:
+                logger.error("Error closing TypeSafe SDK client: %s", exc)
+            self._sdk = None
         logger.info("TypeSafeProvider closed.")

@@ -53,10 +53,29 @@ from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
+try:
+    from mistralai.client import Mistral as _MistralSDK
+
+    mistralai_available = True
+except ImportError:
+    mistralai_available = False
+    _MistralSDK = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # Default base URL for the Mistral AI API.
 DEFAULT_MISTRAL_BASE_URL = "https://api.mistral.ai/v1"
+
+#: Calls the ``mistralai`` v3 SDK covers in a shape llmcore can consume
+#: directly. Mistral's surface is wide — OCR, audio, classification,
+#: moderation, FIM — and the SDK models those with its own typed resources
+#: rather than OpenAI-shaped dicts, so converting all of them would mean
+#: maintaining a second translation layer. The honest middle ground is to use
+#: the SDK where it is a drop-in and keep the rest on direct REST, logging that
+#: choice so ``backend = "sdk"`` never silently does nothing.
+_SDK_CAPABILITIES: frozenset[str] = frozenset(
+    {"chat", "chat_stream", "models", "embeddings"}
+)
 
 # Default model if none is configured.
 DEFAULT_MODEL = "mistral-large-latest"
@@ -211,6 +230,22 @@ class MistralProvider(BaseProvider):
         self.max_retries = int(config.get("max_retries", 2))
         self._discovered_context_lengths = {}
 
+        # --- Transport: direct REST first, official SDK as the fallback ------
+        self._backend = self._resolve_backend(config.get("backend"))
+        self._sdk: Any = None
+        if self._backend == "sdk":
+            # The SDK appends its own version prefix, so handing it llmcore's
+            # base_url verbatim produces /v1/v1/... and a "no Route match" 404.
+            # Strip the suffix, and only override the server when the base URL
+            # has actually been customised.
+            sdk_server = self.base_url
+            if sdk_server.endswith("/v1"):
+                sdk_server = sdk_server[: -len("/v1")]
+            sdk_kwargs: dict[str, Any] = {"api_key": api_key}
+            if sdk_server and sdk_server != DEFAULT_MISTRAL_BASE_URL.removesuffix("/v1"):
+                sdk_kwargs["server_url"] = sdk_server
+            self._sdk = _MistralSDK(**sdk_kwargs)
+
         # Initialise httpx client
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
@@ -234,6 +269,61 @@ class MistralProvider(BaseProvider):
     # ------------------------------------------------------------------
     # Tokenizer
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport, preferring direct REST.
+
+        Mistral publishes ``mistralai`` v3, so llmcore's house rule applies:
+        call the API directly by default and fall back to the vendor SDK when
+        asked. Direct stays the default because this provider's wide surface
+        (OCR, audio, classification, moderation, FIM) is OpenAI-shaped over
+        REST, and llmcore's extractors already speak that shape.
+        """
+        available = {"httpx": httpx_available, "sdk": mistralai_available}
+        req = (requested or "auto").lower()
+        if req not in ("auto", "httpx", "sdk"):
+            logger.warning("Unknown Mistral backend '%s'; using auto-detection.", req)
+            req = "auto"
+        if req != "auto" and available.get(req):
+            return req
+        if req != "auto":
+            logger.warning(
+                "Requested Mistral backend '%s' is unavailable; falling back. "
+                "Install it with: pip install llmcore[mistral]",
+                req,
+            )
+        for backend in ("httpx", "sdk"):
+            if available[backend]:
+                return backend
+        raise ConfigError("No usable Mistral transport is installed.")
+
+    def _use_sdk_for(self, capability: str) -> bool:
+        """Whether *capability* should go through the SDK.
+
+        Only the calls in :data:`_SDK_CAPABILITIES` do. Anything else stays on
+        direct REST even when ``backend = "sdk"``, and logs that once, because a
+        backend that silently does nothing for half its methods is worse than
+        one that is explicit about its coverage.
+        """
+        if self._backend != "sdk":
+            return False
+        if capability in _SDK_CAPABILITIES:
+            return True
+        logger.debug(
+            "Mistral '%s' has no drop-in SDK equivalent; using direct REST for it "
+            "even though backend='sdk'.",
+            capability,
+        )
+        return False
+
+    @staticmethod
+    def _sdk_dump(obj: Any) -> dict[str, Any]:
+        """Normalize an SDK model into the dict shape the extractors expect."""
+        dump = getattr(obj, "model_dump", None)
+        if callable(dump):
+            return dict(dump(mode="json", exclude_none=True))
+        return dict(obj) if isinstance(obj, dict) else {}
 
     def _load_tokenizer(self, model_name: str) -> None:
         """Load tiktoken encoding for Mistral models.
@@ -261,9 +351,15 @@ class MistralProvider(BaseProvider):
     async def get_models_details(self) -> list[ModelDetails]:
         """Discover models via GET /v1/models."""
         try:
-            resp = await self._client.get("/models")
-            resp.raise_for_status()
-            data = resp.json()
+            if self._use_sdk_for("models"):
+                # Feed the SAME `data` the REST path produces, so the parsing
+                # below is shared rather than duplicated per transport.
+                listing = await self._sdk.models.list_async()
+                data = self._sdk_dump(listing)
+            else:
+                resp = await self._client.get("/models")
+                resp.raise_for_status()
+                data = resp.json()
         except httpx.HTTPStatusError as e:
             raise ProviderError(
                 self.get_name(), f"Models list error ({e.response.status_code}): {e}"
@@ -507,6 +603,9 @@ class MistralProvider(BaseProvider):
                 json.dumps(body, indent=2, default=str),
             )
 
+        if self._use_sdk_for("chat_stream" if stream else "chat"):
+            return await self._chat_via_sdk(body, model_name, stream=stream)
+
         try:
             if stream:
                 return self._stream_completion(body, model_name)
@@ -536,6 +635,67 @@ class MistralProvider(BaseProvider):
         except Exception as e:
             logger.error("Unexpected error: %s", e, exc_info=True)
             raise ProviderError(self.get_name(), f"Unexpected error: {e}")
+
+    async def _chat_via_sdk(
+        self, body: dict[str, Any], model_name: str, *, stream: bool
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Run a chat completion through ``mistralai``.
+
+        Returns the same shapes the direct path returns — a response dict, or an
+        async generator of chunk dicts — because every ``extract_*`` method
+        downstream parses those dicts rather than SDK objects.
+        """
+        payload = {k: v for k, v in body.items() if k not in ("model", "messages", "stream")}
+        try:
+            if stream:
+                return await self._stream_via_sdk(body, model_name, payload)
+            result = await self._sdk.chat.complete_async(
+                model=body.get("model") or model_name,
+                messages=body.get("messages"),
+                **payload,
+            )
+        except Exception as e:
+            raise ProviderError(
+                self.get_name(), f"Mistral SDK error: {e}", model_name=model_name
+            ) from e
+        return self._sdk_dump(result)
+
+    async def _stream_via_sdk(
+        self, body: dict[str, Any], model_name: str, payload: dict[str, Any]
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Return an async generator of chunk dicts from the SDK.
+
+        Deliberately an ``async def`` that *returns* a generator rather than an
+        async-generator function, because that is the shape
+        :meth:`_stream_completion` already has: callers await
+        ``chat_completion(stream=True)`` to obtain the iterator. Returning the
+        iterator directly here would make the two transports behave differently
+        at the call site, which defeats the point of having both.
+        """
+
+        async def _generator() -> AsyncGenerator[dict[str, Any], None]:
+            try:
+                events = await self._sdk.chat.stream_async(
+                    model=body.get("model") or model_name,
+                    messages=body.get("messages"),
+                    **payload,
+                )
+                async for event in events:
+                    # The SDK wraps each chunk in an envelope carrying `.data`;
+                    # unwrapping it keeps the chunk shape identical to the REST
+                    # path's, so extract_delta_content needs no transport branch.
+                    chunk = getattr(event, "data", event)
+                    yield self._sdk_dump(chunk)
+            except ProviderError:
+                raise
+            except Exception as e:
+                raise ProviderError(
+                    self.get_name(),
+                    f"Mistral SDK stream error: {e}",
+                    model_name=model_name,
+                ) from e
+
+        return _generator()
 
     async def _stream_completion(
         self, body: dict[str, Any], model_name: str
@@ -702,6 +862,11 @@ class MistralProvider(BaseProvider):
         body.update(kwargs)
 
         try:
+            if self._use_sdk_for("embeddings"):
+                result = await self._sdk.embeddings.create_async(
+                    model=body.get("model"), inputs=body.get("input")
+                )
+                return self._sdk_dump(result)
             resp = await self._client.post("/embeddings", json=body)
             self._raise_for_status(resp, embed_model)
             return resp.json()

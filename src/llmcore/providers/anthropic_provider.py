@@ -28,6 +28,14 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # --- Guarded SDK imports ---
@@ -101,6 +109,14 @@ DEFAULT_ANTHROPIC_TOKEN_LIMITS: dict[str, int] = {
 }
 
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+
+
+#: Public API root for the direct transport.
+_ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
+
+#: Version header the Messages API requires on every direct request. The SDK
+#: sends this for you; calling the API directly means owning it.
+_ANTHROPIC_VERSION = "2023-06-01"
 
 
 class AnthropicProvider(BaseProvider):
@@ -183,9 +199,179 @@ class AnthropicProvider(BaseProvider):
         except Exception as e:
             raise ConfigError(f"Anthropic client initialization failed: {e}")
 
+        # --- Transport -------------------------------------------------------
+        #
+        # llmcore's rule is to call the API directly and fall back to the vendor
+        # SDK, and this provider had only the SDK path. The direct path is now
+        # available with `backend = "httpx"`.
+        #
+        # The default stays "sdk" here, unlike the media providers: the
+        # anthropic SDK owns prompt-caching headers, beta-feature headers and
+        # retry/backoff behaviour that the direct path would have to track by
+        # hand, and this provider's existing tests mock AsyncAnthropic. Direct
+        # is opt-in rather than imposed.
+        self._backend = self._resolve_backend(config.get("backend"))
+        self._http: Any = None
+
     # ------------------------------------------------------------------
     # Provider Identity & Discovery
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport. ``"sdk"`` by default; ``"httpx"`` is opt-in."""
+        available = {"sdk": True, "httpx": httpx_available}
+        req = (requested or "sdk").lower()
+        if req not in ("sdk", "httpx"):
+            logger.warning("Unknown Anthropic backend '%s'; using the SDK.", req)
+            return "sdk"
+        if available.get(req):
+            return req
+        logger.warning(
+            "Requested Anthropic backend '%s' is unavailable; using the SDK.", req
+        )
+        return "sdk"
+
+    def _direct_base_url(self) -> str:
+        """REST root for the direct transport."""
+        return str(self.base_url or _ANTHROPIC_DEFAULT_BASE_URL).rstrip("/")
+
+    def _get_http(self) -> Any:
+        """Return the lazily-built direct HTTP client."""
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                base_url=self._direct_base_url(),
+                headers={
+                    "x-api-key": self.api_key or "",
+                    "anthropic-version": _ANTHROPIC_VERSION,
+                    "content-type": "application/json",
+                },
+                timeout=self.timeout,
+            )
+        return self._http
+
+    @staticmethod
+    def _drop_none(value: Any) -> Any:
+        """Recursively strip ``None`` values from a decoded JSON payload.
+
+        The SDK path returns ``model_dump(exclude_none=True)``, so raw wire JSON
+        — which does include nulls like ``"stop_sequence": null`` — would differ
+        from it key-for-key. Stripping them here is what makes the two
+        transports produce *identical* dicts, which is the whole point: every
+        ``extract_*`` method parses these dicts, so a shape difference would
+        leak the transport choice into callers.
+        """
+        if isinstance(value, dict):
+            return {
+                k: AnthropicProvider._drop_none(v)
+                for k, v in value.items()
+                if v is not None
+            }
+        if isinstance(value, list):
+            return [AnthropicProvider._drop_none(v) for v in value]
+        return value
+
+    def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
+        """Map a direct-transport failure onto the same errors the SDK path uses.
+
+        Raises:
+            ContextLengthError: If the prompt exceeded the model's window.
+            ProviderError: For every other failure.
+        """
+        lowered = body.lower()
+        if status == 400 and (
+            "context" in lowered and ("long" in lowered or "exceed" in lowered)
+        ):
+            raise ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=body,
+            )
+        if status in (401, 403):
+            raise ProviderError(
+                self.get_name(),
+                f"Anthropic authentication failed. Check ANTHROPIC_API_KEY. Error: {body}",
+                model_name=model_name,
+                status_code=status,
+            )
+        if status == 404:
+            raise ProviderError(
+                self.get_name(),
+                f"Anthropic model '{model_name}' not found. Error: {body}",
+                model_name=model_name,
+                status_code=status,
+            )
+        if status == 429:
+            raise ProviderError(
+                self.get_name(),
+                f"Anthropic rate limit reached. Error: {body}",
+                model_name=model_name,
+                status_code=status,
+                retryable=True,
+            )
+        raise ProviderError(
+            self.get_name(),
+            f"API Error ({status}): {body}",
+            model_name=model_name,
+            status_code=status,
+            retryable=status >= 500,
+        )
+
+    @staticmethod
+    async def _sdk_message_events(raw_stream: Any) -> AsyncGenerator[dict[str, Any], None]:
+        """Yield SDK stream events as plain dicts.
+
+        The counterpart to :meth:`_direct_message_events`: both produce the same
+        event dicts so the OpenAI-shaped normalization is written once.
+        """
+        async for event in raw_stream:
+            yield event.model_dump(exclude_none=True)
+
+    async def _direct_messages(
+        self, body: dict[str, Any], model_name: str
+    ) -> dict[str, Any]:
+        """POST ``/v1/messages`` and return the SDK-equivalent response dict."""
+        try:
+            resp = await self._get_http().post("/v1/messages", json=body)
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}") from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}") from e
+        if resp.status_code >= 400:
+            self._raise_direct_status(resp.status_code, resp.text, model_name)
+        return self._drop_none(resp.json())
+
+    async def _direct_message_events(
+        self, body: dict[str, Any], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Yield raw Messages-API stream events as dicts.
+
+        Produces the *same* event dicts the SDK path produces, so the whole
+        OpenAI-shaped normalization downstream is shared between transports
+        rather than written twice.
+        """
+        client = self._get_http()
+        async with client.stream(
+            "POST", "/v1/messages", json={**body, "stream": True}
+        ) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                self._raise_direct_status(resp.status_code, resp.text, model_name)
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    # SSE also carries `event:` lines, which duplicate the
+                    # payload's own `type` field, so they are skipped.
+                    continue
+                payload = line[5:].strip()
+                if not payload or payload == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(payload)
+                except ValueError:
+                    logger.warning("Skipping unparseable Anthropic SSE chunk.")
+                    continue
+                yield self._drop_none(event)
 
     def get_name(self) -> str:
         """Returns the provider instance name."""
@@ -886,14 +1072,20 @@ class AnthropicProvider(BaseProvider):
         Returns:
             OpenAI-normalized response dict.
         """
-        response = await self._client.messages.create(  # type: ignore[union-attr]
-            model=model_name,
-            messages=messages_payload,  # type: ignore[arg-type]
-            system=system_prompt,  # type: ignore[arg-type]
-            **api_kwargs,
-        )
-
-        response_dict = response.model_dump(exclude_none=True)
+        if self._backend == "httpx":
+            body: dict[str, Any] = {"model": model_name, "messages": messages_payload}
+            if system_prompt is not None:
+                body["system"] = system_prompt
+            body.update(api_kwargs)
+            response_dict = await self._direct_messages(body, model_name)
+        else:
+            response = await self._client.messages.create(  # type: ignore[union-attr]
+                model=model_name,
+                messages=messages_payload,  # type: ignore[arg-type]
+                system=system_prompt,  # type: ignore[arg-type]
+                **api_kwargs,
+            )
+            response_dict = response.model_dump(exclude_none=True)
 
         if self.log_raw_payloads_enabled:
             logger.debug(
@@ -967,13 +1159,21 @@ class AnthropicProvider(BaseProvider):
         Handles text deltas, thinking deltas, tool call streaming
         (``input_json_delta``), and message-level events.
         """
-        raw_stream = await self._client.messages.create(  # type: ignore[union-attr]
-            model=model_name,
-            messages=messages_payload,  # type: ignore[arg-type]
-            system=system_prompt,  # type: ignore[arg-type]
-            stream=True,
-            **api_kwargs,
-        )
+        if self._backend == "httpx":
+            body: dict[str, Any] = {"model": model_name, "messages": messages_payload}
+            if system_prompt is not None:
+                body["system"] = system_prompt
+            body.update(api_kwargs)
+            event_source = self._direct_message_events(body, model_name)
+        else:
+            raw_stream = await self._client.messages.create(  # type: ignore[union-attr]
+                model=model_name,
+                messages=messages_payload,  # type: ignore[arg-type]
+                system=system_prompt,  # type: ignore[arg-type]
+                stream=True,
+                **api_kwargs,
+            )
+            event_source = self._sdk_message_events(raw_stream)
 
         # Track state for streaming tool calls
         current_tool_id: str | None = None
@@ -982,8 +1182,7 @@ class AnthropicProvider(BaseProvider):
         async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
             nonlocal current_tool_id, current_tool_name
 
-            async for event in raw_stream:
-                event_dict = event.model_dump(exclude_none=True)
+            async for event_dict in event_source:
                 event_type = event_dict.get("type")
 
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
@@ -1264,6 +1463,13 @@ class AnthropicProvider(BaseProvider):
 
     async def close(self) -> None:
         """Close the underlying Anthropic client session."""
+        if self._http is not None:
+            try:
+                await self._http.aclose()
+            except Exception as e:
+                logger.warning("Error closing direct HTTP client: %s", e)
+            finally:
+                self._http = None
         if self._client:
             try:
                 await self._client.close()
