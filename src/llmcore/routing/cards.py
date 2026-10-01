@@ -48,12 +48,24 @@ __all__ = [
 #: honest number to put against them.
 SELF_HOSTED_PROVIDERS: frozenset[str] = frozenset({"ollama", "vllm"})
 
-#: Instance names and vendor aliases that resolve to a different card
-#: namespace. Mirrors ``_PROVIDER_INSTANCE_ALIASES`` in the provider manager;
-#: duplicated rather than imported to keep routing free of an import cycle,
-#: and covered by a test that asserts the two stay in step.
+#: Provider type -> the name its model cards are filed under.
+#:
+#: This is **not** the same mapping as ``_PROVIDER_INSTANCE_ALIASES`` in the
+#: provider manager, and conflating the two is a bug this module shipped with:
+#: that map folds vendor aliases onto a canonical *provider type*
+#: (``google`` -> ``gemini``), while cards are filed by *vendor directory*,
+#: where the same pair runs the other way (``gemini`` -> ``google``). Pointing
+#: a Gemini target at a ``gemini`` card namespace that does not exist silently
+#: disabled pricing and the context-window check for one of the most used
+#: providers in the library, with no error anywhere -- the lookup just returned
+#: None, and None means "unknown", which every caller handles quietly.
+#:
+#: ``tests/routing/test_cards.py`` now asserts that every provider type with
+#: cards resolves to a namespace that exists, so the next provider added cannot
+#: reintroduce it.
 _CARD_PROVIDER_ALIASES: dict[str, str] = {
-    "google": "gemini",
+    # Provider type is `gemini`; the cards live in `google/`.
+    "gemini": "google",
     "moonshot": "kimi",
     "glm": "zai",
     "zhipu": "zai",

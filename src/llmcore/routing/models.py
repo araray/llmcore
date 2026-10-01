@@ -226,6 +226,12 @@ class FailureKind(StrEnum):
         CONTEXT_LENGTH: The prompt overflowed. **Not** a health problem — route
             to a larger window instead.
         BAD_REQUEST: 400. Fails everywhere; do not fail over.
+        MODEL_NOT_FOUND: 404, or a vendor saying the model does not exist.
+            Deterministic for *this* target, so retrying it is waste — but a
+            peer serves a **different model**, so failing over is exactly
+            right. This is the one case where "permanent" and "try someone
+            else" are both true, which is why it cannot be folded into either
+            ``BAD_REQUEST`` or ``SERVER``.
         REFUSAL: Content policy. Whether to fail over is configurable
             (``routing.on_refusal``) and overridable per request; the shipped
             default is not to, because retrying elsewhere is "shop until
@@ -240,6 +246,7 @@ class FailureKind(StrEnum):
     AUTH = "auth"
     CONTEXT_LENGTH = "context_length"
     BAD_REQUEST = "bad_request"
+    MODEL_NOT_FOUND = "model_not_found"
     REFUSAL = "refusal"
     UNKNOWN = "unknown"
 
@@ -287,6 +294,10 @@ DEFAULT_COOLDOWNS: dict[FailureKind, float | None] = {
     FailureKind.AUTH: None,
     FailureKind.CONTEXT_LENGTH: 0.0,
     FailureKind.BAD_REQUEST: 0.0,
+    # A model that does not exist will not appear in the next ten seconds, and
+    # the usual cause is a typo in config -- which a short cooldown would hide
+    # behind repeated failovers.
+    FailureKind.MODEL_NOT_FOUND: 600.0,
     FailureKind.REFUSAL: 0.0,
     FailureKind.UNKNOWN: 10.0,
 }
@@ -647,6 +658,19 @@ _CONTEXT_MARKERS: tuple[str, ...] = (
     "reduce the length",
 )
 
+#: A missing model, as the vendors actually word it. Several answer 404 with a
+#: body that names the model, and a few answer 400 -- hence matching on text as
+#: well as status.
+_NOT_FOUND_MARKERS: tuple[str, ...] = (
+    "model not found",
+    "model_not_found",
+    "does not exist",
+    "no such model",
+    "unknown model",
+    "invalid model",
+    "not found for api version",
+)
+
 
 def classify_failure(exc: BaseException) -> tuple[FailureKind, float | None]:
     """Classify *exc* into a :class:`FailureKind` and an optional retry delay.
@@ -686,6 +710,12 @@ def classify_failure(exc: BaseException) -> tuple[FailureKind, float | None]:
         return FailureKind.RATE_LIMIT, retry_after
     if status in (401, 403):
         return FailureKind.AUTH, None
+    # Checked before the 400 branch: several vendors answer 400 for a model
+    # that does not exist, and calling that a bad request would stop routing
+    # from trying a peer -- which serves a different model and would have
+    # worked.
+    if status == 404 or any(marker in text for marker in _NOT_FOUND_MARKERS):
+        return FailureKind.MODEL_NOT_FOUND, None
     if status == 400:
         return FailureKind.BAD_REQUEST, None
     if status is not None and 500 <= int(status) < 600:

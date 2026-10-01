@@ -1624,6 +1624,321 @@ state_dir = "~/.llmcore/runtimes"
   # hf_token_env_var = "HF_TOKEN"
 
 # ==============================================================================
+# [routing] - Pools, lanes, failover, and complexity-based routing
+# ==============================================================================
+# Routing answers four questions, and each layer is usable without the others:
+#
+#   Target   which provider+model?        -> never limited by this file (see below)
+#   Pool     if that one is broken, what else?
+#   Lane     what KIND of request is this?
+#   Cascade  was the cheap answer good enough?
+#   Transform what must not leave this machine?
+#
+# EVERYTHING HERE IS A STARTING POINT, NOT A LIMIT. Every key below is
+# overridable by an environment variable (LLMCORE_ROUTING__MAX_ATTEMPTS=5) and
+# by a per-call argument (llm.chat(..., pool="main", max_attempts=5)), and the
+# per-call value always wins. Config exists so you do not have to re-specify
+# everything on every call; it does not freeze the runtime.
+#
+# In particular: a provider+model absent from [providers] above is STILL
+# reachable, by spec string, as long as its credential is in the environment:
+#
+#   await llm.chat("hi", target="xai:grok-4.1-20251117?effort=high")
+#
+# llmcore builds that instance on demand and marks it ephemeral. The
+# [providers] sections are presets, not an allow-list. Set autoprovision =
+# false below if you need a closed set.
+#
+# Full design rationale: docs/ROUTING_SUBSYSTEM_SPEC.md
+[routing]
+# Consult pools, lanes and classifiers at all. With this off, target= still
+# works - dynamic targets are layer 1 and do not depend on the rest.
+enabled = true
+
+# Build a provider instance for an unconfigured target when its credential is
+# discoverable. false restores the pre-routing behaviour, where only
+# [providers] sections were reachable. Useful for a shared service that must
+# not reach an unbudgeted vendor.
+autoprovision = true
+# Keep autoprovisioned instances for the life of the process.
+autoprovision_cache = true
+
+# Pool used when no pool, lane or target is named. Empty = no pooling; calls
+# go to llmcore.default_provider as they always have.
+default_pool = ""
+# Strategy for a pool that declares none of its own. priority is predictable;
+# lowest_cost saves money immediately but reorders silently.
+# One of: priority, round_robin, weighted, lowest_latency, lowest_cost,
+#         least_busy, most_credits
+default_strategy = "priority"
+# Lane used when no classifier has an opinion. Empty = fall through to the pool.
+default_lane = ""
+
+# Distinct targets tried per request. This is a SPEND CAP: on a vendor-wide
+# outage an unbounded pool walk turns one failed request into N paid attempts.
+max_attempts = 3
+# Extra tries against the SAME target, for failures where that makes sense
+# (5xx, dropped connection - usually one bad node behind a load balancer).
+# Moving to a peer would throw away a warm prompt cache for nothing.
+retry_same_attempts = 1
+
+# What to do when a provider refuses on content grounds.
+#   "fail"     - surface it (default). Retrying elsewhere is "shop until
+#                someone says yes", which is a decision you should make
+#                deliberately rather than inherit.
+#   "failover" - try the next target.
+on_refusal = "fail"
+
+# A target that does not support a requested parameter.
+#   "drop"  - drop it with a warning (default). A pool whose members have
+#             different parameter surfaces is the normal case.
+#   "error" - fail the request.
+on_unsupported_param = "drop"
+
+# Treat a context-length failure as a routing signal rather than an error:
+# llmcore knows every model's window from its card, so a prompt that overflows
+# a 200k model can go to a 1M model instead of failing.
+reroute_on_context_overflow = true
+
+# "session" pins a conversation to its first target; "none" distributes every
+# request. Session is the default because failing over mid-conversation drops
+# the cached prompt prefix, shifts output style under few-shot expectations,
+# and invalidates preserved reasoning blocks. A single 429 moves THIS TURN
+# while the pin stays.
+affinity = "session"
+
+  # ----------------------------------------------------------------------------
+  # Cooldowns: how long a target sits out after each kind of failure.
+  # ----------------------------------------------------------------------------
+  # These must differ. Treating them alike is how naive failover burns money or
+  # loops: a 429 clears in seconds, an empty wallet does not clear until a human
+  # tops it up, and a bad key never clears at all.
+  #
+  # Seconds. A Retry-After header always wins over the value here.
+  [routing.cooldowns]
+  rate_limit = 20.0
+  # Minutes, not seconds: it will not fix itself quickly, and an observed
+  # insufficient-credit error also records a balance of zero.
+  insufficient_credit = 600.0
+  timeout = 15.0
+  server = 10.0
+  unknown = 10.0
+  # No `auth` key, deliberately: a 401/403 marks the target unusable for the
+  # life of the process rather than starting a timer, because a bad key does
+  # not heal. Fix the key and restart, or call llm.routing.clear_health().
+
+  # ----------------------------------------------------------------------------
+  # Pools: sets of interchangeable targets.
+  # ----------------------------------------------------------------------------
+  # No pools are defined by default - a shipped pool would name models you may
+  # not have credentials for. Uncomment and edit.
+  #
+  # Per-member routing parameters, written in the spec string and stripped
+  # before the target reaches a provider:
+  #   ?weight=3   relative weight for the "weighted" strategy (0 = spare only)
+  #   ?order=1    priority tier; a higher tier is held back entirely while a
+  #               lower one still has a usable member. This is how you say
+  #               "use my own GPU, and only pay a vendor if it is down".
+  #
+  # [routing.pools.main]
+  # targets = [
+  #   "anthropic:claude-opus-5-5?effort=high",
+  #   "openai:gpt-5.4",
+  #   "gemini:gemini-3.8-flash",
+  # ]
+  # strategy = "priority"
+  # affinity = "session"
+  # max_attempts = 3
+  #
+  # [routing.pools.cheap]
+  # targets = ["gemini:gemini-3.8-flash", "openai:gpt-5.4-mini"]
+  # strategy = "lowest_cost"
+  #
+  # Your own hardware first, a paid API only as a fallback:
+  # [routing.pools.local_first]
+  # targets = ["ollama:llama3.3:70b", "openai:gpt-5.4?order=1"]
+
+  # ----------------------------------------------------------------------------
+  # Lanes: named destinations a classifier picks.
+  # ----------------------------------------------------------------------------
+  # A classifier names a LANE, never a model, so swapping models is an edit
+  # here and not a classifier change. Lane names are yours - complexity tiers,
+  # speed tiers, domains, a privacy class; it is one mechanism.
+  #
+  # `description` is not decoration. The zero-shot classifiers score the prompt
+  # against these descriptions, so this text is what makes them work.
+  #
+  # [routing.lanes]
+  # trivial = "pool:cheap"
+  # standard = "pool:main"
+  #
+  # [routing.lanes.deep]
+  # target = "anthropic:claude-opus-5-5"
+  # params = { effort = "max" }
+  # description = "Multi-step reasoning, proofs, architecture review, hard debugging"
+  #
+  # [routing.lanes.private]
+  # pool = "local_only"
+  # description = "Contains personal data, credentials or other sensitive information"
+
+  # ----------------------------------------------------------------------------
+  # Classifiers: deciding which lane a request belongs in.
+  # ----------------------------------------------------------------------------
+  [routing.classifier]
+  # Evaluated cheapest-first, and within a cost band instructions before
+  # guesses - llmcore reorders the chain to enforce that, because letting a
+  # length heuristic overrule an explicit lane="deep" is a mistake every time.
+  #
+  #   hint           an explicit lane=/complexity=/effort= argument    free
+  #   script         your own function                                 free
+  #   magic_string   a [[lane:deep]] marker in the prompt              free
+  #   heuristic      length, code fences, simple-task verbs            free
+  #   local_encoder  LFM2.5-Encoder-350M on CPU, zero-shot             ~200-300ms
+  #   typesafe_jev   a TypeSafe `choice` question                      1 cheap call
+  #   llm            ask a cheap llmcore target to classify            1 cheap call
+  #
+  # Empty = no classification; calls go to default_pool.
+  chain = []
+
+  # A classification below this is treated as an abstention and the next
+  # classifier gets a turn.
+  min_confidence = 0.55
+
+  # Which way to lean when a classifier is near its floor. The two error
+  # directions are not symmetric: routing too cheap produces a bad answer,
+  # routing too expensive only costs money.
+  #   "quality" (default) | "cost" | "neutral"
+  bias = "quality"
+
+  # Pattern for the magic_string classifier. Must provide named groups `key`
+  # and `value`. Matches are ALWAYS stripped before the prompt is sent, acted
+  # on or not. Leave empty for the built-in [[lane:deep]] / [[effort:max]].
+  magic_pattern = ""
+
+    # Thresholds for the free `heuristic` classifier. Lane names here must
+    # exist in [routing.lanes] or the heuristic abstains rather than inventing
+    # a destination.
+    [routing.classifier.heuristic]
+    trivial_lane = "trivial"
+    standard_lane = "standard"
+    deep_lane = "deep"
+    # code_lane = "code"
+    trivial_max_tokens = 60
+    deep_min_tokens = 1500
+
+    # Local zero-shot router. Costs no money and ~200-300ms of CPU per call
+    # (measured; see the spec). Needs the 'local' extra: pip install llmcore[local]
+    [routing.classifier.local_encoder]
+    model_id = "LiquidAI/LFM2.5-Encoder-350M-Prompt-Router"
+    device = "cpu"
+    min_confidence = 0.25
+    # STRONGLY RECOMMENDED. This model requires trust_remote_code=True, which
+    # executes Python from the model repo; pinning a commit sha stops that code
+    # changing under you between runs.
+    # revision = ""
+
+  # ----------------------------------------------------------------------------
+  # Cascade: answer cheaply, verify, escalate only if it fell short.
+  # ----------------------------------------------------------------------------
+  # OFF by default: it trades latency and an extra call for cost, which is the
+  # wrong trade for interactive use and the right one for batch and agents.
+  [routing.cascade]
+  enabled = false
+  # Cap on escalation steps, i.e. on how much a cheap answer can end up costing.
+  max_rungs = 2
+  # Verifier score at or above which the answer is kept.
+  threshold = 0.7
+  # What to do when the verifier CANNOT judge (returns unknown).
+  #   "accept"   - keep the cheap answer (default). Escalating on every
+  #                unjudgeable answer inverts the saving.
+  #   "escalate" - move up a rung.
+  on_unknown = "accept"
+
+    # [routing.cascade.rungs.default]
+    # rungs = ["pool:cheap", "pool:main", "anthropic:claude-opus-5-5?effort=max"]
+    # Verifiers: script | json | non_empty | typesafe_jev | llm
+    # `script` is the strongest in practice - "does this compile", "does this
+    # match the schema", "do the tests pass" are exact, where a model is a guess.
+    # verifier = "typesafe_jev"
+    # script = "my_module:check_answer"
+
+  # ----------------------------------------------------------------------------
+  # Transforms: what must not leave this machine.
+  # ----------------------------------------------------------------------------
+  [routing.transforms]
+  # Applied in order, each seeing the previous one's rewrite. Available: pii,
+  # strip_magic (added automatically when magic_string is classifying).
+  chain = []
+  # A transform that raises becomes a BLOCK rather than being skipped. Leave
+  # this on for anything protecting data: a detector that crashed has not
+  # cleared the prompt, and treating a crash as "nothing found" is how a
+  # privacy feature becomes decoration.
+  fail_closed = true
+
+    [routing.transforms.pii]
+    # "regex"    - patterns with a checkable shape: email, Luhn-valid cards,
+    #              IBAN, SSN, phone, IP, common API-key prefixes. Free, instant.
+    # "vela_pii" - local 307M token classifier; also catches names and
+    #              addresses. Needs the 'local' extra.
+    detector = "regex"
+    # What a detection means for THIS request:
+    #   "constrain" - route it to a pool that never leaves the machine. THIS IS
+    #                 THE ONLY ONE THAT IS A GUARANTEE. A detector that misses
+    #                 one identifier has leaked it; routing means a miss stays
+    #                 on your own hardware.
+    #   "redact"    - rewrite the prompt. Defence in depth, NOT a guarantee.
+    #   "block"     - refuse to send it.
+    #   "allow"     - record findings only.
+    on_detect = "constrain"
+    # Required when on_detect = "constrain". Must contain only targets you
+    # trust with the data. Without it, llmcore blocks rather than sending.
+    pool = ""
+    # Redact as well as constrain. Worth stacking; still not a guarantee.
+    redact = false
+    # Providers treated as not leaving the machine.
+    local_providers = ["ollama", "vllm"]
+    # Record findings (hashed, never the matched value) in routing events.
+    audit = true
+    # Salt the finding hashes, so digests of low-entropy values like phone
+    # numbers cannot be compared against a precomputed list.
+    hash_salt = ""
+
+  # ----------------------------------------------------------------------------
+  # Parameter profiles: named bundles, so intent is expressed once.
+  # ----------------------------------------------------------------------------
+  # llm.chat("...", profile="frugal"). Applied over a lane's params and under
+  # a per-call keyword argument.
+  #
+  # [routing.profiles.frugal]
+  # effort = "minimal"
+  # max_tokens = 512
+  #
+  # [routing.profiles.thorough]
+  # effort = "max"
+  # temperature = 0.2
+
+  # ----------------------------------------------------------------------------
+  # Proxy mode: llmcore as an OpenAI-compatible endpoint for agent harnesses.
+  # ----------------------------------------------------------------------------
+  # Point a harness at base_url=http://127.0.0.1:8900/v1 with
+  # model="lane:standard" and it gets llmcore's routing, cascades, transforms
+  # and cost accounting without knowing llmcore exists.
+  [routing.proxy]
+  enabled = false
+  # Loopback by default, and that default matters: a routing proxy holds every
+  # provider credential you have configured. Binding it to 0.0.0.0 without a
+  # token would be handing them out.
+  host = "127.0.0.1"
+  port = 8900
+  # REQUIRED for any non-loopback host. llmcore refuses to start otherwise.
+  # Prefer the env var: LLMCORE_ROUTING__PROXY__API_KEY
+  api_key = ""
+  # Expose lanes and pools in GET /v1/models, so a harness's model picker shows
+  # them and a user can select routing policy from an existing tool.
+  advertise_lanes = true
+  advertise_pools = true
+
+# ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations
 # ==============================================================================
 # This section defines web/data SEARCH provider instances.  They are the
