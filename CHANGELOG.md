@@ -7,6 +7,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — `llmcore.routing`: pools, lanes, failover and proxy mode
+
+Five composable layers, all off until configured. With no `[routing]` section
+every call resolves exactly as it did before. Design and the reasoning behind
+each decision: [`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md);
+usage: [`Routing_usage.md`](docs/Routing_usage.md).
+
+**Config stops being an allow-list.** `[providers.*]` sections were acting as
+one: a provider registered in `PROVIDER_MAP`, with its key in the environment
+and its base URL already known, was still unreachable. Any provider+model is
+now addressable by spec string, and llmcore builds the instance on demand:
+
+```python
+await llm.chat("hi", target="xai:grok-4.1-20251117?effort=high")
+await llm.chat("hi", target="ollama:llama3.3:70b")
+await llm.chat("hi", target="vllm:Qwen/Qwen3-30B#my-box")
+```
+
+`routing.autoprovision = false` restores the closed set for deployments that
+want one. (Found along the way: `xai`, `groq` and `together` had no
+`[providers.*]` section at all, so all three were unreachable despite being
+registered — sections added.)
+
+**Pools, with a failure taxonomy rather than one retry rule.** Conflating
+failures is how naive failover burns money or loops, so each gets its own
+handling: a 429 cools down briefly and honours `Retry-After`; an empty wallet
+cools down for minutes and records a balance of zero; a 5xx is retried once
+*in place* before moving, since it is usually one bad node and moving would
+discard a warm prompt cache; a bad key benches the target for the process; a
+400 does not fail over at all; a content refusal does not either, unless
+`on_refusal = "failover"` — retrying a refusal elsewhere is "shop until
+someone says yes", which should be opted into. A prompt that overflows the
+context window is treated as a routing signal, not an error, and is sent to a
+model with a larger window; llmcore also skips a target *before* calling it
+when the card already proves the prompt will not fit.
+
+Seven selection strategies: `priority`, `round_robin`, `weighted`,
+`lowest_latency`, `lowest_cost`, `least_busy`, `most_credits`. Order tiers
+(`?order=1`) express "my own GPU, and only pay a vendor if it is down".
+Session affinity is on by default, because failing over mid-conversation drops
+the cached prefix, shifts output style under few-shot expectations, and
+invalidates preserved reasoning blocks.
+
+Three places where the strategies refuse to guess, because treating "unknown"
+as a number inverts them: an **unpriced** target ranks after every priced one;
+an **unknown balance** ranks after a known one but ahead of a known-*empty*
+one; `lowest_latency` explores an unmeasured target first, since it cannot
+prefer low latency without a measurement. Self-hosted providers price at zero
+rather than unknown, so a local model wins outright.
+
+**Lanes and classifiers.** A classifier names a lane, never a model, so
+swapping models is a config edit. That one indirection covers complexity
+tiers, speed tiers, domain routing and a privacy class with one mechanism.
+Nine classifiers ship, from a free `hint` to a local 350M zero-shot encoder to
+TypeSafe's `choice` primitive. llmcore orders the chain itself: cheapest
+first, and within a cost band instructions before guesses — a `lane=` argument
+and a length heuristic are both free, and running the guess first would
+override what the caller asked for.
+
+Authority has four levels (`caller` > `policy` > `prompt` > `inferred`)
+because a routing marker found in *content* is not as trustworthy as an
+argument on the call. Markers are the point of the feature — in an agent
+harness the model's text is the only channel that passes through, so that is
+how an agent routes itself — but in a RAG path that text may have come from a
+retrieved document, where `[[lane:deep]]` would be a one-line prompt
+injection, or a way out of the private lane. Markers are always stripped
+before egress, acted on or not.
+
+**Cascades** (opt-in): answer cheaply, verify, escalate only if the answer
+fell short. Verdicts are three-valued, and *could not judge* is kept distinct
+from both — read as a fail it escalates every unjudgeable answer and inverts
+the saving; read as a pass it silently disables the quality floor the moment
+the judge breaks.
+
+**The privacy path, where routing is the guarantee and redaction is not.** A
+detector that misses one identifier has leaked it, and none catches
+everything, so `on_detect = "constrain"` changes the *destination*: a prompt
+with personal data goes to a pool that never leaves the machine, and a miss
+stays on your own hardware. Redaction can be stacked and is documented as
+defence in depth. Three ways it refuses to degrade quietly: `constrain` with
+no pool configured blocks rather than sending; a constrain pool that does not
+exist blocks; and a detector that raises blocks (`fail_closed`), because a
+detector that crashed has not cleared the prompt. Findings carry a 16-char
+hash, never the value — including in the exception message.
+
+**Proxy mode** (`llmcore-bridge proxy`): an OpenAI-compatible endpoint, so an
+unmodified agent harness gets all of the above by setting a base URL and a
+model name. `model` accepts `lane:deep`, `pool:main`, `profile:frugal`, a
+target spec, a bare model name or `auto`; lanes and pools appear in
+`GET /v1/models` so the harness's own picker selects routing policy. Usage
+reports the target that *actually* answered, because under a pool that is not
+the model requested and a harness logging spend should not be lied to. It
+binds to loopback and **refuses** a non-loopback bind without a bearer token,
+since the process holds every provider credential in the config.
+
+**Effort and parameters.** The existing effort vocabulary is extended rather
+than replaced, with precedence card → provider config → target → lane →
+profile → per-call keyword. Under a pool an unsupported parameter is dropped
+with a warning, because members genuinely have different parameter surfaces;
+outside a pool it still raises.
+
+**Everything is overridable.** Config is a warm-up, not a cage: every
+`[routing]` setting resolves config → environment → request, and the request
+wins. A misspelled override raises rather than being silently dropped.
+
+**Explaining itself.** `llm.routing.explain()`/`why()` report the lane, the
+classifier that chose it, the chosen target and *why each other candidate was
+not used*, without making a call. `health()` shows per-target cooldowns,
+latency and balance. Every decision also emits a structured event.
+
+New skills in the bundled grimoire pack: `skills/llmcore/proxy`,
+`skills/llmcore/routing`, `skills/llmcore/cost`.
+
+### Fixed — Gemini targets had no pricing or context window, silently
+
+The model-card alias map ran the wrong way: provider type `gemini` was mapped
+*to* a `gemini` card namespace, but the cards are filed under `google/`.
+Nothing raised — the lookup returned `None`, `None` means "unknown", and every
+caller handles unknown quietly — so `lowest_cost` could not price any Gemini
+target and the pre-call context-window check never fired, for one of the most
+used providers in the library. `tests/routing/test_cards.py` now audits every
+provider type against the packaged card tree, read from disk rather than from
+the registry singleton that other suites reset.
+
+### Fixed — tests could load the repo's `.env` and reach real vendors
+
+The test fixtures built confy `Config` objects with its default
+`load_dotenv_file=True`, which exports `.env` into `os.environ`. That made a
+credential-discovery assertion depend on the developer's machine, and it meant
+a test run could reach a real vendor and spend real money. Fixtures now pass
+`load_dotenv_file=False`.
+
+### Changed — measured corrections to the routing spec
+
+Two claims in the design document were wrong and are corrected in place rather
+than quietly dropped:
+
+- §4.4 asserted that a local classifier adds "<50 ms p50 on CPU". Measured on
+  8 CPU threads with `LFM2.5-Encoder-350M-Prompt-Router`: **191 ms for 2
+  lanes, 246 ms for 5, 314 ms for 9**, plus ~40 s once to load. Wrong by about
+  5x, which is why the gate said *measured, not assumed*. The encoder is off
+  by default, runs its forward pass in a worker thread so it cannot stall the
+  event loop, and is documented as a batch/agent feature.
+- The same model's raw top score is meaningless without reading it against
+  chance: 0.20 across five lanes is exactly uniform, i.e. *no opinion*, and
+  taking it as 20% confidence would route on noise. Confidence is now reported
+  chance-corrected, so one floor means the same thing at any lane count.
+
+The heuristic classifier also lost its short-prompt rule, because prompt length
+does not predict request complexity — "write a 2000-word essay on X" is ten
+tokens. Length now only ever *vetoes* the trivial lane.
+
+### Added — `LLMCore.discard_transient_state()`
+
+Drops the cached per-turn introspection and raw response for a session. Needed
+by any long-running embedder — the routing proxy uses one synthetic session per
+request, and without this those caches would grow for the life of the process.
+
+
 ### Added — dual transport for every provider that has a vendor SDK
 
 llmcore's rule is to call each API directly and fall back to the vendor SDK

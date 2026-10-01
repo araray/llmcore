@@ -3,7 +3,10 @@
 Target resolution, failover pools, classifier-driven lanes, response cascades,
 prompt transforms, and proxy mode for agent harnesses.
 
-- **Status:** design + specification. **Nothing implemented.** Awaiting approval.
+- **Status:** **implemented** (T1–T10), approved 2026-10-01. Usage guide:
+  [`Routing_usage.md`](Routing_usage.md). Where measurement contradicted this
+  document, the document was corrected in place and the correction is marked —
+  see §4.4 and the T6 row in §11.
 - **Written:** 2026-10-01
 - **Requested by:** Araray, 2026-10-01 — provider/model groups with failover and
   prioritisation; unrestricted on-the-fly targets; complexity-based routing with
@@ -663,17 +666,68 @@ compounds, and each needs measurement rather than assertion.
 | `trust_remote_code=True` is required to load the router model | Pin `revision` to a commit sha; an unpinned load logs a warning naming the setting; `trust_remote_code = false` is honoured for deployments that forbid it |
 | PII redaction oversold as a guarantee | Documentation states plainly that `constrain` (routing) is the guarantee and redaction is defence in depth |
 
-**Open questions for you:**
+## 13. Decisions taken
 
-1. **Naming.** `Pool` + `Lane` as proposed, or do you prefer different words
-   (`fleet`/`route`, `group`/`tier`)? The split matters more than the words.
-2. **Default strategy** for a pool with no `strategy` set — `priority` (ordered,
-   predictable) or `lowest_cost` (saves money immediately but reorders silently)?
-   I lean `priority`.
-3. **Cascade default**: off everywhere, or on for non-interactive paths
-   (agents/batch) where latency matters less?
-4. **Where should complexity hints live on the wire** in proxy mode — a magic
-   string in the prompt, an OpenAI-style `extra_body`, or a model name suffix
-   (`lane:deep`)? All three are implementable; the third needs no harness change.
-5. **Scope of the first PR.** T1+T2 alone is already useful and reviewable; T1–T5
-   is a coherent "routing works" milestone but a large diff.
+The open questions in the draft, and how they were settled.
+
+1. **Naming** — `Pool` + `Lane` as proposed, accepted.
+2. **Default pool strategy** — `priority`, *and made a user config value*
+   (`routing.default_strategy`) rather than a constant, so a deployment that
+   wants `lowest_cost` everywhere sets it once instead of annotating every
+   pool.
+3. **Cascade default** — off everywhere, including non-interactive paths.
+   Turning it on for agents would have meant the same config behaving
+   differently depending on who called, which is worse than an explicit opt-in.
+4. **Complexity hints on the wire in proxy mode** — all three, because they
+   cost nothing to support together and each covers a case the others cannot:
+   the **model name** (`lane:deep`) needs no harness change at all and is the
+   documented default; `extra_body.llmcore` is there for harnesses that expose
+   it; and a **magic string** in the prompt is the only channel available to
+   the *model itself* inside a harness that exposes neither.
+5. **Scope of the first PR** — all of T1–T10 in one branch, at the user's
+   request ("the pr should encompass everything in my request"), plus the
+   extras proposed in §5 and §8.
+
+### 13.1 Changes the implementation forced on this design
+
+Recorded because a spec that quietly diverges from its implementation is worse
+than no spec:
+
+- **Refusal failover became a config choice** (`routing.on_refusal`) rather
+  than a property of the failure. The draft put it on `FailureKind`; the user's
+  correction was that config is an initial state and anything must be
+  overridable by env and per request. So `FailureKind` now states only *facts*
+  about a failure (`failover_is_pointless`, `affects_health`, `retry_same`) and
+  every *policy* lives in `RoutingSettings`.
+- **A new failure kind, `MODEL_NOT_FOUND`.** The draft's taxonomy had nowhere
+  to put a 404: it is deterministic for the target (so retrying it is waste)
+  but a peer serves a *different model* (so failing over is right). It is the
+  one case where "permanent" and "try someone else" are both true, and folding
+  it into `BAD_REQUEST` or `SERVER` gets one of those wrong.
+- **Classifier ordering needed a second dimension.** "Cheapest first" is not
+  sufficient: an explicit `lane=` and a length heuristic are both free. Each
+  classifier now declares an `authority` — `caller` > `policy` > `prompt` >
+  `inferred` — and a marker found in *content* ranks below both the caller and
+  the operator's own script, because in a RAG path that content may have come
+  from a retrieved document where a routing marker would be a prompt-injection
+  lever.
+- **`most_credits` needed three bands, not two.** Ranking all known balances
+  descending puts a confirmed zero *ahead* of an unknown, which is backwards.
+- **The local encoder's confidence had to be chance-corrected.** See §4.4.
+- **§4.4's latency claim was wrong by ~5x.** See §4.4.
+
+---
+
+**Open questions remaining:**
+
+1. **Cross-process routing state.** `RoutingStateStore` is a protocol with an
+   in-process default, as specified. Nothing shares cooldowns between
+   processes, so N workers each discover a rate limit independently. Worth
+   building only if someone runs llmcore in several processes against one quota.
+2. **No classifier is validated on real traffic.** The evaluation harness is
+   `llm.routing.explain()` plus whatever prompts a user brings; there is no
+   labelled set and therefore no accuracy figure anywhere in the docs. This is
+   the largest honest gap in the subsystem.
+3. **Anthropic effort mapping** (§6.4) still needs the model-generation branch;
+   the account available during implementation had no credit to validate it
+   against.

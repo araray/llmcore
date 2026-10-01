@@ -82,6 +82,7 @@ by trial and error.
 | **🔌 Providers** | 23 vendors, one `chat()` call. Streaming, tool calling, structured output, reasoning extraction, vision, exact tokenizers where the vendor exposes one |
 | **🎨 Generative media** | `llm.media` — image generate/edit/upscale, video generate/interpolate, TTS (+streaming), ASR, music, SFX, voice design. Async jobs with polling, a webhook receiver, and a content-addressed artifact store |
 | **🖥️ Remote GPU runtimes** | `llm.runtimes` — size an open-weights model, provision compute, serve it, and attach the endpoint as a provider instance. Spend ceilings and idle reaping are enforced, not optional |
+| **🧭 Routing** | `target=`/`pool=`/`lane=` on `chat()` — reach any provider+model without a config section, fail over on 429 / empty wallet / timeout, route by request kind, keep PII on your own hardware, and run as an OpenAI-compatible proxy for agent harnesses |
 | **💬 Sessions** | Persistent conversations over SQLite/PostgreSQL/JSON, transient sessions, per-call usage via `chat_with_usage()` |
 | **🔍 RAG** | ChromaDB/pgvector, semantic search, context injection, external-RAG bridge |
 | **🌐 Web search** | Bright Data, Serper.dev, SerpApi, Semantic Scholar (keyless) |
@@ -113,6 +114,11 @@ by trial and error.
   [`PROVIDER_SUPPORT_MATRIX.md`](docs/PROVIDER_SUPPORT_MATRIX.md) §7.1.
 - **`cardctl doctor`** — audits that every registered provider has a card
   adapter, so a new provider cannot ship without model cards.
+- **`llmcore.routing`** — five composable layers: dynamic targets, failover
+  pools with seven selection strategies, classifier-driven lanes, response
+  cascades, and prompt transforms. Plus proxy mode, so an unmodified agent
+  harness routes through llmcore by setting two environment variables. Off by
+  default; see [`Routing_usage.md`](docs/Routing_usage.md).
 
 ---
 
@@ -258,6 +264,98 @@ considers it cleared — with `None` meaning *the vendor did not say*, which is
 deliberately distinct from *no*.
 
 See [`MEDIA_SUBSYSTEM_SPEC.md`](docs/MEDIA_SUBSYSTEM_SPEC.md).
+
+---
+
+## 🧭 Routing
+
+Five layers that compose. Each is useful on its own, and **nothing is on by
+default** — with no `[routing]` section, every call resolves exactly as it did
+before.
+
+**Any model, without a config section.** `[providers.*]` sections are presets,
+not an allow-list:
+
+```python
+await llm.chat("hi", target="xai:grok-4.1-20251117?effort=high")
+await llm.chat("hi", target="ollama:llama3.3:70b")        # colons in model names are fine
+await llm.chat("hi", target="vllm:Qwen/Qwen3-30B#my-box")  # '#' pins an instance
+```
+
+**Failover that distinguishes failures.** A pool is a set of interchangeable
+targets; what routing does next depends on *why* the call failed. A 429 cools
+down briefly and moves on. An empty wallet cools down for minutes and records a
+balance of zero. A 400 does not fail over at all, because it fails everywhere.
+A bad key benches the target for the process. A prompt that overflows the
+context window is not an error — llmcore knows every model's window from its
+card and routes to a bigger one.
+
+```python
+await llm.chat("hi", pool="main")     # 7 strategies: priority, round_robin,
+                                      # weighted, lowest_latency, lowest_cost,
+                                      # least_busy, most_credits
+```
+
+**Routing by request kind.** A classifier names a *lane*, never a model, so
+swapping models is a config edit:
+
+```python
+await llm.chat("rename this variable", lane="trivial")
+await llm.chat("[[lane:deep]] walk me through this proof")   # the model can route itself
+await llm.chat("summarise this", profile="frugal")
+```
+
+The free classifiers (an explicit hint, a marker in the prompt, your own
+function, a length/code heuristic) cost nothing. A local 350M encoder scores the
+prompt against your lane descriptions zero-shot, and TypeSafe's `choice`
+primitive returns a calibrated pick. llmcore orders the chain itself —
+cheapest first, and instructions before guesses, so a length heuristic can never
+override an explicit `lane=`.
+
+**Privacy by destination, not by redaction.**
+
+```toml
+[routing.transforms.pii]
+on_detect = "constrain"     # route it somewhere it cannot leak
+pool = "local_only"
+redact = true               # and redact anyway, as defence in depth
+```
+
+A detector that misses one identifier has leaked it, so the guarantee is the
+*route*: a prompt with personal data in it goes to a pool that never leaves the
+machine. Redaction is stacked on top and documented as a mitigation rather than
+a guarantee.
+
+**Proxy mode for agent harnesses.** The harness owns its API call, so llmcore
+cannot add an argument to it — but it can set a base URL and a model name:
+
+```bash
+llmcore-bridge proxy
+export OPENAI_BASE_URL=http://127.0.0.1:8900/v1 OPENAI_MODEL=lane:standard
+```
+
+Anything speaking the OpenAI chat-completions API now gets pools, failover,
+classifiers, cascades, transforms and cost accounting unchanged. Lanes and pools
+appear in `GET /v1/models`, so the harness's own model picker selects routing
+policy. The proxy binds to loopback and *refuses* a non-loopback bind without a
+bearer token, because the process holds every provider credential you have
+configured.
+
+**Explaining itself.** A feature that silently changes which vendor served a
+request has to be able to say why:
+
+```python
+print(await llm.routing.why("summarise this file"))
+#   lane=trivial pool=cheap strategy=priority chosen=gemini:gemini-3.8-flash est=$0.0004
+#     classifier: heuristic — ~7 tokens and a simple-task verb
+#     -> gemini:gemini-3.8-flash est=0.0004
+#        openai:gpt-5.4 — skipped: cooling down for 12s after rate_limit
+
+llm.routing.health()        # per-target cooldowns, latency, failures, balance
+```
+
+Guide: [`Routing_usage.md`](docs/Routing_usage.md). Design:
+[`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md).
 
 ---
 
@@ -1304,7 +1402,8 @@ from llmcore import (
 | [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) | Phased plan for the remaining gaps in that matrix |
 | [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) | Design, the rollout, and what each vendor taught the abstraction |
 | [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) | Runtime safety model and the Colab backend design |
-| [Routing subsystem spec](docs/ROUTING_SUBSYSTEM_SPEC.md) | **Proposed**: failover pools, classifier-driven lanes, response cascades, prompt transforms, proxy mode |
+| [Routing usage guide](docs/Routing_usage.md) | How to use routing: dynamic targets, pools, lanes, cascades, the privacy path, proxy mode, and what it does not claim |
+| [Routing subsystem spec](docs/ROUTING_SUBSYSTEM_SPEC.md) | The design: five layers, the failure taxonomy, prior art borrowed, and the measured corrections to it |
 
 **Per-provider guides**
 
