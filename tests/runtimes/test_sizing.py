@@ -172,7 +172,7 @@ class TestWeights:
         )
         plan = s.estimate_sync(ModelSpec(repo_id="x/fp32-1b", context_length=4096))
         assert any("per-dtype parameter map" in note for note in plan.notes)
-        assert plan.vram_required_gb > 3.7   # 1B × 4 bytes
+        assert plan.vram_required_gb > 3.7   # 1B x 4 bytes
 
     def test_a_four_bit_build_is_a_quarter_of_the_weights(self, monkeypatch):
         s = sizer()
@@ -207,7 +207,7 @@ class TestKvCache:
         stub(monkeypatch, s, params=7_000_000_000, config=QWEN7B)
         plan = s.estimate_sync(ModelSpec(repo_id="x/q7", context_length=32768))
         assert any(
-            "2 × 28 layers × 4 kv-heads × 128 head-dim" in note for note in plan.notes
+            "2 x 28 layers x 4 kv-heads x 128 head-dim" in note for note in plan.notes
         )
 
     def test_kv_scales_with_context(self, monkeypatch):

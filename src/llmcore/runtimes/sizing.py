@@ -16,7 +16,7 @@ Three facts drive the estimate:
 * **Weights** — exact parameter counts come from the Hub's ``safetensors``
   metadata, which reports counts per dtype. Guessing from file sizes is the
   fallback, not the plan.
-* **KV cache** — ``2 × layers × kv_heads × head_dim × bytes × ctx``. The
+* **KV cache** — ``2 x layers x kv_heads x head_dim x bytes x ctx``. The
   ``kv_heads`` term is what makes grouped-query attention cheap, and getting it
   wrong is the single biggest sizing error available: reading
   ``num_attention_heads`` instead of ``num_key_value_heads`` overestimates
@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -343,7 +342,7 @@ class Sizer:
             out["params"] = sum(params_by_dtype.values())
             notes.append(
                 "parameters from the Hub safetensors index: "
-                + ", ".join(f"{count:,} × {dtype}" for dtype, count in params_by_dtype.items())
+                + ", ".join(f"{count:,} x {dtype}" for dtype, count in params_by_dtype.items())
             )
         elif getattr(safetensors, "total", None):
             out["params"] = int(safetensors.total)
@@ -432,7 +431,7 @@ class Sizer:
         per = bytes_per_param(quantization)
         gb = params * per / 1024**3
         notes.append(
-            f"weights {gb:.1f} GB = {params:,} params × {per} bytes ({quantization})"
+            f"weights {gb:.1f} GB = {params:,} params x {per} bytes ({quantization})"
         )
         return gb
 
@@ -497,8 +496,8 @@ class Sizer:
         total = 2 * layers * kv_heads * head_dim * kv_bytes * context
         gb = total / 1024**3
         notes.append(
-            f"KV cache {gb:.1f} GB = 2 × {layers} layers × {kv_heads} kv-heads × "
-            f"{head_dim} head-dim × {kv_bytes:g} bytes × {context:,} ctx"
+            f"KV cache {gb:.1f} GB = 2 x {layers} layers x {kv_heads} kv-heads x "
+            f"{head_dim} head-dim x {kv_bytes:g} bytes x {context:,} ctx"
         )
         if heads and kv_heads and heads != kv_heads:
             notes.append(
@@ -544,8 +543,8 @@ class Sizer:
             if required <= budget:
                 usable = budget
                 notes.append(
-                    f"{name}: {GPU_SKUS[name].vram_gb:.0f} GB × "
-                    f"{self.gpu_memory_utilization:g} util × "
+                    f"{name}: {GPU_SKUS[name].vram_gb:.0f} GB x "
+                    f"{self.gpu_memory_utilization:g} util x "
                     f"{1 - self.headroom_fraction:g} headroom = {budget:.1f} GB usable -- fits"
                 )
                 if GPU_SKUS[name].notes:
