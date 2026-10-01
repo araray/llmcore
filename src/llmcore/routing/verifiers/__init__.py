@@ -42,8 +42,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
-from ..models import Verdict
-
 if TYPE_CHECKING:
     from ..protocols import ResponseVerifier
 

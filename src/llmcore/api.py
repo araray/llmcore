@@ -80,8 +80,8 @@ except ImportError:
 # annotations`), and routing imports nothing from here, so a plain import is
 # safe and keeps a missing-routing failure from silently reconfiguring
 # ConfyConfig above.
-from llmcore.providers.base import BaseProvider
 from llmcore.routing import RoutingPlan, RoutingRequest, RoutingSettings, Target
+
 try:
     import tomllib
 except ImportError:
@@ -1860,10 +1860,8 @@ class LLMCore:
         reads afterwards describes the target that actually answered, not the
         one that was tried first.
         """
-        from llmcore.routing import RoutingRequest, Target
-
         request = self._build_routing_request(
-            getattr(chat_session, "id", None) and "" or "",
+            (getattr(chat_session, "id", None) and "") or "",
             session_id=getattr(chat_session, "id", None),
         )
         runner_state: dict[str, Any] = {
@@ -1936,13 +1934,20 @@ class LLMCore:
             details = runner_state.get("details")
             if details is not None:
                 # Keep the caller's introspection honest about who answered.
+                # `prompt_tokens` is deliberately excluded and recomputed
+                # below: chat() derives it *after* prepare_context() returns,
+                # so a straight copy of the fresh details overwrites it with
+                # the unset value and the caller sees prompt_tokens = 0.
                 context_details.__dict__.update(
                     {
                         key: value
                         for key, value in details.__dict__.items()
-                        if key not in ("provider", "model")
+                        if key not in ("provider", "model", "prompt_tokens")
                     }
                 )
+                context_details.prompt_tokens = (
+                    getattr(details, "final_token_count", 0) or 0
+                ) + (context_kwargs.get("tool_schema_tokens") or 0)
             context_details.provider = final_provider.get_name()
             context_details.model = final_model
             context_details.max_context_length = (
@@ -2290,6 +2295,23 @@ class LLMCore:
             ContextPreparationDetails if available, None otherwise
         """
         return self._transient_last_interaction_info_cache.get(session_id)
+
+    def discard_transient_state(self, session_id: str) -> None:
+        """Drop the cached introspection and raw response for *session_id*.
+
+        A long-running embedder -- the routing proxy is the first, but any
+        service calling ``chat()`` in a loop qualifies -- reads the
+        introspection for a turn and then has no further use for it. Without
+        this, those per-turn caches are keyed by session id and grow for the
+        life of the process, which for a proxy handling one synthetic session
+        per request is an unbounded leak.
+
+        Args:
+            session_id: The session whose cached per-turn state to forget.
+        """
+        self._transient_last_interaction_info_cache.pop(session_id, None)
+        self._transient_last_raw_response_cache.pop(session_id, None)
+        self._transient_sessions_cache.pop(session_id, None)
 
     def get_last_raw_response(self, session_id: str) -> dict[str, Any] | None:
         """Retrieve the raw provider response from the most recent chat() call.

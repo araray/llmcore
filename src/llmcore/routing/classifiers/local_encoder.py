@@ -261,7 +261,7 @@ class LocalEncoderClassifier:
                 return mapped
             # A bare list of scores, positionally aligned with the routes.
             if len(raw) == len(names) and all(isinstance(x, (int, float)) for x in raw):
-                return {name: float(score) for name, score in zip(names, raw)}
+                return {name: float(score) for name, score in zip(names, raw, strict=True)}
 
         logger.debug("local_encoder: unrecognised route() return shape %r; abstaining.", type(raw))
         return {}

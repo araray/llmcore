@@ -41,7 +41,7 @@ one.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from ..protocols import RequestClassifier, authority_rank, cost_rank
 

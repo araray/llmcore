@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_MAGIC_PATTERN",
-    "compile_magic_pattern",
     "HeuristicClassifier",
     "HintClassifier",
     "MagicStringClassifier",
     "ScriptClassifier",
+    "compile_magic_pattern",
     "strip_magic_strings",
 ]
 

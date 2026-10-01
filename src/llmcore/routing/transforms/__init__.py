@@ -182,8 +182,10 @@ class TransformChain:
 
 
 def _register_builtins() -> None:
-    from . import pii  # noqa: F401
-    from . import magic  # noqa: F401
+    from . import (
+        magic,  # noqa: F401
+        pii,  # noqa: F401
+    )
 
 
 _register_builtins()

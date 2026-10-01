@@ -320,27 +320,32 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
                 {"error": {"message": str(exc), "type": "invalid_request_error"}},
                 status_code=400,
             )
-        if isinstance(exc, ProviderError):
-            kind, retry_after = classify_failure(exc)
-            status = {
-                FailureKind.RATE_LIMIT: 429,
-                FailureKind.INSUFFICIENT_CREDIT: 402,
-                FailureKind.AUTH: 401,
-                FailureKind.BAD_REQUEST: 400,
-                FailureKind.MODEL_NOT_FOUND: 404,
-                FailureKind.CONTEXT_LENGTH: 400,
-                FailureKind.TIMEOUT: 504,
-                FailureKind.SERVER: 502,
-            }.get(kind, 502)
-            headers = {"retry-after": str(int(retry_after))} if retry_after else None
+        # Everything else goes through the routing classifier rather than only
+        # ProviderError: a bare TimeoutError from a transport is a 504, not a
+        # 500, and a harness treats those very differently. An exception the
+        # classifier cannot place is a genuine 500 and is logged with its
+        # traceback, since it is a bug rather than a vendor condition.
+        kind, retry_after = classify_failure(exc)
+        if kind is FailureKind.UNKNOWN and not isinstance(exc, ProviderError):
+            logger.exception("Unhandled error in the routing proxy")
             return JSONResponse(
-                {"error": {"message": str(exc), "type": "api_error", "code": str(kind)}},
-                status_code=status,
-                headers=headers,
+                {"error": {"message": str(exc), "type": "server_error"}}, status_code=500
             )
-        logger.exception("Unhandled error in the routing proxy")
+        status = {
+            FailureKind.RATE_LIMIT: 429,
+            FailureKind.INSUFFICIENT_CREDIT: 402,
+            FailureKind.AUTH: 401,
+            FailureKind.BAD_REQUEST: 400,
+            FailureKind.MODEL_NOT_FOUND: 404,
+            FailureKind.CONTEXT_LENGTH: 400,
+            FailureKind.TIMEOUT: 504,
+            FailureKind.SERVER: 502,
+        }.get(kind, 502)
+        headers = {"retry-after": str(int(retry_after))} if retry_after else None
         return JSONResponse(
-            {"error": {"message": str(exc), "type": "server_error"}}, status_code=500
+            {"error": {"message": str(exc), "type": "api_error", "code": str(kind)}},
+            status_code=status,
+            headers=headers,
         )
 
     # -- endpoints --------------------------------------------------------
@@ -389,19 +394,27 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
             if isinstance(extra.get("routing"), dict):
                 routing_kwargs["routing"] = extra["routing"]
 
-        session_id = (
-            (extra.get("session_id") if isinstance(extra, dict) else None)
-            or body.get("user")
-            or None
-        )
+        caller_session = (
+            extra.get("session_id") if isinstance(extra, dict) else None
+        ) or body.get("user")
         created = int(time.time())
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+
+        # A synthetic session id when the caller gave none. llmcore keys its
+        # per-turn introspection by session, and that introspection is where
+        # the real token counts and the target that answered come from -- so
+        # without an id the usage block would be empty, which is the one thing
+        # this endpoint promised not to do. `save_session` stays off, so
+        # nothing is persisted, and the cached state is dropped after reading
+        # it (see below) rather than accumulating one entry per request.
+        session_id = caller_session or f"proxy-{uuid.uuid4().hex[:16]}"
 
         if stream:
             return StreamingResponse(
                 _stream(
                     llm, prompt, system, prior, routing_kwargs, passthrough,
-                    session_id=session_id, completion_id=completion_id, created=created,
+                    session_id=session_id, caller_session=caller_session,
+                    completion_id=completion_id, created=created,
                     model_label=str(body.get("model") or cfg.default_model),
                 ),
                 media_type="text/event-stream",
@@ -414,16 +427,20 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
                 system_message=system,
                 extra_messages=prior or None,
                 session_id=session_id,
-                save_session=bool(session_id),
+                save_session=bool(caller_session),
                 stream=False,
                 **routing_kwargs,
                 **passthrough,
             )
-        except BaseException as exc:  # noqa: BLE001 - mapped to an HTTP status
+        except BaseException as exc:
+            if not caller_session:
+                llm.discard_transient_state(session_id)
             return error_response(exc)
 
-        info = llm.get_last_interaction_info(session_id) if session_id else None
+        info = llm.get_last_interaction_context_info(session_id)
         served = _served(llm, info)
+        if not caller_session:
+            llm.discard_transient_state(session_id)
         return JSONResponse(
             {
                 "id": completion_id,
@@ -518,7 +535,7 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
         kwargs.pop("model_name", None)
         try:
             plan = await llm.routing.explain(prompt, **kwargs)
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             return error_response(exc)
         return JSONResponse(
             {
@@ -578,6 +595,7 @@ async def _stream(
     passthrough: dict[str, Any],
     *,
     session_id: str | None,
+    caller_session: str | None,
     completion_id: str,
     created: int,
     model_label: str,
@@ -607,7 +625,7 @@ async def _stream(
             system_message=system,
             extra_messages=prior or None,
             session_id=session_id,
-            save_session=bool(session_id),
+            save_session=bool(caller_session),
             stream=True,
             **routing_kwargs,
             **passthrough,
@@ -618,10 +636,12 @@ async def _stream(
                 yield chunk({"content": piece})
         yield chunk({}, finish="stop")
         yield b"data: [DONE]\n\n"
+        if not caller_session:
+            llm.discard_transient_state(session_id)
     except LLMCoreError as exc:
         yield f"data: {json.dumps({'error': {'message': str(exc), 'type': 'api_error'}})}\n\n".encode()
         yield b"data: [DONE]\n\n"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Routing proxy stream failed")
         yield f"data: {json.dumps({'error': {'message': str(exc), 'type': 'server_error'}})}\n\n".encode()
         yield b"data: [DONE]\n\n"

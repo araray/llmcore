@@ -18,12 +18,12 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from ..models import RoutingRequest, Target, TransformAction, TransformResult
 from ..classifiers.free import (
     DEFAULT_MAGIC_PATTERN,
     compile_magic_pattern,
     strip_magic_strings,
 )
+from ..models import RoutingRequest, Target, TransformAction, TransformResult
 from . import register_transform
 
 __all__ = ["StripMagicStrings"]

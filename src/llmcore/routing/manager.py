@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -50,9 +50,7 @@ from .models import (
     RoutingRequest,
     SelectionStrategy,
     Target,
-    TargetHealth,
     TransformAction,
-    TransformResult,
     Verdict,
     classify_failure,
 )
@@ -440,8 +438,9 @@ class RoutingManager:
                 chosen=None,
                 lane=lane_name,
                 classification=classification,
-                notes=tuple(
-                    notes + ["no pool, lane or default_pool configured; using llmcore's default provider"]
+                notes=(
+                    *notes,
+                    "no pool, lane or default_pool configured; using llmcore's default provider",
                 ),
             )
 
@@ -880,7 +879,7 @@ class RoutingManager:
             try:
                 async with self._state.in_flight(target.key):
                     value = await runner(provider, target, params)
-            except BaseException as exc:  # noqa: BLE001 - classified immediately below
+            except BaseException as exc:
                 elapsed = time.perf_counter() - started
                 kind, retry_after = classify_failure(exc)
                 last_error = exc
