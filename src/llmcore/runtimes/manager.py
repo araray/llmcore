@@ -56,6 +56,21 @@ class SpendNotConfirmedError(RuntimeError_):
     """
 
 
+class _ConfigView:
+    """Wraps a ``config.get`` callable so a backend can take ``.get(...)``.
+
+    The manager is handed a bare accessor (it is constructed from
+    ``self.config.get``), while a backend wants something config-shaped. One
+    three-line adapter beats threading two different parameter styles through
+    every backend.
+    """
+
+    __slots__ = ("get",)
+
+    def __init__(self, get: Callable[[str, Any], Any]) -> None:
+        self.get = get
+
+
 class RuntimeManager:
     """Provisions, tracks and attaches remote GPU runtimes.
 
@@ -92,6 +107,20 @@ class RuntimeManager:
         self._handles: dict[str, RuntimeHandle] = {}
         #: Names this manager registered as provider instances.
         self._attached: set[str] = set()
+
+        # Register the Colab backend unless the caller supplied its own. Doing
+        # this in the constructor is safe because constructing a backend
+        # contacts nothing: the CLI is discovered on first use, so
+        # LLMCore.create() still cannot reach a provisioning API.
+        if "colab" not in self._backends:
+            try:
+                from .colab import ColabRuntime
+
+                self._backends["colab"] = ColabRuntime(
+                    config=_ConfigView(get), state_store=self.state
+                )
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("The Colab backend could not be registered", exc_info=True)
 
         logger.debug(
             "RuntimeManager initialized (enabled=%s, backends=%s, confirm_spend=%s).",

@@ -631,9 +631,15 @@ class TestBackendRegistry:
         assert mgr.backends == ["colab"]
 
     async def test_an_unknown_backend_is_an_actionable_error(self):
+        """The error has to name what *is* available. `colab` is registered by
+        default now, so this asserts the behaviour rather than a fixed string.
+        """
         mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
-        with pytest.raises(ConfigError, match="Available: fake"):
+        with pytest.raises(ConfigError) as excinfo:
             await mgr.estimate(REPO, backend="runpod")
+        message = str(excinfo.value)
+        assert "runpod" in message and "fake" in message
+        assert "Available:" in message
 
     async def test_logs_stream(self):
         backend = FakeRuntime()

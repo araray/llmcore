@@ -77,6 +77,10 @@ class RuntimePhase(StrEnum):
         DEGRADED: Assigned and billing, but not serving.
         STOPPING: Being torn down.
         STOPPED: Released. No longer billing.
+        DETACHED: llmcore has let go of it -- tunnel and keepalive stopped --
+            but the compute was **not** released, so it is still billing. The
+            state ``close()`` leaves a runtime in, because a process exiting is
+            not a reason to destroy compute someone is paying for.
         FAILED: Bootstrap failed and the VM was released.
     """
 
@@ -86,6 +90,7 @@ class RuntimePhase(StrEnum):
     DEGRADED = "degraded"
     STOPPING = "stopping"
     STOPPED = "stopped"
+    DETACHED = "detached"
     FAILED = "failed"
 
     @property
@@ -100,6 +105,10 @@ class RuntimePhase(StrEnum):
             RuntimePhase.READY,
             RuntimePhase.DEGRADED,
             RuntimePhase.STOPPING,
+            # Detached means llmcore stopped watching, not that the VM stopped.
+            # Counting it as not-billing would hide exactly the leak this
+            # subsystem's safety rules exist to prevent.
+            RuntimePhase.DETACHED,
         }
 
     @property
