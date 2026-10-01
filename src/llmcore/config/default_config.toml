@@ -142,17 +142,24 @@ provider_retry_base_delay_seconds = 0.5
 provider_retry_max_delay_seconds = 30.0
 
 # --- Administrative API Key ---
-# What it does: Defines the secret key required for accessing administrative endpoints
-#               such as live configuration reloading. This provides a separate,
-#               high-privilege authentication layer independent of tenant API keys.
-# Purpose: Secures administrative operations that could impact the entire platform,
-#          ensuring only authorized administrators can perform sensitive actions
-#          like configuration reloads.
-# Security: This key should be treated as a high-privilege secret. In production,
-#           ALWAYS set this via the environment variable rather than in config files.
-# Default Value: "" (empty - admin endpoints will be disabled)
+#
+# !! NOT ENFORCED. Setting this protects nothing today. !!
+#
+# This key was intended as a high-privilege layer guarding administrative
+# operations such as live configuration reloading, independent of tenant API
+# keys. A config audit found that **no code reads it**: the bridge's
+# ControlService/ReloadConfig has no reference to it, so a deployment that set
+# this believing its reload endpoint was protected would have been wrong.
+#
+# The key is kept rather than deleted so existing configs do not break, and
+# this comment is kept rather than quietly removed because a security control
+# that silently does nothing is worse than one that is absent -- someone has to
+# be able to find out.
+#
+# What DOES protect the bridge today is transport-level: mTLS
+# (--tls-client-ca) and --auth authflow. See llmcore-bridge serve --help.
+#
 # Environment Variable: LLMCORE_ADMIN_API_KEY
-# Example: admin_api_key = "admin_llmk_abc123def456ghi789jkl"
 admin_api_key = ""
 
 # =============================================================================
@@ -3018,6 +3025,10 @@ affinity = "session"
     reserved_response_tokens = 500
 
     # Minimum number of recent chat messages to try to keep during truncation.
+    #
+    # NOT ENFORCED: a config audit found no reader for this key, so truncation
+    # does not currently honour it. Left in place so existing configs keep
+    # loading, and flagged here rather than silently removed.
     minimum_history_messages = 1
 
     # Prioritizes keeping the N most recent user messages (and their preceding

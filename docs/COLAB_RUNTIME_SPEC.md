@@ -292,11 +292,11 @@ sku_ladder = ["T4", "L4", "G4", "A100-40", "A100-80", "H100"]
 | Phase | Scope | Gate |
 |---|---|---|
 | **R1** ✅ | `llmcore.runtimes` core: `ComputeRuntime` protocol, `ModelSpec`/`Plan`/`RuntimeHandle`/`RuntimeStatus`, `RuntimeStateStore`, config section, `RuntimeManager`, `llm.runtimes`, `FakeRuntime`. **No network.** | Landed 2026-09-30, 76 tests. Gate met: a runtime attaches as a real `VLLMProvider` instance at its tunnel URL, marked ephemeral, and detaches on `down()`. See §6.1 |
-| **R2** | `Sizer` — HF metadata, KV math, quant detection, SKU ladder, `estimate`. GET-only, no spend. | Sizing verified against several known models |
-| **R3** | `ColabRuntime` — CLI discovery, `new`, assignment guard, SSH master, bundle push, Drive cache, vLLM recipe, tunnel, ready marker. `up`/`down`/`status`/`logs`. | One real model served end-to-end and reachable through `llm.chat()` |
-| **R4** | Keepalive, liveness probe, idle reaper, hard deadline, orphan detection + `adopt`. | A leaked VM is impossible to create accidentally |
-| **R5** | `bake`, Drive cache inventory + `cache gc`, `llamacpp`/GGUF recipe. | Cold start on a cached model is seconds |
-| **R6** | CLI + docs; **agent-lens migration guide** so it delegates here. | agent-lens can drop its duplicated modules |
+| **R2** ✅ | `Sizer` — HF metadata, KV math, quant detection, SKU ladder, `estimate`. GET-only, no spend. | **Met.** Verified against Qwen2.5-7B, Qwen3-30B (dense and AWQ), Llama-3.3-70B (gated, exercising the fallback) and gemma-3-4b on the live Hub. 45 tests |
+| **R3** ⚠️ | `ColabRuntime` — CLI discovery, `new`, assignment guard, SSH master, bundle push, Drive cache, vLLM recipe, tunnel, ready marker. `up`/`down`/`status`/`logs`. | **Implemented, gate unmet.** Every path is tested against the real CLI's command surface, but "one real model served end-to-end" needs a real GPU VM and real compute units — that run belongs to whoever is paying. 58 tests |
+| **R4** ✅ | Keepalive, liveness probe, idle reaper, hard deadline, orphan detection + `adopt`. | **Met.** `reap()` existed but nothing called it, so the deadlines were documentation; `up()` now starts a supervisor. Orphans are reported with the command that adopts them |
+| **R5** ⚠️ | `bake`, Drive cache inventory + `cache gc`, `llamacpp`/GGUF recipe. | **Implemented, gate unmet** for the same reason as R3: "cold start is seconds" is a measurement on a real VM. `cache gc` is not implemented — `cache` lists, nothing deletes |
+| **R6** ⚠️ | CLI + docs; **agent-lens migration guide** so it delegates here. | `llmcore-runtimes` and [`Runtimes_usage.md`](Runtimes_usage.md) landed. The agent-lens migration guide is **not** written — it needs the R3 gate met first, since it would be telling another project to depend on an unproven path |
 
 **R1–R2 involve no spend at all** and are worth landing early: they are pure
 computation and unlock `estimate` as a useful standalone tool.

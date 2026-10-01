@@ -389,10 +389,26 @@ code, not left to the caller:
 - **`close()` detaches but does not tear down** — a process exiting is not a
   reason to destroy compute you are paying for. `down_all()` is explicit.
 
-Phase R1 (core, protocols, state, provider attachment) ships with a
-`FakeRuntime` for testing. The Colab backend is specified in
-[`COLAB_RUNTIME_SPEC.md`](docs/COLAB_RUNTIME_SPEC.md) and not yet implemented,
-so **nothing here can spend money today**.
+The Colab backend is implemented: sizing against Hugging Face metadata, the
+bootstrap, the SSH tunnel, keepalive, a liveness probe, the idle reaper, orphan
+detection and `bake`. There is a CLI for the commands you need when something
+has gone wrong:
+
+```bash
+llmcore-runtimes estimate Qwen/Qwen2.5-7B-Instruct --context 16384   # free
+llmcore-runtimes up Qwen/Qwen2.5-7B-Instruct --name q7 --yes         # spends
+llmcore-runtimes status                                              # incl. orphans
+llmcore-runtimes down q7
+```
+
+**One gate is deliberately unmet**: the spec asks for "one real model served
+end to end", and meeting it means provisioning a real GPU VM and spending real
+compute units. Everything short of that is tested — sizing against the live
+Hub, the command surface, the generated bootstrap, and every failure and
+teardown path — but nobody has yet run it against a live Colab session.
+
+Guide: [`Runtimes_usage.md`](docs/Runtimes_usage.md). Design:
+[`COLAB_RUNTIME_SPEC.md`](docs/COLAB_RUNTIME_SPEC.md).
 
 ---
 
@@ -1401,6 +1417,7 @@ from llmcore import (
 | [Provider support matrix](docs/PROVIDER_SUPPORT_MATRIX.md) | Per provider: tracked SDK version and commit, transport duality, capability matrix, and a live-validation log recording what was actually called |
 | [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) | Phased plan for the remaining gaps in that matrix |
 | [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) | Design, the rollout, and what each vendor taught the abstraction |
+| [Runtimes usage guide](docs/Runtimes_usage.md) | How to size, start, watch and stop remote GPU runtimes, and what it does not claim |
 | [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) | Runtime safety model and the Colab backend design |
 | [Routing usage guide](docs/Routing_usage.md) | How to use routing: dynamic targets, pools, lanes, cascades, the privacy path, proxy mode, and what it does not claim |
 | [Routing subsystem spec](docs/ROUTING_SUBSYSTEM_SPEC.md) | The design: five layers, the failure taxonomy, prior art borrowed, and the measured corrections to it |

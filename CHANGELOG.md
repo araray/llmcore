@@ -120,6 +120,90 @@ latency and balance. Every decision also emits a structured event.
 New skills in the bundled grimoire pack: `skills/llmcore/proxy`,
 `skills/llmcore/routing`, `skills/llmcore/cost`.
 
+### Added — the Colab runtime backend (R2-R6)
+
+`llmcore.runtimes` can now actually provision: sizing, the Colab backend, a
+supervisor that enforces the deadlines, and `llmcore-runtimes` for the
+commands you need when something has gone wrong.
+
+**Sizing** (R2) is read-only and free, and prints its own arithmetic — a sizer
+that answers "use an A100" and shows nothing is impossible to argue with.
+Every unknown rounds toward *needing more*: overestimating buys a bigger GPU,
+underestimating OOMs on the VM after billing has started. Context shrinks
+before a bigger GPU is chosen, and when nothing fits the sizer refuses with a
+concrete alternative rather than sending the caller to guess — the next guess
+is also a launch.
+
+**The Colab backend** (R3) enforces four rules in code: state is written
+before compute can be assigned; any bootstrap failure releases the VM; nothing
+is connected to until the session actually exists; deadlines are set at
+creation. If a release *also* fails, the log says MAY STILL BE BILLING in
+those words. The VM-side server is started with `setsid`, because as a child
+of the kernel a kernel restart would kill it silently while the VM kept
+billing. Secrets travel on stdin or through `colab exec --env`, never in argv.
+
+**Supervision** (R4). `reap()` existed but nothing called it, which made the
+idle and hard deadlines documentation rather than limits; `up()` now starts a
+supervisor. Liveness marks a runtime DEGRADED after three consecutive
+failures, not one, and never tears it down — letting a transient network
+problem destroy an expensive VM would be worse than the problem. The idle
+reaper needs a last-used time and vLLM exposes no such metric, so `attach()`
+wraps the provider's `chat_completion`.
+
+**`llmcore-runtimes`** (R6) — estimate, up, status, down, logs, adopt, bake,
+cache. `up` requires `--yes`; `estimate` works while the subsystem is
+disabled, because deciding whether to spend should not require enabling spend.
+`status` lists orphans with the command that adopts them.
+
+Three corrections the real tools forced on the spec:
+
+* `colab new --gpu` accepts T4, L4, G4, H100, A100 and nothing else, so the
+  spec's `A100-40`/`A100-80` rungs could never have been provisioned. The
+  ladder now uses the CLI's names (A100 sized conservatively at 40 GB) and a
+  test asserts every SKU maps to a value the CLI accepts. The old spellings
+  still resolve.
+* `Quantization` had one `GGUF` member, but Q4 and Q8 differ by 2x in weight
+  bytes — routinely the difference between fitting a 24 GB card and not.
+* The spec's KV fallback estimated 0.5 GB for a 70B model at 8k context, about
+  5x under. It now scales from the parameter count at a figure calibrated
+  against models where the real numbers are available.
+
+**Three gates are left explicitly unmet**, and the spec's phase table says so
+rather than claiming completion: R3's "one real model served end to end" and
+R5's "cold start is seconds" both require provisioning a real GPU VM and
+spending real compute units, and R6's agent-lens migration guide is not
+written because it would be telling another project to depend on an unproven
+path. `cache gc` is also not implemented — `cache` lists, nothing deletes.
+
+### Fixed — the test suite wrote into the real `~/.llmcore/runtimes`
+
+That directory is the record of what is currently costing money — the spec
+calls it a safety mechanism rather than a cache, and `llmcore-runtimes status`
+reads it. Running the test suite left a phantom entry claiming a READY L4 VM
+was running, which is exactly the false signal the subsystem exists to
+prevent: someone checking whether they were being billed would have been told
+yes, by their own test run.
+
+### Fixed — two config keys promised behaviour that does not exist
+
+A full audit of `default_config.toml` (660 keys) against the code found two
+with no reader anywhere. Both are now marked **NOT ENFORCED** in the config
+rather than quietly removed, because a control that silently does nothing is
+worse than one that is absent — someone has to be able to find out:
+
+* `llmcore.admin_api_key` documented itself as protecting administrative
+  endpoints "such as live configuration reloading". Nothing reads it, and the
+  bridge's `ControlService/ReloadConfig` has no reference to it, so a
+  deployment that set it believing its reload endpoint was protected was
+  wrong. What does protect the bridge is transport-level: mTLS and
+  `--auth authflow`.
+* `context_management.minimum_history_messages` — truncation does not honour
+  it.
+
+Everything else audited clean. All 48 `[routing]` keys and all 14
+`[runtimes]` keys are wired; the 116 unread `semantiscan.*` keys belong to
+that package, which llmcore only carries defaults for.
+
 ### Fixed — Gemini targets had no pricing or context window, silently
 
 The model-card alias map ran the wrong way: provider type `gemini` was mapped
