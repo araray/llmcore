@@ -145,7 +145,7 @@ async def _cmd_status(args: argparse.Namespace) -> int:
             orphans.append(status)
             continue
         print(
-            f"{status.name:16} {str(status.phase):10} {status.sku:8} "
+            f"{status.name:16} {status.phase!s:10} {status.sku:8} "
             f"{status.served_model[:34]:34} {_fmt_minutes(status.expires_in_seconds):8}"
         )
     for status in orphans:
