@@ -413,6 +413,39 @@ max_retries = 2
   #
   # Docs: https://api-docs.deepseek.com/
   # V4 Paper: https://huggingface.co/collections/deepseek-ai/deepseek-v4
+  # --- OpenAI-compatible vendors served by OpenAIProvider ----------------
+  #
+  # These three are registered in PROVIDER_MAP and get their env var and
+  # base_url from _OPENAI_COMPATIBLE_DEFAULTS, but a provider is only
+  # INSTANTIATED when its [providers.*] section exists — so without these
+  # sections `provider_name="xai"` raised "not configured". They are declared
+  # here so the three are usable out of the box.
+
+  [providers.xai]
+  # API key via XAI_API_KEY. base_url defaults to https://api.x.ai/v1
+  # api_key = "..."
+  default_model = "grok-4.1-20251117"
+  timeout = 120
+  # transport = "sdk"   # "sdk" (default) | "httpx" — see [providers.openai]
+  # Native xAI Live Search is reached with native_search=True on chat().
+
+  [providers.groq]
+  # API key via GROQ_API_KEY. base_url defaults to
+  # https://api.groq.com/openai/v1
+  # api_key = "..."
+  default_model = "llama-3.3-70b-versatile"
+  timeout = 120
+  # transport = "sdk"
+  # Groq also serves Whisper (ASR) and PlayAI (TTS) on the same endpoint.
+
+  [providers.together]
+  # API key via TOGETHER_API_KEY. base_url defaults to
+  # https://api.together.xyz/v1
+  # api_key = "..."
+  default_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  timeout = 120
+  # transport = "sdk"
+
   [providers.deepseek]
   # API Key: Set via environment variable for security.
   # Environment Variable: DEEPSEEK_API_KEY
