@@ -29,7 +29,19 @@ PROVIDER_SRC = Path(__file__).resolve().parents[2] / "src" / "llmcore" / "provid
 
 
 def _canonical() -> list[str]:
-    return sorted(k for k in PROVIDER_MAP if k not in _PROVIDER_INSTANCE_ALIASES)
+    """Real llmcore providers, excluding aliases and injected test doubles.
+
+    Several suites inject doubles with ``monkeypatch.setitem(PROVIDER_MAP, ...)``.
+    Teardown normally removes them, but an audit that reads the live registry
+    should not depend on that, so only classes defined under
+    ``llmcore.providers`` count.
+    """
+    return sorted(
+        name
+        for name, cls in PROVIDER_MAP.items()
+        if name not in _PROVIDER_INSTANCE_ALIASES
+        and getattr(cls, "__module__", "").startswith("llmcore.providers")
+    )
 
 
 def _module_source(provider: str) -> str:
