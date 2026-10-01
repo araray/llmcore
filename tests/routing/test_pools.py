@@ -295,8 +295,8 @@ class TestStrategies:
     @pytest.mark.asyncio
     async def test_most_credits_ranks_known_balances_first(self, state):
         p = pool_of("poor:1", "rich:2")
-        await state.record_balance("poor:1", Balance(amount=1.0))
-        await state.record_balance("rich:2", Balance(amount=500.0))
+        await state.record_balance("poor:1", Balance(amount=1.0), now=NOW)
+        await state.record_balance("rich:2", Balance(amount=500.0), now=NOW)
         chosen, candidates = select(
             p, state=state, strategy=SelectionStrategy.MOST_CREDITS, now=NOW
         )
@@ -308,7 +308,7 @@ class TestStrategies:
         """Most vendors expose no balance at all; reading that as empty would
         demote every provider that simply has no endpoint."""
         p = pool_of("unknown:1", "known:2")
-        await state.record_balance("known:2", Balance(amount=0.5))
+        await state.record_balance("known:2", Balance(amount=0.5), now=NOW)
         chosen, candidates = select(
             p, state=state, strategy=SelectionStrategy.MOST_CREDITS, now=NOW
         )
@@ -337,8 +337,8 @@ class TestStrategies:
     async def test_a_probed_empty_balance_starts_a_cooldown(self, state):
         """The probe already said the next call will fail; spending it to find
         out would be wasteful."""
-        await state.record_balance("broke:1", Balance(amount=0.0))
-        assert not state.health_sync("broke:1").is_available()
+        await state.record_balance("broke:1", Balance(amount=0.0), now=NOW)
+        assert not state.health_sync("broke:1").is_available(NOW)
 
     def test_the_pools_own_strategy_applies_by_default(self, state):
         p = pool_of("anthropic:claude-opus-4-1", "openai:gpt-4o-mini", strategy="lowest_cost")
@@ -413,7 +413,11 @@ class TestMostCreditsBands:
     @pytest.mark.asyncio
     async def test_known_empty_ranks_behind_unknown(self, state):
         p = pool_of("empty:1", "unknown:2")
-        await state.record_balance("empty:1", Balance(amount=0.0))
+        # now=NOW matters: a probed-empty balance starts a cooldown, and
+        # without an injected clock that cooldown is measured from the real
+        # time of day -- so this test passed in the morning and failed in the
+        # afternoon, when wall-clock UTC had moved past the fixture's moment.
+        await state.record_balance("empty:1", Balance(amount=0.0), now=NOW)
         later = NOW + timedelta(minutes=20)
         chosen, candidates = select(
             p, state=state, strategy=SelectionStrategy.MOST_CREDITS, now=later

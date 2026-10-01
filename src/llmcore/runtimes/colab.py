@@ -65,6 +65,11 @@ REMOTE_PORT = 8000
 #: How long to wait for the session to appear in `colab sessions` (rule 3).
 ASSIGNMENT_TIMEOUT = 180.0
 
+#: The bootstrap prints this only after the server answers on the VM. It is
+#: the success contract, because `colab exec` returns 0 regardless of whether
+#: the code it ran succeeded.
+BOOTSTRAP_READY_MARKER = "[llmcore] READY"
+
 #: How long to wait for the server to answer /v1/models after it is started.
 #: Generous because a cold model download is included in it.
 SERVE_TIMEOUT = 2700.0
@@ -535,9 +540,22 @@ class ColabRuntime:
             stdin=script,
             timeout=SERVE_TIMEOUT + 120.0,
         )
-        if not result.ok:
-            raise RuntimeError_(f"bootstrap failed on the VM: {result.brief(600)}")
-        handle.metadata["bootstrap_log"] = (result.stdout or "")[-4000:]
+        log = (result.stdout or "") + (result.stderr or "")
+        handle.metadata["bootstrap_log"] = log[-8000:]
+
+        # `colab exec` reports rc=0 even when the code it ran raised, so the
+        # exit status says nothing about whether the bootstrap worked. Observed
+        # directly: a SystemExit inside the script came back as a success, and
+        # the caller went on to open a tunnel to a server that had never
+        # started and wait 45 minutes for it.
+        #
+        # So the contract is the marker, not the exit code: the script prints
+        # READY only after the server answers on the VM.
+        if not result.ok or BOOTSTRAP_READY_MARKER not in log:
+            raise RuntimeError_(
+                f"bootstrap did not reach the ready marker on the VM. "
+                f"Last output: ...{_last_meaningful(log)}"
+            )
 
     async def _open_tunnel(self, handle: RuntimeHandle) -> None:
         """Forward the remote server port to localhost over the Colab SSH proxy."""
@@ -964,6 +982,21 @@ def _parse_inventory(text: str) -> dict[str, Any]:
     return {"env": [], "models": [], "bytes": 0}
 
 
+def _last_meaningful(log: str, limit: int = 700) -> str:
+    """The tail of a bootstrap log, preferring the part that explains a failure.
+
+    A traceback's useful line is its last one, and a VM log is mostly progress
+    chatter, so the naive tail is usually right -- but when the script named a
+    specific failure, lead with that instead.
+    """
+    lines = [line for line in log.splitlines() if line.strip()]
+    for marker in ("SystemExit", "Error", "Traceback"):
+        hits = [i for i, line in enumerate(lines) if marker in line]
+        if hits:
+            return " | ".join(lines[hits[0] :][-6:])[-limit:]
+    return " | ".join(lines[-6:])[-limit:]
+
+
 def _free_port() -> int:
     """Ask the OS for a free local port.
 
@@ -1037,13 +1070,22 @@ except Exception as exc:
 tarball = env_dir / (RECIPE + ".tar.gz")
 sentinel = env_dir / (RECIPE + ".ok")
 
-# Restore into the interpreter's REAL site-packages, not a side directory.
-# An earlier version extracted to /content/llmcore-env, which was never on
-# sys.path -- so the restore "succeeded" and then nothing could import vllm.
-import site
-site_dirs = [d for d in (site.getsitepackages() or []) if Path(d).is_dir()]
-target = Path(site_dirs[-1]) if site_dirs else Path(sys.prefix) / "lib"
-say("site-packages:", target)
+# Where pip ACTUALLY installs for this interpreter.
+#
+# Two earlier attempts got this wrong, and both failed silently. Extracting to
+# /content/llmcore-env meant a restore "succeeded" and then nothing could be
+# imported, because that path was never on sys.path. Using
+# site.getsitepackages()[-1] resolved to /usr/lib/python3/dist-packages on a
+# real Colab VM while pip was installing into
+# /usr/local/lib/python3.13/dist-packages -- so the cached tar would have held
+# the wrong tree, and a "cache hit" would have produced an environment with no
+# recipe in it.
+#
+# sysconfig's purelib is the path pip itself resolves, which makes it the one
+# answer that cannot disagree with the installer.
+import sysconfig
+target = Path(sysconfig.get_paths()["purelib"])
+say("site-packages (pip purelib):", target)
 
 restored = False
 if drive_ok and tarball.is_file() and sentinel.is_file():
@@ -1058,11 +1100,47 @@ if drive_ok and tarball.is_file() and sentinel.is_file():
 
 if not restored:
     say("installing %s (cold start)" % ", ".join(PIP))
-    os.environ.setdefault("PIP_CACHE_DIR", str(CACHE / "pip") if drive_ok else "/content/pipcache")
+    # Local disk, never Drive. Pointing PIP_CACHE_DIR at the Drive mount makes
+    # every wheel download write through FUSE to Google Drive, which on a cold
+    # cache is gigabytes of network round trips -- turning a slow step into an
+    # unbounded one, on a VM that bills by the minute. The artefact worth
+    # persisting is the finished environment tarball, written once at the end;
+    # the pip cache is scratch.
+    os.environ.setdefault("PIP_CACHE_DIR", "/content/pipcache")
     result = run([sys.executable, "-m", "pip", "install", "--quiet", *PIP])
     if result.returncode != 0:
         say("pip install failed:", result.stdout[-2000:], result.stderr[-2000:])
         raise SystemExit("pip install failed")
+
+# --- 2b. Reconcile the torch ecosystem -------------------------------------
+# Installing a serving stack upgrades torch, and the host image's *other*
+# torch packages stay on the CUDA build they shipped with. transformers
+# imports torchaudio unconditionally, and torchaudio refuses to load against a
+# different CUDA than torch -- so the server dies on import with a message
+# about CUDA versions that has nothing to do with the model.
+#
+# Observed on Colab: torch 2.13.0+cu130 against a preinstalled
+# torchaudio 2.11.0+cu128.
+#
+# Removing the mismatched companion is the right fix here rather than pinning:
+# nothing in a text-serving recipe needs audio or vision, and chasing a
+# matching build costs a second multi-gigabyte download on a billing VM.
+try:
+    import torch as _torch
+    want = getattr(_torch.version, "cuda", None)
+    if want:
+        want_tag = "cu" + want.replace(".", "")
+        result = run([sys.executable, "-m", "pip", "list", "--format=freeze"])
+        for line in result.stdout.splitlines():
+            name, _, version = line.partition("==")
+            if name.strip() in ("torchaudio", "torchvision") and "+cu" in version:
+                have_tag = version.split("+", 1)[1].strip()
+                if have_tag != want_tag:
+                    say("removing %s %s: built for %s, torch is %s"
+                        % (name, version.strip(), have_tag, want_tag))
+                    run([sys.executable, "-m", "pip", "uninstall", "-y", name.strip()])
+except Exception as exc:
+    say("torch ecosystem check skipped (%s)" % exc)
 
 # --- 3. Weights ------------------------------------------------------------
 # allow_patterns keeps this to what a server actually loads: pulling the whole
@@ -1213,14 +1291,17 @@ tarball = env_dir / (RECIPE + ".tar.gz")
 sentinel = env_dir / (RECIPE + ".ok")
 
 print("[llmcore] baking", RECIPE, "on a CPU runtime", flush=True)
-os.environ.setdefault("PIP_CACHE_DIR", str(CACHE / "pip"))
+# Local, for the same reason as the bootstrap: Drive is for the finished tar.
+os.environ.setdefault("PIP_CACHE_DIR", "/content/pipcache")
 result = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", *PIP],
                         capture_output=True, text=True)
 if result.returncode != 0:
     print(result.stdout[-2000:], result.stderr[-2000:], flush=True)
     raise SystemExit("pip install failed")
 
-print("[llmcore] tarring into", tarball, flush=True)
+import sysconfig
+target = sysconfig.get_paths()["purelib"]
+print("[llmcore] tarring", target, "into", tarball, flush=True)
 tmp = str(tarball) + ".tmp"
 result = subprocess.run(["tar", "-czf", tmp, "-C", "/usr/lib/python3/dist-packages", "."],
                         capture_output=True, text=True)

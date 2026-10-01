@@ -148,6 +148,122 @@ The provider now branches on the model generation parsed from its id, and
 the nearest supported rung rather than dropping an effort level and losing the
 caller's intent.
 
+### Added — a classifier evaluation harness, and the CLI to run it
+
+llmcore publishes no accuracy figure for any classifier, because none has been
+validated on real traffic and any number would be invented. That gap is still
+open but is now **closable**: `llmcore.routing.evaluation` and
+`llmcore-routing eval` measure a chain against labelled prompts.
+
+The harness is built around one property a single accuracy figure destroys:
+**the two error directions are not interchangeable.** Routing too cheap
+produces a bad answer; routing too expensive only costs money. The same 67%
+can be usable or unusable depending on which way it errs, so every report
+separates them and names the consequence. A test asserts that two classifiers
+with identical 0% accuracy produce opposite reports, which is the whole reason
+the harness exists.
+
+Two further scoring choices, both deliberate: an abstention is **not** counted
+as an error (a classifier that declines is passing the turn down the chain,
+which is the designed behaviour -- scoring it as wrong would make the most
+honest classifier look like the worst), and with no lane order supplied the
+report declines to guess a direction rather than inventing one.
+
+`llmcore-routing` also gets `why`, `health` and `show`. A 29-case starter set
+ships at `docs/examples/lane_eval_starter.jsonl` so replacing it with real
+traffic is an edit rather than a blank page; its README is explicit that it is
+not a benchmark. Unlabelled traffic (a `.txt` file) is accepted too, which
+measures coverage and latency before anyone has decided labelling is worth it.
+
+### Fixed — a privacy-relevant misroute, found by the new harness on its first run
+
+The free `heuristic` classifier routes
+
+> "Here is my patient record: John Doe, DOB 1971-03-02, diagnosed with
+> hypertension. Summarise it."
+
+to the **trivial** lane, because "summarise" is a simple-task verb and the
+heuristic is documented as not looking for personal data at all.
+
+That is survivable only because the privacy guarantee does not depend on the
+classifier: transforms run *after* target selection and change the
+destination, so the prompt is still constrained to a local-only pool before
+anything is sent. This is now asserted rather than assumed, in
+`TestLayeringSurvivesAMisclassification` -- one test proves the classifier
+really does get it wrong, so the premise cannot rot silently, and another
+proves the prompt still cannot reach a remote target.
+
+### Changed — the Colab backend is verified against a real GPU VM
+
+The R3 gate -- "one real model served end to end and reachable through
+`llm.chat()`" -- is **met**. Qwen2.5-1.5B-Instruct served by vLLM on a Colab
+T4, reached through `llm.chat(provider_name=...)`, and routed to through a
+pool containing the runtime:
+
+```
+[2.6s] 'Reply with exactly: COLAB'  ->  COLAB
+plan: pool=local strategy=priority chosen=llmcore-e2e:Qwen/Qwen2.5-1.5B-Instruct
+                                   ->  ROUTED
+```
+
+Teardown released the VM and `colab usage` confirmed 0.00/hr afterwards. Total
+cost of validation: 0.6 compute units.
+
+One honest caveat: in the successful run the server was started by the
+corrected bootstrap script invoked by hand on the VM, because the
+orchestration's own first attempt had died on the torchaudio mismatch below.
+Everything *around* it -- the assignment guard, the tunnel, provider
+attachment, `chat()`, pool routing, status and teardown -- ran through the
+orchestration. A single unattended `up()` with every fix applied has not been
+repeated.
+
+### Fixed — four bugs the live Colab run found, each silent
+
+Every one of these passed the test suite and would have failed on a VM that
+was already billing:
+
+* **The session parser could not find its own session.** `colab sessions`
+  prints `[name] external-id | Hardware: T4 | ...`, not the box-drawn table
+  the generic scraper assumed. The scraper *appeared* to handle it -- it
+  returned a row rather than raising -- with the whole `[name] id` chunk as
+  the name, so the assignment guard never recognised its own session and
+  released a healthy T4 after 180 seconds. Being forgiving is not the same as
+  being right. The real format is now matched explicitly and captured verbatim
+  as a fixture.
+
+* **`colab exec` returns 0 even when the code it ran raised.** The bootstrap
+  script correctly detected its own failure and exited -- and the
+  orchestration read rc=0, opened a tunnel to a server that had never started,
+  and waited 45 minutes. Success is now the explicit `[llmcore] READY` marker,
+  printed only after the server answers on the VM, and a failure message leads
+  with the line that explains it rather than the tail of the progress chatter.
+
+* **A CUDA-mismatched torch companion killed the server on import.**
+  Installing vLLM upgraded torch to `2.13.0+cu130` while Colab's preinstalled
+  `torchaudio 2.11.0+cu128` stayed put; transformers imports torchaudio
+  unconditionally, and torchaudio refuses to load against a different CUDA. The
+  bootstrap now removes torch companions whose CUDA tag disagrees with torch,
+  which is cheaper and more reliable than chasing a matching multi-gigabyte
+  build on a billing VM.
+
+* **The environment cache wrote and read the wrong directory, twice.** First
+  `/usr/lib/python3/dist-packages` (Colab installs into `/usr/local`), then
+  `site.getsitepackages()[-1]`, which resolved to the same wrong path on a real
+  VM. Both now use `sysconfig.get_paths()["purelib"]` -- the path pip itself
+  resolves, and so the only one that cannot disagree with the installer.
+
+Also: `PIP_CACHE_DIR` pointed at the Google Drive mount, so every wheel
+downloaded through FUSE to Drive. The finished environment tarball belongs on
+Drive; the pip cache is scratch and now stays on local disk.
+
+### Fixed — a time-of-day flake in the routing tests
+
+Three `most_credits` tests recorded a balance without an injected clock while
+asserting against a fixed one, so a probed-empty cooldown was measured from
+real wall-clock UTC. They passed in the morning and failed in the afternoon.
+Verified clock-independent by re-running the file with its fixed moment
+shifted 25 years into the past.
+
 ### Added — the Colab runtime backend (R2-R6)
 
 `llmcore.runtimes` can now actually provision: sizing, the Colab backend, a
@@ -177,6 +293,10 @@ failures, not one, and never tears it down — letting a transient network
 problem destroy an expensive VM would be worse than the problem. The idle
 reaper needs a last-used time and vLLM exposes no such metric, so `attach()`
 wraps the provider's `chat_completion`.
+
+`runtimes.colab.auth` selects the CLI's authentication strategy, so a machine
+authenticated with `gcloud auth application-default login` can set
+`auth = "adc"` instead of running the CLI's interactive code-paste flow.
 
 **`llmcore-runtimes`** (R6) — estimate, up, status, down, logs, adopt, bake,
 cache. `up` requires `--yes`; `estimate` works while the subsystem is

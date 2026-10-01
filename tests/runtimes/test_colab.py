@@ -22,6 +22,7 @@ import json
 import pytest
 
 from llmcore.runtimes.colab import (
+    BOOTSTRAP_READY_MARKER,
     LLAMACPP_RECIPE,
     VLLM_RECIPE,
     ColabRuntime,
@@ -110,6 +111,13 @@ class FakeCli:
             self.sessions.pop(session, None)
         elif verb == "sessions":
             return result(argv, stdout=self._table())
+        elif verb == "exec":
+            # A successful bootstrap prints the ready marker. The exit code
+            # does NOT indicate success -- `colab exec` returns 0 even when the
+            # code it ran raised -- so the fake must model the marker, not the
+            # status, or the tests would pass against an orchestration that
+            # cannot tell a working VM from a dead one.
+            return result(argv, stdout=f"[llmcore] working\n{BOOTSTRAP_READY_MARKER}\n")
         return result(argv)
 
     def argv_for(self, verb: str) -> tuple[str, ...] | None:
@@ -342,9 +350,56 @@ class TestUpSafetyRules:
             monkeypatch,
             FakeCli({("exec",): result(("colab", "exec"), rc=1, stderr="CUDA OOM")}),
         )
-        with pytest.raises(RuntimeError_, match="bootstrap failed"):
+        with pytest.raises(RuntimeError_, match="ready marker"):
             await runtime.up(plan_for(), name="qwen30")
         assert cli.argv_for("stop") is not None, "the VM was not released"
+
+    @pytest.mark.asyncio
+    async def test_a_zero_exit_without_the_marker_is_still_a_failure(
+        self, runtime, monkeypatch
+    ):
+        """The bug this contract exists for, observed on a real VM: `colab
+        exec` returned 0 while the script it ran had raised, so the caller
+        opened a tunnel to a server that never started and waited 45 minutes.
+        """
+        cli = wire(
+            runtime,
+            monkeypatch,
+            FakeCli(
+                {
+                    ("exec",): result(
+                        ("colab", "exec"),
+                        rc=0,
+                        stdout="[llmcore] installing vllm\nSystemExit: the model "
+                        "server failed to start\n",
+                    )
+                }
+            ),
+        )
+        with pytest.raises(RuntimeError_, match="ready marker"):
+            await runtime.up(plan_for(), name="qwen30")
+        assert cli.argv_for("stop") is not None
+
+    @pytest.mark.asyncio
+    async def test_the_failure_message_leads_with_the_cause(self, runtime, monkeypatch):
+        """A VM log is mostly progress chatter; the useful line is the error."""
+        wire(
+            runtime,
+            monkeypatch,
+            FakeCli(
+                {
+                    ("exec",): result(
+                        ("colab", "exec"),
+                        rc=0,
+                        stdout="progress\nmore progress\n"
+                        "RuntimeError: Detected that PyTorch and TorchAudio were "
+                        "compiled with different CUDA versions\n",
+                    )
+                }
+            ),
+        )
+        with pytest.raises(RuntimeError_, match="different CUDA versions"):
+            await runtime.up(plan_for(), name="qwen30")
 
     @pytest.mark.asyncio
     async def test_a_failed_readiness_check_releases_the_vm(self, runtime, monkeypatch):

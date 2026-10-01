@@ -408,11 +408,15 @@ llmcore-runtimes status                                              # incl. orp
 llmcore-runtimes down q7
 ```
 
-**One gate is deliberately unmet**: the spec asks for "one real model served
-end to end", and meeting it means provisioning a real GPU VM and spending real
-compute units. Everything short of that is tested — sizing against the live
-Hub, the command surface, the generated bootstrap, and every failure and
-teardown path — but nobody has yet run it against a live Colab session.
+**Verified against a real GPU VM** on 2026-10-01: Qwen2.5-1.5B-Instruct served
+by vLLM on a Colab T4, reached through `llm.chat()` and through a pool
+containing the runtime, then released — total cost 0.6 compute units. That run
+found four bugs that every test had passed, including a session parser that
+could not recognise its own session and a `colab exec` that returns 0 even
+when the code it ran raised. Details in the CHANGELOG.
+
+Still unproven: a single unattended `up()` with all four fixes applied, and
+the "cold start is seconds" claim for a warm environment cache.
 
 Guide: [`Runtimes_usage.md`](docs/Runtimes_usage.md). Design:
 [`COLAB_RUNTIME_SPEC.md`](docs/COLAB_RUNTIME_SPEC.md).

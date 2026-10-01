@@ -263,12 +263,20 @@ The older `A100-40`/`A100-80` spellings still resolve.
 
 ## What this does not claim
 
-- **The end-to-end path has not been run against a real Colab VM.** Doing so
-  spends real compute units, so it is the one gate left for whoever is paying.
-  Everything up to the point of spending — sizing against the live Hugging Face
-  Hub, the command surface, the generated bootstrap, the failure and teardown
-  paths — is covered by tests, but "one real model served end to end" is
-  unverified and should be treated as such.
+- **The end-to-end path has been run once against a real Colab T4** (2026-10-01,
+  Qwen2.5-1.5B-Instruct on vLLM, reached through `llm.chat()` and through a
+  pool, then released). That run found four bugs the whole test suite had
+  passed, which is the honest argument for treating one live run as worth more
+  than any amount of mocking here.
+
+  What is still unproven: a single unattended `up()` with all four fixes
+  applied — in the successful run the server was started by the corrected
+  bootstrap invoked by hand, after the orchestration's own attempt had failed.
+  Expect to hit something on a model or SKU combination nobody has tried.
+- **A cold start takes tens of minutes**, most of it installing the serving
+  stack. The measured run was 35 minutes to first token on a T4, with the pip
+  cache misconfigured onto Google Drive (since fixed). `bake` exists precisely
+  so this is paid once on a CPU VM.
 - **Sizing is an estimate.** It is conservative by design, and a model that the
   sizer says fits can still fail to load for reasons no estimate can see
   (a custom kernel, an unexpected dtype, a vLLM version mismatch).
