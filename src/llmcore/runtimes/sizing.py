@@ -65,6 +65,11 @@ class GpuSku:
             promise one.
         high_mem: Whether this rung needs ``--high-mem`` (system RAM, not
             VRAM).
+        needs_fp16: The card predates Ampere and has no bfloat16. vLLM does
+            **not** silently downcast -- it refuses with "Bfloat16 is only
+            supported on GPUs with compute capability of at least 8.0" -- so a
+            recipe serving a bf16 checkpoint here must be told ``--dtype
+            half`` explicitly.
         compute_units_per_hour: Indicative burn rate, for the spend summary.
             Colab bills in compute units rather than currency, and quoting a
             dollar figure llmcore cannot verify would be worse than quoting the
@@ -77,6 +82,7 @@ class GpuSku:
     cli_gpu: str = ""
     high_mem: bool = False
     compute_units_per_hour: float | None = None
+    needs_fp16: bool = False
     notes: str = ""
 
     @property
@@ -94,8 +100,8 @@ class GpuSku:
 #: the account is given an 80 GB card the plan simply has more headroom than it
 #: promised, which is the safe direction to be wrong in.
 GPU_SKUS: dict[str, GpuSku] = {
-    "T4": GpuSku("T4", 16.0, compute_units_per_hour=1.96,
-                 notes="no bf16; vLLM falls back to fp16"),
+    "T4": GpuSku("T4", 16.0, compute_units_per_hour=1.96, needs_fp16=True,
+                 notes="pre-Ampere: no bf16, so the recipe is told --dtype half"),
     "L4": GpuSku("L4", 24.0, compute_units_per_hour=4.82),
     "G4": GpuSku("G4", 24.0, compute_units_per_hour=4.82, notes="L4-class"),
     "A100": GpuSku("A100", 40.0, compute_units_per_hour=11.77,

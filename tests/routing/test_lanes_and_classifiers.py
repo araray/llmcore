@@ -294,7 +294,7 @@ class TestScriptClassifier:
         assert await ScriptClassifier(func=lambda request: 3.14).classify(req()) is None
 
     def test_a_spec_without_a_colon_says_what_it_wanted(self):
-        with pytest.raises(ValueError, match="module.path:function_name"):
+        with pytest.raises(ValueError, match=r"module\.path:function_name"):
             ScriptClassifier.from_spec("my_module.classify")
 
 

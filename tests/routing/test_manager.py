@@ -21,7 +21,7 @@ from llmcore.exceptions import (
     ProviderError,
 )
 from llmcore.routing.manager import RoutingManager
-from llmcore.routing.models import FailureKind, RoutingRequest, SelectionStrategy, Target, Verdict
+from llmcore.routing.models import FailureKind, RoutingRequest, Target, Verdict
 from llmcore.routing.verifiers import register_verifier
 
 from .conftest import FakeProvider, FakeProviderManager
@@ -392,14 +392,9 @@ class TestLanesAndParams:
     async def test_a_magic_string_never_reaches_a_provider(self, provider_manager, make_config):
         """T5's gate. A marker that leaks is llmcore's internals turning up in
         someone's context window, and a harness would quote it back."""
-        seen: dict[str, str] = {}
-
-        async def capture(provider, target, params):
-            return "ok"
-
         mgr = manager(provider_manager, make_config(BASIC))
         request = RoutingRequest(prompt="[[lane:deep]] Explain this proof.")
-        final, results = await mgr.transform_chain().apply(request, Target.parse("alpha:big"))
+        final, _ = await mgr.transform_chain().apply(request, Target.parse("alpha:big"))
         assert "[[lane:deep]]" not in final.prompt
         assert final.prompt == "Explain this proof."
 
@@ -535,7 +530,7 @@ class TestCascade:
     async def test_an_insufficient_answer_escalates(
         self, pair, make_config, runner, stub_verdicts
     ):
-        providers, provider_manager = pair
+        _, provider_manager = pair
         stub_verdicts(Verdict(sufficient=False, score=0.2), Verdict(sufficient=True, score=0.95))
         result = await manager(provider_manager, make_config(CASCADE_CONFIG)).execute(
             RoutingRequest(prompt="hard"), runner
@@ -571,7 +566,7 @@ class TestCascade:
     async def test_an_unjudgeable_answer_escalates_when_configured_to(
         self, pair, make_config, runner, stub_verdicts
     ):
-        providers, provider_manager = pair
+        _, provider_manager = pair
         stub_verdicts(Verdict(sufficient=None), Verdict(sufficient=True, score=1.0))
         mgr = manager(provider_manager, make_config(CASCADE_CONFIG))
         result = await mgr.execute(
@@ -585,7 +580,7 @@ class TestCascade:
     async def test_cascade_is_off_unless_enabled(self, pair, make_config, runner, stub_verdicts):
         """It trades latency and an extra call, which is wrong for interactive
         use."""
-        providers, provider_manager = pair
+        _, provider_manager = pair
         stub_verdicts(Verdict(sufficient=False, score=0.0))
         config = make_config(CASCADE_CONFIG.replace("enabled = true", "enabled = false"))
         result = await manager(provider_manager, config).execute(
@@ -764,3 +759,63 @@ class TestBalanceProbing:
         balances = await mgr.probe_balances()
         assert balances["beta:mid"] == {"known": True, "amount": 123.0, "unit": "usd"}
         assert mgr.health()["beta:mid"]["balance"]["amount"] == 123.0
+
+
+class TestLayeringSurvivesAMisclassification:
+    """The privacy guarantee must not depend on the classifier being right.
+
+    Found by `llmcore-routing eval` on its first run: the heuristic routes
+    "Here is my patient record: ... Summarise it." to the **trivial** lane,
+    because "summarise" is a simple-task verb and the heuristic is documented
+    as not looking for personal data at all.
+
+    That is only acceptable if the transform layer catches it regardless --
+    which is precisely why transforms run *after* target selection and can
+    change the destination. If the guarantee depended on classification, a
+    classifier that is wrong in this direction would be a data leak.
+    """
+
+    CONFIG = """
+[routing]
+default_pool = "cheap"
+[routing.pools.cheap]
+targets = ["gamma:small"]
+[routing.pools.local_only]
+targets = ["ollama:llama3.3:70b"]
+[routing.lanes]
+trivial = "pool:cheap"
+[routing.classifier]
+chain = ["heuristic"]
+[routing.classifier.heuristic]
+trivial_lane = "trivial"
+[routing.transforms]
+chain = ["pii"]
+[routing.transforms.pii]
+on_detect = "constrain"
+pool = "local_only"
+"""
+
+    PROMPT = (
+        "Here is my patient record: John Doe, DOB 1971-03-02, "
+        "jdoe@example.com, diagnosed with hypertension. Summarise it."
+    )
+
+    @pytest.mark.asyncio
+    async def test_the_classifier_really_does_get_this_wrong(
+        self, provider_manager, make_config
+    ):
+        """Stated as a test so the premise cannot rot silently."""
+        mgr = manager(provider_manager, make_config(self.CONFIG))
+        plan = await mgr.plan(RoutingRequest(prompt=self.PROMPT))
+        assert plan.lane == "trivial", "premise changed; revisit the test below"
+
+    @pytest.mark.asyncio
+    async def test_it_still_cannot_reach_a_remote_target(
+        self, providers, make_config, runner
+    ):
+        """The layering doing its job."""
+        provider_manager = FakeProviderManager(providers)
+        mgr = manager(provider_manager, make_config(self.CONFIG))
+        result = await mgr.execute(RoutingRequest(prompt=self.PROMPT), runner)
+        assert result.target.key == "ollama:llama3.3:70b"
+        assert providers["gamma"].calls == 0, "a remote target was called with PII"

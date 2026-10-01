@@ -648,7 +648,41 @@ class TestBake:
 # ---------------------------------------------------------------------------
 
 
+#: The format `colab sessions` ACTUALLY prints, copied verbatim from a live
+#: run against google-colab-cli 0.7.4. This string is the regression test: the
+#: generic table scraper appeared to handle it -- it returned a row rather than
+#: raising -- but with "[llmcore-e2e] gpu-t4-..." as the session name, so the
+#: assignment guard never recognised its own session and released a healthy
+#: T4. Being forgiving is not the same as being right.
+REAL_SESSIONS_OUTPUT = (
+    "[llmcore-e2e] gpu-t4-s-kkb-usw4b1-2vstf6ryp4yd8 "
+    "| Hardware: T4 | Shape: Standard | Variant: GPU"
+)
+
+REAL_EMPTY_OUTPUT = "[colab] No active sessions found on server."
+
+
 class TestSessionParsing:
+    def test_the_real_cli_format_is_parsed(self):
+        """The bug that released a live VM."""
+        rows = _parse_sessions(REAL_SESSIONS_OUTPUT)
+        assert len(rows) == 1
+        assert rows[0]["name"] == "llmcore-e2e"
+        assert rows[0]["id"] == "gpu-t4-s-kkb-usw4b1-2vstf6ryp4yd8"
+        assert rows[0]["gpu"] == "T4"
+
+    def test_the_real_empty_output_is_no_sessions(self):
+        """`[colab] No active sessions...` is bracketed like a session row and
+        must not be read as a session named 'colab'."""
+        assert _parse_sessions(REAL_EMPTY_OUTPUT) == []
+
+    def test_several_real_rows(self):
+        text = (
+            REAL_SESSIONS_OUTPUT
+            + "\n[other] gpu-l4-abc | Hardware: L4 | Shape: Standard | Variant: GPU"
+        )
+        assert [row["name"] for row in _parse_sessions(text)] == ["llmcore-e2e", "other"]
+
     def test_a_table_is_parsed(self):
         rows = _parse_sessions(SESSIONS_TABLE)
         assert [row["name"] for row in rows] == ["qwen30", "other"]

@@ -273,8 +273,14 @@ class ColabRuntime:
         return result
 
     async def _cli(self, *args: str, **kwargs: Any) -> CommandResult:
-        """Run the Colab CLI."""
-        return await self._run(self._cli_binary(), *args, **kwargs)
+        """Run the Colab CLI, with the configured auth strategy.
+
+        ``--auth`` is a *global* flag and must precede the subcommand, which is
+        why it is spliced in here rather than by each caller.
+        """
+        auth = str(self._get("runtimes.colab.auth", "") or "").strip()
+        prefix = ("--auth", auth) if auth else ()
+        return await self._run(self._cli_binary(), *prefix, *args, **kwargs)
 
     def _cli_binary(self) -> str:
         """Locate the Colab CLI, preferring llmcore's own environment.
@@ -492,6 +498,7 @@ class ColabRuntime:
         artifact that can be read, diffed and reproduced by hand when something
         goes wrong on the VM.
         """
+        sku = GPU_SKUS.get(resolve_sku(plan.sku) or plan.sku)
         script = _bootstrap_script(
             repo_id=plan.spec.repo_id,
             revision=plan.spec.revision,
@@ -499,6 +506,7 @@ class ColabRuntime:
             drive_cache=self._drive_cache,
             context_length=plan.context_length,
             quantization=plan.quantization,
+            dtype="half" if (sku and sku.needs_fp16) else None,
             gpu_memory_utilization=float(
                 self._get("runtimes.defaults.gpu_memory_utilization", 0.90)
             ),
@@ -892,7 +900,39 @@ def _parse_sessions(text: str) -> list[dict[str, Any]]:
 
     rows: list[dict[str, Any]] = []
     for line in stripped.splitlines():
-        line = line.strip().strip("│|").strip()
+        line = line.strip()
+
+        # The format the CLI actually prints (verified against
+        # google-colab-cli 0.7.4):
+        #
+        #   [llmcore-e2e] gpu-t4-s-kkb-usw4b1-2vstf6ryp4yd8 | Hardware: T4 | ...
+        #
+        # This is matched first and explicitly. The generic table scraper below
+        # *appeared* to work on it -- it produced a row rather than raising --
+        # but with the whole `[name] id` chunk as the name, so the assignment
+        # guard never matched its own session and released a healthy VM. A
+        # parser being forgiving is not the same as a parser being right.
+        bracketed = re.match(r"^\[([^\]]+)\]\s*(\S+)?(.*)$", line)
+        if bracketed:
+            name = bracketed.group(1).strip()
+            if name.lower() == "colab":
+                continue  # "[colab] No active sessions found on server."
+            row: dict[str, Any] = {"name": name}
+            if bracketed.group(2):
+                row["id"] = bracketed.group(2).strip()
+            for field in bracketed.group(3).split("|"):
+                key, _, value = field.partition(":")
+                key, value = key.strip().lower(), value.strip()
+                if not value:
+                    continue
+                if key == "hardware":
+                    row["gpu"] = value.upper()
+                elif key:
+                    row[key] = value
+            rows.append(row)
+            continue
+
+        line = line.strip("│|").strip()
         if not line or set(line) <= set("\u2500\u250c\u252c\u2510\u251c\u253c\u2524\u2514\u2534\u2518\u2502-+=| "):
             continue
         cells = [cell.strip() for cell in re.split(r"\s*[│|]\s*|\s{2,}", line) if cell.strip()]
@@ -967,6 +1007,7 @@ CTX = {context_length}
 QUANT = {quantization!r}
 GPU_UTIL = {gpu_memory_utilization}
 TRUST = {trust_remote_code}
+DTYPE = {dtype!r}
 EXTRA = {extra!r}
 LOG = Path("/content/llmcore-server.log")
 
@@ -995,15 +1036,24 @@ except Exception as exc:
 # --- 2. Environment --------------------------------------------------------
 tarball = env_dir / (RECIPE + ".tar.gz")
 sentinel = env_dir / (RECIPE + ".ok")
-target = Path("/content/llmcore-env")
+
+# Restore into the interpreter's REAL site-packages, not a side directory.
+# An earlier version extracted to /content/llmcore-env, which was never on
+# sys.path -- so the restore "succeeded" and then nothing could import vllm.
+import site
+site_dirs = [d for d in (site.getsitepackages() or []) if Path(d).is_dir()]
+target = Path(site_dirs[-1]) if site_dirs else Path(sys.prefix) / "lib"
+say("site-packages:", target)
 
 restored = False
 if drive_ok and tarball.is_file() and sentinel.is_file():
     say("restoring the %s environment from the Drive cache" % RECIPE)
-    target.mkdir(parents=True, exist_ok=True)
     result = run(["tar", "-xzf", str(tarball), "-C", str(target)])
     restored = result.returncode == 0
-    if not restored:
+    if restored:
+        import importlib
+        importlib.invalidate_caches()
+    else:
         say("restore failed; falling back to pip:", result.stderr[-400:])
 
 if not restored:
@@ -1059,6 +1109,11 @@ else:
             "--gpu-memory-utilization", str(GPU_UTIL)]
     if QUANT and QUANT not in ("none", "gguf"):
         argv += ["--quantization", QUANT]
+    if DTYPE:
+        # Pre-Ampere cards have no bfloat16 and vLLM refuses rather than
+        # downcasting, so a bf16 checkpoint on a T4 needs this or it will not
+        # start at all -- after the VM is already billing.
+        argv += ["--dtype", DTYPE]
     if TRUST:
         argv += ["--trust-remote-code"]
 for key, value in (EXTRA or {{}}).items():
@@ -1099,8 +1154,11 @@ else:
 
 # --- 6. Cache the environment for next time --------------------------------
 if drive_ok and not restored:
-    say("tarring the environment into the Drive cache for next time")
-    result = run(["tar", "-czf", str(tarball) + ".tmp", "-C", "/usr/lib/python3/dist-packages", "."])
+    # Tar the directory pip actually installed into. Hard-coding
+    # /usr/lib/python3/dist-packages produced a tarball that did not contain
+    # the recipe at all on Colab, which installs into /usr/local.
+    say("tarring", target, "into the Drive cache for next time")
+    result = run(["tar", "-czf", str(tarball) + ".tmp", "-C", str(target), "."])
     if result.returncode == 0:
         Path(str(tarball) + ".tmp").replace(tarball)
         sentinel.write_text("ok")   # written last: a sentinel means complete
@@ -1122,10 +1180,12 @@ def _bootstrap_script(
     gpu_memory_utilization: float,
     trust_remote_code: bool,
     remote_port: int,
+    dtype: str | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> str:
     """Render the VM-side bootstrap script."""
     return _BOOTSTRAP_TEMPLATE.format(
+        dtype=dtype,
         drive_cache=drive_cache,
         repo_id=repo_id,
         revision=revision,

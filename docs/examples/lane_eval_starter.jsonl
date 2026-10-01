@@ -1,0 +1,29 @@
+{"prompt": "Translate 'good morning' into Japanese.", "expected": "trivial", "note": "short, mechanical"}
+{"prompt": "What is the capital of Portugal?", "expected": "trivial"}
+{"prompt": "Reformat this JSON so it is indented with two spaces.", "expected": "trivial"}
+{"prompt": "Rename the variable `x` to `row_count` in this function.", "expected": "trivial"}
+{"prompt": "Summarise this paragraph in one sentence.", "expected": "trivial"}
+{"prompt": "Convert these dates from DD/MM/YYYY to ISO 8601.", "expected": "trivial"}
+{"prompt": "What does the acronym GQA stand for?", "expected": "trivial"}
+{"prompt": "Write a short blog post about the history of cartography.", "expected": "standard", "note": "short prompt, substantial output -- the classic trap"}
+{"prompt": "Tell me about the weather patterns of the Azores in autumn.", "expected": "standard"}
+{"prompt": "Draft a polite email declining a meeting invitation.", "expected": "standard"}
+{"prompt": "Explain how HTTP caching headers work.", "expected": "standard"}
+{"prompt": "Write a 2000-word essay comparing two schools of jurisprudence.", "expected": "standard", "note": "ten tokens, not a cheap request"}
+{"prompt": "Compare PostgreSQL and SQLite for a single-process desktop app.", "expected": "standard"}
+{"prompt": "What are the trade-offs between REST and gRPC?", "expected": "standard"}
+{"prompt": "Prove that the sum of two odd numbers is even, then explain the general case.", "expected": "deep"}
+{"prompt": "Review this architecture and tell me where the bottlenecks are, with trade-offs.", "expected": "deep"}
+{"prompt": "This test passes locally and fails in CI with no output. Walk me through how to isolate the cause.", "expected": "deep"}
+{"prompt": "Design a schema for multi-tenant billing with usage metering and refunds.", "expected": "deep"}
+{"prompt": "Our p99 latency tripled after a deploy that only changed logging. Why might that be?", "expected": "deep"}
+{"prompt": "Derive the memory cost of a KV cache for a GQA model and show the arithmetic.", "expected": "deep"}
+{"prompt": "Refactor this module for testability and explain what you changed and why.", "expected": "deep"}
+{"prompt": "```python\nfor i in range(10):\n  print(i)\n```\nWhy does this raise IndentationError?", "expected": "code"}
+{"prompt": "Write a Python function that merges overlapping intervals.", "expected": "code"}
+{"prompt": "Add type hints to this function.", "expected": "code"}
+{"prompt": "This SQL query returns duplicates. Fix it.", "expected": "code"}
+{"prompt": "Here is my patient record: John Doe, DOB 1971-03-02, diagnosed with hypertension. Summarise it.", "expected": "private"}
+{"prompt": "Draft a reply to this customer: her email is sara.lopes@example.com and her account is 4111 1111 1111 1111.", "expected": "private"}
+{"prompt": "Review this config before I commit it: api_key = sk-abcdefghijklmnopqrstuvwx", "expected": "private"}
+{"prompt": "Summarise the attached employee performance review for Marta Silva, employee ID 88213.", "expected": "private"}
