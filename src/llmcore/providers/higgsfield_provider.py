@@ -29,9 +29,9 @@ Transport (selectable via ``backend``)
 --------------------------------------
 
 * ``"httpx"`` — direct REST against ``api.higgsfield.ai``. **The default.**
-* ``"sdk"`` — the official ``higgsfield-client`` package. Note that the
-  published client covers agent *sessions* and uploads rather than the
-  generation endpoints, so it is a fallback for the pieces it does cover.
+* ``"sdk"`` — the official ``higgsfield-client`` package, whose ``AsyncClient``
+  covers the whole generation lifecycle (``submit`` / ``status`` / ``result`` /
+  ``cancel``), so this is a genuine fallback rather than a partial one.
 
 References:
   - https://docs.higgsfield.ai/docs
@@ -112,6 +112,18 @@ _STATUS_MAP: dict[str, str] = {
     # distinction is preserved in provider_metadata so a caller does not retry
     # a refusal as though it were a transient error.
     "nsfw": "failed",
+}
+
+#: ``higgsfield_client`` signals state by the *class* it returns rather than by
+#: a field, so the class name is the only thing to map on.
+_SDK_STATUS_CLASSES: dict[str, str] = {
+    "Queued": "queued",
+    "InProgress": "in_progress",
+    "Completed": "completed",
+    "Failed": "failed",
+    "NSFW": "nsfw",
+    "Cancelled": "canceled",
+    "Canceled": "canceled",
 }
 
 #: Result keys that carry files, mapped to the artifact kind they produce.
@@ -203,6 +215,12 @@ class HiggsfieldProvider(BaseProvider):
         self._backend = self._resolve_backend(config.get("backend"))
         self._http: Any = None
         self._sdk: Any = None
+        if self._backend == "sdk":
+            self._sdk = higgsfield_client.AsyncClient(
+                api_key=self._api_key,
+                base_url=self._base_url,
+                timeout=self._timeout,
+            )
 
         logger.debug(
             "Higgsfield provider initialized (backend=%s, base_url=%s).",
@@ -421,6 +439,20 @@ class HiggsfieldProvider(BaseProvider):
         hook = webhook_url or self._webhook_url
         if hook:
             body["webhook_url"] = hook
+
+        if self._backend == "sdk":
+            controller = await self._sdk.submit(
+                application=path, arguments=payload, webhook_url=hook
+            )
+            # Normalized into the same shape the REST response has, so
+            # everything downstream is transport-independent.
+            return {
+                "request_id": controller.request_id,
+                "status": "queued",
+                "status_url": getattr(controller, "status_url", None),
+                "cancel_url": getattr(controller, "cancel_url", None),
+            }
+
         try:
             resp = await self._get_http().post(f"/{path}", json=body)
         except httpx.HTTPError as e:
@@ -487,6 +519,9 @@ class HiggsfieldProvider(BaseProvider):
             job.error = "Lost the Higgsfield request id; the job cannot be polled."
             return job
 
+        if self._backend == "sdk":
+            return self._apply_result(job, await self._sdk_status(request_id))
+
         url = job.poll_url or f"/requests/{request_id}/status"
         resp = await self._get_http().get(url)
         if resp.status_code >= 400:
@@ -501,6 +536,12 @@ class HiggsfieldProvider(BaseProvider):
             return job
         request_id = job.provider_job_id
         if not request_id:
+            return job
+
+        if self._backend == "sdk":
+            await self._sdk.cancel(request_id)
+            job.status = MediaJobStatus.CANCELED
+            job.touch()
             return job
 
         url = job.provider_metadata.get("cancel_url") or f"/requests/{request_id}/cancel"
@@ -532,6 +573,30 @@ class HiggsfieldProvider(BaseProvider):
         if not payload.get("status"):
             return await self.poll_media_job(job)
         return self._apply_result(job, payload)
+
+    async def _sdk_status(self, request_id: str) -> dict[str, Any]:
+        """Return a REST-shaped status payload via the SDK.
+
+        The SDK reports state by returning a different ``Status`` subclass
+        rather than a field, and fetches the output through a separate
+        ``result`` call, so both are normalized into the single dict shape the
+        REST path produces. Keeping one payload shape is what lets
+        :meth:`_apply_result` stay transport-independent.
+        """
+        status = await self._sdk.status(request_id)
+        state = _SDK_STATUS_CLASSES.get(type(status).__name__, "in_progress")
+        payload: dict[str, Any] = {"request_id": request_id, "status": state}
+
+        if state == "completed":
+            # Only a completed request has output to fetch; asking earlier would
+            # raise or return nothing useful.
+            result = await self._sdk.result(request_id)
+            if isinstance(result, dict):
+                payload.update(result)
+        error = getattr(status, "error", None)
+        if error:
+            payload["error"] = str(error)
+        return payload
 
     def _apply_result(self, job: "MediaJob", payload: dict[str, Any]) -> "MediaJob":
         """Fold a ``RequestStatus`` payload into *job*."""

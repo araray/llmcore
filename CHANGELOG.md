@@ -27,6 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently failing.
 - Opts into the webhook receiver and parses its own deliveries; a mismatched
   `request_id` falls back to polling.
+- **Dual transport, per the house rule**: direct REST by default, with
+  `higgsfield-client` 0.2.0 as the `backend = "sdk"` fallback covering the whole
+  `submit` / `status` / `result` / `cancel` lifecycle. Live-validated end to end
+  on **both** transports.
+
+### Added — `test_transport_duality.py`: the direct-vs-SDK audit, enforced
+
+llmcore prefers calling each API directly with the vendor SDK as a fallback, but
+nothing checked it. The Higgsfield provider initially shipped with a
+`backend = "sdk"` option that its resolver accepted, an SDK import, and an
+`self._sdk` attribute that was **never assigned and never called** — so
+selecting it silently did nothing.
+
+The audit now encodes the rule: a provider offering one transport must declare
+why, dual-transport providers must actually construct *and call* their SDK
+client, direct must be the default, and every SDK fallback must be installable
+from its extra. Known gaps are listed with a `GAP:` prefix so they read as
+outstanding work; a provider that gains a second transport and stays on the list
+fails the audit.
+
+Current gaps it records: `anthropic`, `gemini`, `deepgram` and `ollama` are
+**SDK-only with no direct path**, and `mistral` is **direct-only with an unused
+mistralai v3 SDK**.
 
 ### Fixed — cardctl was missing adapters for eight providers
 

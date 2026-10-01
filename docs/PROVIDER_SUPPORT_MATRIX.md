@@ -53,7 +53,7 @@ dev venv. A pin that trails the upstream **major** version is a red flag.
 | Hugging Face | `huggingface-hub` | `huggingface_hub` | `main` @ v0.9.0.rc1 | `1092497a9b65` | 2026-09-29 | `>=1.12.0` | 1.12.0 | ✅ pinned |
 | Z.ai (GLM) | `zai-sdk` | `z-ai-sdk-python` | v0.2.3 | `ca5109c0aa9b` | 2026-06-16 | `>=0.2.3` | 0.2.3 | ✅ current (SDK backend live ✓) |
 | FriendliAI | `friendli` | `friendli-python` | v0.15.1 (repo pyproject reads 0.15.2, unreleased) | `f3039e22ec0d` | 2026-09-28 | `>=0.15.1` | 0.15.1 | ✅ current |
-| Higgsfield | `higgsfield-client` | `higgsfield-client` | **0.1.0** | `aefd1ca67792` | 2026-09-17 | *(none — httpx only)* | not installed | ✅ direct REST (live: auth + error taxonomy; generation blocked on credits) |
+| Higgsfield | `higgsfield-client` | `higgsfield-client` | **v0.2.0** (clone is 0.1.0) | `aefd1ca67792` | 2026-09-17 | `>=0.2.0` *(optional backend)* | 0.2.0 | ✅ current (live ✓ on **both** transports) |
 | Replicate | `replicate` | `replicate-python` | **v1.0.7** | `d2956ff9c3e2` | 2025-08-26 | `>=1.0.7` *(optional backend)* | not installed | ✅ current (live ✓, direct REST default) |
 | ElevenLabs | `elevenlabs` | `elevenlabs-python` | **v2.70.0** | `963b4a59bc0d` | 2026-09-28 | `>=2.70.0` *(optional backend)* | not installed | ✅ current (live ✓, direct REST default) |
 | fal | `fal-client` | `fal` (monorepo: `projects/fal_client`) | **v1.0.3** | `ec46b79` | 2026-09-22 | `>=1.0.0` *(optional backend)* | 1.0.3 | ✅ current (live ✓, direct REST default) |
@@ -324,6 +324,30 @@ Recorded per audit so "current" always means "we called it".
 | 2026-09-30 | ElevenLabs | direct REST (`httpx`) | ✅ TTS + consent metadata, streaming TTS, STT round trip, SFX, model discovery (11 models). 🟡 music + voice design **plan-gated** (free tier) — implemented, not live-validated. Found 1 real bug: 403 plan gating was reported as an auth failure |
 | 2026-09-30 | fal | direct REST (`httpx`) | ✅ image, TTS → ASR round trip, CDN upload, FILM interpolation, upscale, music, cancel. Found 3 real bugs: app-scoped queue paths, storage host + backend, FILM's input schema |
 | 2026-09-20 | FriendliAI | `openai`/`httpx`/`friendli` | ✅ all three backends, streaming, tools, team billing |
+
+## 7.1 Transport duality
+
+llmcore's rule is to **call each API directly and fall back to the vendor SDK
+where one exists**. `tests/providers/test_transport_duality.py` encodes this as
+an audit: a provider offering only one transport must declare why, so the choice
+is recorded rather than accidental.
+
+| State | Providers |
+|---|---|
+| **Dual, on main** | `elevenlabs`, `fal`, `friendli`, `replicate`, `zai`, `openrouter`, `poe`, `huggingface` |
+| **Dual, in review** | `openai` + `groq`/`together`/`xai`/`deepinfra` (PR #29), `higgsfield` (PR #31) |
+| **Single by design** | `deepseek`, `kimi`, `typesafe` (no vendor SDK published), `vllm` (its client *is* the openai SDK) |
+| **Known gaps** | `anthropic`, `gemini`, `deepgram`, `ollama` — **SDK-only, no direct path**; `mistral` — **direct-only, mistralai v3 unused** |
+
+The gaps invert the house rule and are tracked in the exemption list with a
+`GAP:` prefix, so they read as outstanding work rather than as design decisions.
+A provider that gains a second transport and stays on that list fails the audit,
+which is what forces the list to stay honest.
+
+**One documented exception:** Hugging Face prefers the SDK for router traffic,
+because HF hands third-party providers *their own* request shape and absorbing
+that is what `huggingface_hub` exists for. See
+[`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) §5.6.
 
 ---
 
