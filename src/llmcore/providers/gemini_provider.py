@@ -49,6 +49,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
         MediaResult,
     )
 
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # Updated for current-generation Gemini models (April 2026).
@@ -114,6 +122,165 @@ def _ensure_google_genai_imported() -> bool:
     InvalidArgument = _InvalidArgument
     google_genai_available = True
     return True
+
+
+#: Developer-API root for the direct transport. Vertex mode keeps using the SDK
+#: (see ``GeminiProvider._resolve_backend``), because Vertex authenticates with
+#: Google ADC rather than an API key and the SDK owns that exchange.
+_GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+#: Wire field -> SDK attribute. The REST API is camelCase while google-genai
+#: exposes snake_case, so the shim below translates rather than making every
+#: reader know both spellings.
+_WIRE_ALIASES: dict[str, str] = {
+    "finish_reason": "finishReason",
+    "usage_metadata": "usageMetadata",
+    "function_call": "functionCall",
+    "prompt_token_count": "promptTokenCount",
+    "candidates_token_count": "candidatesTokenCount",
+    "total_token_count": "totalTokenCount",
+    "thoughts_token_count": "thoughtsTokenCount",
+    "cached_content_token_count": "cachedContentTokenCount",
+}
+
+
+#: Wire fields the SDK exposes as enums, so readers do ``field.name``. The REST
+#: API returns them as plain strings, which would raise ``AttributeError`` on
+#: ``.name`` — found exactly that way, on the first live call.
+_WIRE_ENUM_FIELDS: frozenset[str] = frozenset({"finish_reason", "finishReason", "blockReason"})
+
+
+class _WireEnum:
+    """A wire string presented like the SDK's enum members."""
+
+    __slots__ = ("name", "value")
+
+    def __init__(self, value: str) -> None:
+        self.name = value
+        self.value = value
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return self.name
+
+    def __bool__(self) -> bool:
+        return bool(self.name)
+
+
+class _WireValue:
+    """Attribute access over decoded REST JSON, shaped like the SDK's objects.
+
+    The Gemini chat path reads a typed ``GenerateContentResponse`` —
+    ``response.text``, ``response.candidates[0].content.parts``, ``p.thought``,
+    ``finish_reason.name`` — rather than a dict. Rewriting that normalization
+    for the direct transport would mean maintaining two copies of the trickiest
+    logic in this provider.
+
+    So the direct transport wraps its JSON in this instead, and the existing
+    normalization runs unchanged over both. It translates camelCase wire names
+    to the SDK's snake_case, and exposes the handful of derived members the
+    readers use (``text``, ``function_calls``, enum-like ``.name``).
+    """
+
+    __slots__ = ("_data",)
+
+    def __init__(self, data: Any) -> None:
+        self._data = data
+
+    # --- generic access ------------------------------------------------
+
+    def __getattr__(self, name: str) -> Any:
+        if not isinstance(self._data, dict):
+            return None
+        for key in (name, _WIRE_ALIASES.get(name)):
+            if key and key in self._data:
+                value = self._data[key]
+                if name in _WIRE_ENUM_FIELDS and isinstance(value, str):
+                    return _WireEnum(value)
+                return _wrap_wire(value)
+        return None
+
+    def __bool__(self) -> bool:
+        return bool(self._data)
+
+    # --- derived members the readers rely on ---------------------------
+
+    @property
+    def name(self) -> Any:
+        """Enum-like access: ``finish_reason.name`` on a wire string."""
+        if isinstance(self._data, str):
+            return self._data
+        if isinstance(self._data, dict) and "name" in self._data:
+            return self._data["name"]
+        return None
+
+    @property
+    def text(self) -> Any:
+        """Text for this node.
+
+        ``text`` means two different things in this object graph: on a response
+        it is the joined non-thought parts (the SDK's ``.text``), while on a
+        *part* it is that part's own string. A property that only did the join
+        silently returned ``""`` for every part, which made streaming yield
+        empty deltas — found on the first live stream. So the level is decided
+        by the data: a node carrying ``candidates`` joins, anything else returns
+        its own field.
+        """
+        if not isinstance(self._data, dict):
+            return ""
+        if "candidates" not in self._data:
+            return self._data.get("text")
+        candidates = self._data.get("candidates") or []
+        chunks: list[str] = []
+        for candidate in candidates:
+            content = (candidate or {}).get("content") or {}
+            for part in content.get("parts") or []:
+                if isinstance(part, dict) and part.get("text") and not part.get("thought"):
+                    chunks.append(str(part["text"]))
+        return "".join(chunks)
+
+    @property
+    def function_calls(self) -> list[Any]:
+        """Flatten ``functionCall`` parts, matching the SDK's ``.function_calls``."""
+        if not isinstance(self._data, dict):
+            return []
+        calls: list[Any] = []
+        for candidate in self._data.get("candidates") or []:
+            content = (candidate or {}).get("content") or {}
+            for part in content.get("parts") or []:
+                call = isinstance(part, dict) and part.get("functionCall")
+                if call:
+                    calls.append(_WireFunctionCall(call))
+        return calls
+
+
+class _WireFunctionCall:
+    """One ``functionCall`` part, exposing ``name``/``args``/``id``."""
+
+    __slots__ = ("_data",)
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self._data = data
+
+    @property
+    def name(self) -> str:
+        return str(self._data.get("name") or "")
+
+    @property
+    def args(self) -> dict[str, Any]:
+        return dict(self._data.get("args") or {})
+
+    @property
+    def id(self) -> str | None:
+        return self._data.get("id")
+
+
+def _wrap_wire(value: Any) -> Any:
+    """Wrap dicts and lists so nested access keeps working."""
+    if isinstance(value, dict):
+        return _WireValue(value)
+    if isinstance(value, list):
+        return [_wrap_wire(v) for v in value]
+    return value
 
 
 class GeminiProvider(BaseProvider):
@@ -205,6 +372,8 @@ class GeminiProvider(BaseProvider):
                 client_kwargs["api_key"] = self.api_key
 
             self._client = genai.Client(**client_kwargs)
+            self._backend = self._resolve_backend(config.get("backend"))
+            self._http: Any = None
             logger.debug("Google Gen AI client initialized successfully.")
         except Exception as e:
             raise ConfigError(f"Google Gen AI configuration failed: {e}") from e
@@ -595,6 +764,169 @@ class GeminiProvider(BaseProvider):
     # Tool Call Normalization
     # ------------------------------------------------------------------
 
+    def _resolve_backend(self, requested: str | None) -> str:
+        """Resolve the transport. ``"sdk"`` by default; ``"httpx"`` is opt-in.
+
+        Vertex mode is forced onto the SDK: Vertex authenticates with Google
+        Application Default Credentials rather than an API key, and reproducing
+        that token exchange in llmcore would be reimplementing the part of
+        ``google-genai`` that earns its keep.
+        """
+        req = (requested or "sdk").lower()
+        if req not in ("sdk", "httpx"):
+            logger.warning("Unknown Gemini backend '%s'; using the SDK.", req)
+            return "sdk"
+        if req == "httpx" and self._vertex_ai:
+            logger.warning(
+                "The Gemini direct transport targets the Developer API, which "
+                "authenticates with an API key; Vertex mode uses Google ADC. "
+                "Falling back to the SDK for this instance."
+            )
+            return "sdk"
+        if req == "httpx" and not httpx_available:
+            logger.warning("httpx is not installed; using the Gemini SDK.")
+            return "sdk"
+        return req
+
+    def _direct_base_url(self) -> str:
+        """REST root for the direct transport."""
+        return _GEMINI_DEFAULT_BASE_URL
+
+    def _get_http(self) -> Any:
+        """Return the lazily-built direct HTTP client."""
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                base_url=self._direct_base_url(),
+                headers={
+                    "x-goog-api-key": self.api_key or "",
+                    "content-type": "application/json",
+                },
+                timeout=getattr(self, "timeout", 120.0),
+            )
+        return self._http
+
+    @staticmethod
+    def _config_to_wire(config: Any) -> dict[str, Any]:
+        """Render a ``GenerateContentConfig`` as the REST request body fields.
+
+        The SDK accepts a typed config object; the REST API wants
+        ``generationConfig`` plus a few siblings. Only the keys the SDK actually
+        set are emitted, so a request carries exactly what the caller asked for.
+        """
+        if config is None:
+            return {}
+        dump = getattr(config, "model_dump", None)
+        raw = dump(exclude_none=True, by_alias=True) if callable(dump) else dict(config or {})
+
+        body: dict[str, Any] = {}
+        # These are top-level on the wire rather than inside generationConfig.
+        for key in ("tools", "toolConfig", "safetySettings", "systemInstruction"):
+            snake = "".join("_" + c.lower() if c.isupper() else c for c in key)
+            if key in raw:
+                body[key] = raw.pop(key)
+            elif snake in raw:
+                body[key] = raw.pop(snake)
+        if raw:
+            body["generationConfig"] = raw
+        return body
+
+    def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
+        """Map a direct failure onto the same exceptions the SDK path raises.
+
+        Raises:
+            ProviderError: Always.
+        """
+        if status in (401, 403):
+            raise ProviderError(
+                self.get_name(),
+                f"Gemini authentication failed. Check GOOGLE_API_KEY / GEMINI_API_KEY. "
+                f"Error: {body}",
+                model_name=model_name,
+                status_code=status,
+            )
+        if status == 404:
+            raise ProviderError(
+                self.get_name(),
+                f"Gemini model '{model_name}' not found. Error: {body}",
+                model_name=model_name,
+                status_code=status,
+            )
+        if status == 429:
+            raise ProviderError(
+                self.get_name(),
+                f"Gemini rate limit reached. Error: {body}",
+                model_name=model_name,
+                status_code=status,
+                retryable=True,
+            )
+        raise ProviderError(
+            self.get_name(),
+            f"API Error ({status}): {body}",
+            model_name=model_name,
+            status_code=status,
+            retryable=status >= 500,
+        )
+
+    async def _direct_generate_content(
+        self, model_name: str, contents: Any, config: Any
+    ) -> Any:
+        """POST ``:generateContent`` and wrap the reply for the SDK-shaped readers."""
+        body = {"contents": self._contents_to_wire(contents), **self._config_to_wire(config)}
+        try:
+            resp = await self._get_http().post(
+                f"/models/{model_name}:generateContent", json=body
+            )
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}") from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}") from e
+        if resp.status_code >= 400:
+            self._raise_direct_status(resp.status_code, resp.text, model_name)
+        return _WireValue(resp.json())
+
+    async def _direct_generate_content_stream(
+        self, model_name: str, contents: Any, config: Any
+    ) -> AsyncGenerator[Any, None]:
+        """Yield ``:streamGenerateContent`` events, wrapped like SDK chunks."""
+        body = {"contents": self._contents_to_wire(contents), **self._config_to_wire(config)}
+        client = self._get_http()
+        async with client.stream(
+            "POST",
+            f"/models/{model_name}:streamGenerateContent",
+            params={"alt": "sse"},
+            json=body,
+        ) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                self._raise_direct_status(resp.status_code, resp.text, model_name)
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if not payload:
+                    continue
+                try:
+                    yield _WireValue(json.loads(payload))
+                except ValueError:
+                    logger.warning("Skipping unparseable Gemini SSE chunk.")
+
+    @staticmethod
+    def _contents_to_wire(contents: Any) -> Any:
+        """Render SDK ``Content`` objects as REST ``contents`` entries."""
+        if contents is None:
+            return []
+        items = contents if isinstance(contents, list) else [contents]
+        wire: list[Any] = []
+        for item in items:
+            dump = getattr(item, "model_dump", None)
+            if callable(dump):
+                wire.append(dump(exclude_none=True, by_alias=True))
+            elif isinstance(item, dict):
+                wire.append(item)
+            else:
+                wire.append({"role": "user", "parts": [{"text": str(item)}]})
+        return wire
+
     def _normalize_tool_calls_from_response(
         self, response: Any
     ) -> list[dict[str, Any]] | None:
@@ -802,11 +1134,14 @@ class GeminiProvider(BaseProvider):
         Returns:
             OpenAI-normalized response dict.
         """
-        response = await self._client.aio.models.generate_content(
-            model=model_name,
-            contents=genai_contents,
-            config=config,
-        )
+        if self._backend == "httpx":
+            response = await self._direct_generate_content(model_name, genai_contents, config)
+        else:
+            response = await self._client.aio.models.generate_content(
+                model=model_name,
+                contents=genai_contents,
+                config=config,
+            )
 
         # .text property excludes thought parts
         text_content = response.text or ""
@@ -901,11 +1236,19 @@ class GeminiProvider(BaseProvider):
             Dicts with ``choices[0].delta.content`` and optionally
             ``choices[0].delta.thinking``.
         """
-        response_stream = await self._client.aio.models.generate_content_stream(
-            model=model_name,
-            contents=genai_contents,
-            config=config,
-        )
+        # Both transports assign `response_stream`, so the normalization below
+        # is shared rather than written once per transport. The direct generator
+        # yields _WireValue chunks, which read exactly like the SDK's.
+        if self._backend == "httpx":
+            response_stream = self._direct_generate_content_stream(
+                model_name, genai_contents, config
+            )
+        else:
+            response_stream = await self._client.aio.models.generate_content_stream(
+                model=model_name,
+                contents=genai_contents,
+                config=config,
+            )
 
         async def stream_wrapper():
             async for chunk in response_stream:

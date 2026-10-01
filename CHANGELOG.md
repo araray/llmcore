@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — dual transport for every provider that has a vendor SDK
+
+llmcore's rule is to call each API directly and fall back to the vendor SDK
+where one exists. Six providers did not follow it. All six now do, taking
+coverage to **21 of 23**; the two that remain single-transport have no official
+vendor SDK.
+
+**Fixed a false claim first.** The transport audit asserted that "TypeSafe
+publishes no Python SDK". `typesafe-sdk` 0.7.2 is official and was already
+cloned in the vendor repos — the evidence was in llmcore's own support matrix.
+TypeSafe now has an SDK fallback, and the remaining exemptions cite what was
+actually checked: the PyPI names `deepseek` (Deskpai.com), `deepseek-sdk` (Sifat
+Hasan) and `kimi-sdk` (no stated author or repository) are **not** vendor
+packages, which is why DeepSeek and Kimi stay direct-only.
+
+**SDK fallbacks added** (direct stays the default):
+
+- **`typesafe`** — `typesafe-sdk`, via a response shim so neither existing
+  parser changes. One honest limitation: request ids are unavailable on that
+  path, because the SDK does not surface response headers.
+- **`mistral`** — `mistralai` v3 for chat, streaming, models and embeddings.
+  OCR, audio, classification, moderation and FIM stay on direct REST, because
+  the SDK models those with its own typed resources rather than OpenAI-shaped
+  dicts. That split is logged per call, so `backend = "sdk"` never silently
+  does nothing for half the surface.
+
+**Direct REST paths added** (the SDK stays the default, for stated reasons):
+
+- **`anthropic`** — `/v1/messages`, streaming included. The SDK keeps the
+  default because it owns prompt-caching and beta headers plus retry behaviour.
+- **`gemini`** — Developer-API `generateContent` and `streamGenerateContent`.
+  Vertex mode is *forced* onto the SDK, since Vertex authenticates with Google
+  ADC rather than an API key.
+- **`deepgram`** — `/v1/listen` and `/v1/speak`. The realtime surfaces
+  (streaming STT/TTS, voice agent, Flux v2) are duplex WebSocket protocols and
+  stay on the SDK, logged per call.
+- **`ollama`** — `/api/chat` with NDJSON streaming, and `/api/tags`.
+
+Throughout, there is **one normalization path per provider rather than one per
+transport**: Anthropic's stream normalizer consumes event dicts from either
+source, Gemini's reads a wire shim that presents REST JSON the way the SDK's
+typed objects look, and Deepgram's batch parser reads a JSON attribute wrapper.
+Each direct path maps failures to the same exceptions the SDK path raises,
+because a dual transport that reports failures differently is not really dual.
+
+### Fixed — five bugs found by live calls rather than by reading
+
+- The **Mistral SDK appends its own version prefix**, so passing llmcore's
+  `base_url` verbatim produced `/v1/v1/...` and a "no Route match" 404.
+- The two **Mistral streaming paths returned different shapes** — the SDK path
+  an async generator, the existing httpx path a coroutine resolving to one.
+  Matched to the existing contract rather than "improved", since callers depend
+  on it.
+- **Gemini's `finish_reason`** arrives as a plain string but readers call
+  `.name`, so enum-valued wire fields are now wrapped.
+- **Gemini's `text` means different things at different levels** of the
+  response graph — the joined non-thought parts on a response, the part's own
+  string on a part. A shim property that only did the join returned `""` for
+  every part and made streaming yield empty deltas.
+- **Deepgram's credential attribute** is `api_key`, not `_api_key`, and the
+  scheme differs between an API key (`Token`) and an access token (`Bearer`).
+- **Ollama double-wrapped its own errors**: a `ProviderError` raised by the
+  direct path was re-caught by the generic handler and reported as "An
+  unexpected error occurred", burying the actionable message and making the two
+  transports describe the same condition differently.
+
+### Changed — the transport audit now checks more
+
+`test_transport_duality.py` gained checks that a provider whose SDK stays the
+default still has a direct client, a transport selector and its own error
+mapper. It also walks the MRO, since `deepinfra` and `vllm` inherit their
+selector from `OpenAIProvider` — reading only a provider's own module
+misclassified both as single-transport.
+
 ### Added — Higgsfield provider
 
 - **New `higgsfield` provider**: generative image (Soul) and video (hosted Kling

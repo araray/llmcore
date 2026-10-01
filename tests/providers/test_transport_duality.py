@@ -55,19 +55,21 @@ def _module_source(provider: str) -> str:
 #: Providers that legitimately have one transport, and why. Anything not listed
 #: here is expected to offer both.
 SINGLE_TRANSPORT_REASONS: dict[str, str] = {
-    # --- No vendor SDK exists, so direct REST is the only option ----------
-    "deepseek": "OpenAI-compatible API; DeepSeek publishes no Python SDK.",
-    "kimi": "OpenAI-compatible API; Moonshot publishes no Python SDK.",
-    "typesafe": "Two REST endpoints; TypeSafe publishes no Python SDK.",
-    # --- Known gaps, tracked rather than hidden --------------------------
-    # These invert the house rule: they are SDK-only with no direct path, or
-    # direct-only with an SDK that exists and is unused. Each is a real gap and
-    # is listed in PROVIDER_MODERNIZATION_PLAN.md rather than silently accepted.
-    "anthropic": "GAP: anthropic SDK only, no direct REST path yet.",
-    "gemini": "GAP: google-genai SDK only, no direct REST path yet.",
-    "deepgram": "GAP: deepgram SDK only, no direct REST path yet.",
-    "ollama": "GAP: ollama SDK only, no direct REST path yet.",
-    "mistral": "GAP: direct REST only; the mistralai v3 SDK exists and is unused.",
+    # --- No *official* vendor SDK exists ----------------------------------
+    #
+    # Checked against PyPI rather than assumed, because an earlier version of
+    # this list claimed TypeSafe published no SDK when `typesafe-sdk` 0.7.2 is
+    # official and was already cloned in the vendor repos. The packages named
+    # below are the ones that turn up in a search and are *not* from the vendor.
+    "deepseek": (
+        "OpenAI-compatible API; DeepSeek publishes no Python SDK. The PyPI "
+        "names `deepseek` (Deskpai.com) and `deepseek-sdk` (Sifat Hasan) are "
+        "third-party, and DeepSeek's own docs direct users to the openai SDK."
+    ),
+    "kimi": (
+        "OpenAI-compatible API; Moonshot publishes no Python SDK. `kimi-sdk` on "
+        "PyPI names no author or repository and is not identifiably official."
+    ),
 }
 
 #: Markers that indicate a module can select between transports at runtime.
@@ -126,11 +128,7 @@ class TestTransportDualityIsRecorded:
         """An exemption is either 'no SDK exists' or an acknowledged GAP. Being
         explicit stops a temporary gap from reading like a design decision."""
         for provider, reason in SINGLE_TRANSPORT_REASONS.items():
-            acceptable = (
-                reason.startswith("GAP:")
-                or "no Python SDK" in reason
-                or "IS the openai SDK" in reason
-            )
+            acceptable = reason.startswith("GAP:") or "no Python SDK" in reason
             assert acceptable, (
                 f"{provider}: the reason should either state that no SDK exists or "
                 f"be marked 'GAP:' so it is tracked. Got: {reason!r}"
@@ -146,12 +144,25 @@ class TestDualTransportProvidersActuallyUseBoth:
     make that shape fail.
     """
 
-    DUAL = ("fal", "elevenlabs", "replicate", "higgsfield")
+    DUAL = ("fal", "elevenlabs", "replicate", "higgsfield", "typesafe", "mistral")
+
+    #: Providers whose *direct* path was added alongside an existing SDK path.
+    #: They are checked for a direct client and a selector, but not for
+    #: "direct is the default" — their SDKs own realtime sockets, ADC token
+    #: exchange, prompt-caching headers and retry policy, so the SDK remains the
+    #: default and direct is opt-in. That is a documented deviation rather than
+    #: an oversight, which is why it is listed here explicitly.
+    SDK_DEFAULT: ClassVar[tuple[str, ...]] = (
+        "anthropic", "gemini", "deepgram", "ollama",
+    )
 
     @pytest.mark.parametrize("provider", DUAL)
     def test_the_sdk_client_is_instantiated(self, provider):
         source = _module_source(provider)
-        assert re.search(r"self\._sdk\s*=\s*\w+\.", source), (
+        # Accepts both `self._sdk = vendor_module.Client(...)` and
+        # `self._sdk = ImportedClient(...)`; the first version of this pattern
+        # only matched the dotted form and reported a false negative.
+        assert re.search(r"self\._sdk\s*=\s*_?[A-Za-z]\w*[.(]", source), (
             f"{provider} declares an SDK backend but never constructs a client, "
             f"so selecting it would silently fall through to the other transport."
         )
@@ -181,6 +192,36 @@ class TestDualTransportProvidersActuallyUseBoth:
         )
 
 
+class TestSdkDefaultProvidersStillHaveBothPaths:
+    """Providers where the SDK stays the default must still offer direct REST."""
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_a_direct_http_client_exists(self, provider):
+        assert _has_direct_http(_module_source(provider)), (
+            f"{provider} is listed as having a direct path but builds no "
+            f"httpx client."
+        )
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_the_transport_is_selectable(self, provider):
+        assert _has_transport_selector(_module_source(provider))
+
+    @pytest.mark.parametrize(
+        "provider", TestDualTransportProvidersActuallyUseBoth.SDK_DEFAULT
+    )
+    def test_the_direct_path_maps_its_own_errors(self, provider):
+        """A direct path that raised raw httpx errors would make the two
+        transports report the same condition differently."""
+        assert "_raise_direct_status" in _module_source(provider), (
+            f"{provider}'s direct path has no error mapper, so failures would "
+            f"not match the SDK path's exceptions."
+        )
+
+
 class TestSdkExtrasAreDeclared:
     """An SDK fallback nobody can install is not a fallback."""
 
@@ -189,6 +230,8 @@ class TestSdkExtrasAreDeclared:
         "elevenlabs": "elevenlabs",
         "replicate": "replicate",
         "higgsfield": "higgsfield-client",
+        "typesafe": "typesafe-sdk",
+        "mistral": "mistralai",
     }
 
     @pytest.mark.parametrize(("provider", "package"), sorted(SDK_EXTRAS.items()))

@@ -56,6 +56,14 @@ from ..models import Message, ModelDetails, Tool, ToolCall
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # Default context lengths for common Ollama models.
@@ -172,6 +180,13 @@ class OllamaProvider(BaseProvider):
                 client_args["timeout"] = self.timeout
             self._client = AsyncClient(**client_args)
             logger.debug("Ollama AsyncClient initialized.")
+            # llmcore's rule is to call the API directly and fall back to the
+            # vendor SDK. Ollama's REST surface is small and stable, so the
+            # direct path is available with `backend = "httpx"`; the SDK stays
+            # the default because this provider's tests mock AsyncClient and it
+            # handles host resolution and NDJSON framing already.
+            self._backend = self._resolve_backend(config.get("backend"))
+            self._http: Any = None
         except Exception as e:
             logger.error(f"Failed to initialize Ollama AsyncClient: {e}", exc_info=True)
             raise ConfigError(f"Ollama client initialization failed: {e}")
@@ -225,7 +240,13 @@ class OllamaProvider(BaseProvider):
             if time.monotonic() - cached_at < self._models_cache_ttl:
                 return list(cached)
         try:
-            list_response = await self._client.list()
+            if self._backend == "httpx":
+                resp = await self._get_http().get("/api/tags")
+                if resp.status_code >= 400:
+                    self._raise_direct_status(resp.status_code, resp.text, "tags")
+                list_response = resp.json()
+            else:
+                list_response = await self._client.list()
             # ListResponse.models is Sequence[ListResponse.Model]
             # Each model has: .model, .size, .digest, .modified_at, .details
             model_list = list_response.models if list_response else []
@@ -451,6 +472,120 @@ class OllamaProvider(BaseProvider):
     # Chat Completion
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport. ``"sdk"`` by default; ``"httpx"`` is opt-in."""
+        req = (requested or "sdk").lower()
+        if req not in ("sdk", "httpx"):
+            logger.warning("Unknown Ollama backend '%s'; using the SDK.", req)
+            return "sdk"
+        if req == "httpx" and not httpx_available:
+            logger.warning("httpx is not installed; using the Ollama SDK.")
+            return "sdk"
+        return req
+
+    def _direct_base_url(self) -> str:
+        """Return the server root for the direct transport.
+
+        Mirrors the SDK's own default so switching transports does not quietly
+        change which server is contacted.
+        """
+        host = self.host or "http://localhost:11434"
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
+        return host.rstrip("/")
+
+    def _get_http(self) -> Any:
+        """Return the lazily-built direct HTTP client."""
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                base_url=self._direct_base_url(),
+                timeout=self.timeout if self.timeout is not None else 120.0,
+            )
+        return self._http
+
+    def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
+        """Map a direct failure onto the same errors the SDK path raises.
+
+        Raises:
+            ProviderError: Always.
+        """
+        if status == 404:
+            raise ProviderError(
+                self.get_name(),
+                f"Model '{model_name}' not found. Pull it with `ollama pull {model_name}`.",
+                model_name=model_name,
+                status_code=status,
+            )
+        raise ProviderError(
+            self.get_name(),
+            f"Ollama API Error (HTTP {status}): {body}",
+            model_name=model_name,
+            status_code=status,
+            retryable=status >= 500,
+        )
+
+    async def _direct_chat(
+        self, call_kwargs: dict[str, Any], model_name: str, *, stream: bool
+    ) -> Any:
+        """POST ``/api/chat``, returning a dict or an NDJSON line iterator.
+
+        Returns the same shapes the SDK returns at this seam — a mapping for a
+        single reply, an async iterator of mappings when streaming — because
+        ``_normalize_response`` and ``_wrap_stream`` consume both and already
+        accept plain dicts.
+        """
+        body = {**call_kwargs, "stream": stream}
+        if not stream:
+            try:
+                resp = await self._get_http().post("/api/chat", json=body)
+            except httpx.ConnectError as exc:
+                raise ProviderError(
+                    self.get_name(),
+                    f"Cannot connect to Ollama server at {self._direct_base_url()}. "
+                    f"Is Ollama running?",
+                    model_name=model_name,
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise ProviderError(
+                    self.get_name(), f"Ollama transport error: {exc}", model_name=model_name
+                ) from exc
+            if resp.status_code >= 400:
+                self._raise_direct_status(resp.status_code, resp.text, model_name)
+            return resp.json()
+        return self._direct_chat_stream(body, model_name)
+
+    async def _direct_chat_stream(
+        self, body: dict[str, Any], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Yield NDJSON chat chunks from ``/api/chat``.
+
+        Ollama streams newline-delimited JSON rather than server-sent events, so
+        there is no ``data:`` prefix to strip — each line is a whole object.
+        """
+        client = self._get_http()
+        try:
+            async with client.stream("POST", "/api/chat", json=body) as resp:
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    self._raise_direct_status(resp.status_code, resp.text, model_name)
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except ValueError:
+                        logger.warning("Skipping unparseable Ollama NDJSON line.")
+        except ProviderError:
+            raise
+        except httpx.ConnectError as exc:
+            raise ProviderError(
+                self.get_name(),
+                f"Cannot connect to Ollama server at {self._direct_base_url()}. "
+                f"Is Ollama running?",
+                model_name=model_name,
+            ) from exc
+
     async def chat_completion(
         self,
         context: ContextPayload,
@@ -551,13 +686,24 @@ class OllamaProvider(BaseProvider):
             for key, value in top_level_kwargs.items():
                 call_kwargs[key] = value
 
-            response_or_stream = await self._client.chat(**call_kwargs)
+            if self._backend == "httpx":
+                response_or_stream = await self._direct_chat(
+                    call_kwargs, model_name, stream=bool(stream)
+                )
+            else:
+                response_or_stream = await self._client.chat(**call_kwargs)
 
             if stream:
                 return await self._wrap_stream(response_or_stream)
             else:
                 return self._normalize_response(response_or_stream)
 
+        except ProviderError:
+            # Already mapped by the direct transport. Without this, the generic
+            # handler below re-wraps it as "An unexpected error occurred", which
+            # buries the actionable message and makes the two transports report
+            # the same condition differently.
+            raise
         except ResponseError as e:
             error_detail = e.error if hasattr(e, "error") and e.error else str(e)
             logger.error(f"Ollama API error: HTTP {e.status_code} - {error_detail}", exc_info=True)

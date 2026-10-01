@@ -329,27 +329,62 @@ Recorded per audit so "current" always means "we called it".
 
 llmcore's rule is to **call each API directly and fall back to the vendor SDK
 where one exists**. `tests/providers/test_transport_duality.py` encodes this as
-an audit: a provider offering only one transport must declare why, so the choice
-is recorded rather than accidental.
+an audit: a provider offering one transport must declare why, dual-transport
+providers must actually construct *and call* their second client, and every SDK
+fallback must be installable from its extra.
+
+**21 of 23 providers are dual-transport.** The two that are not have no official
+vendor SDK:
 
 | State | Count | Providers |
 |---|---:|---|
-| **Dual** | 15 | `openai`, `deepinfra`, `vllm`, `groq`, `together`, `xai` (shared `transport` selector), `elevenlabs`, `fal`, `friendli`, `replicate`, `zai`, `openrouter`, `poe`, `huggingface`, `higgsfield` |
-| **Single by design** | 3 | `deepseek`, `kimi`, `typesafe` — no vendor Python SDK is published |
-| **Known gaps** | 5 | `anthropic`, `gemini`, `deepgram`, `ollama` — **SDK-only, no direct path**; `mistral` — **direct-only, mistralai v3 unused** |
+| **Direct-first, SDK fallback** | 17 | `openai`, `deepinfra`, `vllm`, `groq`, `together`, `xai` (shared `transport` selector), `elevenlabs`, `fal`, `replicate`, `higgsfield`, `friendli`, `zai`, `openrouter`, `poe`, `huggingface`, `typesafe`, `mistral` |
+| **SDK-first, direct opt-in** | 4 | `anthropic`, `gemini`, `deepgram`, `ollama` |
+| **Single — no official SDK** | 2 | `deepseek`, `kimi` |
 
-`deepinfra` and `vllm` inherit their transport selector from `OpenAIProvider`
-rather than declaring one, so the audit walks the MRO. Reading only a provider's
-own module misclassified both as single-transport in the audit's first version.
+### Why four providers keep the SDK as the default
 
-The gaps invert the house rule and are tracked in the exemption list with a
-`GAP:` prefix, so they read as outstanding work rather than as design decisions.
-A provider that gains a second transport and stays on that list fails the audit,
-which is what forces the list to stay honest.
+These are a documented deviation, not an oversight, and the audit lists them
+explicitly so the deviation stays visible:
 
-**One documented exception:** Hugging Face prefers the SDK for router traffic,
-because HF hands third-party providers *their own* request shape and absorbing
-that is what `huggingface_hub` exists for. See
+- **`anthropic`** — the SDK owns prompt-caching and beta-feature headers plus
+  retry/backoff behaviour the direct path would have to track by hand.
+- **`gemini`** — Vertex mode authenticates with Google ADC rather than an API
+  key, so Vertex is *forced* onto the SDK; the direct path targets the
+  Developer API.
+- **`deepgram`** — most of its surface is duplex WebSocket (streaming STT/TTS,
+  voice agent, Flux v2) with its own framing and finalize semantics. The direct
+  path covers the batch endpoints; realtime stays on the SDK and logs that.
+- **`ollama`** — the SDK handles host resolution and NDJSON framing already.
+
+All four still offer `backend = "httpx"`, and each direct path maps its failures
+to the same exceptions the SDK path raises — a dual transport that reports
+failures differently is not really dual.
+
+### Partial coverage, stated rather than implied
+
+Two providers use the SDK (or direct) for part of their surface and say so per
+call, rather than letting a setting silently do nothing:
+
+- **`mistral`** — the SDK covers chat, streaming, models and embeddings; OCR,
+  audio, classification, moderation and FIM stay on direct REST, because the
+  SDK models those with its own typed resources rather than OpenAI-shaped dicts.
+- **`deepgram`** — direct REST covers transcribe/speak/models; realtime stays
+  on the SDK.
+
+### Corrections this audit forced
+
+- `typesafe` was listed as having **no Python SDK**. `typesafe-sdk` 0.7.2 is
+  official and was already cloned in the vendor repos — the claim was wrong, and
+  the evidence was in this document's own clone table.
+- `deepseek` and `kimi` remain single-transport, but the reason now cites what
+  was checked: the PyPI names `deepseek` (Deskpai.com), `deepseek-sdk` (Sifat
+  Hasan) and `kimi-sdk` (no stated author or repository) are **not** vendor
+  packages.
+
+**One documented exception to direct-first:** Hugging Face prefers the SDK for
+router traffic, because HF hands third-party providers *their own* request shape
+and absorbing that is what `huggingface_hub` exists for. See
 [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) §5.6.
 
 ---

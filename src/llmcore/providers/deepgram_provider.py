@@ -96,6 +96,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     )
     from ..models import Tool
 
+try:
+    import httpx
+
+    httpx_available = True
+except ImportError:  # pragma: no cover
+    httpx_available = False
+    httpx = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -160,6 +168,65 @@ _DEFAULT_TTS_MODEL = "aura-2-thalia-en"
 #: Documented REST text-to-speech input character cap. Used as the nominal
 #: "context length" for a provider that has no token context window.
 _DEFAULT_FALLBACK_CONTEXT_LENGTH = 2000
+
+class _JsonNode:
+    """Attribute access over decoded Deepgram JSON.
+
+    The batch parser reads the SDK's typed result (``result.results.channels``
+    and so on). Deepgram's REST reply is the same JSON those models are built
+    from, so wrapping it here means the parser is shared between transports
+    rather than written twice.
+    """
+
+    __slots__ = ("_data",)
+
+    def __init__(self, data: Any) -> None:
+        self._data = data
+
+    def __getattr__(self, name: str) -> Any:
+        if isinstance(self._data, dict):
+            return _wrap_json(self._data.get(name))
+        return None
+
+    def __getitem__(self, key: Any) -> Any:
+        return _wrap_json(self._data[key]) if self._data is not None else None
+
+    def __iter__(self):
+        if isinstance(self._data, list):
+            return iter(_wrap_json(v) for v in self._data)
+        return iter(())
+
+    def __len__(self) -> int:
+        return len(self._data) if hasattr(self._data, "__len__") else 0
+
+    def __bool__(self) -> bool:
+        return bool(self._data)
+
+    def model_dump(self, **_kwargs: Any) -> Any:
+        """Return the underlying JSON, matching the SDK models' interface."""
+        return self._data
+
+
+def _wrap_json(value: Any) -> Any:
+    """Wrap dicts and lists for attribute access; pass scalars through."""
+    if isinstance(value, dict):
+        return _JsonNode(value)
+    if isinstance(value, list):
+        return [_wrap_json(v) for v in value]
+    return value
+
+
+#: REST root for the direct transport.
+_DEEPGRAM_DEFAULT_BASE_URL = "https://api.deepgram.com"
+
+#: Capabilities the direct transport covers. Deepgram's batch endpoints are
+#: plain REST, but its realtime surfaces — streaming STT, streaming TTS, the
+#: voice agent, Flux v2 — are duplex WebSocket protocols with their own
+#: message framing, keepalives and finalize semantics. Reimplementing those
+#: would be rebuilding the part of the SDK that genuinely earns its keep, so
+#: they stay on the SDK even when ``backend = "httpx"``, and say so.
+_DIRECT_CAPABILITIES: frozenset[str] = frozenset({"transcribe", "speak", "models"})
+
 
 #: Accepted keyword params for batch STT (``listen.v1.media.transcribe_file`` /
 #: ``transcribe_url``). Used to filter merged config + call kwargs so unknown
@@ -436,6 +503,8 @@ class DeepgramProvider(BaseProvider):
                 client_kwargs["environment"] = environment
 
             self._client = AsyncDeepgramClient(**client_kwargs)
+            self._backend = self._resolve_backend(config.get("backend"))
+            self._http: Any = None
             logger.debug(
                 "Deepgram client initialised (instance=%s, stt=%s, tts=%s).",
                 self._provider_instance_name or "deepgram",
@@ -444,6 +513,157 @@ class DeepgramProvider(BaseProvider):
             )
         except Exception as exc:  # surface as ConfigError
             raise ConfigError(f"Deepgram client configuration failed: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    # Transport
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_backend(requested: str | None) -> str:
+        """Resolve the transport. ``"sdk"`` by default; ``"httpx"`` is opt-in.
+
+        The SDK stays the default because most of this provider's surface is
+        realtime sockets that only the SDK implements; the direct path covers
+        the batch endpoints, which is where llmcore's house rule applies.
+        """
+        req = (requested or "sdk").lower()
+        if req not in ("sdk", "httpx"):
+            logger.warning("Unknown Deepgram backend '%s'; using the SDK.", req)
+            return "sdk"
+        if req == "httpx" and not httpx_available:
+            logger.warning("httpx is not installed; using the Deepgram SDK.")
+            return "sdk"
+        return req
+
+    def _use_direct_for(self, capability: str) -> bool:
+        """Whether *capability* should bypass the SDK.
+
+        Only the batch endpoints in :data:`_DIRECT_CAPABILITIES` do. The
+        realtime surfaces stay on the SDK even under ``backend = "httpx"``,
+        and log that once, so the setting never silently does nothing.
+        """
+        if self._backend != "httpx":
+            return False
+        if capability in _DIRECT_CAPABILITIES:
+            return True
+        logger.debug(
+            "Deepgram '%s' is a realtime WebSocket surface with no direct-REST "
+            "equivalent; using the SDK for it even though backend='httpx'.",
+            capability,
+        )
+        return False
+
+    def _direct_base_url(self) -> str:
+        """REST root for the direct transport."""
+        configured = getattr(self, "_base_url", None) or _DEEPGRAM_DEFAULT_BASE_URL
+        return str(configured).rstrip("/")
+
+    def _get_http(self) -> Any:
+        """Return the lazily-built direct HTTP client."""
+        if self._http is None:
+            # The public attribute is `api_key` (no underscore); `_access_token`
+            # is the OAuth alternative. Deepgram uses the `Token` scheme for an
+            # API key and `Bearer` for an access token.
+            credential = self.api_key or self._access_token or ""
+            scheme = "Token" if self.api_key else "Bearer"
+            self._http = httpx.AsyncClient(
+                base_url=self._direct_base_url(),
+                headers={"Authorization": f"{scheme} {credential}"},
+                timeout=getattr(self, "_timeout", 60.0),
+            )
+        return self._http
+
+    def _raise_direct_status(self, status: int, body: str, model: str | None) -> None:
+        """Map a direct failure onto the same errors the SDK path raises.
+
+        Raises:
+            ProviderError: Always.
+        """
+        if status in (401, 403):
+            raise ProviderError(
+                "deepgram",
+                f"Deepgram authentication failed. Check DEEPGRAM_API_KEY. Error: {body}",
+                model_name=model,
+                status_code=status,
+            )
+        if status == 400:
+            raise ProviderError(
+                "deepgram",
+                f"Deepgram rejected the request: {body}",
+                model_name=model,
+                status_code=status,
+            )
+        if status == 429:
+            raise ProviderError(
+                "deepgram",
+                f"Deepgram rate limit reached. Error: {body}",
+                model_name=model,
+                status_code=status,
+                retryable=True,
+            )
+        raise ProviderError(
+            "deepgram",
+            f"Deepgram API error ({status}): {body}",
+            model_name=model,
+            status_code=status,
+            retryable=status >= 500,
+        )
+
+    async def _direct_transcribe(
+        self,
+        *,
+        params: dict[str, Any],
+        audio_bytes: bytes | None = None,
+        url: str | None = None,
+    ) -> Any:
+        """POST ``/v1/listen`` and return the SDK-equivalent response object.
+
+        Deepgram's REST reply is the same JSON the SDK models, so it is wrapped
+        for attribute access and the existing parser is untouched.
+        """
+        query = {k: v for k, v in params.items() if v is not None}
+        model = query.get("model")
+        try:
+            if url is not None:
+                resp = await self._get_http().post(
+                    "/v1/listen",
+                    params=query,
+                    json={"url": url},
+                    headers={"Content-Type": "application/json"},
+                )
+            else:
+                resp = await self._get_http().post(
+                    "/v1/listen",
+                    params=query,
+                    content=audio_bytes or b"",
+                    headers={"Content-Type": "application/octet-stream"},
+                )
+        except httpx.HTTPError as exc:
+            raise ProviderError(
+                "deepgram", f"Deepgram transport error: {exc}", model_name=model, retryable=True
+            ) from exc
+        if resp.status_code >= 400:
+            self._raise_direct_status(resp.status_code, resp.text, model)
+        return _wrap_json(resp.json())
+
+    async def _direct_speak(self, text: str, params: dict[str, Any]) -> AsyncIterator[bytes]:
+        """POST ``/v1/speak`` and yield audio bytes, like the SDK generator."""
+        query = {k: v for k, v in params.items() if v is not None}
+        model = query.get("model")
+        client = self._get_http()
+        async with client.stream(
+            "POST",
+            "/v1/speak",
+            params=query,
+            json={"text": text},
+            headers={"Content-Type": "application/json"},
+        ) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                self._raise_direct_status(resp.status_code, resp.text, model)
+            async for chunk in resp.aiter_bytes():
+                if chunk:
+                    yield chunk
 
     # ------------------------------------------------------------------
     # Construction helpers
@@ -934,7 +1154,14 @@ class DeepgramProvider(BaseProvider):
         used_model = params.get("model", self.default_stt_model)
 
         try:
-            if url is not None:
+            if self._use_direct_for("transcribe"):
+                request_bytes = (
+                    None if url is not None else self._coerce_audio_bytes(audio_data)
+                )
+                response = await self._direct_transcribe(
+                    params=params, audio_bytes=request_bytes, url=url
+                )
+            elif url is not None:
                 response = await self._client.listen.v1.media.transcribe_url(
                     url=url, **params
                 )
@@ -1111,9 +1338,12 @@ class DeepgramProvider(BaseProvider):
 
         try:
             chunks: list[bytes] = []
-            async for chunk in self._client.speak.v1.audio.generate(
-                text=text, **params
-            ):
+            source = (
+                self._direct_speak(text, params)
+                if self._use_direct_for("speak")
+                else self._client.speak.v1.audio.generate(text=text, **params)
+            )
+            async for chunk in source:
                 if chunk:
                     chunks.append(chunk)
             audio = b"".join(chunks)
