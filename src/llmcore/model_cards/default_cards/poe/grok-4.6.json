@@ -19,7 +19,17 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
   "lifecycle": {
@@ -28,7 +38,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "xAI’s frontier model for long-running agents, interactive and visual work, coding, and knowledge work.",
+  "description": "xAI’s Grok 4.6 model for coding, agents, and knowledge work. For the newer model, use Grok-4.7.",
   "tags": [],
   "source": "generated"
 }

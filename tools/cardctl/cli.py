@@ -78,6 +78,17 @@ def main(argv: list[str] | None = None) -> int:
     # --- stats ---
     sub.add_parser("stats", help="Dashboard of card coverage and health.")
 
+    # --- doctor ---
+    doc = sub.add_parser(
+        "doctor",
+        help="Check that every llmcore provider has an adapter and cards.",
+    )
+    doc.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero on warnings too, not just on errors (for CI).",
+    )
+
     args = parser.parse_args(argv)
 
     # Logging
@@ -101,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_cleanup(args, cards_root)
         elif args.command == "stats":
             return _cmd_stats(cards_root)
+        elif args.command == "doctor":
+            return _cmd_doctor(args, cards_root)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
@@ -375,4 +388,116 @@ def _cmd_stats(cards_root: Path | None) -> int:
         f"{totals[3]:5d} {totals[4]:7d} {totals[5]:7d} {totals[6]:5d}"
     )
 
+    return 0
+
+
+# ======================================================================
+# doctor
+# ======================================================================
+
+
+def _cmd_doctor(args: argparse.Namespace, cards_root: Path | None) -> int:
+    """Cross-check llmcore's provider registry against cardctl and the cards.
+
+    This exists because of a real failure: media providers (fal, ElevenLabs,
+    Replicate) were added to ``PROVIDER_MAP`` and shipped without anyone adding
+    a cardctl adapter, and nothing complained. ``generate`` only reports on the
+    provider you name, ``stats`` only sees providers that already have cards, so
+    a provider with no adapter was invisible to both.
+
+    Three checks, reported separately because they have different severities:
+
+    * **error** — a registered provider has no adapter, so its cards can never
+      be generated. This is the gap that went unnoticed.
+    * **warning** — an adapter exists but no cards are on disk, or an adapter
+      needs a key that is not set. Both are expected in some environments.
+    * **info** — an adapter with no llmcore provider behind it, which is usually
+      a deliberate alias rather than a problem.
+    """
+    from llmcore.providers.manager import (
+        _PROVIDER_INSTANCE_ALIASES,
+        PROVIDER_MAP,
+    )
+
+    from .adapters import _ADAPTER_REGISTRY, get_adapter
+    from .core.common import cards_dir_for_provider
+
+    canonical = {
+        name for name in PROVIDER_MAP if name not in _PROVIDER_INSTANCE_ALIASES
+    }
+    adapters = set(_ADAPTER_REGISTRY)
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    infos: list[str] = []
+
+    print("cardctl doctor")
+    print("=" * 72)
+    print(f"{'provider':<14} {'adapter':<22} {'cards':>6}  {'key':<5} notes")
+    print("-" * 72)
+
+    for name in sorted(canonical):
+        adapter_name = type(get_adapter(name)).__name__ if name in adapters else "-"
+        has_adapter = name in adapters
+
+        card_count = 0
+        try:
+            card_dir = cards_dir_for_provider(name, cards_root)
+            if card_dir.is_dir():
+                card_count = len(list(card_dir.glob("*.json")))
+        except Exception:  # a missing tree is a warning, not a crash
+            card_count = 0
+
+        key_state = "n/a"
+        notes: list[str] = []
+        if has_adapter:
+            adapter = get_adapter(name)
+            if getattr(adapter, "requires_api_key", False):
+                key_state = "set" if adapter.get_api_key() else "MISSING"
+                if key_state == "MISSING":
+                    warnings.append(
+                        f"{name}: adapter needs ${adapter.api_key_env_var}, which is "
+                        f"not set — `generate {name}` will fail here."
+                    )
+            else:
+                key_state = "none"
+            if card_count == 0:
+                warnings.append(
+                    f"{name}: has an adapter but no cards on disk. Run "
+                    f"`cardctl generate {name}`."
+                )
+        else:
+            errors.append(
+                f"{name}: registered in PROVIDER_MAP but has NO cardctl adapter, so "
+                f"its model cards can never be generated. Add "
+                f"tools/cardctl/adapters/{name}_adapter.py and register it."
+            )
+            notes.append("NO ADAPTER")
+
+        print(
+            f"{name:<14} {adapter_name:<22} {card_count:>6}  {key_state:<5} "
+            f"{' '.join(notes)}"
+        )
+
+    orphans = sorted(adapters - canonical - set(_PROVIDER_INSTANCE_ALIASES))
+    for name in orphans:
+        infos.append(f"{name}: adapter with no llmcore provider (alias or legacy).")
+
+    print("-" * 72)
+    print(f"{len(canonical)} providers, {len(adapters)} adapter keys registered.")
+
+    for label, items in (("ERROR", errors), ("WARN", warnings), ("INFO", infos)):
+        for item in items:
+            print(f"{label}: {item}")
+
+    if errors:
+        print(
+            f"\n{len(errors)} provider(s) have no card adapter. This is the gap that "
+            f"let media providers ship without cards."
+        )
+        return 1
+    if warnings and args.strict:
+        print(f"\n{len(warnings)} warning(s), and --strict was requested.")
+        return 1
+    print("\nEvery registered provider has a card adapter.")
     return 0

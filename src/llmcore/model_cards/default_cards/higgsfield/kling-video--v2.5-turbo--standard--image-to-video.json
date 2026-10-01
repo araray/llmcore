@@ -1,0 +1,47 @@
+{
+  "model_id": "kling-video/v2.5-turbo/standard/image-to-video",
+  "display_name": "Kling 2.5 Turbo Standard (image-to-video)",
+  "provider": "higgsfield",
+  "model_type": "video-generation",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": true,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Image-conditioned video at the standard tier.",
+  "tags": [
+    "video",
+    "kling",
+    "image-to-video",
+    "curated"
+  ],
+  "source": "generated"
+}

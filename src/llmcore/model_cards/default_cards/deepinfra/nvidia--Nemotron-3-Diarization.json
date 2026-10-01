@@ -1,0 +1,57 @@
+{
+  "model_id": "nvidia/Nemotron-3-Diarization",
+  "display_name": "Nemotron-3-Diarization",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Nemotron 3 Diarization is an open-weight streaming Sortformer model, engineered for low-latency speaker diarization across up to 8 speakers, ordered by arrival time. It powers meeting transcription, call analytics, and voice-agent pipelines—resolving who spoke when with generic speaker labels and timestamps in a single streaming pass, offline or in real time.",
+  "tags": [
+    "{'type': 'audio', 'supported_inputs': {'sources': {'type': 'enum', 'values': ['url', 'base64']}}, 'pricing': [{'type': 'prompt', 'unit': 'second', 'cost_usd': '0.0000100000'}]}",
+    "output:{'type': 'transcription', 'supported_parameters': {'language': {'type': 'enum', 'values': ['auto', 'af', 'am', 'ar', 'as', 'az', 'ba', 'be', 'bg', 'bn', 'bo', 'br', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es', 'et', 'eu', 'fa', 'fi', 'fo', 'fr', 'gl', 'gu', 'ha', 'haw', 'he', 'hi', 'hr', 'ht', 'hu', 'hy', 'id', 'is', 'it', 'ja', 'jw', 'ka', 'kk', 'km', 'kn', 'ko', 'la', 'lb', 'ln', 'lo', 'lt', 'lv', 'mg', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'ne', 'nl', 'nn', 'no', 'oc', 'pa', 'pl', 'ps', 'pt', 'ro', 'ru', 'sa', 'sd', 'si', 'sk', 'sl', 'sn', 'so', 'sq', 'sr', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'tk', 'tl', 'tr', 'tt', 'uk', 'ur', 'uz', 'vi', 'yi', 'yo', 'yue', 'zh']}, 'timestamps': {'type': 'boolean'}}, 'streaming': true, 'pricing': []}"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "nvidia/Nemotron-3-Diarization",
+    "input_modalities": [
+      "{'type': 'audio', 'supported_inputs': {'sources': {'type': 'enum', 'values': ['url', 'base64']}}, 'pricing': [{'type': 'prompt', 'unit': 'second', 'cost_usd': '0.0000100000'}]}"
+    ],
+    "output_modalities": [
+      "{'type': 'transcription', 'supported_parameters': {'language': {'type': 'enum', 'values': ['auto', 'af', 'am', 'ar', 'as', 'az', 'ba', 'be', 'bg', 'bn', 'bo', 'br', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es', 'et', 'eu', 'fa', 'fi', 'fo', 'fr', 'gl', 'gu', 'ha', 'haw', 'he', 'hi', 'hr', 'ht', 'hu', 'hy', 'id', 'is', 'it', 'ja', 'jw', 'ka', 'kk', 'km', 'kn', 'ko', 'la', 'lb', 'ln', 'lo', 'lt', 'lv', 'mg', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'ne', 'nl', 'nn', 'no', 'oc', 'pa', 'pl', 'ps', 'pt', 'ro', 'ru', 'sa', 'sd', 'si', 'sk', 'sl', 'sn', 'so', 'sq', 'sr', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'tk', 'tl', 'tr', 'tt', 'uk', 'ur', 'uz', 'vi', 'yi', 'yo', 'yue', 'zh']}, 'timestamps': {'type': 'boolean'}}, 'streaming': true, 'pricing': []}"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

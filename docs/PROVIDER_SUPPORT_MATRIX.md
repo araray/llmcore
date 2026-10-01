@@ -53,6 +53,7 @@ dev venv. A pin that trails the upstream **major** version is a red flag.
 | Hugging Face | `huggingface-hub` | `huggingface_hub` | `main` @ v0.9.0.rc1 | `1092497a9b65` | 2026-09-29 | `>=1.12.0` | 1.12.0 | ✅ pinned |
 | Z.ai (GLM) | `zai-sdk` | `z-ai-sdk-python` | v0.2.3 | `ca5109c0aa9b` | 2026-06-16 | `>=0.2.3` | 0.2.3 | ✅ current (SDK backend live ✓) |
 | FriendliAI | `friendli` | `friendli-python` | v0.15.1 (repo pyproject reads 0.15.2, unreleased) | `f3039e22ec0d` | 2026-09-28 | `>=0.15.1` | 0.15.1 | ✅ current |
+| Higgsfield | `higgsfield-client` | `higgsfield-client` | **0.1.0** | `aefd1ca67792` | 2026-09-17 | *(none — httpx only)* | not installed | ✅ direct REST (live: auth + error taxonomy; generation blocked on credits) |
 | Replicate | `replicate` | `replicate-python` | **v1.0.7** | `d2956ff9c3e2` | 2025-08-26 | `>=1.0.7` *(optional backend)* | not installed | ✅ current (live ✓, direct REST default) |
 | ElevenLabs | `elevenlabs` | `elevenlabs-python` | **v2.70.0** | `963b4a59bc0d` | 2026-09-28 | `>=2.70.0` *(optional backend)* | not installed | ✅ current (live ✓, direct REST default) |
 | fal | `fal-client` | `fal` (monorepo: `projects/fal_client`) | **v1.0.3** | `ec46b79` | 2026-09-22 | `>=1.0.0` *(optional backend)* | 1.0.3 | ✅ current (live ✓, direct REST default) |
@@ -146,6 +147,7 @@ vendor docs). Columns are the `BaseProvider` surface plus the media APIs.
 | openrouter | `sdk + httpx (+native)` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | ❓ | ❌ |
 | poe | `sdk + httpx (+native)` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❓ | ❓ | ❓ | ❓ | — | — | — | ❌ |
 | vllm | `sdk + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | — | ❌ |
+| higgsfield | `httpx (+sdk)` | — | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — |
 | replicate | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | — |
 | elevenlabs | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — |
 | fal | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | — |

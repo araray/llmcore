@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Higgsfield provider
+
+- **New `higgsfield` provider**: generative image (Soul) and video (hosted Kling
+  and MiniMax Hailuo) behind one async request API. Media-only;
+  `chat_completion()` raises. Direct REST by default, following the fal pattern
+  deliberately rather than inventing a second one for the same shape.
+- **Credentials are a pair.** The scheme is `Authorization: Key {id}:{secret}`,
+  not one opaque token, so `api_key_id` / `api_key_secret` can be configured
+  separately and a single-token credential warns at construction rather than
+  failing with a 401 much later.
+- **`nsfw` is handled as its own terminal state.** Higgsfield reports it
+  alongside `failed`, but one is a content refusal and the other a malfunction.
+  Both end the job; the error says explicitly that a refusal will not succeed on
+  retry, and the raw state is preserved in `provider_metadata`.
+- **Text-to-video and image-to-video are separate endpoints**, so supplying a
+  conditioning image switches the path instead of posting an image to a
+  text-only endpoint and getting a 422. An unmapped model warns rather than
+  silently failing.
+- Opts into the webhook receiver and parses its own deliveries; a mismatched
+  `request_id` falls back to polling.
+
+### Fixed — cardctl was missing adapters for eight providers
+
+`fal`, `elevenlabs`, `replicate`, `deepgram`, `groq`, `together`, `vllm` and
+`higgsfield` were registered in `PROVIDER_MAP` with **no cardctl adapter**, so
+their model cards could never be generated. `openai_compat`'s own docstring had
+claimed Groq and Together since it was written, but neither was ever registered,
+so `cardctl generate groq` simply failed.
+
+Nothing caught this because `generate` only reports on the provider you name and
+`stats` only sees providers that already have cards — a provider with no adapter
+was invisible to both.
+
+### Added — `cardctl doctor`, and a test that enforces coverage
+
+- **`cardctl doctor`** cross-checks llmcore's provider registry against the
+  adapter registry and the cards on disk, separating *errors* (a registered
+  provider with no adapter — cards can never be generated) from *warnings* (no
+  cards yet, or a key not set) and *info* (an adapter with no provider, usually
+  an alias). `--strict` fails on warnings too.
+- `tests/tools/test_cardctl_coverage.py` asserts the same invariant, so adding a
+  provider without an adapter now fails the suite instead of shipping quietly.
+
+### Added — cardctl support for providers with no catalog endpoint
+
+- **`CuratedAdapter`**: emits cards from a declared set for providers that
+  publish no listing route — fal and Higgsfield address models by endpoint path,
+  Replicate's catalog is tens of thousands of community models, and vLLM serves
+  whatever a deployment loaded. Every such card is tagged **`curated`**, so a
+  declared entry is never mistaken for a discovered one.
+- **`ReplicateAdapter` enriches** each curated entry from the model's live
+  schema, recording the owner's description and the model's real input field
+  names — the same schema the provider reads at runtime, so the card documents
+  what will actually be sent.
+- **`VLLMAdapter`** requires `--base-url` and says why: there is no vendor
+  catalog, and defaulting to localhost would silently card whatever happens to
+  be running.
+
+### Added — media capabilities on model cards
+
+- `ModelCapabilities` gains `image_generation`, `image_edit`, `image_upscale`,
+  `video_generation`, `video_interpolation`, `speech_synthesis`,
+  `transcription`, `music_generation`, `sfx_generation` and `voice_design`,
+  mirroring `llmcore.media.MediaCapability`. `ModelType` gains
+  `video-generation` and `media`. All default off, so existing chat cards are
+  unaffected.
+- The card builder maps them through. Without this the media cards claimed **no
+  capabilities at all**, which reads as "this model does nothing" rather than
+  "nobody filled this in".
+
+### Fixed — two cardctl bugs found while generating
+
+- **Adapter aliases built duplicate card trees.** `cardctl generate gemini`
+  created a second `gemini/` directory alongside `google/`, because the
+  directory is named after whatever string the caller passed.
+  `cards_dir_for_provider()` now canonicalizes aliases, so there is exactly one
+  directory per provider.
+- **Deepgram cards were written once per model *and language*.** Its
+  `/v1/models` lists a record per language, so 553 records collapsed into 144
+  files with whichever variant came last deciding each card's language metadata.
+  Records are now grouped by canonical name with their language coverage merged.
+
+### Changed — all model cards regenerated
+
+2319 cards across 22 providers, 0 validation failures.
+
 ### Added — `llmcore.runtimes` core: remote GPU runtimes (R1)
 
 - **New `llmcore.runtimes` subsystem**, reachable as `llm.runtimes`: provision

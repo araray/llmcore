@@ -62,6 +62,19 @@ class NormalizedModel:
     license: str | None = None
     tags: list[str] = field(default_factory=list)
 
+    # Generative media capabilities (llmcore.media). Chat adapters leave these
+    # alone; media adapters set them so a card states what the endpoint serves.
+    supports_image_generation: bool = False
+    supports_image_edit: bool = False
+    supports_image_upscale: bool = False
+    supports_video_generation: bool = False
+    supports_video_interpolation: bool = False
+    supports_speech_synthesis: bool = False
+    supports_transcription: bool = False
+    supports_music_generation: bool = False
+    supports_sfx_generation: bool = False
+    supports_voice_design: bool = False
+
     # Provider-specific raw data (for extension fields)
     raw_api_data: dict[str, Any] = field(default_factory=dict)
 

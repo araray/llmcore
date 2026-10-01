@@ -18,13 +18,23 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.05,
-      "output": 0.2
+      "input": 0.024,
+      "output": 0.112
     }
   },
   "lifecycle": {

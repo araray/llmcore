@@ -21,7 +21,17 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": true
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": {
     "currency": "USD",
@@ -32,7 +42,7 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-07-08"
+    "release_date": "2026-10-01"
   },
   "license": null,
   "open_weights": false,

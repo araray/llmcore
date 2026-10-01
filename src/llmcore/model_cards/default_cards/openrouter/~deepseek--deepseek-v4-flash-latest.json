@@ -5,8 +5,8 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1310720,
-    "max_output_tokens": 384000
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -18,13 +18,23 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.0493,
-      "output": 0.1478
+      "input": 0.0078,
+      "output": 0.1307
     }
   },
   "lifecycle": {

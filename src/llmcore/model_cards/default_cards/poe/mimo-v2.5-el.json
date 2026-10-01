@@ -19,7 +19,17 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
   "lifecycle": {
@@ -28,7 +38,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "MiMo-V2.5 is a multimodal model with native visual and audio understanding, built to reason and act across modalities while supporting a large context window. It is positioned as a major step forward in agentic capability and multimodal understanding, with strong performance in visual reasoning, chart analysis, and real-world multimodal tasks.\n\nNotes: \n- Modalities: Text, Image, Video, Audio\n- Context window: 1M\n\nThis bot supports optional parameters for additional customization.",
+  "description": "This model is retiring on 2026-10-20. Please switch to: https://poe.com/MiMo-V2.6-Flash-EL\nMiMo-V2.5 is a multimodal model with native visual and audio understanding, built to reason and act across modalities while supporting a large context window. It is positioned as a major step forward in agentic capability and multimodal understanding, with strong performance in visual reasoning, chart analysis, and real-world multimodal tasks.\n\nNotes: \n- Modalities: Text, Image, Video, Audio\n- Context window: 1M\n\nThis bot supports optional parameters for additional customization.",
   "tags": [],
   "source": "generated"
 }

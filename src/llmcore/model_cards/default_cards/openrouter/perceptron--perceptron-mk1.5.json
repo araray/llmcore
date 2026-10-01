@@ -1,0 +1,50 @@
+{
+  "model_id": "perceptron/perceptron-mk1.5",
+  "display_name": "Perceptron: Perceptron Mk1.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 36864,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 1.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-25"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Perceptron Mk1.5 is Perceptron's embodied reasoning model for physical agents. It accepts text, image, video, and audio input, and answers with text plus optional structured annotations: points, boxes, polygons, tracks,...",
+  "tags": [],
+  "source": "generated"
+}

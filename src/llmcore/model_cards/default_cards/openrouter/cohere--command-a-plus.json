@@ -1,0 +1,50 @@
+{
+  "model_id": "cohere/command-a-plus",
+  "display_name": "Cohere: Command A+",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 192000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-22"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Command A+ is Cohere's flagship model for enterprise agentic workflows. It accepts text and image inputs with a 192K context window, supports native tool calling with strict tool schemas, structured...",
+  "tags": [],
+  "source": "generated"
+}

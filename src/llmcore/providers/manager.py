@@ -32,6 +32,7 @@ from .elevenlabs_provider import ElevenLabsProvider
 from .fal_provider import FalProvider
 from .friendli_provider import FriendliProvider
 from .gemini_provider import GeminiProvider
+from .higgsfield_provider import HiggsfieldProvider
 from .huggingface_provider import HuggingFaceProvider
 from .kimi_provider import KimiProvider
 from .mistral_provider import MistralProvider
@@ -80,6 +81,9 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     # Replicate: one generic prediction adapter for the whole catalog, driven
     # by each model's published schema. Media-only.
     "replicate": ReplicateProvider,
+    # Higgsfield: generative image/video (Soul, plus hosted Kling and Hailuo)
+    # behind one async request API. Media-only.
+    "higgsfield": HiggsfieldProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —

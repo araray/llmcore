@@ -1,46 +1,48 @@
 {
   "model_id": "aura-2-andromeda-en",
-  "display_name": "Aura-2 Andromeda (English)",
+  "display_name": "andromeda",
   "provider": "deepgram",
   "model_type": "tts",
   "architecture": {
-    "family": "aura",
-    "architecture_type": "transformer"
+    "family": "aura-2"
   },
   "context": {
-    "max_input_tokens": 2000
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
     "audio_input": false,
-    "audio_output": true
+    "audio_output": true,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": true,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
-  "provider_extension": {
-    "pricing": {
-      "currency": "USD",
-      "unit": "1k_characters",
-      "billing_tier": "pay-as-you-go",
-      "source": "https://deepgram.com/pricing",
-      "as_of": "2026-06-25",
-      "status": "published",
-      "rate_per_1k_characters": 0.03,
-      "rate_per_million_characters": 30.0,
-      "growth_rate_per_1k_characters": 0.027,
-      "note": "Aura-2 voice. Billed per character."
-    }
-  },
   "lifecycle": {
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Deepgram Aura-2 voice 'Andromeda' (English). Billed per character.",
+  "description": "Deepgram model: aura-2-andromeda-en",
   "tags": [
-    "streaming",
-    "batch",
-    "aura-2"
+    "audio",
+    "tts",
+    "languages:2"
   ],
   "source": "generated"
 }

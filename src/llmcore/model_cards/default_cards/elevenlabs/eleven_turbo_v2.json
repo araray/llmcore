@@ -1,0 +1,46 @@
+{
+  "model_id": "eleven_turbo_v2",
+  "display_name": "Eleven Turbo v2",
+  "provider": "elevenlabs",
+  "model_type": "tts",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 30000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": true,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Our English-only, low latency model. Best for developer use cases where speed matters and you only need English. Performance is on par with Turbo v2.5. (context is 30000 characters, not tokens — ElevenLabs bills per character).",
+  "tags": [
+    "audio",
+    "tts",
+    "languages:1"
+  ],
+  "source": "generated"
+}

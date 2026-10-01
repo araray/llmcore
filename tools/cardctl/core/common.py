@@ -60,10 +60,43 @@ def model_id_to_display_name(model_id: str) -> str:
     return " ".join(result)
 
 
+#: Adapter aliases that must share another provider's card directory.
+#:
+#: Registering an alias in the adapter registry is not enough on its own: the
+#: card directory is named after whatever string the caller passed, so
+#: ``cardctl generate gemini`` would build a second ``gemini/`` tree duplicating
+#: ``google/``. Aliases therefore canonicalize here, so there is exactly one
+#: directory per provider no matter which spelling is used.
+_CARD_DIR_ALIASES: dict[str, str] = {
+    # llmcore's provider registry says "gemini"; the card tree has always been
+    # "google", and the cards are the same models either way.
+    "gemini": "google",
+    "moonshot": "kimi",
+    "friendliai": "friendli",
+    "friendli_ai": "friendli",
+    "glm": "zai",
+    "zhipu": "zai",
+    "zhipuai": "zai",
+    "bigmodel": "zai",
+    "jev": "typesafe",
+    "fal_ai": "fal",
+    "eleven_labs": "elevenlabs",
+}
+
+
+def canonical_provider_dir_name(provider: str) -> str:
+    """Return the card-directory name for *provider*, resolving aliases."""
+    return _CARD_DIR_ALIASES.get(provider.strip().lower(), provider.strip().lower())
+
+
 def cards_dir_for_provider(provider: str, root: Path | None = None) -> Path:
-    """Return the card directory for a given provider name."""
+    """Return the card directory for a given provider name.
+
+    Aliases resolve to the canonical provider's directory, so a provider never
+    ends up with two card trees under different spellings.
+    """
     base = root or DEFAULT_CARDS_ROOT
-    return base / provider
+    return base / canonical_provider_dir_name(provider)
 
 
 def ensure_init_py(directory: Path) -> None:

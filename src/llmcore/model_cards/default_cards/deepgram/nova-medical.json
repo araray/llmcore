@@ -1,0 +1,48 @@
+{
+  "model_id": "nova-medical",
+  "display_name": "medical",
+  "provider": "deepgram",
+  "model_type": "stt",
+  "architecture": {
+    "family": "nova"
+  },
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": true,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Deepgram model: nova-medical",
+  "tags": [
+    "audio",
+    "stt",
+    "languages:2"
+  ],
+  "source": "generated"
+}

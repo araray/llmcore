@@ -1,0 +1,46 @@
+{
+  "model_id": "eleven_english_sts_v2",
+  "display_name": "Eleven English v2",
+  "provider": "elevenlabs",
+  "model_type": "audio",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 5000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Our state-of-the-art speech to speech model suitable for scenarios where you need maximum control over the content and prosody of your generations. (context is 5000 characters, not tokens — ElevenLabs bills per character).",
+  "tags": [
+    "audio",
+    "speech-to-speech",
+    "languages:1"
+  ],
+  "source": "generated"
+}

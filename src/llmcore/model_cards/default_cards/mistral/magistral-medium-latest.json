@@ -1,6 +1,6 @@
 {
   "model_id": "magistral-medium-latest",
-  "display_name": "magistral-medium-2509",
+  "display_name": "mistral-medium-latest",
   "provider": "mistral",
   "model_type": "chat",
   "architecture": {
@@ -8,7 +8,7 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -20,7 +20,17 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": true
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": {
     "currency": "USD",
@@ -31,14 +41,21 @@
   },
   "lifecycle": {
     "status": "active",
-    "release_date": "2026-07-08"
+    "release_date": "2026-10-01"
   },
   "license": null,
   "open_weights": false,
   "aliases": [
-    "magistral-medium-2509"
+    "mistral-medium-latest",
+    "mistral-medium",
+    "mistral-medium-3-5",
+    "mistral-medium-3.5",
+    "mistral-medium-3",
+    "mistral-medium-2604",
+    "mistral-vibe-cli-latest",
+    "mistral-vibe-cli-with-tools"
   ],
-  "description": "Our frontier-class reasoning model release candidate September 2025.",
+  "description": "Official mistral-medium-latest Mistral AI model",
   "tags": [
     "multimodal",
     "reasoning"
@@ -50,6 +67,6 @@
     "guardrails": {
       "system_prompt": false
     },
-    "default_temperature": 0.7
+    "default_temperature": 1.0
   }
 }

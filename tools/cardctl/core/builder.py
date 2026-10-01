@@ -152,6 +152,19 @@ class CardBuilder:
             "audio_output": model.supports_audio_output,
             "video_input": model.supports_video_input,
             "reasoning": model.supports_reasoning,
+            # Generative media. Without these a media card would claim no
+            # capabilities at all, which is worse than having no card: it reads
+            # as "this model does nothing" rather than "nobody filled this in".
+            "image_generation": model.supports_image_generation,
+            "image_edit": model.supports_image_edit,
+            "image_upscale": model.supports_image_upscale,
+            "video_generation": model.supports_video_generation,
+            "video_interpolation": model.supports_video_interpolation,
+            "speech_synthesis": model.supports_speech_synthesis,
+            "transcription": model.supports_transcription,
+            "music_generation": model.supports_music_generation,
+            "sfx_generation": model.supports_sfx_generation,
+            "voice_design": model.supports_voice_design,
         }
 
     def _build_pricing(

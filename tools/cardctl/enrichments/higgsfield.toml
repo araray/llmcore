@@ -1,0 +1,8 @@
+# tools/cardctl/enrichments/higgsfield.toml
+# Curated overlays for higgsfield cards. Values here WIN over whatever the adapter
+# discovers, so corrections survive regeneration.
+#
+# [models."<model-id>"]
+# description = "..."
+# [models."<model-id>".pricing]
+# input_per_million = 0.0

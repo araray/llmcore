@@ -1,0 +1,45 @@
+{
+  "model_id": "minimax/video-01",
+  "display_name": "MiniMax video-01 (Replicate)",
+  "provider": "replicate",
+  "model_type": "video-generation",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": true,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Generate 6s videos with prompts or images. (Also known as Hailuo). Use a subject reference to make a video with a character and the S2V-01 model.",
+  "tags": [
+    "video",
+    "curated"
+  ],
+  "source": "generated"
+}
