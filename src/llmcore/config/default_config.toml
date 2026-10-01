@@ -1615,12 +1615,39 @@ state_dir = "~/.llmcore/runtimes"
   gpu_memory_utilization = 0.90
   headroom_fraction = 0.15
 
+  # How often the supervisor probes liveness and applies the deadlines above.
+  # 0 disables it -- which also disables the idle reaper, so the deadlines
+  # become documentation rather than limits. Leave it on.
+  supervise_seconds = 60
+
   [runtimes.colab]
   # Requires the official Colab CLI:  pip install google-colab-cli
-  # Discovered at call time; never a hard dependency of llmcore.
+  # Discovered at call time; never a hard dependency of llmcore. Looked for
+  # next to the running interpreter first, since llmcore is often installed in
+  # a venv whose bin/ is not on the shell PATH.
   cli_path = "colab"
+
+  # Environments and weights are cached here between runs, which is the
+  # difference between a ten-minute cold start and a sub-minute warm one.
   drive_cache_dir = "/content/drive/MyDrive/.llmcore-cache"
-  sku_ladder = ["T4", "L4", "G4", "A100-40", "A100-80", "H100"]
+
+  # Cheapest first. These are the names `colab new --gpu` actually accepts;
+  # there is no way to ask for a particular amount of A100 VRAM, so A100 is
+  # sized conservatively at 40 GB. The older spellings A100-40 / A100-80 are
+  # still understood and both resolve to A100.
+  #
+  # Trim this to what your subscription can actually get -- an account that
+  # will never be given an A100 should not spend a minute discovering that on
+  # every launch.
+  sku_ladder = ["T4", "L4", "G4", "A100", "H100"]
+
+  # Holds the kernel active so Colab does not reclaim the VM. Runs in the
+  # llmcore process rather than on the VM, deliberately: a keepalive that
+  # outlives its owner is a leaked VM with a heartbeat. 0 disables it.
+  keepalive_seconds = 60
+
+  # Where the Hugging Face token is read from, for gated repos. The token is
+  # passed to the VM through the CLI's --env, never on a command line.
   # hf_token_env_var = "HF_TOKEN"
 
 # ==============================================================================

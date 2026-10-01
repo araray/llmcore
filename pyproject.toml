@@ -270,6 +270,7 @@ Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 [project.scripts]
 llmcore-storage = "llmcore.storage.cli:main"
 llmcore-bridge = "llmcore.bridge.cli:main"
+llmcore-runtimes = "llmcore.runtimes.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
