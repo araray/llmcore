@@ -1304,6 +1304,7 @@ from llmcore import (
 | [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) | Phased plan for the remaining gaps in that matrix |
 | [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) | Design, the rollout, and what each vendor taught the abstraction |
 | [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) | Runtime safety model and the Colab backend design |
+| [Routing subsystem spec](docs/ROUTING_SUBSYSTEM_SPEC.md) | **Proposed**: failover pools, classifier-driven lanes, response cascades, prompt transforms, proxy mode |
 
 **Per-provider guides**
 
