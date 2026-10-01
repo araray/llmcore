@@ -352,6 +352,7 @@ markers = [
     "requires_postgres: Tests that require PostgreSQL database",
     "requires_ollama: Tests that need a live Ollama server (auto-skipped when unreachable)",
     "requires_pgvector: Tests that require pgvector extension",
+    "live: Tests that call a real external service (network, credentials); deselect with '-m \"not live\"'",
 ]
 
 # --- Coverage Configuration ---
