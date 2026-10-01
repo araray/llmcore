@@ -218,6 +218,7 @@ class LLMCore:
         self._original_config_dict = {}
         self._observability = None
         self._media_manager: Any | None = None
+        self._runtime_manager: Any | None = None
         # Grimoire control plane (populated by _initialize_from_config)
         self._grimoire: Any | None = None
         self._grimoire_config: Any | None = None
@@ -265,6 +266,38 @@ class LLMCore:
                 "The media subsystem is not initialized. Use 'await LLMCore.create()'."
             )
         return self._media_manager
+
+    @property
+    def runtimes(self) -> Any:
+        """The remote GPU runtime subsystem (Colab first).
+
+        Provisions compute elsewhere, serves an open-weights model on it, and
+        attaches the endpoint as a provider instance — so a remotely served
+        model is reachable through the same ``llm.chat()`` as a hosted API::
+
+            plan = await llm.runtimes.estimate("Qwen/Qwen3-30B-A3B-Instruct-2507")
+            handle = await llm.runtimes.up(plan.spec.repo_id, name="qwen30",
+                                           confirm_spend=True)
+            answer = await llm.chat("Explain GQA briefly.", provider_name="qwen30")
+            await llm.runtimes.down("qwen30")
+
+        **Unlike every other provider, a runtime bills per minute from the
+        moment it is assigned, whether or not anyone calls it.** So the
+        subsystem is disabled unless ``[runtimes] enabled = true``, accessing
+        this property provisions nothing, and ``up()`` refuses without explicit
+        spend confirmation. ``estimate()`` is free and works while disabled.
+
+        Returns:
+            The :class:`~llmcore.runtimes.RuntimeManager` for this instance.
+
+        Raises:
+            ConfigError: If accessed before ``LLMCore.create()`` finished.
+        """
+        if self._runtime_manager is None:
+            raise ConfigError(
+                "The runtimes subsystem is not initialized. Use 'await LLMCore.create()'."
+            )
+        return self._runtime_manager
 
     @classmethod
     async def create(
@@ -557,6 +590,17 @@ class LLMCore:
                 self._provider_manager, self.config.get
             )
 
+            # Runtimes are the one subsystem that can spend money just by
+            # existing, so construction deliberately only builds the manager:
+            # no backend is contacted, nothing is provisioned, and the whole
+            # thing stays inert unless [runtimes] enabled = true.
+            from llmcore.runtimes import RuntimeManager
+
+            self._runtime_manager = RuntimeManager(
+                provider_manager=self._provider_manager,
+                config_get=self.config.get,
+            )
+
             logger.debug("Initializing SessionManager...")
             self._session_manager = SessionManager(self._storage_manager.session_storage)
 
@@ -649,6 +693,13 @@ class LLMCore:
             media_mgr = getattr(self, "_media_manager", None)
             if media_mgr is not None:
                 await media_mgr.close()
+            # Runtimes are detached, NOT torn down: a process exiting is not a
+            # reason to destroy compute someone is paying for and may still
+            # want. State files survive so the next session can find and stop
+            # it; llm.runtimes.down_all() is the explicit way to stop spending.
+            runtime_mgr = getattr(self, "_runtime_manager", None)
+            if runtime_mgr is not None:
+                await runtime_mgr.close()
             await self._provider_manager.close_all()
             # Search manager may not exist if init failed very early; guard it.
             search_mgr = getattr(self, "_search_provider_manager", None)

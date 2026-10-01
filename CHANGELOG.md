@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — `llmcore.runtimes` core: remote GPU runtimes (R1)
+
+- **New `llmcore.runtimes` subsystem**, reachable as `llm.runtimes`: provision
+  compute elsewhere, serve an open-weights model on it, and attach the endpoint
+  as a provider instance — so a remotely served model is reachable through the
+  same `llm.chat()` as any hosted API. Phase R1 of
+  `COLAB_RUNTIME_SPEC.md`: core types, the `ComputeRuntime` protocol, the state
+  store, `RuntimeManager`, and a `FakeRuntime`. **No real backend yet, so
+  nothing can spend money.**
+- **The safety model is enforced, not just documented.** Unlike every other
+  provider, a runtime bills per minute from the moment it is assigned, whether
+  or not anyone calls it. So: the subsystem is **off by default**;
+  `LLMCore.create()` builds the manager without contacting any backend; `up()`
+  raises `SpendNotConfirmedError` unless confirmation is explicit; and
+  `estimate()` is free and works **while disabled**, because deciding whether to
+  spend should not require enabling spend.
+- **State is written before provisioning returns**, because the dangerous window
+  is a crash between assignment and bookkeeping — money burning with nothing
+  tracking it. One indented-JSON file per runtime under `~/.llmcore/runtimes`,
+  so anyone who suspects they are being billed can find out with `ls` and `cat`.
+- **Bounded by default**: idle (45 min) and hard-lifetime (240 min) deadlines
+  come from config, not from the caller remembering. A **compute-unit ceiling**
+  is checked *before* either, because an idle reaper does not protect against a
+  runtime that is busy in a loop.
+- **Fail closed**: if attach fails after `up()` succeeded, the runtime is
+  released rather than left burning, and the error says so.
+- **`close()` detaches; it does not tear down.** A process exiting is not a
+  reason to destroy compute someone is paying for and may still want, so
+  `LLMCore.close()` unregisters the provider instances and leaves the state
+  files for the next session. `down_all()` is the explicit way to stop spending.
+- Provider attachment needs **no new provider class**: the endpoint is
+  OpenAI-compatible, so `attach()` registers a `vllm`-type instance
+  (`ephemeral=True`, `replace=True`) and `api_style` decides the type, so a
+  future TGI or llama.cpp recipe attaches a different one without touching the
+  runtime layer.
+- Robustness where the state directory is already wrong: an unknown `phase`
+  parses as `DEGRADED` rather than raising, and one corrupt record is skipped
+  with a warning rather than failing the listing — a bad file must not hide the
+  runtimes still running.
+- New config section `[runtimes]`, disabled by default.
+
 ### Added — direct `httpx` transport for OpenAI and its four subclasses
 
 - **`OpenAIProvider` now has a direct REST transport** alongside the `openai`

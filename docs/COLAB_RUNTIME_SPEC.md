@@ -3,7 +3,9 @@
 Let llmcore provision, control and serve models on remote GPU runtimes — Google
 Colab first — so a model running on someone else's GPU is just another provider.
 
-- **Status:** design + specification. Nothing implemented.
+- **Status:** **R1 implemented** — `llmcore.runtimes` core, the safety model,
+  and provider attachment, with a `FakeRuntime` for tests. **No real backend
+  yet, so nothing can spend money.** R2 (sizing) onward not started — see §6.
 - **Written:** 2026-09-29
 - **Reference implementation studied:** `/av/repos/agent-lens`
   (`docs/colab-design.md`, 391 lines + ~3,750 lines across 13 modules) and
@@ -289,7 +291,7 @@ sku_ladder = ["T4", "L4", "G4", "A100-40", "A100-80", "H100"]
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **R1** | `llmcore.runtimes` core: `ComputeRuntime` protocol, `ModelSpec`/`Plan`/`RuntimeHandle`/`RuntimeStatus`, `RuntimeState`, config section. `ProviderManager.register_instance()` / `unregister_instance()` + ephemeral teardown. A `FakeRuntime` for tests. **No network.** | Dynamic provider registration works and is covered |
+| **R1** ✅ | `llmcore.runtimes` core: `ComputeRuntime` protocol, `ModelSpec`/`Plan`/`RuntimeHandle`/`RuntimeStatus`, `RuntimeStateStore`, config section, `RuntimeManager`, `llm.runtimes`, `FakeRuntime`. **No network.** | Landed 2026-09-30, 76 tests. Gate met: a runtime attaches as a real `VLLMProvider` instance at its tunnel URL, marked ephemeral, and detaches on `down()`. See §6.1 |
 | **R2** | `Sizer` — HF metadata, KV math, quant detection, SKU ladder, `estimate`. GET-only, no spend. | Sizing verified against several known models |
 | **R3** | `ColabRuntime` — CLI discovery, `new`, assignment guard, SSH master, bundle push, Drive cache, vLLM recipe, tunnel, ready marker. `up`/`down`/`status`/`logs`. | One real model served end-to-end and reachable through `llm.chat()` |
 | **R4** | Keepalive, liveness probe, idle reaper, hard deadline, orphan detection + `adopt`. | A leaked VM is impossible to create accidentally |
@@ -299,6 +301,68 @@ sku_ladder = ["T4", "L4", "G4", "A100-40", "A100-80", "H100"]
 **R1–R2 involve no spend at all** and are worth landing early: they are pure
 computation and unlock `estimate` as a useful standalone tool.
 
+### 6.1 What R1 settled
+
+The subsystem exists but **cannot spend anything yet** — there is no real
+backend, only `FakeRuntime`. That is deliberate: R1's job was to get the safety
+model and the provider seam right while mistakes are still free.
+
+**The safety rules are now enforced rather than described.** Four of the five
+are implemented in `RuntimeManager` and each has tests:
+
+- *No implicit spend* — the subsystem is off by default, `LLMCore.create()`
+  builds the manager without contacting any backend, and `up()` raises
+  `SpendNotConfirmedError` unless confirmation is explicit. `estimate()` is free
+  and deliberately works **while disabled**, because deciding whether to spend
+  should not require enabling spend.
+- *No implicit persistence of spend* — state is written **before** provisioning
+  returns, since the dangerous window is a crash between assignment and
+  bookkeeping, where money burns and nothing knows. One indented-JSON file per
+  runtime, so someone who suspects they are being billed can find out with `ls`
+  and `cat`.
+- *Bounded by default* — idle and hard deadlines come from config defaults, not
+  from the caller remembering to pass them.
+- *Fail closed* — if attach fails after `up()` succeeded, the runtime is
+  released rather than left burning, and the error says so.
+
+Rule 5 (no implicit secrets) stays with the backends, which own credentials.
+
+**Three decisions worth recording:**
+
+1. **`close()` detaches; it does not tear down.** A process exiting is not a
+   reason to destroy compute someone is paying for and may still want, so
+   `LLMCore.close()` unregisters the provider instances and leaves the state
+   files. `down_all()` is the explicit way to stop spending. Getting this
+   backwards would make every crashed script silently destroy a warm runtime —
+   or, worse, make every clean exit look like it had.
+2. **`DEGRADED` is a billing phase.** A broken runtime is still an assigned one,
+   so `RuntimePhase.is_billing` includes it. The reaper and teardown both key
+   off that property rather than off "is it working".
+3. **A compute ceiling is checked before either deadline.** An idle reaper does
+   not protect against a runtime that is *busy* in a loop, which is the
+   expensive failure mode the reference design misses.
+
+**Two robustness choices** came from asking what happens when the state
+directory is already wrong: an unknown `phase` string parses as `DEGRADED`
+rather than raising (a file written by a newer llmcore still describes a VM
+burning money), and one corrupt record is skipped with a warning rather than
+failing the whole listing (one bad file must not hide the runtimes still
+running).
+
+**The gate — dynamic provider registration — is met.** `attach()` registers the
+runtime's endpoint as a `vllm`-type instance, marked `ephemeral=True` so the
+provider manager tears it down with the rest, and `replace=True` so a legitimate
+re-attach after a reconnect does not fail. Verified against the real
+`ProviderManager`: `llm.runtimes.up(...)` yields a resolvable `VLLMProvider`
+pointed at the tunnel URL, and `down()` unregisters it. `api_style` picks the
+provider type, so a future recipe speaking TGI or llama.cpp attaches a different
+type without touching this layer.
+
+**Note on tooling:** the spec previously suggested `uv tool install
+google-colab-cli`. llmcore's convention is pip, so the install hint is now
+`pip install google-colab-cli`. The CLI (0.7.4) is installed in the shared venv
+and ready for R3.
+
 ---
 
 ## 7. Risks
@@ -306,7 +370,7 @@ computation and unlock `estimate` as a useful standalone tool.
 | Risk | Mitigation |
 |---|---|
 | **Runaway spend** — the defining risk | §2: explicit-action-only, idle reaper on, hard lifetime cap, orphan detection, state always inspectable |
-| Colab CLI is **not installed** on this machine (`colab` not on PATH) and is Linux/macOS only | Discover at call time, fail with the `uv tool install google-colab-cli` hint; never a hard dependency of llmcore |
+| Colab CLI is **not installed** on this machine (`colab` not on PATH) and is Linux/macOS only | Discover at call time, fail with a `pip install google-colab-cli` hint; never a hard dependency of llmcore |
 | Colab auth/quota errors (400/412) | Surface verbatim in `status` with the next action; prune the SKU ladder interactively |
 | Upstream CLI is young; flags may move | Pin a tested CLI version range in the docs; parse `--json` output where offered, never scrape human text |
 | Platform limits (~12 h, ~90 min idle) | Surface as ETAs; never circumvent |
