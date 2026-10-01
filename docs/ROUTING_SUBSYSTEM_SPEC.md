@@ -465,13 +465,31 @@ Policy per parameter, from the model card:
   with a warning. A pool whose members have different parameter surfaces is the
   normal case, and erroring would make pools unusable.
 
-### 6.4 Known defect to fix in this work
+### 6.4 Known defect to fix in this work — **fixed, and the fix was measured**
 
 `PROVIDER_MODERNIZATION_PLAN.md` records an Anthropic `thinking_budget_tokens`
-400. Current Claude models take `thinking: {type: "adaptive"}` and **reject**
-`budget_tokens`; pre-4.6 models require `budget_tokens`. The effort mapper must
-branch on the model generation, which is exactly the kind of fact a model card
-should carry rather than code guessing.
+400. The draft of this section said "current Claude models take
+`thinking: {type: "adaptive"}` and **reject** `budget_tokens`; pre-4.6 models
+require `budget_tokens`" — one boundary. Measured against the live API on
+2026-10-01, one request per model, there are **three**, and they do not
+coincide:
+
+| generation | `type=enabled` + `budget_tokens` | `type=adaptive` | `type=disabled` |
+|---|---|---|---|
+| ≤ 4.5 | 200 — the only option | **400** not supported | 200 |
+| **4.6** | 200 | 200 | 200 |
+| ≥ 4.7 | **400** not supported | 200 | **400** — use `between_tools` |
+
+4.6 accepts every form, so a caller's explicit token budget is **honoured**
+there instead of converted; the single-cutoff version would have silently
+overridden a deliberate, valid choice. A further constraint the draft missed:
+`max_tokens` must be **strictly** greater than `budget_tokens` (equal is a
+400), which makes some effort levels unsendable at small `max_tokens` —
+llmcore clamps, and turns thinking off when no valid budget exists.
+
+This remains the kind of fact a model card should carry rather than code
+guessing, but the facts themselves had to be measured before they could be
+written down anywhere.
 
 ---
 
@@ -731,6 +749,13 @@ than no spec:
    since a single accuracy figure hides which error you are buying. A 29-case
    starter set ships so the work is an edit rather than a blank page. What
    nobody can supply but the user is the labelled traffic itself.
-3. **Anthropic effort mapping** (§6.4) still needs the model-generation branch;
-   the account available during implementation had no credit to validate it
-   against.
+3. ~~**Anthropic effort mapping** (§6.4) still needs the model-generation
+   branch.~~ **Done and validated live.** The measurement corrected the design:
+   there are *three* boundaries, not one. `type=adaptive` is supported from
+   4.6, `type=enabled`/`budget_tokens` is rejected from 4.7, and
+   `type=disabled` is also rejected from 4.7 (the API names `between_tools` as
+   its replacement). 4.6 accepts every form, so an explicit budget is honoured
+   there rather than converted. Separately, `max_tokens` must be *strictly*
+   greater than `budget_tokens`, which makes some effort levels unsendable at
+   small `max_tokens` -- llmcore clamps, and disables thinking when no valid
+   budget exists.
