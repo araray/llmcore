@@ -332,12 +332,15 @@ where one exists**. `tests/providers/test_transport_duality.py` encodes this as
 an audit: a provider offering only one transport must declare why, so the choice
 is recorded rather than accidental.
 
-| State | Providers |
-|---|---|
-| **Dual, on main** | `elevenlabs`, `fal`, `friendli`, `replicate`, `zai`, `openrouter`, `poe`, `huggingface` |
-| **Dual, in review** | `openai` + `groq`/`together`/`xai`/`deepinfra` (PR #29), `higgsfield` (PR #31) |
-| **Single by design** | `deepseek`, `kimi`, `typesafe` (no vendor SDK published), `vllm` (its client *is* the openai SDK) |
-| **Known gaps** | `anthropic`, `gemini`, `deepgram`, `ollama` — **SDK-only, no direct path**; `mistral` — **direct-only, mistralai v3 unused** |
+| State | Count | Providers |
+|---|---:|---|
+| **Dual** | 15 | `openai`, `deepinfra`, `vllm`, `groq`, `together`, `xai` (shared `transport` selector), `elevenlabs`, `fal`, `friendli`, `replicate`, `zai`, `openrouter`, `poe`, `huggingface`, `higgsfield` |
+| **Single by design** | 3 | `deepseek`, `kimi`, `typesafe` — no vendor Python SDK is published |
+| **Known gaps** | 5 | `anthropic`, `gemini`, `deepgram`, `ollama` — **SDK-only, no direct path**; `mistral` — **direct-only, mistralai v3 unused** |
+
+`deepinfra` and `vllm` inherit their transport selector from `OpenAIProvider`
+rather than declaring one, so the audit walks the MRO. Reading only a provider's
+own module misclassified both as single-transport in the audit's first version.
 
 The gaps invert the house rule and are tracked in the exemption list with a
 `GAP:` prefix, so they read as outstanding work rather than as design decisions.

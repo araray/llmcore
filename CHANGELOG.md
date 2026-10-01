@@ -47,9 +47,15 @@ from its extra. Known gaps are listed with a `GAP:` prefix so they read as
 outstanding work; a provider that gains a second transport and stays on the list
 fails the audit.
 
-Current gaps it records: `anthropic`, `gemini`, `deepgram` and `ollama` are
-**SDK-only with no direct path**, and `mistral` is **direct-only with an unused
-mistralai v3 SDK**.
+The audit walks the MRO rather than a provider's own module, because
+`deepinfra` and `vllm` inherit their selector from `OpenAIProvider` and have
+dual transport without a line of their own about it — the first version read
+only the own-module source and misclassified both.
+
+Result: **15 dual-transport**, 3 single by design (`deepseek`, `kimi`,
+`typesafe` — no vendor SDK published), and **5 recorded gaps**: `anthropic`,
+`gemini`, `deepgram` and `ollama` are **SDK-only with no direct path**, and
+`mistral` is **direct-only with an unused mistralai v3 SDK**.
 
 ### Fixed — cardctl was missing adapters for eight providers
 

@@ -33,8 +33,23 @@ def _canonical() -> list[str]:
 
 
 def _module_source(provider: str) -> str:
-    module = PROVIDER_MAP[provider].__module__
-    return (PROVIDER_SRC / f"{module.rsplit('.', 1)[-1]}.py").read_text()
+    """Return the source of *provider*'s class and every base it inherits from.
+
+    Reading only the provider's own module is wrong: ``deepinfra`` and ``vllm``
+    subclass ``OpenAIProvider`` and inherit its transport selector, so they have
+    dual transport without a line of their own about it. Walking the MRO is what
+    makes the audit see that — the first version of this helper did not, and
+    classified both as single-transport.
+    """
+    chunks: list[str] = []
+    for klass in PROVIDER_MAP[provider].__mro__:
+        module = getattr(klass, "__module__", "")
+        if not module.startswith("llmcore.providers"):
+            continue
+        path = PROVIDER_SRC / f"{module.rsplit('.', 1)[-1]}.py"
+        if path.is_file():
+            chunks.append(path.read_text())
+    return "\n".join(chunks)
 
 
 #: Providers that legitimately have one transport, and why. Anything not listed
@@ -44,17 +59,6 @@ SINGLE_TRANSPORT_REASONS: dict[str, str] = {
     "deepseek": "OpenAI-compatible API; DeepSeek publishes no Python SDK.",
     "kimi": "OpenAI-compatible API; Moonshot publishes no Python SDK.",
     "typesafe": "Two REST endpoints; TypeSafe publishes no Python SDK.",
-    "vllm": "OpenAI-compatible, self-hosted; vLLM's client IS the openai SDK.",
-    # --- Dual transport implemented but not yet merged -------------------
-    # These four share openai_provider.py, which gains a `transport` selector in
-    # PR #29 (direct httpx alongside the openai SDK). Listed so this branch's
-    # audit is accurate; `test_the_reason_list_has_no_stale_entries` will fail
-    # once that lands, which is the prompt to delete these lines.
-    "openai": "GAP: direct httpx transport is in review (PR #29).",
-    "groq": "GAP: inherits openai_provider; direct transport in review (PR #29).",
-    "together": "GAP: inherits openai_provider; direct transport in review (PR #29).",
-    "xai": "GAP: inherits openai_provider; direct transport in review (PR #29).",
-    "deepinfra": "GAP: inherits openai_provider; direct transport in review (PR #29).",
     # --- Known gaps, tracked rather than hidden --------------------------
     # These invert the house rule: they are SDK-only with no direct path, or
     # direct-only with an SDK that exists and is unused. Each is a real gap and
