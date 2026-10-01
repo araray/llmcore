@@ -1,0 +1,395 @@
+# src/llmcore/runtimes/models.py
+"""Core types for the remote-GPU runtime subsystem (spec phase R1).
+
+A runtime is unlike every other thing llmcore talks to. A provider is stateless
+and bills per request; **a runtime bills per minute from the moment it is
+assigned, whether or not anyone calls it.** Every type here is shaped by that:
+spend ceilings are fields rather than options, state is written to disk so a
+runtime can always be found and killed, and nothing in this module can start
+anything.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
+
+__all__ = [
+    "ModelSpec",
+    "Plan",
+    "Quantization",
+    "RuntimeHandle",
+    "RuntimePhase",
+    "RuntimeStatus",
+]
+
+
+class Quantization(StrEnum):
+    """Weight quantization a recipe will load.
+
+    Attributes:
+        NONE: Full precision as published (fp16/bf16).
+        FP8: 8-bit floating point.
+        INT8: 8-bit integer.
+        AWQ: Activation-aware weight quantization.
+        GPTQ: GPTQ-quantized weights.
+        GGUF: llama.cpp's container format.
+    """
+
+    NONE = "none"
+    FP8 = "fp8"
+    INT8 = "int8"
+    AWQ = "awq"
+    GPTQ = "gptq"
+    GGUF = "gguf"
+
+
+class RuntimePhase(StrEnum):
+    """Lifecycle phase of a runtime.
+
+    ``DEGRADED`` exists separately from ``FAILED`` because the distinction
+    matters to the provider layer: a degraded runtime still **costs money** and
+    still needs releasing, so it must not be quietly forgotten the way a
+    never-started one can be.
+
+    Attributes:
+        PLANNED: Sized but not provisioned. Costs nothing.
+        STARTING: Provisioning or bootstrapping. Already billing.
+        READY: Serving and reachable.
+        DEGRADED: Assigned and billing, but not serving.
+        STOPPING: Being torn down.
+        STOPPED: Released. No longer billing.
+        FAILED: Bootstrap failed and the VM was released.
+    """
+
+    PLANNED = "planned"
+    STARTING = "starting"
+    READY = "ready"
+    DEGRADED = "degraded"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    FAILED = "failed"
+
+    @property
+    def is_billing(self) -> bool:
+        """Whether a runtime in this phase is probably costing money.
+
+        Used by the reaper and by teardown-on-exit. ``DEGRADED`` counts: a
+        broken runtime is still an assigned one.
+        """
+        return self in {
+            RuntimePhase.STARTING,
+            RuntimePhase.READY,
+            RuntimePhase.DEGRADED,
+            RuntimePhase.STOPPING,
+        }
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether no further transition is expected."""
+        return self in {RuntimePhase.STOPPED, RuntimePhase.FAILED}
+
+
+@dataclass(frozen=True, slots=True)
+class ModelSpec:
+    """What the caller wants served.
+
+    Attributes:
+        repo_id: Hugging Face repository id.
+        revision: Git revision, branch or tag. ``None`` means the default.
+        context_length: Desired context window in tokens.
+        quantization: Requested quantization, or ``None`` to let the sizer pick.
+        trust_remote_code: Whether the recipe may execute repo-provided code.
+            Defaults to ``False``: running arbitrary code from a model repo is a
+            decision the caller should have to make explicitly.
+        extra: Recipe-specific knobs, passed through verbatim.
+    """
+
+    repo_id: str
+    revision: str | None = None
+    context_length: int = 8192
+    quantization: Quantization | None = None
+    trust_remote_code: bool = False
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.repo_id or "/" not in self.repo_id:
+            raise ValueError(
+                f"repo_id must look like 'owner/name', got {self.repo_id!r}."
+            )
+        if self.context_length <= 0:
+            raise ValueError("context_length must be positive.")
+
+
+@dataclass(frozen=True, slots=True)
+class Plan:
+    """A sizing decision: what it would take to serve a :class:`ModelSpec`.
+
+    A plan is the output of ``estimate()``, which is **read-only and free**. It
+    is deliberately a separate type from :class:`RuntimeHandle` so that sizing
+    can be inspected, logged and approved without anything being provisioned.
+
+    Attributes:
+        spec: What this plan serves.
+        sku: GPU SKU chosen (e.g. ``"L4"``, ``"A100-40"``).
+        recipe: Server recipe (``"vllm"``, ``"llamacpp"``, ...).
+        quantization: Quantization the recipe will load.
+        vram_required_gb: Estimated VRAM for weights plus KV cache plus
+            headroom.
+        vram_available_gb: What the chosen SKU provides.
+        context_length: Context the plan is sized for, which may be below the
+            request when the model could not otherwise fit.
+        fits: Whether the model fits the chosen SKU at all.
+        notes: Human-readable reasoning, for display before approving spend.
+        estimated_cost_per_hour: Indicative cost, when known.
+    """
+
+    spec: ModelSpec
+    sku: str
+    recipe: str = "vllm"
+    quantization: Quantization = Quantization.NONE
+    vram_required_gb: float = 0.0
+    vram_available_gb: float = 0.0
+    context_length: int = 8192
+    fits: bool = True
+    notes: tuple[str, ...] = ()
+    estimated_cost_per_hour: float | None = None
+
+    @property
+    def headroom_gb(self) -> float:
+        """VRAM left over on the chosen SKU. Negative means it does not fit."""
+        return self.vram_available_gb - self.vram_required_gb
+
+    def with_notes(self, *notes: str) -> Plan:
+        """Return a copy with *notes* appended."""
+        return replace(self, notes=(*self.notes, *notes))
+
+
+@dataclass(slots=True)
+class RuntimeHandle:
+    """A provisioned runtime, and everything needed to find and kill it.
+
+    Mutable by design: phase and deadlines change over a runtime's life, and the
+    handle is the thing persisted to disk so a leaked VM can always be
+    recovered. Serialized by :meth:`to_dict` into inspectable JSON — a human
+    with a text editor has to be able to see what is running and what it costs.
+
+    Attributes:
+        name: Caller-chosen name; also the provider instance name once attached.
+        runtime: Backend that owns it (``"colab"``).
+        external_id: Backend-side identifier (e.g. a Colab session id).
+        base_url: OpenAI-compatible endpoint, usually a local tunnel port.
+        served_model: Model id the server was told to serve.
+        api_style: Wire protocol, which decides the provider type to attach.
+        recipe: Server recipe in use.
+        sku: GPU SKU assigned.
+        phase: Current lifecycle phase.
+        started_at: When provisioning began.
+        idle_deadline: When the reaper stops it for inactivity.
+        hard_deadline: When the reaper stops it regardless of activity.
+        last_activity_at: Last observed request, for idle reaping.
+        max_compute_units: Optional ceiling on backend compute units.
+        compute_units_used: Consumption so far, when the backend reports it.
+        state_path: Where this handle is persisted.
+        error: Why it failed or degraded.
+        metadata: Backend-specific extras.
+    """
+
+    name: str
+    runtime: str
+    external_id: str
+    base_url: str
+    served_model: str
+    api_style: str = "openai"
+    recipe: str = "vllm"
+    sku: str = ""
+    phase: RuntimePhase = RuntimePhase.STARTING
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    idle_deadline: datetime | None = None
+    hard_deadline: datetime | None = None
+    last_activity_at: datetime | None = None
+    max_compute_units: float | None = None
+    compute_units_used: float | None = None
+    state_path: Path | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    # --- spend ceilings ------------------------------------------------
+
+    def touch(self, when: datetime | None = None) -> None:
+        """Record activity and push the idle deadline out."""
+        now = when or datetime.now(timezone.utc)
+        self.last_activity_at = now
+        if self.idle_deadline is not None and self.idle_minutes:
+            self.idle_deadline = now + timedelta(minutes=self.idle_minutes)
+
+    @property
+    def idle_minutes(self) -> float | None:
+        """Configured idle window, recovered from metadata."""
+        value = self.metadata.get("idle_minutes")
+        return float(value) if value else None
+
+    def expired_reason(self, now: datetime | None = None) -> str | None:
+        """Why this runtime should be reaped, or ``None`` to keep it.
+
+        Checks the hard deadline before the idle one, and the compute ceiling
+        before either: an idle reaper does not protect against a runtime that is
+        *busy* in a loop, which is the expensive failure mode.
+        """
+        moment = now or datetime.now(timezone.utc)
+        if (
+            self.max_compute_units is not None
+            and self.compute_units_used is not None
+            and self.compute_units_used >= self.max_compute_units
+        ):
+            return (
+                f"compute ceiling reached "
+                f"({self.compute_units_used:.2f}/{self.max_compute_units:.2f} units)"
+            )
+        if self.hard_deadline is not None and moment >= self.hard_deadline:
+            return f"hard lifetime deadline passed ({self.hard_deadline.isoformat()})"
+        if self.idle_deadline is not None and moment >= self.idle_deadline:
+            return f"idle since {(self.last_activity_at or self.started_at).isoformat()}"
+        return None
+
+    # --- serialization -------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe mapping of this handle."""
+
+        def _dt(value: datetime | None) -> str | None:
+            return value.isoformat() if value else None
+
+        return {
+            "name": self.name,
+            "runtime": self.runtime,
+            "external_id": self.external_id,
+            "base_url": self.base_url,
+            "served_model": self.served_model,
+            "api_style": self.api_style,
+            "recipe": self.recipe,
+            "sku": self.sku,
+            "phase": str(self.phase),
+            "started_at": _dt(self.started_at),
+            "idle_deadline": _dt(self.idle_deadline),
+            "hard_deadline": _dt(self.hard_deadline),
+            "last_activity_at": _dt(self.last_activity_at),
+            "max_compute_units": self.max_compute_units,
+            "compute_units_used": self.compute_units_used,
+            "error": self.error,
+            "metadata": dict(self.metadata),
+        }
+
+    def to_json(self) -> str:
+        """Return indented JSON, so the state file is human-readable."""
+        return json.dumps(self.to_dict(), indent=2, sort_keys=True)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any], *, state_path: Path | None = None) -> RuntimeHandle:
+        """Rebuild a handle from :meth:`to_dict` output.
+
+        Unknown phases become :attr:`RuntimePhase.DEGRADED` rather than raising:
+        a state file written by a newer llmcore still describes a VM that is
+        burning money, and refusing to parse it would hide that.
+        """
+
+        def _dt(value: Any) -> datetime | None:
+            if not value:
+                return None
+            try:
+                return datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+
+        try:
+            phase = RuntimePhase(str(payload.get("phase", "degraded")))
+        except ValueError:
+            phase = RuntimePhase.DEGRADED
+
+        started = _dt(payload.get("started_at")) or datetime.now(timezone.utc)
+        return cls(
+            name=str(payload.get("name", "")),
+            runtime=str(payload.get("runtime", "")),
+            external_id=str(payload.get("external_id", "")),
+            base_url=str(payload.get("base_url", "")),
+            served_model=str(payload.get("served_model", "")),
+            api_style=str(payload.get("api_style", "openai")),
+            recipe=str(payload.get("recipe", "vllm")),
+            sku=str(payload.get("sku", "")),
+            phase=phase,
+            started_at=started,
+            idle_deadline=_dt(payload.get("idle_deadline")),
+            hard_deadline=_dt(payload.get("hard_deadline")),
+            last_activity_at=_dt(payload.get("last_activity_at")),
+            max_compute_units=payload.get("max_compute_units"),
+            compute_units_used=payload.get("compute_units_used"),
+            state_path=state_path,
+            error=payload.get("error"),
+            metadata=dict(payload.get("metadata") or {}),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeStatus:
+    """A point-in-time view of one runtime, for display.
+
+    Separate from :class:`RuntimeHandle` because status is what a *caller* is
+    shown — it adds derived values like elapsed time and includes whether the
+    endpoint currently answers, which the handle itself cannot know.
+
+    Attributes:
+        name: Runtime name.
+        runtime: Backend name.
+        phase: Current phase.
+        served_model: Model being served.
+        sku: GPU SKU.
+        base_url: Endpoint.
+        uptime_seconds: Seconds since provisioning began.
+        reachable: Whether a liveness probe succeeded; ``None`` if not probed.
+        attached: Whether a provider instance is currently registered for it.
+        expires_in_seconds: Seconds until the nearest deadline, when set.
+        error: Failure detail.
+    """
+
+    name: str
+    runtime: str
+    phase: RuntimePhase
+    served_model: str = ""
+    sku: str = ""
+    base_url: str = ""
+    uptime_seconds: float = 0.0
+    reachable: bool | None = None
+    attached: bool = False
+    expires_in_seconds: float | None = None
+    error: str | None = None
+
+    @classmethod
+    def from_handle(
+        cls,
+        handle: RuntimeHandle,
+        *,
+        reachable: bool | None = None,
+        attached: bool = False,
+        now: datetime | None = None,
+    ) -> RuntimeStatus:
+        """Build a status view from *handle*."""
+        moment = now or datetime.now(timezone.utc)
+        deadlines = [d for d in (handle.idle_deadline, handle.hard_deadline) if d]
+        expires = (min(deadlines) - moment).total_seconds() if deadlines else None
+        return cls(
+            name=handle.name,
+            runtime=handle.runtime,
+            phase=handle.phase,
+            served_model=handle.served_model,
+            sku=handle.sku,
+            base_url=handle.base_url,
+            uptime_seconds=max(0.0, (moment - handle.started_at).total_seconds()),
+            reachable=reachable,
+            attached=attached,
+            expires_in_seconds=expires,
+            error=handle.error,
+        )

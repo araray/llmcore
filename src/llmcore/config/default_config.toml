@@ -1514,6 +1514,48 @@ max_retries = 2
   # webhook_secret = "..."
 
 # ==============================================================================
+# [runtimes] - Remote GPU Runtimes (Colab first)
+# ==============================================================================
+# Provision compute elsewhere, serve an open-weights model on it, and attach the
+# endpoint as a provider instance - so a remotely served model is reachable
+# through the same llm.chat() as any hosted API.
+#
+# READ THIS BEFORE ENABLING. Unlike every other provider, a runtime bills PER
+# MINUTE from the moment it is assigned, whether or not anyone calls it. The
+# subsystem is therefore off by default, LLMCore.create() never provisions
+# anything regardless of this file, and `up()` refuses without explicit spend
+# confirmation. `estimate()` is free and works while disabled.
+[runtimes]
+enabled = false
+default_backend = "colab"
+# Inspectable JSON, one file per runtime. This is a SAFETY mechanism, not a
+# cache: a runtime llmcore started must always be findable and killable, so you
+# can `ls` and `cat` this directory to see what is costing you money.
+state_dir = "~/.llmcore/runtimes"
+
+  [runtimes.defaults]
+  recipe = "vllm"
+  # Require confirm_spend=True on every up() call. Leave this on unless you are
+  # scripting against a budget you are already watching.
+  confirm_spend = true
+  # Stop after this long with no requests. 0 disables the idle reaper.
+  idle_minutes = 45
+  # Hard kill regardless of activity. 0 disables it. An idle reaper does NOT
+  # protect against a runtime that is busy in a loop, which is the expensive
+  # failure mode - this is what does.
+  max_lifetime_minutes = 240
+  gpu_memory_utilization = 0.90
+  headroom_fraction = 0.15
+
+  [runtimes.colab]
+  # Requires the official Colab CLI:  pip install google-colab-cli
+  # Discovered at call time; never a hard dependency of llmcore.
+  cli_path = "colab"
+  drive_cache_dir = "/content/drive/MyDrive/.llmcore-cache"
+  sku_ladder = ["T4", "L4", "G4", "A100-40", "A100-80", "H100"]
+  # hf_token_env_var = "HF_TOKEN"
+
+# ==============================================================================
 # [search_providers] - Web / Data Search Provider Configurations
 # ==============================================================================
 # This section defines web/data SEARCH provider instances.  They are the
