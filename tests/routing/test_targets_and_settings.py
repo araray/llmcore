@@ -459,18 +459,24 @@ class TestTargetResolution:
         with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
             manager.resolve_target("anthropic:claude-opus-5-5")
 
-    def test_credential_discovery_tries_every_spelling(self):
+    def test_credential_discovery_tries_every_spelling(self, monkeypatch):
+        """Discovery stops at the first variable that is set, so the ambient
+        environment has to be cleared or this asserts about the developer's
+        machine rather than about the code."""
         from llmcore.providers.manager import ProviderManager
 
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         _, tried = ProviderManager._discover_credential("gemini", None)
         assert "GOOGLE_API_KEY" in tried and "GEMINI_API_KEY" in tried
 
-    def test_compat_providers_get_their_own_env_var(self):
+    def test_compat_providers_get_their_own_env_var(self, monkeypatch):
         from llmcore.providers.manager import (
             _OPENAI_COMPATIBLE_DEFAULTS,
             ProviderManager,
         )
 
+        monkeypatch.delenv("XAI_API_KEY", raising=False)
         _, tried = ProviderManager._discover_credential(
             "xai", _OPENAI_COMPATIBLE_DEFAULTS["xai"]
         )

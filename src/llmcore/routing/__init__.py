@@ -14,6 +14,9 @@ Config is a warm-up rather than a cage: every knob resolves config → env →
 per-request, and the request always wins.
 """
 
+from .cards import context_window, estimate_cost_usd
+from .lanes import Lane, parse_lanes
+from .manager import RoutingManager, RoutingResult
 from .models import (
     Balance,
     Candidate,
@@ -31,20 +34,43 @@ from .models import (
     Verdict,
     classify_failure,
 )
+from .pools import Pool, select
+from .protocols import (
+    AUTHORITIES,
+    COST_HINTS,
+    BalanceProbe,
+    PromptTransform,
+    RequestClassifier,
+    ResponseVerifier,
+    RoutingStateStore,
+)
 from .settings import ClassifierBias, RefusalPolicy, RoutingSettings, UnknownVerdictPolicy
+from .state import InMemoryRoutingState
 
 __all__ = [
+    "AUTHORITIES",
+    "COST_HINTS",
     "Balance",
+    "BalanceProbe",
     "Candidate",
     "Classification",
     "ClassifierBias",
     "FailureKind",
     "Finding",
+    "InMemoryRoutingState",
+    "Lane",
+    "Pool",
+    "PromptTransform",
+    "RequestClassifier",
+    "ResponseVerifier",
     "Outcome",
     "RefusalPolicy",
+    "RoutingManager",
     "RoutingPlan",
     "RoutingRequest",
+    "RoutingResult",
     "RoutingSettings",
+    "RoutingStateStore",
     "SelectionStrategy",
     "Target",
     "TargetHealth",
@@ -53,4 +79,8 @@ __all__ = [
     "UnknownVerdictPolicy",
     "Verdict",
     "classify_failure",
+    "context_window",
+    "estimate_cost_usd",
+    "parse_lanes",
+    "select",
 ]

@@ -114,8 +114,14 @@ class RoutingSettings:
         classifier_chain: Classifier names, evaluated cheapest-first.
         min_confidence: Floor below which a classification is ignored.
         bias: See :class:`ClassifierBias`.
-        magic_pattern: Regex for an in-prompt routing directive. Matches are
-            **stripped before egress**.
+        magic_pattern: Regex for an in-prompt routing directive, or ``None``
+            for the built-in
+            :data:`~llmcore.routing.classifiers.free.DEFAULT_MAGIC_PATTERN`.
+            A custom pattern must provide named groups ``key`` and ``value``
+            (``[[lane:deep]]`` → key ``lane``, value ``deep``); one without
+            them is rejected at build time with a message saying so, rather
+            than raising from inside the classifier on a live request.
+            Matches are **stripped before egress** either way.
         transforms: Transform names to apply before a call.
         explain_only: Plan without calling — used by ``routing.explain()``.
     """
@@ -146,7 +152,7 @@ class RoutingSettings:
     classifier_chain: tuple[str, ...] = ()
     min_confidence: float = 0.55
     bias: ClassifierBias = ClassifierBias.QUALITY
-    magic_pattern: str = r"\[\[\s*(?:lane|route)\s*:\s*([a-zA-Z0-9_.-]+)\s*\]\]"
+    magic_pattern: str | None = None
 
     transforms: tuple[str, ...] = ()
     explain_only: bool = False
@@ -228,9 +234,8 @@ class RoutingSettings:
             bias=_as_enum(
                 ClassifierBias, read("routing.classifier.bias", defaults.bias), defaults.bias
             ),
-            magic_pattern=str(
-                read("routing.classifier.magic_pattern", defaults.magic_pattern)
-            ),
+            magic_pattern=read("routing.classifier.magic_pattern", defaults.magic_pattern)
+            or None,
             transforms=tuple(read("routing.transforms.chain", ()) or ()),
         )
 

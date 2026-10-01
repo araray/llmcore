@@ -385,6 +385,93 @@ class MediaJobTimeoutError(MediaJobError):
 # =============================================================================
 
 
+class RoutingError(LLMCoreError):
+    """Base class for errors raised by the routing subsystem.
+
+    Attributes:
+        pool: The pool being routed through, when known.
+        lane: The lane that was chosen, when known.
+    """
+
+    def __init__(
+        self,
+        message: str = "Routing error.",
+        *,
+        pool: str | None = None,
+        lane: str | None = None,
+    ):
+        self.pool = pool
+        self.lane = lane
+        bits = []
+        if lane:
+            bits.append(f"lane='{lane}'")
+        if pool:
+            bits.append(f"pool='{pool}'")
+        detail = f" ({', '.join(bits)})" if bits else ""
+        super().__init__(f"{message}{detail}")
+
+
+class NoTargetAvailableError(RoutingError):
+    """Raised when every target in a pool was unusable or had been tried.
+
+    Carries the per-candidate reasons, because "routing failed" is useless on
+    its own: the actionable information is *why* each member was skipped --
+    one in a 429 cooldown, one with a bad key, one whose context window was
+    too small for the prompt.
+
+    Attributes:
+        candidates: ``(target spec, reason)`` for every member considered.
+        last_error: The final provider error, when the pool was exhausted by
+            failures rather than by cooldowns.
+    """
+
+    def __init__(
+        self,
+        message: str = "No routing target was available.",
+        *,
+        pool: str | None = None,
+        lane: str | None = None,
+        candidates: list[tuple[str, str]] | None = None,
+        last_error: BaseException | None = None,
+    ):
+        self.candidates = candidates or []
+        self.last_error = last_error
+        if self.candidates:
+            lines = "; ".join(f"{spec}: {reason}" for spec, reason in self.candidates)
+            message = f"{message} Candidates considered -- {lines}."
+        super().__init__(message, pool=pool, lane=lane)
+
+
+class PromptBlockedError(RoutingError):
+    """Raised when a transform refused to let a prompt be sent.
+
+    Distinct from a provider's content refusal: this one never left the
+    machine. The findings are carried hashed, never as the matched values --
+    a privacy feature whose exception message contained the identifiers it
+    found would be the leak it exists to prevent.
+
+    Attributes:
+        findings: ``(kind, where, hashed)`` for each detection.
+        transform: Which transform refused.
+    """
+
+    def __init__(
+        self,
+        message: str = "The prompt was blocked before it was sent.",
+        *,
+        transform: str | None = None,
+        findings: list[tuple[str, str, str]] | None = None,
+    ):
+        self.transform = transform
+        self.findings = findings or []
+        if transform:
+            message = f"{message} Blocked by the '{transform}' transform."
+        if self.findings:
+            kinds = ", ".join(sorted({kind for kind, _, _ in self.findings}))
+            message = f"{message} Detected: {kinds}."
+        super().__init__(message)
+
+
 class ModerationError(LLMCoreError):
     """Raised when a moderation gateway cannot produce a verdict.
 

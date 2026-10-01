@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_MAGIC_PATTERN",
+    "compile_magic_pattern",
     "HeuristicClassifier",
     "HintClassifier",
     "MagicStringClassifier",
@@ -128,6 +129,36 @@ class HintClassifier:
 #: ``[[lane:deep]]``, ``[[effort:max]]``. Double brackets because single ones
 #: appear in ordinary prose and Markdown far too often to claim.
 DEFAULT_MAGIC_PATTERN = r"\[\[(?P<key>lane|route|effort|complexity):(?P<value>[\w.-]+)\]\]"
+
+
+def compile_magic_pattern(raw: Any) -> re.Pattern[str] | None:
+    """Compile a user-supplied magic pattern, or return ``None`` for the default.
+
+    Validates the named groups up front. The classifier reads ``key`` and
+    ``value`` from every match, so a pattern without them raises an
+    ``IndexError`` from inside ``classify()`` — on a live request, once per
+    call, as a warning in a log nobody is reading. Checking here turns that
+    into one clear configuration error at startup.
+    """
+    if not raw:
+        return None
+    if isinstance(raw, re.Pattern):
+        pattern = raw
+    else:
+        try:
+            pattern = re.compile(str(raw), re.IGNORECASE)
+        except re.error as exc:
+            raise ValueError(
+                f"routing.classifier.magic_pattern is not a valid regex: {exc}"
+            ) from exc
+    missing = [name for name in ("key", "value") if name not in pattern.groupindex]
+    if missing:
+        raise ValueError(
+            f"routing.classifier.magic_pattern must define named group(s) "
+            f"{', '.join(missing)}. The default is {DEFAULT_MAGIC_PATTERN!r}, which reads "
+            f"'[[lane:deep]]' as key='lane', value='deep'."
+        )
+    return pattern
 
 
 def strip_magic_strings(text: str, pattern: re.Pattern[str]) -> str:
@@ -425,8 +456,7 @@ def _build_hint(*, config: Mapping[str, Any], lanes: Mapping[str, Any]) -> HintC
 
 def _build_magic(*, config: Mapping[str, Any], lanes: Mapping[str, Any]) -> MagicStringClassifier:
     raw = config.get("magic_pattern") or config.get("pattern")
-    pattern = re.compile(raw, re.IGNORECASE) if raw else None
-    return MagicStringClassifier(pattern=pattern, lanes=lanes)
+    return MagicStringClassifier(pattern=compile_magic_pattern(raw), lanes=lanes)
 
 
 def _build_heuristic(
