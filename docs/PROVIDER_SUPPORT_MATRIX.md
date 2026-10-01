@@ -132,7 +132,7 @@ vendor docs). Columns are the `BaseProvider` surface plus the media APIs.
 
 | Provider | Transport | Chat | Stream | Tools | Structured out | Reasoning extract | Vision in | Audio in (STT) | Audio out (TTS) | Image gen | Video gen | Embeddings | OCR | Native search | Exact tokenizer |
 |---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| openai | `sdk` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | — | ✅ | ✅ |
+| openai | `sdk + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | — | ✅ | ✅ |
 | anthropic | `sdk` | ✅ | ✅ | ✅ | ✅ | 🟡 | ✅ | — | — | — | — | — | — | ❌ | ❌ |
 | gemini | `sdk` | ✅ | ✅ | ✅ | ✅ | 🟡 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | — | ✅ | ❌ |
 | deepseek | `sdk`(openai) | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | — | ❌ | — | — | ❌ |
@@ -140,12 +140,12 @@ vendor docs). Columns are the `BaseProvider` surface plus the media APIs.
 | friendli | `openai → httpx → sdk` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | — | ✅ |
 | mistral | `httpx` | ✅ | ✅ | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | ❌ |
 | kimi | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | ❌ | — | — | ✅ |
-| deepinfra | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
+| deepinfra | `sdk + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
 | ollama | `sdk` | ✅ | ✅ | ✅ | ✅ | 🟡 | ✅ | — | — | — | — | ❌ | — | — | 🟡 |
 | huggingface | `sdk + httpx` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ❌ |
-| openrouter | `openai (+sdk)` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | ❓ | ❌ |
-| poe | `openai (+native)` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❓ | ❓ | ❓ | ❓ | — | — | — | ❌ |
-| vllm | `openai + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | — | ❌ |
+| openrouter | `sdk + httpx (+native)` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | ❓ | ❌ |
+| poe | `sdk + httpx (+native)` | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❓ | ❓ | ❓ | ❓ | — | — | — | ❌ |
+| vllm | `sdk + httpx` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | — | — | — | — | ❌ | — | — | ❌ |
 | replicate | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | — |
 | elevenlabs | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — |
 | fal | `httpx (+sdk)` | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | — |

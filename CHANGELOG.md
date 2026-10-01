@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — direct `httpx` transport for OpenAI and its four subclasses
+
+- **`OpenAIProvider` now has a direct REST transport** alongside the `openai`
+  SDK, selected with `transport = "httpx"`. Because this class is the base for
+  **`deepinfra`, `vllm`, `poe` and `openrouter`**, one transport gives five
+  providers a dual approach at once — the highest-leverage item in Phase 3 of
+  `PROVIDER_MODERNIZATION_PLAN.md` (§5.8).
+- **The key is `transport`, not `backend`.** OpenRouter and Poe already use
+  `backend` to choose between their native vendor SDK and OpenAI-compatible
+  mode; overloading it would have made one of the two settings unreachable.
+- **The default stays `"sdk"`, deliberately.** Four subclasses' test suites
+  mock `AsyncOpenAI`, so flipping the default would route five providers past
+  their own tests — the same failure the Z.ai SDK backend caused when it
+  changed auto-resolution and broke 21 tests. Direct transport is opt-in per
+  instance.
+- **The transports are interchangeable**, which is the actual requirement:
+  every `extract_*` method parses response *dicts*, so the direct path returns
+  exactly what `model_dump(exclude_none=True)` produces and maps failures to
+  the same typed exceptions — `ContextLengthError`, and the actionable
+  model-not-found `ProviderError` that names the provider's default model.
+  Verified live against OpenAI: identical response keys, identical extracted
+  tool calls, identical 137-model listings, streaming on both. Also verified
+  live on DeepInfra, confirming the base-class leverage is real.
+- Request shaping — parameter validation, native search, reasoning-model
+  parameter naming, tool payloads — happens **before** the transport branch, so
+  the direct path inherits it rather than reimplementing it. That is what keeps
+  the two from drifting.
+- **OpenRouter's `HTTP-Referer` / `X-Title` headers reach the direct transport
+  too**, so both identify the application to OpenRouter the same way.
+- Streaming parses server-sent events, treats `[DONE]` as a sentinel rather
+  than JSON, and skips an unparseable chunk instead of failing the stream.
+- New config: `transport` and `[providers.<name>.default_headers]`.
+
 ### Added — Hugging Face media adapter and Inference Endpoints (M8)
 
 - **The `huggingface` provider is now a media adapter** for `image_generate`,
