@@ -122,6 +122,12 @@ elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.70.0"]
 # each model's published OpenAPI schema rather than a class per model.
 # Install with: pip install llmcore[replicate]
 replicate = ["httpx>=0.27.0", "replicate>=1.0.7"]
+# Higgsfield — generative image/video (Soul, Kling, Hailuo) behind one async
+# request API. The provider talks to api.higgsfield.ai over httpx directly
+# (default); 'higgsfield-client' is the optional SDK fallback, whose AsyncClient
+# covers the whole submit/status/result/cancel lifecycle.
+# Install with: pip install llmcore[higgsfield]
+higgsfield = ["httpx>=0.27.0", "higgsfield-client>=0.2.0"]
 # TypeSafe.ai (System One typed judgments: noul/choice/score questions with
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
@@ -235,6 +241,7 @@ all = [
     "llmcore[fal]",
     "llmcore[elevenlabs]",
     "llmcore[replicate]",
+    "llmcore[higgsfield]",
     "llmcore[typesafe]",
     "llmcore[mistral]",
     "llmcore[kimi]",

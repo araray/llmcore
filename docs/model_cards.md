@@ -1092,6 +1092,81 @@ print(f"Saved to: {saved_path}")
 
 ---
 
+## Keeping cards in sync: `cardctl`
+
+`cardctl` discovers models from each provider's API and writes/updates cards.
+
+```bash
+venv/bin/python -m tools.cardctl doctor            # coverage audit — run this first
+venv/bin/python -m tools.cardctl generate <provider>
+venv/bin/python -m tools.cardctl validate
+venv/bin/python -m tools.cardctl diff <provider>   # read-only
+venv/bin/python -m tools.cardctl stats
+```
+
+### `doctor` — why it exists
+
+`doctor` cross-checks llmcore's provider registry against cardctl's adapter
+registry and the cards on disk.
+
+It was added after a real failure: the media providers (`fal`, `elevenlabs`,
+`replicate`) were added to `PROVIDER_MAP` and shipped **without** cardctl
+adapters, and nothing complained. `generate` only reports on the provider you
+name, and `stats` only sees providers that already have cards — so a provider
+with no adapter was invisible to both.
+
+It reports three severities:
+
+| Severity | Meaning |
+|---|---|
+| **ERROR** | A registered provider has **no adapter**, so its cards can never be generated. Exits non-zero |
+| **WARN** | An adapter exists but has no cards, or needs a key that is not set. Expected in some environments; `--strict` makes these fail too |
+| **INFO** | An adapter with no provider behind it — usually a deliberate alias |
+
+`tests/tools/test_cardctl_coverage.py` asserts the same invariant, so adding a
+provider without an adapter now fails the test suite rather than shipping quietly.
+
+### Adapters for providers with no catalog endpoint
+
+Most providers answer `GET /v1/models`. Several media providers do not, for
+structural reasons rather than oversight:
+
+- **fal** and **Higgsfield** address a model *by endpoint path*, with no listing
+  route.
+- **Replicate** hosts tens of thousands of community models; enumerating them
+  would produce a card dump, not a catalog.
+- **vLLM** serves whatever a given deployment loaded, so "the catalog" depends on
+  a server that may not be running when cards are generated.
+
+These use `CuratedAdapter`: cards are emitted for the model paths llmcore ships
+as per-capability defaults, and every card is tagged **`curated`** so nobody
+mistakes a declared entry for a discovered one. A card saying *"this is the
+default llmcore will call, and here is what it does"* is useful; one implying
+llmcore enumerated a marketplace would be a lie.
+
+`ReplicateAdapter` goes further and *enriches* each curated entry from the
+model's live schema, recording the owner's description and the model's **real
+input field names** — the same schema the provider reads at runtime to map
+canonical arguments, so the card documents what will actually be sent.
+
+### Media capabilities on cards
+
+Cards describe generative media as well as chat. `ModelCapabilities` carries
+`image_generation`, `image_edit`, `image_upscale`, `video_generation`,
+`video_interpolation`, `speech_synthesis`, `transcription`, `music_generation`,
+`sfx_generation` and `voice_design`, mirroring `llmcore.media.MediaCapability`.
+`ModelType` adds `video-generation` and `media`.
+
+### Aliases share one card directory
+
+An adapter alias resolves to the canonical provider's directory, so
+`cardctl generate gemini` updates `google/` rather than building a second tree.
+This is enforced in `cards_dir_for_provider()`, because the directory is named
+after whatever string the caller passes — a duplicate `gemini/` tree is exactly
+what happened before the canonicalization was added.
+
+---
+
 ## Validation & Troubleshooting
 
 ### Validate Before Deployment

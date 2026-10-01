@@ -8,7 +8,7 @@
     "architecture_type": "transformer"
   },
   "context": {
-    "max_input_tokens": 4096
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -18,8 +18,19 @@
     "structured_output": false,
     "vision": false,
     "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
     "reasoning": false,
-    "multimodal": false
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": {
     "currency": "USD",

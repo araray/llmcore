@@ -1,0 +1,45 @@
+{
+  "model_id": "playgroundai/playground-v2.5-1024px-aesthetic",
+  "display_name": "playground-v2.5-1024px-aesthetic",
+  "provider": "huggingface",
+  "model_type": "image-generation",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Huggingface model: playgroundai/playground-v2.5-1024px-aesthetic",
+  "tags": [
+    "open-weights",
+    "image-generation"
+  ],
+  "source": "generated"
+}

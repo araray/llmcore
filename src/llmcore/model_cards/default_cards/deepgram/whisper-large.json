@@ -1,43 +1,48 @@
 {
   "model_id": "whisper-large",
-  "display_name": "Whisper Cloud (large)",
+  "display_name": "large",
   "provider": "deepgram",
   "model_type": "stt",
   "architecture": {
-    "family": "whisper",
-    "architecture_type": "transformer"
+    "family": "whisper"
   },
   "context": {
-    "max_input_tokens": 1000000
+    "max_input_tokens": 128000
   },
   "capabilities": {
-    "streaming": false,
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
     "audio_input": true,
-    "audio_output": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": true,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
-  "provider_extension": {
-    "pricing": {
-      "currency": "USD",
-      "unit": "audio_minute",
-      "billing_tier": "pay-as-you-go",
-      "model_improvement_program": true,
-      "source": "https://deepgram.com/pricing",
-      "as_of": "2026-06-25",
-      "status": "not_listed",
-      "rate_per_minute": null,
-      "note": "Deepgram Whisper Cloud appears under concurrency limits but no per-minute rate is published on the current pricing page. Consult the pricing page or Deepgram for current rates."
-    }
-  },
   "lifecycle": {
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Deepgram-hosted OpenAI Whisper (large) for batch transcription. Billed per audio-minute.",
+  "description": "Deepgram model: whisper-large",
   "tags": [
-    "batch"
+    "audio",
+    "stt",
+    "languages:113"
   ],
   "source": "generated"
 }

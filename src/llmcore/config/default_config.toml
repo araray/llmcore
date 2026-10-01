@@ -701,6 +701,41 @@ max_retries = 2
   # --- Ollama Provider ---
   # For locally running models via Ollama.
 
+  # --- Higgsfield (generative image/video: Soul, Kling, Hailuo) ---
+  [providers.higgsfield]
+  # type = "higgsfield"  # auto-detected from section name
+
+  # Credentials are a PAIR: the API expects "Key <key-id>:<key-secret>".
+  # HIGGSFIELD_API_KEY should hold the joined "id:secret" form. If you keep the
+  # halves apart, set api_key_id and api_key_secret instead.
+  # api_key = "<key-id>:<key-secret>"
+  # api_key_id = "..."
+  # api_key_secret = "..."
+
+  # Transport backend: "httpx" (direct REST, default) or "sdk".
+  # Note the published higgsfield-client covers agent sessions and uploads
+  # rather than these generation endpoints, so "httpx" is the real path.
+  # backend = "httpx"
+
+  timeout = 300
+
+  # Optional callback. llmcore's webhook receiver (media.jobs.webhook_base_url)
+  # issues a per-job URL automatically, which is preferable to a static one.
+  # webhook_url = "https://your-server.example.com/hook"
+
+  # --- Per-capability model paths ---
+  # Higgsfield has NO catalog endpoint and the console's model list moves, so
+  # llmcore ships a small starting set. Browse https://console.higgsfield.ai
+  [providers.higgsfield.models]
+  # image_generate = "higgsfield-ai/soul/standard"
+  # video_generate = "minimax/hailuo-2.3/standard/text-to-video"
+  # Other documented video paths:
+  #   kling-video/v2.5-turbo/pro/text-to-video
+  #   kling-video/v2.5-turbo/pro/image-to-video
+  # Supplying an image to a text-to-video path switches to its image-to-video
+  # counterpart automatically, because Higgsfield splits them into separate
+  # endpoints.
+
   # --- Replicate (one generic prediction adapter for the whole catalog) ---
   [providers.replicate]
   # type = "replicate"  # auto-detected from section name

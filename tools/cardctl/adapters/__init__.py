@@ -37,6 +37,25 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "openrouter": "openrouter_adapter.OpenRouterAdapter",
     "poe": "poe_adapter.PoeAdapter",
     "huggingface": "huggingface_adapter.HuggingFaceAdapter",
+    # Alias: llmcore's provider registry calls Google's provider "gemini", while
+    # the card tree has always used "google". Both resolve, so neither spelling
+    # silently generates nothing.
+    "gemini": "google_adapter.GoogleAdapter",
+    # OpenAI-compatible aliases. openai_compat has named these since it was
+    # written, but no adapter was registered, so `cardctl generate groq` failed.
+    "groq": "groq_adapter.GroqAdapter",
+    "together": "together_adapter.TogetherAdapter",
+    # Self-hosted: requires --base-url, since there is no vendor catalog.
+    "vllm": "vllm_adapter.VLLMAdapter",
+    # Speech and voice.
+    "deepgram": "deepgram_adapter.DeepgramAdapter",
+    "elevenlabs": "elevenlabs_adapter.ElevenLabsAdapter",
+    "eleven_labs": "elevenlabs_adapter.ElevenLabsAdapter",
+    # Generative-media providers with no catalog endpoint: curated defaults.
+    "fal": "fal_adapter.FalAdapter",
+    "fal_ai": "fal_adapter.FalAdapter",
+    "replicate": "replicate_adapter.ReplicateAdapter",
+    "higgsfield": "higgsfield_adapter.HiggsfieldAdapter",
 }
 
 

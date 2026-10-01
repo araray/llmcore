@@ -1,55 +1,48 @@
 {
   "model_id": "nova-3-medical",
-  "display_name": "Nova-3 Medical",
+  "display_name": "medical",
   "provider": "deepgram",
   "model_type": "stt",
   "architecture": {
-    "family": "nova",
-    "architecture_type": "transformer"
+    "family": "nova-3"
   },
   "context": {
-    "max_input_tokens": 1000000
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
     "audio_input": true,
-    "audio_output": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": true,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
-  "provider_extension": {
-    "pricing": {
-      "currency": "USD",
-      "unit": "audio_minute",
-      "billing_tier": "pay-as-you-go",
-      "model_improvement_program": true,
-      "source": "https://deepgram.com/pricing",
-      "as_of": "2026-06-25",
-      "status": "inferred",
-      "rate_per_minute": 0.0077,
-      "note": "The pricing page does not list a separate Nova-3 Medical rate; this record assumes Nova-3 monolingual pricing. Verify before relying on it for billing.",
-      "promotional_streaming_rate_per_minute": 0.0048,
-      "observed_rates_per_minute": [
-        0.0048,
-        0.0077
-      ],
-      "growth_rate_per_minute": [
-        0.0042,
-        0.0065
-      ],
-      "assumption": "priced_as_nova_3_monolingual"
-    }
-  },
   "lifecycle": {
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Deepgram Nova-3 tuned for medical terminology. Billed per audio-minute.",
+  "description": "Deepgram model: nova-3-medical",
   "tags": [
-    "streaming",
-    "batch",
-    "medical"
+    "audio",
+    "stt",
+    "languages:17"
   ],
   "source": "generated"
 }

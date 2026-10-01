@@ -1,45 +1,48 @@
 {
   "model_id": "nova-2-phonecall",
-  "display_name": "Nova-2 Phonecall",
+  "display_name": "2-phonecall",
   "provider": "deepgram",
   "model_type": "stt",
   "architecture": {
-    "family": "nova",
-    "architecture_type": "transformer"
+    "family": "nova-2"
   },
   "context": {
-    "max_input_tokens": 1000000
+    "max_input_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
     "audio_input": true,
-    "audio_output": false
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": true,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
   },
   "pricing": null,
-  "provider_extension": {
-    "pricing": {
-      "currency": "USD",
-      "unit": "audio_minute",
-      "billing_tier": "pay-as-you-go",
-      "model_improvement_program": true,
-      "source": "https://deepgram.com/pricing",
-      "as_of": "2026-06-25",
-      "status": "not_listed",
-      "rate_per_minute": null,
-      "note": "Nova-2 (phonecall) rates are not published on the current Deepgram pricing page. Consult the pricing page or Deepgram for current rates."
-    }
-  },
   "lifecycle": {
     "status": "active"
   },
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Deepgram Nova-2 tuned for telephony / phone-call audio. Billed per audio-minute.",
+  "description": "Deepgram model: nova-2-phonecall",
   "tags": [
-    "streaming",
-    "batch",
-    "telephony"
+    "audio",
+    "stt",
+    "languages:6"
   ],
   "source": "generated"
 }

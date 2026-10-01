@@ -50,6 +50,8 @@ class ModelType(str, Enum):
     MODERATION = "moderation"  # Content moderation/classification models
     TTS = "tts"  # Text-to-speech models
     STT = "stt"  # Speech-to-text models
+    VIDEO_GENERATION = "video-generation"  # Veo, Kling, Hailuo, Minimax, ...
+    MEDIA = "media"  # Multi-capability media endpoint (marketplace models)
     DECISION = "decision"  # Typed-judgment / structured-decision models (e.g. TypeSafe Jev)
 
 
@@ -99,6 +101,20 @@ class Provider(str, Enum):
     OPENROUTER = "openrouter"
     POE = "poe"
     DEEPINFRA = "deepinfra"
+    # Vendors llmcore ships adapters for. The field accepts a plain string too,
+    # so this list is for typed convenience rather than validation — but it
+    # drifting behind the provider registry is exactly how a provider gets
+    # forgotten, so `cardctl doctor` checks it.
+    ZAI = "zai"
+    FRIENDLI = "friendli"
+    TYPESAFE = "typesafe"
+    HUGGINGFACE = "huggingface"
+    DEEPGRAM = "deepgram"
+    ELEVENLABS = "elevenlabs"
+    FAL = "fal"
+    HIGGSFIELD = "higgsfield"
+    VLLM = "vllm"
+    GEMINI = "gemini"
     LOCAL = "local"
 
 
@@ -157,6 +173,22 @@ class ModelCapabilities(BaseModel):
     web_search: bool = Field(False, description="Has web search capability")
     reasoning: bool = Field(False, description="Extended thinking / chain-of-thought")
     file_processing: bool = Field(False, description="Can process uploaded files")
+
+    # --- Generative media (llmcore.media capabilities) ---------------------
+    # Mirrors llmcore.media.MediaCapability so a card can state what a media
+    # endpoint actually serves. All default False, so existing chat cards are
+    # unaffected.
+    image_edit: bool = Field(False, description="Can edit a supplied image")
+    image_upscale: bool = Field(False, description="Can upscale a supplied image")
+    video_generation: bool = Field(False, description="Can generate video")
+    video_interpolation: bool = Field(
+        False, description="Can interpolate between existing frames"
+    )
+    speech_synthesis: bool = Field(False, description="Text-to-speech (TTS)")
+    transcription: bool = Field(False, description="Speech-to-text (ASR)")
+    music_generation: bool = Field(False, description="Can generate music")
+    sfx_generation: bool = Field(False, description="Can generate sound effects")
+    voice_design: bool = Field(False, description="Can design new voices")
 
 
 class TokenPricing(BaseModel):

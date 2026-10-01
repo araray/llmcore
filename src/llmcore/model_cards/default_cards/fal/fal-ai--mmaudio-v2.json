@@ -1,0 +1,47 @@
+{
+  "model_id": "fal-ai/mmaudio-v2",
+  "display_name": "MMAudio v2 (fal)",
+  "provider": "fal",
+  "model_type": "audio",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": true,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Sound effects, optionally conditioned on video (foley).",
+  "tags": [
+    "audio",
+    "sfx",
+    "foley",
+    "curated"
+  ],
+  "source": "generated"
+}

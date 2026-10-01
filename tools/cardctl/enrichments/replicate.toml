@@ -1,0 +1,8 @@
+# tools/cardctl/enrichments/replicate.toml
+# Curated overlays for replicate cards. Values here WIN over whatever the adapter
+# discovers, so corrections survive regeneration.
+#
+# [models."<model-id>"]
+# description = "..."
+# [models."<model-id>".pricing]
+# input_per_million = 0.0

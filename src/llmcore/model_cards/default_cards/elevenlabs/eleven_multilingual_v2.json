@@ -1,0 +1,46 @@
+{
+  "model_id": "eleven_multilingual_v2",
+  "display_name": "Eleven Multilingual v2",
+  "provider": "elevenlabs",
+  "model_type": "tts",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 10000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": true,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": true,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Our most life-like, emotionally rich mode in 29 languages. Best for voice overs, audiobooks, post-production, or any other content creation needs. (context is 10000 characters, not tokens — ElevenLabs bills per character).",
+  "tags": [
+    "audio",
+    "tts",
+    "languages:29"
+  ],
+  "source": "generated"
+}
