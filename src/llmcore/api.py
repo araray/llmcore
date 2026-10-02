@@ -2341,8 +2341,8 @@ class LLMCore:
         Append Darwin agent usage records to a session's interaction log.
 
         The enhanced cognitive cycle captures per-phase token/cost usage
-        (``PhaseUsage``, 2.7) but agent runs bypass the chat path that
-        normally records ``session.metadata["interactions"]`` — so
+        (``PhaseUsage``, 2.7), but nothing writes
+        ``session.metadata["interactions"]`` on its own — so
         :meth:`get_session_token_stats` reported zero for Darwin turns.
         Hosts driving agent runs call this once per run (or per stream
         segment) with the usage they accumulated; the stats method then
@@ -2351,7 +2351,13 @@ class LLMCore:
         Each record is normalized to::
 
             {timestamp, provider, model, prompt_tokens, completion_tokens,
-             total_tokens, cost, source: "darwin"}
+             total_tokens, cached_tokens, cache_write_tokens, cost,
+             source: "darwin"}
+
+        The two cache counts matter for more than reporting: on cache-heavy
+        agent traffic, tokens read from cache are the bulk of the prompt, and
+        dropping them here made ``SessionTokenStats.total_cached_tokens``
+        permanently zero even though the cycle had measured it.
 
         Args:
             session_id: Session to record usage against (created if the
@@ -2399,6 +2405,11 @@ class LLMCore:
             total_tokens = _tokens(record.get("total_tokens"))
             if total_tokens == 0:
                 total_tokens = prompt_tokens + completion_tokens
+            # Cached tokens are part of the prompt, so a count exceeding it
+            # is a reporting error rather than extra tokens; clamp instead
+            # of letting it inflate the cache-hit ratio past 100%.
+            cached_tokens = min(_tokens(record.get("cached_tokens")), prompt_tokens)
+            cache_write_tokens = _tokens(record.get("cache_write_tokens"))
             raw_cost = record.get("cost")
             try:
                 cost = float(raw_cost) if raw_cost is not None else None
@@ -2412,6 +2423,8 @@ class LLMCore:
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
+                    "cached_tokens": cached_tokens,
+                    "cache_write_tokens": cache_write_tokens,
                     "cost": cost,
                     "source": "darwin",
                 }
@@ -2468,10 +2481,12 @@ class LLMCore:
                 prompt_tokens = interaction.get("prompt_tokens", 0)
                 completion_tokens = interaction.get("completion_tokens", 0)
                 cached_tokens = interaction.get("cached_tokens", 0)
+                cache_write_tokens = interaction.get("cache_write_tokens", 0)
 
                 stats.total_prompt_tokens += prompt_tokens
                 stats.total_completion_tokens += completion_tokens
                 stats.total_cached_tokens += cached_tokens
+                stats.total_cache_write_tokens += cache_write_tokens
                 stats.interaction_count += 1
 
                 # Track max values
