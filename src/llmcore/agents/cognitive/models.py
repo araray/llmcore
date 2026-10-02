@@ -242,9 +242,24 @@ class PhaseUsage(BaseModel):
     ``phases.usage`` re-exports it alongside ``extract_usage``.
     """
 
-    prompt_tokens: int = Field(default=0, ge=0, description="Prompt/input tokens")
+    prompt_tokens: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Prompt/input tokens, including any served from cache "
+            "(cached_tokens is a subset of this, never additional)"
+        ),
+    )
     completion_tokens: int = Field(default=0, ge=0, description="Completion/output tokens")
     total_tokens: int = Field(default=0, ge=0, description="Total tokens")
+    cached_tokens: int = Field(
+        default=0, ge=0, description="Prompt tokens served from cache (subset of prompt_tokens)"
+    )
+    cache_write_tokens: int = Field(
+        default=0,
+        ge=0,
+        description="Tokens written to the prompt cache (additional to prompt_tokens)",
+    )
     cost: float | None = Field(
         default=None,
         description="Cost from model-card pricing (None when pricing is unknown)",

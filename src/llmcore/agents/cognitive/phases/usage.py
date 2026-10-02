@@ -45,6 +45,44 @@ def _coerce_tokens(value: Any) -> int:
         return 0
 
 
+def _cache_tokens(usage: dict[str, Any]) -> tuple[int, int, bool]:
+    """Read cache counters, and say whether the prompt count excludes them.
+
+    Returns ``(cached, written, prompt_excludes_cached)``.
+
+    The two provider families disagree about what a prompt-token count
+    means, and the disagreement is silent:
+
+    * **Anthropic-style** reports ``input_tokens`` as *fresh only*, with
+      ``cache_read_input_tokens`` and ``cache_creation_input_tokens``
+      alongside. Observed on real traffic, ``input_tokens`` can be ~6 while
+      cache reads are ~922,000 — so pricing the prompt count alone misses
+      almost the entire bill.
+    * **OpenAI-style** reports ``prompt_tokens`` as the whole prompt, with
+      the cached part broken out under ``prompt_tokens_details``. Pricing
+      that count at the fresh-input rate overcharges every cached token.
+
+    Getting this backwards is not a rounding error in either direction: one
+    way understates a cached agent turn by orders of magnitude, the other
+    overstates it by up to ~15x. The provider's own key names are the only
+    reliable signal of which contract applies, so they are what we read.
+    """
+    cached = _coerce_tokens(usage.get("cache_read_input_tokens"))
+    written = _coerce_tokens(usage.get("cache_creation_input_tokens"))
+    if cached or written or "input_tokens" in usage:
+        # Anthropic-style: the prompt count is fresh tokens only.
+        return cached, written, True
+
+    details = usage.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        cached = _coerce_tokens(details.get("cached_tokens"))
+    # Some OpenAI-compatible gateways flatten it.
+    if not cached:
+        cached = _coerce_tokens(usage.get("cached_tokens"))
+    written = written or _coerce_tokens(usage.get("cache_creation_tokens"))
+    return cached, written, False
+
+
 def extract_usage(
     response: Any,
     provider_name: str | None,
@@ -56,6 +94,12 @@ def extract_usage(
     ``completion_tokens``/``total_tokens``); a missing total is computed
     from the parts. Cost comes from the model-card registry's pricing
     (memoized per provider+model); unknown models keep ``cost=None``.
+
+    Prompt caching is accounted for, which matters more than it sounds:
+    the circuit breaker's ``COST_LIMIT`` acts on this number, and on
+    cache-heavy agent traffic cache reads are the overwhelming majority of
+    input tokens. See :func:`_cache_tokens` for the two incompatible
+    provider conventions and what each one gets wrong when ignored.
 
     Args:
         response: Raw provider response (only dict shapes carry usage).
@@ -74,6 +118,17 @@ def extract_usage(
     prompt_tokens = _coerce_tokens(usage.get("prompt_tokens"))
     completion_tokens = _coerce_tokens(usage.get("completion_tokens"))
     total_tokens = _coerce_tokens(usage.get("total_tokens"))
+
+    cached_tokens, cache_write_tokens, prompt_excludes_cached = _cache_tokens(usage)
+    if prompt_excludes_cached and cached_tokens:
+        # Normalise to this codebase's contract: prompt_tokens is the whole
+        # prompt and cached_tokens is a subset of it. Without this the
+        # cached bulk never reaches pricing at all.
+        prompt_tokens += cached_tokens
+        if total_tokens:
+            total_tokens += cached_tokens
+    cached_tokens = min(cached_tokens, prompt_tokens)
+
     if total_tokens == 0:
         total_tokens = prompt_tokens + completion_tokens
     if prompt_tokens == 0 and completion_tokens == 0 and total_tokens == 0:
@@ -88,7 +143,10 @@ def extract_usage(
         if pricing is not None:
             try:
                 cost = pricing.get_cost(
-                    input_tokens=prompt_tokens, output_tokens=completion_tokens
+                    input_tokens=prompt_tokens,
+                    output_tokens=completion_tokens,
+                    cached_tokens=cached_tokens,
+                    cache_write_tokens=cache_write_tokens,
                 )
             except Exception:
                 logger.debug(
@@ -100,6 +158,8 @@ def extract_usage(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
+        cached_tokens=cached_tokens,
+        cache_write_tokens=cache_write_tokens,
         cost=cost,
         provider=provider_str,
         model=model_str,
