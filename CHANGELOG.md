@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — context-tiered pricing is actually applied
+
+`ModelPricing.context_tiers` was declared, documented, and populated on four
+packaged cards — and read by nothing. `get_cost` used the flat rates whatever
+the prompt size, so a long prompt on a model that charges more for long
+context was priced at roughly **half** its true cost. Gemini 2.5 Pro and
+Sonnet 4.5 both charge about double beyond a 200k prompt; a 500k-token Gemini
+prompt came out at $0.725 instead of $1.40.
+
+`ModelPricing` gains `tier_for()` and `rates_for()`, and both cost paths
+(`get_cost` and `LLMCore.estimate_cost`) resolve the bracket before pricing
+anything. `CostEstimate.context_tier_threshold` reports which bracket was
+applied, so an unexpected number can be explained without re-deriving it.
+
+**`threshold_tokens` is the tier's inclusive upper bound**, which the field's
+original description left ambiguous. That is the reading that matches
+published pricing: Gemini 2.5 Pro declares thresholds 200,000 and 1,048,576
+with input $1.25 and $2.50, and its real rates are $1.25 up to a 200k prompt
+and $2.50 beyond — so a 500k prompt belongs to the 1,048,576 bracket.
+Treating the threshold as a floor would price that prompt at $1.25 and halve
+the bill. A prompt larger than every threshold falls to the largest bracket,
+never back to the cheapest.
+
+Cache-write tokens count toward the bracket, since they are part of the
+prompt even though providers report them separately from `input_tokens`.
+
+A tier need only state input and output. Where it does not state cached or
+cache-write rates, the base rates are **rescaled by the tier's input ratio**
+rather than carried across unchanged: `cached_input` is definitionally a
+discount off input, so carrying an absolute figure over a bracket boundary
+would silently change the discount — 25% of input in one bracket and 12% in
+the next, which no vendor publishes. `ContextTier` now also accepts explicit
+`cached_input` and `cache_write`, which override that rule, so a vendor who
+does something different can be recorded exactly.
+
 ### Added — cache-write pricing, and a daily price refresh
 
 **`TokenPricing.cache_write`.** Cost estimates priced fresh input and cached

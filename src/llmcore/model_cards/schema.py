@@ -214,11 +214,42 @@ class TokenPricing(BaseModel):
 
 
 class ContextTier(BaseModel):
-    """Pricing tier based on context window usage."""
+    """Pricing tier based on context window usage.
 
-    threshold_tokens: int = Field(..., description="Token threshold for this tier")
+    ``threshold_tokens`` is the tier's **inclusive upper bound**: the tier
+    applies to a prompt no larger than that many tokens. The applicable
+    tier is therefore the *smallest* one whose threshold still covers the
+    prompt.
+
+    This reading is the one that matches published vendor pricing. Gemini
+    2.5 Pro declares thresholds 200,000 (input $1.25) and 1,048,576 (input
+    $2.50), and its published rates are $1.25 up to a 200k prompt and $2.50
+    beyond it -- so a 500k prompt must land on the 1,048,576 tier. Reading
+    the threshold as a lower bound would price that prompt at $1.25 and
+    halve the bill. Sonnet 4.5 declares the same shape ($3 to 200k, $6
+    beyond).
+    """
+
+    threshold_tokens: int = Field(
+        ..., description="Largest prompt, in tokens, that this tier covers"
+    )
     input_price: float = Field(..., description="Input price per 1M at this tier")
     output_price: float = Field(..., description="Output price per 1M at this tier")
+    cached_input: float | None = Field(
+        None,
+        description=(
+            "Cached-input price per 1M at this tier. When omitted, the base "
+            "cached rate is rescaled to keep its discount ratio (see "
+            "ModelPricing.rates_for)."
+        ),
+    )
+    cache_write: float | None = Field(
+        None,
+        description=(
+            "Cache-write price per 1M at this tier. When omitted, the base "
+            "cache-write rate is rescaled to keep its ratio to input."
+        ),
+    )
 
 
 class ModelPricing(BaseModel):
@@ -232,6 +263,63 @@ class ModelPricing(BaseModel):
     context_tiers: list[ContextTier] | None = Field(
         None, description="Tiered pricing based on context usage"
     )
+
+    def tier_for(self, prompt_tokens: int) -> ContextTier | None:
+        """The context tier covering a prompt of ``prompt_tokens``, if any.
+
+        Returns the smallest tier whose ``threshold_tokens`` still covers
+        the prompt. A prompt larger than every threshold falls to the
+        largest tier rather than to the base rates, since exceeding the
+        declared tiers means "beyond the last bracket", never "back to the
+        cheapest price".
+        """
+        if not self.context_tiers:
+            return None
+        tiers = sorted(self.context_tiers, key=lambda t: t.threshold_tokens)
+        for tier in tiers:
+            if prompt_tokens <= tier.threshold_tokens:
+                return tier
+        return tiers[-1]
+
+    def rates_for(self, prompt_tokens: int) -> TokenPricing:
+        """The rates that apply to a prompt of ``prompt_tokens``.
+
+        Without context tiers this is just ``per_million_tokens``. With
+        them, input and output come from the applicable tier.
+
+        The cached and cache-write rates need a decision, because a tier is
+        only required to state input and output. When the tier does not
+        state them, the base rates are **rescaled by the tier's input
+        ratio** rather than carried over unchanged: ``cached_input`` is
+        definitionally a discount off the input rate, so carrying an
+        absolute figure across a tier boundary would silently change the
+        discount -- 25% of input at one tier and 12% at the next, which no
+        vendor publishes. Preserving the ratio keeps the model internally
+        consistent. A tier that states its own rates overrides this
+        entirely, which is the right way to record a vendor who does
+        something different.
+        """
+        base = self.per_million_tokens
+        tier = self.tier_for(prompt_tokens)
+        if tier is None:
+            return base
+
+        ratio = (tier.input_price / base.input) if base.input else 1.0
+        return TokenPricing(
+            input=tier.input_price,
+            output=tier.output_price,
+            cached_input=(
+                tier.cached_input
+                if tier.cached_input is not None
+                else (base.cached_input * ratio if base.cached_input is not None else None)
+            ),
+            cache_write=(
+                tier.cache_write
+                if tier.cache_write is not None
+                else (base.cache_write * ratio if base.cache_write is not None else None)
+            ),
+            reasoning_output=base.reasoning_output,
+        )
 
     def get_cost(
         self,
@@ -262,17 +350,23 @@ class ModelPricing(BaseModel):
             so a cost estimate that ignores them is not an approximation --
             it is answering a different question.
         """
+        # Which bracket the prompt falls in decides every input-side rate.
+        # The prompt is everything sent: fresh input, tokens read from
+        # cache (a subset of input_tokens), plus tokens written to cache,
+        # which providers report separately from input_tokens.
+        rates = self.rates_for(input_tokens + cache_write_tokens)
+
         # Calculate base input cost
         non_cached_input = max(0, input_tokens - cached_tokens)
-        input_cost = (non_cached_input / 1_000_000) * self.per_million_tokens.input
+        input_cost = (non_cached_input / 1_000_000) * rates.input
 
         # Add cached token cost if applicable
         cached_cost = 0.0
-        if cached_tokens > 0 and self.per_million_tokens.cached_input is not None:
-            cached_cost = (cached_tokens / 1_000_000) * self.per_million_tokens.cached_input
+        if cached_tokens > 0 and rates.cached_input is not None:
+            cached_cost = (cached_tokens / 1_000_000) * rates.cached_input
         elif cached_tokens > 0:
             # If no cached price, charge full input price
-            cached_cost = (cached_tokens / 1_000_000) * self.per_million_tokens.input
+            cached_cost = (cached_tokens / 1_000_000) * rates.input
 
         # Cache writes are billed at their own premium rate. With no stated
         # rate we fall back to the plain input price, which understates the
@@ -281,14 +375,12 @@ class ModelPricing(BaseModel):
         write_cost = 0.0
         if cache_write_tokens > 0:
             write_rate = (
-                self.per_million_tokens.cache_write
-                if self.per_million_tokens.cache_write is not None
-                else self.per_million_tokens.input
+                rates.cache_write if rates.cache_write is not None else rates.input
             )
             write_cost = (cache_write_tokens / 1_000_000) * write_rate
 
         # Calculate output cost
-        output_cost = (output_tokens / 1_000_000) * self.per_million_tokens.output
+        output_cost = (output_tokens / 1_000_000) * rates.output
 
         return input_cost + cached_cost + write_cost + output_cost
 
