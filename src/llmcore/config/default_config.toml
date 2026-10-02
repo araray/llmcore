@@ -3830,12 +3830,27 @@ affinity = "session"
         max_same_errors = 3
 
         # Trip after N seconds of total execution time
-        # Default Value: 300 (5 minutes)
-        max_execution_time_seconds = 300
+        # Default Value: 1800 (30 minutes)
+        #
+        # Was 300s, which sat below the median measured duration of an agent
+        # turn, so it fired during normal operation rather than on runaways.
+        # Five minutes cannot distinguish "stuck" from "doing tool work".
+        max_execution_time_seconds = 1800
 
         # Trip if total cost exceeds this amount (USD)
-        # Default Value: 1.0
-        max_total_cost = 1.0
+        # Default Value: 25.0
+        #
+        # Was 1.0. Measured across 4,140 real agent turns, priced from model
+        # cards with cache-aware accounting, the median turn costs $1.04 and
+        # the 90th percentile $10.02 -- so a $1.00 cap cut off slightly over
+        # half of ordinary turns mid-run. $25 trips on roughly 3% of them,
+        # which is the tail where runaway behaviour lives: the most expensive
+        # 1% of turns account for about a quarter of all spend.
+        #
+        # This is a dollar figure, so it is model-dependent: $25 of a cheap
+        # model is a great deal more work than $25 of a frontier one. Lower
+        # it for untrusted or unattended runs.
+        max_total_cost = 25.0
 
         # Trip if progress stalls for N iterations (no output change)
         # Default Value: 5

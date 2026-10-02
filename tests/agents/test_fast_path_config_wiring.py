@@ -68,6 +68,16 @@ class TestTranslation:
         assert runtime.use_cache is True          # default, not a crash
         assert runtime.max_response_time_ms == 5000
 
+    def test_a_mock_section_degrades_to_defaults(self):
+        # Callers build managers with mocks; an attribute can exist and
+        # still not be a number, which used to raise from the constructor.
+        from unittest.mock import MagicMock
+
+        runtime = RuntimeConfig.from_agents_config(MagicMock())
+        assert runtime.cache_ttl_seconds == 3600.0
+        assert runtime.cache_max_entries == 100
+        assert runtime.max_response_time_ms == 5000
+
     def test_none_section_yields_defaults(self):
         runtime = RuntimeConfig.from_agents_config(None)
         assert runtime.cache_max_entries == 100

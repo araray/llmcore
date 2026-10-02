@@ -25,12 +25,23 @@ from llmcore.agents.routing.capability_checker import (
 
 
 class FakeCaps:
+    """Stands in for ModelCapabilities, including its is_populated probe."""
+
+    _UNINFORMATIVE = ("streaming",)
+
     def __init__(self, **flags):
+        self._flags = dict(flags)
         for k, v in flags.items():
             setattr(self, k, v)
 
     def __getattr__(self, item):  # unset flags read as False, as pydantic would
+        if item.startswith("_"):
+            raise AttributeError(item)
         return False
+
+    def is_populated(self) -> bool:
+        return any(v is True for k, v in self._flags.items()
+                   if k not in self._UNINFORMATIVE)
 
 
 class FakeContext:

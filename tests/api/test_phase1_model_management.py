@@ -56,11 +56,13 @@ class TestModelDetails:
         assert model.id == "gpt-4o"
         assert model.provider_name == "openai"
         assert model.context_length == 128000
-        # Check defaults
+        # Check defaults. The capability flags default to None, not False:
+        # nothing was stated, and None is falsy so truthiness checks are
+        # unaffected.
         assert model.supports_streaming is True
-        assert model.supports_tools is False
-        assert model.supports_vision is False
-        assert model.supports_reasoning is False
+        assert model.supports_tools is None
+        assert model.supports_vision is None
+        assert model.supports_reasoning is None
         assert model.model_type == "chat"
 
     def test_full_creation(self):

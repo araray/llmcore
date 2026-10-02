@@ -542,14 +542,26 @@ class ModelDetails(BaseModel):
     supports_streaming: bool = Field(
         default=True, description="Indicates if the model supports streaming responses."
     )
-    supports_tools: bool = Field(
-        default=False, description="Indicates if the model supports tool/function calling."
+    supports_tools: bool | None = Field(
+        default=None,
+        description=(
+            f"Whether the model supports tool/function calling. None means unknown -- the "
+            "source had nothing to say, which is not the same as False."
+        ),
     )
-    supports_vision: bool = Field(
-        default=False, description="Indicates if the model supports vision/image inputs."
+    supports_vision: bool | None = Field(
+        default=None,
+        description=(
+            f"Whether the model supports vision/image inputs. None means unknown -- the "
+            "source had nothing to say, which is not the same as False."
+        ),
     )
-    supports_reasoning: bool = Field(
-        default=False, description="Indicates if the model supports extended reasoning."
+    supports_reasoning: bool | None = Field(
+        default=None,
+        description=(
+            f"Whether the model supports extended reasoning. None means unknown -- the "
+            "source had nothing to say, which is not the same as False."
+        ),
     )
     family: str | None = Field(
         default=None, description="Model family (e.g., 'GPT-4', 'Claude', 'Llama')."

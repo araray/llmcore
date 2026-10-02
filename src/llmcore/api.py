@@ -170,6 +170,24 @@ class LLMCoreProtocol(Protocol):
 # ==============================================================================
 
 
+
+def _card_capability(card: Any, flag: str) -> bool | None:
+    """Read one capability flag, or None when the card never stated any.
+
+    26% of packaged chat cards carry a capability block nobody filled in:
+    `streaming=True` from the generator and every other flag False. Reading
+    that as a negative is how llmcore came to report that current frontier
+    models cannot call tools.
+    """
+    caps = getattr(card, "capabilities", None)
+    if caps is None:
+        return None
+    probe = getattr(caps, "is_populated", None)
+    if not callable(probe) or not probe():
+        return None
+    return bool(getattr(caps, flag, False))
+
+
 class LLMCore:
     """
     Main class for interacting with Large Language Models.
@@ -4256,10 +4274,15 @@ class LLMCore:
                     display_name=card.display_name or card.model_id,
                     context_length=card.context.max_input_tokens if card.context else 4096,
                     max_output_tokens=card.context.max_output_tokens if card.context else None,
-                    supports_streaming=card.capabilities.streaming if card.capabilities else True,
-                    supports_tools=card.capabilities.tool_use if card.capabilities else False,
-                    supports_vision=card.capabilities.vision if card.capabilities else False,
-                    supports_reasoning=card.capabilities.reasoning if card.capabilities else False,
+                    # A card whose capability block was never filled in says
+                    # nothing; reporting False there asserts a negative we
+                    # have not established.
+                    supports_streaming=(
+                        card.capabilities.streaming if card.capabilities else True
+                    ),
+                    supports_tools=_card_capability(card, "tool_use"),
+                    supports_vision=_card_capability(card, "vision"),
+                    supports_reasoning=_card_capability(card, "reasoning"),
                     family=card.architecture.family if card.architecture else None,
                     parameter_count=card.architecture.parameter_count
                     if card.architecture

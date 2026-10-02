@@ -17,7 +17,7 @@ Usage:
     breaker = AgentCircuitBreaker(
         max_iterations=15,
         max_same_errors=3,
-        max_execution_time_seconds=300,
+        max_execution_time_seconds=1800,
     )
 
     breaker.start()
@@ -124,6 +124,8 @@ if PYDANTIC_AVAILABLE:
         current_iteration: int = 0
         elapsed_time_seconds: float = 0.0
         total_cost: float = 0.0
+        projected_total_cost: float = 0.0
+        cost_budget_fraction: float = 0.0
         error_count: int = 0
         same_error_count: int = 0
         progress_stall_iterations: int = 0
@@ -144,6 +146,8 @@ else:
         current_iteration: int = 0
         elapsed_time_seconds: float = 0.0
         total_cost: float = 0.0
+        projected_total_cost: float = 0.0
+        cost_budget_fraction: float = 0.0
         error_count: int = 0
         same_error_count: int = 0
         progress_stall_iterations: int = 0
@@ -159,8 +163,8 @@ if PYDANTIC_AVAILABLE:
 
         max_iterations: int = Field(default=15, ge=1, le=1000)
         max_same_errors: int = Field(default=3, ge=1, le=100)
-        max_execution_time_seconds: int = Field(default=300, ge=1)
-        max_total_cost: float = Field(default=1.0, ge=0.0)
+        max_execution_time_seconds: int = Field(default=1800, ge=1)
+        max_total_cost: float = Field(default=25.0, ge=0.0)
         progress_stall_threshold: int = Field(default=5, ge=1, le=50)
         progress_stall_tolerance: float = Field(default=0.01, ge=0.0, le=1.0)
 else:
@@ -171,8 +175,8 @@ else:
 
         max_iterations: int = 15
         max_same_errors: int = 3
-        max_execution_time_seconds: int = 300
-        max_total_cost: float = 1.0
+        max_execution_time_seconds: int = 1800
+        max_total_cost: float = 25.0
         progress_stall_threshold: int = 5
         progress_stall_tolerance: float = 0.01
 
@@ -195,8 +199,23 @@ class AgentCircuitBreaker:
     Args:
         max_iterations: Maximum number of iterations before tripping
         max_same_errors: Maximum times the same error can occur
-        max_execution_time_seconds: Maximum total execution time
-        max_total_cost: Maximum total cost in dollars
+        max_execution_time_seconds: Maximum total execution time.
+            300s was below the median duration of the agent turns that
+            could be measured, so like the cost cap it fired during normal
+            operation rather than on runaways. The evidence here is weaker
+            than for cost -- usable timing data came from a single harness,
+            about 6% of the corpus, where the median turn ran 295s and the
+            90th percentile 2,340s -- but it is enough to show that five
+            minutes cannot distinguish "stuck" from "doing tool work".
+        max_total_cost: Maximum total cost in dollars.
+            A runaway guard has to sit above normal work, and $1.00 did not.
+            Measured across 4,140 real agent turns priced from model cards
+            with cache-aware accounting, the *median* turn costs $1.04 and
+            the 90th percentile $10.02 -- so a $1.00 cap would cut off
+            slightly over half of ordinary turns mid-run. $25 trips on about
+            3% of them, which is the tail where runaway behaviour actually
+            lives (the most expensive 1% of turns account for roughly a
+            quarter of all spend).
         progress_stall_threshold: Iterations without progress before tripping
         progress_stall_tolerance: Minimum progress change to count as "progress"
     """
@@ -205,8 +224,8 @@ class AgentCircuitBreaker:
         self,
         max_iterations: int = 15,
         max_same_errors: int = 3,
-        max_execution_time_seconds: int = 300,
-        max_total_cost: float = 1.0,
+        max_execution_time_seconds: int = 1800,
+        max_total_cost: float = 25.0,
         progress_stall_threshold: int = 5,
         progress_stall_tolerance: float = 0.01,
         config: CircuitBreakerConfig | None = None,
@@ -522,12 +541,40 @@ class AgentCircuitBreaker:
             current_iteration=current_iteration,
             elapsed_time_seconds=elapsed,
             total_cost=self._total_cost,
+            projected_total_cost=self._project_cost(current_iteration),
+            cost_budget_fraction=(
+                self._total_cost / self.config.max_total_cost
+                if self.config.max_total_cost
+                else 0.0
+            ),
             error_count=len(self._errors),
             same_error_count=same_error_count,
             progress_stall_iterations=progress_stall_iterations,
             should_retry=should_retry,
             suggested_action=suggested_action,
         )
+
+    def _project_cost(self, current_iteration: int) -> float:
+        """Extrapolate what the run will cost if it uses its full iteration budget.
+
+        A linear extrapolation from spend-per-iteration, which the shape of
+        real agent traffic supports: the cost of a turn is dominated by
+        re-sending a roughly constant context on every step, so it grows
+        close to linearly in step count rather than accelerating.
+
+        This exists so a host can *see a trip coming*. The breaker only
+        reports when the budget is already gone, which on a long run means
+        discarding most of the work; a projection at iteration three is
+        actionable in a way that a trip at iteration twenty is not.
+
+        Returns 0.0 before any iteration has been priced, rather than
+        guessing from nothing.
+        """
+        iterations = max(current_iteration, len(self._progress_history))
+        if iterations <= 0 or self._total_cost <= 0:
+            return 0.0
+        per_iteration = self._total_cost / iterations
+        return per_iteration * self.config.max_iterations
 
     # =========================================================================
     # Status and Introspection
@@ -616,7 +663,7 @@ def create_circuit_breaker(
         "default": CircuitBreakerConfig(
             max_iterations=15,
             max_same_errors=3,
-            max_execution_time_seconds=300,
+            max_execution_time_seconds=1800,
             max_total_cost=1.0,
             progress_stall_threshold=5,
         ),
