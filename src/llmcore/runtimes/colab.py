@@ -65,6 +65,15 @@ REMOTE_PORT = 8000
 #: How long to wait for the session to appear in `colab sessions` (rule 3).
 ASSIGNMENT_TIMEOUT = 180.0
 
+#: Bumped whenever the *layout* of a cached environment tarball changes.
+#:
+#: Needed because the first two versions of the cache tarred the wrong
+#: directory, and a sentinel that only says "complete" cannot distinguish
+#: "complete" from "complete, and useless". A cache that cannot be
+#: invalidated is a trap: restoring a stale tar skips the install and the
+#: server then fails on a VM that is already billing.
+ENV_CACHE_VERSION = "3"
+
 #: The bootstrap prints this only after the server answers on the VM. It is
 #: the success contract, because `colab exec` returns 0 regardless of whether
 #: the code it ran succeeded.
@@ -1035,6 +1044,7 @@ REPO = {repo_id!r}
 REVISION = {revision!r}
 RECIPE = {recipe_name!r}
 PIP = {pip!r}
+ENV_CACHE_VERSION = {env_cache_version!r}
 PORT = {remote_port}
 CTX = {context_length}
 QUANT = {quantization!r}
@@ -1087,16 +1097,27 @@ import sysconfig
 target = Path(sysconfig.get_paths()["purelib"])
 say("site-packages (pip purelib):", target)
 
+# The sentinel records the cache format AND the path the tar was made from.
+# Either changing makes the tarball untrustworthy, and trusting it anyway
+# means skipping the install and discovering the problem from a server that
+# will not start.
+want_stamp = "llmcore-env v%s %s" % (ENV_CACHE_VERSION, target)
+
 restored = False
 if drive_ok and tarball.is_file() and sentinel.is_file():
-    say("restoring the %s environment from the Drive cache" % RECIPE)
-    result = run(["tar", "-xzf", str(tarball), "-C", str(target)])
-    restored = result.returncode == 0
-    if restored:
-        import importlib
-        importlib.invalidate_caches()
+    have_stamp = sentinel.read_text(errors="replace").strip()
+    if have_stamp != want_stamp:
+        say("ignoring the cached %s environment: it was built as %r, this needs %r"
+            % (RECIPE, have_stamp, want_stamp))
     else:
-        say("restore failed; falling back to pip:", result.stderr[-400:])
+        say("restoring the %s environment from the Drive cache" % RECIPE)
+        result = run(["tar", "-xzf", str(tarball), "-C", str(target)])
+        restored = result.returncode == 0
+        if restored:
+            import importlib
+            importlib.invalidate_caches()
+        else:
+            say("restore failed; falling back to pip:", result.stderr[-400:])
 
 if not restored:
     say("installing %s (cold start)" % ", ".join(PIP))
@@ -1239,7 +1260,9 @@ if drive_ok and not restored:
     result = run(["tar", "-czf", str(tarball) + ".tmp", "-C", str(target), "."])
     if result.returncode == 0:
         Path(str(tarball) + ".tmp").replace(tarball)
-        sentinel.write_text("ok")   # written last: a sentinel means complete
+        # Written last, and recording what this tar actually is: a sentinel
+        # that only says "complete" cannot tell a usable cache from a stale one.
+        sentinel.write_text(want_stamp)
     else:
         say("env tar failed (not fatal):", result.stderr[-300:])
 
@@ -1264,6 +1287,7 @@ def _bootstrap_script(
     """Render the VM-side bootstrap script."""
     return _BOOTSTRAP_TEMPLATE.format(
         dtype=dtype,
+        env_cache_version=ENV_CACHE_VERSION,
         drive_cache=drive_cache,
         repo_id=repo_id,
         revision=revision,
@@ -1301,6 +1325,7 @@ if result.returncode != 0:
 
 import sysconfig
 target = sysconfig.get_paths()["purelib"]
+stamp = "llmcore-env v{env_cache_version} %s" % target
 print("[llmcore] tarring", target, "into", tarball, flush=True)
 tmp = str(tarball) + ".tmp"
 result = subprocess.run(["tar", "-czf", tmp, "-C", "/usr/lib/python3/dist-packages", "."],
@@ -1308,15 +1333,18 @@ result = subprocess.run(["tar", "-czf", tmp, "-C", "/usr/lib/python3/dist-packag
 if result.returncode != 0:
     raise SystemExit("tar failed: " + result.stderr[-500:])
 Path(tmp).replace(tarball)
-sentinel.write_text("ok")
-print("[llmcore] baked", tarball, flush=True)
+sentinel.write_text(stamp)
+print("[llmcore] baked", tarball, "as", stamp, flush=True)
 '''
 
 
 def _bake_script(recipe: dict[str, Any], drive_cache: str) -> str:
     """Render the CPU-side bake script."""
     return _BAKE_TEMPLATE.format(
-        drive_cache=drive_cache, recipe_name=recipe["name"], pip=list(recipe["pip"])
+        drive_cache=drive_cache,
+        recipe_name=recipe["name"],
+        pip=list(recipe["pip"]),
+        env_cache_version=ENV_CACHE_VERSION,
     )
 
 
