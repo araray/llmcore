@@ -460,10 +460,48 @@ class RuntimeManager:
         if name is not None:
             handles = {k: v for k, v in handles.items() if k == name}
 
-        return [
+        rows = [
             RuntimeStatus.from_handle(h, attached=h.name in self._attached)
             for h in sorted(handles.values(), key=lambda h: h.started_at, reverse=True)
         ]
+        if name is None:
+            rows.extend(await self._orphans(set(handles)))
+        return rows
+
+    async def _orphans(self, known: set[str]) -> list[RuntimeStatus]:
+        """Compute running compute that llmcore has no record of.
+
+        This asks the *backends*, not the state store, and that distinction is
+        the whole point: an orphan is by definition something the state store
+        does not know about, so a status built only from local records can
+        never surface one. The backends implemented this and nothing called
+        them -- which came to light when a real unnamed A100 appeared during
+        testing and `status` reported only the runtime llmcore had started.
+
+        An unknown running VM is unmonitored spend, so this is a safety
+        feature. It is also best-effort: a backend that cannot list right now
+        (expired credentials, network) must not stop status from reporting the
+        runtimes llmcore *does* know about, since those are the ones it can
+        still kill.
+        """
+        found: list[RuntimeStatus] = []
+        for backend in self._backends.values():
+            try:
+                reported = await backend.status(None)
+            except Exception as exc:
+                logger.warning(
+                    "Could not ask the '%s' backend what is running, so any runtime it "
+                    "owns that llmcore has no record of will not be listed: %s",
+                    getattr(backend, "name", backend),
+                    exc,
+                )
+                continue
+            for row in reported:
+                if row.name in known:
+                    continue
+                known.add(row.name)
+                found.append(row)
+        return found
 
     async def down(self, name: str, *, release: bool = True, forget: bool = True) -> bool:
         """Stop a runtime and detach its provider instance.

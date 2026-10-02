@@ -833,3 +833,72 @@ class TestSupervision:
             assert provider.calls == 1
         finally:
             await mgr.stop_supervisor()
+
+
+class TestOrphansReachThePublicApi:
+    """An orphan is, by definition, absent from the state store.
+
+    The backends computed orphans and nothing called them, so `status()` built
+    its answer purely from local records and could never report one. That came
+    to light when a real unnamed A100 appeared during live testing and
+    `llmcore-runtimes status` listed only the runtime llmcore had started.
+    An unknown running VM is unmonitored spend.
+    """
+
+    class _BackendWithAnOrphan(FakeRuntime):
+        async def status(self, name=None):
+            rows = await super().status(name)
+            if name is None:
+                rows.append(
+                    RuntimeStatus(
+                        name="stray-a100",
+                        runtime=self.name,
+                        phase=RuntimePhase.DEGRADED,
+                        sku="A100",
+                        error="orphan: llmcore has no record of this session",
+                    )
+                )
+            return rows
+
+    async def test_an_orphan_is_listed(self):
+        mgr = RuntimeManager({"fake": self._BackendWithAnOrphan()}, config_get=_config())
+        names = {s.name for s in await mgr.status()}
+        assert "stray-a100" in names
+
+    async def test_the_orphan_row_says_what_to_do(self):
+        mgr = RuntimeManager({"fake": self._BackendWithAnOrphan()}, config_get=_config())
+        row = next(s for s in await mgr.status() if s.name == "stray-a100")
+        assert "orphan" in (row.error or "")
+
+    async def test_a_runtime_llmcore_started_is_not_duplicated_as_an_orphan(self):
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        try:
+            await mgr.up(REPO, name="mine", confirm_spend=True, backend="fake", attach=False)
+            names = [s.name for s in await mgr.status()]
+            assert names.count("mine") == 1
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_asking_about_one_runtime_does_not_list_orphans(self):
+        """`status("mine")` is a question about one thing."""
+        mgr = RuntimeManager({"fake": self._BackendWithAnOrphan()}, config_get=_config())
+        try:
+            await mgr.up(REPO, name="mine", confirm_spend=True, backend="fake", attach=False)
+            assert [s.name for s in await mgr.status("mine")] == ["mine"]
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_a_backend_that_cannot_list_does_not_break_status(self):
+        """The runtimes llmcore knows about are the ones it can still kill, so
+        they must still be reported when the backend is unreachable."""
+
+        class Broken(FakeRuntime):
+            async def status(self, name=None):
+                raise RuntimeError("credentials expired")
+
+        mgr = RuntimeManager({"fake": Broken()}, config_get=_config())
+        try:
+            await mgr.up(REPO, name="mine", confirm_spend=True, backend="fake", attach=False)
+            assert [s.name for s in await mgr.status()] == ["mine"]
+        finally:
+            await mgr.stop_supervisor()
