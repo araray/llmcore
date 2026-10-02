@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — `[agents.fast_path]` settings now take effect
+
+`FastPathExecutor` accepts a `config`, but `single_agent` constructed it
+without one, so it fell back to its own module-level defaults. Everything in
+the user's `[agents.fast_path]` section except `enabled` was inert: a
+`cache_max_entries` or `cache_ttl_seconds` a user set did nothing, because
+the executor also built `ResponseCache()` with no arguments.
+
+Two classes are named `FastPathConfig` — the user-facing pydantic section in
+`config.agents_config`, and the executor's runtime class in
+`agents.learning.fast_path`. They disagree about field names
+(`cache_enabled` vs `use_cache`, `templates_enabled` vs `use_templates`) and
+about which fields exist: the runtime class had no cache-sizing fields at
+all, so the executor could not have honoured them even if handed a config.
+
+The runtime class gains `cache_max_entries` and `cache_ttl_seconds`, passes
+them to `ResponseCache`, and gains
+`FastPathConfig.from_agents_config()`. That translation is written out field
+by field deliberately — anything automatic (`model_dump()` into `**kwargs`)
+would drop precisely the renamed fields and silently leave them defaulted,
+reproducing the bug while appearing correct. A test pins the fact that the
+two classes still differ, so unifying them later is a deliberate act rather
+than an accident.
+
+Building `FastPathExecutor()` with no config still yields the previous
+defaults; it is public API.
+
 ### Fixed — the capability pre-check refused every model newer than its table
 
 `CapabilityChecker` resolved models against `DEFAULT_MODEL_INFO`, a static
