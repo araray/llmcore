@@ -43,7 +43,7 @@ from .cognitive.goal_classifier import (
     GoalClassifier,
     GoalComplexity,
 )
-from .learning.fast_path import FastPathExecutor
+from .learning.fast_path import FastPathConfig, FastPathExecutor
 from .persona import (
     AgentPersona,
     PersonaManager,
@@ -266,8 +266,19 @@ class SingleAgentMode:
         # Initialize fast-path executor (G3)
         # Use the default provider for fast-path calls
         default_provider = provider_manager.get_provider()
+        # Pass the user's `[agents.fast_path]` settings through. Without
+        # `config=`, the executor falls back to its own module-level
+        # defaults, so everything in that section except `enabled` was
+        # inert -- a cache size and TTL set by the user did nothing.
+        #
+        # The translation is explicit because the two FastPathConfig
+        # classes name the same concepts differently; see
+        # FastPathConfig.from_agents_config.
+        _fast_path_cfg = getattr(self._agents_config, "fast_path", None)
         self.fast_path_executor = FastPathExecutor(
-            llm_provider=default_provider, prompt_registry=prompt_registry
+            llm_provider=default_provider,
+            config=FastPathConfig.from_agents_config(_fast_path_cfg),
+            prompt_registry=prompt_registry,
         )
 
         # Initialize capability checker (G3 Phase 4)
