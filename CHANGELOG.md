@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — cache-write pricing, and a daily price refresh
+
+**`TokenPricing.cache_write`.** Cost estimates priced fresh input and cached
+reads but had no concept of writing the cache, which providers bill at a
+premium (Anthropic charges 1.25x input for a 5-minute cache). On measured
+agent traffic cache reads and writes are **~97% of all input tokens**, so the
+omission was not a rounding error: pricing cache reads as fresh input
+overstates a warm agent turn by **14.6x**.
+
+`ModelPricing.get_cost`, `ModelCard.estimate_cost` and
+`LLMCore.estimate_cost` all take `cache_write_tokens` now, and `CostEstimate`
+reports `cache_write_cost`. Cache writes are *additional* to `input_tokens`
+rather than a subset, matching how providers report usage — Anthropic returns
+`cache_creation_input_tokens` alongside `input_tokens`. Omitting the argument
+changes no existing answer.
+
+Where a card states no cache-write rate, the plain input rate is used. That
+understates the premium, but the alternative — inferring it from the
+multipliers in `AnthropicExtension.prompt_caching`, which no code reads —
+would silently diverge from the published number, and the 5-minute vs 1-hour
+variant is not recoverable from a token count.
+
+**`tools/kairos/pricewatch.yaml`.** The packaged cards were 64% unpriced
+(1484 of 2319), and inverted: `generated` cards refresh from provider
+`/v1/models` endpoints, which return no prices, while hand-written `builtin`
+cards carry pricing and never refresh. Every model in observed traffic was
+unpriced — which also meant `lowest_cost`, correctly ranking unpriced targets
+last, was ranking the most-used models last.
+
+A daily kairos job now refreshes pricing from vendor APIs and vendor pricing
+pages into `~/.config/llmcore/model_cards/`, which the registry already loads
+over the packaged cards. The tool lives outside this repo (it reaches the
+network on a timer); the workflow definition is versioned here. Coverage
+measured after one run: 36% → 43%, with cache read and write rates for
+Anthropic.
+
 ### Added — `llmcore.routing`: pools, lanes, failover and proxy mode
 
 Five composable layers, all off until configured. With no `[routing]` section

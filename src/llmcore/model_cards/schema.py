@@ -199,6 +199,15 @@ class TokenPricing(BaseModel):
     cached_input: float | None = Field(
         None, description="Cached input price per 1M tokens (prompt caching)"
     )
+    cache_write: float | None = Field(
+        None,
+        description=(
+            "Price per 1M tokens to WRITE the prompt cache. Billed at a "
+            "premium over input (Anthropic charges 1.25x for a 5-minute "
+            "cache). Distinct from cached_input, which is the discounted "
+            "read rate."
+        ),
+    )
     reasoning_output: float | None = Field(
         None, description="Reasoning token price per 1M (for o1/thinking models)"
     )
@@ -229,6 +238,7 @@ class ModelPricing(BaseModel):
         input_tokens: int,
         output_tokens: int,
         cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
     ) -> float:
         """
         Calculate cost for given token counts.
@@ -237,9 +247,20 @@ class ModelPricing(BaseModel):
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             cached_tokens: Number of cached input tokens (subset of input)
+            cache_write_tokens: Tokens written to the prompt cache. These
+                are *additional* to ``input_tokens``, not a subset of them,
+                matching how providers report usage: Anthropic returns
+                ``cache_creation_input_tokens`` alongside ``input_tokens``
+                rather than inside it.
 
         Returns:
             Total cost in the model's currency
+
+        Note:
+            For agent traffic this term dominates. Measured on real harness
+            sessions, cache reads and writes were ~97% of all input tokens,
+            so a cost estimate that ignores them is not an approximation --
+            it is answering a different question.
         """
         # Calculate base input cost
         non_cached_input = max(0, input_tokens - cached_tokens)
@@ -253,10 +274,23 @@ class ModelPricing(BaseModel):
             # If no cached price, charge full input price
             cached_cost = (cached_tokens / 1_000_000) * self.per_million_tokens.input
 
+        # Cache writes are billed at their own premium rate. With no stated
+        # rate we fall back to the plain input price, which understates the
+        # real cost -- but inventing a multiplier would be worse, and the
+        # card can say so explicitly when the vendor publishes it.
+        write_cost = 0.0
+        if cache_write_tokens > 0:
+            write_rate = (
+                self.per_million_tokens.cache_write
+                if self.per_million_tokens.cache_write is not None
+                else self.per_million_tokens.input
+            )
+            write_cost = (cache_write_tokens / 1_000_000) * write_rate
+
         # Calculate output cost
         output_cost = (output_tokens / 1_000_000) * self.per_million_tokens.output
 
-        return input_cost + cached_cost + output_cost
+        return input_cost + cached_cost + write_cost + output_cost
 
 
 class ModelLifecycle(BaseModel):
@@ -589,6 +623,7 @@ class ModelCard(BaseModel):
         input_tokens: int,
         output_tokens: int,
         cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
     ) -> float | None:
         """
         Estimate cost for given token counts.
@@ -597,12 +632,16 @@ class ModelCard(BaseModel):
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             cached_tokens: Number of cached input tokens
+            cache_write_tokens: Tokens written to the prompt cache
+                (additional to ``input_tokens``, not a subset)
 
         Returns:
             Cost in model's currency, or None if no pricing data
         """
         if self.pricing:
-            return self.pricing.get_cost(input_tokens, output_tokens, cached_tokens)
+            return self.pricing.get_cost(
+                input_tokens, output_tokens, cached_tokens, cache_write_tokens
+            )
         return None
 
     def supports_capability(self, capability: str) -> bool:

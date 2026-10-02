@@ -1,0 +1,56 @@
+# workflows/pricewatch.yaml
+#
+# Daily refresh of llmcore's model pricing from vendor sources.
+#
+#   Install: cp kairos/pricewatch.yaml /av/conf/kairos/workflows/
+#   Verify:  kairos workflows show pricewatch
+#
+# Two jobs rather than one, deliberately. `fetch` exits non-zero when its
+# diff gate sees something alarming -- a price that moved more than 35%, or
+# a model that vanished from a feed. `apply` is conditioned on fetch having
+# succeeded, so a held run stops before publishing and the previously
+# published prices stay in force until a human looks at it. An unattended
+# job that publishes whatever it scraped is how routing silently starts
+# preferring a misparse.
+#
+# Splitting them also gives each half its own run record in `kairos runs`,
+# so "the fetch worked but the apply refused as stale" is visible rather
+# than buried in one exit code.
+# --card-root is passed explicitly rather than letting the tool import
+# llmcore to locate it: a scheduled pricing refresh should not be able to
+# fail because an unrelated llmcore dependency (sqlalchemy, chromadb) is
+# unhappy, and it should not pay to import them to read a directory.
+name: pricewatch
+description: "Refresh llmcore model pricing from vendor APIs and pricing pages"
+tags: [llmcore, pricing]
+
+triggers:
+  - type: cron
+    spec: "17 4 * * *"          # 04:17 daily; the sources are static pages
+
+# `jobs` is a mapping keyed by job name (the list form in kairos's
+# USAGE.md is not what the loader accepts).
+jobs:
+  fetch:
+    steps:
+      - name: refresh-prices
+        command: /av/repos/kairos/utils/job_wrapper.sh /av/repos/ai-tools/bin/pricewatch --card-root /av/repos/llmcore/src/llmcore/model_cards/default_cards fetch
+        env:
+          KAIROS_JOB_NAME: pricewatch-fetch
+
+  apply:
+    # `needs` alone is the intra-run gate: kairos skips a job whose
+    # dependency failed in *this* run ("Dependency ... was FAILURE").
+    #
+    # Do not add `condition: job("fetch").last_success` here. That KEL
+    # predicate asks about the *previous completed run* of fetch, not this
+    # one, so after any single held run it would keep skipping apply even
+    # once fetch started succeeding again. Verified live.
+    needs: [fetch]
+    steps:
+      - name: write-override-cards
+        # --max-age-days 2 means a silently-wedged fetch stops publishing
+        # within two days instead of serving stale prices indefinitely.
+        command: /av/repos/kairos/utils/job_wrapper.sh /av/repos/ai-tools/bin/pricewatch --card-root /av/repos/llmcore/src/llmcore/model_cards/default_cards apply --max-age-days 2
+        env:
+          KAIROS_JOB_NAME: pricewatch-apply
