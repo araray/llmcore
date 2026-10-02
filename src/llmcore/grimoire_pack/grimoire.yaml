@@ -9,4 +9,5 @@ authors: [llmcore]
 spell_paths: [spells/]
 rune_paths: [runes/contracts/]
 promptlet_paths: [spells/promptlets/]
+skilldoc_paths: [skills/docs/]
 vars_path: vars/defaults.yaml

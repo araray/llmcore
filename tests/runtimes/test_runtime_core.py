@@ -19,6 +19,7 @@ covered"*, which :class:`TestProviderAttachment` does.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -507,6 +508,33 @@ class _RecordingProviders:
         return self.registered.pop(name, None) is not None
 
 
+class _TrackedProvider:
+    """A provider object with just enough surface for activity tracking."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.calls = 0
+
+    async def chat_completion(self, **kwargs: Any) -> str:
+        self.calls += 1
+        return "ok"
+
+
+class _FakeProviderManager(_RecordingProviders):
+    """`_RecordingProviders` plus `get_provider`, which activity tracking needs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.providers: dict[str, _TrackedProvider] = {}
+
+    def register_instance(self, name, provider_type, config, **kwargs):
+        super().register_instance(name, provider_type, config, **kwargs)
+        self.providers.setdefault(name, _TrackedProvider(name))
+
+    def get_provider(self, name: str | None = None) -> _TrackedProvider:
+        return self.providers[name or next(iter(self.providers))]
+
+
 class TestProviderAttachment:
     """The R1 gate: a runtime's endpoint becomes a usable provider instance."""
 
@@ -631,9 +659,15 @@ class TestBackendRegistry:
         assert mgr.backends == ["colab"]
 
     async def test_an_unknown_backend_is_an_actionable_error(self):
+        """The error has to name what *is* available. `colab` is registered by
+        default now, so this asserts the behaviour rather than a fixed string.
+        """
         mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
-        with pytest.raises(ConfigError, match="Available: fake"):
+        with pytest.raises(ConfigError) as excinfo:
             await mgr.estimate(REPO, backend="runpod")
+        message = str(excinfo.value)
+        assert "runpod" in message and "fake" in message
+        assert "Available:" in message
 
     async def test_logs_stream(self):
         backend = FakeRuntime()
@@ -644,3 +678,158 @@ class TestBackendRegistry:
         mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
         plan = await mgr.estimate(REPO, quantization="awq")
         assert plan.quantization is Quantization.AWQ
+
+
+class TestSupervision:
+    """R4: the deadlines are only real if something enforces them."""
+
+    async def test_up_starts_the_supervisor(self):
+        """A caller who forgot to start the reaper would discover that from a
+        bill, so provisioning starts it."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        try:
+            await mgr.up(REPO, name="r", confirm_spend=True, backend="fake", attach=False)
+            assert mgr._supervisor is not None and not mgr._supervisor.done()
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_starting_twice_is_idempotent(self):
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        try:
+            mgr.start_supervisor(interval=3600)
+            first = mgr._supervisor
+            mgr.start_supervisor(interval=3600)
+            assert mgr._supervisor is first
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_close_stops_the_supervisor(self):
+        """But does not stop the runtimes: a process exiting is not a reason
+        to destroy compute someone is paying for."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        mgr.start_supervisor(interval=3600)
+        await mgr.close()
+        assert mgr._supervisor is None
+
+    async def test_a_zero_interval_disables_it(self):
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        mgr.start_supervisor(interval=0)
+        assert mgr._supervisor is None
+
+    async def test_a_dead_endpoint_becomes_degraded_after_three_misses(self, monkeypatch):
+        """Three rather than one: a single missed poll is usually the tunnel
+        reconnecting."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        handle = await mgr.up(
+            REPO, name="r", confirm_spend=True, backend="fake", attach=False
+        )
+        handle.phase = RuntimePhase.READY
+        handle.base_url = "http://127.0.0.1:1/v1"   # nothing listens on port 1
+
+        try:
+            for expected in (RuntimePhase.READY, RuntimePhase.READY, RuntimePhase.DEGRADED):
+                await mgr.probe_liveness()
+                assert handle.phase is expected
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_a_degraded_runtime_is_not_torn_down_by_a_probe(self, monkeypatch):
+        """A failed health check must not destroy an expensive VM -- that call
+        belongs to the deadlines or to the user."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        handle = await mgr.up(
+            REPO, name="r", confirm_spend=True, backend="fake", attach=False
+        )
+        handle.base_url = "http://127.0.0.1:1/v1"
+        try:
+            for _ in range(5):
+                await mgr.probe_liveness()
+            assert handle.phase is RuntimePhase.DEGRADED
+            assert mgr.state.load("r") is not None, "the handle must still be tracked"
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_recovery_returns_a_runtime_to_ready(self, monkeypatch):
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        handle = await mgr.up(
+            REPO, name="r", confirm_spend=True, backend="fake", attach=False
+        )
+        handle.phase = RuntimePhase.DEGRADED
+        handle.metadata["liveness_misses"] = 3
+        handle.base_url = "http://127.0.0.1:1/v1"
+
+        class Ok:
+            status_code = 200
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def get(self, url):
+                return Ok()
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: Client())
+        try:
+            await mgr.probe_liveness()
+            assert handle.phase is RuntimePhase.READY
+            assert handle.metadata["liveness_misses"] == 0
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_a_supervisor_cycle_that_raises_does_not_kill_the_loop(self, monkeypatch):
+        """A supervisor that dies on one bad cycle stops reaping, and the
+        consequence of not reaping is money."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        calls = {"n": 0}
+
+        async def flaky():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("transient")
+            return {}
+
+        monkeypatch.setattr(mgr, "probe_liveness", flaky)
+        mgr.start_supervisor(interval=0.01)
+        await asyncio.sleep(0.1)
+        try:
+            assert calls["n"] >= 2, "the loop stopped after the first failure"
+            assert not mgr._supervisor.done()
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_a_call_through_an_attached_runtime_marks_it_used(self):
+        """vLLM exposes no last-request metric, so the idle reaper depends on
+        this count happening on llmcore's side."""
+        providers = _FakeProviderManager()
+        mgr = RuntimeManager(
+            {"fake": FakeRuntime()}, provider_manager=providers, config_get=_config()
+        )
+        try:
+            handle = await mgr.up(REPO, name="r", confirm_spend=True, backend="fake")
+            handle.last_activity_at = None
+            provider = providers.get_provider("r")
+            await provider.chat_completion(context=[], model="m")
+            assert handle.last_activity_at is not None
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_tracking_a_runtime_twice_does_not_stack_wrappers(self):
+        """A runtime may be re-attached after a reconnect."""
+        providers = _FakeProviderManager()
+        mgr = RuntimeManager(
+            {"fake": FakeRuntime()}, provider_manager=providers, config_get=_config()
+        )
+        try:
+            handle = await mgr.up(REPO, name="r", confirm_spend=True, backend="fake")
+            mgr.attach(handle)
+            mgr.attach(handle)
+            provider = providers.get_provider("r")
+            await provider.chat_completion(context=[], model="m")
+            assert provider.calls == 1
+        finally:
+            await mgr.stop_supervisor()

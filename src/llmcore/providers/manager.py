@@ -895,6 +895,192 @@ class ProviderManager:
             )
         return provider_instance
 
+    # ------------------------------------------------------------------
+    # Dynamic target resolution (routing subsystem)
+    # ------------------------------------------------------------------
+
+    def resolve_target(
+        self,
+        target: Any,
+        *,
+        autoprovision: bool = True,
+        cache: bool = True,
+    ) -> BaseProvider:
+        """Resolve a routing target to a provider instance, building one if needed.
+
+        This is what stops config being an allow-list. ``get_provider()`` only
+        ever sees instances built during ``__init__`` from ``[providers.*]``
+        sections, so a provider that is registered in :data:`PROVIDER_MAP`, has
+        its credential in the environment and its base URL in
+        :data:`_OPENAI_COMPATIBLE_DEFAULTS` was still unreachable — config was
+        acting as a whitelist when it should be a warm-up.
+
+        Resolution order:
+
+        1. **A configured instance wins.** An explicit ``instance``, or a
+           provider name that matches a configured section, resolves to that
+           preset. Existing setups keep behaving exactly as before.
+        2. **Otherwise autoprovision**, when *autoprovision* is set and a
+           credential is discoverable.
+        3. **Otherwise raise**, naming the environment variable that was missing
+           and the instances that *are* reachable.
+
+        Args:
+            target: A :class:`~llmcore.routing.models.Target` or a spec string.
+            autoprovision: Build an instance when none is configured.
+            cache: Keep an autoprovisioned instance for the process. ``False``
+                is for one-off probes that should not linger.
+
+        Returns:
+            A ready provider instance.
+
+        Raises:
+            ConfigError: If the target cannot be resolved.
+        """
+        from ..routing.models import Target
+
+        spec = Target.parse(target) if not isinstance(target, Target) else target
+        requested = (spec.instance or spec.provider).lower()
+
+        # 1. Presets win.
+        if requested in self._providers:
+            return self._providers[requested]
+        alias = _PROVIDER_INSTANCE_ALIASES.get(requested)
+        if alias and alias in self._providers:
+            return self._providers[alias]
+        if spec.instance:
+            # An explicit instance pin that does not exist is a configuration
+            # error, not an invitation to build something similar.
+            raise ConfigError(
+                f"Target pins instance '{spec.instance}', which is not configured. "
+                f"Configured instances: {sorted(self._providers)}."
+            )
+
+        provider_type = _PROVIDER_INSTANCE_ALIASES.get(
+            spec.provider.lower(), spec.provider.lower()
+        )
+        if provider_type not in PROVIDER_MAP:
+            raise ConfigError(
+                f"Unknown provider '{spec.provider}'. Known provider types: "
+                f"{sorted(k for k in PROVIDER_MAP if k not in _PROVIDER_INSTANCE_ALIASES)}."
+            )
+
+        if not autoprovision:
+            raise ConfigError(
+                f"Provider '{spec.provider}' is not configured and autoprovisioning is "
+                f"disabled (routing.autoprovision = false). Either add a "
+                f"[providers.{spec.provider}] section or enable autoprovisioning."
+            )
+
+        # 2. Autoprovision.
+        built = self._autoprovision(provider_type, spec, cache=cache)
+        return built
+
+    def _autoprovision(self, provider_type: str, spec: Any, *, cache: bool) -> BaseProvider:
+        """Build an ephemeral instance for *provider_type*.
+
+        Raises:
+            ConfigError: If no credential can be found, or construction fails.
+        """
+        from ..routing.models import Target
+
+        assert isinstance(spec, Target)
+        config: dict[str, Any] = {}
+
+        compat = _OPENAI_COMPATIBLE_DEFAULTS.get(provider_type)
+        if compat:
+            config["base_url"] = compat["base_url"]
+
+        api_key, env_tried = self._discover_credential(provider_type, compat)
+        if api_key:
+            config["api_key"] = api_key
+        if spec.model:
+            config["default_model"] = spec.model
+
+        # Ollama and vLLM need no key; vLLM needs a base_url it cannot guess, so
+        # it is reported as unresolvable rather than pointed at localhost.
+        needs_key = provider_type not in ("ollama",)
+        if needs_key and not api_key:
+            raise ConfigError(
+                f"Provider '{spec.provider}' is not configured and no credential was "
+                f"found. Set one of: {', '.join(env_tried)} — or add a "
+                f"[providers.{spec.provider}] section. Reachable instances: "
+                f"{sorted(self._providers)}."
+            )
+
+        # A distinct name so an autoprovisioned instance never shadows a preset
+        # the user may add later, and is visible as such in diagnostics.
+        name = provider_type if cache else f"{provider_type}@transient"
+        try:
+            instance = self.register_instance(
+                name, provider_type, config, ephemeral=True, replace=True
+            )
+        except Exception as exc:
+            raise ConfigError(
+                f"Could not autoprovision provider '{spec.provider}': {exc}"
+            ) from exc
+
+        logger.info(
+            "Autoprovisioned provider '%s' (type=%s) for a dynamic target; "
+            "no [providers.%s] section was configured.",
+            name,
+            provider_type,
+            provider_type,
+        )
+        if not cache:
+            self._ephemeral_instances.discard(name.lower())
+            self._providers.pop(name.lower(), None)
+        return instance
+
+    @staticmethod
+    def _discover_credential(
+        provider_type: str, compat: dict[str, str] | None
+    ) -> tuple[str | None, list[str]]:
+        """Find a credential for *provider_type* in the environment.
+
+        Mirrors the conventions each provider already honours, so a key that
+        works for a configured section also works for a dynamic target. Returns
+        the key plus the variables that were tried, so a failure can tell the
+        caller exactly what to set.
+        """
+        candidates: list[str] = []
+        if compat:
+            candidates.append(compat["env_var"])
+        # The spellings each provider module accepts, in its own order.
+        extra: dict[str, tuple[str, ...]] = {
+            "openai": ("OPENAI_API_KEY",),
+            "anthropic": ("ANTHROPIC_API_KEY",),
+            "gemini": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+            "deepseek": ("DEEPSEEK_API_KEY",),
+            "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
+            "mistral": ("MISTRAL_API_KEY",),
+            "zai": ("ZAI_API_KEY", "GLM_API_KEY"),
+            "friendli": ("FRIENDLI_TOKEN", "FRIENDLIAI_API_KEY"),
+            "deepinfra": ("DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"),
+            "openrouter": ("OPENROUTER_API_KEY",),
+            "poe": ("POE_API_KEY",),
+            "huggingface": ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"),
+            "deepgram": ("DEEPGRAM_API_KEY",),
+            "elevenlabs": ("ELEVENLABS_API_KEY", "ELEVEN_API_KEY"),
+            "fal": ("FAL_KEY", "FAL_API_KEY"),
+            "replicate": ("REPLICATE_API_TOKEN", "REPLICATE_API_KEY"),
+            "higgsfield": ("HIGGSFIELD_API_KEY", "HIGGSFIELD_KEY"),
+            "typesafe": ("TYPESAFE_API_KEY",),
+            "vllm": ("VLLM_API_KEY",),
+        }
+        candidates.extend(extra.get(provider_type, ()))
+        candidates.append(f"{provider_type.upper()}_API_KEY")
+
+        seen: list[str] = []
+        for name in candidates:
+            if name in seen:
+                continue
+            seen.append(name)
+            value = os.environ.get(name)
+            if value:
+                return value, seen
+        return None, seen
+
     def get_default_provider(self) -> BaseProvider:
         """Gets the instance of the configured default provider."""
         return self.get_provider(self._default_provider_name)

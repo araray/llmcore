@@ -270,6 +270,8 @@ Changelog = "https://github.com/araray/llmcore/blob/main/CHANGELOG.md"
 [project.scripts]
 llmcore-storage = "llmcore.storage.cli:main"
 llmcore-bridge = "llmcore.bridge.cli:main"
+llmcore-runtimes = "llmcore.runtimes.cli:main"
+llmcore-routing = "llmcore.routing.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -352,6 +354,7 @@ markers = [
     "requires_postgres: Tests that require PostgreSQL database",
     "requires_ollama: Tests that need a live Ollama server (auto-skipped when unreachable)",
     "requires_pgvector: Tests that require pgvector extension",
+    "live: Tests that call a real external service (network, credentials); deselect with '-m \"not live\"'",
 ]
 
 # --- Coverage Configuration ---

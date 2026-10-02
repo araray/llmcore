@@ -267,11 +267,97 @@ def _add_serve_args(p: argparse.ArgumentParser) -> None:
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
 
+# --------------------------------------------------------------------------- #
+# proxy
+# --------------------------------------------------------------------------- #
+async def _proxy_async(args: argparse.Namespace) -> int:
+    """Run the OpenAI-compatible routing proxy.
+
+    A separate subcommand rather than another transport on ``serve``, because
+    it is a different thing: ``serve`` exposes llmcore's own contract to
+    llmcore clients, while this impersonates somebody else's API so an
+    unmodified agent harness can be pointed at it.
+    """
+    import uvicorn
+
+    from llmcore import LLMCore
+
+    from .proxy_app import ProxyConfig, create_proxy_app
+
+    _set_parent_death_signal()
+    llm = await LLMCore.create(config_file_path=args.config, env_prefix=args.env_prefix)
+    try:
+        config = ProxyConfig.from_config(llm.config.get)
+        if args.host:
+            config = ProxyConfig(
+                host=args.host,
+                port=args.port or config.port,
+                api_key=args.api_key or config.api_key,
+                advertise_lanes=config.advertise_lanes,
+                advertise_pools=config.advertise_pools,
+                default_model=args.default_model or config.default_model,
+            )
+        elif args.port or args.api_key or args.default_model:
+            config = ProxyConfig(
+                host=config.host,
+                port=args.port or config.port,
+                api_key=args.api_key or config.api_key,
+                advertise_lanes=config.advertise_lanes,
+                advertise_pools=config.advertise_pools,
+                default_model=args.default_model or config.default_model,
+            )
+
+        logger.info(
+            "llmcore routing proxy on http://%s:%d/v1 (auth=%s)",
+            config.host,
+            config.port,
+            "bearer token" if config.api_key else "none, loopback only",
+        )
+        for key, value in config.harness_env().items():
+            # Printed so the operator can paste it straight into the harness.
+            # The token is the one they configured, so echoing it here tells
+            # them nothing they did not already set.
+            logger.info("  %s=%s", key, value)
+
+        server = uvicorn.Server(
+            uvicorn.Config(
+                create_proxy_app(llm, config),
+                host=config.host,
+                port=config.port,
+                log_level=args.log_level.lower(),
+                lifespan="off",
+            )
+        )
+        await server.serve()
+        return 0
+    finally:
+        await llm.close()
+
+
+def _add_proxy_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--host", default=None,
+                   help="bind address (default: routing.proxy.host, else 127.0.0.1). "
+                        "A non-loopback host requires --api-key.")
+    p.add_argument("--port", type=int, default=None, help="bind port (default: 8900)")
+    p.add_argument("--api-key", default=None,
+                   help="bearer token clients must send; REQUIRED for a non-loopback bind")
+    p.add_argument("--default-model", default=None,
+                   help="what `model` means when a client omits it (default: auto)")
+    p.add_argument("--config", default=None, help="path to a TOML config (confy)")
+    p.add_argument("--env-prefix", default="LLMCORE", help="env var prefix for config")
+    p.add_argument("--log-level", default="INFO",
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="llmcore-bridge", description="LLMCore sidecar bridge")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="run the bridge server")
     _add_serve_args(serve)
+    proxy = sub.add_parser(
+        "proxy", help="run the OpenAI-compatible routing proxy for agent harnesses"
+    )
+    _add_proxy_args(proxy)
 
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -283,6 +369,15 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_serve_async(args))
         except KeyboardInterrupt:  # pragma: no cover
             return 0
+    if args.command == "proxy":
+        try:
+            return asyncio.run(_proxy_async(args))
+        except KeyboardInterrupt:  # pragma: no cover
+            return 0
+        except ValueError as exc:
+            # The refused-bind case: a clear message beats a traceback.
+            logger.error("%s", exc)
+            return 2
     parser.error(f"unknown command: {args.command}")
     return 2
 

@@ -31,21 +31,35 @@ __all__ = [
 class Quantization(StrEnum):
     """Weight quantization a recipe will load.
 
+    The GGUF variants are separate members rather than one ``GGUF`` because
+    sizing cannot work without them: Q4 and Q8 differ by a factor of two in
+    weight bytes, which is routinely the difference between fitting a 24 GB
+    card and not. A single ``GGUF`` member would force the sizer to guess.
+
     Attributes:
         NONE: Full precision as published (fp16/bf16).
         FP8: 8-bit floating point.
         INT8: 8-bit integer.
-        AWQ: Activation-aware weight quantization.
-        GPTQ: GPTQ-quantized weights.
-        GGUF: llama.cpp's container format.
+        INT4: 4-bit integer (bitsandbytes and similar).
+        AWQ: Activation-aware weight quantization, 4-bit.
+        GPTQ: GPTQ-quantized weights, typically 4-bit.
+        GGUF: llama.cpp's container format, precision unspecified. Prefer a
+            specific variant; this exists for repos that say no more.
+        GGUF_Q4: GGUF at roughly 4 bits per weight (Q4_K_M, IQ4_XS, ...).
+        GGUF_Q5: GGUF at roughly 5 bits per weight.
+        GGUF_Q8: GGUF at roughly 8 bits per weight.
     """
 
     NONE = "none"
     FP8 = "fp8"
     INT8 = "int8"
+    INT4 = "int4"
     AWQ = "awq"
     GPTQ = "gptq"
     GGUF = "gguf"
+    GGUF_Q4 = "gguf_q4"
+    GGUF_Q5 = "gguf_q5"
+    GGUF_Q8 = "gguf_q8"
 
 
 class RuntimePhase(StrEnum):
@@ -63,6 +77,10 @@ class RuntimePhase(StrEnum):
         DEGRADED: Assigned and billing, but not serving.
         STOPPING: Being torn down.
         STOPPED: Released. No longer billing.
+        DETACHED: llmcore has let go of it -- tunnel and keepalive stopped --
+            but the compute was **not** released, so it is still billing. The
+            state ``close()`` leaves a runtime in, because a process exiting is
+            not a reason to destroy compute someone is paying for.
         FAILED: Bootstrap failed and the VM was released.
     """
 
@@ -72,6 +90,7 @@ class RuntimePhase(StrEnum):
     DEGRADED = "degraded"
     STOPPING = "stopping"
     STOPPED = "stopped"
+    DETACHED = "detached"
     FAILED = "failed"
 
     @property
@@ -86,6 +105,10 @@ class RuntimePhase(StrEnum):
             RuntimePhase.READY,
             RuntimePhase.DEGRADED,
             RuntimePhase.STOPPING,
+            # Detached means llmcore stopped watching, not that the VM stopped.
+            # Counting it as not-billing would hide exactly the leak this
+            # subsystem's safety rules exist to prevent.
+            RuntimePhase.DETACHED,
         }
 
     @property
@@ -140,7 +163,11 @@ class Plan:
         quantization: Quantization the recipe will load.
         vram_required_gb: Estimated VRAM for weights plus KV cache plus
             headroom.
-        vram_available_gb: What the chosen SKU provides.
+        vram_available_gb: What is actually **usable** on the chosen SKU --
+            the device total after ``gpu_memory_utilization`` and the headroom
+            reserve, which is the number the fit decision compared against.
+            Reporting the sticker VRAM here would make a plan look like it had
+            several GB more room than the sizer believed.
         context_length: Context the plan is sized for, which may be below the
             request when the model could not otherwise fit.
         fits: Whether the model fits the chosen SKU at all.

@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -469,6 +470,257 @@ class AnthropicProvider(BaseProvider):
                 )
             return details_list
 
+    # ------------------------------------------------------------------
+    # Extended thinking: what each model generation actually accepts
+    # ------------------------------------------------------------------
+
+    # There are **two** boundaries here, not one, and they do not coincide.
+    # Measured against the live API on 2026-10-01, one request per model:
+    #
+    #   generation   thinking.type=enabled (+budget_tokens)   thinking.type=adaptive
+    #   <= 4.5       200 (the only option)                    400 "adaptive thinking
+    #                                                             is not supported"
+    #   4.6          200                                      200   <- both work
+    #   >= 4.7       400 "thinking.type.enabled is not         200
+    #                     supported for this model"
+    #
+    # So 4.6 is an overlap where either form is accepted, which is why a
+    # single cutoff is wrong: assuming one at 4.6 discards a caller's explicit
+    # token budget on a model that would have honoured it.
+
+    #: Earliest generation that accepts ``{"type": "adaptive"}``.
+    _ADAPTIVE_FROM = (4, 6)
+
+    #: Earliest generation that **rejects** ``{"type": "enabled"}`` and its
+    #: ``budget_tokens``. This is the one that turns a reasonable request into
+    #: a 400, and it is the defect recorded in
+    #: PROVIDER_MODERNIZATION_PLAN.md and the routing spec.
+    _BUDGET_REJECTED_FROM = (4, 7)
+
+    #: Earliest generation that rejects ``{"type": "disabled"}``. Measured:
+    #: 4.7+ answers 400 and says so itself -- *"To turn thinking off on this
+    #: model, send "thinking": {"type": "between_tools"} instead of
+    #: {"type": "disabled"}"*. So "do not think" is spelled differently on
+    #: either side of this line, and a caller asking for no reasoning should
+    #: not have to know which.
+    _DISABLED_REJECTED_FROM = (4, 7)
+
+    #: What "do not think" is called on 4.7 and later.
+    _NO_THINKING_MODERN = "between_tools"
+
+    #: Anthropic requires ``max_tokens`` **strictly greater** than
+    #: ``thinking.budget_tokens`` -- equal values are rejected -- and a budget
+    #: below this floor is rejected outright.
+    _MIN_BUDGET_TOKENS = 1024
+
+    #: llmcore's canonical reasoning-effort vocabulary mapped onto Anthropic's
+    #: `output_config.effort`, which has fewer rungs. `none`/`minimal` fold
+    #: down and `xhigh` folds up, because folding to the nearest supported rung
+    #: is the documented policy for an unsupported effort level -- dropping it
+    #: silently would lose the caller's intent entirely.
+    _EFFORT_TO_OUTPUT_CONFIG: dict[str, str] = {
+        # "none" never reaches this table -- it disables thinking outright.
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "high",
+        "max": "max",
+    }
+
+    #: For pre-4.6 models, which take a token budget instead of an effort
+    #: level. Anthropic requires >= 1024.
+    _EFFORT_TO_BUDGET: dict[str, int] = {
+        "none": 0,
+        "minimal": 1024,
+        "low": 2048,
+        "medium": 8192,
+        "high": 16384,
+        "xhigh": 24576,
+        "max": 32768,
+    }
+
+    @staticmethod
+    def _model_generation(model: str | None) -> tuple[int, int] | None:
+        """Extract ``(major, minor)`` from a model id, or ``None`` if unclear.
+
+        Ids look like ``claude-sonnet-4-6`` or ``claude-opus-5-5-20260101``.
+        Returning ``None`` for anything unrecognised matters: an unknown model
+        must not be assumed modern, because guessing wrong in that direction
+        sends `budget_tokens` to a model that rejects it.
+        """
+        if not model:
+            return None
+        match = re.search(r"-(\d+)-(\d+)(?:-|$)", model)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    @classmethod
+    def _supports_adaptive_thinking(cls, model: str | None) -> bool:
+        """Whether *model* accepts ``{"type": "adaptive"}``."""
+        generation = cls._model_generation(model)
+        if generation is None:
+            # Unknown id: assume the newest behaviour. The older family is the
+            # shrinking set, so defaulting the other way would break every new
+            # model by default.
+            return True
+        return generation >= cls._ADAPTIVE_FROM
+
+    @classmethod
+    def _rejects_budget_tokens(cls, model: str | None) -> bool:
+        """Whether *model* answers 400 to ``{"type": "enabled"}``."""
+        generation = cls._model_generation(model)
+        if generation is None:
+            return True
+        return generation >= cls._BUDGET_REJECTED_FROM
+
+    @classmethod
+    def _no_thinking_block(cls, model: str | None) -> dict[str, str]:
+        """The way to say "do not think" that *model* accepts."""
+        generation = cls._model_generation(model)
+        modern = generation is None or generation >= cls._DISABLED_REJECTED_FROM
+        return {"type": cls._NO_THINKING_MODERN if modern else "disabled"}
+
+    @classmethod
+    def _normalize_thinking(
+        cls,
+        thinking: Any,
+        effort: str | None,
+        model: str | None,
+        max_tokens: int | None = None,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Map a caller's thinking/effort request onto what *model* accepts.
+
+        Returns ``(thinking_block, output_config_effort)``. Either may be
+        ``None``.
+
+        The whole point is that these two are not interchangeable across
+        generations: 4.6 and later express reasoning depth as
+        ``output_config.effort`` with ``thinking: {"type": "adaptive"}``, while
+        earlier models express it as ``thinking.budget_tokens``. A caller who
+        says ``effort="high"`` means the same thing in both cases and should
+        not have to know which.
+        """
+        adaptive = cls._supports_adaptive_thinking(model)
+        rejects_budget = cls._rejects_budget_tokens(model)
+        block: dict[str, Any] | None = dict(thinking) if isinstance(thinking, dict) else None
+        effort_key = str(effort).strip().lower() if effort else None
+
+        if adaptive:
+            # Only convert when the model would actually refuse the budget.
+            # On 4.6 both forms are accepted, so a caller who asked for a
+            # precise token budget keeps it -- discarding it there would be
+            # overriding an explicit, valid choice.
+            if block and "budget_tokens" in block and rejects_budget:
+                dropped = block.pop("budget_tokens")
+                logger.warning(
+                    "Dropping thinking.budget_tokens=%s: %s answers 400 to "
+                    "thinking.type=enabled ('not supported for this model'). "
+                    "Claude 4.7 and later take thinking={'type': 'adaptive'} plus "
+                    "output_config.effort. Pass effort= instead.",
+                    dropped,
+                    model,
+                )
+                block["type"] = "adaptive"
+            elif block and block.get("type") == "enabled" and rejects_budget:
+                block["type"] = "adaptive"
+            if block and "budget_tokens" in block and not rejects_budget:
+                # Honoured as given; nothing to map.
+                return block, None
+            if effort_key == "none":
+                # "none" means do not think, on either generation. Returning
+                # adaptive-at-low would quietly spend reasoning tokens the
+                # caller explicitly asked not to spend.
+                return cls._no_thinking_block(model), None
+            if effort_key:
+                if block is None:
+                    block = {"type": "adaptive"}
+                return block, cls._EFFORT_TO_OUTPUT_CONFIG.get(effort_key, "medium")
+            return block, None
+
+        # Pre-4.6: a budget, not an effort level.
+        if effort_key:
+            budget = cls._EFFORT_TO_BUDGET.get(effort_key, 8192)
+            if budget <= 0:
+                return cls._no_thinking_block(model), None
+            budget = cls._fit_budget(budget, max_tokens)
+            if budget is None:
+                logger.warning(
+                    "effort=%r maps to a thinking budget that does not fit "
+                    "max_tokens=%s on %s (Anthropic needs max_tokens > budget, and a "
+                    "budget of at least %d). Disabling thinking for this call; raise "
+                    "max_tokens to get reasoning.",
+                    effort_key,
+                    max_tokens,
+                    model,
+                    cls._MIN_BUDGET_TOKENS,
+                )
+                return cls._no_thinking_block(model), None
+            merged = block or {}
+            merged.setdefault("type", "enabled")
+            merged.setdefault("budget_tokens", budget)
+            return merged, None
+        if block and block.get("type") == "adaptive":
+            fitted = cls._fit_budget(cls._EFFORT_TO_BUDGET["medium"], max_tokens)
+            if fitted is None:
+                logger.warning(
+                    "%s does not support adaptive thinking, and max_tokens=%s leaves no "
+                    "room for a budget; disabling thinking for this call.",
+                    model,
+                    max_tokens,
+                )
+                return cls._no_thinking_block(model), None
+            logger.warning(
+                "%s does not support adaptive thinking; converting to "
+                "{'type': 'enabled', 'budget_tokens': %d}.",
+                model,
+                fitted,
+            )
+            block = {"type": "enabled", "budget_tokens": fitted}
+        elif block and block.get("type") == "enabled" and "budget_tokens" in block:
+            # A caller's own budget still has to fit, and the API rejects
+            # equality rather than clamping.
+            fitted = cls._fit_budget(int(block["budget_tokens"]), max_tokens)
+            if fitted is None:
+                logger.warning(
+                    "thinking.budget_tokens=%s does not fit max_tokens=%s on %s; "
+                    "disabling thinking for this call.",
+                    block["budget_tokens"],
+                    max_tokens,
+                    model,
+                )
+                return cls._no_thinking_block(model), None
+            if fitted != block["budget_tokens"]:
+                logger.info(
+                    "Reducing thinking.budget_tokens from %s to %d so it fits "
+                    "max_tokens=%s.",
+                    block["budget_tokens"],
+                    fitted,
+                    max_tokens,
+                )
+            block["budget_tokens"] = fitted
+        return block, None
+
+    @classmethod
+    def _fit_budget(cls, budget: int, max_tokens: int | None) -> int | None:
+        """Largest usable budget at or below *budget*, or ``None`` if none fits.
+
+        Anthropic requires ``max_tokens`` **strictly greater** than
+        ``budget_tokens`` -- equal values are rejected, which is easy to get
+        wrong -- and rejects a budget below
+        :attr:`_MIN_BUDGET_TOKENS`. Between those two constraints there is
+        simply no valid budget when ``max_tokens`` is small, and the honest
+        answer there is to turn thinking off rather than send a request that
+        cannot succeed.
+        """
+        if max_tokens is None:
+            return budget
+        ceiling = int(max_tokens) - 1
+        if ceiling < cls._MIN_BUDGET_TOKENS:
+            return None
+        return min(budget, ceiling)
+
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Returns a schema of supported inference parameters for Anthropic models."""
         return {
@@ -481,7 +733,18 @@ class AnthropicProvider(BaseProvider):
                 "type": "object",
                 "description": (
                     "Extended thinking config: "
-                    "{type: enabled|adaptive|disabled, budget_tokens: int}"
+                    "{type: enabled|adaptive|disabled, budget_tokens: int}. "
+                    "budget_tokens is dropped for Claude 4.6+ models, which "
+                    "reject it; prefer `effort`."
+                ),
+            },
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": (
+                    "llmcore's canonical reasoning effort. Mapped to "
+                    "output_config.effort on Claude 4.6+ and to "
+                    "thinking.budget_tokens on earlier models."
                 ),
             },
             "output_config": {
@@ -967,13 +1230,24 @@ class AnthropicProvider(BaseProvider):
             if key in kwargs:
                 api_kwargs[key] = kwargs.pop(key)
 
-        # Extended thinking
-        thinking = kwargs.pop("thinking", None)
+        # Extended thinking and effort, mapped to what this model generation
+        # actually accepts (see _normalize_thinking).
+        thinking, mapped_effort = self._normalize_thinking(
+            kwargs.pop("thinking", None),
+            kwargs.pop("effort", None),
+            model_name,
+            max_tokens=api_kwargs.get("max_tokens"),
+        )
         if thinking:
             api_kwargs["thinking"] = thinking
 
         # Output config (structured output + effort)
         output_config = kwargs.pop("output_config", None)
+        if mapped_effort:
+            output_config = {**(output_config or {})}
+            # An explicit output_config.effort wins: the caller named
+            # Anthropic's own vocabulary, so they meant it literally.
+            output_config.setdefault("effort", mapped_effort)
         if output_config:
             api_kwargs["output_config"] = output_config
 
@@ -1079,11 +1353,19 @@ class AnthropicProvider(BaseProvider):
             body.update(api_kwargs)
             response_dict = await self._direct_messages(body, model_name)
         else:
+            # `system` is omitted rather than passed as None. The SDK
+            # serialises an explicit None into the body as `"system": null`,
+            # and the API answers 400 "system: Input should be a valid array"
+            # -- so on this transport *every* call without a system message
+            # failed. The httpx path already omitted it; the two transports
+            # have to agree.
+            sdk_kwargs: dict[str, Any] = dict(api_kwargs)
+            if system_prompt is not None:
+                sdk_kwargs["system"] = system_prompt
             response = await self._client.messages.create(  # type: ignore[union-attr]
                 model=model_name,
                 messages=messages_payload,  # type: ignore[arg-type]
-                system=system_prompt,  # type: ignore[arg-type]
-                **api_kwargs,
+                **sdk_kwargs,
             )
             response_dict = response.model_dump(exclude_none=True)
 
@@ -1166,12 +1448,16 @@ class AnthropicProvider(BaseProvider):
             body.update(api_kwargs)
             event_source = self._direct_message_events(body, model_name)
         else:
+            # Omitted when absent, for the same reason as the non-streaming
+            # path: an explicit None becomes `"system": null` and is rejected.
+            sdk_kwargs: dict[str, Any] = dict(api_kwargs)
+            if system_prompt is not None:
+                sdk_kwargs["system"] = system_prompt
             raw_stream = await self._client.messages.create(  # type: ignore[union-attr]
                 model=model_name,
                 messages=messages_payload,  # type: ignore[arg-type]
-                system=system_prompt,  # type: ignore[arg-type]
                 stream=True,
-                **api_kwargs,
+                **sdk_kwargs,
             )
             event_source = self._sdk_message_events(raw_stream)
 

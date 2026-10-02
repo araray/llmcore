@@ -75,6 +75,13 @@ try:
     from confy.loader import Config as ConfyConfig
 except ImportError:
     ConfyConfig = dict[str, Any]  # type: ignore [no-redef]
+
+# Routing types are used at runtime (this module has no `from __future__ import
+# annotations`), and routing imports nothing from here, so a plain import is
+# safe and keeps a missing-routing failure from silently reconfiguring
+# ConfyConfig above.
+from llmcore.routing import RoutingPlan, RoutingRequest, RoutingSettings, Target
+
 try:
     import tomllib
 except ImportError:
@@ -219,6 +226,8 @@ class LLMCore:
         self._observability = None
         self._media_manager: Any | None = None
         self._runtime_manager: Any | None = None
+        self._routing_manager: Any | None = None
+        self._routing: Any | None = None
         # Grimoire control plane (populated by _initialize_from_config)
         self._grimoire: Any | None = None
         self._grimoire_config: Any | None = None
@@ -266,6 +275,37 @@ class LLMCore:
                 "The media subsystem is not initialized. Use 'await LLMCore.create()'."
             )
         return self._media_manager
+
+    @property
+    def routing(self) -> Any:
+        """Routing: pools, lanes, failover and complexity-based destinations.
+
+        The accessor is for *inspection*; routing itself happens inside
+        ``chat()`` via its ``target=``/``pool=``/``lane=``/``profile=``
+        arguments::
+
+            await llm.chat("hi", target="xai:grok-4.1?effort=high")
+            await llm.chat("hi", pool="main")
+
+            plan = await llm.routing.explain("summarise this file")
+            print(await llm.routing.why("summarise this file"))
+            llm.routing.health()
+
+        ``explain()`` exists because a feature that silently changes which
+        vendor served a request has to be able to answer "why did it pick
+        that?" without anyone reading logs.
+
+        Returns:
+            The :class:`RoutingFacade` for this instance.
+
+        Raises:
+            ConfigError: If accessed before ``LLMCore.create()`` finished.
+        """
+        if self._routing is None:
+            raise ConfigError(
+                "The routing subsystem is not initialized. Use 'await LLMCore.create()'."
+            )
+        return self._routing
 
     @property
     def runtimes(self) -> Any:
@@ -600,6 +640,19 @@ class LLMCore:
                 provider_manager=self._provider_manager,
                 config_get=self.config.get,
             )
+
+            # Routing is inert until [routing] names a pool, a lane or a
+            # classifier chain: with none of those, every call resolves exactly
+            # as it did before. Constructing it is free -- it reads config and
+            # contacts nothing.
+            from llmcore.routing import RoutingManager
+
+            self._routing_manager = RoutingManager(
+                self._provider_manager,
+                config=self.config,
+                ask=self._routing_ask,
+            )
+            self._routing = RoutingFacade(self)
 
             logger.debug("Initializing SessionManager...")
             self._session_manager = SessionManager(self._storage_manager.session_storage)
@@ -1145,6 +1198,13 @@ class LLMCore:
         tool_choice: str | None = None,
         extra_messages: list[Message] | None = None,
         native_search: bool = False,
+        target: str | None = None,
+        pool: str | None = None,
+        lane: str | None = None,
+        profile: str | None = None,
+        complexity: str | None = None,
+        effort: str | None = None,
+        routing: dict[str, Any] | None = None,
         **provider_kwargs,
     ) -> str | AsyncGenerator[str, None]:
         """
@@ -1166,6 +1226,40 @@ class LLMCore:
             save_session=True
         )
         ```
+
+        ## Routing
+
+        Any provider+model is reachable by spec string, whether or not it has a
+        `[providers.*]` section, as long as its credential is in the
+        environment. Config is a set of presets, not an allow-list:
+
+        ```python
+        await llm.chat("hi", target="xai:grok-4.1-20251117?effort=high")
+        ```
+
+        With `[routing]` configured, a call can name a pool (failover across
+        interchangeable targets), a lane (a named destination), or a parameter
+        profile — or say nothing and let a classifier decide:
+
+        ```python
+        await llm.chat("hi", pool="main")        # failover across the pool
+        await llm.chat("hi", lane="deep")        # a named destination
+        await llm.chat("hi", profile="frugal")   # a parameter bundle
+        await llm.chat("refactor this", complexity="high")   # a hint
+        await llm.chat("hi", routing={"max_attempts": 5})    # per-call policy
+        ```
+
+        Every `[routing]` setting is overridable per call through `routing=`,
+        because config is a warm-up rather than a cage.
+
+        **Streaming caveat:** a target is chosen for a streaming call as
+        normal, but there is no failover once bytes have been emitted — a
+        half-delivered stream cannot be retracted. A stream that fails before
+        its first chunk does fail over.
+
+        See `llm.routing.explain()` to find out where a message would go
+        without sending it, and `docs/ROUTING_SUBSYSTEM_SPEC.md` for the
+        design.
 
         ## External RAG Engine Integration
 
@@ -1220,6 +1314,22 @@ class LLMCore:
             system_message: Optional system message to define LLM behavior.
                 Sets the role and personality for this conversation.
 
+            target: A routing spec string -- `"provider:model?params#instance"`.
+                Bypasses pools, lanes and classification entirely, which is the
+                documented way to reproduce a result. Reachable whether or not
+                the provider has a config section.
+            pool: Route through this pool, with failover across its members.
+            lane: Route to this lane, skipping classification.
+            profile: Apply a named parameter profile from
+                `[routing.profiles.*]`.
+            complexity: A hint for the classifier chain. Names a lane if one
+                exists by that name; otherwise read as an effort level.
+            effort: Reasoning effort -- one of `none`, `minimal`, `low`,
+                `medium`, `high`, `xhigh`, `max`. Folded to the nearest rung
+                the target supports, or dropped where it has no reasoning mode.
+            routing: Per-call overrides for any `[routing]` setting, e.g.
+                `{"max_attempts": 5, "on_refusal": "failover"}`. These win over
+                config and environment.
             provider_name: Optional provider override (e.g., 'openai', 'anthropic', 'ollama').
                 If None, uses the default provider from configuration.
 
@@ -1338,18 +1448,50 @@ class LLMCore:
                 ...     session_id=session_id
                 ... )
         """
-        # Get the active provider
-        active_provider = self._provider_manager.get_provider(provider_name)
-        actual_model = model_name or active_provider.default_model
+        # Routing decides the target when asked to, and otherwise stays out of
+        # the way: with no routing argument and no pool, lane or classifier
+        # chain configured, `routing_plan` is None and resolution below is
+        # byte-for-byte what it was before routing existed.
+        routing_settings, routing_plan, routing_params = await self._resolve_routing(
+            message,
+            system_message=system_message,
+            session_id=session_id,
+            tools=tools,
+            target=target,
+            pool=pool,
+            lane=lane,
+            profile=profile,
+            complexity=complexity,
+            effort=effort,
+            routing=routing,
+            provider_kwargs=provider_kwargs,
+        )
 
-        # Validate provider kwargs against supported parameters
-        supported_params = active_provider.get_supported_parameters(actual_model)
-        for key in provider_kwargs:
-            if key not in supported_params:
-                raise ValueError(
-                    f"Unsupported parameter '{key}' for provider '{active_provider.get_name()}'. "
-                    f"Supported parameters are: {list(supported_params.keys())}"
-                )
+        if routing_plan is not None and routing_plan.chosen is not None:
+            active_provider = self._provider_manager.resolve_target(
+                routing_plan.chosen,
+                autoprovision=routing_settings.autoprovision,
+                cache=routing_settings.autoprovision_cache,
+            )
+            actual_model = (
+                model_name or routing_plan.chosen.model or active_provider.default_model
+            )
+        else:
+            active_provider = self._provider_manager.get_provider(provider_name)
+            actual_model = model_name or active_provider.default_model
+
+        # Routing parameters sit *under* an explicit keyword argument, so a
+        # caller's own value always wins (spec 6.1).
+        if routing_params:
+            provider_kwargs = {**routing_params, **provider_kwargs}
+
+        provider_kwargs = self._filter_provider_kwargs(
+            active_provider,
+            actual_model,
+            provider_kwargs,
+            settings=routing_settings,
+            from_pool=bool(routing_plan is not None and routing_plan.pool),
+        )
 
         # Load or create session
         chat_session = await self._session_manager.load_or_create_session(
@@ -1463,16 +1605,49 @@ class LLMCore:
                     actual_model,
                 )
 
-        # Call provider
-        response_data = await active_provider.chat_completion(
-            context=context_payload,
-            model=actual_model,
-            stream=stream,
-            tools=tools,
-            tool_choice=tool_choice,
-            **native_search_call_kwargs,
-            **provider_kwargs,
-        )
+        # Call provider. When routing chose from a pool, this goes through the
+        # attempt loop so a 429 or an empty wallet moves to a peer; a 400 or a
+        # refusal does not, since those fail everywhere.
+        #
+        # Streaming is deliberately excluded: once bytes have reached the
+        # caller the call cannot be retracted, so there is nothing honest to
+        # fail over to. A stream that fails before its first chunk is still
+        # covered, because that failure happens inside this await.
+        if routing_plan is not None and routing_plan.pool and not stream:
+            response_data, active_provider, actual_model = await self._call_with_failover(
+                plan=routing_plan,
+                settings=routing_settings,
+                provider=active_provider,
+                model=actual_model,
+                context_payload=context_payload,
+                context_details=context_details,
+                chat_session=chat_session,
+                tools=tools,
+                tool_choice=tool_choice,
+                native_search=native_search,
+                native_search_call_kwargs=native_search_call_kwargs,
+                provider_kwargs=provider_kwargs,
+                # Forwarded verbatim to prepare_context() on a failover, so the
+                # keyword names here are ITS names, not chat()'s.
+                rag_enabled=enable_rag,
+                rag_k=rag_retrieval_k,
+                rag_collection=rag_collection_name,
+                rag_metadata_filter=rag_metadata_filter,
+                active_context_item_ids=active_context_item_ids,
+                explicitly_staged_items=explicitly_staged_items,
+                prompt_template_values=prompt_template_values,
+                tool_schema_tokens=tool_schema_tokens,
+            )
+        else:
+            response_data = await active_provider.chat_completion(
+                context=context_payload,
+                model=actual_model,
+                stream=stream,
+                tools=tools,
+                tool_choice=tool_choice,
+                **native_search_call_kwargs,
+                **provider_kwargs,
+            )
 
         # Handle response
         if stream:
@@ -1517,6 +1692,287 @@ class LLMCore:
             if save_session:
                 await self._session_manager.save_session(chat_session)
             return full_content
+
+    # =========================================================================
+    # Routing helpers
+    # =========================================================================
+
+    def _build_routing_request(
+        self,
+        message: str,
+        *,
+        system_message: str | None = None,
+        session_id: str | None = None,
+        tools: list[Tool] | None = None,
+        hints: dict[str, Any] | None = None,
+    ) -> RoutingRequest:
+        """Build the read-only view classifiers and transforms get.
+
+        A copy rather than the live session, so a classifier cannot mutate the
+        request it is being asked about. Tools are passed as names only: a
+        classifier wanting to know "is this an agent turn?" needs the names,
+        not the schemas, and sending schemas to a classifier API would be
+        expensive for no gain.
+        """
+        return RoutingRequest(
+            prompt=message,
+            system=system_message,
+            session_id=session_id,
+            tools=tuple(getattr(tool, "name", str(tool)) for tool in (tools or ())),
+            hints={key: value for key, value in (hints or {}).items() if value is not None},
+        )
+
+    async def _resolve_routing(
+        self,
+        message: str,
+        *,
+        system_message: str | None,
+        session_id: str | None,
+        tools: list[Tool] | None,
+        target: str | None,
+        pool: str | None,
+        lane: str | None,
+        profile: str | None,
+        complexity: str | None,
+        effort: str | None,
+        routing: dict[str, Any] | None,
+        provider_kwargs: dict[str, Any],
+    ) -> tuple[RoutingSettings, RoutingPlan | None, dict[str, Any]]:
+        """Decide whether routing applies to this call, and if so, where to.
+
+        Returns ``(settings, plan, params)``. ``plan`` is ``None`` when routing
+        has nothing to contribute, which is the common case for an
+        unconfigured install and keeps the old resolution path exactly as it
+        was.
+        """
+        settings = self._routing_manager.settings
+        if routing:
+            settings = settings.override(**routing)
+
+        asked = any(
+            value is not None for value in (target, pool, lane, profile, complexity, effort)
+        )
+        configured = bool(
+            settings.enabled
+            and (settings.default_pool or settings.default_lane or settings.classifier_chain)
+        )
+        if not asked and not configured:
+            return settings, None, {}
+
+        request = self._build_routing_request(
+            message,
+            system_message=system_message,
+            session_id=session_id,
+            tools=tools,
+            hints={
+                "target": target,
+                "lane": lane,
+                "complexity": complexity,
+                "effort": effort,
+            },
+        )
+        plan = await self._routing_manager.plan(
+            request, settings=settings, target=target, pool=pool, lane=lane, profile=profile
+        )
+        params = dict(plan.chosen.params) if plan.chosen is not None else {}
+        if effort and "effort" not in params:
+            params["effort"] = effort
+        return settings, plan, params
+
+    def _filter_provider_kwargs(
+        self,
+        provider: BaseProvider,
+        model: str,
+        provider_kwargs: dict[str, Any],
+        *,
+        settings: RoutingSettings | None = None,
+        from_pool: bool = False,
+    ) -> dict[str, Any]:
+        """Drop or reject parameters the target does not support.
+
+        Historically an unsupported parameter raised, and for a single
+        configured provider that is the right answer: the caller named
+        something that does not exist and should hear about it.
+
+        Pools change that, but only pools. A pool whose members have different
+        parameter surfaces is the *normal* case -- `effort` means something on
+        one model and nothing on another -- so raising would make such pools
+        unusable, and every caller would have to know which member served the
+        request before choosing arguments.
+
+        So the rule is narrow: drop with a warning only when a **pool** chose
+        the target, and raise everywhere else. A caller who names one provider
+        and one bogus parameter has made a mistake and should hear about it,
+        exactly as before routing existed.
+        `routing.on_unsupported_param = "error"` makes the pool case strict too.
+        """
+        if not provider_kwargs:
+            return provider_kwargs
+        supported = provider.get_supported_parameters(model)
+        unsupported = [key for key in provider_kwargs if key not in supported]
+        if not unsupported:
+            return provider_kwargs
+
+        strict = (
+            not from_pool or settings is None or settings.on_unsupported_param != "drop"
+        )
+        if strict:
+            raise ValueError(
+                f"Unsupported parameter '{unsupported[0]}' for provider "
+                f"'{provider.get_name()}'. Supported parameters are: {list(supported.keys())}"
+            )
+        logger.warning(
+            "Dropping parameter(s) %s: pool member '%s' (model '%s') does not support them. "
+            "Set routing.on_unsupported_param = \"error\" to make this raise instead.",
+            ", ".join(unsupported),
+            provider.get_name(),
+            model,
+        )
+        return {key: value for key, value in provider_kwargs.items() if key in supported}
+
+    async def _call_with_failover(
+        self,
+        *,
+        plan: RoutingPlan,
+        settings: RoutingSettings,
+        provider: BaseProvider,
+        model: str,
+        context_payload: Any,
+        context_details: Any,
+        chat_session: Any,
+        tools: list[Tool] | None,
+        tool_choice: str | None,
+        native_search: bool,
+        native_search_call_kwargs: dict[str, Any],
+        provider_kwargs: dict[str, Any],
+        **context_kwargs: Any,
+    ) -> tuple[Any, BaseProvider, str]:
+        """Call the chosen target, moving to a peer where that makes sense.
+
+        The context payload is re-prepared whenever the target changes, which
+        is the whole reason this cannot simply wrap ``chat_completion``:
+        models have different context windows and different tokenizers, so a
+        payload budgeted for a 128k model is not valid for the 32k peer it
+        fails over to. Re-preparing is a real cost, and it is paid only on the
+        failover path.
+
+        ``context_details`` is updated in place so the introspection a caller
+        reads afterwards describes the target that actually answered, not the
+        one that was tried first.
+        """
+        request = self._build_routing_request(
+            (getattr(chat_session, "id", None) and "") or "",
+            session_id=getattr(chat_session, "id", None),
+        )
+        runner_state: dict[str, Any] = {
+            "provider": provider,
+            "model": model,
+            "payload": context_payload,
+            "kwargs": dict(provider_kwargs),
+        }
+
+        async def runner(
+            attempt_provider: BaseProvider, attempt_target: Target, params: dict[str, Any]
+        ) -> Any:
+            attempt_model = attempt_target.model or attempt_provider.default_model
+            same = (
+                attempt_provider.get_name() == runner_state["provider"].get_name()
+                and attempt_model == runner_state["model"]
+            )
+            if same:
+                payload = runner_state["payload"]
+                call_kwargs = runner_state["kwargs"]
+            else:
+                # A different model means a different budget and tokenizer.
+                details = await self._memory_manager.prepare_context(
+                    session=chat_session,
+                    provider_name=attempt_provider.get_name(),
+                    model_name=attempt_model,
+                    **context_kwargs,
+                )
+                payload = details.prepared_messages
+                call_kwargs = self._filter_provider_kwargs(
+                    attempt_provider,
+                    attempt_model,
+                    dict(params),
+                    settings=settings,
+                    from_pool=True,
+                )
+                runner_state.update(
+                    provider=attempt_provider, model=attempt_model, payload=payload,
+                    kwargs=call_kwargs, details=details,
+                )
+
+            search_kwargs: dict[str, Any] = {}
+            if native_search and attempt_provider.supports_native_search(attempt_model):
+                search_kwargs["native_search"] = True
+
+            return await attempt_provider.chat_completion(
+                context=payload,
+                model=attempt_model,
+                stream=False,
+                tools=tools,
+                tool_choice=tool_choice,
+                **search_kwargs,
+                **call_kwargs,
+            )
+
+        result = await self._routing_manager.execute(
+            request,
+            runner,
+            settings=settings,
+            pool=plan.pool,
+            lane=plan.lane,
+            call_params=provider_kwargs,
+        )
+
+        final_provider = runner_state["provider"]
+        final_model = runner_state["model"]
+        if result.failed_over:
+            served = result.target.spec()
+            logger.info("routing: %s served this request after %d attempt(s)", served, len(result.attempts))
+            details = runner_state.get("details")
+            if details is not None:
+                # Keep the caller's introspection honest about who answered.
+                # `prompt_tokens` is deliberately excluded and recomputed
+                # below: chat() derives it *after* prepare_context() returns,
+                # so a straight copy of the fresh details overwrites it with
+                # the unset value and the caller sees prompt_tokens = 0.
+                context_details.__dict__.update(
+                    {
+                        key: value
+                        for key, value in details.__dict__.items()
+                        if key not in ("provider", "model", "prompt_tokens")
+                    }
+                )
+                context_details.prompt_tokens = (
+                    getattr(details, "final_token_count", 0) or 0
+                ) + (context_kwargs.get("tool_schema_tokens") or 0)
+            context_details.provider = final_provider.get_name()
+            context_details.model = final_model
+            context_details.max_context_length = (
+                getattr(details, "max_tokens_for_model", None)
+                or final_provider.get_max_context_length(final_model)
+            )
+        return result.value, final_provider, final_model
+
+    async def _routing_ask(self, prompt: str, *, target: str | None = None) -> str:
+        """Single-shot completion for the ``llm`` classifier and verifier.
+
+        Deliberately minimal and session-free: a classifier call must not
+        appear in the conversation it is classifying, must not be saved, and
+        must not itself be routed -- a classifier that went back through
+        routing could classify itself forever.
+        """
+        provider = self._provider_manager.resolve_target(
+            target or Target(provider=self._provider_manager._default_provider_name),
+            autoprovision=self._routing_manager.settings.autoprovision,
+        )
+        model = (Target.parse(target).model if target else None) or provider.default_model
+        response = await provider.chat_completion(
+            context=[{"role": "user", "content": prompt}], model=model, stream=False
+        )
+        return self._extract_full_content(response, provider) or ""
 
     async def chat_with_usage(
         self,
@@ -1839,6 +2295,23 @@ class LLMCore:
             ContextPreparationDetails if available, None otherwise
         """
         return self._transient_last_interaction_info_cache.get(session_id)
+
+    def discard_transient_state(self, session_id: str) -> None:
+        """Drop the cached introspection and raw response for *session_id*.
+
+        A long-running embedder -- the routing proxy is the first, but any
+        service calling ``chat()`` in a loop qualifies -- reads the
+        introspection for a turn and then has no further use for it. Without
+        this, those per-turn caches are keyed by session id and grow for the
+        life of the process, which for a proxy handling one synthetic session
+        per request is an unbounded leak.
+
+        Args:
+            session_id: The session whose cached per-turn state to forget.
+        """
+        self._transient_last_interaction_info_cache.pop(session_id, None)
+        self._transient_last_raw_response_cache.pop(session_id, None)
+        self._transient_sessions_cache.pop(session_id, None)
 
     def get_last_raw_response(self, session_id: str) -> dict[str, Any] | None:
         """Retrieve the raw provider response from the most recent chat() call.
@@ -5407,3 +5880,170 @@ class LLMCore:
             ```
         """
         return self._runtime_config_dirty
+
+
+# =============================================================================
+# Routing facade
+# =============================================================================
+
+
+class RoutingFacade:
+    """``llm.routing`` — inspect and explain routing without making a call.
+
+    Exists because opaque routing is a support burden. A feature that silently
+    changes which vendor served a request has to be able to answer "why did it
+    pick that?", and the answer must not require reading logs or enabling
+    debug output.
+    """
+
+    def __init__(self, core: LLMCore) -> None:
+        self._core = core
+
+    # -- introspection ---------------------------------------------------
+
+    def pools(self) -> dict[str, list[str]]:
+        """Configured pools and their members.
+
+        Example:
+            ```python
+            llm.routing.pools()
+            # {'main': ['anthropic:claude-opus-5-5?effort=high', 'openai:gpt-5.4']}
+            ```
+        """
+        return self._core._routing_manager.pools()
+
+    def lanes(self) -> dict[str, str]:
+        """Configured lanes and what each one points at."""
+        return self._core._routing_manager.lanes()
+
+    def profiles(self) -> dict[str, dict[str, Any]]:
+        """Configured parameter profiles."""
+        return self._core._routing_manager.profiles()
+
+    def classifiers(self) -> list[str]:
+        """The classifier chain, in the order it will actually run.
+
+        Not the order from config: llmcore reorders it cheapest-first and, within
+        a cost band, instructions before guesses.
+        """
+        return self._core._routing_manager.classifier_chain().names()
+
+    def transforms(self) -> list[str]:
+        """The transform chain, in order."""
+        return self._core._routing_manager.transform_chain().names()
+
+    def settings(self) -> dict[str, Any]:
+        """The resolved routing settings, after config and environment."""
+        from dataclasses import asdict
+
+        resolved = asdict(self._core._routing_manager.settings)
+        resolved["cooldowns"] = {
+            str(kind): seconds for kind, seconds in resolved["cooldowns"].items()
+        }
+        return {key: (str(value) if hasattr(value, "value") else value) for key, value in resolved.items()}
+
+    # -- health ----------------------------------------------------------
+
+    def health(self) -> dict[str, dict[str, Any]]:
+        """Per-target health: cooldowns, latency, failures, balance.
+
+        What to read when a pool is behaving oddly. ``cooldown_remaining`` is
+        in seconds, and ``unusable`` means an auth failure benched the target
+        for the life of the process.
+        """
+        return self._core._routing_manager.health()
+
+    async def clear_health(self, target: str | None = None) -> None:
+        """Forget recorded health for one target, or all of them.
+
+        The honest escape hatch for the case the design otherwise handles
+        badly: you have topped up an account or fixed a key, and you should not
+        have to restart the process to escape an ``unusable`` mark.
+
+        Args:
+            target: A target key (``"openai:gpt-5.4"``), or ``None`` for all.
+        """
+        await self._core._routing_manager.state.clear(target)
+
+    async def probe_balances(self) -> dict[str, dict[str, Any]]:
+        """Ask each pool member's provider for its remaining balance.
+
+        Most vendors expose none, and those come back ``known: false`` rather
+        than being omitted — "we asked and nobody knows" and "we did not ask"
+        are different facts, and only the first justifies ranking a target
+        below one with a known balance.
+        """
+        return await self._core._routing_manager.probe_balances()
+
+    # -- explain ---------------------------------------------------------
+
+    async def explain(
+        self,
+        message: str,
+        *,
+        system_message: str | None = None,
+        session_id: str | None = None,
+        target: str | None = None,
+        pool: str | None = None,
+        lane: str | None = None,
+        profile: str | None = None,
+        complexity: str | None = None,
+        effort: str | None = None,
+        tools: list[Tool] | None = None,
+    ) -> RoutingPlan:
+        """Decide where a message *would* go, without sending it.
+
+        Runs the classifier chain for real — so a chain containing a paid
+        classifier will make that one cheap call — but never calls the target
+        model.
+
+        Example:
+            ```python
+            plan = await llm.routing.explain("summarise this file")
+            print(plan.summary())
+            # lane=trivial via heuristic(0.65) pool=cheap -> gemini:gemini-3.8-flash ~$0.0004
+            for candidate in plan.candidates:
+                if not candidate.eligible:
+                    print(candidate.target.spec(), "skipped:", candidate.reason)
+            ```
+
+        Returns:
+            A :class:`~llmcore.routing.RoutingPlan`.
+        """
+        request = self._core._build_routing_request(
+            message,
+            system_message=system_message,
+            session_id=session_id,
+            tools=tools,
+            hints={
+                "target": target,
+                "lane": lane,
+                "complexity": complexity,
+                "effort": effort,
+            },
+        )
+        return await self._core._routing_manager.plan(
+            request, target=target, pool=pool, lane=lane, profile=profile
+        )
+
+    async def why(self, message: str, **kwargs: Any) -> str:
+        """:meth:`explain`, rendered as readable lines.
+
+        For the CLI and for a quick look in a REPL, where a dataclass repr is
+        the wrong shape.
+        """
+        plan = await self.explain(message, **kwargs)
+        lines = [plan.summary()]
+        if plan.classification is not None:
+            rationale = plan.classification.rationale or "no rationale given"
+            lines.append(f"  classifier: {plan.classification.source} — {rationale}")
+        for candidate in plan.candidates:
+            mark = "->" if plan.chosen and candidate.target.key == plan.chosen.key else "  "
+            if candidate.eligible:
+                score = f" score={candidate.score:.4g}" if candidate.score is not None else ""
+                lines.append(f"  {mark} {candidate.target.spec()}{score}")
+            else:
+                lines.append(f"     {candidate.target.spec()} — skipped: {candidate.reason}")
+        for note in plan.notes:
+            lines.append(f"  note: {note}")
+        return "\n".join(lines)

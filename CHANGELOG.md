@@ -7,6 +7,437 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — `llmcore.routing`: pools, lanes, failover and proxy mode
+
+Five composable layers, all off until configured. With no `[routing]` section
+every call resolves exactly as it did before. Design and the reasoning behind
+each decision: [`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md);
+usage: [`Routing_usage.md`](docs/Routing_usage.md).
+
+**Config stops being an allow-list.** `[providers.*]` sections were acting as
+one: a provider registered in `PROVIDER_MAP`, with its key in the environment
+and its base URL already known, was still unreachable. Any provider+model is
+now addressable by spec string, and llmcore builds the instance on demand:
+
+```python
+await llm.chat("hi", target="xai:grok-4.1-20251117?effort=high")
+await llm.chat("hi", target="ollama:llama3.3:70b")
+await llm.chat("hi", target="vllm:Qwen/Qwen3-30B#my-box")
+```
+
+`routing.autoprovision = false` restores the closed set for deployments that
+want one. (Found along the way: `xai`, `groq` and `together` had no
+`[providers.*]` section at all, so all three were unreachable despite being
+registered — sections added.)
+
+**Pools, with a failure taxonomy rather than one retry rule.** Conflating
+failures is how naive failover burns money or loops, so each gets its own
+handling: a 429 cools down briefly and honours `Retry-After`; an empty wallet
+cools down for minutes and records a balance of zero; a 5xx is retried once
+*in place* before moving, since it is usually one bad node and moving would
+discard a warm prompt cache; a bad key benches the target for the process; a
+400 does not fail over at all; a content refusal does not either, unless
+`on_refusal = "failover"` — retrying a refusal elsewhere is "shop until
+someone says yes", which should be opted into. A prompt that overflows the
+context window is treated as a routing signal, not an error, and is sent to a
+model with a larger window; llmcore also skips a target *before* calling it
+when the card already proves the prompt will not fit.
+
+Seven selection strategies: `priority`, `round_robin`, `weighted`,
+`lowest_latency`, `lowest_cost`, `least_busy`, `most_credits`. Order tiers
+(`?order=1`) express "my own GPU, and only pay a vendor if it is down".
+Session affinity is on by default, because failing over mid-conversation drops
+the cached prefix, shifts output style under few-shot expectations, and
+invalidates preserved reasoning blocks.
+
+Three places where the strategies refuse to guess, because treating "unknown"
+as a number inverts them: an **unpriced** target ranks after every priced one;
+an **unknown balance** ranks after a known one but ahead of a known-*empty*
+one; `lowest_latency` explores an unmeasured target first, since it cannot
+prefer low latency without a measurement. Self-hosted providers price at zero
+rather than unknown, so a local model wins outright.
+
+**Lanes and classifiers.** A classifier names a lane, never a model, so
+swapping models is a config edit. That one indirection covers complexity
+tiers, speed tiers, domain routing and a privacy class with one mechanism.
+Nine classifiers ship, from a free `hint` to a local 350M zero-shot encoder to
+TypeSafe's `choice` primitive. llmcore orders the chain itself: cheapest
+first, and within a cost band instructions before guesses — a `lane=` argument
+and a length heuristic are both free, and running the guess first would
+override what the caller asked for.
+
+Authority has four levels (`caller` > `policy` > `prompt` > `inferred`)
+because a routing marker found in *content* is not as trustworthy as an
+argument on the call. Markers are the point of the feature — in an agent
+harness the model's text is the only channel that passes through, so that is
+how an agent routes itself — but in a RAG path that text may have come from a
+retrieved document, where `[[lane:deep]]` would be a one-line prompt
+injection, or a way out of the private lane. Markers are always stripped
+before egress, acted on or not.
+
+**Cascades** (opt-in): answer cheaply, verify, escalate only if the answer
+fell short. Verdicts are three-valued, and *could not judge* is kept distinct
+from both — read as a fail it escalates every unjudgeable answer and inverts
+the saving; read as a pass it silently disables the quality floor the moment
+the judge breaks.
+
+**The privacy path, where routing is the guarantee and redaction is not.** A
+detector that misses one identifier has leaked it, and none catches
+everything, so `on_detect = "constrain"` changes the *destination*: a prompt
+with personal data goes to a pool that never leaves the machine, and a miss
+stays on your own hardware. Redaction can be stacked and is documented as
+defence in depth. Three ways it refuses to degrade quietly: `constrain` with
+no pool configured blocks rather than sending; a constrain pool that does not
+exist blocks; and a detector that raises blocks (`fail_closed`), because a
+detector that crashed has not cleared the prompt. Findings carry a 16-char
+hash, never the value — including in the exception message.
+
+**Proxy mode** (`llmcore-bridge proxy`): an OpenAI-compatible endpoint, so an
+unmodified agent harness gets all of the above by setting a base URL and a
+model name. `model` accepts `lane:deep`, `pool:main`, `profile:frugal`, a
+target spec, a bare model name or `auto`; lanes and pools appear in
+`GET /v1/models` so the harness's own picker selects routing policy. Usage
+reports the target that *actually* answered, because under a pool that is not
+the model requested and a harness logging spend should not be lied to. It
+binds to loopback and **refuses** a non-loopback bind without a bearer token,
+since the process holds every provider credential in the config.
+
+**Effort and parameters.** The existing effort vocabulary is extended rather
+than replaced, with precedence card → provider config → target → lane →
+profile → per-call keyword. Under a pool an unsupported parameter is dropped
+with a warning, because members genuinely have different parameter surfaces;
+outside a pool it still raises.
+
+**Everything is overridable.** Config is a warm-up, not a cage: every
+`[routing]` setting resolves config → environment → request, and the request
+wins. A misspelled override raises rather than being silently dropped.
+
+**Explaining itself.** `llm.routing.explain()`/`why()` report the lane, the
+classifier that chose it, the chosen target and *why each other candidate was
+not used*, without making a call. `health()` shows per-target cooldowns,
+latency and balance. Every decision also emits a structured event.
+
+New skills in the bundled grimoire pack: `skills/llmcore/proxy`,
+`skills/llmcore/routing`, `skills/llmcore/cost`.
+
+### Fixed — Anthropic thinking/effort, mapped per generation and verified live
+
+Reasoning depth is expressed differently by different Claude generations, and
+llmcore forwarded whatever the caller passed -- so a reasonable request became
+an API error purely because of which model served it. Pools make that routine,
+since members span generations.
+
+`effort` is now a first-class Anthropic parameter and means the same thing
+everywhere; the provider maps it to whatever the target accepts.
+
+**The boundaries were measured against the live API**, one request per model,
+and there are **three of them, which do not coincide.** The first draft of this
+fix assumed a single cutoff at 4.6 and was wrong:
+
+| generation | `type=enabled` + `budget_tokens` | `type=adaptive` | `type=disabled` |
+|---|---|---|---|
+| ≤ 4.5 | 200 — the only option | **400** not supported | 200 |
+| **4.6** | 200 | 200 | 200 |
+| ≥ 4.7 | **400** not supported | 200 | **400** not supported |
+
+So:
+
+* **≥ 4.7** gets `{"type": "adaptive"}` plus `output_config.effort`; a caller's
+  `budget_tokens` is converted with a warning quoting the 400 it would have
+  caused.
+* **4.6 is an overlap where both forms work**, so a caller's explicit token
+  budget is *honoured* there rather than discarded. The single-cutoff draft
+  would have silently overridden a valid, deliberate choice.
+* **≤ 4.5** gets `{"type": "enabled", "budget_tokens": N}` mapped from the
+  effort level, and a request for `adaptive` is converted rather than failing.
+* **An unparseable model id gets the newest behaviour**, because the older
+  families are the shrinking set.
+
+Two further bugs the live run found, both of which would have 400'd:
+
+* **`{"type": "disabled"}` is rejected from 4.7**, and the API names the
+  replacement itself: *"To turn thinking off on this model, send
+  `thinking: {"type": "between_tools"}`"*. So `effort="none"` now sends
+  whichever spelling the target accepts. (It disables rather than requesting
+  adaptive-at-low, which would quietly spend reasoning tokens the caller
+  explicitly asked not to spend.)
+* **`max_tokens` must be *strictly* greater than `budget_tokens`** -- equal
+  values are a 400 -- and a budget below 1024 is rejected outright. So
+  `effort="high"` with `max_tokens=512` was unsendable. The budget is now
+  clamped to fit, and where no valid budget exists thinking is turned off with
+  a warning saying how to get it back, because sending a request that cannot
+  succeed is worse than answering without reasoning and saying so.
+
+`xhigh` folds to `high` on 4.6+, following the documented policy of folding to
+the nearest supported rung rather than dropping an effort level and losing the
+caller's intent.
+
+**Validated live**: 12 of 12 cases across `claude-haiku-4-5`,
+`claude-sonnet-4-6` and `claude-sonnet-5-5`, asserting both the response and
+the exact payload sent. Total cost under $0.02.
+
+### Fixed — every Anthropic call without a system message failed on the SDK transport
+
+Found while validating the above, and unrelated to it. The SDK path passed
+`system=system_prompt` unconditionally, so with no system message the SDK
+serialised `"system": null` into the body and the API answered 400 *"system:
+Input should be a valid array"*. The httpx path already omitted it when
+absent; the two transports have to agree, and now do.
+
+This is exactly the class of bug the dual-transport work exists to surface:
+the direct path is the default, so the SDK fallback was never exercised
+against a real account until credits were available.
+
+### Added — a classifier evaluation harness, and the CLI to run it
+
+llmcore publishes no accuracy figure for any classifier, because none has been
+validated on real traffic and any number would be invented. That gap is still
+open but is now **closable**: `llmcore.routing.evaluation` and
+`llmcore-routing eval` measure a chain against labelled prompts.
+
+The harness is built around one property a single accuracy figure destroys:
+**the two error directions are not interchangeable.** Routing too cheap
+produces a bad answer; routing too expensive only costs money. The same 67%
+can be usable or unusable depending on which way it errs, so every report
+separates them and names the consequence. A test asserts that two classifiers
+with identical 0% accuracy produce opposite reports, which is the whole reason
+the harness exists.
+
+Two further scoring choices, both deliberate: an abstention is **not** counted
+as an error (a classifier that declines is passing the turn down the chain,
+which is the designed behaviour -- scoring it as wrong would make the most
+honest classifier look like the worst), and with no lane order supplied the
+report declines to guess a direction rather than inventing one.
+
+`llmcore-routing` also gets `why`, `health` and `show`. A 29-case starter set
+ships at `docs/examples/lane_eval_starter.jsonl` so replacing it with real
+traffic is an edit rather than a blank page; its README is explicit that it is
+not a benchmark. Unlabelled traffic (a `.txt` file) is accepted too, which
+measures coverage and latency before anyone has decided labelling is worth it.
+
+### Fixed — a privacy-relevant misroute, found by the new harness on its first run
+
+The free `heuristic` classifier routes
+
+> "Here is my patient record: John Doe, DOB 1971-03-02, diagnosed with
+> hypertension. Summarise it."
+
+to the **trivial** lane, because "summarise" is a simple-task verb and the
+heuristic is documented as not looking for personal data at all.
+
+That is survivable only because the privacy guarantee does not depend on the
+classifier: transforms run *after* target selection and change the
+destination, so the prompt is still constrained to a local-only pool before
+anything is sent. This is now asserted rather than assumed, in
+`TestLayeringSurvivesAMisclassification` -- one test proves the classifier
+really does get it wrong, so the premise cannot rot silently, and another
+proves the prompt still cannot reach a remote target.
+
+### Changed — the Colab backend is verified against a real GPU VM
+
+The R3 gate -- "one real model served end to end and reachable through
+`llm.chat()`" -- is **met**. Qwen2.5-1.5B-Instruct served by vLLM on a Colab
+T4, reached through `llm.chat(provider_name=...)`, and routed to through a
+pool containing the runtime:
+
+```
+[2.6s] 'Reply with exactly: COLAB'  ->  COLAB
+plan: pool=local strategy=priority chosen=llmcore-e2e:Qwen/Qwen2.5-1.5B-Instruct
+                                   ->  ROUTED
+```
+
+Teardown released the VM and `colab usage` confirmed 0.00/hr afterwards. Total
+cost of validation: 0.6 compute units.
+
+One honest caveat: in the successful run the server was started by the
+corrected bootstrap script invoked by hand on the VM, because the
+orchestration's own first attempt had died on the torchaudio mismatch below.
+Everything *around* it -- the assignment guard, the tunnel, provider
+attachment, `chat()`, pool routing, status and teardown -- ran through the
+orchestration. A single unattended `up()` with every fix applied has not been
+repeated.
+
+### Fixed — four bugs the live Colab run found, each silent
+
+Every one of these passed the test suite and would have failed on a VM that
+was already billing:
+
+* **The session parser could not find its own session.** `colab sessions`
+  prints `[name] external-id | Hardware: T4 | ...`, not the box-drawn table
+  the generic scraper assumed. The scraper *appeared* to handle it -- it
+  returned a row rather than raising -- with the whole `[name] id` chunk as
+  the name, so the assignment guard never recognised its own session and
+  released a healthy T4 after 180 seconds. Being forgiving is not the same as
+  being right. The real format is now matched explicitly and captured verbatim
+  as a fixture.
+
+* **`colab exec` returns 0 even when the code it ran raised.** The bootstrap
+  script correctly detected its own failure and exited -- and the
+  orchestration read rc=0, opened a tunnel to a server that had never started,
+  and waited 45 minutes. Success is now the explicit `[llmcore] READY` marker,
+  printed only after the server answers on the VM, and a failure message leads
+  with the line that explains it rather than the tail of the progress chatter.
+
+* **A CUDA-mismatched torch companion killed the server on import.**
+  Installing vLLM upgraded torch to `2.13.0+cu130` while Colab's preinstalled
+  `torchaudio 2.11.0+cu128` stayed put; transformers imports torchaudio
+  unconditionally, and torchaudio refuses to load against a different CUDA. The
+  bootstrap now removes torch companions whose CUDA tag disagrees with torch,
+  which is cheaper and more reliable than chasing a matching multi-gigabyte
+  build on a billing VM.
+
+* **The environment cache wrote and read the wrong directory, twice.** First
+  `/usr/lib/python3/dist-packages` (Colab installs into `/usr/local`), then
+  `site.getsitepackages()[-1]`, which resolved to the same wrong path on a real
+  VM. Both now use `sysconfig.get_paths()["purelib"]` -- the path pip itself
+  resolves, and so the only one that cannot disagree with the installer.
+
+Also: `PIP_CACHE_DIR` pointed at the Google Drive mount, so every wheel
+downloaded through FUSE to Drive. The finished environment tarball belongs on
+Drive; the pip cache is scratch and now stays on local disk.
+
+### Fixed — a time-of-day flake in the routing tests
+
+Three `most_credits` tests recorded a balance without an injected clock while
+asserting against a fixed one, so a probed-empty cooldown was measured from
+real wall-clock UTC. They passed in the morning and failed in the afternoon.
+Verified clock-independent by re-running the file with its fixed moment
+shifted 25 years into the past.
+
+### Added — the Colab runtime backend (R2-R6)
+
+`llmcore.runtimes` can now actually provision: sizing, the Colab backend, a
+supervisor that enforces the deadlines, and `llmcore-runtimes` for the
+commands you need when something has gone wrong.
+
+**Sizing** (R2) is read-only and free, and prints its own arithmetic — a sizer
+that answers "use an A100" and shows nothing is impossible to argue with.
+Every unknown rounds toward *needing more*: overestimating buys a bigger GPU,
+underestimating OOMs on the VM after billing has started. Context shrinks
+before a bigger GPU is chosen, and when nothing fits the sizer refuses with a
+concrete alternative rather than sending the caller to guess — the next guess
+is also a launch.
+
+**The Colab backend** (R3) enforces four rules in code: state is written
+before compute can be assigned; any bootstrap failure releases the VM; nothing
+is connected to until the session actually exists; deadlines are set at
+creation. If a release *also* fails, the log says MAY STILL BE BILLING in
+those words. The VM-side server is started with `setsid`, because as a child
+of the kernel a kernel restart would kill it silently while the VM kept
+billing. Secrets travel on stdin or through `colab exec --env`, never in argv.
+
+**Supervision** (R4). `reap()` existed but nothing called it, which made the
+idle and hard deadlines documentation rather than limits; `up()` now starts a
+supervisor. Liveness marks a runtime DEGRADED after three consecutive
+failures, not one, and never tears it down — letting a transient network
+problem destroy an expensive VM would be worse than the problem. The idle
+reaper needs a last-used time and vLLM exposes no such metric, so `attach()`
+wraps the provider's `chat_completion`.
+
+`runtimes.colab.auth` selects the CLI's authentication strategy, so a machine
+authenticated with `gcloud auth application-default login` can set
+`auth = "adc"` instead of running the CLI's interactive code-paste flow.
+
+**`llmcore-runtimes`** (R6) — estimate, up, status, down, logs, adopt, bake,
+cache. `up` requires `--yes`; `estimate` works while the subsystem is
+disabled, because deciding whether to spend should not require enabling spend.
+`status` lists orphans with the command that adopts them.
+
+Three corrections the real tools forced on the spec:
+
+* `colab new --gpu` accepts T4, L4, G4, H100, A100 and nothing else, so the
+  spec's `A100-40`/`A100-80` rungs could never have been provisioned. The
+  ladder now uses the CLI's names (A100 sized conservatively at 40 GB) and a
+  test asserts every SKU maps to a value the CLI accepts. The old spellings
+  still resolve.
+* `Quantization` had one `GGUF` member, but Q4 and Q8 differ by 2x in weight
+  bytes — routinely the difference between fitting a 24 GB card and not.
+* The spec's KV fallback estimated 0.5 GB for a 70B model at 8k context, about
+  5x under. It now scales from the parameter count at a figure calibrated
+  against models where the real numbers are available.
+
+**Three gates are left explicitly unmet**, and the spec's phase table says so
+rather than claiming completion: R3's "one real model served end to end" and
+R5's "cold start is seconds" both require provisioning a real GPU VM and
+spending real compute units, and R6's agent-lens migration guide is not
+written because it would be telling another project to depend on an unproven
+path. `cache gc` is also not implemented — `cache` lists, nothing deletes.
+
+### Fixed — the test suite wrote into the real `~/.llmcore/runtimes`
+
+That directory is the record of what is currently costing money — the spec
+calls it a safety mechanism rather than a cache, and `llmcore-runtimes status`
+reads it. Running the test suite left a phantom entry claiming a READY L4 VM
+was running, which is exactly the false signal the subsystem exists to
+prevent: someone checking whether they were being billed would have been told
+yes, by their own test run.
+
+### Fixed — two config keys promised behaviour that does not exist
+
+A full audit of `default_config.toml` (660 keys) against the code found two
+with no reader anywhere. Both are now marked **NOT ENFORCED** in the config
+rather than quietly removed, because a control that silently does nothing is
+worse than one that is absent — someone has to be able to find out:
+
+* `llmcore.admin_api_key` documented itself as protecting administrative
+  endpoints "such as live configuration reloading". Nothing reads it, and the
+  bridge's `ControlService/ReloadConfig` has no reference to it, so a
+  deployment that set it believing its reload endpoint was protected was
+  wrong. What does protect the bridge is transport-level: mTLS and
+  `--auth authflow`.
+* `context_management.minimum_history_messages` — truncation does not honour
+  it.
+
+Everything else audited clean. All 48 `[routing]` keys and all 14
+`[runtimes]` keys are wired; the 116 unread `semantiscan.*` keys belong to
+that package, which llmcore only carries defaults for.
+
+### Fixed — Gemini targets had no pricing or context window, silently
+
+The model-card alias map ran the wrong way: provider type `gemini` was mapped
+*to* a `gemini` card namespace, but the cards are filed under `google/`.
+Nothing raised — the lookup returned `None`, `None` means "unknown", and every
+caller handles unknown quietly — so `lowest_cost` could not price any Gemini
+target and the pre-call context-window check never fired, for one of the most
+used providers in the library. `tests/routing/test_cards.py` now audits every
+provider type against the packaged card tree, read from disk rather than from
+the registry singleton that other suites reset.
+
+### Fixed — tests could load the repo's `.env` and reach real vendors
+
+The test fixtures built confy `Config` objects with its default
+`load_dotenv_file=True`, which exports `.env` into `os.environ`. That made a
+credential-discovery assertion depend on the developer's machine, and it meant
+a test run could reach a real vendor and spend real money. Fixtures now pass
+`load_dotenv_file=False`.
+
+### Changed — measured corrections to the routing spec
+
+Two claims in the design document were wrong and are corrected in place rather
+than quietly dropped:
+
+- §4.4 asserted that a local classifier adds "<50 ms p50 on CPU". Measured on
+  8 CPU threads with `LFM2.5-Encoder-350M-Prompt-Router`: **191 ms for 2
+  lanes, 246 ms for 5, 314 ms for 9**, plus ~40 s once to load. Wrong by about
+  5x, which is why the gate said *measured, not assumed*. The encoder is off
+  by default, runs its forward pass in a worker thread so it cannot stall the
+  event loop, and is documented as a batch/agent feature.
+- The same model's raw top score is meaningless without reading it against
+  chance: 0.20 across five lanes is exactly uniform, i.e. *no opinion*, and
+  taking it as 20% confidence would route on noise. Confidence is now reported
+  chance-corrected, so one floor means the same thing at any lane count.
+
+The heuristic classifier also lost its short-prompt rule, because prompt length
+does not predict request complexity — "write a 2000-word essay on X" is ten
+tokens. Length now only ever *vetoes* the trivial lane.
+
+### Added — `LLMCore.discard_transient_state()`
+
+Drops the cached per-turn introspection and raw response for a session. Needed
+by any long-running embedder — the routing proxy uses one synthetic session per
+request, and without this those caches would grow for the life of the process.
+
+
 ### Added — dual transport for every provider that has a vendor SDK
 
 llmcore's rule is to call each API directly and fall back to the vendor SDK

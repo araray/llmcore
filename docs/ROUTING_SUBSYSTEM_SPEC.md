@@ -3,7 +3,10 @@
 Target resolution, failover pools, classifier-driven lanes, response cascades,
 prompt transforms, and proxy mode for agent harnesses.
 
-- **Status:** design + specification. **Nothing implemented.** Awaiting approval.
+- **Status:** **implemented** (T1–T10), approved 2026-10-01. Usage guide:
+  [`Routing_usage.md`](Routing_usage.md). Where measurement contradicted this
+  document, the document was corrected in place and the correction is marked —
+  see §4.4 and the T6 row in §11.
 - **Written:** 2026-10-01
 - **Requested by:** Araray, 2026-10-01 — provider/model groups with failover and
   prioritisation; unrestricted on-the-fly targets; complexity-based routing with
@@ -323,9 +326,29 @@ to save an API call is only worth it when the cheap signals are absent.
 | `vela` | `llm-semantic-router/Vela-1.0-Encoder-307M-{Domain,Guard,PII}` | local CPU | task-specific 307M encoders |
 | `llm` | ask any cheap llmcore target to classify | 1 cheap call | dogfoods the library; good default when a local model is unwanted |
 
-The two local options deserve emphasis because they make the feature *free at
-the margin*: a 307–350M encoder scoring a prompt against lane descriptions runs
-on CPU in milliseconds, so classification does not become a tax on every call.
+The two local options make classification free in *money* — no second vendor,
+no per-call charge, nothing leaving the machine. They are **not** free in
+latency, and the first draft of this spec was wrong about that.
+
+> **Measured during implementation** (8 CPU threads, no GPU,
+> `LFM2.5-Encoder-350M-Prompt-Router`): p50 **191 ms** for 2 lanes, **246 ms**
+> for 5, **314 ms** for 9, plus ~40 s once to load the model. The draft gate
+> below guessed "<50 ms"; the real figure is about 5x that. Lane count drives
+> it, since every lane is scored in the pass.
+>
+> So the honest positioning is: a local encoder earns its latency when routing
+> decides between calls that take seconds anyway, and in batch or agent
+> workloads. For interactive use the free classifiers remain the zero-latency
+> path, which is why they are first in the default chain.
+
+A second measured correction: the model returns a distribution over the lanes
+it was given, so a raw top score must be read against chance — 0.20 across
+five lanes is exactly uniform, i.e. *no opinion*, and taking it as a 20%
+confidence would route on noise. llmcore therefore reports confidence
+chance-corrected, `(top - 1/n) / (1 - 1/n)`, so one confidence floor means the
+same thing at any lane count. In testing, prompts that matched no lane
+produced precisely this uniform output and are now correctly abstentions that
+fall through to the next classifier.
 
 Local models are fetched through the **existing** Hugging Face provider and
 cached by `huggingface_hub`; no new download machinery is needed.
@@ -442,13 +465,31 @@ Policy per parameter, from the model card:
   with a warning. A pool whose members have different parameter surfaces is the
   normal case, and erroring would make pools unusable.
 
-### 6.4 Known defect to fix in this work
+### 6.4 Known defect to fix in this work — **fixed, and the fix was measured**
 
 `PROVIDER_MODERNIZATION_PLAN.md` records an Anthropic `thinking_budget_tokens`
-400. Current Claude models take `thinking: {type: "adaptive"}` and **reject**
-`budget_tokens`; pre-4.6 models require `budget_tokens`. The effort mapper must
-branch on the model generation, which is exactly the kind of fact a model card
-should carry rather than code guessing.
+400. The draft of this section said "current Claude models take
+`thinking: {type: "adaptive"}` and **reject** `budget_tokens`; pre-4.6 models
+require `budget_tokens`" — one boundary. Measured against the live API on
+2026-10-01, one request per model, there are **three**, and they do not
+coincide:
+
+| generation | `type=enabled` + `budget_tokens` | `type=adaptive` | `type=disabled` |
+|---|---|---|---|
+| ≤ 4.5 | 200 — the only option | **400** not supported | 200 |
+| **4.6** | 200 | 200 | 200 |
+| ≥ 4.7 | **400** not supported | 200 | **400** — use `between_tools` |
+
+4.6 accepts every form, so a caller's explicit token budget is **honoured**
+there instead of converted; the single-cutoff version would have silently
+overridden a deliberate, valid choice. A further constraint the draft missed:
+`max_tokens` must be **strictly** greater than `budget_tokens` (equal is a
+400), which makes some effort levels unsendable at small `max_tokens` —
+llmcore clamps, and turns thinking off when no valid budget exists.
+
+This remains the kind of fact a model card should carry rather than code
+guessing, but the facts themselves had to be measured before they could be
+written down anywhere.
 
 ---
 
@@ -617,7 +658,7 @@ it pick that?", and the answer must not require reading logs.
 | **T3** | Card-driven strategies: `lowest_cost`, `lowest_latency`, `least_busy`; `ContextLengthError` → larger-window routing | Cost strategy picks the cheaper target on a mixed pool, verified against card pricing |
 | **T4** | `BalanceProbe` for Friendli + OpenRouter; `most_credits` with honest unknowns; insufficient-credit → long cooldown | Unknown balance never ranks as zero |
 | **T5** | Lanes, `RequestClassifier`, chain, and the free classifiers (`hint`, `magic_string`, `heuristic`, `script`) + `llm.routing.explain()` | Magic strings never reach a provider; `explain()` is accurate |
-| **T6** | `typesafe_jev` classifier; `local_encoder` (LFM2.5) via the HF provider; optional `local_router` (Arch-Router) and `vela` | Local classification adds <50 ms p50 on CPU — **measured, not assumed** |
+| **T6** | `typesafe_jev` classifier; `local_encoder` (LFM2.5) via the HF provider; optional `local_router` (Arch-Router) and `vela` | ~~Local classification adds <50 ms p50 on CPU~~ — **measured at 191–314 ms p50 depending on lane count** (§4.4). Gate restated: the cost is measured and documented, the model is loaded off the event loop, and a local classifier is never in the default chain |
 | **T7** | Cascade: `ResponseVerifier`, rungs, thresholds, `script`/`typesafe_jev`/`vela` verifiers, spend caps | A cheap-then-escalate run costs less than always-strong on an eval set |
 | **T8** | `PromptTransform`, `vela_pii` detector, `constrain` action, local-only pools, hashed audit findings | PII in a prompt provably does not reach a remote target |
 | **T9** | Proxy mode on the bridge: OpenAI-compatible endpoints, lanes in `/v1/models`, loopback-default auth, the three skills | An unmodified agent harness routes through llmcore |
@@ -639,19 +680,82 @@ compounds, and each needs measurement rather than assertion.
 | Autoprovision reaches an unbudgeted vendor | `autoprovision = false`; and autoprovision requires a credential to already be present |
 | Proxy mode concentrates every credential | Loopback by default; bearer token required for any other bind |
 | Local classifier adds a torch dependency | Optional extra; `local_encoder` is opt-in and the free classifiers cover the common case |
+| Local classifier costs 200–300 ms per call (measured, §4.4) | Off by default; the forward pass runs in a worker thread so it cannot stall the event loop; documented as a batch/agent feature rather than an interactive one |
+| `trust_remote_code=True` is required to load the router model | Pin `revision` to a commit sha; an unpinned load logs a warning naming the setting; `trust_remote_code = false` is honoured for deployments that forbid it |
 | PII redaction oversold as a guarantee | Documentation states plainly that `constrain` (routing) is the guarantee and redaction is defence in depth |
 
-**Open questions for you:**
+## 13. Decisions taken
 
-1. **Naming.** `Pool` + `Lane` as proposed, or do you prefer different words
-   (`fleet`/`route`, `group`/`tier`)? The split matters more than the words.
-2. **Default strategy** for a pool with no `strategy` set — `priority` (ordered,
-   predictable) or `lowest_cost` (saves money immediately but reorders silently)?
-   I lean `priority`.
-3. **Cascade default**: off everywhere, or on for non-interactive paths
-   (agents/batch) where latency matters less?
-4. **Where should complexity hints live on the wire** in proxy mode — a magic
-   string in the prompt, an OpenAI-style `extra_body`, or a model name suffix
-   (`lane:deep`)? All three are implementable; the third needs no harness change.
-5. **Scope of the first PR.** T1+T2 alone is already useful and reviewable; T1–T5
-   is a coherent "routing works" milestone but a large diff.
+The open questions in the draft, and how they were settled.
+
+1. **Naming** — `Pool` + `Lane` as proposed, accepted.
+2. **Default pool strategy** — `priority`, *and made a user config value*
+   (`routing.default_strategy`) rather than a constant, so a deployment that
+   wants `lowest_cost` everywhere sets it once instead of annotating every
+   pool.
+3. **Cascade default** — off everywhere, including non-interactive paths.
+   Turning it on for agents would have meant the same config behaving
+   differently depending on who called, which is worse than an explicit opt-in.
+4. **Complexity hints on the wire in proxy mode** — all three, because they
+   cost nothing to support together and each covers a case the others cannot:
+   the **model name** (`lane:deep`) needs no harness change at all and is the
+   documented default; `extra_body.llmcore` is there for harnesses that expose
+   it; and a **magic string** in the prompt is the only channel available to
+   the *model itself* inside a harness that exposes neither.
+5. **Scope of the first PR** — all of T1–T10 in one branch, at the user's
+   request ("the pr should encompass everything in my request"), plus the
+   extras proposed in §5 and §8.
+
+### 13.1 Changes the implementation forced on this design
+
+Recorded because a spec that quietly diverges from its implementation is worse
+than no spec:
+
+- **Refusal failover became a config choice** (`routing.on_refusal`) rather
+  than a property of the failure. The draft put it on `FailureKind`; the user's
+  correction was that config is an initial state and anything must be
+  overridable by env and per request. So `FailureKind` now states only *facts*
+  about a failure (`failover_is_pointless`, `affects_health`, `retry_same`) and
+  every *policy* lives in `RoutingSettings`.
+- **A new failure kind, `MODEL_NOT_FOUND`.** The draft's taxonomy had nowhere
+  to put a 404: it is deterministic for the target (so retrying it is waste)
+  but a peer serves a *different model* (so failing over is right). It is the
+  one case where "permanent" and "try someone else" are both true, and folding
+  it into `BAD_REQUEST` or `SERVER` gets one of those wrong.
+- **Classifier ordering needed a second dimension.** "Cheapest first" is not
+  sufficient: an explicit `lane=` and a length heuristic are both free. Each
+  classifier now declares an `authority` — `caller` > `policy` > `prompt` >
+  `inferred` — and a marker found in *content* ranks below both the caller and
+  the operator's own script, because in a RAG path that content may have come
+  from a retrieved document where a routing marker would be a prompt-injection
+  lever.
+- **`most_credits` needed three bands, not two.** Ranking all known balances
+  descending puts a confirmed zero *ahead* of an unknown, which is backwards.
+- **The local encoder's confidence had to be chance-corrected.** See §4.4.
+- **§4.4's latency claim was wrong by ~5x.** See §4.4.
+
+---
+
+**Open questions remaining:**
+
+1. **Cross-process routing state.** `RoutingStateStore` is a protocol with an
+   in-process default, as specified. Nothing shares cooldowns between
+   processes, so N workers each discover a rate limit independently. Worth
+   building only if someone runs llmcore in several processes against one quota.
+2. **No classifier is validated on real traffic.** Still true, and still the
+   largest honest gap. What has changed is that it is now *closable*:
+   `llmcore.routing.evaluation` and `llmcore-routing eval` measure a chain
+   against labelled prompts and report too-cheap and too-expensive separately,
+   since a single accuracy figure hides which error you are buying. A 29-case
+   starter set ships so the work is an edit rather than a blank page. What
+   nobody can supply but the user is the labelled traffic itself.
+3. ~~**Anthropic effort mapping** (§6.4) still needs the model-generation
+   branch.~~ **Done and validated live.** The measurement corrected the design:
+   there are *three* boundaries, not one. `type=adaptive` is supported from
+   4.6, `type=enabled`/`budget_tokens` is rejected from 4.7, and
+   `type=disabled` is also rejected from 4.7 (the API names `between_tools` as
+   its replacement). 4.6 accepts every form, so an explicit budget is honoured
+   there rather than converted. Separately, `max_tokens` must be *strictly*
+   greater than `budget_tokens`, which makes some effort levels unsendable at
+   small `max_tokens` -- llmcore clamps, and disables thinking when no valid
+   budget exists.

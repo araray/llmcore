@@ -159,13 +159,16 @@ The audit found the widest divergence here. Split into reviewable PRs:
 1. **Models + cards.** Refresh the lineup to Opus 5.5 / Opus 5 / Sonnet 5.5 /
    Sonnet 5 / Haiku 4.5 / Fable 5.x, update the default from
    `claude-sonnet-4-6`, regenerate cards, and record per-model thinking rules.
-2. **Thinking and effort — correctness fix, not a feature.** `budget_tokens` is
-   **rejected with a 400** on Opus 5.x / Sonnet 5.x / Fable 5.x, yet
-   `thinking_budget_tokens` is still a documented llmcore config key. Move to
-   `thinking: {type: "adaptive"}` + `output_config.effort`
-   (`low|medium|high|xhigh|max`), mapped from llmcore's canonical
-   reasoning-effort vocabulary (`model_cards.md` §Reasoning-Effort Vocabulary).
-   Keep `budget_tokens` only for the pre-4.6 models that still accept it.
+2. ~~**Thinking and effort — correctness fix, not a feature.**~~ **Done**
+   (2026-10-01), and the implementation corrected this entry. Measured against
+   the live API, the rejection boundary is **4.7**, not 4.6: Sonnet 4.6 and
+   Opus 4.6 accept `budget_tokens` *and* `adaptive`, so they are an overlap
+   where a caller's explicit budget is honoured rather than converted. 4.7+
+   reject `type=enabled` **and** `type=disabled`, the latter in favour of
+   `type=between_tools`. `effort` is now a first-class Anthropic parameter
+   mapped from llmcore's canonical vocabulary, and the budget is clamped to
+   satisfy Anthropic's requirement that `max_tokens` be strictly greater than
+   it. Validated with 12 live calls across three generations.
 3. **Refusals.** Handle `stop_reason: "refusal"` + `stop_details` (currently
    unhandled — a refusal looks like an empty response), and expose the
    server-side `fallbacks` parameter.

@@ -23,6 +23,7 @@ under the runtime's name, and ``llm.chat(..., provider_name=name)`` just works.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -54,6 +55,21 @@ class SpendNotConfirmedError(RuntimeError_):
     Deliberately its own type so a caller can catch exactly this and prompt,
     rather than string-matching a generic error.
     """
+
+
+class _ConfigView:
+    """Wraps a ``config.get`` callable so a backend can take ``.get(...)``.
+
+    The manager is handed a bare accessor (it is constructed from
+    ``self.config.get``), while a backend wants something config-shaped. One
+    three-line adapter beats threading two different parameter styles through
+    every backend.
+    """
+
+    __slots__ = ("get",)
+
+    def __init__(self, get: Callable[[str, Any], Any]) -> None:
+        self.get = get
 
 
 class RuntimeManager:
@@ -92,6 +108,22 @@ class RuntimeManager:
         self._handles: dict[str, RuntimeHandle] = {}
         #: Names this manager registered as provider instances.
         self._attached: set[str] = set()
+        #: The liveness/reaper loop, started on the first successful up().
+        self._supervisor: asyncio.Task[None] | None = None
+
+        # Register the Colab backend unless the caller supplied its own. Doing
+        # this in the constructor is safe because constructing a backend
+        # contacts nothing: the CLI is discovered on first use, so
+        # LLMCore.create() still cannot reach a provisioning API.
+        if "colab" not in self._backends:
+            try:
+                from .colab import ColabRuntime
+
+                self._backends["colab"] = ColabRuntime(
+                    config=_ConfigView(get), state_store=self.state
+                )
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("The Colab backend could not be registered", exc_info=True)
 
         logger.debug(
             "RuntimeManager initialized (enabled=%s, backends=%s, confirm_spend=%s).",
@@ -274,6 +306,10 @@ class RuntimeManager:
                     f"was released rather than left running. Cause: {e}"
                 ) from e
 
+        # Started here rather than left to the caller: the deadlines stamped
+        # above are only real if something enforces them, and a caller who
+        # forgot to start the reaper would discover that from a bill.
+        self.start_supervisor()
         return handle
 
     def _apply_limits(
@@ -341,6 +377,7 @@ class RuntimeManager:
             replace=True,
         )
         self._attached.add(handle.name)
+        self._track_activity(handle)
         logger.info(
             "Attached runtime '%s' as provider instance (type=%s, model=%s).",
             handle.name,
@@ -348,6 +385,42 @@ class RuntimeManager:
             handle.served_model,
         )
         return handle.name
+
+    def _track_activity(self, handle: RuntimeHandle) -> None:
+        """Wrap the attached provider so each call marks the runtime as used.
+
+        The idle reaper needs to know when a runtime was last used, and vLLM
+        exposes no last-request metric -- so the count has to happen on this
+        side. Wrapping the provider's ``chat_completion`` is the precise place:
+        it is exactly one call per real request, where hooking
+        ``get_provider()`` would miss a long stream and hooking the tunnel
+        would require a proxy.
+
+        Idempotent, because a runtime may be re-attached after a reconnect and
+        wrapping a wrapper would stack indefinitely.
+        """
+        if self._providers is None:
+            return
+        try:
+            provider = self._providers.get_provider(handle.name)
+        except Exception:
+            return
+        if getattr(provider, "_llmcore_runtime_tracked", False):
+            return
+
+        original = provider.chat_completion
+
+        async def tracked(*args: Any, **kwargs: Any) -> Any:
+            handle.touch()
+            try:
+                return await original(*args, **kwargs)
+            finally:
+                # Touched again on the way out so a long generation does not
+                # look idle for its whole duration.
+                handle.touch()
+
+        provider.chat_completion = tracked  # type: ignore[method-assign]
+        provider._llmcore_runtime_tracked = True  # type: ignore[attr-defined]
 
     async def detach(self, name: str) -> bool:
         """Unregister the provider instance for *name*, if attached."""
@@ -459,6 +532,112 @@ class RuntimeManager:
             reaped.append((handle.name, reason))
         return reaped
 
+    # ------------------------------------------------------------------
+    # Supervision (spec phase R4)
+    # ------------------------------------------------------------------
+
+    def start_supervisor(self, *, interval: float | None = None) -> None:
+        """Start the background loop that probes liveness and reaps.
+
+        Without this, :meth:`reap` is a method nobody calls and the deadlines
+        are documentation. It is started automatically by :meth:`up`, so a
+        caller who provisions something gets the reaper whether or not they
+        remembered to ask for it -- which is the right default for a feature
+        whose failure mode is a bill.
+
+        Idempotent. Needs a running event loop, so it is a no-op when called
+        from synchronous code.
+        """
+        if self._supervisor is not None and not self._supervisor.done():
+            return
+        seconds = float(
+            interval
+            if interval is not None
+            else self._get("runtimes.defaults.supervise_seconds", 60.0) or 60.0
+        )
+        if seconds <= 0:
+            return
+        try:
+            self._supervisor = asyncio.create_task(
+                self._supervise(seconds), name="llmcore-runtime-supervisor"
+            )
+        except RuntimeError:
+            logger.debug("No running event loop; the runtime supervisor was not started.")
+
+    async def stop_supervisor(self) -> None:
+        """Stop the supervisor loop, if running."""
+        task, self._supervisor = self._supervisor, None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    async def _supervise(self, interval: float) -> None:
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await self.probe_liveness()
+                await self.reap()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # A supervisor that dies on one bad cycle stops reaping, and
+                # the consequence of not reaping is money.
+                logger.exception("Runtime supervisor cycle failed; continuing.")
+
+    async def probe_liveness(self) -> dict[str, bool]:
+        """Check each running runtime's endpoint; mark the dead ones DEGRADED.
+
+        Three consecutive failures rather than one, because a single missed
+        poll is usually the tunnel reconnecting. The runtime is marked
+        ``DEGRADED`` and **not** torn down: a degraded runtime is still
+        assigned and still billing, so the decision to release it belongs to
+        the reaper's deadlines or to the user -- not to a failed health check,
+        which would make a transient network problem destroy an expensive VM.
+        """
+        import httpx
+
+        results: dict[str, bool] = {}
+        for handle in list(self._handles.values()):
+            if handle.phase not in (RuntimePhase.READY, RuntimePhase.DEGRADED):
+                continue
+            if not handle.base_url:
+                continue
+            url = handle.base_url.rstrip("/") + "/models"
+            alive = False
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    alive = (await client.get(url)).status_code == 200
+            except Exception as exc:
+                handle.error = f"liveness probe failed: {type(exc).__name__}"
+            results[handle.name] = alive
+
+            misses = int(handle.metadata.get("liveness_misses", 0))
+            if alive:
+                if handle.phase is RuntimePhase.DEGRADED:
+                    logger.info("Runtime '%s' is answering again.", handle.name)
+                    handle.phase = RuntimePhase.READY
+                    handle.error = None
+                handle.metadata["liveness_misses"] = 0
+            else:
+                misses += 1
+                handle.metadata["liveness_misses"] = misses
+                if misses >= 3 and handle.phase is RuntimePhase.READY:
+                    handle.phase = RuntimePhase.DEGRADED
+                    logger.warning(
+                        "Runtime '%s' has failed %d liveness probes; marking it DEGRADED. "
+                        "It is still assigned and still billing. Check "
+                        "llm.runtimes.logs(%r), or stop it with llm.runtimes.down(%r).",
+                        handle.name,
+                        misses,
+                        handle.name,
+                        handle.name,
+                    )
+            self.state.save(handle)
+        return results
+
     async def adopt(
         self, external_id: str, *, name: str, backend: str | None = None, attach: bool = True
     ) -> RuntimeHandle:
@@ -486,5 +665,6 @@ class RuntimeManager:
         files remain so the next session can find it. Use :meth:`down_all` to
         actually stop spending.
         """
+        await self.stop_supervisor()
         for name in list(self._attached):
             await self.detach(name)
