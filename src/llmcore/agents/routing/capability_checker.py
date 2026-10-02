@@ -127,6 +127,10 @@ class ModelInfo:
     max_output_tokens: int
     cost_per_1k_input: float = 0.0
     cost_per_1k_output: float = 0.0
+    #: False when the capability set could not be established. The context
+    #: window may still be known, so a context check stays authoritative
+    #: while capability checks downgrade to "cannot verify".
+    capabilities_known: bool = True
 
     @property
     def supports_tools(self) -> bool:
@@ -345,6 +349,89 @@ DEFAULT_MODEL_INFO: dict[str, ModelInfo] = {
 # =============================================================================
 
 
+def _capability_from_card(card: Any) -> ModelInfo | None:
+    """Translate a model card into a :class:`ModelInfo`, or ``None``.
+
+    The static table below covers 13 models from early 2024. The card
+    registry covers thousands, including every model released since, so a
+    checker that consults only the table reports every current model as
+    unknown.
+
+    Cards are not uniformly trustworthy, though: generated cards often ship
+    a capability block with every flag ``False``, which means "nobody filled
+    this in", not "this model can do nothing". An all-false block is
+    therefore read as *unknown* capabilities rather than as a set of
+    negatives — otherwise the registry would confidently report that a
+    frontier model cannot call tools.
+    """
+    context = getattr(card, "context", None)
+    window = getattr(context, "max_input_tokens", None) or 0
+    max_out = getattr(context, "max_output_tokens", None) or 0
+
+    caps: set[Capability] = set()
+    block = getattr(card, "capabilities", None)
+    flags = {
+        "tool_use": Capability.TOOLS,
+        "function_calling": Capability.TOOLS,
+        "vision": Capability.VISION,
+        "streaming": Capability.STREAMING,
+        "json_mode": Capability.JSON_MODE,
+        "structured_output": Capability.JSON_MODE,
+        "code_execution": Capability.CODE_EXECUTION,
+    }
+    # `streaming` is excluded from the "is this block filled in?" test
+    # because card generators default it to true. A card whose only true
+    # flag is streaming has not been filled in, and reading its false
+    # `tool_use` as a real negative makes the checker confidently report
+    # that a frontier model cannot call tools.
+    substantive = {"tool_use", "function_calling", "vision", "json_mode",
+                   "structured_output", "code_execution"}
+    any_true = False
+    if block is not None:
+        for attr, capability in flags.items():
+            if getattr(block, attr, False):
+                caps.add(capability)
+                if attr in substantive:
+                    any_true = True
+
+    # Context-size capabilities come from the window, which is a number
+    # rather than a flag, so it is trustworthy even on a stub card.
+    for threshold, capability in (
+        (128_000, Capability.CONTEXT_128K),
+        (32_000, Capability.CONTEXT_32K),
+        (16_000, Capability.CONTEXT_16K),
+        (8_000, Capability.CONTEXT_8K),
+        (4_000, Capability.CONTEXT_4K),
+    ):
+        if window >= threshold:
+            caps.add(capability)
+            break
+
+    if not window and not any_true:
+        return None  # the card tells us nothing useful
+
+    if any_true:
+        # A chat model that demonstrably does something also holds a
+        # conversation; cards do not model these two, and inferring them
+        # from "it is a chat model" is safe in a way that inferring tool
+        # support is not.
+        if str(getattr(card, "model_type", "") or "") in ("chat", "ModelType.CHAT"):
+            caps.update({Capability.SYSTEM_MESSAGE, Capability.MULTI_TURN})
+
+    pricing = getattr(card, "pricing", None)
+    per_million = getattr(pricing, "per_million_tokens", None)
+    return ModelInfo(
+        name=str(getattr(card, "model_id", "") or ""),
+        provider=str(getattr(card, "provider", "") or ""),
+        capabilities=caps,
+        context_window=window,
+        max_output_tokens=max_out,
+        cost_per_1k_input=(getattr(per_million, "input", 0.0) or 0.0) / 1000,
+        cost_per_1k_output=(getattr(per_million, "output", 0.0) or 0.0) / 1000,
+        capabilities_known=any_true,
+    )
+
+
 class CapabilityChecker:
     """
     Check model capabilities before agent execution.
@@ -354,12 +441,40 @@ class CapabilityChecker:
 
     Args:
         model_registry: Optional custom model registry (dict of name -> ModelInfo)
+        use_model_cards: Consult the model-card registry for models absent
+            from ``model_registry``. This is what
+            ``agents.capability_check.use_model_cards`` has always promised;
+            without it the checker only knows the 13 models in the static
+            table and reports everything newer as unknown.
     """
 
-    def __init__(self, model_registry: dict[str, ModelInfo] | None = None):
+    def __init__(
+        self,
+        model_registry: dict[str, ModelInfo] | None = None,
+        use_model_cards: bool = True,
+    ):
         self.model_registry = model_registry or DEFAULT_MODEL_INFO
+        self.use_model_cards = use_model_cards
 
-    def get_model_info(self, model: str) -> ModelInfo | None:
+    def _from_model_cards(self, model: str) -> ModelInfo | None:
+        """Look ``model`` up in the model-card registry."""
+        if not self.use_model_cards:
+            return None
+        try:
+            from ...model_cards import get_model_card_registry
+
+            registry = get_model_card_registry()
+            for provider in registry.get_providers():
+                card = registry.get(provider, model)
+                if card is not None:
+                    info = _capability_from_card(card)
+                    if info is not None:
+                        return info
+        except Exception:
+            logger.debug("Model-card capability lookup failed for %s", model, exc_info=True)
+        return None
+
+    def get_model_info(self, model: str) -> ModelInfo | None:  # noqa: D401
         """
         Get model info, handling variations in model names.
 
@@ -390,7 +505,9 @@ class CapabilityChecker:
             if registered_name in model_lower or model_lower in registered_name:
                 return info
 
-        return None
+        # Nothing in the static table: ask the model cards, which know
+        # every model shipped since that table was written.
+        return self._from_model_cards(model)
 
     def check_compatibility(
         self,
@@ -423,15 +540,26 @@ class CapabilityChecker:
         model_info = self.get_model_info(model)
 
         if model_info is None:
+            # An unknown model is *unknown*, not incompatible. Returning
+            # `compatible=False` here meant `strict_mode` (on by default)
+            # refused to run any model missing from the registry, which was
+            # every model newer than the static table. A warning says what
+            # we actually know: nothing.
             return CompatibilityResult(
-                compatible=False,
+                compatible=True,
                 model=model,
                 issues=[
                     CapabilityIssue(
                         capability=Capability.TOOLS,  # Generic
-                        severity=IssueSeverity.ERROR,
-                        message=f"Unknown model: {model}",
-                        suggestion="Check model name or add to registry",
+                        severity=IssueSeverity.WARNING,
+                        message=(
+                            f"Capabilities for {model} are unknown; proceeding "
+                            "without a pre-flight guarantee"
+                        ),
+                        suggestion=(
+                            "Add a model card, or pass a custom model_registry, "
+                            "to get a real pre-flight check"
+                        ),
                     )
                 ],
             )
@@ -441,7 +569,11 @@ class CapabilityChecker:
             issues.append(
                 CapabilityIssue(
                     capability=Capability.TOOLS,
-                    severity=IssueSeverity.ERROR,
+                    severity=(
+                        IssueSeverity.ERROR
+                        if model_info.capabilities_known
+                        else IssueSeverity.WARNING
+                    ),
                     message=f"Model {model} does not support tool/function calling",
                     suggestion=(
                         "Use --use-activities flag for activity-based execution, "
@@ -455,7 +587,11 @@ class CapabilityChecker:
             issues.append(
                 CapabilityIssue(
                     capability=Capability.VISION,
-                    severity=IssueSeverity.ERROR,
+                    severity=(
+                        IssueSeverity.ERROR
+                        if model_info.capabilities_known
+                        else IssueSeverity.WARNING
+                    ),
                     message=f"Model {model} does not support vision/images",
                     suggestion="Switch to a vision-capable model (gpt-4o, claude-3, gemini-pro-vision)",
                 )
