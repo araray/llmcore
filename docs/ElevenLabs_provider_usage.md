@@ -225,8 +225,8 @@ path keeps the vendor SDK off the critical path and the dependency optional.
 
 ## 9. Related
 
-- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — subsystem design; §5.3
+- the media subsystem design spec — subsystem design; §5.3
   covers what ElevenLabs changed about it
-- [`PROVIDER_SUPPORT_MATRIX.md`](PROVIDER_SUPPORT_MATRIX.md) — SDK versions and
+- the provider support matrix — SDK versions and
   the live validation log
 - [`Fal_provider_usage.md`](Fal_provider_usage.md) — the other broad media adapter

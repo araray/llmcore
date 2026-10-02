@@ -125,6 +125,6 @@ Contrast ElevenLabs, where the vendor does track it.
 
 ## 6. Related
 
-- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — §5.6 on the routing
+- the media subsystem design spec — §5.6 on the routing
   problem and the transport exception
-- [`PROVIDER_SUPPORT_MATRIX.md`](PROVIDER_SUPPORT_MATRIX.md) — live validation log
+- the provider support matrix — live validation log

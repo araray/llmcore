@@ -1234,7 +1234,7 @@ class OpenAIProvider(BaseProvider):
     # Media subsystem adapter (llmcore.media protocols)
     # ==================================================================
     #
-    # Phase M3 of docs/MEDIA_SUBSYSTEM_SPEC.md. The image/speech methods above
+    # Phase M3 of the media subsystem design spec. The image/speech methods above
     # are unchanged; these adapters translate MediaRef in and MediaArtifact out
     # and delegate, so there is one code path per operation.
     #

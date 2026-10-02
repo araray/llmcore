@@ -1524,7 +1524,7 @@ max_retries = 2
 # with built-in defaults, reporting whatever the configured providers can do
 # (`llm.media.capabilities()` / `llm.media.who_can("video_generate")`).
 #
-# See docs/MEDIA_SUBSYSTEM_SPEC.md for the design.
+# See the media subsystem design spec.
 [media]
 
   # --- Artifact handling ---
@@ -1683,7 +1683,7 @@ state_dir = "~/.llmcore/runtimes"
 # [providers] sections are presets, not an allow-list. Set autoprovision =
 # false below if you need a closed set.
 #
-# Full design rationale: docs/ROUTING_SUBSYSTEM_SPEC.md
+# Full design rationale: the routing subsystem design spec
 [routing]
 # Consult pools, lanes and classifiers at all. With this off, target= still
 # works - dynamic targets are layer 1 and do not depend on the rest.

@@ -80,6 +80,11 @@ class ModelCardRegistry:
 
         # Lowercase model_id -> (provider, original_model_id) for case-insensitive lookup
         self._lowercase_index: dict[str, list[tuple[str, str]]] = {}
+        # (provider, model_id) -> the `source` the winning card file
+        # declared, used to break same-tier duplicate collisions.
+        self._origins: dict[tuple[str, str], str | None] = {}
+        #: Same-tier duplicate model_ids seen during the last load.
+        self._collisions: list[str] = []
 
         self._loaded = False
         self._builtin_path: Path | None = None
@@ -212,6 +217,8 @@ class ModelCardRegistry:
             user_path = self.get_default_user_path()
         self._user_path = user_path
 
+        self._collisions = []
+
         # Load built-in cards first (lower priority)
         builtin_count = 0
         if builtin_path.exists():
@@ -227,6 +234,18 @@ class ModelCardRegistry:
             logger.info(f"Loaded {user_count} user model cards from {user_path}")
         else:
             logger.debug(f"User cards directory not found: {user_path}")
+
+        if self._collisions:
+            logger.warning(
+                f"{len(self._collisions)} model_id(s) appear in more than one "
+                f"card file within the same tier; resolved by declared origin "
+                f"(hand-written beats generated). First few: "
+                f"{'; '.join(self._collisions[:3])}"
+                f"{' ...' if len(self._collisions) > 3 else ''}. "
+                f"Enable debug logging for the full list."
+            )
+            for note in self._collisions:
+                logger.debug(f"Duplicate model card: {note}")
 
         self._loaded = True
         total_cards = sum(len(cards) for cards in self._cards.values())
@@ -247,7 +266,14 @@ class ModelCardRegistry:
             Number of cards loaded
         """
         count = 0
-        for json_file in path.rglob("*.json"):
+        # Sorted, because unsorted rglob made loading order filesystem
+        # dependent -- and the tree contains 87 model_ids that appear in two
+        # files under different filename spellings (`vendor--model.json` from
+        # the generator, `vendor__model.json` hand-written). Two of those
+        # disagreed about whether the model had pricing, and which one won
+        # differed per model: Llama-3.3-70B kept its price, Llama-3.2-11B
+        # silently lost it. Order must be a rule, not an accident.
+        for json_file in sorted(path.rglob("*.json")):
             # Skip index files and non-card files
             if json_file.name in ("index.json", "manifest.json"):
                 continue
@@ -260,14 +286,19 @@ class ModelCardRegistry:
                 cards_data = data if isinstance(data, list) else [data]
 
                 for card_data in cards_data:
-                    # Inject source and update timestamp
+                    # The file's own `source` says how it was produced
+                    # ("builtin", "generated", ...), which is what cardctl's
+                    # refresh convention keys off. Injecting the *tier* here
+                    # destroys it, so remember it before overwriting.
+                    declared = card_data.get("source")
                     card_data["source"] = source
                     if "last_updated" not in card_data:
                         card_data["last_updated"] = datetime.now().isoformat()
 
                     try:
                         card = ModelCard.model_validate(card_data)
-                        self._register_card(card)
+                        self._register_card(card, declared_origin=declared,
+                                            path=json_file)
                         count += 1
                     except Exception as e:
                         logger.warning(f"Failed to validate model card in {json_file}: {e}")
@@ -279,7 +310,18 @@ class ModelCardRegistry:
 
         return count
 
-    def _register_card(self, card: ModelCard) -> None:
+    #: Hand-curated cards outrank generated ones when two files claim the
+    #: same model_id in the same tier. This mirrors cardctl's rule, where
+    #: `generate` refuses to touch a builtin card.
+    _ORIGIN_PRECEDENCE = {"builtin": 3, "curated": 2, "generated": 1}
+
+    def _register_card(
+        self,
+        card: ModelCard,
+        *,
+        declared_origin: str | None = None,
+        path: Path | None = None,
+    ) -> None:
         """
         Register a card in the registry.
 
@@ -287,6 +329,10 @@ class ModelCardRegistry:
 
         Args:
             card: ModelCard to register
+            declared_origin: The `source` the card file itself declared,
+                before the loading tier overwrote it. Used to break ties
+                when two files in the same tier claim one model_id.
+            path: File the card came from, for the collision warning.
         """
         # Normalize provider to string
         provider = card.provider if isinstance(card.provider, str) else card.provider.value
@@ -296,7 +342,30 @@ class ModelCardRegistry:
         if provider_lower not in self._cards:
             self._cards[provider_lower] = {}
 
-        # Store card (overwrites if exists - user cards override builtin)
+        # A collision *between* tiers is the documented override: user
+        # cards replace builtin ones. A collision *within* a tier is a
+        # duplicate in the tree, and resolving it by load order means a
+        # model's pricing depends on directory iteration. Resolve it by the
+        # declared origin instead, and say so.
+        existing = self._cards[provider_lower].get(card.model_id)
+        if existing is not None and existing.source == card.source:
+            previous = self._origins.get((provider_lower, card.model_id))
+            incoming_rank = self._ORIGIN_PRECEDENCE.get(declared_origin or "", 0)
+            existing_rank = self._ORIGIN_PRECEDENCE.get(previous or "", 0)
+            keep_existing = existing_rank >= incoming_rank
+            # Recorded rather than warned per card: the packaged tree has 89
+            # of these, and 89 warnings on every load would be noise nobody
+            # reads. `load()` emits one summary.
+            self._collisions.append(
+                f"{provider_lower}/{card.model_id} "
+                f"(kept '{previous if keep_existing else declared_origin}', "
+                f"ignored '{declared_origin if keep_existing else previous}'"
+                f"{f' from {path.name}' if path else ''})"
+            )
+            if keep_existing:
+                return
+
+        self._origins[(provider_lower, card.model_id)] = declared_origin
         self._cards[provider_lower][card.model_id] = card
 
         # Update case-insensitive index

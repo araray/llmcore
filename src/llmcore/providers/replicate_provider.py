@@ -37,7 +37,7 @@ Transport (selectable via ``backend``)
 
 References:
   - https://replicate.com/docs/reference/http
-  - SDK clone: /av/avalon/xrepos/replicate-python (v1.0.7)
+  - Vendor SDK: replicate-python (v1.0.7)
 """
 
 from __future__ import annotations

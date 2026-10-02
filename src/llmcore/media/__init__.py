@@ -2,7 +2,7 @@
 """Generative media (image, audio, video) for LLMCore.
 
 A sibling subsystem to chat providers and search providers, reached through
-:attr:`llmcore.LLMCore.media`.  See ``docs/MEDIA_SUBSYSTEM_SPEC.md`` for the
+:attr:`llmcore.LLMCore.media`.  See the media subsystem design spec for the
 design, and :mod:`llmcore.media.protocols` for what a provider adapter must
 implement.
 

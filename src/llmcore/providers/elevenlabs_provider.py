@@ -37,7 +37,7 @@ Transport (selectable via ``backend``)
 
 References:
   - https://elevenlabs.io/docs/api-reference
-  - SDK clone: /av/avalon/xrepos/elevenlabs-python (v2.70.0)
+  - Vendor SDK: elevenlabs-python (v2.70.0)
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ class ElevenLabsProvider(BaseProvider):
 
     Media-only by design: ElevenLabs serves speech and audio generation, not
     chat completions, so :meth:`chat_completion` raises rather than pretending.
-    The real surface is ``llm.media`` (see ``docs/MEDIA_SUBSYSTEM_SPEC.md``).
+    The real surface is ``llm.media`` (see the media subsystem design spec).
 
     Configuration keys (under ``[providers.elevenlabs]``):
 

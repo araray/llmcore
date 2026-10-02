@@ -1,5 +1,5 @@
 # src/llmcore/routing/__init__.py
-"""Routing for llmcore (see ``docs/ROUTING_SUBSYSTEM_SPEC.md``).
+"""Routing for llmcore (see the routing subsystem design spec).
 
 Five layers that compose, each usable without the others:
 

@@ -699,7 +699,7 @@ class BridgeCore:
             "Embed is not available in llmcore.v1: LLMCore exposes no public "
             "embeddings method (provider-level create_embeddings sits behind the "
             "private provider manager). Tracked for a follow-up phase; see "
-            "CONTINUATION_GUIDE_B1.md."
+            "the bindings continuation guide."
         )
 
     async def count_tokens(

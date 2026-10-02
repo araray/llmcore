@@ -222,7 +222,7 @@ error — the full payload is always kept in `job.provider_metadata["result"]`.
 fal supports webhook delivery (`?fal_webhook=`), and the adapter will send a
 `webhook_url` from config if you set one. llmcore has **no webhook receiver
 yet** — that is phase M9 of
-[`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md). Until then, a configured
+the media subsystem design spec. Until then, a configured
 webhook is delivered to an endpoint you run and reconcile yourself; polling
 remains the supported path.
 
@@ -230,8 +230,8 @@ remains the supported path.
 
 ## 9. Related
 
-- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — the subsystem design,
+- the media subsystem design spec — the subsystem design,
   and §5.2 on what fal proved about it
-- [`PROVIDER_SUPPORT_MATRIX.md`](PROVIDER_SUPPORT_MATRIX.md) — SDK versions and
+- the provider support matrix — SDK versions and
   the live validation log
 - [`CONFIG_REFERENCE.md`](CONFIG_REFERENCE.md) — every config key

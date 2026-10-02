@@ -5,7 +5,7 @@ kind, keep sensitive prompts on your own hardware, and put llmcore in front of
 an agent harness as an OpenAI-compatible proxy.
 
 For the design and the reasoning behind each decision, see
-[`ROUTING_SUBSYSTEM_SPEC.md`](ROUTING_SUBSYSTEM_SPEC.md). This document is how
+the routing subsystem design spec. This document is how
 to use it.
 
 **Nothing here is on by default.** With no `[routing]` section, every call

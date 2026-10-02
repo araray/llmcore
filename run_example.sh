@@ -4,7 +4,7 @@
 dir_base="${PWD}"
 dir_examples="${dir_base}/examples"
 dir_venv="${dir_base}/venv"
-dir_logs="/av/logs/llmcore"
+dir_logs="${LLMCORE_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/llmcore/logs}"
 
 
 

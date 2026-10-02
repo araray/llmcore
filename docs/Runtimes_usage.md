@@ -3,7 +3,7 @@
 Size an open-weights model, provision compute, serve it, and reach it through
 the same `llm.chat()` as any hosted API.
 
-Design and safety rationale: [`COLAB_RUNTIME_SPEC.md`](COLAB_RUNTIME_SPEC.md).
+Design and safety rationale: the Colab runtime design spec.
 This document is how to use it.
 
 ---

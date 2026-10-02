@@ -68,7 +68,7 @@ jobs:
           # Optional vendor SDKs (zai-sdk, friendli, ...) are installed on
           # purpose: every provider test pins its `backend` explicitly, so the
           # presence of a vendor SDK can no longer bypass the mocks and reach a
-          # live API. See docs/PROVIDER_MODERNIZATION_PLAN.md §9.
+          # live API. See the provider modernization plan §9.
           #
           # NOTE: openai>=3 and anthropic>=1 are built on httpx2 and no longer
           # install httpx/certifi transitively; the provider extras declare

@@ -5,7 +5,7 @@ only run when both the token and the required SERP zone are available.
 
 Run:
     set -a
-    source /av/data/dbs/.env
+    source /path/to/your/.env
     set +a
     python examples/live_search_smoke.py
 

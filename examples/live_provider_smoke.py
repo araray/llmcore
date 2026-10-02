@@ -6,7 +6,7 @@ environment, and one streaming call for Gemini when available.
 
 Run:
     set -a
-    source /av/data/dbs/.env
+    source /path/to/your/.env
     set +a
     python examples/live_provider_smoke.py
 

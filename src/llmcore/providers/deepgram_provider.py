@@ -2400,7 +2400,7 @@ class DeepgramProvider(BaseProvider):
     # ==================================================================
     #
     # Deepgram is the reference migration for the media subsystem (see
-    # docs/MEDIA_SUBSYSTEM_SPEC.md §4.4): it is the only integration that
+    # the media subsystem design spec §4.4): it is the only integration that
     # already exercises batch STT, realtime WebSocket STT and a bidirectional
     # voice agent, so it validates the hard parts of the abstraction before any
     # new vendor lands.

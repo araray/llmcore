@@ -1,5 +1,5 @@
 # src/llmcore/runtimes/__init__.py
-"""Remote GPU runtimes for llmcore (see ``docs/COLAB_RUNTIME_SPEC.md``).
+"""Remote GPU runtimes for llmcore (see the Colab runtime design spec).
 
 A runtime provisions compute somewhere else, serves an open-weights model on it,
 and attaches the resulting OpenAI-compatible endpoint as a provider instance —

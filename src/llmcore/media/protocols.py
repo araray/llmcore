@@ -7,7 +7,7 @@ implements only what its vendor supports, and the routers in
 logic never names a provider.
 
 Three method-shape conventions, matching the three execution classes in
-``docs/MEDIA_SUBSYSTEM_SPEC.md``:
+the media subsystem design spec:
 
 * **Request/response** returns :class:`~llmcore.media.models.MediaResult`.
 * **Byte stream** returns ``AsyncIterator[bytes]`` (or an async session object).
