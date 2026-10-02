@@ -36,7 +36,7 @@ __all__ = ["MediaManager"]
 
 #: Built-in preference order per capability, used when ``[media.routing]`` is
 #: silent.  Sourced from the workload recommendations in the provider survey
-#: (see ``docs/MEDIA_SUBSYSTEM_SPEC.md`` §2.7); a provider that is not
+#: (see the media subsystem design spec §2.7); a provider that is not
 #: configured is skipped, so these are hints rather than requirements.
 DEFAULT_ROUTING: dict[MediaCapability, tuple[str, ...]] = {
     MediaCapability.TTS: ("elevenlabs", "openai", "deepgram", "zai", "mistral", "deepinfra"),

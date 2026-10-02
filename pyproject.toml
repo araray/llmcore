@@ -72,7 +72,7 @@ ollama = ["ollama>=0.6.3"]
 deepinfra = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
 # Mistral: the provider talks to the REST API over httpx directly (no vendor
 # SDK today — `mistralai` v3.x is a candidate second backend, see
-# docs/PROVIDER_MODERNIZATION_PLAN.md).
+# the provider modernization plan).
 mistral = ["httpx>=0.27.0", "mistralai>=3.0.0"]
 # Kimi (Moonshot AI): OpenAI-compatible chat plus httpx for the Moonshot-only
 # REST endpoints (token estimate, balance, file upload) and tiktoken for the

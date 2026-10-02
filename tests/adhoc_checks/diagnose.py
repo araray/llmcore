@@ -6,7 +6,7 @@ Darwin Layer 2 Diagnostic Script.
 Run this to identify what's missing or broken in the cognitive package.
 
 Usage:
-    cd /av/data/repos/llmcore
+    cd /path/to/llmcore
     source venv/bin/activate
     python diagnose_darwin.py
 """

@@ -1,7 +1,7 @@
 # tests/providers/test_anthropic_thinking.py
 """Extended thinking across Claude generations.
 
-The defect this covers is recorded in `PROVIDER_MODERNIZATION_PLAN.md` and in
+The defect this covers is recorded in the provider modernization plan and in
 the routing spec §6.4: `thinking.budget_tokens` is **rejected with a 400** by
 Claude 4.6 and later, and llmcore forwarded a caller's budget unchanged. So a
 perfectly reasonable request turned into an API error purely because of which

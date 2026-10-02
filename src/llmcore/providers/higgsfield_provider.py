@@ -36,7 +36,7 @@ Transport (selectable via ``backend``)
 References:
   - https://docs.higgsfield.ai/docs
   - https://docs.higgsfield.ai/docs/openapi.json
-  - SDK clone: /av/avalon/xrepos/higgsfield-client (0.1.0, aefd1ca)
+  - Vendor SDK: higgsfield-client (0.1.0, aefd1ca)
 """
 
 from __future__ import annotations

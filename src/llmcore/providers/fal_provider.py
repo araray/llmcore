@@ -118,7 +118,7 @@ class FalProvider(BaseProvider):
 
     Media-only by design: fal serves generative media models, not chat
     completions, so :meth:`chat_completion` raises rather than pretending.
-    The real surface is ``llm.media`` (see ``docs/MEDIA_SUBSYSTEM_SPEC.md``).
+    The real surface is ``llm.media`` (see the media subsystem design spec).
 
     Configuration keys (under ``[providers.fal]``):
 

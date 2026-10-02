@@ -6,7 +6,7 @@ environment overrides, and skips providers whose keys are not available.
 
 Run:
     set -a
-    source /av/data/dbs/.env
+    source /path/to/your/.env
     set +a
     python examples/hosted_providers_example.py
 

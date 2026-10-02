@@ -512,7 +512,7 @@ class TestConfigIntegration:
                     "enabled": True,
                     "events": {
                         "enabled": True,
-                        "log_path": "/av/logs/llmcore/events.jsonl",
+                        "log_path": "/tmp/llmcore-test/events.jsonl",
                         "min_severity": "info",
                         "categories": [],
                         "rotation": {
@@ -563,7 +563,7 @@ class TestConfigIntegration:
 
         # Events
         assert config.events.enabled is True
-        assert config.events.log_path == "/av/logs/llmcore/events.jsonl"
+        assert config.events.log_path == "/tmp/llmcore-test/events.jsonl"
         assert config.events.rotation.strategy == RotationStrategy.BOTH
         assert config.events.rotation.max_size_mb == 10
 

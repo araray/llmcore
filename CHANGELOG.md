@@ -11,10 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **`TokenPricing.cache_write`.** Cost estimates priced fresh input and cached
 reads but had no concept of writing the cache, which providers bill at a
-premium (Anthropic charges 1.25x input for a 5-minute cache). On measured
-agent traffic cache reads and writes are **~97% of all input tokens**, so the
-omission was not a rounding error: pricing cache reads as fresh input
-overstates a warm agent turn by **14.6x**.
+premium (Anthropic charges 1.25x input for a 5-minute cache). For
+cache-heavy workloads that term can dominate the bill, so omitting it does
+not approximate the total — it answers a different question.
 
 `ModelPricing.get_cost`, `ModelCard.estimate_cost` and
 `LLMCore.estimate_cost` all take `cache_write_tokens` now, and `CostEstimate`
@@ -24,30 +23,44 @@ rather than a subset, matching how providers report usage — Anthropic returns
 changes no existing answer.
 
 Where a card states no cache-write rate, the plain input rate is used. That
-understates the premium, but the alternative — inferring it from the
-multipliers in `AnthropicExtension.prompt_caching`, which no code reads —
-would silently diverge from the published number, and the 5-minute vs 1-hour
-variant is not recoverable from a token count.
+understates the premium, but inferring it from the multipliers in
+`AnthropicExtension.prompt_caching`, which no code reads, would silently
+diverge from the published number, and the 5-minute vs 1-hour variant is not
+recoverable from a token count.
 
-**`tools/kairos/pricewatch.yaml`.** The packaged cards were 64% unpriced
-(1484 of 2319), and inverted: `generated` cards refresh from provider
-`/v1/models` endpoints, which return no prices, while hand-written `builtin`
-cards carry pricing and never refresh. Every model in observed traffic was
-unpriced — which also meant `lowest_cost`, correctly ranking unpriced targets
-last, was ranking the most-used models last.
+### Fixed — model card loading is deterministic
 
-A daily kairos job now refreshes pricing from vendor APIs and vendor pricing
-pages into `~/.config/llmcore/model_cards/`, which the registry already loads
-over the packaged cards. The tool lives outside this repo (it reaches the
-network on a timer); the workflow definition is versioned here. Coverage
-measured after one run: 36% → 43%, with cache read and write rates for
-Anthropic.
+`ModelCardRegistry._load_directory` walked the tree with an unsorted
+`rglob`, so load order was filesystem dependent. The packaged tree contains
+model ids that appear in two files under different filename spellings
+(`vendor--model.json`, `vendor__model.json`), and some of those pairs
+disagree about whether the model has pricing — so whether a model appeared
+priced could depend on directory iteration order, and routing reads pricing
+to rank targets.
+
+Loading is now sorted, and a duplicate `model_id` *within* one tier is
+resolved by the card's own declared `source` (hand-written beats generated,
+matching the card-refresh convention) rather than by load order. A
+cross-tier collision is still the documented override: user cards replace
+packaged ones. Collisions are summarised in one warning, with the full list
+at debug level.
+
+The loading tier no longer destroys the card's declared `source`; it is kept
+alongside so precedence can be decided.
+
+### Added — `tools/kairos/pricewatch.yaml`
+
+Definition of a scheduled job that refreshes model pricing from vendor APIs
+and vendor pricing pages into `~/.config/llmcore/model_cards/`, which the
+registry already loads over the packaged cards. The tool it invokes lives
+outside this repo, since it reaches the network on a timer; only the
+machine-neutral definition is versioned here. See `tools/kairos/README.md`.
 
 ### Added — `llmcore.routing`: pools, lanes, failover and proxy mode
 
 Five composable layers, all off until configured. With no `[routing]` section
 every call resolves exactly as it did before. Design and the reasoning behind
-each decision: [`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md);
+each decision: the routing subsystem design spec;
 usage: [`Routing_usage.md`](docs/Routing_usage.md).
 
 **Config stops being an allow-list.** `[providers.*]` sections were acting as
@@ -669,7 +682,7 @@ was invisible to both.
   compute elsewhere, serve an open-weights model on it, and attach the endpoint
   as a provider instance — so a remotely served model is reachable through the
   same `llm.chat()` as any hosted API. Phase R1 of
-  `COLAB_RUNTIME_SPEC.md`: core types, the `ComputeRuntime` protocol, the state
+  the Colab runtime design spec: core types, the `ComputeRuntime` protocol, the state
   store, `RuntimeManager`, and a `FakeRuntime`. **No real backend yet, so
   nothing can spend money.**
 - **The safety model is enforced, not just documented.** Unlike every other
@@ -710,7 +723,7 @@ was invisible to both.
   SDK, selected with `transport = "httpx"`. Because this class is the base for
   **`deepinfra`, `vllm`, `poe` and `openrouter`**, one transport gives five
   providers a dual approach at once — the highest-leverage item in Phase 3 of
-  `PROVIDER_MODERNIZATION_PLAN.md` (§5.8).
+  the provider modernization plan (§5.8).
 - **The key is `transport`, not `backend`.** OpenRouter and Poe already use
   `backend` to choose between their native vendor SDK and OpenAI-compatible
   mode; overloading it would have made one of the two settings unreachable.
@@ -912,7 +925,7 @@ capability that would fail.
   vendor, everything queued rather than only the slow things, inputs addressed
   by URL rather than by bytes, output schemas that vary per model. It needed no
   new `MediaJob` field, no new `MediaExecution` member and no change to
-  `MediaJobManager`. See `MEDIA_SUBSYSTEM_SPEC.md` §5.2.
+  `MediaJobManager`. See the media subsystem design spec §5.2.
 - **Every capability is an async job**, including image generation. The same
   `llm.media.images.generate(...)` call returns a `MediaResult` on OpenAI and a
   `MediaJob` on fal; `llm.media.wait()` absorbs both, because execution class is
@@ -1068,7 +1081,7 @@ resulting artifact was fed straight back in as an ASR input via
 
 - **`llmcore.media`**, reached through `llm.media`: a sibling subsystem to chat
   providers and search providers for generative image, audio and video.
-  Implements phase M1 of `docs/MEDIA_SUBSYSTEM_SPEC.md`; no vendor adapters yet,
+  Implements phase M1 of the media subsystem design spec; no vendor adapters yet,
   which is the gate the spec requires before any provider work lands.
 - **Three execution classes, not one** — `MediaResult` for request/response,
   `AsyncIterator[bytes]` for streams, `MediaJob` for long-running work. Image
@@ -1115,7 +1128,7 @@ resulting artifact was fed straight back in as an ASR input via
   `is_ephemeral()` / `ephemeral_instances`. Providers were previously only
   constructible during `__init__`; subsystems that *create* endpoints need to
   add one afterwards. This is the single capability shared by the media program
-  and the remote-runtime program (`docs/COLAB_RUNTIME_SPEC.md`), where a Colab
+  and the remote-runtime program (the Colab runtime design spec), where a Colab
   VM's OpenAI-compatible endpoint is registered as a `vllm` instance.
 - Guards that matter: a name collision raises unless `replace=True` (so a live
   provider is never silently swapped out from under its callers), the configured
@@ -1132,7 +1145,7 @@ resulting artifact was fed straight back in as an ASR input via
 
 ### Added — media and remote-runtime specifications
 
-- `docs/MEDIA_SUBSYSTEM_SPEC.md` — design and specification for a first-class
+- the media subsystem design spec — design and specification for a first-class
   `llmcore.media` subsystem: `MediaArtifact` / `MediaUsage` / `MediaJob`,
   capability `Protocol`s per modality, the three execution classes
   (request/response, byte stream, async job), capability-oriented model cards
@@ -1144,7 +1157,7 @@ resulting artifact was fed straight back in as an ASR input via
   working. Notably corrects the source research: **OpenAI's Sora video APIs
   were deprecated in `openai` 3.1**, so frontier video comes from Veo and
   fal-hosted models instead.
-- `docs/COLAB_RUNTIME_SPEC.md` — design and specification for a
+- the Colab runtime design spec — design and specification for a
   `llmcore.runtimes` subsystem that provisions and controls remote GPU runtimes
   (Google Colab first) and attaches the resulting OpenAI-compatible endpoint as
   a provider instance, so a remotely served model is reachable through the
@@ -1190,11 +1203,11 @@ no `ANTHROPIC_API_KEY` is available in this environment.**
 
 ### Added — provider audit documents
 
-- `docs/PROVIDER_SUPPORT_MATRIX.md` — the ongoing tracker: per provider, the
+- the provider support matrix — the ongoing tracker: per provider, the
   vendor SDK clone with tag/commit/date, our pin, the installed version, the
   transport shape, and a capability matrix extracted from the provider classes.
   Section 6 is a runnable refresh procedure.
-- `docs/PROVIDER_MODERNIZATION_PLAN.md` — the phased program that closes the
+- the provider modernization plan — the phased program that closes the
   gaps, built on the dual-transport and one-contract principles.
 
 ### Added — FriendliAI provider
@@ -1689,7 +1702,7 @@ APIs (Academic Graph, Recommendations, Datasets), which share a host
   and manager wiring (keyless + `s2` alias + keyed). Full search suite: 199
   passed, 0 regressions.
 - **Docs:** `docs/Search_providers_usage.md` (new §11 Semantic Scholar) and
-  `docs/Search_providers_rationale.md` (glance row, capability matrix, config
+  the search providers design rationale (glance row, capability matrix, config
   reference, tradeoffs) updated; new `examples/semanticscholar_search_example.py`.
 
 > `cardctl` is intentionally **not** extended for Semantic Scholar — it manages
@@ -1757,7 +1770,7 @@ engines/verticals selected with one `engine` parameter.
   batch fan-out, archive/account/locations, retries, the free health check, and
   manager wiring.
 - **Docs:** `docs/Search_providers_usage.md` and
-  `docs/Search_providers_rationale.md` updated with a SerpApi section, capability
+  the search providers design rationale updated with a SerpApi section, capability
   matrix row and config reference; new `examples/serpapi_search_example.py`.
 
 > `cardctl` is intentionally **not** extended for SerpApi — it manages *LLM model

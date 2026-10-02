@@ -7,7 +7,7 @@ This script traces through the import chain step by step to identify
 exactly where imports are failing.
 
 Usage:
-    cd /av/data/repos/llmcore
+    cd /path/to/llmcore
     python diagnose_imports.py
 """
 

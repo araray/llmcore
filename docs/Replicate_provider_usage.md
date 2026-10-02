@@ -156,8 +156,8 @@ registers a single-use callback URL automatically. Polling remains the fallback.
 
 ## 8. Related
 
-- [`MEDIA_SUBSYSTEM_SPEC.md`](MEDIA_SUBSYSTEM_SPEC.md) — §5.5 on what this
+- the media subsystem design spec — §5.5 on what this
   proved about the generic-adapter bet
-- [`PROVIDER_SUPPORT_MATRIX.md`](PROVIDER_SUPPORT_MATRIX.md) — SDK versions and
+- the provider support matrix — SDK versions and
   the live validation log
 - [`Fal_provider_usage.md`](Fal_provider_usage.md) — the other marketplace adapter

@@ -494,7 +494,7 @@ class AnthropicProvider(BaseProvider):
     #: Earliest generation that **rejects** ``{"type": "enabled"}`` and its
     #: ``budget_tokens``. This is the one that turns a reasonable request into
     #: a 400, and it is the defect recorded in
-    #: PROVIDER_MODERNIZATION_PLAN.md and the routing spec.
+    #: the provider modernization plan and the routing spec.
     _BUDGET_REJECTED_FROM = (4, 7)
 
     #: Earliest generation that rejects ``{"type": "disabled"}``. Measured:

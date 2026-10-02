@@ -30,7 +30,7 @@ Design notes
 * ``raw`` / ``provider_metadata`` always preserve the vendor payload so power
   users can reach fields the normalizer does not surface.
 
-See ``docs/MEDIA_SUBSYSTEM_SPEC.md`` for the full design.
+See the media subsystem design spec for the full design.
 """
 
 from __future__ import annotations

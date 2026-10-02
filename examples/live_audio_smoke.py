@@ -6,7 +6,7 @@ public sample URL.
 
 Run:
     set -a
-    source /av/data/dbs/.env
+    source /path/to/your/.env
     set +a
     python examples/live_audio_smoke.py
 """

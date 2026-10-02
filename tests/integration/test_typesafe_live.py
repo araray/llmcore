@@ -3,7 +3,7 @@
 
 Skipped automatically when the key is absent (CI has none). Run locally with::
 
-    set -a; source /av/data/dbs/.env; set +a
+    set -a; source /path/to/your/.env; set +a
     pytest tests/integration/test_typesafe_live.py -m integration -q
 
 Each run makes three small requests (~500 input tokens each, output is free).

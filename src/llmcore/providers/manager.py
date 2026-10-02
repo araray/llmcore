@@ -755,7 +755,7 @@ class ProviderManager:
         Providers are normally constructed during ``__init__`` from
         ``[providers.*]``.  This adds one afterwards, which is what subsystems
         that *create* endpoints need: a remote GPU runtime that has just booted
-        (see ``docs/COLAB_RUNTIME_SPEC.md``) or a media adapter discovered
+        (see the Colab runtime design spec) or a media adapter discovered
         dynamically.
 
         Args:

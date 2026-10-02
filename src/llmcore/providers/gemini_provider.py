@@ -1482,7 +1482,7 @@ class GeminiProvider(BaseProvider):
     # Media subsystem adapter (llmcore.media protocols)
     # ==================================================================
     #
-    # Phase M4 of docs/MEDIA_SUBSYSTEM_SPEC.md. Gemini has the largest media
+    # Phase M4 of the media subsystem design spec. Gemini has the largest media
     # surface llmcore curates, and Veo makes it the FIRST true async-job
     # provider — so this is where the MediaJob lifecycle is validated against a
     # real vendor rather than the in-repo fake.

@@ -214,7 +214,7 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
     #: vLLM serves language models over an OpenAI-compatible surface. It has no
     #: image, speech or audio endpoints, so it declares nothing — inheriting
     #: OpenAI's declaration would make the router call endpoints that 404.
-    #: (Embeddings/rerank are a tracked gap; see PROVIDER_MODERNIZATION_PLAN §8.)
+    #: (Embeddings/rerank are a tracked gap; see the provider modernization plan §8.)
     _MEDIA_CAPABILITIES: frozenset[Any] = frozenset()
 
 

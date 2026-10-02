@@ -171,7 +171,7 @@ class BalanceProbe(Protocol):
 
     Implemented by *providers*, not by routing. Most vendors have no public
     balance endpoint, so this is deliberately sparse: see
-    ``docs/ROUTING_SUBSYSTEM_SPEC.md`` §3.4 for who does.
+    the routing subsystem design spec §3.4 for who does.
     """
 
     async def remaining_balance(self) -> Balance | None:

@@ -1258,7 +1258,7 @@ class LLMCore:
         its first chunk does fail over.
 
         See `llm.routing.explain()` to find out where a message would go
-        without sending it, and `docs/ROUTING_SUBSYSTEM_SPEC.md` for the
+        without sending it, and the routing subsystem design spec for the
         design.
 
         ## External RAG Engine Integration

@@ -16,7 +16,7 @@ questions and get structured, calibrated answers back. This script shows:
 
 To run this example:
 - Install with the TypeSafe extra: ``pip install llmcore[typesafe]`` (httpx only).
-- Set the API key (or ``set -a; source /av/data/dbs/.env; set +a``):
+- Set the API key (or ``set -a; source /path/to/your/.env; set +a``):
     export TYPESAFE_API_KEY='your-key-here'
 
 Docs: https://docs.typesafe.ai  ·  llmcore guide: docs/TypeSafe_provider_usage.md

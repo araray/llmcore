@@ -111,7 +111,7 @@ by trial and error.
 - **Dual transport** — 21 of 23 providers now call the vendor API directly with
   the SDK as a fallback (or the reverse, where an SDK owns something llmcore
   should not reimplement). See
-  [`PROVIDER_SUPPORT_MATRIX.md`](docs/PROVIDER_SUPPORT_MATRIX.md) §7.1.
+  the provider support matrix §7.1.
 - **`cardctl doctor`** — audits that every registered provider has a card
   adapter, so a new provider cannot ship without model cards.
 - **`llmcore.routing`** — five composable layers: dynamic targets, failover
@@ -263,7 +263,7 @@ record: whose voice it is, whether it is a clone, and whether the vendor
 considers it cleared — with `None` meaning *the vendor did not say*, which is
 deliberately distinct from *no*.
 
-See [`MEDIA_SUBSYSTEM_SPEC.md`](docs/MEDIA_SUBSYSTEM_SPEC.md).
+See the media subsystem design spec.
 
 ---
 
@@ -362,7 +362,7 @@ bad answer, routing too expensive only costs money, and a single percentage
 hides which one you are buying.
 
 Guide: [`Routing_usage.md`](docs/Routing_usage.md). Design:
-[`ROUTING_SUBSYSTEM_SPEC.md`](docs/ROUTING_SUBSYSTEM_SPEC.md).
+the routing subsystem design spec.
 
 ---
 
@@ -419,7 +419,7 @@ Still unproven: a single unattended `up()` with all four fixes applied, and
 the "cold start is seconds" claim for a warm environment cache.
 
 Guide: [`Runtimes_usage.md`](docs/Runtimes_usage.md). Design:
-[`COLAB_RUNTIME_SPEC.md`](docs/COLAB_RUNTIME_SPEC.md).
+the Colab runtime design spec.
 
 ---
 
@@ -697,7 +697,7 @@ export TYPESAFE_API_KEY="..."          # TypeSafe.ai System One
 API directly and which fall back to a vendor SDK — llmcore prefers direct calls
 so an SDK lagging the API does not block you, and keeps the SDK where it owns
 something non-trivial. Full detail in
-[`PROVIDER_SUPPORT_MATRIX.md`](docs/PROVIDER_SUPPORT_MATRIX.md).
+the provider support matrix.
 
 ### Chat and reasoning
 
@@ -1425,13 +1425,13 @@ from llmcore import (
 
 | Document | What it covers |
 |---|---|
-| [Provider support matrix](docs/PROVIDER_SUPPORT_MATRIX.md) | Per provider: tracked SDK version and commit, transport duality, capability matrix, and a live-validation log recording what was actually called |
-| [Provider modernization plan](docs/PROVIDER_MODERNIZATION_PLAN.md) | Phased plan for the remaining gaps in that matrix |
-| [Media subsystem spec](docs/MEDIA_SUBSYSTEM_SPEC.md) | Design, the rollout, and what each vendor taught the abstraction |
+| Provider support matrix | Per provider: tracked SDK version and commit, transport duality, capability matrix, and a live-validation log recording what was actually called |
+| Provider modernization plan | Phased plan for the remaining gaps in that matrix |
+| Media subsystem spec | Design, the rollout, and what each vendor taught the abstraction |
 | [Runtimes usage guide](docs/Runtimes_usage.md) | How to size, start, watch and stop remote GPU runtimes, and what it does not claim |
-| [Remote runtime spec](docs/COLAB_RUNTIME_SPEC.md) | Runtime safety model and the Colab backend design |
+| Remote runtime spec | Runtime safety model and the Colab backend design |
 | [Routing usage guide](docs/Routing_usage.md) | How to use routing: dynamic targets, pools, lanes, cascades, the privacy path, proxy mode, and what it does not claim |
-| [Routing subsystem spec](docs/ROUTING_SUBSYSTEM_SPEC.md) | The design: five layers, the failure taxonomy, prior art borrowed, and the measured corrections to it |
+| Routing subsystem spec | The design: five layers, the failure taxonomy, prior art borrowed, and the measured corrections to it |
 
 **Per-provider guides**
 
@@ -1443,7 +1443,7 @@ from llmcore import (
 [FriendliAI](docs/Friendli_provider_usage.md) ·
 [TypeSafe.ai](docs/TypeSafe_provider_usage.md) ·
 [Search providers](docs/Search_providers_usage.md)
-([rationale](docs/Search_providers_rationale.md))
+(rationale)
 
 ---
 

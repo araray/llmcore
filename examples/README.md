@@ -83,7 +83,7 @@ export DEEPGRAM_API_KEY="dg_..."
 ```bash
 # Load a local env file without printing secrets
 set -a
-source /av/data/dbs/.env
+source /path/to/your/.env
 set +a
 
 # Local default provider

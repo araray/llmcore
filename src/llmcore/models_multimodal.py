@@ -471,7 +471,7 @@ class TextAnalysisResult(BaseModel):
 # The types above predate `llmcore.media` and are public API: seven providers
 # return them today. Rather than replace them, each gains a conversion to and
 # from `llmcore.media.MediaArtifact`, so the legacy provider methods and the
-# media routers describe the same asset. See docs/MEDIA_SUBSYSTEM_SPEC.md §4.3.
+# media routers describe the same asset. See the media subsystem design spec §4.3.
 #
 # Imports are local to each method so this module keeps no import-time
 # dependency on the media subsystem.

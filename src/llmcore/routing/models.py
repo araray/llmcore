@@ -1,5 +1,5 @@
 # src/llmcore/routing/models.py
-"""Core types for the routing subsystem (see ``docs/ROUTING_SUBSYSTEM_SPEC.md``).
+"""Core types for the routing subsystem (see the routing subsystem design spec).
 
 Five layers compose here, and the types are deliberately separate per layer so
 each is usable without the others:
