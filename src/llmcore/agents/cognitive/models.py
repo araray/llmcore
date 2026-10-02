@@ -630,6 +630,20 @@ class CycleIteration(BaseModel):
     total_completion_tokens: int = Field(
         default=0, description="Total completion tokens across phase usage records (2.7)"
     )
+    total_cached_tokens: int = Field(
+        default=0,
+        description=(
+            "Prompt tokens served from cache across phase usage records "
+            "(a subset of total_prompt_tokens, never additional)"
+        ),
+    )
+    total_cache_write_tokens: int = Field(
+        default=0,
+        description=(
+            "Tokens written to the prompt cache across phase usage records "
+            "(additional to total_prompt_tokens)"
+        ),
+    )
     total_cost: float = Field(
         default=0.0, description="Total provider cost for this iteration (2.7)"
     )
@@ -703,6 +717,8 @@ class CycleIteration(BaseModel):
 
         prompt_total = 0
         completion_total = 0
+        cached_total = 0
+        cache_write_total = 0
         cost_total = 0.0
         for usage in (
             self.plan_output.usage if self.plan_output else None,
@@ -714,10 +730,14 @@ class CycleIteration(BaseModel):
                 continue
             prompt_total += usage.prompt_tokens
             completion_total += usage.completion_tokens
+            cached_total += usage.cached_tokens
+            cache_write_total += usage.cache_write_tokens
             if usage.cost:
                 cost_total += usage.cost
         self.total_prompt_tokens = prompt_total
         self.total_completion_tokens = completion_total
+        self.total_cached_tokens = cached_total
+        self.total_cache_write_tokens = cache_write_total
         self.total_cost = cost_total
 
         return total
@@ -808,6 +828,8 @@ class CycleIteration(BaseModel):
             "total_tokens_used": self.total_tokens_used,
             "total_prompt_tokens": self.total_prompt_tokens,
             "total_completion_tokens": self.total_completion_tokens,
+            "total_cached_tokens": self.total_cached_tokens,
+            "total_cache_write_tokens": self.total_cache_write_tokens,
             "total_cost": self.total_cost,
             "duration_ms": self.duration_ms,
             "error": self.error,
@@ -890,6 +912,14 @@ class EnhancedAgentState(AgentState):
     total_tokens_used: int = Field(default=0, description="Total tokens used across all iterations")
     total_cost: float = Field(
         default=0.0, description="Total provider cost (USD) across all iterations (2.7)"
+    )
+    total_cached_tokens: int = Field(
+        default=0,
+        description="Prompt tokens served from cache across all iterations",
+    )
+    total_cache_write_tokens: int = Field(
+        default=0,
+        description="Tokens written to the prompt cache across all iterations",
     )
     total_tool_calls: int = Field(default=0, description="Total number of tool calls made")
 
@@ -1207,6 +1237,8 @@ class EnhancedAgentState(AgentState):
         # state totals here (complete_iteration routes through this).
         self.total_tokens_used += iteration.total_tokens_used
         self.total_cost += float(iteration.total_cost or 0.0)
+        self.total_cached_tokens += iteration.total_cached_tokens
+        self.total_cache_write_tokens += iteration.total_cache_write_tokens
         if iteration.act_output:
             self.total_tool_calls += 1
 

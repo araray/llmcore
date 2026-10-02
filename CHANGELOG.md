@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — cache token counts reach session statistics
+
+`SessionTokenStats.total_cached_tokens` has always existed, and
+`get_session_token_stats` has always read `cached_tokens` off each
+interaction record — but nothing ever wrote that key, so the field was
+permanently zero. The cognitive cycle measures the number and it was being
+dropped at every handoff.
+
+The whole chain now carries it: `PhaseUsage` →
+`CycleIteration.total_cached_tokens` / `total_cache_write_tokens` →
+`EnhancedAgentState` → `record_agent_usage` → `SessionTokenStats`.
+`SessionTokenStats` gains `total_cache_write_tokens`, and
+`CycleIteration.to_history_summary()` reports both.
+
+`record_agent_usage` clamps `cached_tokens` to `prompt_tokens`: cached
+tokens are part of the prompt, so a larger count is a reporting error rather
+than extra tokens, and letting it through would imply a cache-hit ratio
+above 100%. Records omitting the new keys behave exactly as before.
+
+Also corrects `record_agent_usage`'s docstring, which claimed agent runs
+"bypass the chat path that normally records
+`session.metadata["interactions"]`". Nothing writes that list for the chat
+path either — `record_agent_usage` is its only writer, and plain chat
+sessions fall back to estimating from message token counts.
+
 ### Fixed — the agent's cost accounting now sees prompt caching
 
 `extract_usage` priced every iteration as

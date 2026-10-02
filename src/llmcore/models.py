@@ -661,6 +661,9 @@ class SessionTokenStats(BaseModel):
         total_completion_tokens: Cumulative count of all output/completion tokens.
         total_tokens: Sum of prompt and completion tokens.
         total_cached_tokens: Cumulative count of tokens served from provider cache.
+            A subset of total_prompt_tokens, never additional to it.
+        total_cache_write_tokens: Cumulative count of tokens written to the
+            provider cache. Additional to total_prompt_tokens, not a subset.
         interaction_count: Number of chat interactions in the session.
         avg_prompt_tokens: Average prompt tokens per interaction.
         avg_completion_tokens: Average completion tokens per interaction.
@@ -676,6 +679,9 @@ class SessionTokenStats(BaseModel):
     total_completion_tokens: int = Field(default=0, description="Total output tokens used.")
     total_tokens: int = Field(default=0, description="Total tokens (prompt + completion).")
     total_cached_tokens: int = Field(default=0, description="Total tokens served from cache.")
+    total_cache_write_tokens: int = Field(
+        default=0, description="Total tokens written to the provider cache."
+    )
     interaction_count: int = Field(default=0, description="Number of chat interactions.")
     avg_prompt_tokens: float = Field(
         default=0.0, description="Average prompt tokens per interaction."
