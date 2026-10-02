@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — the agent's cost accounting now sees prompt caching
+
+`extract_usage` priced every iteration as
+`get_cost(input_tokens=prompt_tokens, output_tokens=completion_tokens)`,
+reading no cache counters at all. The circuit breaker's `COST_LIMIT` acts on
+that number, and on cache-heavy agent traffic cache reads are the
+overwhelming majority of input tokens — so the limit was wrong by an order
+of magnitude, in **opposite directions depending on the provider**:
+
+- **Anthropic-style** reports the prompt count as *fresh tokens only*, with
+  `cache_read_input_tokens` alongside. The cached bulk never reached
+  pricing: a real turn with 6 fresh and 922,403 cached tokens priced at
+  $0.0193 instead of $0.2037 — **10.6× under**. Against the default
+  `max_total_cost` of $1.00 the breaker tripped at iteration 52 instead of 5.
+- **OpenAI-style** reports the whole prompt, with the cached part under
+  `prompt_tokens_details`. Every cached token was charged at the fresh rate:
+  $3.7089 for the same turn — **18.2× over**, tripping at iteration 1 and
+  killing every run.
+
+`extract_usage` now reads both conventions, decides which contract applies
+from the provider's own key names, and normalises to this codebase's rule
+that `cached_tokens` is a subset of `prompt_tokens` while cache writes are
+additional. Both shapes now yield the same cost for the same turn.
+`PhaseUsage` carries `cached_tokens` and `cache_write_tokens`, so iteration
+totals and session stats can report them too.
+
+A usage block with no cache information behaves exactly as before.
+
 ### Fixed — context-tiered pricing is actually applied
 
 `ModelPricing.context_tiers` was declared, documented, and populated on four
