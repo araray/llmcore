@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — the capability pre-check refused every model newer than its table
+
+`CapabilityChecker` resolved models against `DEFAULT_MODEL_INFO`, a static
+table of **13 entries** from early 2024 (`gpt-4-turbo`, `claude-3-opus`,
+`gemini-pro`…), and returned `compatible=False` for anything absent from it.
+`capability_check.enabled` and `strict_mode` both default to `True`, and
+`single_agent` returns early with `success=False` and zero iterations when
+the check fails — so `EnhancedAgentManager.run()` (whose default mode is
+`SINGLE`) **refused to run any current model out of the box**, while a model
+card existed for every one of them.
+
+`agents.capability_check.use_model_cards` has defaulted to `True` since it
+was added and promised exactly this lookup. Nothing read it.
+
+Three changes:
+
+- `CapabilityChecker` takes `use_model_cards` and falls back to the
+  model-card registry for models absent from the static table, so the
+  thousands of packaged cards are reachable. `single_agent` passes the
+  configured value.
+- **An unknown model is unknown, not incompatible.** It now yields
+  `compatible=True` with a warning saying capabilities could not be
+  established, instead of a hard error that `strict_mode` turned into a
+  refusal.
+- A card whose capability block was never filled in is read as *unknown*
+  rather than as a set of negatives. Card generators default `streaming` to
+  true and leave the rest false, so a card whose only true flag is
+  `streaming` would otherwise make the checker assert that a frontier model
+  cannot call tools. Context windows are still trusted on such cards, being
+  numbers rather than defaulted flags.
+
+A model whose card genuinely states it lacks a required capability is still
+a hard error, and a context-window shortfall is still a hard error. Both are
+covered by tests, since the easy way to "fix" this would be to stop checking.
+
 ### Fixed — cache token counts reach session statistics
 
 `SessionTokenStats.total_cached_tokens` has always existed, and

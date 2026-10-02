@@ -271,7 +271,18 @@ class SingleAgentMode:
         )
 
         # Initialize capability checker (G3 Phase 4)
-        self.capability_checker = CapabilityChecker()
+        #
+        # `use_model_cards` is honoured here. Without it the checker only
+        # knows the 13 models in its static table, so every model released
+        # since reported as unknown — and with `strict_mode` on by default
+        # that refused the run outright.
+        # Duck-typed/mock configs may have no typed `capability_check`
+        # section, the same reason _resolve_convergence exists; default to
+        # consulting the cards rather than crashing or silently disabling.
+        _capability_cfg = getattr(self._agents_config, "capability_check", None)
+        self.capability_checker = CapabilityChecker(
+            use_model_cards=bool(getattr(_capability_cfg, "use_model_cards", True))
+        )
 
         # Initialize cognitive cycle
         self.cognitive_cycle = CognitiveCycle(
