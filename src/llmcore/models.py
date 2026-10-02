@@ -725,12 +725,15 @@ class CostEstimate(BaseModel):
         output_cost: Cost for output/completion tokens.
         cached_discount: Cost savings from cached tokens (if applicable).
         reasoning_cost: Cost for reasoning tokens (for thinking models).
+        cache_write_cost: Cost for tokens written to the prompt cache.
         total_cost: Total estimated cost.
         currency: Currency code (ISO 4217, default "USD").
         pricing_source: Source of pricing data ("model_card", "estimated", "unavailable").
         prompt_tokens: Number of prompt tokens used in estimate.
         completion_tokens: Number of completion tokens used in estimate.
         cached_tokens: Number of cached tokens (subset of prompt).
+        cache_write_tokens: Tokens written to the prompt cache (additional
+            to prompt_tokens, not a subset of it).
         reasoning_tokens: Number of reasoning tokens (for thinking models).
         input_price_per_million: Input price per 1M tokens used.
         output_price_per_million: Output price per 1M tokens used.
@@ -743,6 +746,9 @@ class CostEstimate(BaseModel):
     output_cost: float = Field(default=0.0, description="Cost for output tokens.")
     cached_discount: float = Field(default=0.0, description="Cost savings from cached tokens.")
     reasoning_cost: float = Field(default=0.0, description="Cost for reasoning tokens.")
+    cache_write_cost: float = Field(
+        default=0.0, description="Cost for tokens written to the prompt cache."
+    )
     total_cost: float = Field(default=0.0, description="Total estimated cost.")
     currency: str = Field(default="USD", description="Currency code (ISO 4217).")
     pricing_source: str = Field(
@@ -754,6 +760,10 @@ class CostEstimate(BaseModel):
     prompt_tokens: int = Field(default=0, description="Prompt tokens in this estimate.")
     completion_tokens: int = Field(default=0, description="Completion tokens in this estimate.")
     cached_tokens: int = Field(default=0, description="Cached tokens (subset of prompt).")
+    cache_write_tokens: int = Field(
+        default=0,
+        description="Tokens written to the prompt cache (additional to prompt).",
+    )
     reasoning_tokens: int = Field(default=0, description="Reasoning tokens used.")
 
     # Pricing rates used
@@ -762,6 +772,9 @@ class CostEstimate(BaseModel):
     )
     output_price_per_million: float | None = Field(
         default=None, description="Output price per 1M tokens."
+    )
+    cache_write_price_per_million: float | None = Field(
+        default=None, description="Cache-write price per 1M tokens used."
     )
     cached_price_per_million: float | None = Field(
         default=None, description="Cached input price per 1M tokens."

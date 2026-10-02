@@ -2540,6 +2540,7 @@ class LLMCore:
         completion_tokens: int,
         *,
         cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
         reasoning_tokens: int = 0,
     ) -> CostEstimate:
         """
@@ -2555,6 +2556,13 @@ class LLMCore:
             prompt_tokens: Input/prompt token count.
             completion_tokens: Output/completion token count.
             cached_tokens: Tokens served from cache (discount applied).
+            cache_write_tokens: Tokens written to the prompt cache, billed
+                at a premium. Additional to prompt_tokens, not a subset --
+                providers report them separately (Anthropic returns
+                cache_creation_input_tokens alongside input_tokens). On
+                real agent traffic cache reads and writes are ~97% of all
+                input tokens, so omitting this term does not approximate
+                the cost, it answers a different question.
             reasoning_tokens: Reasoning/thinking tokens (special pricing).
 
         Returns:
@@ -2583,6 +2591,7 @@ class LLMCore:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             cached_tokens=cached_tokens,
+            cache_write_tokens=cache_write_tokens,
             reasoning_tokens=reasoning_tokens,
             provider=provider_name,
             model_id=model_name,
@@ -2602,6 +2611,7 @@ class LLMCore:
         result.input_price_per_million = pricing.input
         result.output_price_per_million = pricing.output
         result.cached_price_per_million = pricing.cached_input
+        result.cache_write_price_per_million = pricing.cache_write
 
         # Calculate input cost
         regular_input_tokens = max(0, prompt_tokens - cached_tokens)
@@ -2623,6 +2633,15 @@ class LLMCore:
                     (cached_tokens / 1_000_000) * pricing.cached_input
                 )
 
+        # Cache writes are billed at their own premium rate. Without a
+        # stated rate, fall back to plain input: that understates the true
+        # cost, but inventing a multiplier would be worse.
+        if cache_write_tokens > 0:
+            write_rate = (
+                pricing.cache_write if pricing.cache_write is not None else pricing.input
+            )
+            result.cache_write_cost = (cache_write_tokens / 1_000_000) * write_rate
+
         # Calculate output cost
         regular_output_tokens = max(0, completion_tokens - reasoning_tokens)
         result.output_cost = (regular_output_tokens / 1_000_000) * pricing.output
@@ -2636,7 +2655,12 @@ class LLMCore:
                 result.output_cost += (reasoning_tokens / 1_000_000) * pricing.output
 
         # Calculate total
-        result.total_cost = result.input_cost + result.output_cost + result.reasoning_cost
+        result.total_cost = (
+            result.input_cost
+            + result.output_cost
+            + result.reasoning_cost
+            + result.cache_write_cost
+        )
 
         return result
 
