@@ -329,20 +329,38 @@ class FastPathConfig:
         and legacy config objects keep working.
         """
         def pick(name: str, default: Any) -> Any:
+            """Read one field, falling back to the default on anything odd.
+
+            Callers build managers with mocks and partially-formed config
+            objects, so an attribute can exist and still not be a usable
+            value. Coercion alone is not enough to catch that: a MagicMock
+            implements ``__float__`` and happily becomes ``1.0``, which
+            would silently give the cache a one-second TTL. So the value
+            has to *be* the right kind of thing, not merely convertible to
+            it.
+            """
             value = getattr(section, name, None)
-            return default if value is None else value
+            if value is None:
+                return default
+            if isinstance(default, bool):
+                return value if isinstance(value, bool) else default
+            if isinstance(default, (int, float)):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    return default
+                return type(default)(value)
+            return value
 
         return cls(
             max_response_time_ms=pick("max_response_time_ms", 5000),
             # cache_enabled -> use_cache
-            use_cache=bool(pick("cache_enabled", True)),
+            use_cache=pick("cache_enabled", True),
             # templates_enabled -> use_templates
-            use_templates=bool(pick("templates_enabled", True)),
+            use_templates=pick("templates_enabled", True),
             temperature=pick("temperature", 0.7),
             max_tokens=pick("max_tokens", 500),
-            fallback_on_timeout=bool(pick("fallback_on_timeout", True)),
+            fallback_on_timeout=pick("fallback_on_timeout", True),
             cache_max_entries=pick("cache_max_entries", 100),
-            cache_ttl_seconds=float(pick("cache_ttl_seconds", 3600.0)),
+            cache_ttl_seconds=pick("cache_ttl_seconds", 3600.0),
         )
 
 

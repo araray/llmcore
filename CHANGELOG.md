@@ -33,6 +33,24 @@ than an accident.
 
 Building `FastPathExecutor()` with no config still yields the previous
 defaults; it is public API.
+### Changed — capability flags report unknown instead of False
+
+`ModelDetails.supports_tools` / `supports_vision` / `supports_reasoning` are
+now `bool | None`, defaulting to `None`. A card whose capability block was
+never filled in says nothing, and reporting `False` asserted a negative that
+had not been established — 26% of packaged chat cards carry a generator's
+`streaming=True` and every other flag false. `None` is falsy, so truthiness
+checks are unaffected.
+
+`ModelCapabilities.is_populated()` now owns that test, and the agent
+capability checker uses it rather than its own copy.
+
+Also hardens `FastPathConfig.from_agents_config` against values that exist
+but are not usable. Coercion alone was not enough: a `MagicMock`
+implements `__float__` and becomes `1.0`, which would have given the
+fast-path cache a one-second TTL. Values must now be the right kind of
+thing, not merely convertible.
+
 ### Changed — the agent circuit breaker's budgets now sit above normal work
 
 `max_total_cost` defaulted to **$1.00**. Measured across 4,140 real agent
