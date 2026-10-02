@@ -2603,7 +2603,14 @@ class LLMCore:
             logger.debug(f"No pricing data for {provider_name}/{model_name}")
             return result
 
-        pricing = card.pricing.per_million_tokens
+        # Several models price by context size (Gemini 2.5 Pro and Sonnet
+        # 4.5 both charge roughly double beyond a 200k prompt). Resolve the
+        # bracket first: the rates used below depend on it, and reading the
+        # flat rates instead understates a long prompt by ~2x.
+        pricing = card.pricing.rates_for(prompt_tokens + cache_write_tokens)
+        applied_tier = card.pricing.tier_for(prompt_tokens + cache_write_tokens)
+        if applied_tier is not None:
+            result.context_tier_threshold = applied_tier.threshold_tokens
         result.pricing_source = "model_card"
         result.currency = card.pricing.currency
 

@@ -773,6 +773,13 @@ class CostEstimate(BaseModel):
     output_price_per_million: float | None = Field(
         default=None, description="Output price per 1M tokens."
     )
+    context_tier_threshold: int | None = Field(
+        default=None,
+        description=(
+            "Threshold of the context pricing tier applied, if the model "
+            "prices by context size. None means flat rates."
+        ),
+    )
     cache_write_price_per_million: float | None = Field(
         default=None, description="Cache-write price per 1M tokens used."
     )
