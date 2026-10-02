@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — the agent circuit breaker's budgets now sit above normal work
+
+`max_total_cost` defaulted to **$1.00**. Measured across 4,140 real agent
+turns, priced from model cards with cache-aware accounting, the **median**
+turn costs **$1.04** and the 90th percentile **$10.02** — so the guard cut
+off slightly over half of ordinary turns mid-run. It only looked harmless
+while cost accounting was understating Anthropic-shaped runs roughly
+tenfold; correcting that made the cap bite as written.
+
+The default is now **$25.00**, which trips on roughly 3% of real turns —
+the tail where runaway behaviour actually lives, since the most expensive 1%
+of turns account for about a quarter of all spend. This is a dollar figure
+and therefore model-dependent, so it is worth lowering for unattended runs.
+
+`max_execution_time_seconds` is raised from **300** to **1800** for the same
+reason: five minutes sat below the median measured duration of an agent
+turn, so it could not distinguish "stuck" from "doing tool work". The
+evidence is weaker here — usable timing came from a single harness, about 6%
+of the corpus, median 295s and p90 2,340s — and that is stated in the
+config rather than implied.
+
+These defaults are declared in four places: the breaker's pydantic config,
+its dataclass fallback, its `__init__` signature, and `default_config.toml`.
+The TOML is the one that actually loads, and it had already drifted from the
+code. A test now pins all of them together.
+
+### Added — the breaker reports a trip coming, not just a trip
+
+`CircuitBreakerResult` gains `projected_total_cost` and
+`cost_budget_fraction`. The breaker previously reported a budget only once
+it was already gone, which on a long run means discarding most of the work;
+a projection at iteration three is actionable in a way a trip at iteration
+twenty is not.
+
+The projection extrapolates linearly from spend-per-iteration, which the
+shape of real agent traffic supports: a turn's cost is dominated by
+re-sending a roughly constant context on every step, so it grows close to
+linearly in step count rather than accelerating. It returns 0.0 before any
+iteration has been priced rather than guessing from nothing.
+
 ### Fixed — the capability pre-check refused every model newer than its table
 
 `CapabilityChecker` resolved models against `DEFAULT_MODEL_INFO`, a static
