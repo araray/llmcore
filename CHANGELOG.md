@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — `[agents.fast_path]` settings now take effect
+
+`FastPathExecutor` accepts a `config`, but `single_agent` constructed it
+without one, so it fell back to its own module-level defaults. Everything in
+the user's `[agents.fast_path]` section except `enabled` was inert: a
+`cache_max_entries` or `cache_ttl_seconds` a user set did nothing, because
+the executor also built `ResponseCache()` with no arguments.
+
+Two classes are named `FastPathConfig` — the user-facing pydantic section in
+`config.agents_config`, and the executor's runtime class in
+`agents.learning.fast_path`. They disagree about field names
+(`cache_enabled` vs `use_cache`, `templates_enabled` vs `use_templates`) and
+about which fields exist: the runtime class had no cache-sizing fields at
+all, so the executor could not have honoured them even if handed a config.
+
+The runtime class gains `cache_max_entries` and `cache_ttl_seconds`, passes
+them to `ResponseCache`, and gains
+`FastPathConfig.from_agents_config()`. That translation is written out field
+by field deliberately — anything automatic (`model_dump()` into `**kwargs`)
+would drop precisely the renamed fields and silently leave them defaulted,
+reproducing the bug while appearing correct. A test pins the fact that the
+two classes still differ, so unifying them later is a deliberate act rather
+than an accident.
+
+Building `FastPathExecutor()` with no config still yields the previous
+defaults; it is public API.
+### Changed — capability flags report unknown instead of False
+
+`ModelDetails.supports_tools` / `supports_vision` / `supports_reasoning` are
+now `bool | None`, defaulting to `None`. A card whose capability block was
+never filled in says nothing, and reporting `False` asserted a negative that
+had not been established — 26% of packaged chat cards carry a generator's
+`streaming=True` and every other flag false. `None` is falsy, so truthiness
+checks are unaffected.
+
+`ModelCapabilities.is_populated()` now owns that test, and the agent
+capability checker uses it rather than its own copy.
+
+Also hardens `FastPathConfig.from_agents_config` against values that exist
+but are not usable. Coercion alone was not enough: a `MagicMock`
+implements `__float__` and becomes `1.0`, which would have given the
+fast-path cache a one-second TTL. Values must now be the right kind of
+thing, not merely convertible.
+
+### Changed — the agent circuit breaker's budgets now sit above normal work
+
+`max_total_cost` defaulted to **$1.00**. Measured across 4,140 real agent
+turns, priced from model cards with cache-aware accounting, the **median**
+turn costs **$1.04** and the 90th percentile **$10.02** — so the guard cut
+off slightly over half of ordinary turns mid-run. It only looked harmless
+while cost accounting was understating Anthropic-shaped runs roughly
+tenfold; correcting that made the cap bite as written.
+
+The default is now **$25.00**, which trips on roughly 3% of real turns —
+the tail where runaway behaviour actually lives, since the most expensive 1%
+of turns account for about a quarter of all spend. This is a dollar figure
+and therefore model-dependent, so it is worth lowering for unattended runs.
+
+`max_execution_time_seconds` is raised from **300** to **1800** for the same
+reason: five minutes sat below the median measured duration of an agent
+turn, so it could not distinguish "stuck" from "doing tool work". The
+evidence is weaker here — usable timing came from a single harness, about 6%
+of the corpus, median 295s and p90 2,340s — and that is stated in the
+config rather than implied.
+
+These defaults are declared in four places: the breaker's pydantic config,
+its dataclass fallback, its `__init__` signature, and `default_config.toml`.
+The TOML is the one that actually loads, and it had already drifted from the
+code. A test now pins all of them together.
+
+### Added — the breaker reports a trip coming, not just a trip
+
+`CircuitBreakerResult` gains `projected_total_cost` and
+`cost_budget_fraction`. The breaker previously reported a budget only once
+it was already gone, which on a long run means discarding most of the work;
+a projection at iteration three is actionable in a way a trip at iteration
+twenty is not.
+
+The projection extrapolates linearly from spend-per-iteration, which the
+shape of real agent traffic supports: a turn's cost is dominated by
+re-sending a roughly constant context on every step, so it grows close to
+linearly in step count rather than accelerating. It returns 0.0 before any
+iteration has been priced rather than guessing from nothing.
 ### Fixed — a failed evaluation is no longer scored as a mid-range result
 
 `MultiAttemptArbiter` filled a failed candidate evaluation with 5.0 across

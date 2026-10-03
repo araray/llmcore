@@ -157,7 +157,12 @@ class ModelContext(BaseModel):
 
 
 class ModelCapabilities(BaseModel):
-    """Model capability flags indicating supported features."""
+    """Model capability flags indicating supported features.
+
+    Every flag is a plain bool, so an unfilled block is indistinguishable
+    from a model that genuinely does nothing. Use :meth:`is_populated` to
+    tell those apart before reporting a capability as absent.
+    """
 
     streaming: bool = Field(True, description="Supports streaming responses")
     function_calling: bool = Field(False, description="Supports function/tool calling")
@@ -189,6 +194,24 @@ class ModelCapabilities(BaseModel):
     music_generation: bool = Field(False, description="Can generate music")
     sfx_generation: bool = Field(False, description="Can generate sound effects")
     voice_design: bool = Field(False, description="Can design new voices")
+
+    #: Flags a card generator sets without knowing anything about the model.
+    #: `streaming` defaults to True, so its presence proves nothing.
+    _UNINFORMATIVE = ("streaming",)
+
+    def is_populated(self) -> bool:
+        """True when some capability was actually recorded.
+
+        A generated card commonly carries `streaming=True` and every other
+        flag False, which means "nobody filled this in", not "this model
+        can do nothing". Reading that as a set of negatives makes llmcore
+        report that a frontier model cannot call tools.
+        """
+        return any(
+            value is True
+            for name, value in self.model_dump().items()
+            if name not in self._UNINFORMATIVE
+        )
 
 
 class TokenPricing(BaseModel):
