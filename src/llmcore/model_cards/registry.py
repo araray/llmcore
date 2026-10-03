@@ -597,16 +597,31 @@ class ModelCardRegistry:
             Dict with pricing info or None if not available
         """
         card = self.get(provider, model_id)
-        if card and card.pricing:
-            return {
-                "input": card.pricing.per_million_tokens.input,
-                "output": card.pricing.per_million_tokens.output,
-                "cached_input": card.pricing.per_million_tokens.cached_input,
-                "reasoning_output": card.pricing.per_million_tokens.reasoning_output,
-                "currency": card.pricing.currency,
-                "batch_discount_percent": card.pricing.batch_discount_percent,
+        if not card or not card.pricing:
+            return None
+
+        info: dict[str, Any] = {
+            "currency": card.pricing.currency,
+            "batch_discount_percent": card.pricing.batch_discount_percent,
+        }
+        # A model billed per image or per second has no token rates, so
+        # these keys are absent rather than zero -- reading a missing rate
+        # as free is the mistake this whole area keeps making.
+        tokens = card.pricing.per_million_tokens
+        if tokens is not None:
+            info.update({
+                "input": tokens.input,
+                "output": tokens.output,
+                "cached_input": tokens.cached_input,
+                "reasoning_output": tokens.reasoning_output,
+            })
+        if card.pricing.per_unit is not None:
+            info["per_unit"] = {
+                field: value
+                for field in card.pricing.per_unit.UNITS
+                if (value := getattr(card.pricing.per_unit, field)) is not None
             }
-        return None
+        return info
 
     def get_providers(self) -> list[str]:
         """

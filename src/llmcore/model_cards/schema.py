@@ -21,9 +21,10 @@ Phase: Foundation
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -236,6 +237,92 @@ class TokenPricing(BaseModel):
     )
 
 
+class UnitPricing(BaseModel):
+    """Prices for things that are not tokens.
+
+    A third of some providers' catalogues is not billed per token at all:
+    image models charge per image or per megapixel, video models per clip
+    or per second of output, speech per character, transcription per audio
+    minute. ``per_million_tokens`` cannot express any of that, and because
+    it was a *required* field such a model could not have a
+    :class:`ModelPricing` at all — which is why those cards carried
+    ``pricing: null`` and were invisible to every cost path.
+
+    Every rate is in the enclosing :class:`ModelPricing`'s currency, per one
+    unit of the named thing. ``None`` means the vendor does not price that
+    unit, which is distinct from zero.
+
+    .. note::
+        Comparing rates is only meaningful **between models priced in the
+        same unit**. Dollars-per-image and dollars-per-token are not
+        commensurable, and no conversion between them is attempted: a
+        routing pool should hold models that do the same kind of work, and
+        within such a pool the comparison is sound.
+    """
+
+    per_image: float | None = Field(None, description="Price per generated image")
+    per_megapixel: float | None = Field(
+        None, description="Price per megapixel of generated image"
+    )
+    per_video: float | None = Field(None, description="Price per generated video")
+    per_video_second: float | None = Field(
+        None, description="Price per second of generated video"
+    )
+    per_audio_minute: float | None = Field(
+        None, description="Price per minute of audio processed or produced"
+    )
+    per_character: float | None = Field(
+        None, description="Price per character (speech synthesis)"
+    )
+    per_second: float | None = Field(
+        None, description="Price per second of compute or output"
+    )
+    per_request: float | None = Field(
+        None, description="Flat price per request, regardless of size"
+    )
+
+    #: Field name -> the keyword :meth:`ModelPricing.get_cost` accepts for it.
+    #: Kept explicit so a new unit cannot be added to the model without
+    #: deciding what callers pass for it.
+    UNITS: ClassVar[dict[str, str]] = {
+        "per_image": "images",
+        "per_megapixel": "megapixels",
+        "per_video": "videos",
+        "per_video_second": "video_seconds",
+        "per_audio_minute": "audio_minutes",
+        "per_character": "characters",
+        "per_second": "seconds",
+        "per_request": "requests",
+    }
+
+    def is_priced(self) -> bool:
+        """True when any unit rate is stated."""
+        return any(getattr(self, field) is not None for field in self.UNITS)
+
+    def cost_for(self, quantities: Mapping[str, float]) -> float:
+        """Cost of ``quantities``, keyed by the names in :attr:`UNITS`.
+
+        A quantity whose unit the model does not price contributes nothing
+        and is reported by :meth:`unpriced_units`, so a caller can tell
+        "free" from "we have no rate for that".
+        """
+        total = 0.0
+        for field, keyword in self.UNITS.items():
+            rate = getattr(self, field)
+            amount = quantities.get(keyword)
+            if rate is None or not amount:
+                continue
+            total += float(rate) * float(amount)
+        return total
+
+    def unpriced_units(self, quantities: Mapping[str, float]) -> list[str]:
+        """Quantities supplied that this model states no rate for."""
+        priced = {kw for f, kw in self.UNITS.items() if getattr(self, f) is not None}
+        return sorted(
+            kw for kw, amount in quantities.items() if amount and kw not in priced
+        )
+
+
 class ContextTier(BaseModel):
     """Pricing tier based on context window usage.
 
@@ -279,7 +366,17 @@ class ModelPricing(BaseModel):
     """Complete pricing information for a model."""
 
     currency: str = Field("USD", description="Currency code (ISO 4217)")
-    per_million_tokens: TokenPricing
+    per_million_tokens: TokenPricing | None = Field(
+        None,
+        description=(
+            "Per-token rates. Optional: a model billed per image, per video "
+            "or per second has none, and requiring this field is what "
+            "previously made such a model unrepresentable."
+        ),
+    )
+    per_unit: UnitPricing | None = Field(
+        None, description="Non-token rates (per image, per second, …)"
+    )
     batch_discount_percent: float | None = Field(
         None, description="Discount percentage for batch API (e.g., 50 for 50% off)"
     )
@@ -304,7 +401,7 @@ class ModelPricing(BaseModel):
                 return tier
         return tiers[-1]
 
-    def rates_for(self, prompt_tokens: int) -> TokenPricing:
+    def rates_for(self, prompt_tokens: int) -> TokenPricing | None:
         """The rates that apply to a prompt of ``prompt_tokens``.
 
         Without context tiers this is just ``per_million_tokens``. With
@@ -323,6 +420,11 @@ class ModelPricing(BaseModel):
         something different.
         """
         base = self.per_million_tokens
+        if base is None:
+            # A model priced only per image or per second has no token
+            # rates to tier. Returning zeros would read as "free", so the
+            # absence is propagated instead.
+            return None
         tier = self.tier_for(prompt_tokens)
         if tier is None:
             return base
@@ -352,6 +454,7 @@ class ModelPricing(BaseModel):
         cache_write_tokens: int = 0,
         reasoning_tokens: int = 0,
         batch: bool = False,
+        **units: float,
     ) -> float:
         """
         Calculate cost for given token counts.
@@ -370,6 +473,12 @@ class ModelPricing(BaseModel):
                 card states one, otherwise at the output rate.
             batch: Price as a batch-API request, applying
                 ``batch_discount_percent`` when the card states one.
+            **units: Quantities of non-token units — ``images``,
+                ``megapixels``, ``videos``, ``video_seconds``,
+                ``audio_minutes``, ``characters``, ``seconds``,
+                ``requests`` — priced from :attr:`per_unit`. A unit the
+                model states no rate for contributes nothing; use
+                :meth:`UnitPricing.unpriced_units` to tell that from free.
 
         Returns:
             Total cost in the model's currency
@@ -385,6 +494,16 @@ class ModelPricing(BaseModel):
         # cache (a subset of input_tokens), plus tokens written to cache,
         # which providers report separately from input_tokens.
         rates = self.rates_for(input_tokens + cache_write_tokens)
+        if rates is None:
+            # Nothing is priced per token here. Only the unit rates apply,
+            # and a caller passing token counts to such a model is asking
+            # a question the card cannot answer.
+            unit_only = (
+                self.per_unit.cost_for(units) if self.per_unit and units else 0.0
+            )
+            if batch and self.batch_discount_percent:
+                unit_only *= max(0.0, 1.0 - self.batch_discount_percent / 100.0)
+            return unit_only
 
         # Calculate base input cost
         non_cached_input = max(0, input_tokens - cached_tokens)
@@ -424,6 +543,8 @@ class ModelPricing(BaseModel):
             output_cost += (reasoning / 1_000_000) * reasoning_rate
 
         total = input_cost + cached_cost + write_cost + output_cost
+        if self.per_unit and units:
+            total += self.per_unit.cost_for(units)
 
         # The batch discount was declared on this model and read by nothing,
         # so a caller could set it and be charged the full rate. It applies
