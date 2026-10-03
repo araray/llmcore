@@ -253,31 +253,35 @@ class HuggingFaceProvider(BaseProvider):
         full Hub listing API.
         """
         registry = get_model_card_registry()
-        cards = registry.get_provider_cards("huggingface")
         results: list[ModelDetails] = []
-        for card in cards.values():
+        for summary in registry.list_cards(provider="huggingface"):
+            card = registry.get("huggingface", summary.model_id)
+            if card is None:  # pragma: no cover - listed but unreadable
+                continue
+            capabilities = card.capabilities
+            context = card.context
+            architecture = card.architecture
             results.append(
                 ModelDetails(
                     id=card.model_id,
-                    provider_name="huggingface",
+                    provider_name=self.get_name(),
                     display_name=card.display_name or card.model_id,
+                    # None where the repo states no window: 83 of these cards
+                    # are gated or have no config.json, and quoting a number
+                    # for them would be inventing one.
                     context_length=card.get_context_length(),
-                    max_output_tokens=card.context.get("max_output_tokens")
-                    if card.context
-                    else None,
-                    supports_streaming=card.capabilities.streaming
-                    if card.capabilities
-                    else True,
-                    supports_tools=card.capabilities.tool_calling
-                    if card.capabilities
-                    else False,
-                    supports_vision=card.capabilities.vision
-                    if card.capabilities
-                    else False,
-                    family=card.architecture.get("family")
-                    if card.architecture
-                    else None,
-                    model_type=card.model_type or "chat",
+                    max_output_tokens=context.max_output_tokens if context else None,
+                    supports_streaming=capabilities.streaming if capabilities else True,
+                    supports_tools=capabilities.tool_use if capabilities else False,
+                    supports_vision=capabilities.vision if capabilities else False,
+                    supports_reasoning=capabilities.reasoning if capabilities else False,
+                    family=architecture.family if architecture else None,
+                    parameter_count=(
+                        str(architecture.parameter_count)
+                        if architecture and architecture.parameter_count
+                        else None
+                    ),
+                    model_type=str(card.model_type or "chat"),
                     metadata={"source": "model_card"},
                 )
             )
