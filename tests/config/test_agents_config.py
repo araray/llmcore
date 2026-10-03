@@ -85,8 +85,11 @@ class TestAgentsConfigDefaults:
         assert config.enabled is True
         assert config.max_iterations == 15
         assert config.max_same_errors == 3
-        assert config.max_execution_time_seconds == 300
-        assert config.max_total_cost == 1.0
+        # Raised deliberately: both former values sat below the median of
+        # real agent work, so the guard fired during normal operation.
+        # See tests/agents/test_circuit_breaker_budgets.py for the basis.
+        assert config.max_execution_time_seconds == 1800
+        assert config.max_total_cost == 25.0
         assert config.progress_stall_threshold == 5
         assert config.progress_stall_tolerance == 0.01
 

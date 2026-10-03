@@ -356,7 +356,22 @@ class ResponseCache:
 
 
 class FastPathConfig:
-    """Configuration for fast-path execution."""
+    """Runtime configuration for fast-path execution.
+
+    .. warning::
+        This is **not** the user-facing config section. A separate
+        :class:`llmcore.config.agents_config.FastPathConfig` holds the
+        ``[agents.fast_path]`` settings a user actually writes, and the two
+        classes share a name while disagreeing about field names
+        (``cache_enabled`` vs ``use_cache``, ``templates_enabled`` vs
+        ``use_templates``) and about which fields exist at all.
+
+        That divergence is why the user-facing section was inert: the
+        executor was built without a config, so it silently used these
+        defaults. Use :meth:`from_agents_config` to translate, rather than
+        passing one where the other is expected — the names are close
+        enough that a mistake would not raise.
+    """
 
     def __init__(
         self,
@@ -366,6 +381,8 @@ class FastPathConfig:
         temperature: float = 0.7,
         max_tokens: int = 500,
         fallback_on_timeout: bool = True,
+        cache_max_entries: int = 100,
+        cache_ttl_seconds: float = 3600.0,
     ):
         self.max_response_time_ms = max_response_time_ms
         self.use_cache = use_cache
@@ -373,6 +390,56 @@ class FastPathConfig:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.fallback_on_timeout = fallback_on_timeout
+        self.cache_max_entries = cache_max_entries
+        self.cache_ttl_seconds = cache_ttl_seconds
+
+    @classmethod
+    def from_agents_config(cls, section: Any) -> FastPathConfig:
+        """Translate the user-facing ``[agents.fast_path]`` section.
+
+        The mapping is written out field by field on purpose. The two
+        classes name the same concepts differently, so anything automatic
+        (``model_dump()`` into ``**kwargs``) would drop exactly the
+        renamed fields and leave them at their defaults — which is the bug
+        this method exists to fix.
+
+        Missing attributes fall back to the defaults above, so duck-typed
+        and legacy config objects keep working.
+        """
+        def pick(name: str, default: Any) -> Any:
+            """Read one field, falling back to the default on anything odd.
+
+            Callers build managers with mocks and partially-formed config
+            objects, so an attribute can exist and still not be a usable
+            value. Coercion alone is not enough to catch that: a MagicMock
+            implements ``__float__`` and happily becomes ``1.0``, which
+            would silently give the cache a one-second TTL. So the value
+            has to *be* the right kind of thing, not merely convertible to
+            it.
+            """
+            value = getattr(section, name, None)
+            if value is None:
+                return default
+            if isinstance(default, bool):
+                return value if isinstance(value, bool) else default
+            if isinstance(default, (int, float)):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    return default
+                return type(default)(value)
+            return value
+
+        return cls(
+            max_response_time_ms=pick("max_response_time_ms", 5000),
+            # cache_enabled -> use_cache
+            use_cache=pick("cache_enabled", True),
+            # templates_enabled -> use_templates
+            use_templates=pick("templates_enabled", True),
+            temperature=pick("temperature", 0.7),
+            max_tokens=pick("max_tokens", 500),
+            fallback_on_timeout=pick("fallback_on_timeout", True),
+            cache_max_entries=pick("cache_max_entries", 100),
+            cache_ttl_seconds=pick("cache_ttl_seconds", 3600.0),
+        )
 
 
 class FastPathExecutor:
@@ -405,7 +472,14 @@ class FastPathExecutor:
         self.config = config or FastPathConfig()
         self._prompt_registry = prompt_registry
 
-        self._cache = ResponseCache() if self.config.use_cache else None
+        self._cache = (
+            ResponseCache(
+                max_entries=self.config.cache_max_entries,
+                ttl_seconds=self.config.cache_ttl_seconds,
+            )
+            if self.config.use_cache
+            else None
+        )
         self._stats = {
             "total_executions": 0,
             "cache_hits": 0,

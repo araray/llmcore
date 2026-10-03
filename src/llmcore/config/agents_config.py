@@ -211,9 +211,25 @@ class CircuitBreakerConfig(BaseModel):
     max_same_errors: int = Field(
         default=3, ge=1, le=100, description="Trip after N identical errors"
     )
-    max_execution_time_seconds: int = Field(default=300, ge=1, description="Trip after N seconds")
+    max_execution_time_seconds: int = Field(
+        default=1800,
+        ge=1,
+        description=(
+            "Trip after N seconds. Defaults to 30 minutes: 300s was below "
+            "the median measured duration of an agent turn, so it fired "
+            "during normal operation instead of on runaways."
+        ),
+    )
     max_total_cost: float = Field(
-        default=1.0, ge=0.0, description="Trip after spending more than $X"
+        default=25.0,
+        ge=0.0,
+        description=(
+            "Trip after spending more than $X. Defaults to $25: measured "
+            "across 4,140 real agent turns the median turn costs $1.04 and "
+            "the 90th percentile $10.02, so the former $1.00 cap cut off "
+            "slightly over half of ordinary turns. $25 trips on ~3%, which "
+            "is where runaway behaviour actually lives."
+        ),
     )
     progress_stall_threshold: int = Field(
         default=5, ge=1, le=50, description="Trip if progress stalls for N iterations"

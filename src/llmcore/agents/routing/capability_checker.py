@@ -379,20 +379,24 @@ def _capability_from_card(card: Any) -> ModelInfo | None:
         "structured_output": Capability.JSON_MODE,
         "code_execution": Capability.CODE_EXECUTION,
     }
-    # `streaming` is excluded from the "is this block filled in?" test
-    # because card generators default it to true. A card whose only true
-    # flag is streaming has not been filled in, and reading its false
-    # `tool_use` as a real negative makes the checker confidently report
-    # that a frontier model cannot call tools.
-    substantive = {"tool_use", "function_calling", "vision", "json_mode",
-                   "structured_output", "code_execution"}
     any_true = False
     if block is not None:
         for attr, capability in flags.items():
             if getattr(block, attr, False):
                 caps.add(capability)
-                if attr in substantive:
-                    any_true = True
+        # Whether the block was filled in at all is a property of the card,
+        # so the card schema owns that test. Duck-typed blocks may not have
+        # it -- and may answer every getattr -- so the attribute is only
+        # used when it is actually callable.
+        probe = getattr(block, "is_populated", None)
+        if callable(probe):
+            any_true = bool(probe())
+        else:
+            any_true = any(
+                bool(getattr(block, attr, False))
+                for attr in flags
+                if attr != "streaming"
+            )
 
     # Context-size capabilities come from the window, which is a number
     # rather than a flag, so it is trustworthy even on a stub card.
