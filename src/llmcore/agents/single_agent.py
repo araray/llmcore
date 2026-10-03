@@ -638,6 +638,9 @@ class SingleAgentMode:
                 goal=goal,
                 classification=classification,
                 context=context,
+                # Scope cache entries to this conversation. Without it one
+                # session's answer to "continue" is served to another's.
+                scope=session_id,
             )
 
             end_time = datetime.now(timezone.utc).replace(tzinfo=None)

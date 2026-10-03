@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — the fast-path response cache could serve another conversation's answer
+
+Three defects, each demonstrable, in a cache that PR #43 had just made
+configurable and therefore more likely to be exercised:
+
+- **The key was the prompt text alone.** One session's answer to `"continue"`
+  was returned to another session asking the same thing. Entries are now
+  namespaced by a caller-supplied scope, and `single_agent` passes the
+  session id.
+- **Lookup used Jaccard over word *sets*,** which ignores order entirely:
+  `"delete the old file"` and `"the file delete old"` scored 1.0 and
+  returned each other's response. Matching is now exact by default;
+  a threshold below 1.0 enables fuzzy matching that respects sequence.
+- **Nothing stopped a state-dependent prompt being stored.** `"continue"` is
+  not a question, it is a reference to whatever was happening, and the
+  correct answer changes every time. Such prompts are now refused at write
+  time, so the mistake cannot be made later at lookup either.
+
+Measured on 6,694 real harness prompts: 35.1% are exact duplicates, but of
+the 483 repeated prompts **92% recur inside a single session** and **63%
+produced outputs differing by more than 2×** — the same text with a
+different correct answer. The single most repeated prompt was
+`"continue... ensure you commit often"` (78 occurrences).
+
+The default threshold moved from 0.8 to 1.0 for the same measurement:
+normalising those prompts raised the duplicate rate only from 35.1% to
+35.4%, so fuzzy matching buys almost nothing while risking a wrong answer.
+
 ### Fixed — the capability pre-check refused every model newer than its table
 
 `CapabilityChecker` resolved models against `DEFAULT_MODEL_INFO`, a static

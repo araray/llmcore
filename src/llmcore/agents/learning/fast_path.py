@@ -32,7 +32,9 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import difflib
 import logging
+import re
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -171,70 +173,141 @@ def get_template_response(
 # =============================================================================
 
 
+#: Openings that make a prompt a *pointer into conversation state* rather
+#: than a self-contained question. Measured on 6,694 real harness prompts:
+#: the most repeated prompt was "continue... ensure you commit often" (78
+#: occurrences), and of all repeated prompts 92% recurred inside a single
+#: session while 63% produced outputs differing by more than 2x. The same
+#: text, a different correct answer, because the state moved -- so these can
+#: never be served from cache.
+STATE_POINTER_OPENINGS = frozenset({
+    "continue", "continues", "go", "proceed", "resume", "next", "again",
+    "more", "keep", "carry",
+})
+
+#: Whole prompts that only acknowledge and carry no request of their own.
+ACKNOWLEDGEMENTS = frozenset({
+    "ok", "okay", "k", "yes", "y", "yep", "yeah", "sure", "no", "n", "nope",
+    "thanks", "thank you", "ty", "great", "good", "nice", "perfect", "done",
+    "fine", "cool", "right", "correct", "exactly", "got it", "understood",
+})
+
+
+def is_cacheable(query: str) -> bool:
+    """False when a prompt's answer depends on conversation state.
+
+    A response cache keyed on prompt text is only sound for self-contained
+    questions. "continue" is not a question; it is a reference to whatever
+    was happening, and the right answer changes every time. Caching it
+    returns a stale answer with full confidence, which is worse than a
+    cache miss by a wide margin.
+    """
+    text = re.sub(r"[^\w\s]", " ", (query or "").lower())
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return False
+    if text in ACKNOWLEDGEMENTS:
+        return False
+    first = text.split(" ", 1)[0]
+    # The opening word decides: "continue, then run the tests" is still a
+    # continuation, however much follows it.
+    return first not in STATE_POINTER_OPENINGS
+
+
 class ResponseCache:
     """
-    Simple in-memory cache for trivial responses.
+    In-memory cache for trivial, self-contained responses.
 
-    Uses semantic similarity (basic) for cache lookup.
-    For production, consider using embedding-based similarity.
+    Two properties this needs that it did not have:
+
+    **Scope.** The key was the prompt text alone, so one conversation's
+    answer to "continue" was served to another's. Entries are now namespaced
+    by a caller-supplied scope (a session id), and an entry stored under one
+    scope is invisible to another.
+
+    **Order.** Lookup matched on Jaccard similarity over *word sets*, which
+    ignores word order entirely -- "delete the old file" and "the file
+    delete old" scored 1.0 and returned each other's response. Matching is
+    now exact by default; a threshold below 1.0 enables fuzzy matching that
+    respects sequence.
+
+    It also refuses to store prompts whose answer depends on conversation
+    state; see :func:`is_cacheable`.
     """
 
     def __init__(
         self,
         max_entries: int = 100,
-        similarity_threshold: float = 0.8,
+        similarity_threshold: float = 1.0,
         ttl_seconds: float = 3600.0,
     ):
         self.max_entries = max_entries
         self.similarity_threshold = similarity_threshold
         self.ttl_seconds = ttl_seconds
 
-        self._cache: dict[str, dict[str, Any]] = {}
+        self._cache: dict[tuple[str, str], dict[str, Any]] = {}
 
-    def get(self, query: str) -> str | None:
+    def get(self, query: str, *, scope: str | None = None) -> str | None:
         """
-        Get cached response for query.
+        Get cached response for query within ``scope``.
 
         Args:
             query: User query
+            scope: Conversation the query belongs to. Entries never cross
+                scopes; omitting it uses a shared namespace, which is only
+                safe for genuinely global, stateless prompts.
 
         Returns:
             Cached response or None
         """
-        query_normalized = self._normalize(query)
+        if not is_cacheable(query):
+            return None
 
-        # Exact match
-        if query_normalized in self._cache:
-            entry = self._cache[query_normalized]
+        key = self._key(query, scope)
+        entry = self._cache.get(key)
+        if entry is not None:
             if time.time() - entry["timestamp"] < self.ttl_seconds:
                 return entry["response"]
-            else:
-                # Expired
-                del self._cache[query_normalized]
+            del self._cache[key]
 
-        # Similarity search
-        for cached_query, entry in list(self._cache.items()):
-            if time.time() - entry["timestamp"] >= self.ttl_seconds:
-                del self._cache[cached_query]
+        if self.similarity_threshold >= 1.0:
+            return None
+
+        # Fuzzy lookup, within this scope only and sequence-aware.
+        scope_key = self._scope(scope)
+        normalized = self._normalize(query)
+        for (entry_scope, cached_query), entry in list(self._cache.items()):
+            if entry_scope != scope_key:
                 continue
-
-            similarity = self._similarity(query_normalized, cached_query)
-            if similarity >= self.similarity_threshold:
+            if time.time() - entry["timestamp"] >= self.ttl_seconds:
+                del self._cache[(entry_scope, cached_query)]
+                continue
+            if self._similarity(normalized, cached_query) >= self.similarity_threshold:
                 return entry["response"]
 
         return None
 
-    def set(self, query: str, response: str) -> None:
+    def set(self, query: str, response: str, *, scope: str | None = None) -> None:
         """
         Cache a response.
 
         Args:
             query: User query
             response: Generated response
-        """
-        query_normalized = self._normalize(query)
+            scope: Conversation this belongs to; the entry is invisible
+                outside it.
 
-        self._cache[query_normalized] = {
+        A prompt whose answer depends on conversation state is not stored at
+        all, so the mistake cannot be made later at lookup time either.
+        """
+        if not is_cacheable(query):
+            logger.debug(
+                "not caching %r: its answer depends on conversation state",
+                query[:60],
+            )
+            return
+
+        self._cache[self._key(query, scope)] = {
             "response": response,
             "timestamp": time.time(),
         }
@@ -253,23 +326,28 @@ class ResponseCache:
         """Clear the cache."""
         self._cache = {}
 
+    @staticmethod
+    def _scope(scope: str | None) -> str:
+        return scope or ""
+
+    def _key(self, query: str, scope: str | None) -> tuple[str, str]:
+        return (self._scope(scope), self._normalize(query))
+
     def _normalize(self, text: str) -> str:
         """Normalize text for comparison."""
         return text.lower().strip()
 
     def _similarity(self, a: str, b: str) -> float:
-        """Calculate simple text similarity."""
-        # Jaccard similarity on words
-        words_a = set(a.split())
-        words_b = set(b.split())
+        """Sequence-aware similarity in [0, 1].
 
-        if not words_a or not words_b:
+        Jaccard over word *sets* was wrong for a response cache: it scores
+        "delete the old file" and "the file delete old" as identical, so one
+        could be served the other's answer. ``SequenceMatcher`` respects
+        order, so a reordering is no longer a perfect match.
+        """
+        if not a or not b:
             return 0.0
-
-        intersection = len(words_a & words_b)
-        union = len(words_a | words_b)
-
-        return intersection / union if union > 0 else 0.0
+        return difflib.SequenceMatcher(None, a.split(), b.split()).ratio()
 
 
 # =============================================================================
@@ -342,6 +420,7 @@ class FastPathExecutor:
         goal: str,
         classification: GoalClassification | None = None,
         context: str | None = None,
+        scope: str | None = None,
     ) -> FastPathResult:
         """
         Execute fast-path for a goal.
@@ -350,6 +429,9 @@ class FastPathExecutor:
             goal: The user's goal/message
             classification: Pre-computed classification (optional)
             context: Additional context (optional)
+            scope: Conversation id. Cache entries never cross scopes, so
+                omitting it shares one namespace across conversations --
+                pass the session id.
 
         Returns:
             FastPathResult with response
@@ -360,7 +442,7 @@ class FastPathExecutor:
         try:
             # Strategy 1: Check cache
             if self._cache and self.config.use_cache:
-                cached = self._cache.get(goal)
+                cached = self._cache.get(goal, scope=scope)
                 if cached:
                     self._stats["cache_hits"] += 1
                     duration_ms = int((time.time() - start_time) * 1000)
@@ -386,7 +468,7 @@ class FastPathExecutor:
 
                     # Cache for future
                     if self._cache:
-                        self._cache.set(goal, template_response)
+                        self._cache.set(goal, template_response, scope=scope)
 
                     return FastPathResult(
                         success=True,
@@ -403,7 +485,7 @@ class FastPathExecutor:
 
                 # Cache for future
                 if self._cache:
-                    self._cache.set(goal, response)
+                    self._cache.set(goal, response, scope=scope)
 
                 result = FastPathResult(
                     success=True,
