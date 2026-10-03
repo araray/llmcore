@@ -14,6 +14,13 @@ Config is a warm-up rather than a cage: every knob resolves config → env →
 per-request, and the request always wins.
 """
 
+from .budget import (
+    BudgetAction,
+    BudgetPolicy,
+    BudgetState,
+    BudgetVerdict,
+    TurnBudget,
+)
 from .cards import context_window, estimate_cost_usd
 from .lanes import Lane, parse_lanes
 from .manager import RoutingManager, RoutingResult
@@ -48,6 +55,10 @@ from .settings import ClassifierBias, RefusalPolicy, RoutingSettings, UnknownVer
 from .state import InMemoryRoutingState
 
 __all__ = [
+    "BudgetAction",
+    "BudgetPolicy",
+    "BudgetState",
+    "BudgetVerdict",
     "AUTHORITIES",
     "COST_HINTS",
     "Balance",
@@ -83,4 +94,5 @@ __all__ = [
     "estimate_cost_usd",
     "parse_lanes",
     "select",
+    "TurnBudget",
 ]

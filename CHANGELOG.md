@@ -1883,6 +1883,58 @@ that wire format already spells unset.
 A sweep of every other provider's listing found no further dead code: the seven
 that fail without a network genuinely call their vendor's API.
 
+### Added — a per-turn step and spend budget, enforced in the proxy
+
+The cost-control design's layer 4, which was spec'd and left unimplemented.
+The agent circuit breaker bounds an agent *run*; the chat path had no per-turn
+budget at all — and `chat()` is what the proxy exposes to agent harnesses,
+which is where the expensive turns in the measurements actually came from.
+
+**Why steps rather than prompt complexity.** Measured on this project's own
+traffic: routing by predicted prompt complexity is worth about **2.2% of
+spend**, while turns over 200 steps are **62%** of it. Cost is roughly
+`steps × context × cached_rate` with context per step close to flat, so the
+quantity worth bounding is the one observable directly, cheaply and exactly.
+
+`llmcore.routing.budget` adds `TurnBudget`, `BudgetPolicy`, `BudgetVerdict`
+and `BudgetAction` (`report` / `warn` / `stop`), with a cost projection from
+the mean cost per step. Configured under `[routing.budget]`, and the proxy
+refuses a step past the ceiling with **429** and `type: "budget_exceeded"`,
+reporting state in the `llmcore` usage block of every response. Streaming is
+counted too, or `stream=true` would be a way to spend unseen.
+
+**There are no default limits.** An unset dial is unbounded. The agent circuit
+breaker shipped with a `$1.00` default that would have cut off 50.7% of this
+project's normal turns, and a number nobody chose is worse than no number.
+
+Three questions the design left open, and how they resolved:
+
+- **Where the accumulator lives:** caller-owned and explicitly fed, like
+  `AgentCircuitBreaker`. Building it on routing's event stream was the
+  tempting alternative and is wrong — `emit_attempt` is guarded by
+  `has_sinks()`, so the budget would silently stop counting whenever nobody
+  was listening. A spend guard must not depend on observability being on.
+- **Mid-turn `constrain`:** not implemented, because it is not safe. Changing
+  model inside a conversation changes behaviour, and with preserved-thinking
+  models it invalidates reasoning blocks already in the history.
+- **Who sets it:** `caller > policy > config`, mirroring the classifier chain.
+  `with_policy()` replaces the dials without resetting the meter, so raising a
+  limit cannot clear what a turn has already spent.
+
+**Unknown cost is not zero.** A step against an unpriceable target records its
+cost as unknown rather than `0.00`; the step still counts and
+`cost_is_partial` goes true, with the verdict saying the spend ceiling cannot
+be enforced. A budget that treated unpriced calls as free would never trip —
+the failure this cost model has had at several layers. A step ceiling still
+works regardless, which is part of why it is the better dial.
+
+**It can only count a turn the harness identifies.** A step budget needs a
+stable key across the calls of one turn, and the proxy has one only when the
+caller sends `user` or `llmcore.session_id`. Without it every request gets a
+fresh synthetic session, so "steps so far" would always be zero; the proxy
+declines to track the turn rather than enforce something meaningless, and
+omits the `budget` block so the difference is visible.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider
