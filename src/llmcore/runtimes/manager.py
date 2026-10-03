@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from collections.abc import Callable
+from importlib import import_module
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -111,19 +113,27 @@ class RuntimeManager:
         #: The liveness/reaper loop, started on the first successful up().
         self._supervisor: asyncio.Task[None] | None = None
 
-        # Register the Colab backend unless the caller supplied its own. Doing
-        # this in the constructor is safe because constructing a backend
-        # contacts nothing: the CLI is discovered on first use, so
-        # LLMCore.create() still cannot reach a provisioning API.
-        if "colab" not in self._backends:
+        # Register the shipped backends unless the caller supplied its own.
+        # Doing this in the constructor is safe because constructing a backend
+        # contacts nothing: credentials, CLIs and catalogues are all resolved on
+        # first use, so LLMCore.create() still cannot reach a provisioning API.
+        for key, factory in (
+            ("colab", "colab:ColabRuntime"),
+            ("gpuai", "gpuai:GpuAiRuntime"),
+            ("deepinfra", "deepinfra:DeepInfraRuntime"),
+        ):
+            if key in self._backends:
+                continue
+            module_name, class_name = factory.split(":")
             try:
-                from .colab import ColabRuntime
-
-                self._backends["colab"] = ColabRuntime(
+                module = import_module(f".{module_name}", __package__)
+                self._backends[key] = getattr(module, class_name)(
                     config=_ConfigView(get), state_store=self.state
                 )
             except Exception:  # pragma: no cover - defensive
-                logger.debug("The Colab backend could not be registered", exc_info=True)
+                logger.debug(
+                    "The %s backend could not be registered", key, exc_info=True
+                )
 
         logger.debug(
             "RuntimeManager initialized (enabled=%s, backends=%s, confirm_spend=%s).",
@@ -221,6 +231,7 @@ class RuntimeManager:
         confirm_spend: bool | None = None,
         idle_minutes: float | None = None,
         max_lifetime_minutes: float | None = None,
+        max_spend: float | None = None,
         max_compute_units: float | None = None,
         attach: bool = True,
         **estimate_kwargs: Any,
@@ -238,8 +249,12 @@ class RuntimeManager:
             idle_minutes: Idle window before reaping. ``0`` disables it.
             max_lifetime_minutes: Hard kill regardless of activity. ``0``
                 disables it.
-            max_compute_units: Optional ceiling on backend compute units. An
-                idle reaper does not protect against a runtime busy in a loop.
+            max_spend: Optional ceiling on what the runtime may consume, in
+                the backend's own billing unit (dollars for gpu.ai and
+                DeepInfra, compute units for Colab). An idle reaper does not
+                protect against a runtime busy in a loop.
+            max_compute_units: Deprecated alias for *max_spend*, from when the
+                only backend was Colab.
             attach: Register a provider instance for the endpoint.
 
         Raises:
@@ -283,8 +298,22 @@ class RuntimeManager:
             else float(max_lifetime_minutes)
         )
 
+        if max_compute_units is not None:
+            if max_spend is not None:
+                raise TypeError(
+                    "Pass either max_spend or its deprecated alias "
+                    "max_compute_units, not both."
+                )
+            warnings.warn(
+                "max_compute_units is deprecated; use max_spend, which is "
+                "denominated in the backend's own billing unit.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            max_spend = max_compute_units
+
         handle = await runtime.up(plan, name=name)
-        self._apply_limits(handle, idle=idle, hard=hard, units=max_compute_units)
+        self._apply_limits(handle, idle=idle, hard=hard, spend=max_spend)
         # Persisted immediately: the dangerous window is a crash between
         # assignment and bookkeeping, where money burns and nothing knows.
         self.state.save(handle)
@@ -318,7 +347,7 @@ class RuntimeManager:
         *,
         idle: float,
         hard: float,
-        units: float | None,
+        spend: float | None,
     ) -> None:
         """Stamp spend ceilings onto *handle*."""
         now = handle.started_at or datetime.now(timezone.utc)
@@ -328,8 +357,8 @@ class RuntimeManager:
         if hard > 0:
             handle.hard_deadline = now + timedelta(minutes=hard)
             handle.metadata["max_lifetime_minutes"] = hard
-        if units is not None:
-            handle.max_compute_units = float(units)
+        if spend is not None:
+            handle.max_spend = float(spend)
         handle.last_activity_at = now
 
     # ------------------------------------------------------------------
@@ -357,16 +386,25 @@ class RuntimeManager:
                 f"{', '.join(sorted(_API_STYLE_PROVIDERS))}."
             )
 
+        instance_config: dict[str, Any] = {
+            "base_url": handle.base_url,
+            "default_model": handle.served_model,
+            # vLLM servers accept any bearer token. On a local tunnel there is
+            # no secret to carry; on a hosted tunnel the real credential is the
+            # header below, and vLLM still wants *a* bearer.
+            "api_key": handle.metadata.get("api_key", "runtime-local"),
+        }
+        # A rental backend may serve through a tunnel whose authentication is a
+        # header rather than a bearer token -- gpu.ai's is HTTP Basic. Without
+        # this the endpoint would be attached and every request to it rejected.
+        headers = handle.metadata.get("default_headers")
+        if headers:
+            instance_config["default_headers"] = dict(headers)
+
         self._providers.register_instance(
             handle.name,
             provider_type,
-            {
-                "base_url": handle.base_url,
-                "default_model": handle.served_model,
-                # vLLM servers accept any bearer token; the endpoint is a local
-                # tunnel, so there is no secret to carry here.
-                "api_key": handle.metadata.get("api_key", "runtime-local"),
-            },
+            instance_config,
             # Marked ephemeral so the provider manager knows this instance was
             # created by a subsystem rather than configured, and tears it down
             # with the rest on close_all(). Without the flag the instance would
@@ -687,7 +725,7 @@ class RuntimeManager:
         self._require_enabled("adopt a runtime")
         handle = await self._backend_for(backend).adopt(external_id, name=name)
         self._apply_limits(
-            handle, idle=self._idle_minutes, hard=self._max_lifetime_minutes, units=None
+            handle, idle=self._idle_minutes, hard=self._max_lifetime_minutes, spend=None
         )
         self.state.save(handle)
         self._handles[name] = handle

@@ -30,6 +30,7 @@ import pytest
 from llmcore.exceptions import ConfigError
 from llmcore.runtimes import (
     ComputeRuntime,
+    CostUnit,
     ModelSpec,
     Plan,
     Quantization,
@@ -162,12 +163,22 @@ class TestSpendCeilings:
         future = datetime.now(timezone.utc) + timedelta(hours=1)
         handle = _handle(
             idle_deadline=future, hard_deadline=future,
-            max_compute_units=10.0, compute_units_used=10.0,
+            max_spend=10.0, spend_used=10.0,
         )
-        assert "compute ceiling" in handle.expired_reason()
+        assert "spend ceiling" in handle.expired_reason()
+
+    def test_the_ceiling_is_reported_in_the_backend_s_own_unit(self):
+        """A dollar-billed backend must not have its ceiling printed in
+        compute units, and a Colab one must not have it printed in dollars.
+        There is no exchange rate between them to fall back on."""
+        colab = _handle(max_spend=10.0, spend_used=12.0)
+        assert "12.00 compute units of 10.00 compute units" in colab.expired_reason()
+
+        rental = _handle(max_spend=10.0, spend_used=12.0, spend_unit=CostUnit.USD)
+        assert "$12.00 of $10.00" in rental.expired_reason()
 
     def test_compute_ceiling_is_ignored_when_unreported(self):
-        handle = _handle(max_compute_units=10.0, compute_units_used=None)
+        handle = _handle(max_spend=10.0, spend_used=None)
         assert handle.expired_reason() is None
 
     def test_touch_pushes_the_idle_deadline_out(self):
@@ -190,14 +201,31 @@ class TestSerialization:
         now = datetime.now(timezone.utc)
         original = _handle(
             sku="A100-40", phase=RuntimePhase.READY, started_at=now,
-            hard_deadline=now + timedelta(hours=2), max_compute_units=50.0,
+            hard_deadline=now + timedelta(hours=2), max_spend=50.0,
+            spend_unit=CostUnit.USD,
         )
         restored = RuntimeHandle.from_dict(original.to_dict())
         assert restored.name == original.name
         assert restored.phase is RuntimePhase.READY
         assert restored.sku == "A100-40"
-        assert restored.max_compute_units == 50.0
+        assert restored.max_spend == 50.0
+        assert restored.spend_unit is CostUnit.USD
         assert restored.hard_deadline == original.hard_deadline
+
+    def test_a_state_file_from_before_cost_units_keeps_its_ceiling(self):
+        """The file on disk describes something that may still be billing, so
+        dropping its ceiling because the field was renamed would remove the
+        one guard against a runtime busy in a loop."""
+        legacy = {
+            "name": "old", "runtime": "colab", "external_id": "x",
+            "base_url": "http://127.0.0.1:1", "served_model": "m",
+            "phase": "ready", "max_compute_units": 50.0,
+            "compute_units_used": 12.5,
+        }
+        restored = RuntimeHandle.from_dict(legacy)
+        assert restored.max_spend == 50.0
+        assert restored.spend_used == 12.5
+        assert restored.spend_unit is CostUnit.COMPUTE_UNIT
 
     def test_json_is_human_readable(self):
         """Someone who suspects they are being billed must be able to `cat` it."""
@@ -382,12 +410,30 @@ class TestPersistenceAndBounds:
         )
         assert handle.idle_deadline is None and handle.hard_deadline is None
 
-    async def test_a_compute_ceiling_can_be_set(self, manager):
+    async def test_a_spend_ceiling_can_be_set(self, manager):
         mgr, _ = manager
         handle = await mgr.up(
-            REPO, name="r", confirm_spend=True, attach=False, max_compute_units=25.0
+            REPO, name="r", confirm_spend=True, attach=False, max_spend=25.0
         )
-        assert handle.max_compute_units == 25.0
+        assert handle.max_spend == 25.0
+
+    async def test_the_old_ceiling_kwarg_still_works_and_warns(self, manager):
+        mgr, _ = manager
+        with pytest.deprecated_call():
+            handle = await mgr.up(
+                REPO, name="r", confirm_spend=True, attach=False,
+                max_compute_units=25.0,
+            )
+        assert handle.max_spend == 25.0
+
+    async def test_passing_both_ceiling_kwargs_is_refused(self, manager):
+        """Silently preferring one would decide a spend ceiling by coin toss."""
+        mgr, _ = manager
+        with pytest.raises(TypeError, match="not both"):
+            await mgr.up(
+                REPO, name="r", confirm_spend=True, attach=False,
+                max_spend=1.0, max_compute_units=2.0,
+            )
 
     async def test_status_includes_runtimes_from_other_processes(self, manager, tmp_path):
         """A runtime started by a previous session is still costing money."""
@@ -655,8 +701,19 @@ class TestBackendRegistry:
 
     def test_register_backend_uses_its_own_name(self):
         mgr = RuntimeManager()
-        mgr.register_backend(FakeRuntime("colab"))
-        assert mgr.backends == ["colab"]
+        mgr.register_backend(FakeRuntime("runpod"))
+        assert "runpod" in mgr.backends
+
+    def test_the_shipped_backends_are_registered(self):
+        """Registering them must stay free of side effects: this constructor
+        runs inside ``LLMCore.create()``, which must not be able to reach a
+        provisioning API or require a credential."""
+        assert RuntimeManager().backends == ["colab", "deepinfra", "gpuai"]
+
+    def test_a_supplied_backend_wins_over_the_shipped_one(self):
+        fake = FakeRuntime("gpuai")
+        mgr = RuntimeManager({"gpuai": fake})
+        assert mgr._backends["gpuai"] is fake
 
     async def test_an_unknown_backend_is_an_actionable_error(self):
         """The error has to name what *is* available. `colab` is registered by

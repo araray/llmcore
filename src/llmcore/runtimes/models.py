@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "CostUnit",
     "ModelSpec",
     "Plan",
     "Quantization",
@@ -60,6 +61,41 @@ class Quantization(StrEnum):
     GGUF_Q4 = "gguf_q4"
     GGUF_Q5 = "gguf_q5"
     GGUF_Q8 = "gguf_q8"
+
+
+class CostUnit(StrEnum):
+    """The currency a backend bills in.
+
+    This exists because the subsystem's one safety net -- a spend ceiling that
+    fires even while a runtime is *busy*, which the idle reaper cannot catch --
+    has to compare like with like. Colab bills in compute units and publishes
+    no exchange rate to dollars; gpu.ai and DeepInfra bill in dollars and
+    publish live per-hour prices. Carrying the unit alongside every rate and
+    every ceiling keeps llmcore from inventing a conversion between them.
+
+    There is deliberately no ``convert()``. A fabricated exchange rate is the
+    same class of bug as every other one this subsystem's cost model has had:
+    a plausible number standing in for an absent implementation.
+
+    Attributes:
+        COMPUTE_UNIT: Colab's unit. Has no published dollar value.
+        USD: US dollars, as billed by gpu.ai, DeepInfra and most rental APIs.
+    """
+
+    COMPUTE_UNIT = "compute-unit"
+    USD = "usd"
+
+    def amount(self, value: float) -> str:
+        """Render *value* as an amount in this unit."""
+        if self is CostUnit.USD:
+            return f"${value:,.2f}"
+        return f"{value:,.2f} compute units"
+
+    def rate(self, value: float) -> str:
+        """Render *value* as a per-hour burn rate in this unit."""
+        if self is CostUnit.USD:
+            return f"${value:,.2f}/hour"
+        return f"{value:g} compute units/hour"
 
 
 class RuntimePhase(StrEnum):
@@ -173,6 +209,18 @@ class Plan:
         fits: Whether the model fits the chosen SKU at all.
         notes: Human-readable reasoning, for display before approving spend.
         estimated_cost_per_hour: Indicative cost, when known.
+        cost_unit: What ``estimated_cost_per_hour`` is denominated in. ``None``
+            when no rate is known.
+        gpu_count: Devices the plan assumes. ``1`` for Colab, which has no
+            other option; rental APIs sell multi-GPU nodes, and on those
+            ``vram_available_gb`` is the aggregate across all of them.
+        region: Where the plan priced its compute, when the backend has
+            regions and the price varies by them. A plan that cannot say which
+            region it priced cannot promise the price it quoted.
+        offering_id: Backend-side identifier for the exact catalogue row this
+            plan priced, so ``up()`` can pin the launch to it. A catalogue row
+            is a quote, not a booking: without pinning, a backend is free to
+            place the instance on a pricier offering than the one approved.
     """
 
     spec: ModelSpec
@@ -185,6 +233,36 @@ class Plan:
     fits: bool = True
     notes: tuple[str, ...] = ()
     estimated_cost_per_hour: float | None = None
+    cost_unit: CostUnit | None = None
+    gpu_count: int = 1
+    region: str | None = None
+    offering_id: str | None = None
+
+    @property
+    def shape(self) -> str:
+        """The compute shape as one display string.
+
+        Catalogues disagree about whether the device count belongs in the SKU
+        name: DeepInfra sells ``"1xA100-80GB"``, gpu.ai sells ``a100_80gb``
+        with a separate count, and Colab sells ``"L4"`` with no count at all.
+        Prefixing unconditionally produced ``"1x1xA100-80GB"``, so the prefix
+        is added only when the name does not already carry it.
+        """
+        if self.gpu_count > 1 and not self.sku.lower().startswith(f"{self.gpu_count}x"):
+            return f"{self.gpu_count}x{self.sku}"
+        return self.sku
+
+    @property
+    def burn_rate(self) -> str | None:
+        """The hourly rate rendered in its own unit, or ``None`` if unknown.
+
+        Unknown is returned as ``None`` rather than a zero or a bare number:
+        every caller of this displays it before asking for spend approval, and
+        "0" would read as free.
+        """
+        if self.estimated_cost_per_hour is None or self.cost_unit is None:
+            return None
+        return self.cost_unit.rate(self.estimated_cost_per_hour)
 
     @property
     def headroom_gb(self) -> float:
@@ -219,8 +297,14 @@ class RuntimeHandle:
         idle_deadline: When the reaper stops it for inactivity.
         hard_deadline: When the reaper stops it regardless of activity.
         last_activity_at: Last observed request, for idle reaping.
-        max_compute_units: Optional ceiling on backend compute units.
-        compute_units_used: Consumption so far, when the backend reports it.
+        max_spend: Optional ceiling on what this runtime may consume, in
+            :attr:`spend_unit`. The only guard against the expensive failure
+            mode: a runtime *busy* in a loop, which the idle reaper never
+            touches.
+        spend_used: Consumption so far, when the backend reports it.
+        spend_unit: What ``max_spend`` and ``spend_used`` are denominated in.
+            Both are compared directly, so a backend must report them in the
+            same unit it accepts the ceiling in.
         state_path: Where this handle is persisted.
         error: Why it failed or degraded.
         metadata: Backend-specific extras.
@@ -239,8 +323,9 @@ class RuntimeHandle:
     idle_deadline: datetime | None = None
     hard_deadline: datetime | None = None
     last_activity_at: datetime | None = None
-    max_compute_units: float | None = None
-    compute_units_used: float | None = None
+    max_spend: float | None = None
+    spend_used: float | None = None
+    spend_unit: CostUnit = CostUnit.COMPUTE_UNIT
     state_path: Path | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -263,19 +348,20 @@ class RuntimeHandle:
     def expired_reason(self, now: datetime | None = None) -> str | None:
         """Why this runtime should be reaped, or ``None`` to keep it.
 
-        Checks the hard deadline before the idle one, and the compute ceiling
+        Checks the hard deadline before the idle one, and the spend ceiling
         before either: an idle reaper does not protect against a runtime that is
         *busy* in a loop, which is the expensive failure mode.
         """
         moment = now or datetime.now(timezone.utc)
         if (
-            self.max_compute_units is not None
-            and self.compute_units_used is not None
-            and self.compute_units_used >= self.max_compute_units
+            self.max_spend is not None
+            and self.spend_used is not None
+            and self.spend_used >= self.max_spend
         ):
             return (
-                f"compute ceiling reached "
-                f"({self.compute_units_used:.2f}/{self.max_compute_units:.2f} units)"
+                f"spend ceiling reached "
+                f"({self.spend_unit.amount(self.spend_used)} of "
+                f"{self.spend_unit.amount(self.max_spend)})"
             )
         if self.hard_deadline is not None and moment >= self.hard_deadline:
             return f"hard lifetime deadline passed ({self.hard_deadline.isoformat()})"
@@ -305,8 +391,9 @@ class RuntimeHandle:
             "idle_deadline": _dt(self.idle_deadline),
             "hard_deadline": _dt(self.hard_deadline),
             "last_activity_at": _dt(self.last_activity_at),
-            "max_compute_units": self.max_compute_units,
-            "compute_units_used": self.compute_units_used,
+            "max_spend": self.max_spend,
+            "spend_used": self.spend_used,
+            "spend_unit": str(self.spend_unit),
             "error": self.error,
             "metadata": dict(self.metadata),
         }
@@ -337,6 +424,11 @@ class RuntimeHandle:
         except ValueError:
             phase = RuntimePhase.DEGRADED
 
+        try:
+            unit = CostUnit(str(payload.get("spend_unit", CostUnit.COMPUTE_UNIT)))
+        except ValueError:
+            unit = CostUnit.COMPUTE_UNIT
+
         started = _dt(payload.get("started_at")) or datetime.now(timezone.utc)
         return cls(
             name=str(payload.get("name", "")),
@@ -352,8 +444,12 @@ class RuntimeHandle:
             idle_deadline=_dt(payload.get("idle_deadline")),
             hard_deadline=_dt(payload.get("hard_deadline")),
             last_activity_at=_dt(payload.get("last_activity_at")),
-            max_compute_units=payload.get("max_compute_units"),
-            compute_units_used=payload.get("compute_units_used"),
+            # Pre-CostUnit state files named these for Colab's unit. A state
+            # file describes something that may still be billing, so an older
+            # one has to keep loading rather than lose its ceiling.
+            max_spend=payload.get("max_spend", payload.get("max_compute_units")),
+            spend_used=payload.get("spend_used", payload.get("compute_units_used")),
+            spend_unit=unit,
             state_path=state_path,
             error=payload.get("error"),
             metadata=dict(payload.get("metadata") or {}),
@@ -379,6 +475,12 @@ class RuntimeStatus:
         reachable: Whether a liveness probe succeeded; ``None`` if not probed.
         attached: Whether a provider instance is currently registered for it.
         expires_in_seconds: Seconds until the nearest deadline, when set.
+        spend_used: What this runtime has consumed so far, when the backend
+            reports it. For anything billed by the hour this is the first
+            question an operator asks, and it was the one thing a status could
+            not answer.
+        max_spend: The ceiling it is being compared against, when set.
+        spend_unit: What both are denominated in.
         error: Failure detail.
     """
 
@@ -392,7 +494,21 @@ class RuntimeStatus:
     reachable: bool | None = None
     attached: bool = False
     expires_in_seconds: float | None = None
+    spend_used: float | None = None
+    max_spend: float | None = None
+    spend_unit: CostUnit = CostUnit.COMPUTE_UNIT
     error: str | None = None
+
+    @property
+    def spend_so_far(self) -> str | None:
+        """Accrued spend rendered in its own unit, or ``None`` if unreported.
+
+        ``None`` rather than ``"$0.00"``: a backend that does not report
+        consumption has not told us it is free.
+        """
+        if self.spend_used is None:
+            return None
+        return self.spend_unit.amount(self.spend_used)
 
     @classmethod
     def from_handle(
@@ -418,5 +534,8 @@ class RuntimeStatus:
             reachable=reachable,
             attached=attached,
             expires_in_seconds=expires,
+            spend_used=handle.spend_used,
+            max_spend=handle.max_spend,
+            spend_unit=handle.spend_unit,
             error=handle.error,
         )
