@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — the artifact cache can actually be collected
+
+`ArtifactStore.gc()` existed and had **no callers**, for two reasons. It
+took a *keep-set* and nothing computed one — a collector with no way to say
+what was still in use. And eviction was not recoverable: materialization
+re-points an artifact's `uri` at the local copy, so deleting that copy left
+the artifact pointing at a dead path, even though the provider URL had been
+preserved under `provider_metadata["source_uri"]`.
+
+**Recovery comes first.** `materialize()` now falls back to that preserved
+source URL when the local copy is missing. That is what makes this store a
+*cache* rather than a store of record: a file can always be re-fetched, so
+throwing one away is a tuning decision rather than data loss. Verified end
+to end — evict, then re-materialize, and the bytes come back from the
+original URL.
+
+**Then eviction.** `gc()` takes three composable policies:
+
+- `keep_checksums` — reference-based; anything unnamed is evicted.
+  `None` still means *no-op*, so a mistaken bare call cannot wipe the store.
+  An empty set is distinct: a positive statement that nothing is live.
+- `max_age_days` — evict files older than this.
+- `max_total_bytes` — evict oldest-first until the store fits.
+
+A file named in `keep_checksums` is never removed by the other two, so a
+caller who knows what is live cannot be overruled by an age rule.
+`dry_run=True` reports without removing.
+
+`live_checksums(artifacts)` builds the keep-set, and `entries()` /
+`total_bytes()` expose what is stored. Reachable as
+`MediaManager.artifacts.gc(...)`.
+
+**Breaking:** `gc()` returns a `GcReport` (removed, freed bytes, kept,
+dry-run flag, and a per-file reason for auditing a surprise) rather than a
+bare count. `ArtifactStore` is publicly exported, but nothing in this repo
+or the sibling repos called `.gc(`, so the change is breaking in principle
+and affects nothing today. Declared rather than slipped in.
 ### Added — pricing for models that are not billed per token
 
 Image, video, speech and transcription models are often priced per image,
