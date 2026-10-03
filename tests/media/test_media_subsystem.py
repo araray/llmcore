@@ -550,14 +550,16 @@ class TestArtifactStore:
     def test_gc_without_keep_set_is_a_noop(self, tmp_path):
         store = ArtifactStore(tmp_path)
         cs, _ = store.put(b"keep")
-        assert store.gc() == 0
+        # gc now returns a GcReport rather than a bare count; the no-op
+        # guarantee is unchanged.
+        assert store.gc().removed == 0
         assert store.has(cs)
 
     def test_gc_removes_unlisted(self, tmp_path):
         store = ArtifactStore(tmp_path)
         keep, _ = store.put(b"keep")
         drop, _ = store.put(b"drop")
-        assert store.gc(keep_checksums={keep}) == 1
+        assert store.gc(keep_checksums={keep}).removed == 1
         assert store.has(keep) and not store.has(drop)
 
     def test_construction_does_not_touch_the_filesystem(self, tmp_path):

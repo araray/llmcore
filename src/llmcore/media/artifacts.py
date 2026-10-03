@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Awaitable, Callable
+import time
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from ..exceptions import MediaError
 from .models import MediaArtifact
@@ -48,6 +51,18 @@ class MaterializePolicy(StrEnum):
     ALWAYS = "always"
     ON_EXPIRY = "on_expiry"
     NEVER = "never"
+
+
+@dataclass(frozen=True)
+class GcReport:
+    """What a :meth:`ArtifactStore.gc` pass did, or would have done."""
+
+    removed: int
+    freed_bytes: int
+    kept: int
+    dry_run: bool = False
+    #: ``"<checksum>:<reason>"`` per removed file, for auditing a surprise.
+    details: list[str] = field(default_factory=list)
 
 
 class ArtifactStore:
@@ -145,6 +160,14 @@ class ArtifactStore:
         if not (force or self.should_materialize(artifact)):
             return artifact
 
+        # An artifact already materialized has had its uri re-pointed at the
+        # local copy. If that copy is gone -- evicted by `gc`, or deleted by
+        # hand -- fetching the uri would fail against a dead path. Fall back
+        # to the provider URL that materialization preserved, which is what
+        # makes this store a cache rather than a store of record: a file can
+        # always be re-fetched, so losing one is recoverable.
+        artifact = self._recover_source(artifact)
+
         fetch = fetcher or self._fetcher
         if fetch is None:
             raise MediaError(
@@ -206,27 +229,149 @@ class ArtifactStore:
         dest.write_bytes(materialized.data)
         return dest
 
-    def gc(self, *, keep_checksums: set[str] | None = None) -> int:
-        """Delete stored files not in *keep_checksums*.
+    @staticmethod
+    def _recover_source(artifact: MediaArtifact) -> MediaArtifact:
+        """Point a stale local artifact back at the URL it came from.
+
+        Materialization re-points ``uri`` at the local copy and records the
+        original under ``provider_metadata["source_uri"]``. When the local
+        copy no longer exists, that recorded URL is the only way back, so it
+        is restored here. An artifact whose local file is intact, or which
+        never had a source URL, is returned unchanged.
+        """
+        uri = artifact.uri or ""
+        if not uri.startswith("file://"):
+            return artifact
+        local = Path(unquote(urlparse(uri).path))
+        if local.exists():
+            return artifact
+        source = dict(artifact.provider_metadata).get("source_uri")
+        if not source:
+            return artifact
+        logger.debug(
+            "Local artifact %s is gone; re-fetching from %s", local, source
+        )
+        return MediaArtifact(
+            **{
+                **{f: getattr(artifact, f) for f in artifact.__slots__},
+                "uri": str(source),
+            }
+        )
+
+    def live_checksums(self, artifacts: Iterable[MediaArtifact]) -> set[str]:
+        """Digests referenced by *artifacts*, for use as a keep-set.
+
+        Exists because :meth:`gc` takes a keep-set and nothing computed one,
+        which is why it had no callers: there was a collector but no way to
+        say what was still in use.
+        """
+        live: set[str] = set()
+        for artifact in artifacts:
+            digest = getattr(artifact, "checksum_sha256", None)
+            if digest:
+                live.add(str(digest))
+        return live
+
+    def entries(self) -> list[tuple[str, Path, int, float]]:
+        """Every stored file as ``(checksum, path, size_bytes, mtime)``."""
+        if not self.base_path.exists():
+            return []
+        found = []
+        for path in sorted(self.base_path.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                stat = path.stat()
+            except OSError:  # pragma: no cover - raced deletion
+                continue
+            found.append((path.stem, path, stat.st_size, stat.st_mtime))
+        return found
+
+    def total_bytes(self) -> int:
+        """Size of the store on disk."""
+        return sum(size for _c, _p, size, _m in self.entries())
+
+    def gc(
+        self,
+        *,
+        keep_checksums: set[str] | None = None,
+        max_age_days: float | None = None,
+        max_total_bytes: int | None = None,
+        dry_run: bool = False,
+    ) -> GcReport:
+        """Evict stored files under one or more policies.
+
+        Three policies, which compose. A file is removed if **any** of them
+        selects it, and a file named in ``keep_checksums`` is never removed
+        by the others -- an explicit keep always wins, so a caller who knows
+        what is live cannot be overruled by an age rule.
 
         Args:
-            keep_checksums: Digests to retain; everything else is removed. When
-                ``None``, nothing is deleted (a no-op, so a mistaken call cannot
-                wipe the store).
+            keep_checksums: Digests to retain. Supplying this *also* enables
+                reference-based collection: anything not named is evicted.
+                Passing ``None`` leaves reference-based collection off, so a
+                mistaken call with no arguments cannot wipe the store.
+            max_age_days: Evict files last modified longer ago than this.
+            max_total_bytes: Evict oldest-first until the store fits.
+            dry_run: Report what would be removed and remove nothing.
 
         Returns:
-            Number of files removed.
+            A :class:`GcReport`. Eviction is safe because the store is a
+            cache: :meth:`materialize` re-fetches from the preserved source
+            URL when a local copy is missing.
         """
-        if keep_checksums is None:
-            return 0
-        removed = 0
-        if not self.base_path.exists():
-            return 0
-        for path in self.base_path.rglob("*"):
-            if path.is_file() and path.stem not in keep_checksums:
-                path.unlink()
-                removed += 1
-        return removed
+        entries = self.entries()
+        keep = set(keep_checksums or ())
+        doomed: dict[Path, str] = {}
+
+        if keep_checksums is not None:
+            for checksum, path, _size, _mtime in entries:
+                if checksum not in keep:
+                    doomed[path] = "unreferenced"
+
+        if max_age_days is not None:
+            cutoff = time.time() - max_age_days * 86400
+            for checksum, path, _size, mtime in entries:
+                if checksum not in keep and mtime < cutoff:
+                    doomed.setdefault(path, "stale")
+
+        if max_total_bytes is not None:
+            # Oldest first, and only as far as needed to fit.
+            survivors = sorted(
+                ((c, p, s, m) for c, p, s, m in entries if p not in doomed),
+                key=lambda e: e[3],
+            )
+            total = sum(s for _c, _p, s, _m in survivors)
+            for checksum, path, size, _mtime in survivors:
+                if total <= max_total_bytes:
+                    break
+                if checksum in keep:
+                    continue
+                doomed[path] = "over_budget"
+                total -= size
+
+        freed = 0
+        removed: list[str] = []
+        for path, reason in doomed.items():
+            try:
+                size = path.stat().st_size
+            except OSError:  # pragma: no cover - raced deletion
+                continue
+            if not dry_run:
+                try:
+                    path.unlink()
+                except OSError:  # pragma: no cover
+                    continue
+            freed += size
+            removed.append(f"{path.stem}:{reason}")
+
+        return GcReport(
+            removed=len(removed),
+            freed_bytes=freed,
+            kept=len(entries) - len(removed),
+            dry_run=dry_run,
+            details=sorted(removed),
+        )
 
 
 def _suffix_for(artifact: MediaArtifact) -> str:
