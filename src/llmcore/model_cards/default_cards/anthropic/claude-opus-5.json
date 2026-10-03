@@ -7,9 +7,7 @@
     "family": "claude",
     "architecture_type": "transformer"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": false,

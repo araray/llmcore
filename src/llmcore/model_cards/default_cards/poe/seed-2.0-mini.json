@@ -7,7 +7,7 @@
     "family": "Empirio Labs AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 256000
   },
   "capabilities": {
     "streaming": true,

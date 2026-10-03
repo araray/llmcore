@@ -6,9 +6,7 @@
   "architecture": {
     "family": "Novita AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI introduces the GPT-OSS-20B, an open-weight reasoning model available under the Apache 2.0 license and OpenAI GPT-OSS usage policy. Developed with feedback from the open-source community, this text-only model is compatible with OpenAI Responses API and is designed to be used within agentic workflows with strong instruction following, tool use like web search and Python code execution, and reasoning capabilities.\n\nThe GPT-OSS-20B model delivers similar results to OpenAI o3\u2011mini on common benchmarks and can run on edge devices with just 16 GB of memory, making it ideal for on-device use cases, local inference, or rapid iteration without costly infrastructure. This model also performs strongly on tool use, few-shot function calling, CoT reasoning (as seen in results on the Tau-Bench agentic evaluation suite) and HealthBench (even outperforming proprietary models like OpenAI o1 and GPT\u20114o). \n\nTechnical Specifications\n\nFile Support: Attachments not supported\nContext window: 128k tokens",
+  "description": "OpenAI introduces the GPT-OSS-20B, an open-weight reasoning model available under the Apache 2.0 license and OpenAI GPT-OSS usage policy. Developed with feedback from the open-source community, this text-only model is compatible with OpenAI Responses API and is designed to be used within agentic workflows with strong instruction following, tool use like web search and Python code execution, and reasoning capabilities.\n\nThe GPT-OSS-20B model delivers similar results to OpenAI o3‑mini on common benchmarks and can run on edge devices with just 16 GB of memory, making it ideal for on-device use cases, local inference, or rapid iteration without costly infrastructure. This model also performs strongly on tool use, few-shot function calling, CoT reasoning (as seen in results on the Tau-Bench agentic evaluation suite) and HealthBench (even outperforming proprietary models like OpenAI o1 and GPT‑4o). \n\nTechnical Specifications\n\nFile Support: Attachments not supported\nContext window: 128k tokens",
   "tags": [
     "novita ai",
     "vision"

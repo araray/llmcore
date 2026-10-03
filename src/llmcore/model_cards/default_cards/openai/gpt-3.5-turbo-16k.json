@@ -8,7 +8,7 @@
     "architecture_type": "transformer"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 16000
   },
   "capabilities": {
     "streaming": true,

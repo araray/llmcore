@@ -7,7 +7,7 @@
     "family": "Fireworks AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 202752
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GLM-4.7 is a next-generation general-purpose model optimized for coding, reasoning, and agentic workflows, delivering strong gains in multilingual software engineering, tool use, and complex problem solving. It introduces advanced thinking controls\u2014interleaved, preserved, and turn-level thinking\u2014to improve stability on long-horizon, multi-turn tasks. Supported context length: 198k tokens. More information: https://app.fireworks.ai/models/fireworks/glm-4p7\n\nSupported file format: jpg, jpeg, png, heic, pdf, python, xlsx\n",
+  "description": "GLM-4.7 is a next-generation general-purpose model optimized for coding, reasoning, and agentic workflows, delivering strong gains in multilingual software engineering, tool use, and complex problem solving. It introduces advanced thinking controls—interleaved, preserved, and turn-level thinking—to improve stability on long-horizon, multi-turn tasks. Supported context length: 198k tokens. More information: https://app.fireworks.ai/models/fireworks/glm-4p7\n\nSupported file format: jpg, jpeg, png, heic, pdf, python, xlsx\n",
   "tags": [
     "fireworks ai"
   ],

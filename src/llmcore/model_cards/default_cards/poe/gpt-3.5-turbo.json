@@ -1,14 +1,12 @@
 {
   "model_id": "gpt-3.5-turbo",
-  "display_name": "OpenAI\u2019s GPT 3.5 Turbo model is a powerful language generation system designed to provide highly coherent, contextually relevant, and detailed responses. Supports 16,384 tokens of context. ",
+  "display_name": "OpenAI’s GPT 3.5 Turbo model is a powerful language generation system designed to provide highly coherent, contextually relevant, and detailed responses. Supports 16,384 tokens of context. ",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "OpenAI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "OpenAI\u2019s GPT 3.5 Turbo model is a powerful language generation system designed to provide highly coherent, contextually relevant, and detailed responses. Supports 16,384 tokens of context. ",
+  "description": "OpenAI’s GPT 3.5 Turbo model is a powerful language generation system designed to provide highly coherent, contextually relevant, and detailed responses. Supports 16,384 tokens of context. ",
   "tags": [
     "openai",
     "vision"

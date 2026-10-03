@@ -6,9 +6,7 @@
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,

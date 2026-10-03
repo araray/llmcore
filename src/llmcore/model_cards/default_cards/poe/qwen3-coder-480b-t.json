@@ -1,13 +1,13 @@
 {
   "model_id": "qwen3-coder-480b-t",
-  "display_name": "Qwen3\u2011Coder\u2011480B is a state of the art mixture\u2011of\u2011experts (MoE) code\u2011specialized language model with 480\u202fbillion total parameters and 35\u202fbillion activated parameters. Qwen3\u2011Coder delivers exceptional ",
+  "display_name": "Qwen3‑Coder‑480B is a state of the art mixture‑of‑experts (MoE) code‑specialized language model with 480 billion total parameters and 35 billion activated parameters. Qwen3‑Coder delivers exceptional ",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Together AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Qwen3\u2011Coder\u2011480B is a state of the art mixture\u2011of\u2011experts (MoE) code\u2011specialized language model with 480\u202fbillion total parameters and 35\u202fbillion activated parameters. Qwen3\u2011Coder delivers exceptional performance across code generation, function calling, tool use, and long\u2011context reasoning. It natively supports up to 262,144\u2011token context windows, making it ideal for large repository and multi\u2011file coding tasks.",
+  "description": "Qwen3‑Coder‑480B is a state of the art mixture‑of‑experts (MoE) code‑specialized language model with 480 billion total parameters and 35 billion activated parameters. Qwen3‑Coder delivers exceptional performance across code generation, function calling, tool use, and long‑context reasoning. It natively supports up to 262,144‑token context windows, making it ideal for large repository and multi‑file coding tasks.",
   "tags": [
     "code",
     "together ai"

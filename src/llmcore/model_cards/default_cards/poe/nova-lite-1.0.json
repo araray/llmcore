@@ -1,14 +1,12 @@
 {
   "model_id": "nova-lite-1.0",
-  "display_name": "Amazon Nova Lite is a low\u2011cost multimodal foundation model from Amazon that can process text, images, and video and is optimized for speed and affordability. It offers a context window of 300,000 toke",
+  "display_name": "Amazon Nova Lite is a low‑cost multimodal foundation model from Amazon that can process text, images, and video and is optimized for speed and affordability. It offers a context window of 300,000 toke",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Amazon Nova Lite is a low\u2011cost multimodal foundation model from Amazon that can process text, images, and video and is optimized for speed and affordability. It offers a context window of 300,000 tokens, allowing handling of very large inputs in a single request (including up to ~30 minutes of video).",
+  "description": "Amazon Nova Lite is a low‑cost multimodal foundation model from Amazon that can process text, images, and video and is optimized for speed and affordability. It offers a context window of 300,000 tokens, allowing handling of very large inputs in a single request (including up to ~30 minutes of video).",
   "tags": [
     "empirio labs ai",
     "vision"

@@ -7,7 +7,7 @@
     "family": "Together AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 202752
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GLM-5.1 is Z.ai's next-generation flagship model for agentic engineering. It achieves state-of-the-art on SWE-Bench Pro and leads GLM-5 by a wide margin on NL2Repo and Terminal-Bench 2.0. The real breakthrough, though, is endurance. Previous models plateau early \u2014 they apply familiar techniques for quick gains, then stall. More time doesn't help. GLM-5.1 stays productive over far longer horizons, breaking down ambiguous problems, running experiments, reading results, and revising its strategy with real precision. Across hundreds of rounds and thousands of tool calls, it keeps optimizing. The longer it runs, the better the result.",
+  "description": "GLM-5.1 is Z.ai's next-generation flagship model for agentic engineering. It achieves state-of-the-art on SWE-Bench Pro and leads GLM-5 by a wide margin on NL2Repo and Terminal-Bench 2.0. The real breakthrough, though, is endurance. Previous models plateau early — they apply familiar techniques for quick gains, then stall. More time doesn't help. GLM-5.1 stays productive over far longer horizons, breaking down ambiguous problems, running experiments, reading results, and revising its strategy with real precision. Across hundreds of rounds and thousands of tool calls, it keeps optimizing. The longer it runs, the better the result.",
   "tags": [
     "together ai"
   ],

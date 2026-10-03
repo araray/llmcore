@@ -7,7 +7,7 @@
     "family": "Fireworks AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 200000
   },
   "capabilities": {
     "streaming": true,

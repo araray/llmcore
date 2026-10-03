@@ -1,14 +1,12 @@
 {
   "model_id": "nova-premier-1.0",
-  "display_name": "Note: This model will be retired on September 14, 2026\nThe Amazon Nova Premier 1.0 model is Amazon\u2019s most capable foundation model, able to handle extremely long contexts (\u2248\u202f1 million tokens) and mult",
+  "display_name": "Note: This model will be retired on September 14, 2026\nThe Amazon Nova Premier 1.0 model is Amazon’s most capable foundation model, able to handle extremely long contexts (≈ 1 million tokens) and mult",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Note: This model will be retired on September 14, 2026\nThe Amazon Nova Premier 1.0 model is Amazon\u2019s most capable foundation model, able to handle extremely long contexts (\u2248\u202f1 million tokens) and multimodal inputs like text, images, and video while excelling at complex, multi\u2011step tasks across tools and data sources. \nIt supports chain\u2011of\u2011thought style reasoning and breaks down problems into intermediate steps before arriving at an answer, improving coherence and accuracy.\n\nOptional parameter:\nEnable thinking about the response before giving a final answer: toggle it `off`, otherwise it is `on` by default.",
+  "description": "Note: This model will be retired on September 14, 2026\nThe Amazon Nova Premier 1.0 model is Amazon’s most capable foundation model, able to handle extremely long contexts (≈ 1 million tokens) and multimodal inputs like text, images, and video while excelling at complex, multi‑step tasks across tools and data sources. \nIt supports chain‑of‑thought style reasoning and breaks down problems into intermediate steps before arriving at an answer, improving coherence and accuracy.\n\nOptional parameter:\nEnable thinking about the response before giving a final answer: toggle it `off`, otherwise it is `on` by default.",
   "tags": [
     "empirio labs ai",
     "vision"
