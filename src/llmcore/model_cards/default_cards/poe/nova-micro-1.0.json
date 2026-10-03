@@ -1,14 +1,12 @@
 {
   "model_id": "nova-micro-1.0",
-  "display_name": "Amazon Nova Micro is a text-only foundation model in the Amazon Nova family, designed for ultra\u2011low latency and very low cost, optimized for tasks like summarization, translation, and interactive chat",
+  "display_name": "Amazon Nova Micro is a text-only foundation model in the Amazon Nova family, designed for ultra‑low latency and very low cost, optimized for tasks like summarization, translation, and interactive chat",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Amazon Nova Micro is a text-only foundation model in the Amazon Nova family, designed for ultra\u2011low latency and very low cost, optimized for tasks like summarization, translation, and interactive chat. It supports a context window of 128,000 tokens, enabling handling of large text inputs in a single request.",
+  "description": "Amazon Nova Micro is a text-only foundation model in the Amazon Nova family, designed for ultra‑low latency and very low cost, optimized for tasks like summarization, translation, and interactive chat. It supports a context window of 128,000 tokens, enabling handling of large text inputs in a single request.",
   "tags": [
     "empirio labs ai"
   ],

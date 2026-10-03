@@ -7,7 +7,7 @@
     "family": "Together AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Qwen3-Coder-Next-FP8 is an open-weight language model designed specifically for coding agents and local development. It features the following key enhancements:\n\nSuper Efficient with Significant Performance: With only 3B activated parameters (80B total parameters), it achieves performance comparable to models with 10\u201320x more active parameters, making it highly cost-effective for agent deployment.\nAdvanced Agentic Capabilities: Through an elaborate training recipe, it excels at long-horizon reasoning, complex tool usage, and recovery from execution failures, ensuring robust performance in dynamic coding tasks.\nVersatile Integration with Real-World IDE: Its 256k context length, combined with adaptability to various scaffold templates, enables seamless integration with different CLI/IDE platforms (e.g., Claude Code, Qwen Code, Qoder, Kilo, Trae, Cline, etc.), supporting diverse development environments.",
+  "description": "Qwen3-Coder-Next-FP8 is an open-weight language model designed specifically for coding agents and local development. It features the following key enhancements:\n\nSuper Efficient with Significant Performance: With only 3B activated parameters (80B total parameters), it achieves performance comparable to models with 10–20x more active parameters, making it highly cost-effective for agent deployment.\nAdvanced Agentic Capabilities: Through an elaborate training recipe, it excels at long-horizon reasoning, complex tool usage, and recovery from execution failures, ensuring robust performance in dynamic coding tasks.\nVersatile Integration with Real-World IDE: Its 256k context length, combined with adaptability to various scaffold templates, enables seamless integration with different CLI/IDE platforms (e.g., Claude Code, Qwen Code, Qoder, Kilo, Trae, Cline, etc.), supporting diverse development environments.",
   "tags": [
     "code",
     "together ai"

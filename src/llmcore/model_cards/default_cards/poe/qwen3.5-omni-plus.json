@@ -7,7 +7,7 @@
     "family": "Empirio Labs AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 1000000
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Qwen3.5-Omni Plus is the flagship variant of Qwen's latest omni-modal model, supporting text, image, audio, and video understanding and interaction. It handles up to 3 hours of audio and 1 hour of video input, with audio input in 90+ languages and speech output in 30+ languages across 55 voice timbres.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Context Window: 256K\n- Recommended: instruct the model to avoid markdown formatting in Text + Audio mode\n\nInput limits:\n- Images: up to 2,048 files, \u226420 MB each, min 10\u00d710 px, aspect ratio \u2264200:1\n- Audio: up to 2,048 files, \u22642 GB each, up to 3 hrs\n- Video: up to 512 files, \u22642 GB each, up to 1 hr\n- Formats \u2014 Image: JPG, JPEG, JPE, PNG, WebP, BMP, TIF, TIFF, HEIC, GIF | Audio: AMR, WAV, 3GP, 3GPP, AAC, MP3 | Video: MP4, AVI, MKV, MOV, FLV, WMV\n- Audio Input: 92 languages, 21 dialects\n\nOutput:\n- Modalities: text only, or text + audio (audio-only not available)\n- 55 voice timbres (default: Tina)\n- Audio output: 29 languages, 7 dialects\n\nThis bot supports optional parameters for additional customization.",
+  "description": "Qwen3.5-Omni Plus is the flagship variant of Qwen's latest omni-modal model, supporting text, image, audio, and video understanding and interaction. It handles up to 3 hours of audio and 1 hour of video input, with audio input in 90+ languages and speech output in 30+ languages across 55 voice timbres.\nThis model is served by Alibaba Cloud Int. from Singapore.\n\nNotes:\n- Context Window: 256K\n- Recommended: instruct the model to avoid markdown formatting in Text + Audio mode\n\nInput limits:\n- Images: up to 2,048 files, ≤20 MB each, min 10×10 px, aspect ratio ≤200:1\n- Audio: up to 2,048 files, ≤2 GB each, up to 3 hrs\n- Video: up to 512 files, ≤2 GB each, up to 1 hr\n- Formats — Image: JPG, JPEG, JPE, PNG, WebP, BMP, TIF, TIFF, HEIC, GIF | Audio: AMR, WAV, 3GP, 3GPP, AAC, MP3 | Video: MP4, AVI, MKV, MOV, FLV, WMV\n- Audio Input: 92 languages, 21 dialects\n\nOutput:\n- Modalities: text only, or text + audio (audio-only not available)\n- 55 voice timbres (default: Tina)\n- Audio output: 29 languages, 7 dialects\n\nThis bot supports optional parameters for additional customization.",
   "tags": [
     "empirio labs ai"
   ],

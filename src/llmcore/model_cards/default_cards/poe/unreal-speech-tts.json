@@ -6,9 +6,7 @@
   "architecture": {
     "family": "Unreal Speech"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Convert chats, URLs, and documents into natural speech. 8 Languages: English, Japanese, Chinese, Spanish, French, Hindi, Italian, Portuguese. Defaults to Voice: Sierra. Full list below:\n\nAmerican English\n- Male: Noah, Jasper, Caleb, Ronan, Ethan, Daniel, Zane, Rowan\n- Female: Autumn, Melody, Hannah, Emily, Ivy, Kaitlyn, Luna, Willow, Lauren, Sierra\n\nBritish English\n- Male: Benjamin, Arthur, Edward, Oliver\n- Female: Eleanor, Chloe, Amelia, Charlotte\n\nJapanese\n- Male: Haruto\n- Female: Sakura, Hana, Yuki, Rina\n\nChinese\n- Male: Wei, Jian, Hao, Sheng\n- Female: Mei, Lian, Ting, Jing\n\nSpanish\n- Male: Mateo, Javier\n- Female: Luc\u00eda\n\nFrench\n- Female: \u00c9lodie\n\nHindi\n- Male: Arjun, Rohan\n- Female: Ananya, Priya\n\nItalian\n- Male: Luca\n- Female: Giulia\n\nPortuguese\n- Male: Thiago, Rafael\n- Female: Camila",
+  "description": "Convert chats, URLs, and documents into natural speech. 8 Languages: English, Japanese, Chinese, Spanish, French, Hindi, Italian, Portuguese. Defaults to Voice: Sierra. Full list below:\n\nAmerican English\n- Male: Noah, Jasper, Caleb, Ronan, Ethan, Daniel, Zane, Rowan\n- Female: Autumn, Melody, Hannah, Emily, Ivy, Kaitlyn, Luna, Willow, Lauren, Sierra\n\nBritish English\n- Male: Benjamin, Arthur, Edward, Oliver\n- Female: Eleanor, Chloe, Amelia, Charlotte\n\nJapanese\n- Male: Haruto\n- Female: Sakura, Hana, Yuki, Rina\n\nChinese\n- Male: Wei, Jian, Hao, Sheng\n- Female: Mei, Lian, Ting, Jing\n\nSpanish\n- Male: Mateo, Javier\n- Female: Lucía\n\nFrench\n- Female: Élodie\n\nHindi\n- Male: Arjun, Rohan\n- Female: Ananya, Priya\n\nItalian\n- Male: Luca\n- Female: Giulia\n\nPortuguese\n- Male: Thiago, Rafael\n- Female: Camila",
   "tags": [
     "audio",
     "unreal speech"

@@ -1801,6 +1801,56 @@ about a model; this method is a **budgeting assumption** callers use to decide
 how much history to send, so it has to produce a number. The card does not
 claim 128,000, and nothing reading cards will believe it does.
 
+### Fixed — context windows now come from the sources we already had
+
+Follow-on from the previous entry. Having stopped the generator inventing
+windows, this uses the real sources that existed all along, and admits unknown
+where none does. **Effective cards claiming 128,000: 986 → 320.**
+
+**HuggingFace (210 → 19), via each repo's own `config.json`.** Added to
+pricewatch rather than here, since it is a vendor-native fetch. 197 repos state
+a window and **only 5 of those were actually 128,000**: `BAAI/bge-base-en-v1.5`
+is **512**, overstated 250-fold, and `Qwen/QwQ-32B` is 40,960 — while
+`ByteDance-Seed/UI-TARS-1.5-7B` genuinely is 128,000, which is why this reads
+rather than infers. 63 of the windows live under `text_config`, where a
+multimodal repo keeps its language model's; `model_max_length` is never
+consulted, because it is tokenizer config and routinely holds the sentinel
+`1000000000000000019884624838656`.
+
+**Poe (170 → 45).** 75 cards claimed 128,000 purely from the catch-all removed
+above — including `canvas-creator`, `code-editor` and `elevenlabs-music`, which
+are Poe bots, not frontier models. Those are now unknown. A further **50
+disagreed with a family rule the adapter already held**, 8 of them really
+1,000,000, so llmcore was truncating work it could have done. The 45 that
+remain are the ones a researched rule actually backs.
+
+**Anthropic (8 → 0).** No Claude model has ever had a 128,000-token input
+window — they are 200,000, or 1,000,000 for 5.x — so unlike chat cards in
+general, that value on a Claude card is always wrong. `claude-opus-5-5`,
+`claude-sonnet-5-5` and `claude-fable-5-1` now carry the 1,000,000 that
+Anthropic's own comparison table publishes. The other five are unknown:
+Anthropic publishes only the current generation, and llmcore's provider table
+stops at 4.6, so nothing states them.
+
+**OpenAI: 6 cards contradicted the provider's own table.** `gpt-4` claimed
+128,000 where `DEFAULT_OPENAI_TOKEN_LIMITS` says **8,000** — a 16-fold
+overstatement — and the `gpt-3.5-turbo` family claimed it where the table says
+16,000.
+
+Three audits keep each of these from returning, and they deliberately assert
+different things. An **exact-id** table (OpenAI's) is ground truth a card may
+not contradict. A **family-pattern** table (Poe's, which answers 200,000 for
+anything matching "claude") is only a fallback, and 73 Poe cards legitimately
+disagree with it because the *table* is the stale one — it would call
+`claude-sonnet-5.5` 200,000 and `deepseek-v4-pro` 128,000 when the cards
+correctly say 1,000,000 and 1,048,576. So the Poe audit only forbids an
+unbacked 128,000.
+
+**Still 320**, nearly all needing a source rather than a correction: `openai`
+100 (newer models absent from its table), `deepinfra` 99, `openrouter` 46,
+`poe` 45 (backed by a family rule), `huggingface` 19 (gated or config-less
+repos). 505 cards now state no window at all, which llmcore reads as unknown.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

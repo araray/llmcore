@@ -7,7 +7,7 @@
     "family": "Novita AI"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +30,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "The Qwen3.5 series 397B-A17B native vision-language model is based on a hybrid architecture design that integrates linear attention mechanisms with sparse Mixture-of-Experts (MoE), achieving higher inference efficiency. Across a variety of tasks\u2014including language understanding, logical reasoning, code generation, agentic tasks, image understanding, video understanding, and graphical user interface (GUI) interaction\u2014it demonstrates exceptional performance comparable to current top-tier frontier models. Possessing robust code generation and agentic capabilities, it exhibits strong generalization across various agent scenarios.\n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 262k tokens\n\nOptional parameters:\nEnable thinking about the response before giving a final answer: toggle it `on`, otherwise it is `off`  by default.\nSet temperature to control randomness in the response: Set number from 1 to 2.  This is set to `0.7` by default. Lower values make the output more focused and deterministic.\nSet max output tokens: Set number from 1 to 64000. This is set to 64000 by default.",
+  "description": "The Qwen3.5 series 397B-A17B native vision-language model is based on a hybrid architecture design that integrates linear attention mechanisms with sparse Mixture-of-Experts (MoE), achieving higher inference efficiency. Across a variety of tasks—including language understanding, logical reasoning, code generation, agentic tasks, image understanding, video understanding, and graphical user interface (GUI) interaction—it demonstrates exceptional performance comparable to current top-tier frontier models. Possessing robust code generation and agentic capabilities, it exhibits strong generalization across various agent scenarios.\n\nFile Support: Text, Markdown, Image, Video and PDF files\nContext window: 262k tokens\n\nOptional parameters:\nEnable thinking about the response before giving a final answer: toggle it `on`, otherwise it is `off`  by default.\nSet temperature to control randomness in the response: Set number from 1 to 2.  This is set to `0.7` by default. Lower values make the output more focused and deterministic.\nSet max output tokens: Set number from 1 to 64000. This is set to 64000 by default.",
   "tags": [
     "novita ai",
     "vision"

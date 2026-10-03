@@ -1,14 +1,12 @@
 {
   "model_id": "gpt-oss-120b-cs",
-  "display_name": "World\u2019s fastest inference for GPT OSS 120B with Cerebras. OpenAI's GPT-OSS-120B delivers sophisticated chain-of-thought reasoning capabilities in a fully open model. The bot does not accept video, ppt",
+  "display_name": "World’s fastest inference for GPT OSS 120B with Cerebras. OpenAI's GPT-OSS-120B delivers sophisticated chain-of-thought reasoning capabilities in a fully open model. The bot does not accept video, ppt",
   "provider": "poe",
   "model_type": "chat",
   "architecture": {
     "family": "CerebrasAI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "World\u2019s fastest inference for GPT OSS 120B with Cerebras. OpenAI's GPT-OSS-120B delivers sophisticated chain-of-thought reasoning capabilities in a fully open model. The bot does not accept video, ppt, docx and excel files.",
+  "description": "World’s fastest inference for GPT OSS 120B with Cerebras. OpenAI's GPT-OSS-120B delivers sophisticated chain-of-thought reasoning capabilities in a fully open model. The bot does not accept video, ppt, docx and excel files.",
   "tags": [
     "cerebrasai"
   ],

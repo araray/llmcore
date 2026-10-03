@@ -6,9 +6,7 @@
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Magistral Medium 2509 (thinking) by EmpirioLabs.\nMagistral is Mistral's first reasoning model. It is ideal for general purpose use requiring longer thought processing and better accuracy than with non-reasoning LLMs. From legal research and financial forecasting to software development and creative storytelling \u2014 this model solves multi-step challenges where transparency and precision are critical. Context Window: 40,000k\nSupported file type uploads: PDF, XLSX, TXT, PNG, JPG, JPEG",
+  "description": "Magistral Medium 2509 (thinking) by EmpirioLabs.\nMagistral is Mistral's first reasoning model. It is ideal for general purpose use requiring longer thought processing and better accuracy than with non-reasoning LLMs. From legal research and financial forecasting to software development and creative storytelling — this model solves multi-step challenges where transparency and precision are critical. Context Window: 40,000k\nSupported file type uploads: PDF, XLSX, TXT, PNG, JPG, JPEG",
   "tags": [
     "empirio labs ai",
     "reasoning",

@@ -168,3 +168,146 @@ class TestTheGeneratorDoesNotInventOne:
         # Researched values are untouched.
         assert _guess_context_length("gpt-4o") == 128_000
         assert _guess_context_length("claude-sonnet-4") == 200_000
+
+
+class TestPoeCardsDoNotCarryTheRemovedCatchAll:
+    """Poe cards must not state 128,000 unless the family table says so.
+
+    The Poe adapter carries researched per-family windows and used to have a
+    catch-all returning 128,000 for everything else. The catch-all is gone, but
+    170 cards generated while it existed kept its answer -- including
+    `canvas-creator`, `code-editor` and `elevenlabs-music`, which are Poe bots
+    rather than frontier LLMs. Fifty of them disagreed with a family rule the
+    same file already held, and eight were really 1,000,000, so llmcore was
+    truncating work it could have done.
+
+    This asserts the *narrow* thing and not the tempting one. "Cards must agree
+    with the family table" is false: 73 cards legitimately disagree because the
+    **table is the stale one** -- it answers 200,000 for anything matching
+    "claude" and 128,000 for anything matching "deepseek", while the cards know
+    `claude-sonnet-5.5` is 1,000,000 and `deepseek-v4-pro` is 1,048,576. The
+    table is a fallback for models nothing else can place, so it cannot be used
+    as ground truth against a card that was told better.
+    """
+
+    @pytest.fixture(scope="class")
+    def poe_cards(self) -> list[tuple[str, dict]]:
+        import llmcore.model_cards
+
+        root = (
+            pathlib.Path(llmcore.model_cards.__file__).parent / "default_cards" / "poe"
+        )
+        if not root.is_dir():
+            pytest.skip("no packaged poe cards")
+        return [(p.name, json.loads(p.read_text())) for p in sorted(root.glob("*.json"))]
+
+    def test_a_card_claiming_128000_is_backed_by_a_family_rule(self, poe_cards):
+        from tools.cardctl.adapters.poe_adapter import _guess_context_length
+
+        unbacked = [
+            name
+            for name, card in poe_cards
+            if (card.get("context") or {}).get("max_input_tokens") == 128_000
+            and _guess_context_length(card.get("model_id", "")) != 128_000
+        ]
+        assert not unbacked, (
+            f"{len(unbacked)} Poe card(s) claim 128,000 with nothing backing it, "
+            f"which is what the removed catch-all produced: {unbacked[:10]}"
+        )
+
+    def test_the_catch_all_is_still_gone(self):
+        """The data fix above is only durable while the generator stays fixed."""
+        from tools.cardctl.adapters.poe_adapter import _guess_context_length
+
+        assert _guess_context_length("a-bot-nobody-has-a-rule-for") is None
+
+
+class TestAnthropicWindowsAreSourcedOrUnknown:
+    """No Claude model has ever had a 128,000-token input window.
+
+    They are 200,000, or 1,000,000 for the 5.x generation. So unlike the chat
+    cards in general -- where 128,000 is sometimes right -- that value on an
+    Anthropic card is always wrong, which makes it the one provider where the
+    audit can be absolute.
+    """
+
+    @pytest.fixture(scope="class")
+    def anthropic_cards(self) -> list[tuple[str, dict]]:
+        import llmcore.model_cards
+
+        root = (
+            pathlib.Path(llmcore.model_cards.__file__).parent
+            / "default_cards"
+            / "anthropic"
+        )
+        if not root.is_dir():
+            pytest.skip("no packaged anthropic cards")
+        return [(p.name, json.loads(p.read_text())) for p in sorted(root.glob("*.json"))]
+
+    def test_no_claude_card_claims_128000(self, anthropic_cards):
+        offenders = [
+            name
+            for name, card in anthropic_cards
+            if (card.get("context") or {}).get("max_input_tokens") == 128_000
+        ]
+        assert not offenders, (
+            f"Claude windows are 200,000 or 1,000,000, never 128,000: {offenders}"
+        )
+
+    def test_every_stated_window_is_a_real_claude_window(self, anthropic_cards):
+        """A guard against the next plausible-looking number. If Anthropic
+        ships a new window this test should fail and be updated deliberately,
+        rather than quietly accepting whatever a generator wrote."""
+        allowed = {200_000, 1_000_000}
+        wrong = [
+            (name, (card.get("context") or {}).get("max_input_tokens"))
+            for name, card in anthropic_cards
+            if (card.get("context") or {}).get("max_input_tokens")
+            and (card.get("context") or {}).get("max_input_tokens") not in allowed
+        ]
+        assert not wrong, f"unrecognised Claude window(s): {wrong}"
+
+
+class TestCardsAgreeWithProviderFallbackTables:
+    """Where a provider ships a researched table, no card may contradict it.
+
+    Two in-repo sources already knew better than the cards did.
+    `DEFAULT_OPENAI_TOKEN_LIMITS` says `gpt-4` is 8,000 and `gpt-3.5-turbo` is
+    16,000 while their cards claimed 128,000 -- a 16x overstatement on the
+    first, so a caller trusting the card would push 128k tokens into an 8k
+    model.
+
+    This is the mirror image of the Poe case, and the difference is worth
+    stating. A *family-pattern* table (Poe's, which answers 200,000 for
+    anything matching "claude") goes stale as models ship and cannot be
+    treated as ground truth. An *exact-id* table like this one cannot go stale
+    in the same way: it either names a model or it does not, and when it names
+    one it was written about that model.
+    """
+
+    @pytest.fixture(scope="class")
+    def openai_cards(self) -> list[tuple[str, dict]]:
+        import llmcore.model_cards
+
+        root = (
+            pathlib.Path(llmcore.model_cards.__file__).parent
+            / "default_cards"
+            / "openai"
+        )
+        if not root.is_dir():
+            pytest.skip("no packaged openai cards")
+        return [(p.name, json.loads(p.read_text())) for p in sorted(root.glob("*.json"))]
+
+    def test_no_openai_card_contradicts_the_provider_table(self, openai_cards):
+        from llmcore.providers.openai_provider import DEFAULT_OPENAI_TOKEN_LIMITS
+
+        disagreements = []
+        for name, card in openai_cards:
+            stated = (card.get("context") or {}).get("max_input_tokens")
+            known = DEFAULT_OPENAI_TOKEN_LIMITS.get(card.get("model_id", ""))
+            if stated and known and stated != known:
+                disagreements.append(f"{name}: card={stated} provider={known}")
+        assert not disagreements, (
+            f"{len(disagreements)} OpenAI card(s) contradict the provider's own "
+            f"researched table, which names each model exactly: {disagreements[:10]}"
+        )
