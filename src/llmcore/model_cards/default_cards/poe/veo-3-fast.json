@@ -1,14 +1,12 @@
 {
   "model_id": "veo-3-fast",
-  "display_name": "Veo 3 Fast is a speed-optimized variant of Google\u2019s Veo 3 AI video generation engine. It\u2019s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound",
+  "display_name": "Veo 3 Fast is a speed-optimized variant of Google’s Veo 3 AI video generation engine. It’s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "Google"
   },
-  "context": {
-    "max_input_tokens": 4096
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Veo 3 Fast is a speed-optimized variant of Google\u2019s Veo 3 AI video generation engine. It\u2019s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound, effects). Prioritizes faster generation times while still delivering solid visual and audio quality, supports text-to-video and image-to-video workflows, allowing creators to animate still images into motion sequences, operates under defined constraints (e.g. video lengths of 4, 6, or 8 seconds). Set the aspect ratio (either `16:9` or `9:16`), which defaults to `16:9`.\nPlease only upload photos that you own or have the right to use, otherwise the bot will throw an error.",
+  "description": "Veo 3 Fast is a speed-optimized variant of Google’s Veo 3 AI video generation engine. It’s designed for rapid, cost-efficient production of short clips with synchronized audio (dialogue, ambient sound, effects). Prioritizes faster generation times while still delivering solid visual and audio quality, supports text-to-video and image-to-video workflows, allowing creators to animate still images into motion sequences, operates under defined constraints (e.g. video lengths of 4, 6, or 8 seconds). Set the aspect ratio (either `16:9` or `9:16`), which defaults to `16:9`.\nPlease only upload photos that you own or have the right to use, otherwise the bot will throw an error.",
   "tags": [
     "google",
     "video-generation"

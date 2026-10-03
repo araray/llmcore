@@ -51,7 +51,10 @@ class OpenRouterAdapter(BaseAdapter):
             return None
 
         pricing = m.get("pricing", {}) or {}
-        ctx = m.get("context_length") or 128_000
+        # No fallback: OpenRouter states `context_length` for everything it
+        # routes, so an absent one means the route is unusual, not that it
+        # holds 128,000 tokens.
+        ctx = m.get("context_length") or None
 
         # Parse pricing (OpenRouter returns per-token strings)
         input_price = _parse_price(pricing.get("prompt", "0"))

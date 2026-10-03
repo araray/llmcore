@@ -1,14 +1,12 @@
 {
   "model_id": "ray2",
-  "display_name": "Ray2 is a large\u2013scale video generative model capable of creating realistic visuals with natural, coherent motion. It has strong understanding of text instructions and can also take image input. \n\nOpti",
+  "display_name": "Ray2 is a large–scale video generative model capable of creating realistic visuals with natural, coherent motion. It has strong understanding of text instructions and can also take image input. \n\nOpti",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "LumaLabs"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Ray2 is a large\u2013scale video generative model capable of creating realistic visuals with natural, coherent motion. It has strong understanding of text instructions and can also take image input. \n\nOptional parameters:\nCan produce videos from 540p to 4k resolution and with either 5/9s durations. \nAspect ratio available (21:9, 16:9, 4:3, 1:1, 3:4, 9:16, 9:21)",
+  "description": "Ray2 is a large–scale video generative model capable of creating realistic visuals with natural, coherent motion. It has strong understanding of text instructions and can also take image input. \n\nOptional parameters:\nCan produce videos from 540p to 4k resolution and with either 5/9s durations. \nAspect ratio available (21:9, 16:9, 4:3, 1:1, 3:4, 9:16, 9:21)",
   "tags": [
     "lumalabs",
     "video-generation",

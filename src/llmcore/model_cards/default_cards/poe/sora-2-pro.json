@@ -1,14 +1,12 @@
 {
   "model_id": "sora-2-pro",
-  "display_name": "Sora 2 Pro is OpenAI\u2019s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds ",
+  "display_name": "Sora 2 Pro is OpenAI’s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds ",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "OpenAI"
   },
-  "context": {
-    "max_input_tokens": 4096
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Sora 2 Pro is OpenAI\u2019s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds on Sora 2\u2019s capabilities with enhanced physical accuracy, intricate world-state persistence, and higher fidelity in cinematic styles. The model excels at generating synchronized dialogue, sound effects, and realistic simulations, all while adhering to real-world physics. Sora 2 Pro also supports seamless editing, complex multi-shot prompt execution, and the integration of real-world elements like people, animals, and objects with unparalleled detail and accuracy.\nThis bot supports text-to-video and image-to-video generation.\n\nOptional parameters:\n- Duration. Video output duration in seconds (options: 4, 8, 12)\n- Size. Resolution of the output video. Options: [Landscape] - 1280x720, 1792x1024, [Portrait] - 720x1280, 1024x1792",
+  "description": "Sora 2 Pro is OpenAI’s state-of-the-art video and audio generation model, capable of creating richly detailed, dynamic clips with synchronized audio from natural language prompts or images. It builds on Sora 2’s capabilities with enhanced physical accuracy, intricate world-state persistence, and higher fidelity in cinematic styles. The model excels at generating synchronized dialogue, sound effects, and realistic simulations, all while adhering to real-world physics. Sora 2 Pro also supports seamless editing, complex multi-shot prompt execution, and the integration of real-world elements like people, animals, and objects with unparalleled detail and accuracy.\nThis bot supports text-to-video and image-to-video generation.\n\nOptional parameters:\n- Duration. Video output duration in seconds (options: 4, 8, 12)\n- Size. Resolution of the output video. Options: [Landscape] - 1280x720, 1792x1024, [Portrait] - 720x1280, 1024x1792",
   "tags": [
     "openai",
     "video-generation",

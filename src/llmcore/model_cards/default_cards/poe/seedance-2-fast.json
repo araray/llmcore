@@ -1,14 +1,12 @@
 {
   "model_id": "seedance-2-fast",
-  "display_name": "Seedance 2.0 Fast supports the text and image inputs but is optimized for speed, making it ideal for rapid iteration, quick concept testing, and high\u2011volume creative workflows.\n\nCost estimate - $0.115",
+  "display_name": "Seedance 2.0 Fast supports the text and image inputs but is optimized for speed, making it ideal for rapid iteration, quick concept testing, and high‑volume creative workflows.\n\nCost estimate - $0.115",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "Bytedance"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Seedance 2.0 Fast supports the text and image inputs but is optimized for speed, making it ideal for rapid iteration, quick concept testing, and high\u2011volume creative workflows.\n\nCost estimate - $0.115 per second (10300 tokens per second) at 480p, $0.24752 per second (22100 tokens per second) at 720p, at a rate of $0.0112  per 1000 tokens.",
+  "description": "Seedance 2.0 Fast supports the text and image inputs but is optimized for speed, making it ideal for rapid iteration, quick concept testing, and high‑volume creative workflows.\n\nCost estimate - $0.115 per second (10300 tokens per second) at 480p, $0.24752 per second (22100 tokens per second) at 720p, at a rate of $0.0112  per 1000 tokens.",
   "tags": [
     "bytedance",
     "video-generation"
