@@ -127,7 +127,10 @@ def _model_details_to_proto(m: Any) -> catalog_pb2.ModelDetails:
     p = catalog_pb2.ModelDetails(
         id=m.id,
         provider_name=m.provider_name,
-        context_length=m.context_length,
+        # Proto int fields cannot carry None, and 0 is how this wire format
+        # already spells "unset" -- see the media providers, which pass 0 for
+        # models that have no token window at all.
+        context_length=m.context_length or 0,
         supports_streaming=m.supports_streaming,
         supports_tools=m.supports_tools,
         supports_vision=m.supports_vision,

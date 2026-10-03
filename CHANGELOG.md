@@ -1851,6 +1851,38 @@ unbacked 128,000.
 `poe` 45 (backed by a family rule), `huggingface` 19 (gated or config-less
 repos). 505 cards now state no window at all, which llmcore reads as unknown.
 
+### Fixed — a model listing can now say it does not know the context window
+
+Caught by checking the consequences of the previous two entries rather than
+assuming them. Once 227 packaged cards stopped claiming a window they were
+never told, two providers that fed card values straight into `ModelDetails`
+broke — and one of them had been broken all along.
+
+**`ModelDetails.context_length` is now `int | None`, defaulting to `None`.** It
+was `int` with a default of **4,096** — the same fabrication the card generator
+used to make, one layer up — so an explicit `None` was refused outright. A
+caller could not tell a real 4k model from one nobody had described.
+
+- **Deepgram's `get_models_details()` raised `ValidationError`.** Its 144
+  speech cards state no token window, because their input is audio, and the
+  provider passed that through. It failed on the first model.
+- **HuggingFace's `get_models_details()` raised `AttributeError`, and always
+  had.** It called `registry.get_provider_cards()`, which does not exist on the
+  registry — and behind that first failure sat three more:
+  `card.context.get(...)` and `card.architecture.get(...)` treat pydantic
+  models as dicts, and `card.capabilities.tool_calling` is not a field, it is
+  `tool_use`. Four independent bugs in one function, with no test touching it.
+  It now lists all 298 cards, 83 of them reporting no window.
+
+Both consumers of the field were adjusted rather than left to meet a `None`:
+`MemoryManager._get_precise_context_length()` falls through to the provider's
+own fallback instead of returning it (the method promises an `int`, and callers
+size a context budget with it), and the gRPC bridge sends `0`, which is how
+that wire format already spells unset.
+
+A sweep of every other provider's listing found no further dead code: the seven
+that fail without a network genuinely call their vendor's API.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

@@ -147,11 +147,22 @@ class MemoryManager:
             models_details = await provider.get_models_details()
             for detail in models_details:
                 if detail.id == model:
+                    # A listing may now say "unknown" rather than quote a
+                    # number nobody stated. That is not an answer this method
+                    # can return -- it promises an int and callers size a
+                    # context budget with it -- so fall through to the
+                    # provider's own fallback instead of propagating None.
+                    if detail.context_length is None:
+                        logger.debug(
+                            f"{model} states no context length; using provider fallback."
+                        )
+                        break
                     logger.debug(
                         f"Found precise context length for {model}: {detail.context_length} tokens"
                     )
                     return detail.context_length
-            logger.debug(f"Model {model} not in details, using provider fallback.")
+            else:
+                logger.debug(f"Model {model} not in details, using provider fallback.")
             return provider.get_max_context_length(model)
         except Exception as e:
             logger.warning(

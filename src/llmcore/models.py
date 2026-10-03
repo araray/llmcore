@@ -516,7 +516,12 @@ class ModelDetails(BaseModel):
         id: The unique identifier for the model (e.g., "gpt-4o").
         provider_name: The name of the provider this model belongs to.
         display_name: Human-friendly name for the model.
-        context_length: The maximum context window size in tokens.
+        context_length: The maximum context window size in tokens, or ``None``
+            when nothing states one. Unknown has to be representable here:
+            227 packaged cards legitimately carry no window -- a speech-to-text
+            model's input is audio, and a gated HuggingFace repo's config
+            cannot be read -- and the previous default of 4,096 was the same
+            fabrication the card generator used to make, one layer up.
         max_output_tokens: Maximum number of output tokens the model can generate.
         supports_streaming: Flag indicating if the model supports streaming responses.
         supports_tools: Flag indicating if the model supports tool/function calling.
@@ -533,8 +538,9 @@ class ModelDetails(BaseModel):
     id: str = Field(description="The unique identifier for the model.")
     provider_name: str = Field(description="The name of the provider this model belongs to.")
     display_name: str | None = Field(default=None, description="Human-friendly name for the model.")
-    context_length: int = Field(
-        default=4096, description="The maximum context window size in tokens."
+    context_length: int | None = Field(
+        default=None,
+        description="Maximum context window size in tokens; None when unknown.",
     )
     max_output_tokens: int | None = Field(
         default=None, description="Maximum number of output tokens the model can generate."
