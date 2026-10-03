@@ -80,3 +80,58 @@ class TestRealisticAgentTurn:
         )
         assert cold > warm
         assert cold - warm == pytest.approx(0.5)  # 100k at $5/Mtok
+
+
+class TestReasoningAndBatch:
+    """Two fields the cost model declared and read nowhere.
+
+    Flagged by the design-bible reading: `get_cost` declared
+    `reasoning_output` and `batch_discount_percent` but consulted neither,
+    so a card could state them and a caller be charged the plain rate.
+    """
+
+    @staticmethod
+    def pricing(**kwargs):
+        rates = {"input": 4.0, "output": 20.0, "reasoning_output": 50.0}
+        rates.update(kwargs.pop("rates", {}))
+        return ModelPricing(per_million_tokens=TokenPricing(**rates), **kwargs)
+
+    def test_reasoning_tokens_use_their_own_rate(self):
+        p = self.pricing()
+        assert p.get_cost(0, 1_000_000, reasoning_tokens=1_000_000) == pytest.approx(50.0)
+
+    def test_reasoning_is_a_subset_of_output_not_additional(self):
+        p = self.pricing()
+        # 500k at $50 + 500k at $20, never 1M + 500k.
+        assert p.get_cost(0, 1_000_000, reasoning_tokens=500_000) == pytest.approx(35.0)
+
+    def test_reasoning_beyond_output_is_clamped(self):
+        p = self.pricing()
+        assert p.get_cost(0, 100, reasoning_tokens=10_000) == p.get_cost(
+            0, 100, reasoning_tokens=100)
+
+    def test_no_reasoning_rate_falls_back_to_output(self):
+        p = self.pricing(rates={"reasoning_output": None})
+        assert p.get_cost(0, 1_000_000, reasoning_tokens=1_000_000) == pytest.approx(20.0)
+
+    def test_batch_discount_is_applied(self):
+        p = self.pricing(batch_discount_percent=50)
+        assert p.get_cost(0, 1_000_000, batch=True) == pytest.approx(10.0)
+
+    def test_batch_discount_covers_the_whole_request(self):
+        p = self.pricing(batch_discount_percent=50)
+        full = p.get_cost(1_000_000, 1_000_000, cached_tokens=500_000)
+        assert p.get_cost(1_000_000, 1_000_000, cached_tokens=500_000,
+                          batch=True) == pytest.approx(full / 2)
+
+    def test_no_declared_discount_means_no_discount(self):
+        p = self.pricing()
+        assert p.get_cost(0, 1_000_000, batch=True) == p.get_cost(0, 1_000_000)
+
+    def test_batch_false_is_the_default(self):
+        p = self.pricing(batch_discount_percent=50)
+        assert p.get_cost(0, 1_000_000) == pytest.approx(20.0)
+
+    def test_omitting_the_new_arguments_changes_nothing(self):
+        p = self.pricing(batch_discount_percent=50)
+        assert p.get_cost(1_000, 500) == p.get_cost(1_000, 500, 0, 0, 0, False)

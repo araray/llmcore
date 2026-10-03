@@ -350,6 +350,8 @@ class ModelPricing(BaseModel):
         output_tokens: int,
         cached_tokens: int = 0,
         cache_write_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        batch: bool = False,
     ) -> float:
         """
         Calculate cost for given token counts.
@@ -363,6 +365,11 @@ class ModelPricing(BaseModel):
                 matching how providers report usage: Anthropic returns
                 ``cache_creation_input_tokens`` alongside ``input_tokens``
                 rather than inside it.
+            reasoning_tokens: Thinking/reasoning tokens, a *subset* of
+                ``output_tokens``. Priced at ``reasoning_output`` when the
+                card states one, otherwise at the output rate.
+            batch: Price as a batch-API request, applying
+                ``batch_discount_percent`` when the card states one.
 
         Returns:
             Total cost in the model's currency
@@ -402,10 +409,28 @@ class ModelPricing(BaseModel):
             )
             write_cost = (cache_write_tokens / 1_000_000) * write_rate
 
-        # Calculate output cost
-        output_cost = (output_tokens / 1_000_000) * rates.output
+        # Reasoning tokens are a subset of the output and may carry their
+        # own rate. Without a stated rate they are simply output, which is
+        # what charging them at the output price amounts to.
+        reasoning = max(0, min(reasoning_tokens, output_tokens))
+        plain_output = output_tokens - reasoning
+        output_cost = (plain_output / 1_000_000) * rates.output
+        if reasoning:
+            reasoning_rate = (
+                rates.reasoning_output
+                if rates.reasoning_output is not None
+                else rates.output
+            )
+            output_cost += (reasoning / 1_000_000) * reasoning_rate
 
-        return input_cost + cached_cost + write_cost + output_cost
+        total = input_cost + cached_cost + write_cost + output_cost
+
+        # The batch discount was declared on this model and read by nothing,
+        # so a caller could set it and be charged the full rate. It applies
+        # to the whole request, which is why it is applied last.
+        if batch and self.batch_discount_percent:
+            total *= max(0.0, 1.0 - self.batch_discount_percent / 100.0)
+        return total
 
 
 class ModelLifecycle(BaseModel):
@@ -739,6 +764,8 @@ class ModelCard(BaseModel):
         output_tokens: int,
         cached_tokens: int = 0,
         cache_write_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        batch: bool = False,
     ) -> float | None:
         """
         Estimate cost for given token counts.
@@ -755,7 +782,8 @@ class ModelCard(BaseModel):
         """
         if self.pricing:
             return self.pricing.get_cost(
-                input_tokens, output_tokens, cached_tokens, cache_write_tokens
+                input_tokens, output_tokens, cached_tokens, cache_write_tokens,
+                reasoning_tokens, batch,
             )
         return None
 

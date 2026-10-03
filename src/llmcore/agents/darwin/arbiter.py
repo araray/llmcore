@@ -135,7 +135,11 @@ class CandidateScore(BaseModel):
     Attributes:
         candidate_id: ID of the candidate being scored
         criteria_scores: Map of criterion name to score
-        weighted_total: Weighted average of all scores
+        weighted_total: Weighted average of all scores, or None when the
+            evaluation did not complete. None means "not judged", which is
+            not the same as a low score and must never compete as one.
+        evaluation_failed: True when the evaluation crashed, timed out or
+            could not be parsed
         arbiter_feedback: Optional feedback from the evaluator
         evaluation_time_ms: Time taken to evaluate (milliseconds)
         created_at: When this evaluation was performed
@@ -143,7 +147,8 @@ class CandidateScore(BaseModel):
 
     candidate_id: str
     criteria_scores: dict[str, float]  # criterion name -> score
-    weighted_total: float
+    weighted_total: float | None = None
+    evaluation_failed: bool = False
     arbiter_feedback: str | None = None
     evaluation_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
@@ -174,7 +179,7 @@ class ArbiterDecision(BaseModel):
     all_scores: list[CandidateScore]
     all_candidates: list[Candidate] = Field(default_factory=list)
     reasoning: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     selection_time_ms: float | None = None
     total_time_ms: float | None = None
     created_at: datetime = Field(default_factory=_utc_now)
@@ -383,9 +388,14 @@ class MultiAttemptArbiter:
         decision.total_time_ms = total_ms
         decision.all_candidates = candidates
 
+        shown = (
+            f"{decision.confidence:.2f}"
+            if decision.confidence is not None
+            else "unknown"
+        )
         logger.info(
             f"Selected candidate {decision.selected_id} with confidence "
-            f"{decision.confidence:.2f} (total time: {total_ms:.0f}ms)"
+            f"{shown} (total time: {total_ms:.0f}ms)"
         )
 
         return decision
@@ -578,12 +588,17 @@ class MultiAttemptArbiter:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.warning(f"Candidate {i} evaluation failed: {result}")
-                # Create default score for failed evaluation
+                # Record that it was not judged. It used to be filled with
+                # 5.0 across every criterion, which on a 0-10 scale is
+                # exactly `min_acceptable_score`, so a crashed evaluation
+                # entered selection looking like a mid-range result and
+                # could beat a candidate that genuinely scored 4.
                 scores.append(
                     CandidateScore(
                         candidate_id=candidates[i].id,
-                        criteria_scores={c.name: 5.0 for c in self.config.criteria},
-                        weighted_total=5.0,
+                        criteria_scores={},
+                        weighted_total=None,
+                        evaluation_failed=True,
                         arbiter_feedback=f"Evaluation failed: {result}",
                     )
                 )
@@ -659,16 +674,18 @@ class MultiAttemptArbiter:
             )
             return CandidateScore(
                 candidate_id=candidate.id,
-                criteria_scores={c.name: 5.0 for c in self.config.criteria},
-                weighted_total=5.0,
+                criteria_scores={},
+                weighted_total=None,
+                evaluation_failed=True,
                 arbiter_feedback="Evaluation timed out",
             )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning(f"Failed to parse evaluation for {candidate.id}: {e}")
             return CandidateScore(
                 candidate_id=candidate.id,
-                criteria_scores={c.name: 5.0 for c in self.config.criteria},
-                weighted_total=5.0,
+                criteria_scores={},
+                weighted_total=None,
+                evaluation_failed=True,
                 arbiter_feedback=f"Parse error: {e}",
             )
 
@@ -691,14 +708,23 @@ class MultiAttemptArbiter:
                 selected_content=candidates[0].content,
                 all_scores=scores,
                 reasoning="Only one candidate available",
-                confidence=scores[0].weighted_total / 10.0 if scores else 0.5,
+                confidence=(
+                    scores[0].weighted_total / 10.0
+                    if scores and scores[0].weighted_total is not None
+                    else None
+                ),
             )
 
         # Build summary for selection
         summary_parts = []
         for candidate, score in zip(candidates, scores):
             parts = [f"\n{candidate.id} (temp={candidate.temperature}):"]
-            parts.append(f"  Weighted Score: {score.weighted_total:.2f}")
+            if score.weighted_total is None:
+                # Saying "not evaluated" is the point: an LLM shown a
+                # fabricated 5.00 cannot know to discount it.
+                parts.append("  Weighted Score: not evaluated")
+            else:
+                parts.append(f"  Weighted Score: {score.weighted_total:.2f}")
             for name, s in score.criteria_scores.items():
                 parts.append(f"  - {name}: {s:.1f}")
             if score.arbiter_feedback:
@@ -766,19 +792,28 @@ class MultiAttemptArbiter:
         candidates: list[Candidate],
         scores: list[CandidateScore],
     ) -> Candidate:
-        """Fallback selection: choose candidate with highest weighted score."""
-        if not scores:
+        """Fallback selection: the highest *judged* weighted score.
+
+        Candidates whose evaluation did not complete are not ranked. The
+        previous version mapped a missing score to 0.0 and a failed one to
+        a fabricated 5.0, so an unjudged candidate could win outright.
+        """
+        judged = {
+            s.candidate_id: s.weighted_total
+            for s in scores
+            if s.weighted_total is not None and not s.evaluation_failed
+        }
+        rankable = [c for c in candidates if c.id in judged]
+        if not rankable:
+            # Nothing was judged. Returning the first candidate is an
+            # arbitrary choice, and it is logged as one rather than
+            # presented as a selection.
+            logger.warning(
+                "No candidate was successfully evaluated; falling back to the "
+                "first candidate arbitrarily"
+            )
             return candidates[0]
-
-        # Map candidate IDs to scores
-        score_map = {s.candidate_id: s.weighted_total for s in scores}
-
-        # Find candidate with highest score
-        best_candidate = max(
-            candidates,
-            key=lambda c: score_map.get(c.id, 0.0),
-        )
-        return best_candidate
+        return max(rankable, key=lambda c: judged[c.id])
 
     # =========================================================================
     # UTILITY METHODS
