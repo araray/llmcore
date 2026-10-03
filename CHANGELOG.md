@@ -90,6 +90,30 @@ shape of real agent traffic supports: a turn's cost is dominated by
 re-sending a roughly constant context on every step, so it grows close to
 linearly in step count rather than accelerating. It returns 0.0 before any
 iteration has been priced rather than guessing from nothing.
+### Fixed — a failed evaluation is no longer scored as a mid-range result
+
+`MultiAttemptArbiter` filled a failed candidate evaluation with 5.0 across
+every criterion, at three sites: an exception, a timeout and an unparseable
+response. On a 0–10 scale that is exactly `min_acceptable_score`, so a
+candidate nobody managed to judge entered selection looking like a mid-range
+result — it could beat one that genuinely scored 4, and in the
+highest-score fallback could win outright (a missing score mapped to 0.0,
+while a *failed* one got 5.0).
+
+`CandidateScore.weighted_total` is now `float | None` with
+`evaluation_failed`, unjudged candidates are excluded from ranking, the
+selection summary shows them as "not evaluated" rather than a number, and an
+all-unjudged set is logged as an arbitrary choice instead of being presented
+as a selection. `ArbiterDecision.confidence` is nullable, since a confidence
+derived from a non-score was itself invented.
+
+### Added — `get_cost` reads the two remaining pricing fields
+
+`reasoning_output` and `batch_discount_percent` were declared on the pricing
+model and consulted nowhere, so a card could state them and a caller still
+be charged the plain rate. `get_cost` and `ModelCard.estimate_cost` now take
+`reasoning_tokens` (a subset of output, clamped to it) and `batch`. Omitting
+them changes no existing answer.
 ### Fixed — the fast-path response cache could serve another conversation's answer
 
 Three defects, each demonstrable, in a cache that PR #43 had just made

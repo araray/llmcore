@@ -542,8 +542,12 @@ class TestCandidateEvaluation:
             candidate=sample_candidate,
             task="test",
         )
-        # Should return default scores
-        assert score.weighted_total == 5.0
+        # An unparseable evaluation is *not judged*. It used to be filled
+        # with 5.0 on every criterion -- exactly min_acceptable_score -- so
+        # it entered selection looking like a mid-range result.
+        assert score.weighted_total is None
+        assert score.evaluation_failed is True
+        assert score.criteria_scores == {}
 
     @pytest.mark.asyncio
     async def test_evaluate_handles_missing_criteria(self, sample_candidate):
@@ -960,3 +964,84 @@ class TestConcurrencyAndTimeout:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestUnjudgedCandidatesDoNotCompete:
+    """A failed evaluation must not behave like a score.
+
+    Flagged by the design-bible reading as a breach of "null, never zero":
+    a crashed, timed-out or unparseable evaluation was stored as 5.0 across
+    every criterion. On a 0-10 scale that is exactly `min_acceptable_score`,
+    so a candidate nobody managed to judge could beat one that genuinely
+    scored 4 -- and in the fallback path could win outright.
+    """
+
+    def _arbiter(self):
+        from llmcore.agents.darwin.arbiter import MultiAttemptArbiter
+
+        async def _llm(messages, **kwargs):
+            return MockLLMResponse("{}")
+
+        return MultiAttemptArbiter(llm_client=_llm)
+
+    def _score(self, cid, total, failed=False):
+        from llmcore.agents.darwin.arbiter import CandidateScore
+
+        return CandidateScore(
+            candidate_id=cid,
+            criteria_scores={} if failed else {"quality": total},
+            weighted_total=None if failed else total,
+            evaluation_failed=failed,
+        )
+
+    def _candidates(self, *ids):
+        from llmcore.agents.darwin.arbiter import Candidate
+
+        return [
+            Candidate(id=i, content=f"c-{i}", temperature=0.3, prompt_variant="v")
+            for i in ids
+        ]
+
+    def test_an_unjudged_candidate_cannot_win_the_fallback(self):
+        arbiter = self._arbiter()
+        candidates = self._candidates("a", "b")
+        scores = [self._score("a", None, failed=True), self._score("b", 4.0)]
+        assert arbiter._fallback_select(candidates, scores).id == "b"
+
+    def test_the_highest_judged_score_still_wins(self):
+        arbiter = self._arbiter()
+        candidates = self._candidates("a", "b", "c")
+        scores = [self._score("a", 3.0), self._score("b", 9.0),
+                  self._score("c", None, failed=True)]
+        assert arbiter._fallback_select(candidates, scores).id == "b"
+
+    def test_all_unjudged_is_arbitrary_and_says_so(self, caplog):
+        import logging
+
+        arbiter = self._arbiter()
+        candidates = self._candidates("a", "b")
+        scores = [self._score("a", None, failed=True),
+                  self._score("b", None, failed=True)]
+        with caplog.at_level(logging.WARNING):
+            chosen = arbiter._fallback_select(candidates, scores)
+        assert chosen.id == "a"
+        assert any("arbitrarily" in r.message for r in caplog.records)
+
+    def test_a_candidate_absent_from_scores_is_not_ranked(self):
+        # Previously a missing score mapped to 0.0, which still ranked it.
+        arbiter = self._arbiter()
+        candidates = self._candidates("a", "b")
+        assert arbiter._fallback_select(candidates, [self._score("b", 1.0)]).id == "b"
+
+    def test_no_scores_at_all_still_returns_something(self):
+        arbiter = self._arbiter()
+        candidates = self._candidates("a")
+        assert arbiter._fallback_select(candidates, []).id == "a"
+
+    def test_confidence_may_be_unknown(self):
+        from llmcore.agents.darwin.arbiter import ArbiterDecision
+
+        decision = ArbiterDecision(
+            selected_id="a", selected_content="x", all_scores=[], reasoning="r"
+        )
+        assert decision.confidence is None
