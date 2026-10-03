@@ -44,6 +44,7 @@ from typing import Any
 
 from ..exceptions import ConfigError
 from .models import (
+    CostUnit,
     ModelSpec,
     Plan,
     Quantization,
@@ -332,9 +333,13 @@ class ColabRuntime:
         sku = GPU_SKUS.get(plan.sku)
         if sku is not None:
             notes = [f"colab new --gpu {sku.gpu_flag}" + (" --high-mem" if sku.high_mem else "")]
-            if sku.compute_units_per_hour:
+            if sku.cost_per_hour is not None:
+                # Rendered from the rung rather than from ``plan.burn_rate``:
+                # this backend knows it bills in compute units, so the note
+                # survives a plan that reached it without a unit attached.
+                unit = sku.cost_unit or CostUnit.COMPUTE_UNIT
                 notes.append(
-                    f"burn rate ~{sku.compute_units_per_hour:g} compute units/hour while assigned, "
+                    f"burn rate ~{unit.rate(sku.cost_per_hour)} while assigned, "
                     f"whether or not anything calls it"
                 )
             return plan.with_notes(*notes)

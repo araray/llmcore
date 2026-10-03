@@ -5,10 +5,17 @@ OpenAI-compatible API, media generation (image and video), and GPU rental.
 llmcore's provider covers the **text surface**: 14 chat models and one
 embedding model.
 
-The other two surfaces are not served yet. The 20 image and 14 video models
-need media adapters, and GPU rental needs a `runtimes` backend — llmcore has
-only ever had one of those (Colab), which is also why DeepInfra's rental
-half is unsupported.
+**GPU rental is now served too, as a runtime backend rather than a provider**
+— see [Remote GPU runtimes](./Runtimes_usage.md). The two surfaces are
+genuinely different products: this provider calls models gpu.ai hosts and is
+billed per token, while the runtime backend rents a GPU by the hour and serves
+a model you choose on it. DeepInfra's rental half is now supported the same
+way.
+
+The media surface is still not served. The 20 image and 14 video models are
+priced and carded but have no adapter, so `llm.generate_image(...)` cannot
+reach gpu.ai yet. The cards exist so the cost of those models is known before
+an adapter is written, not to suggest one already exists.
 
 ## Setup
 
@@ -86,6 +93,14 @@ cost = card.pricing.get_cost(0, 0, video_seconds=5)   # 24¢/s -> $1.20
 > above means the billed output volume is not fully visible from a response.
 > Use these figures to compare and plan, and check real numbers against your
 > own gpu.ai billing before relying on them.
+>
+> This applies to **inference** pricing specifically, and it is not the same
+> situation as rental. gpu.ai's rental prices come from `GET /v1/pricing` and
+> are read live at the moment a runtime is sized, so those are as current as
+> the API. Inference prices have no equivalent endpoint llmcore can poll, and
+> no scheduled refresh covers them, so these card figures can drift without
+> llmcore noticing. `get_cost(...)` on a gpu.ai model answers "roughly what
+> order of magnitude", not "what you were charged".
 
 ## Behaviour notes
 

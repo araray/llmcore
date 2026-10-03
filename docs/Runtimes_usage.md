@@ -3,6 +3,8 @@
 Size an open-weights model, provision compute, serve it, and reach it through
 the same `llm.chat()` as any hosted API.
 
+Three backends ship: **Colab**, **gpu.ai** and **DeepInfra**.
+
 Design and safety rationale: the Colab runtime design spec.
 This document is how to use it.
 
@@ -31,6 +33,30 @@ running, including things llmcore did not start.
 
 ---
 
+## Pick a backend
+
+| | Colab | gpu.ai | DeepInfra |
+|---|---|---|---|
+| Billed in | compute units | **US dollars**/hour | **US dollars**/hour |
+| Price source | a table in llmcore | live, `GET /v1/pricing` | live, `GET /deploy/llm/gpu_availability` |
+| Regions | none | 7, priced separately | none |
+| Multi-GPU | no | yes | yes |
+| Expires by itself | yes, on its own | only if you ask (`auto_terminate_hours`) | **no** |
+| Logs through llmcore | yes | no (web console / SSH) | yes |
+| Needs a key to size | no (CLI auth) | **no** — the catalogue is public | yes |
+
+The thing to carry away from that table is the "expires by itself" row. A
+forgotten Colab session stops on its own; a forgotten rental does not. Both
+rental backends therefore set a platform-side lifetime where the platform
+supports one, and `llmcore-runtimes status` reports instances llmcore did not
+start as **orphans**, with the command to adopt and kill them.
+
+llmcore never converts between compute units and dollars. There is no published
+rate to convert with, so each backend quotes and bounds spend in the unit it is
+actually billed in.
+
+---
+
 ## Install
 
 ```bash
@@ -41,13 +67,93 @@ colab --help                         # the official Colab CLI must authenticate 
 ```toml
 [runtimes]
 enabled = true
-default_backend = "colab"
+default_backend = "colab"   # or "gpuai", or "deepinfra"
 
   [runtimes.defaults]
   confirm_spend = true
   idle_minutes = 45
   max_lifetime_minutes = 240
+
+  [runtimes.gpuai]
+  # GPUAI_API_KEY by default. Sizing needs no key at all.
+  api_key_env_var = "GPUAI_API_KEY"
+  # Optional: restrict which shapes the sizer will consider, cheapest first.
+  # Omit it and the whole live catalogue is walked cheapest-first.
+  # sku_ladder = ["1xa40", "1xa100_80gb", "2xa100_80gb"]
+
+  [runtimes.deepinfra]
+  api_key_env_var = "DEEPINFRA_API_KEY"
+  # sku_ladder = ["1xA100-80GB", "2xA100-80GB", "1xH100-80GB"]
 ```
+
+### Renting from gpu.ai
+
+```bash
+llmcore-runtimes estimate Qwen/Qwen2.5-7B-Instruct --context 32768 --backend gpuai
+```
+
+```
+model      Qwen/Qwen2.5-7B-Instruct
+shape      1xa40 in ca-central
+fits       yes
+burn rate  ~$0.50/hour while assigned
+
+working:
+  - 1xa40: ca-central at $0.49/hour; plus 100 GB disk at $0.014/hour; secure
+  - pinned to offering 3a5ee74dcf97, so the launch cannot be placed on a
+    pricier row than this one
+```
+
+Two details in that output are deliberate:
+
+- **The rate includes the disk.** gpu.ai bills the instance filesystem
+  separately from the GPU. Quoting only `price_per_hour` would understate the
+  bill, which is the one direction a cost-bounding subsystem must not be wrong
+  in.
+- **The offering is pinned.** A catalogue row is a quote, not a booking.
+  Without `offering_id`, the platform is free to place the instance on a
+  pricier row than the one you approved.
+
+gpu.ai serves the model with its own `vllm` template, which needs **at least 24
+GB of VRAM** — smaller rungs are reported as unable to run it rather than
+silently skipped.
+
+### Renting from DeepInfra
+
+DeepInfra sells compute twice, and only one of the two is a runtime:
+
+- **Serverless inference**, billed per token — that is the `deepinfra`
+  *provider*, not a runtime. Nothing to size, start or reap.
+- **Dedicated LLM deployments**, billed per hour of reservation — that is the
+  runtime this backend drives.
+- **Container rentals** (`/v1/containers`) are raw GPU nodes with no server on
+  them. llmcore does not drive these: it would have to install and expose a
+  server itself, and at the time of writing DeepInfra offers them on B200 only,
+  with no capacity available.
+
+```bash
+llmcore-runtimes estimate meta-llama/Llama-3.3-70B-Instruct --backend deepinfra
+```
+
+```
+shape      4xA100-80GB
+fits       yes
+burn rate  ~$3.56/hour while assigned
+
+working:
+  - a dedicated deployment is billed for the reservation, not per token:
+    stopping it is the only thing that stops the cost
+```
+
+Two DeepInfra-specific behaviours worth knowing:
+
+- A deployment's name must be **owned** — `<your display name>/<model>` — and
+  DeepInfra rejects anything else. llmcore reads the display name from
+  `/v1/me`; override it with `runtimes.deepinfra.owner`.
+- `down()` **deletes** the deployment, because DeepInfra reserves the hardware
+  for as long as the deployment exists. Scaling it to zero is not the same as
+  not paying for it. `down(release=False)` stops it instead and records the
+  runtime as `detached`, meaning llmcore has let go but the cost may continue.
 
 ---
 
@@ -258,6 +364,50 @@ will never be given an A100 should not spend a minute discovering that on every
 launch. These are the names `colab new --gpu` accepts; there is no way to ask
 for a particular amount of A100 VRAM, so A100 is sized conservatively at 40 GB.
 The older `A100-40`/`A100-80` spellings still resolve.
+
+---
+
+## Accrued spend
+
+`status` reports what a runtime has cost so far, in its own unit:
+
+```
+NAME             PHASE      SKU      MODEL                        EXPIRES  SPENT
+llama            ready      4xA100-  araray/Llama-3.3-70B         3h 12m   $4.15
+```
+
+A `-` in that column means the backend does not report consumption. It does
+**not** mean the runtime is free.
+
+The two backends get the figure differently, and the difference matters:
+
+- **DeepInfra** has a meter (`/payment/usage/rent`), so llmcore reads metered
+  seconds. A deployment that was stopped and restarted has billed for less time
+  than it has existed, and only the meter knows that.
+- **gpu.ai** publishes no per-instance running total, so llmcore derives
+  `rate × elapsed` from the instance's creation time. Allocation time is not
+  free, so the clock starts at `created_at` rather than at the moment it became
+  ready — which over-estimates slightly, so a ceiling fires early rather than
+  late.
+
+`max_spend` is compared against this figure, in the backend's own unit:
+
+```python
+await llm.runtimes.up(
+    "Qwen/Qwen2.5-7B-Instruct",
+    name="qwen",
+    backend="gpuai",
+    confirm_spend=True,
+    max_spend=5.00,        # dollars, on this backend
+    max_lifetime_minutes=120,
+)
+```
+
+It is the only guard against the expensive failure mode: a runtime that is
+*busy* in a loop, which the idle reaper never touches.
+
+> `max_compute_units` is the old name for `max_spend`, from when Colab was the
+> only backend. It still works and warns.
 
 ---
 

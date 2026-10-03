@@ -1676,6 +1676,80 @@ the required `per_million_tokens`, one field over.
 does not apply, since 0 reads as "no room". Two unguarded readers in
 `schema.py` are fixed; `api.py` already defended against absence.
 
+### Rentable compute beyond Colab: gpu.ai and DeepInfra runtime backends
+
+The runtimes subsystem could provision from one place, and its data model said
+so in several ways that had nothing to do with Colab being first and everything
+to do with Colab being the only one. Two rental backends now ship alongside it,
+and the places where the model assumed Colab are named and fixed rather than
+worked around.
+
+**The billing unit is now explicit.** A new `CostUnit` travels with every rate
+and every ceiling. Colab bills in compute units and publishes no dollar value
+for them; gpu.ai and DeepInfra bill in dollars. There is deliberately no
+conversion between the two: a fabricated exchange rate is the same class of bug
+as every other one this cost model has had — a plausible number standing in for
+an absent implementation.
+
+- `RuntimeHandle.max_compute_units` / `compute_units_used` are now `max_spend`
+  / `spend_used` with a `spend_unit`. The spend ceiling is the only guard
+  against a runtime *busy* in a loop, which the idle reaper never touches, so
+  it has to compare like with like. State files written before this keep
+  loading, with their old keys read and their unit inferred: a file on disk
+  describes something that may still be billing, and dropping its ceiling
+  because a field was renamed would remove the guard.
+- `RuntimeManager.up(max_compute_units=...)` still works and warns. Passing
+  both names raises rather than picking one.
+- `runtimes status` gained a `SPENT` column. `-` there means the backend does
+  not report consumption — not that the runtime is free.
+- `Plan` gained `cost_unit`, `gpu_count`, `region` and `offering_id`, and a
+  `shape` property. The CLI previously printed any backend's rate with the
+  literal suffix "compute units/hour", so a $2.50 GPU displayed as "2.5
+  compute units/hour".
+- `Sizer` takes a `skus` catalogue. Colab's five-rung `GPU_SKUS` table stays as
+  Colab's menu; a rental backend passes its own, read from its own API, because
+  live per-region dollar prices are not something a table in this source could
+  keep honest.
+
+**gpu.ai** (`backend="gpuai"`) reads `GET /v1/pricing` and `/v1/gpu-types`,
+neither of which needs a key — so `estimate` stays genuinely free. It keeps the
+cheapest available offering per shape, records which region that was, and pins
+the launch to that `offering_id`: a catalogue row is a quote, not a booking, and
+without the pin the platform may place the instance on a pricier row than the
+one approved. The quoted rate includes the instance disk, which is billed
+separately from the GPU. Serving uses gpu.ai's own `vllm` template, and because
+its HTTPS tunnel authenticates with HTTP Basic rather than a bearer token, the
+handle carries a header.
+
+**DeepInfra** (`backend="deepinfra"`) drives dedicated LLM deployments, which
+reserve hardware by the hour. Two traps it handles: a deployment's name must be
+prefixed with the account's display name or DeepInfra refuses it, and
+`/deploy/list` returns serverless per-token model references alongside real
+rentals — reporting those as untracked runtimes would raise a cost alarm about
+something with no hourly cost. Accrued spend comes from DeepInfra's own meter
+rather than elapsed wall-clock, because a deployment stopped and restarted has
+billed for less time than it has existed. `down()` deletes, since reserving is
+what bills; `down(release=False)` stops it and records `detached`.
+
+Both fail closed — a failure after the instance exists terminates it before
+raising — and both report compute llmcore did not start as an **orphan** with
+the command to adopt it. That matters more here than on Colab: a forgotten
+Colab session expires on its own, and a forgotten rental bills until something
+kills it. gpu.ai's `auto_terminate_hours` is also set from the configured
+lifetime, rounded up, so the platform enforces a kill even if llmcore dies.
+
+`ComputeRuntime` itself needed no new verbs. The audit behind this work is in
+the design docs; the protocol was written with other backends in mind and held
+up.
+
+### Configured request headers reached only one of two transports
+
+`default_headers` in a provider config was applied to the direct httpx
+transport and silently dropped by the SDK client — which is the default — though
+the code claimed both transports send the same request. It now reaches both.
+This matters for any endpoint whose authentication *is* a header, such as a
+runtime served behind an HTTP Basic tunnel.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

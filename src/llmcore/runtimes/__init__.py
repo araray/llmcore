@@ -14,6 +14,7 @@ what the config says.
 
 from .manager import RuntimeError_, RuntimeManager, SpendNotConfirmedError
 from .models import (
+    CostUnit,
     ModelSpec,
     Plan,
     Quantization,
@@ -27,6 +28,7 @@ from .state import DEFAULT_STATE_DIR, RuntimeStateStore
 __all__ = [
     "DEFAULT_STATE_DIR",
     "ComputeRuntime",
+    "CostUnit",
     "ModelSpec",
     "Plan",
     "Quantization",
