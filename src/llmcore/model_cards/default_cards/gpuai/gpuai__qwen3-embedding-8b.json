@@ -1,0 +1,28 @@
+{
+  "model_id": "gpuai/qwen3-embedding-8b",
+  "display_name": "Qwen3 Embedding 8B",
+  "provider": "gpuai",
+  "model_type": "embedding",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.1
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Qwen",
+    "supported_parameters": [],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  },
+  "context": {
+    "max_input_tokens": 40960
+  }
+}

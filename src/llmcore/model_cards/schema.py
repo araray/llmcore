@@ -804,7 +804,15 @@ class ModelCard(BaseModel):
     # Technical Specifications
     # -------------------------------------------------------------------------
     architecture: ModelArchitecture | None = Field(None, description="Model architecture details")
-    context: ModelContext = Field(..., description="Context window configuration")
+    context: ModelContext | None = Field(
+        None,
+        description=(
+            "Context window configuration. Optional: an image or video "
+            "generation model has no token context window, and requiring "
+            "this field made such a model unrepresentable in the same way "
+            "a required per_million_tokens did."
+        ),
+    )
     capabilities: ModelCapabilities = Field(
         default_factory=ModelCapabilities, description="Supported features"
     )
@@ -871,13 +879,18 @@ class ModelCard(BaseModel):
     # Helper Methods
     # -------------------------------------------------------------------------
 
-    def get_context_length(self) -> int:
-        """Get maximum input context length."""
-        return self.context.max_input_tokens
+    def get_context_length(self) -> int | None:
+        """Maximum input context length, or ``None`` when there is no window.
+
+        A generation model measured in images or seconds has no token
+        window. Returning 0 would read as "no room"; ``None`` says the
+        question does not apply.
+        """
+        return self.context.max_input_tokens if self.context else None
 
     def get_max_output(self) -> int | None:
         """Get maximum output tokens."""
-        return self.context.max_output_tokens
+        return self.context.max_output_tokens if self.context else None
 
     def estimate_cost(
         self,
@@ -1004,7 +1017,8 @@ class ModelCardSummary(BaseModel):
     display_name: str | None = None
     provider: str
     model_type: str
-    context_length: int
+    #: None for a model with no token context window (image, video).
+    context_length: int | None = None
     status: str
     source: str
     has_pricing: bool = False
@@ -1028,7 +1042,7 @@ class ModelCardSummary(BaseModel):
             display_name=card.display_name,
             provider=provider_str,
             model_type=model_type_str,
-            context_length=card.context.max_input_tokens,
+            context_length=card.context.max_input_tokens if card.context else None,
             status=status_str,
             source=card.source,
             has_pricing=card.pricing is not None,

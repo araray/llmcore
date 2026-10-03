@@ -1,0 +1,24 @@
+{
+  "model_id": "gpuai/flux.1.1-pro",
+  "display_name": "FLUX.1.1 Pro",
+  "provider": "gpuai",
+  "model_type": "image-generation",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_unit": {
+      "per_megapixel": 0.04
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Black Forest Labs",
+    "supported_parameters": [],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  }
+}

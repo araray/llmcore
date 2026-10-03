@@ -1,0 +1,42 @@
+{
+  "model_id": "gpuai/gpt-oss-120b",
+  "display_name": "GPT-OSS 120B",
+  "provider": "gpuai",
+  "model_type": "chat",
+  "source": "generated",
+  "aliases": [
+    "oss-120b"
+  ],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.6
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "OpenAI",
+    "supported_parameters": [
+      "max_tokens",
+      "messages",
+      "model",
+      "n",
+      "seed",
+      "stop",
+      "stream",
+      "stream_options",
+      "temperature",
+      "top_p",
+      "user"
+    ],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  },
+  "context": {
+    "max_input_tokens": 131072
+  }
+}

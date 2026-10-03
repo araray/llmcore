@@ -1,0 +1,29 @@
+{
+  "model_id": "gpuai/glm-5.3-flash",
+  "display_name": "GLM 5.3 Flash",
+  "provider": "gpuai",
+  "model_type": "chat",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.15,
+      "output": 0.5,
+      "cached_input": 0.03
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Z.AI",
+    "supported_parameters": [],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  },
+  "context": {
+    "max_input_tokens": 1048575
+  }
+}
