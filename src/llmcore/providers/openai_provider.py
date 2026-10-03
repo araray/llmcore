@@ -260,6 +260,16 @@ class OpenAIProvider(BaseProvider):
             project = config.get("project")
             if project:
                 client_kwargs["project"] = project
+            # The SDK path needs these too. Without this the docstring below
+            # ("so both transports send the same request") was false for
+            # configured headers: ``default_headers`` reached only the direct
+            # transport, and ``sdk`` is the default -- so a config that relied
+            # on a header had it silently dropped. That matters for an endpoint
+            # whose authentication *is* a header, such as a runtime served
+            # behind an HTTP Basic tunnel.
+            headers = config.get("default_headers")
+            if headers:
+                client_kwargs["default_headers"] = dict(headers)
             self._client = AsyncOpenAI(**client_kwargs)
             logger.debug("AsyncOpenAI client initialized.")
         except Exception as e:

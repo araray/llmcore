@@ -33,10 +33,11 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .models import ModelSpec, Plan, Quantization
+from .models import CostUnit, ModelSpec, Plan, Quantization
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +71,21 @@ class GpuSku:
             supported on GPUs with compute capability of at least 8.0" -- so a
             recipe serving a bf16 checkpoint here must be told ``--dtype
             half`` explicitly.
-        compute_units_per_hour: Indicative burn rate, for the spend summary.
-            Colab bills in compute units rather than currency, and quoting a
-            dollar figure llmcore cannot verify would be worse than quoting the
-            unit the user is actually charged in.
+        cost_per_hour: Indicative burn rate in :attr:`cost_unit`, for the
+            spend summary. Colab bills in compute units rather than currency,
+            and quoting a dollar figure llmcore cannot verify would be worse
+            than quoting the unit the user is actually charged in -- which is
+            why the unit travels with the number.
+        cost_unit: What ``cost_per_hour`` is denominated in.
+        gpu_count: Devices in this rung. ``1`` for Colab, which sells no other
+            shape. Rental catalogues list multi-GPU nodes as separate rows, and
+            on those ``vram_gb`` is the **aggregate** across all devices: vLLM
+            shards weights and KV cache across a tensor-parallel group, so the
+            group's combined VRAM is what a model is sized against.
+        region: Where this rung is offered, for catalogues whose price varies
+            by region. ``None`` when the backend has no region concept.
+        offering_id: Backend-side id for this exact catalogue row, so a launch
+            can be pinned to the row that was priced.
         notes: Anything a caller should know before picking it.
     """
 
@@ -81,9 +93,25 @@ class GpuSku:
     vram_gb: float
     cli_gpu: str = ""
     high_mem: bool = False
-    compute_units_per_hour: float | None = None
+    cost_per_hour: float | None = None
+    cost_unit: CostUnit | None = None
     needs_fp16: bool = False
+    gpu_count: int = 1
+    region: str | None = None
+    offering_id: str | None = None
     notes: str = ""
+
+    @property
+    def compute_units_per_hour(self) -> float | None:
+        """Deprecated alias for :attr:`cost_per_hour` on Colab-billed rungs.
+
+        Returns ``None`` for a rung priced in anything other than compute
+        units, so a caller that still reads this name cannot be handed dollars
+        under a field that promises compute units.
+        """
+        if self.cost_unit is not None and self.cost_unit is not CostUnit.COMPUTE_UNIT:
+            return None
+        return self.cost_per_hour
 
     @property
     def gpu_flag(self) -> str:
@@ -100,13 +128,15 @@ class GpuSku:
 #: the account is given an 80 GB card the plan simply has more headroom than it
 #: promised, which is the safe direction to be wrong in.
 GPU_SKUS: dict[str, GpuSku] = {
-    "T4": GpuSku("T4", 16.0, compute_units_per_hour=1.96, needs_fp16=True,
+    "T4": GpuSku("T4", 16.0, cost_per_hour=1.96, cost_unit=CostUnit.COMPUTE_UNIT,
+                 needs_fp16=True,
                  notes="pre-Ampere: no bf16, so the recipe is told --dtype half"),
-    "L4": GpuSku("L4", 24.0, compute_units_per_hour=4.82),
-    "G4": GpuSku("G4", 24.0, compute_units_per_hour=4.82, notes="L4-class"),
-    "A100": GpuSku("A100", 40.0, compute_units_per_hour=11.77,
+    "L4": GpuSku("L4", 24.0, cost_per_hour=4.82, cost_unit=CostUnit.COMPUTE_UNIT),
+    "G4": GpuSku("G4", 24.0, cost_per_hour=4.82, cost_unit=CostUnit.COMPUTE_UNIT,
+                 notes="L4-class"),
+    "A100": GpuSku("A100", 40.0, cost_per_hour=11.77, cost_unit=CostUnit.COMPUTE_UNIT,
                    notes="Colab may assign a 40 GB or 80 GB card; sized for 40"),
-    "H100": GpuSku("H100", 80.0, compute_units_per_hour=23.0),
+    "H100": GpuSku("H100", 80.0, cost_per_hour=23.0, cost_unit=CostUnit.COMPUTE_UNIT),
 }
 
 #: Accepted spellings that are not SKU names, so a config written against the
@@ -235,6 +265,14 @@ class Sizer:
         offline: Skip the Hub entirely and size from local model cards. Useful
             on a machine with no network, and the reason sizing has a fallback
             chain at all.
+        skus: The catalogue *ladder* names are resolved against. Defaults to
+            :data:`GPU_SKUS`, which is Colab's fixed menu. A rental backend
+            passes its own catalogue, read from its own API: its prices are
+            live, per-region and in dollars, none of which a table in llmcore's
+            source could keep honest.
+        aliases: Extra accepted spellings for *skus*. Defaults to
+            :data:`SKU_ALIASES`, and is empty when *skus* is supplied, since
+            Colab's spellings mean nothing in another vendor's catalogue.
     """
 
     def __init__(
@@ -246,7 +284,16 @@ class Sizer:
         overhead_gb: float = 2.5,
         hf_token: str | None = None,
         offline: bool = False,
+        skus: Mapping[str, GpuSku] | None = None,
+        aliases: Mapping[str, str] | None = None,
     ) -> None:
+        self.skus: Mapping[str, GpuSku] = GPU_SKUS if skus is None else dict(skus)
+        if aliases is not None:
+            self.aliases: Mapping[str, str] = dict(aliases)
+        elif skus is None:
+            self.aliases = SKU_ALIASES
+        else:
+            self.aliases = {}
         self.ladder = tuple(ladder)
         self.headroom_fraction = float(headroom_fraction)
         self.gpu_memory_utilization = float(gpu_memory_utilization)
@@ -294,6 +341,7 @@ class Sizer:
             metadata, quantization, weights_gb, context, required, notes
         )
 
+        rung = self.skus.get(sku)
         plan = Plan(
             spec=spec if context == spec.context_length else _with_context(spec, context),
             sku=sku,
@@ -304,9 +352,11 @@ class Sizer:
             context_length=context,
             fits=fits,
             notes=tuple(notes),
-            estimated_cost_per_hour=(
-                GPU_SKUS[sku].compute_units_per_hour if sku in GPU_SKUS else None
-            ),
+            estimated_cost_per_hour=rung.cost_per_hour if rung else None,
+            cost_unit=rung.cost_unit if rung else None,
+            gpu_count=rung.gpu_count if rung else 1,
+            region=rung.region if rung else None,
+            offering_id=rung.offering_id if rung else None,
         )
         if not fits:
             return plan.with_notes(*self._refusal_advice(metadata, weights_gb, quantization))
@@ -531,30 +581,54 @@ class Sizer:
         """
         candidates: list[str] = []
         for configured in self.ladder:
-            resolved = resolve_sku(configured)
+            resolved = self._resolve(configured)
             if resolved is None:
                 notes.append(f"ignoring unknown SKU {configured!r} in the configured ladder")
             elif resolved not in candidates:
                 candidates.append(resolved)
         if not candidates:
-            notes.append(
-                f"no known SKUs in the configured ladder {self.ladder}; using the default ladder"
-            )
-            candidates = list(DEFAULT_SKU_LADDER)
+            # Falling back to Colab's ladder inside another vendor's catalogue
+            # would size against GPUs that vendor does not sell, so there the
+            # fallback is the catalogue itself, cheapest first.
+            if self.skus is GPU_SKUS:
+                notes.append(
+                    f"no known SKUs in the configured ladder {self.ladder}; "
+                    f"using the default ladder"
+                )
+                candidates = list(DEFAULT_SKU_LADDER)
+            else:
+                notes.append(
+                    f"no known SKUs in the configured ladder {self.ladder}; "
+                    f"using the backend catalogue cheapest-first"
+                )
+                candidates = sorted(
+                    self.skus,
+                    key=lambda n: (
+                        self.skus[n].cost_per_hour
+                        if self.skus[n].cost_per_hour is not None
+                        else float("inf"),
+                        self.skus[n].vram_gb,
+                    ),
+                )
+            if not candidates:
+                raise ValueError(
+                    "The sizer was given an empty SKU catalogue, so there is "
+                    "nothing to size against."
+                )
 
         kv_gb = required - weights_gb - self.overhead_gb
         for name in candidates:
-            usable = GPU_SKUS[name].vram_gb * self.gpu_memory_utilization
+            usable = self.skus[name].vram_gb * self.gpu_memory_utilization
             budget = usable * (1 - self.headroom_fraction)
             if required <= budget:
                 usable = budget
                 notes.append(
-                    f"{name}: {GPU_SKUS[name].vram_gb:.0f} GB x "
+                    f"{name}: {self.skus[name].vram_gb:.0f} GB x "
                     f"{self.gpu_memory_utilization:g} util x "
                     f"{1 - self.headroom_fraction:g} headroom = {budget:.1f} GB usable -- fits"
                 )
-                if GPU_SKUS[name].notes:
-                    notes.append(f"{name}: {GPU_SKUS[name].notes}")
+                if self.skus[name].notes:
+                    notes.append(f"{name}: {self.skus[name].notes}")
                 return name, usable, True, context, kv_gb, required
 
             # Try a smaller context on this SKU before moving up a rung: a
@@ -568,8 +642,8 @@ class Sizer:
                     f"{name}: {budget:.1f} GB usable -- fits at {new_context:,} ctx instead of "
                     f"{context:,} (KV {new_kv:.1f} GB)"
                 )
-                if GPU_SKUS[name].notes:
-                    notes.append(f"{name}: {GPU_SKUS[name].notes}")
+                if self.skus[name].notes:
+                    notes.append(f"{name}: {self.skus[name].notes}")
                 return name, usable, True, new_context, new_kv, new_required
             notes.append(f"{name}: {budget:.1f} GB usable -- needs {required:.1f} GB, skipping")
 
@@ -578,7 +652,7 @@ class Sizer:
         # refusal that quotes a bigger number than the decision used invites
         # the reader to conclude the sizer is being pessimistic.
         budget = (
-            GPU_SKUS[largest].vram_gb * self.gpu_memory_utilization
+            self.skus[largest].vram_gb * self.gpu_memory_utilization
             * (1 - self.headroom_fraction)
         )
         notes.append(
@@ -586,6 +660,14 @@ class Sizer:
             f"estimate is {required:.1f} GB"
         )
         return largest, budget, False, context, kv_gb, required
+
+    def _resolve(self, name: str) -> str | None:
+        """Map a configured spelling to a name in this sizer's catalogue."""
+        key = str(name).strip()
+        if key in self.skus:
+            return key
+        resolved = self.aliases.get(key.lower())
+        return resolved if resolved in self.skus else None
 
     def _fit_context(
         self,

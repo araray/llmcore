@@ -71,8 +71,10 @@ async def _cmd_estimate(args: argparse.Namespace) -> int:
     print(f"needs      {plan.vram_required_gb:.1f} GB")
     print(f"sku        {plan.sku} ({plan.vram_available_gb:.1f} GB usable)")
     print(f"fits       {'yes' if plan.fits else 'NO'}")
-    if plan.estimated_cost_per_hour:
-        print(f"burn rate  ~{plan.estimated_cost_per_hour:g} compute units/hour while assigned")
+    print(f"shape      {plan.shape}"
+          + (f" in {plan.region}" if plan.region else ""))
+    if plan.burn_rate:
+        print(f"burn rate  ~{plan.burn_rate} while assigned")
     print("\nworking:")
     for note in plan.notes:
         print(f"  - {note}")
@@ -94,11 +96,12 @@ async def _cmd_up(args: argparse.Namespace) -> int:
                 print(f"  {note}", file=sys.stderr)
             return 1
 
-        rate = plan.estimated_cost_per_hour
+        rate = plan.burn_rate
         print(
-            f"About to start {plan.sku} serving {plan.spec.repo_id} at "
+            f"About to start {plan.shape} serving {plan.spec.repo_id} at "
             f"{plan.context_length:,} context"
-            + (f", burning ~{rate:g} compute units/hour from the moment it is assigned."
+            + (f" in {plan.region}" if plan.region else "")
+            + (f", burning ~{rate} from the moment it is assigned."
                if rate else ".")
         )
         if not args.yes:
@@ -138,15 +141,19 @@ async def _cmd_status(args: argparse.Namespace) -> int:
         print("No runtimes. Nothing is billing, as far as llmcore can see.")
         return 0
 
-    print(f"{'NAME':16} {'PHASE':10} {'SKU':8} {'MODEL':34} {'EXPIRES':8}")
+    print(f"{'NAME':16} {'PHASE':10} {'SKU':8} {'MODEL':28} {'EXPIRES':8} {'SPENT':10}")
     orphans = []
     for status in statuses:
         if status.error and "orphan" in status.error:
             orphans.append(status)
             continue
+        # "-" rather than a zero: a backend that does not report consumption
+        # has not told us the runtime is free.
+        spent = status.spend_so_far or "-"
         print(
             f"{status.name:16} {status.phase!s:10} {status.sku:8} "
-            f"{status.served_model[:34]:34} {_fmt_minutes(status.expires_in_seconds):8}"
+            f"{status.served_model[:28]:28} {_fmt_minutes(status.expires_in_seconds):8} "
+            f"{spent:10}"
         )
     for status in orphans:
         print(f"\n! {status.name}: {status.error}")
