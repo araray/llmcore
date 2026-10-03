@@ -44,6 +44,42 @@ dry-run flag, and a per-file reason for auditing a surprise) rather than a
 bare count. `ArtifactStore` is publicly exported, but nothing in this repo
 or the sibling repos called `.gc(`, so the change is breaking in principle
 and affects nothing today. Declared rather than slipped in.
+### Added — pricing for models that are not billed per token
+
+Image, video, speech and transcription models are often priced per image,
+per megapixel, per second of output, per character or per audio minute.
+`per_million_tokens` cannot express any of that — and because it was a
+**required** field, such a model could not have a `ModelPricing` at all.
+That is why those cards carried `pricing: null` and were invisible to every
+cost path, and why providers like `elevenlabs`, `deepgram`, `fal` and
+`higgsfield` sit on the unpriceable list.
+
+`ModelPricing.per_million_tokens` is now optional, and a new
+`ModelPricing.per_unit` carries the non-token rates. `get_cost()`,
+`ModelCard.estimate_cost()` and `LLMCore.estimate_cost()` accept unit
+quantities — `images`, `megapixels`, `videos`, `video_seconds`,
+`audio_minutes`, `characters`, `seconds`, `requests` — and token and unit
+rates add, since a model may charge for its prompt *and* per image.
+
+Three things kept honest:
+
+- A unit the model states no rate for contributes **nothing**, and
+  `UnitPricing.unpriced_units()` reports it, so "we have no rate" stays
+  distinguishable from "free".
+- `rates_for()` returns `None` for a model with no token rates rather than
+  zeros, and `registry.get_pricing()` **omits** the token keys rather than
+  reporting them as 0.0.
+- No conversion is attempted between dollars-per-image and
+  dollars-per-token. Comparison is only meaningful within one unit, which
+  is what a routing pool of like-for-like models provides.
+
+Existing token-only pricing is unchanged, and omitting the new arguments
+changes no existing answer.
+
+Card pricing documentation now also states plainly that these figures are a
+reference rather than an invoice: rate cards change, promotional rates
+lapse, and some providers bill reasoning tokens as output without reporting
+the split, so real cost should be checked against billing.
 
 ### Fixed — `[agents.fast_path]` settings now take effect
 

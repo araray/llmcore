@@ -134,10 +134,46 @@ card = registry.get("openai", "gpt-4o")
 cost = card.estimate_cost(
     input_tokens=50_000,
     output_tokens=2_000,
-    cached_tokens=10_000  # Prompt caching
+    cached_tokens=10_000,       # a subset of input_tokens
+    cache_write_tokens=5_000,   # additional to input_tokens
 )
 print(f"Estimated cost: ${cost:.4f}")
 ```
+
+`cached_tokens` is a **subset** of `input_tokens`; `cache_write_tokens` is
+**additional** to it, matching how providers report usage.
+
+### Models that are not billed per token
+
+Image, video, speech and transcription models are often priced per image,
+per megapixel, per second of output, per character or per audio minute.
+Those rates live in `pricing.per_unit`, and `per_million_tokens` is absent
+for such a model — absent rather than zero, because no rate is not the same
+as free.
+
+```python
+card = registry.get("gpuai", "some-image-model")
+cost = card.estimate_cost(0, 0, images=4, megapixels=2.5)
+
+# "no rate for this unit" is distinguishable from "free":
+unpriced = card.pricing.per_unit.unpriced_units({"videos": 2})
+```
+
+Accepted quantities: `images`, `megapixels`, `videos`, `video_seconds`,
+`audio_minutes`, `characters`, `seconds`, `requests`.
+
+Comparing rates is only meaningful **between models priced in the same
+unit** — dollars-per-image and dollars-per-token are not commensurable, and
+no conversion between them is attempted. A routing pool should hold models
+that do the same kind of work; within such a pool the comparison is sound.
+
+> **Prices are a reference, not an invoice.** Card pricing comes from each
+> vendor's published rate card. What a call actually costs can differ:
+> serverless tiers change, promotional rates lapse, and some providers bill
+> reasoning tokens as output without reporting the split, so the billed
+> volume is not fully visible from a response. Use these figures to compare
+> and plan, and check real numbers against your own billing before relying
+> on them.
 
 ---
 
