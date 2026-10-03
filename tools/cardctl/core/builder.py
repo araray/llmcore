@@ -120,16 +120,31 @@ class CardBuilder:
 
         return arch if arch else None
 
-    def _build_context(self, model: NormalizedModel, enrichment: ModelEnrichment) -> dict[str, Any]:
-        # Enrichment overrides take priority, then adapter-discovered value,
-        # then a conservative 128K default.  The previous 4096 default was
-        # far too low and produced broken context budgets at runtime.
+    def _build_context(
+        self, model: NormalizedModel, enrichment: ModelEnrichment
+    ) -> dict[str, Any] | None:
+        """Build the context block, or ``None`` when nothing states a window.
+
+        There is deliberately **no default**. The history of this function is
+        the argument for that: it defaulted to 4,096, which was far too low
+        and produced broken context budgets at runtime, and was then changed
+        to 128,000, which is far too low for some models and meaningless for
+        others. Both were the same mistake -- answering with a plausible
+        number instead of admitting the question had no answer.
+
+        Measured before this change: **986 of 2,279 effective cards (43%)
+        claimed exactly 128,000 tokens**, including 51 speech-to-text models
+        whose input is audio and 124 image generators that have no token
+        window at all. A card that says nothing is read as unknown; a card
+        that says 128,000 is believed.
+        """
         max_input = (
             enrichment.overrides.get("max_input_tokens")
             or enrichment.overrides.get("context_length")
             or model.context_length
-            or 128_000
         )
+        if not max_input:
+            return None
         ctx: dict[str, Any] = {
             "max_input_tokens": max_input,
         }

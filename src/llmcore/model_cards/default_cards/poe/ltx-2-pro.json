@@ -1,14 +1,12 @@
 {
   "model_id": "ltx-2-pro",
-  "display_name": "LTX-2 Pro is an advanced video generation model by Lightricks designed for professional\u2011grade results. It offers high\u2011quality, realistic video generation at exceptional speed and supports outputs up t",
+  "display_name": "LTX-2 Pro is an advanced video generation model by Lightricks designed for professional‑grade results. It offers high‑quality, realistic video generation at exceptional speed and supports outputs up t",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "fal"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "LTX-2 Pro is an advanced video generation model by Lightricks designed for professional\u2011grade results. It offers high\u2011quality, realistic video generation at exceptional speed and supports outputs up to 2K resolution. Perfect for both text\u2011to\u2011video and image\u2011to\u2011video creation, it delivers cinematic detail and smooth performance.\n\nOptional Prompts:\nGenerate an audio with the video. This is disabled by default. \nSet. resolution with one of `1080p`, `1440p`, `2160p`. This is set to 1080p by default.\nSet the duration of the generated video (one of `6s, 8s, 10s`). This is set to 6s by default. \nSet the fps of the generated video to one of 25 or 50. This is set to 25 by default\n\nNotes: \nDuration and resolution values will change the price. \nFile attachment accepted: jpeg, png, webp",
+  "description": "LTX-2 Pro is an advanced video generation model by Lightricks designed for professional‑grade results. It offers high‑quality, realistic video generation at exceptional speed and supports outputs up to 2K resolution. Perfect for both text‑to‑video and image‑to‑video creation, it delivers cinematic detail and smooth performance.\n\nOptional Prompts:\nGenerate an audio with the video. This is disabled by default. \nSet. resolution with one of `1080p`, `1440p`, `2160p`. This is set to 1080p by default.\nSet the duration of the generated video (one of `6s, 8s, 10s`). This is set to 6s by default. \nSet the fps of the generated video to one of 25 or 50. This is set to 25 by default\n\nNotes: \nDuration and resolution values will change the price. \nFile attachment accepted: jpeg, png, webp",
   "tags": [
     "fal",
     "video-generation",

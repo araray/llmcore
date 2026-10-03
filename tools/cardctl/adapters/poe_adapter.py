@@ -85,7 +85,7 @@ def _parse_context_from_description(description: str) -> int | None:
 # ---------------------------------------------------------------------------
 
 
-def _guess_context_length(model_id: str) -> int:
+def _guess_context_length(model_id: str) -> int | None:
     """Heuristic context length based on known model families.
 
     Since Poe doesn't expose context length in its ``/v1/models`` response,
@@ -236,10 +236,17 @@ def _guess_context_length(model_id: str) -> int:
         "whisper",
     )
     if any(t in lower for t in _media_prefixes):
-        return 4_096
+        # A media endpoint has no text-token input window. The old 4,096 here
+        # was a number with no referent: nothing publishes it, and a caller
+        # reading it would believe a prompt budget exists where none does.
+        return None
 
-    # Conservative default
-    return 128_000
+    # Unknown. Deliberately not a "conservative default": the previous
+    # 128,000 made every unrecognised model claim a window it was never
+    # told it had, and a plausible number is read as authoritative in a way
+    # an absent one is not. ``None`` means the card carries no context
+    # block, which llmcore reads as unknown.
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,7 @@
     "family": "qwen",
     "parameter_count": "7B"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": false,
     "function_calling": false,

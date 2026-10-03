@@ -366,6 +366,14 @@ class PoeProvider(OpenAIProvider):
         1. Model Card Registry (``poe`` provider key).
         2. Fallback: 128000 (conservative default for frontier models).
 
+        The fallback stays here even though cards no longer invent a window,
+        because the two answer different questions. A card states what is
+        *known* about a model, and for an image or audio bot the honest answer
+        is nothing. This method is a **budgeting assumption** with an ``int``
+        contract -- callers use it to decide how much history to send -- so it
+        has to produce a number. The distinction matters: the card does not
+        claim 128,000, and nothing reading cards will believe it does.
+
         Args:
             model: Bot name.
 
@@ -379,7 +387,12 @@ class PoeProvider(OpenAIProvider):
             registry = get_model_card_registry()
             card = registry.get("poe", model_name)
             if card is not None:
-                return card.get_context_length()
+                # `get_context_length()` returns None for a card that states
+                # no window. Returning that would break this method's `int`
+                # contract -- which is how it broke `ModelDetails` once.
+                known = card.get_context_length()
+                if known:
+                    return known
         except Exception:
             pass
 

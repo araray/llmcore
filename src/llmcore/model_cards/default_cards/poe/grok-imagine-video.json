@@ -6,9 +6,7 @@
   "architecture": {
     "family": "fal"
   },
-  "context": {
-    "max_input_tokens": 131072
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,

@@ -1,14 +1,12 @@
 {
   "model_id": "veo-3.1-lite",
-  "display_name": "Google\u2019s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and i",
+  "display_name": "Google’s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and i",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "Google"
   },
-  "context": {
-    "max_input_tokens": 4096
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Google\u2019s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and image-to-video workflows, with synchronized dialogue, sound effects, and ambient audio. While optimized for affordability, it still benefits from the Veo 3.1 generation\u2019s improved prompt adherence and cinematic understanding.\n\nThis bot supports optional parameters for additional customization.\n\nNote: 1080p requires 8s duration\nReference mode: Use up to 3 input images as references for video generation\nReference images require 8s duration\nPlease only upload photos that you own or have the right to use. Otherwise, the bot will return an error.",
+  "description": "Google’s Veo 3.1 Lite is the most cost-efficient model in the Veo 3.1 family, delivering high-quality video generation with native audio at a fraction of the cost. It supports both text-to-video and image-to-video workflows, with synchronized dialogue, sound effects, and ambient audio. While optimized for affordability, it still benefits from the Veo 3.1 generation’s improved prompt adherence and cinematic understanding.\n\nThis bot supports optional parameters for additional customization.\n\nNote: 1080p requires 8s duration\nReference mode: Use up to 3 input images as references for video generation\nReference images require 8s duration\nPlease only upload photos that you own or have the right to use. Otherwise, the bot will return an error.",
   "tags": [
     "google",
     "video-generation",

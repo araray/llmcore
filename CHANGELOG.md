@@ -1750,6 +1750,57 @@ the code claimed both transports send the same request. It now reaches both.
 This matters for any endpoint whose authentication *is* a header, such as a
 runtime served behind an HTTP Basic tunnel.
 
+### Fixed — an unstated context window is now absent, not 128,000
+
+The card generator had no way to say "nobody told me". It defaulted
+`max_input_tokens` to 4,096, which was far too low and produced broken context
+budgets at runtime; that was fixed by changing the default to 128,000, which is
+far too low for some models and **meaningless** for others. Both were the same
+error one layer down — answering with a plausible number instead of admitting
+the question had no answer. #48 made `context` optional precisely so unknown
+could be represented; this makes the generator use that.
+
+Measured before the change: **986 of 2,279 effective cards (43%) claimed
+exactly 128,000 tokens.** Among them, 51 speech-to-text models whose input is
+audio, 114 text-to-speech voices whose published limit is in characters, and
+124 image generators with no token window of any kind.
+
+- `CardBuilder._build_context()` returns `None` when no source states a window.
+  There is no fallback, deliberately.
+- The Poe adapter's catch-all `128_000` and its `4_096` for media endpoints are
+  gone. Its per-family values are researched and stay: `gpt-4o` really is
+  128,000 and Claude really is 200,000.
+- The OpenRouter adapter no longer substitutes 128,000 when `context_length`
+  is absent.
+- **396 cards** had the fabricated window removed: every speech, image, video
+  and audio card that carried one. No media card claims 128,000 any more, and
+  430 cards now state no window at all, which llmcore reads as unknown.
+
+Windows that a vendor actually publishes were **kept**, because they are real
+numbers in the wrong unit rather than numbers with no referent: ElevenLabs
+states a per-model character limit (5,000–40,000), and Whisper's decoder really
+does stop at 448.
+
+`tests/model_cards/test_absent_context.py` audits this so it cannot come back,
+including that an unrecognised Poe model gets no guess while `gpt-4o` keeps its
+researched value.
+
+**Not fixed:** 757 chat, vision and embedding cards still claim 128,000. For
+those the field is meaningful and the value may even be right, so they need a
+vendor source rather than a blanket strip. The HuggingFace embedding cards are
+the most suspect — a BERT-family encoder stops at 512, not 128,000.
+
+### Fixed — `PoeProvider.get_max_context_length()` could return `None`
+
+It read `card.get_context_length()` straight out, which now returns `None` for
+a card stating no window — breaking the method's `int` contract and, through
+it, `ModelDetails` validation for the whole Poe model listing.
+
+The fallback stays in this method on purpose. A card states what is *known*
+about a model; this method is a **budgeting assumption** callers use to decide
+how much history to send, so it has to produce a number. The card does not
+claim 128,000, and nothing reading cards will believe it does.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

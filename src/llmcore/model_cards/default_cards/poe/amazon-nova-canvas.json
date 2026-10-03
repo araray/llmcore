@@ -1,14 +1,12 @@
 {
   "model_id": "amazon-nova-canvas",
-  "display_name": "Note: This model will be retired on September 30, 2026\nAmazon Nova Canvas is a high-quality image\u2010generation model that creates and edits images from text or image inputs\u2014offering features like inpain",
+  "display_name": "Note: This model will be retired on September 30, 2026\nAmazon Nova Canvas is a high-quality image‐generation model that creates and edits images from text or image inputs—offering features like inpain",
   "provider": "poe",
   "model_type": "image-generation",
   "architecture": {
     "family": "Empirio Labs AI"
   },
-  "context": {
-    "max_input_tokens": 128000
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Note: This model will be retired on September 30, 2026\nAmazon Nova Canvas is a high-quality image\u2010generation model that creates and edits images from text or image inputs\u2014offering features like inpainting/outpainting, virtual try\u2011on, style controls, and background removal\u2014all with built\u2011in customization.",
+  "description": "Note: This model will be retired on September 30, 2026\nAmazon Nova Canvas is a high-quality image‐generation model that creates and edits images from text or image inputs—offering features like inpainting/outpainting, virtual try‑on, style controls, and background removal—all with built‑in customization.",
   "tags": [
     "empirio labs ai",
     "image-generation"

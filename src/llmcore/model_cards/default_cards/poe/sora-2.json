@@ -1,14 +1,12 @@
 {
   "model_id": "sora-2",
-  "display_name": "Sora 2 is OpenAI\u2019s latest video and audio generation model, delivering exceptional realism, physical accuracy, and controllability. It excels at creating cinematic scenes, synchronized dialogue, sound",
+  "display_name": "Sora 2 is OpenAI’s latest video and audio generation model, delivering exceptional realism, physical accuracy, and controllability. It excels at creating cinematic scenes, synchronized dialogue, sound",
   "provider": "poe",
   "model_type": "audio",
   "architecture": {
     "family": "OpenAI"
   },
-  "context": {
-    "max_input_tokens": 4096
-  },
+  "context": null,
   "capabilities": {
     "streaming": true,
     "function_calling": true,
@@ -30,7 +28,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Sora 2 is OpenAI\u2019s latest video and audio generation model, delivering exceptional realism, physical accuracy, and controllability. It excels at creating cinematic scenes, synchronized dialogue, sound effects, and dynamic simulations while faithfully adhering to the laws of physics. The model supports editing, multi-shot prompt adherence, and the integration of real-world elements, such as people, animals, and objects.\nThis bot supports text-to-video and image-to-video generation.\n\nOptional parameters:\n- Set Duration. Select from (4 seconds, 8 seconds or 12 seconds) to specify video length in seconds. Set to 4 seconds as default.\n- Set Resolution. Select from (Landscape - 1280x720 or Portrait - 720x1280). It is set to Portrait (720x1280) resolution as default.",
+  "description": "Sora 2 is OpenAI’s latest video and audio generation model, delivering exceptional realism, physical accuracy, and controllability. It excels at creating cinematic scenes, synchronized dialogue, sound effects, and dynamic simulations while faithfully adhering to the laws of physics. The model supports editing, multi-shot prompt adherence, and the integration of real-world elements, such as people, animals, and objects.\nThis bot supports text-to-video and image-to-video generation.\n\nOptional parameters:\n- Set Duration. Select from (4 seconds, 8 seconds or 12 seconds) to specify video length in seconds. Set to 4 seconds as default.\n- Set Resolution. Select from (Landscape - 1280x720 or Portrait - 720x1280). It is set to Portrait (720x1280) resolution as default.",
   "tags": [
     "openai",
     "video-generation",
