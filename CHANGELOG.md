@@ -1639,6 +1639,43 @@ no `ANTHROPIC_API_KEY` is available in this environment.**
   allows only a couple of requests per minute, which is why native token
   counting is opt-in and `examples/friendli_example.py` paces its calls.
 
+### Added — gpu.ai provider (text surface)
+
+[gpu.ai](https://gpu.ai) sells serverless inference behind an
+OpenAI-compatible API, media generation, and GPU rental. This adds the text
+surface: 14 chat models and one embedding model, with all 49 catalogue
+models carded.
+
+Its `/v1/models` is the most complete catalogue of any provider integrated
+here — `context_length`, `pricing`, `supported_parameters` and `aliases`
+inline — so cards are generated from discovery rather than hand-written.
+Image and video models are filtered out of *discovery* while keeping their
+cards: listing them as chat models would make them selectable by a router
+that cannot call them.
+
+Three provider-specific behaviours, each found by calling the API:
+
+- **`max_tokens` includes reasoning.** On `gpuai/gpt-oss-120b`,
+  `max_tokens=8` returned empty content having spent all 8 tokens, while
+  256 returned `"OK"` using 45. A layer trimming `max_tokens` to save money
+  produces *nothing*, not less; `MIN_REASONING_MAX_TOKENS` documents a floor.
+- **Reasoning tokens are billed as output with no breakdown**, so cost
+  estimates assume the output rate. Recorded per card under
+  `provider_metadata.reasoning_billing` rather than left implicit.
+- **`encoding_format` is rejected outright** — the parameter, not a value.
+  The OpenAI SDK injects it, so embeddings build their payload directly.
+
+### Changed — `ModelCard.context` is optional
+
+An image or video generation model has no token context window, and because
+`context` was **required** such a model could not be carded at all — 34 of
+gpu.ai's 49 models failed validation. This is the same structural blocker as
+the required `per_million_tokens`, one field over.
+
+`get_context_length()` now returns `None` rather than 0 where the question
+does not apply, since 0 reads as "no room". Two unguarded readers in
+`schema.py` are fixed; `api.py` already defended against absence.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider
@@ -2166,3 +2203,5 @@ provider is **Bright Data**.
 - **Backward compatible.** The subsystem is additive and optional; deployments
   that do not configure `[search_providers]` are unaffected. The search methods
   raise a clear `ConfigError` only if called with no provider configured.
+
+

@@ -1,0 +1,29 @@
+{
+  "model_id": "gpuai/minimax-h3",
+  "display_name": "Minimax H3",
+  "provider": "gpuai",
+  "model_type": "video-generation",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_unit": {
+      "per_video": 0.6955,
+      "per_video_second": 0.14
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "MiniMax",
+    "supported_parameters": [
+      "model",
+      "prompt",
+      "seconds"
+    ],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  }
+}

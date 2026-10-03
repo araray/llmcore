@@ -27,6 +27,7 @@ from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider, ContextPayload
 from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
+from .gpuai_provider import GpuAiProvider
 from .deepseek_provider import DeepSeekProvider
 from .elevenlabs_provider import ElevenLabsProvider
 from .fal_provider import FalProvider
@@ -68,6 +69,7 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "huggingface": HuggingFaceProvider,
     "kimi": KimiProvider,
     "deepinfra": DeepInfraProvider,
+    "gpuai": GpuAiProvider,
     # Z.ai (Zhipu AI) — GLM family of models.
     "zai": ZaiProvider,
     # FriendliAI: Model APIs (serverless), Dedicated Endpoints, and Container.
@@ -1057,6 +1059,7 @@ class ProviderManager:
             "zai": ("ZAI_API_KEY", "GLM_API_KEY"),
             "friendli": ("FRIENDLI_TOKEN", "FRIENDLIAI_API_KEY"),
             "deepinfra": ("DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"),
+            "gpuai": ("GPUAI_API_KEY", "GPU_AI_API_KEY"),
             "openrouter": ("OPENROUTER_API_KEY",),
             "poe": ("POE_API_KEY",),
             "huggingface": ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"),

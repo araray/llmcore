@@ -1,0 +1,28 @@
+{
+  "model_id": "gpuai/qwen3.5-9b",
+  "display_name": "Qwen3.5 9B",
+  "provider": "gpuai",
+  "model_type": "chat",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.17,
+      "output": 0.25
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Qwen",
+    "supported_parameters": [],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  },
+  "context": {
+    "max_input_tokens": 262144
+  }
+}

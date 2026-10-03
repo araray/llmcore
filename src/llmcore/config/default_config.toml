@@ -1179,6 +1179,49 @@ max_retries = 2
   # Native provider for the Kimi Open Platform (Moonshot AI).  Uses the
   # OpenAI-compatible Chat Completions endpoint plus Moonshot-specific
   # extensions (thinking mode, Preserved Thinking, vision: image + video).
+  [providers.gpuai]
+  # type = "gpuai"  # auto-detected from section name
+  #
+  # gpu.ai (https://gpu.ai) — serverless inference behind an OpenAI-compatible
+  # API, plus image/video generation and GPU rental that llmcore does not serve
+  # yet. This section covers the text surface: chat and embeddings.
+  #
+  # Its /v1/models catalogue is unusually complete — it states context_length,
+  # pricing, supported_parameters and aliases inline — so model cards for this
+  # provider can be generated almost entirely from discovery.
+  #
+  # Two things to know before trusting a cost figure here:
+  #
+  #   * Reasoning tokens are billed as output and the response carries no
+  #     breakdown, so a cost estimate assumes reasoning is charged at the
+  #     output rate. The catalogue publishes a single output price, which
+  #     supports that, but it is an assumption rather than a reported fact.
+  #   * max_tokens includes reasoning. A budget below roughly 256 returns
+  #     *empty content* rather than shorter content on reasoning models, so a
+  #     layer that trims max_tokens to save money will silently produce
+  #     nothing. Observed at max_tokens=8.
+  #
+  # Pricing read from the catalogue is the vendor's published rate card and is
+  # a reference, not an invoice; check real numbers against your billing.
+
+  # API Key — set via the environment rather than here.
+  # Environment Variable: LLMCORE_PROVIDERS__GPUAI__API_KEY or GPUAI_API_KEY
+  # api_key = "..."
+
+  # Base URL. /v1 is included: the catalogue, chat and embedding endpoints all
+  # sit directly beneath it.
+  # base_url = "https://api.gpu.ai/v1"
+
+  # Default model. Cheapest chat model at the time of integration.
+  # default_model = "gpuai/qwen3.8-flash"
+
+  # Fallback context window, used only when neither the catalogue nor a model
+  # card states one.
+  # default_context_length = 32768
+
+  # timeout = 120
+  # max_retries = 3
+
   [providers.deepinfra]
   # type = "deepinfra"  # auto-detected from section name
   #

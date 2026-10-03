@@ -1,0 +1,24 @@
+{
+  "model_id": "gpuai/flux.2-flex",
+  "display_name": "FLUX.2 Flex",
+  "provider": "gpuai",
+  "model_type": "image-generation",
+  "source": "generated",
+  "aliases": [],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_unit": {
+      "per_image": 0.03
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Black Forest Labs",
+    "supported_parameters": [],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  }
+}

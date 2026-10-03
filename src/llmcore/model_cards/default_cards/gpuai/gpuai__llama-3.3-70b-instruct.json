@@ -1,0 +1,44 @@
+{
+  "model_id": "gpuai/llama-3.3-70b-instruct",
+  "display_name": "Llama 3.3 70B Instruct",
+  "provider": "gpuai",
+  "model_type": "chat",
+  "source": "generated",
+  "aliases": [
+    "llama-3.3-70b",
+    "llama-3.3-70b-instruct",
+    "llama3.3-70b"
+  ],
+  "lifecycle": {
+    "status": "active"
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.04,
+      "output": 1.04
+    }
+  },
+  "provider_metadata": {
+    "tier": "serverless",
+    "author": "Meta",
+    "supported_parameters": [
+      "max_tokens",
+      "messages",
+      "model",
+      "n",
+      "seed",
+      "stop",
+      "stream",
+      "stream_options",
+      "temperature",
+      "top_p",
+      "user"
+    ],
+    "reasoning_billing": "assumed charged at the output rate; vendor publishes no split",
+    "pricing_caveat": "published rate card; a reference, not an invoice"
+  },
+  "context": {
+    "max_input_tokens": 32768
+  }
+}
