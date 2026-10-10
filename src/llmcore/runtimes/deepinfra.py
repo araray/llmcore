@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .accounts import SshKey
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -204,6 +205,17 @@ class DeepInfraRuntime:
             )
         self._owner = owner
         return owner
+
+    async def ssh_keys(self) -> list[SshKey]:
+        """SSH keys registered on the account (``GET /v1/ssh_keys``).
+
+        Read-only here: they are what a DeepInfra *container* rental installs,
+        and this backend does not rent containers yet.
+        """
+        rows = await self._call("GET", "/v1/ssh_keys")
+        if isinstance(rows, Mapping):
+            rows = rows.get("data") or rows.get("ssh_keys") or []
+        return [SshKey.from_api(self.name, row) for row in rows or []]
 
     # ------------------------------------------------------------------
     # Catalogue

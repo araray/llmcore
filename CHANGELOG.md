@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — SSH keys for rented instances
+
+A bare instance is reached over SSH, and a gpu.ai launch installs keys by id.
+llmcore could pass `runtimes.gpuai.ssh_key_ids` but not find or register one.
+
+- `GpuAiRuntime.ssh_keys()` lists the account's keys (all pages) and
+  `GpuAiRuntime.create_ssh_key(name, public_key, idempotency_key=None)`
+  registers one. `DeepInfraRuntime.ssh_keys()` reads DeepInfra's
+  (`GET /v1/ssh_keys`), for its container rentals.
+- Both return `llmcore.runtimes.SshKey` (`id`, `name`, `fingerprint`,
+  `public_key`, `created_at`).
+- `create_ssh_key` refuses anything that is not a single OpenSSH **public**
+  key, and refuses a private key outright, before contacting gpu.ai
+  (`llmcore.runtimes.accounts.check_public_key`).
+
 ### Added — rent a bare gpu.ai instance
 
 `GpuAiRuntime.up()` always deploys the vllm template with `env.MODEL` and

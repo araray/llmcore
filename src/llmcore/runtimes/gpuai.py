@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .accounts import SshKey, check_public_key
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -1156,6 +1157,50 @@ class GpuAiRuntime:
                 handle.phase = RuntimePhase.STOPPED
                 self._state.save(handle)
         logger.info("Terminated gpu.ai instance %s.", instance_id)
+
+    # ------------------------------------------------------------------
+    # SSH keys
+    # ------------------------------------------------------------------
+
+    async def ssh_keys(self) -> list[SshKey]:
+        """Every SSH key registered on the account, following the cursor.
+
+        A launch installs keys by id (``InstanceRequest.ssh_key_ids``); without
+        one there is no shell access except gpu.ai's web console.
+        """
+        keys: list[SshKey] = []
+        cursor: str | None = None
+        for _ in range(50):
+            params = {"cursor": cursor} if cursor else None
+            page = await self._call("GET", "/ssh-keys", params=params) or {}
+            keys.extend(SshKey.from_api(self.name, row) for row in page.get("data") or [])
+            cursor = page.get("next_cursor")
+            if not cursor:
+                break
+        return keys
+
+    async def create_ssh_key(
+        self, name: str, public_key: str, *, idempotency_key: str | None = None
+    ) -> SshKey:
+        """Register an OpenSSH **public** key under *name* and return it.
+
+        Refuses a private key, or anything that is not an OpenSSH public key,
+        before contacting gpu.ai. Idempotency-keyed like every mutation here.
+
+        Raises:
+            ValueError: If *public_key* is not a public key.
+            RuntimeError_: If gpu.ai refuses it.
+        """
+        if not name:
+            raise ValueError("An SSH key needs a name.")
+        material = check_public_key(public_key)
+        created = await self._call(
+            "POST",
+            "/ssh-keys",
+            json={"name": name, "public_key": material},
+            headers={"Idempotency-Key": idempotency_key or str(uuid.uuid4())},
+        )
+        return SshKey.from_api(self.name, created or {})
 
     def _split_shape(self, plan: Plan) -> tuple[str, int]:
         """Recover ``(gpu_type, gpu_count)`` from a catalogue SKU name."""

@@ -12,6 +12,7 @@ whether or not anyone calls it, so `LLMCore.create()` cannot start one no matter
 what the config says.
 """
 
+from .accounts import SshKey
 from .manager import RuntimeError_, RuntimeManager, SpendNotConfirmedError
 from .models import (
     CostUnit,
@@ -39,4 +40,5 @@ __all__ = [
     "RuntimeStateStore",
     "RuntimeStatus",
     "SpendNotConfirmedError",
+    "SshKey",
 ]
