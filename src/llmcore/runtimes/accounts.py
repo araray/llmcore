@@ -449,14 +449,14 @@ async def openrouter_balance(
                 f"{response.text[:300]}",
             )
         data = (response.json() or {}).get("data") or {}
-        credits = _number(data.get("total_credits"))
-        usage = _number(data.get("total_usage"))
-        balance = credits - usage if credits is not None and usage is not None else None
+        bought = _number(data.get("total_credits"))
+        used = _number(data.get("total_usage"))
+        balance = bought - used if bought is not None and used is not None else None
         return AccountBalance(
             provider=provider,
             balance_usd=balance,
-            spent_usd=usage,
-            total_credits_usd=credits,
+            spent_usd=used,
+            total_credits_usd=bought,
         )
     except Exception as exc:
         logger.debug("OpenRouter balance read failed: %s", exc)
