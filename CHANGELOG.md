@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — runtime state files no longer hold credentials
+
+A runtime state file is meant to be read with `cat`, which is exactly why it
+gets copied, backed up and pasted into bug reports. Two backends wrote a
+credential into one: `DeepInfraRuntime` stored the **account API key** in the
+handle's metadata, and `GpuAiRuntime` stored the vllm tunnel's **HTTP Basic
+header** (the instance's app password). Both files are mode 0600, which does
+not survive a copy.
+
+- `RuntimeHandle.secrets` holds credentials **in memory only**. `to_dict()`
+  never serializes it, and also drops any key in `SECRET_METADATA_KEYS`
+  (`api_key`, `default_headers`, `app_password`, `authorization`, `token`)
+  from `metadata`, so a third-party backend that puts one in the wrong place
+  still cannot leak it.
+- State files written before this change still load: a credential found in
+  their metadata is moved to `secrets` for this process, and the next save
+  rewrites the file without it.
+- Each rental backend re-derives credentials at use time with
+  `await backend.credentials(handle)`: DeepInfra resolves its key from the
+  environment again; gpu.ai re-reads the tunnel login with
+  `GET /instances/{id}?include=credentials`, the only read that returns it.
+- `RuntimeManager.attach()` and the liveness probe read
+  `handle.credential(...)`. The probe also now **sends** the tunnel's Basic
+  header: without it every probe of a gpu.ai template was a 401, and a healthy
+  rental would have been marked DEGRADED after three of them.
+
 ### Added — the artifact cache can actually be collected
 
 `ArtifactStore.gc()` existed and had **no callers**, for two reasons. It

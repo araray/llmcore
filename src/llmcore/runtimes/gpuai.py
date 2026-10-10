@@ -550,16 +550,8 @@ class GpuAiRuntime:
             "terminal_url": connection.get("terminal_url"),
             "auto_terminate_at": instance.get("auto_terminate_at"),
         }
-        user = connection.get("app_user")
-        password = connection.get("app_password")
-        if user and password:
-            # The tunnel authenticates with HTTP Basic, not a bearer token, so
-            # the credential has to travel as a header. ``api_key`` is still set
-            # because vLLM wants *some* bearer and the provider layer requires
-            # one; the Basic header is what actually gets past the tunnel.
-            token = base64.b64encode(f"{user}:{password}".encode()).decode()
-            metadata["default_headers"] = {"Authorization": f"Basic {token}"}
-        elif app_url:
+        secrets = self._secrets_from(connection)
+        if not secrets and app_url:
             logger.warning(
                 "gpu.ai instance %s served %s but returned no basic-auth "
                 "credentials, so requests to it will probably be rejected. "
@@ -586,7 +578,42 @@ class GpuAiRuntime:
             started_at=started,
             spend_unit=CostUnit.USD,
             metadata={k: v for k, v in metadata.items() if v is not None},
+            secrets=secrets,
         )
+
+    @staticmethod
+    def _secrets_from(connection: Mapping[str, Any]) -> dict[str, Any]:
+        """The tunnel's Basic-auth header, when the payload carries its login.
+
+        The tunnel authenticates with HTTP Basic, not a bearer token, so the
+        credential has to travel as a header. ``api_key`` is still set by the
+        manager because vLLM wants *some* bearer and the provider layer
+        requires one; the Basic header is what actually gets past the tunnel.
+        Returned as secrets, never metadata: it is a password, and the handle's
+        metadata is written to a state file meant to be read with ``cat``.
+        """
+        user = connection.get("app_user")
+        password = connection.get("app_password")
+        if not (user and password):
+            return {}
+        token = base64.b64encode(f"{user}:{password}".encode()).decode()
+        return {"default_headers": {"Authorization": f"Basic {token}"}}
+
+    async def credentials(self, handle: RuntimeHandle) -> dict[str, Any]:
+        """Re-derive *handle*'s credentials from gpu.ai and attach them.
+
+        A handle read back from a state file has no secrets, by design. This
+        fetches the instance's tunnel login again (``?include=credentials``,
+        the only read that returns it) and returns what was found, which is
+        empty for an instance with no app URL -- a bare SSH box has nothing to
+        authenticate to over HTTP.
+        """
+        if not handle.external_id:
+            return {}
+        instance = await self._instance(handle.external_id, credentials=True)
+        secrets = self._secrets_from(instance.get("connection") or {})
+        handle.secrets.update(secrets)
+        return secrets
 
     def _accrued(self, handle: RuntimeHandle, now: datetime | None = None) -> float | None:
         """Dollars this runtime has cost so far, derived from its rate.

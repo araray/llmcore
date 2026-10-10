@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "SECRET_METADATA_KEYS",
     "CostUnit",
     "ModelSpec",
     "Plan",
@@ -27,6 +28,17 @@ __all__ = [
     "RuntimePhase",
     "RuntimeStatus",
 ]
+
+
+#: Metadata keys that hold credentials. A backend that needs one at use time
+#: keeps it in :attr:`RuntimeHandle.secrets`, which is never written to disk;
+#: these names are also scrubbed from ``metadata`` on serialization, so a
+#: backend that puts one in the wrong place still cannot leak it into a state
+#: file. A state file is meant to be read with ``cat`` -- and copied, backed up
+#: and pasted into bug reports, which is why it must hold nothing secret.
+SECRET_METADATA_KEYS: frozenset[str] = frozenset(
+    {"api_key", "default_headers", "app_password", "authorization", "token"}
+)
 
 
 class Quantization(StrEnum):
@@ -307,7 +319,11 @@ class RuntimeHandle:
             same unit it accepts the ceiling in.
         state_path: Where this handle is persisted.
         error: Why it failed or degraded.
-        metadata: Backend-specific extras.
+        metadata: Backend-specific extras. Persisted, so never a credential.
+        secrets: Credentials needed to *use* the runtime (a bearer, a tunnel's
+            Basic header). Held in memory only: :meth:`to_dict` leaves them
+            out, and a handle read back from disk has none until its backend
+            re-derives them (``await backend.credentials(handle)``).
     """
 
     name: str
@@ -329,6 +345,19 @@ class RuntimeHandle:
     state_path: Path | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    secrets: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    # --- credentials ---------------------------------------------------
+
+    def credential(self, key: str, default: Any = None) -> Any:
+        """Return the credential *key*, from :attr:`secrets` first.
+
+        Falls back to ``metadata`` for handles a third-party backend built the
+        old way; such a value is still scrubbed when the handle is saved.
+        """
+        if key in self.secrets:
+            return self.secrets[key]
+        return self.metadata.get(key, default)
 
     # --- spend ceilings ------------------------------------------------
 
@@ -395,7 +424,11 @@ class RuntimeHandle:
             "spend_used": self.spend_used,
             "spend_unit": str(self.spend_unit),
             "error": self.error,
-            "metadata": dict(self.metadata),
+            # Secrets never reach the file: ``secrets`` is not serialized at
+            # all, and a credential left in metadata is dropped here too.
+            "metadata": {
+                k: v for k, v in self.metadata.items() if k not in SECRET_METADATA_KEYS
+            },
         }
 
     def to_json(self) -> str:
@@ -430,6 +463,11 @@ class RuntimeHandle:
             unit = CostUnit.COMPUTE_UNIT
 
         started = _dt(payload.get("started_at")) or datetime.now(timezone.utc)
+        metadata = dict(payload.get("metadata") or {})
+        # State files written before secrets were split out carry them in
+        # metadata. They are moved to ``secrets`` so this process can still
+        # use them, and the next save rewrites the file without them.
+        secrets = {k: metadata.pop(k) for k in list(metadata) if k in SECRET_METADATA_KEYS}
         return cls(
             name=str(payload.get("name", "")),
             runtime=str(payload.get("runtime", "")),
@@ -452,7 +490,8 @@ class RuntimeHandle:
             spend_unit=unit,
             state_path=state_path,
             error=payload.get("error"),
-            metadata=dict(payload.get("metadata") or {}),
+            metadata=metadata,
+            secrets=secrets,
         )
 
 

@@ -303,7 +303,7 @@ class TestGpuAiUp:
         runtime = gpuai_runtime(tmp_path, up_routes())
         handle = await runtime.up(await plan_for(runtime), name="r")
         assert handle.base_url == "https://gpu-abcd.apps.gpu.ai/v1"
-        assert handle.metadata["default_headers"]["Authorization"].startswith("Basic ")
+        assert handle.secrets["default_headers"]["Authorization"].startswith("Basic ")
         assert handle.spend_unit is CostUnit.USD
 
     async def test_a_failure_after_create_terminates_the_instance(self, tmp_path):
@@ -577,7 +577,7 @@ class TestDeepInfraUp:
         handle = await runtime.up(await plan_for(runtime), name="r")
         assert handle.base_url.endswith("/v1/openai")
         assert handle.served_model == "araray/Qwen2.5-7B-Instruct"
-        assert handle.metadata["api_key"] == "test-key"
+        assert handle.secrets["api_key"] == "test-key"
         assert handle.spend_unit is CostUnit.USD
 
     async def test_a_failed_deployment_is_deleted_not_left_reserved(self, tmp_path):
@@ -685,6 +685,73 @@ class TestDeepInfraTeardown:
         )
         handle = await runtime.adopt("dep-1", name="rescued")
         assert handle.metadata["price_per_hour"] == 0.89
+
+
+class TestNoSecretsInStateFiles:
+    """A state file is meant to be read with ``cat`` -- and so it gets copied,
+    backed up and pasted into bug reports. Neither the DeepInfra account key
+    nor gpu.ai's tunnel password may be in one."""
+
+    async def test_the_gpuai_basic_header_is_not_persisted(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        text = handle.state_path.read_text()
+        assert "Basic " not in text
+        assert "default_headers" not in text
+        assert '"p"' not in text  # the app_password in the fixture
+
+    async def test_the_deepinfra_key_is_not_persisted(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert "test-key" not in handle.state_path.read_text()
+
+    async def test_a_reloaded_handle_has_no_secrets_until_rederived(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        reloaded = runtime._state.load("r")
+        assert reloaded.secrets == {}
+        assert await runtime.credentials(reloaded) == {"api_key": "test-key"}
+        assert reloaded.credential("api_key") == "test-key"
+
+    async def test_gpuai_rederives_the_tunnel_login_from_the_api(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        reloaded = runtime._state.load("r")
+        assert reloaded.credential("default_headers") is None
+        secrets = await runtime.credentials(reloaded)
+        assert secrets["default_headers"]["Authorization"].startswith("Basic ")
+        last = runtime._client.sent("GET", "/instances/inst-1")[-1]
+        assert last["params"] == {"include": "credentials"}
+
+    async def test_an_old_state_file_with_a_key_loads_and_is_scrubbed_on_save(self, tmp_path):
+        """Files written before the split still describe something billing, so
+        they must load -- and the next save must drop the key."""
+        from llmcore.runtimes import RuntimeHandle
+
+        store = RuntimeStateStore(tmp_path)
+        path = store.path_for("old")
+        path.write_text(jsonlib.dumps({
+            "name": "old", "runtime": "deepinfra", "external_id": "dep-1",
+            "base_url": "https://api.deepinfra.com/v1/openai", "served_model": "m",
+            "phase": "ready", "metadata": {"api_key": "leaked", "gpu": "A100-80GB"},
+        }))
+        handle = store.load("old")
+        assert handle.credential("api_key") == "leaked"
+        assert "api_key" not in handle.metadata
+        store.save(handle)
+        assert "leaked" not in path.read_text()
+        assert isinstance(handle, RuntimeHandle)
+
+    async def test_a_credential_left_in_metadata_is_scrubbed_anyway(self, tmp_path):
+        from llmcore.runtimes import RuntimeHandle
+
+        handle = RuntimeHandle(
+            name="x", runtime="third-party", external_id="1", base_url="", served_model="",
+            metadata={"default_headers": {"Authorization": "Basic c2VjcmV0"}, "region": "r"},
+        )
+        payload = handle.to_dict()
+        assert payload["metadata"] == {"region": "r"}
+        assert "secrets" not in payload
 
 
 class TestBothSatisfyTheProtocol:

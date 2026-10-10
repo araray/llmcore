@@ -453,9 +453,6 @@ class DeepInfraRuntime:
             "deploy_type": deployment.get("type"),
             "deploy_status": deployment.get("status"),
             "price_per_hour": rate,
-            # The endpoint is DeepInfra's gateway, so unlike a tunnelled
-            # runtime this one needs the account's real credential.
-            "api_key": self.api_key,
         }
         return RuntimeHandle(
             name=name,
@@ -472,7 +469,23 @@ class DeepInfraRuntime:
             started_at=created,
             spend_unit=CostUnit.USD,
             metadata={k: v for k, v in metadata.items() if v is not None},
+            # The endpoint is DeepInfra's gateway, so unlike a tunnelled
+            # runtime this one needs the account's real credential. In
+            # memory only: it is the account key, and the handle is persisted.
+            secrets={"api_key": self.api_key} if self.api_key else {},
         )
+
+    async def credentials(self, handle: RuntimeHandle) -> dict[str, Any]:
+        """Re-derive *handle*'s credential: the account key, read at use time.
+
+        Nothing is fetched -- the gateway takes the same key this backend
+        authenticates with -- but it is resolved now, from the environment or
+        the constructor, rather than from a state file that must not hold it.
+        """
+        key = self.api_key
+        secrets = {"api_key": key} if key else {}
+        handle.secrets.update(secrets)
+        return secrets
 
     async def _rented_seconds(self) -> dict[str, float]:
         """Seconds of reservation per deploy id, from DeepInfra's own meter.
