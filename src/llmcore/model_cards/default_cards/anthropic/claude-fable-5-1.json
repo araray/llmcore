@@ -33,7 +33,16 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 10.0,
+      "output": 50.0,
+      "cached_input": 0.25,
+      "cache_write": 12.5
+    },
+    "batch_discount_percent": 50
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-08-28"

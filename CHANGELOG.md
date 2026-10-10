@@ -2026,6 +2026,38 @@ since a status describes something that may be billing and refusing to build it
 would hide the runtime entirely. Found by making the mistake while writing the
 diagnostics tests.
 
+### Fixed — CI was red on `main`, in two ways this work was responsible for
+
+Found by reading this branch's own CI logs rather than trusting a local run.
+Both failures were already on `main`, and neither was visible locally — the
+first because a local pricewatch override masked it, the second because the
+local run was a subset that skipped `tests/tools`.
+
+**`cardctl` had no gpu.ai adapter.** PR #49 registered `gpuai` in
+`PROVIDER_MAP`, and `tests/tools/test_cardctl_coverage.py` exists to catch
+exactly that: a provider whose cards can never be generated. It had been
+failing ever since. `tools/cardctl/adapters/gpuai_adapter.py` now reads the
+catalogue, verified live against all 49 models.
+
+gpu.ai prices four modalities four different ways, so the adapter converts
+cents-per-1M-tokens for chat and embedding, and routes images
+(`per_mpxl_microcents`) and video (`per_video_microcents`,
+`per_video_second_cents`) through unit pricing instead of coercing them into a
+per-token rate they do not have. Media models get **no** context window rather
+than a defaulted one, and `supported_parameters` is read as a real negative —
+gpu.ai enumerates what each endpoint accepts.
+
+**Six Claude cards had `pricing: null`.** `claude-opus-5-5`,
+`claude-sonnet-5-5`, `claude-fable-5-1` and their predecessors carried no
+pricing at all, so `get_cost()` on llmcore's most-used model returned nothing
+and four cache-accounting tests failed on `NoneType`. The rates now come from
+Anthropic's own published pricing page, via the same `scrape:anthropic` feed
+that supplied the 1M context windows — not inferred.
+
+A lesson worth recording: a locally installed pricewatch override set makes the
+packaged cards look more complete than they are. Tests that read the registry
+pass on a developer's machine and fail in CI, which is the wrong way round.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider
