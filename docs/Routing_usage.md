@@ -23,6 +23,7 @@ resolves exactly as it did before routing existed.
 - [5. Transforms: the privacy path](#5-transforms-the-privacy-path)
 - [Effort, thinking and parameters](#effort-thinking-and-parameters)
 - [Proxy mode for agent harnesses](#proxy-mode-for-agent-harnesses)
+- [A per-turn step budget](#a-per-turn-step-budget)
 - [Inspecting what routing did](#inspecting-what-routing-did)
 - [Measuring a classifier](#measuring-a-classifier)
 - [Overriding anything, anywhere](#overriding-anything-anywhere)
@@ -451,6 +452,139 @@ llmcore-bridge proxy --host 0.0.0.0
 
 **Streaming never fails over**: once bytes have reached the client the call
 cannot be retracted. A stream that fails before its first chunk does fail over.
+
+---
+
+## A per-turn step budget
+
+### Why steps, and not prompt complexity
+
+Measured on this project's own traffic:
+
+| | share of spend |
+|---|---|
+| routing by predicted prompt complexity | **~2.2%** |
+| turns longer than 200 steps | **62%** |
+
+Cost is roughly `steps × context × cached_rate`, and context per step is close
+to flat. So the quantity worth bounding is the one that is observable
+**directly, cheaply and exactly** — not the one a classifier has to guess. A
+prompt's eventual turn length is not predictable from its text.
+
+The agent circuit breaker already bounds an agent *run*. This bounds a *turn*
+on the chat path, which is what the proxy exposes to a harness — and the proxy
+is where the expensive turns in the measurements actually came from.
+
+### Configuring it
+
+```toml
+[routing.budget]
+max_steps = 200          # the unit the measurements are in
+max_cost_usd = 5.00      # what an operator actually budgets
+warn_at_fraction = 0.8   # also applied to the projection
+action = "warn"          # "report" | "warn" | "stop"
+```
+
+**There are no defaults.** An unset dial is unbounded. The agent circuit
+breaker shipped with a `$1.00` default that would have cut off **50.7% of this
+project's normal turns**, and a number nobody chose is worse than no number.
+
+Start on `report`, read the numbers it emits, then choose a limit and switch to
+`stop`. That is how a limit gets picked rather than guessed.
+
+### What the proxy does with it
+
+On `stop`, a request past the ceiling is refused with **429** and
+`type: "budget_exceeded"` — 429 rather than 400 because the request is
+well-formed and the same request in a new conversation would succeed, which is
+what a harness's retry logic reads that status as. Every response carries the
+state:
+
+```json
+"llmcore": {
+  "target": "openai:gpt-4o-mini",
+  "budget": {
+    "state": "warning",
+    "steps": 168,
+    "cost_usd": 4.21,
+    "projected_cost_usd": 5.01,
+    "cost_is_partial": false,
+    "reason": "168 of 200 steps used; on course for $5.01 by step 200, over the $5.00 ceiling"
+  }
+}
+```
+
+Streaming is counted too. Otherwise `stream=true` would be a way to spend
+without being seen.
+
+### It can only count a turn the harness identifies
+
+A step budget needs a stable key across the calls of one turn, and the proxy
+only has one when the harness says which conversation a call belongs to —
+through the standard `user` field or `llmcore.session_id` in `extra_body`:
+
+```python
+client.chat.completions.create(
+    model="lane:standard",
+    messages=messages,
+    user="my-session-7",          # this is what makes the budget countable
+)
+```
+
+**Without it, nothing is tracked.** Every request would get a fresh synthetic
+session, so "steps so far" would always be zero and enforcement would be
+theatre. The proxy declines to track the turn rather than enforce something
+meaningless, and omits the `budget` block so you can tell the difference.
+
+### Unknown cost is not zero
+
+A step against a target with no price records its cost as **unknown**, not
+`0.00`. The step still counts, and `cost_is_partial` goes true:
+
+```
+"reason": "3 step(s) could not be priced, so the spend ceiling cannot be enforced"
+```
+
+A budget that quietly treated unpriced calls as free would never trip — which
+is the failure this subsystem's cost model has had at several layers. A step
+ceiling still works regardless, which is part of why it is the better dial.
+
+### There is no mid-turn model switch
+
+The design considered a `constrain` action that would drop to a cheaper target
+mid-turn. It is **not** implemented, because it is not safe: changing model
+inside a conversation changes behaviour, and with preserved-thinking models it
+invalidates reasoning blocks already in the history. The actions stop at
+`stop`. A caller that wants a cheaper target for the *next* turn can choose one
+itself, using the state above.
+
+### Using it directly
+
+The budget is a plain object, so anything can own one — not just the proxy:
+
+```python
+from llmcore.routing.budget import BudgetAction, BudgetPolicy, TurnBudget
+
+budget = TurnBudget(BudgetPolicy(max_steps=200, action=BudgetAction.STOP))
+
+while working:
+    verdict = budget.check()
+    if verdict.should_stop:
+        raise RuntimeError(verdict.reason)
+
+    answer = await llm.chat(..., session_id=session)
+    info = llm.get_last_interaction_context_info(session)
+    budget.record(
+        cost_usd=priced_or_none,
+        input_tokens=info.prompt_tokens,
+        output_tokens=info.completion_tokens,
+    )
+```
+
+It is fed explicitly rather than hooked onto routing's event stream on
+purpose: those events are guarded by `has_sinks()`, so a budget built on them
+would silently stop counting whenever nobody was listening. A spend guard must
+not depend on observability being switched on.
 
 ---
 

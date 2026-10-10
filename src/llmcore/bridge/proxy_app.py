@@ -54,9 +54,16 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from ..routing.budget import BudgetPolicy, TurnBudget
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["ProxyConfig", "create_proxy_app"]
+
+#: Conversations whose budgets are tracked at once. A harness that never
+#: reuses a session id would otherwise grow this without limit; the oldest
+#: entry is dropped, which loses a budget rather than leaking memory.
+MAX_TRACKED_TURNS = 512
 
 
 class ProxyConfig:
@@ -71,6 +78,7 @@ class ProxyConfig:
         advertise_lanes: Include lanes in ``GET /v1/models``.
         advertise_pools: Include pools in ``GET /v1/models``.
         default_model: What ``model`` means when a client omits it.
+        budget: Per-turn step and spend policy. Unbounded unless configured.
 
     Raises:
         ValueError: If a non-loopback bind has no token.
@@ -87,6 +95,7 @@ class ProxyConfig:
         advertise_lanes: bool = True,
         advertise_pools: bool = True,
         default_model: str = "auto",
+        budget: BudgetPolicy | None = None,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -94,6 +103,7 @@ class ProxyConfig:
         self.advertise_lanes = advertise_lanes
         self.advertise_pools = advertise_pools
         self.default_model = default_model
+        self.budget = budget or BudgetPolicy()
 
         if not self.is_loopback and not self.api_key:
             raise ValueError(
@@ -119,6 +129,7 @@ class ProxyConfig:
             advertise_lanes=bool(read("routing.proxy.advertise_lanes", True)),
             advertise_pools=bool(read("routing.proxy.advertise_pools", True)),
             default_model=str(read("routing.proxy.default_model", "auto")),
+            budget=BudgetPolicy.from_config(read),
         )
 
     def harness_env(self) -> dict[str, str]:
@@ -244,6 +255,54 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
         A Starlette app with the ``/v1`` surface mounted at the root.
     """
     cfg = config or ProxyConfig.from_config(getattr(llm, "config", None) and llm.config.get)
+
+    #: Live turn budgets, by conversation. Only populated for conversations
+    #: the caller identified -- see ``_budget_for``.
+    turns: dict[str, TurnBudget] = {}
+
+    def _budget_for(caller_session: str | None) -> TurnBudget | None:
+        """The budget for this conversation, or ``None`` if it cannot be kept.
+
+        A step budget needs a stable key across the calls of one turn, and the
+        proxy only has one when the harness identifies the conversation --
+        through ``user`` or ``llmcore.session_id``. Without that every request
+        gets a fresh synthetic id, so "steps so far" would always be zero and
+        enforcement would be theatre. Rather than counting something
+        meaningless, this declines to track the turn at all.
+        """
+        if not cfg.budget.is_bounded or not caller_session:
+            return None
+        budget = turns.get(caller_session)
+        if budget is None:
+            if len(turns) >= MAX_TRACKED_TURNS:
+                # Oldest first: a dropped budget under-counts, which is the
+                # safe direction to fail compared with unbounded growth in a
+                # process holding every provider credential.
+                turns.pop(next(iter(turns)), None)
+            budget = TurnBudget(cfg.budget)
+            turns[caller_session] = budget
+        return budget
+
+    def budget_exceeded(verdict: Any) -> JSONResponse:
+        """Refuse a step the budget will not pay for."""
+        logger.warning("Proxy refused a step: %s", verdict.reason)
+        return JSONResponse(
+            {
+                "error": {
+                    "message": (
+                        f"llmcore refused this request: {verdict.reason}. The "
+                        f"turn's budget is set by [routing.budget]."
+                    ),
+                    "type": "budget_exceeded",
+                    "code": "budget_exceeded",
+                },
+                "llmcore": {"budget": verdict.as_dict()},
+            },
+            # 429 rather than 400: the request is well-formed and the same
+            # request in a new conversation would succeed, which is what a
+            # harness's retry logic reads this status as.
+            status_code=429,
+        )
 
     def authorised(request: Request) -> bool:
         if not cfg.api_key:
@@ -397,6 +456,12 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
         caller_session = (
             extra.get("session_id") if isinstance(extra, dict) else None
         ) or body.get("user")
+        budget = _budget_for(caller_session)
+        if budget is not None:
+            verdict = budget.check()
+            if verdict.should_stop:
+                return budget_exceeded(verdict)
+
         created = int(time.time())
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
 
@@ -416,6 +481,7 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
                     session_id=session_id, caller_session=caller_session,
                     completion_id=completion_id, created=created,
                     model_label=str(body.get("model") or cfg.default_model),
+                    budget=budget,
                 ),
                 media_type="text/event-stream",
                 headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
@@ -439,6 +505,9 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
 
         info = llm.get_last_interaction_context_info(session_id)
         served = _served(llm, info)
+        if budget is not None:
+            _record_step(budget, served)
+            served["budget"] = budget.check().as_dict()
         if not caller_session:
             llm.discard_transient_state(session_id)
         return JSONResponse(
@@ -573,6 +642,43 @@ def create_proxy_app(llm: Any, config: ProxyConfig | None = None) -> Starlette:
     )
 
 
+def _record_step(budget: TurnBudget, served: dict[str, Any]) -> None:
+    """Add one served request to *budget*, pricing it from its model card.
+
+    The cost is priced here rather than taken from the response because
+    OpenAI's wire format has no cost field -- and the target that answered may
+    not be the one that was asked for, so the harness could not price it
+    either.
+
+    An unpriceable target records ``None``, which the budget counts as a step
+    whose cost is unknown. It must not arrive as ``0.0``: a turn full of
+    unpriced calls would then look free and never trip a spend ceiling, which
+    is the failure this subsystem's cost model has had repeatedly.
+    """
+    cost: float | None = None
+    provider = served.get("provider")
+    model = served.get("model")
+    prompt_tokens = int(served.get("prompt_tokens") or 0)
+    completion_tokens = int(served.get("completion_tokens") or 0)
+    if provider and model:
+        try:
+            from ..routing.cards import estimate_cost_usd
+            from ..routing.models import Target
+
+            cost = estimate_cost_usd(
+                Target.parse(f"{provider}:{model}"),
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+            )
+        except Exception as exc:  # pragma: no cover - pricing is best-effort
+            logger.debug("Proxy could not price %s:%s: %s", provider, model, exc)
+    budget.record(
+        cost_usd=cost,
+        input_tokens=prompt_tokens,
+        output_tokens=completion_tokens,
+    )
+
+
 def _served(llm: Any, info: Any) -> dict[str, Any]:
     """Describe who actually answered, for the ``llmcore`` usage block."""
     served: dict[str, Any] = {}
@@ -599,6 +705,7 @@ async def _stream(
     completion_id: str,
     created: int,
     model_label: str,
+    budget: TurnBudget | None = None,
 ) -> AsyncIterator[bytes]:
     """Emit an OpenAI-shaped SSE stream.
 
@@ -636,9 +743,17 @@ async def _stream(
                 yield chunk({"content": piece})
         yield chunk({}, finish="stop")
         yield b"data: [DONE]\n\n"
+        # Recorded after the stream completes, not before it starts: the step
+        # has happened either way, and leaving it uncounted would make
+        # streaming a way to spend without a budget noticing.
+        if budget is not None:
+            _record_step(budget, _served(llm, llm.get_last_interaction_context_info(session_id)))
         if not caller_session:
             llm.discard_transient_state(session_id)
     except LLMCoreError as exc:
+        if budget is not None:
+            # A stream that died partway still burned tokens upstream.
+            budget.record(cost_usd=None)
         yield f"data: {json.dumps({'error': {'message': str(exc), 'type': 'api_error'}})}\n\n".encode()
         yield b"data: [DONE]\n\n"
     except Exception as exc:
