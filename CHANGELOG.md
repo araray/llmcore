@@ -2058,6 +2058,31 @@ A lesson worth recording: a locally installed pricewatch override set makes the
 packaged cards look more complete than they are. Tests that read the registry
 pass on a developer's machine and fail in CI, which is the wrong way round.
 
+### Changed — the architecture diagrams are SVG
+
+The eight box-and-arrow diagrams in the README, the agentic system guide and
+the model-cards doc were ASCII art. They are now SVG, drawn with a shared
+design system and rendered through Krita to verify each layout before it
+shipped — which is how several problems were caught: a title and a path label
+overlapping by 5px, a `RESULT` box sitting 26px below the bottom of its own
+canvas, a loop label running off the left edge, and connector arrows whose
+heads were longer than their 4px shafts.
+
+The diagrams carry a light card background rather than a transparent one.
+GitHub renders a README on white *or* near-black, and dark strokes on
+transparency vanish on the dark one.
+
+Each file has a `<title>` and a `<desc>`, so a screen reader gets the
+explanation rather than a filename, and the markdown alt text says what the
+diagram shows. Text stays live `<text>` with a portable font stack, so it
+scales and selects; every file was re-rendered through librsvg — a different
+renderer with different fonts — to confirm nothing overflows when the viewer's
+font is not the one it was drawn with.
+
+**File trees and the exception hierarchy stay as text.** They were caught by
+the same search, but an image of a directory listing is worse than the
+listing: it cannot be copied, searched or diffed.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

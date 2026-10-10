@@ -64,24 +64,7 @@ A **model card** is a structured metadata document that describes an LLM's:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     ModelCardRegistry                           │
-│                      (Singleton)                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────┐                    │
-│  │  Built-in Cards │    │   User Cards    │                    │
-│  │  (llmcore pkg)  │    │ (~/.config/...)  │                    │
-│  │                 │    │                 │                    │
-│  │  Lower Priority │ ←─ │ Higher Priority │  (user overrides)  │
-│  └─────────────────┘    └─────────────────┘                    │
-├─────────────────────────────────────────────────────────────────┤
-│  Indexes:                                                       │
-│  • provider → model_id → ModelCard                             │
-│  • alias → (provider, model_id)                                │
-│  • lowercase_model_id → [(provider, model_id), ...]            │
-└─────────────────────────────────────────────────────────────────┘
-```
+![ModelCardRegistry: built-in cards, user cards that override them, and the three indexes built on load](diagrams/model-card-registry.svg)
 
 The registry loads cards on first access (lazy loading) and supports:
 - **User overrides**: User cards with the same `model_id` replace built-in cards
