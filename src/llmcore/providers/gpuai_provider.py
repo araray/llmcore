@@ -3,9 +3,10 @@
 
 gpu.ai sells three things: text inference, media generation (image and
 video), and GPU rental. This provider covers the first. The media surface
-belongs to :mod:`llmcore.media` and the rental surface to
-:mod:`llmcore.runtimes`, which has no gpu.ai backend yet -- the same gap
-DeepInfra has, since that subsystem has only ever had one backend.
+belongs to :mod:`llmcore.media`, and the rental surface to
+:mod:`llmcore.runtimes.gpuai` (:class:`~llmcore.runtimes.gpuai.GpuAiRuntime`),
+which rents instances, serves a model on gpu.ai's ``vllm`` template, and
+reads the account's balance, usage and SSH keys.
 
 The text surface is OpenAI-compatible, verified against the live endpoint,
 so almost everything is inherited from :class:`OpenAIProvider`. What is
