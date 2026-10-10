@@ -23,6 +23,8 @@ than a bearer token.
 
 from __future__ import annotations
 
+import json
+
 import asyncio
 import base64
 import logging
@@ -1294,13 +1296,24 @@ class GpuAiRuntime:
         try:
             rows: list[dict[str, Any]] = []
             cursor: str | None = None
+            seen_cursors: set[str] = set()
+            seen_rows: set[str] = set()
             for _ in range(200):
                 params = dict(query, cursor=cursor) if cursor else (dict(query) or None)
                 page = await self._call("GET", "/usage", params=params) or {}
-                rows.extend(page.get("data") or [])
+                fresh = 0
+                for row in page.get("data") or []:
+                    key = json.dumps(row, sort_keys=True, default=str)
+                    if key not in seen_rows:       # a page served twice is counted once
+                        seen_rows.add(key)
+                        rows.append(row)
+                        fresh += 1
                 cursor = page.get("next_cursor")
-                if not cursor:
+                # the live API (2026-10-10) can hand back the same cursor and page: stop
+                # instead of summing one page 200 times
+                if not cursor or cursor in seen_cursors or not fresh:
                     break
+                seen_cursors.add(cursor)
             buckets = tuple(
                 UsageBucket(
                     start=_parse_ts(row.get("bucket_start")),
