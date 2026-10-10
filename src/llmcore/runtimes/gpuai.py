@@ -49,7 +49,14 @@ from .state import RuntimeStateStore
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DEFAULT_GPUAI_API_BASE", "GpuAiRuntime", "GpuOffer", "OfferEnvironment"]
+__all__ = [
+    "DEFAULT_GPUAI_API_BASE",
+    "GpuAiRuntime",
+    "GpuOffer",
+    "InstancePort",
+    "InstanceRequest",
+    "OfferEnvironment",
+]
 
 #: Public developer API root. ``/pricing``, ``/gpu-types`` and ``/environments``
 #: under it need no credentials, which is what lets ``estimate`` stay free.
@@ -275,6 +282,180 @@ class GpuOffer:
             else None
         )
         return out
+
+
+#: gpu.ai's bounds on ``auto_terminate_hours``.
+_AUTO_TERMINATE_RANGE = (1, 720)
+
+#: Env names the platform refuses on a custom-image launch.
+_RESERVED_ENV = ("PUBLIC_KEY", "GPUAI_")
+
+
+@dataclass(frozen=True, slots=True)
+class InstancePort:
+    """A container port to expose on a custom-image launch.
+
+    Attributes:
+        port: Port inside the container (22 is reserved for SSH).
+        protocol: ``"http"`` or ``"tcp"``.
+        primary: Serve this port at the instance's app URL, behind the
+            per-instance Basic login. At most one, and it must be http.
+    """
+
+    port: int
+    protocol: str = "tcp"
+    primary: bool = False
+
+    def to_api(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"port": int(self.port), "protocol": self.protocol}
+        if self.primary:
+            body["primary"] = True
+        return body
+
+
+@dataclass(frozen=True, slots=True)
+class InstanceRequest:
+    """What to rent: a bare gpu.ai instance, reached over SSH.
+
+    The counterpart of a :class:`~llmcore.runtimes.models.Plan` for callers
+    that drive the machine themselves -- their own code, environments and
+    models -- rather than having llmcore serve one model on gpu.ai's vllm
+    template. Every field maps to one field of ``POST /instances``.
+
+    Attributes:
+        gpu_type: e.g. ``"rtx_6000_ada"``.
+        gpu_count: GPUs on the instance.
+        environment: ``"certified"``, ``"certified:<framework>[@<ver>]"``,
+            ``"raw_vm[:<os>]"`` or ``"provider_template"``. Omit both this and
+            *image* for the provider default (the certified image).
+        image: A public linux/amd64 image to launch instead.
+        entrypoint: Override the image's ENTRYPOINT (requires *image*).
+        cmd: Override the image's CMD (requires *image*).
+        disk_gb: Instance filesystem size. Narrows placement; omit for 100 GB.
+        ssh_key_ids: Registered keys to install (see ``ssh_keys()``). Without
+            any, gpu.ai installs the keys flagged attach-on-provision, and
+            without those the only way in is the web console.
+        ports: Ports to expose (requires *image*; at most 10).
+        env: Environment variables (requires nothing reserved: ``PUBLIC_KEY``,
+            ``GPUAI_*``). **Not** recorded in state -- only their names are.
+        auto_terminate_hours: Server-side lifetime, 1-720, counted from
+            ``running``. ``None`` uses ``runtimes.defaults.max_lifetime_minutes``
+            rounded up, so a launch is bounded unless the config says not to.
+        offering_id: Pin the launch to one exact offering.
+        region: Region code.
+        max_price_per_hour: Refuse placement above this whole-instance rate.
+        viewed_price_per_hour: The rate shown to whoever approved the launch.
+            gpu.ai fails the launch with ``price_changed`` if it rose by more
+            than a cent, instead of charging more.
+    """
+
+    gpu_type: str
+    gpu_count: int = 1
+    environment: str | None = None
+    image: str | None = None
+    entrypoint: tuple[str, ...] | None = None
+    cmd: tuple[str, ...] | None = None
+    disk_gb: int | None = None
+    ssh_key_ids: tuple[str, ...] = ()
+    ports: tuple[InstancePort, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+    auto_terminate_hours: int | None = None
+    offering_id: str | None = None
+    region: str | None = None
+    max_price_per_hour: float | None = None
+    viewed_price_per_hour: float | None = None
+
+    @classmethod
+    def from_offer(
+        cls, offer: GpuOffer, *, disk_gb: int | None = None, **fields: Any
+    ) -> InstanceRequest:
+        """A request pinned to *offer*, with its price as both ceilings.
+
+        The rate is rounded **up** to the cent, because gpu.ai folds extra disk
+        into one cent-rounded hourly price; a ceiling below that would refuse
+        the very offer it was built from. Any field can be overridden.
+        """
+        rate = math.ceil(offer.cost_per_hour(disk_gb) * 100 - 1e-9) / 100
+        values: dict[str, Any] = {
+            "gpu_type": offer.gpu_type,
+            "gpu_count": offer.gpu_count,
+            "region": offer.region or None,
+            "offering_id": offer.offering_id or None,
+            "disk_gb": disk_gb,
+            "max_price_per_hour": rate,
+            "viewed_price_per_hour": rate,
+        }
+        values.update(fields)
+        return cls(**values)
+
+    def problems(self) -> list[str]:
+        """What gpu.ai would refuse, found before anything is sent."""
+        out: list[str] = []
+        if not self.gpu_type:
+            out.append("gpu_type is required")
+        if int(self.gpu_count) < 1:
+            out.append("gpu_count must be at least 1")
+        if self.environment and self.image:
+            out.append("pass environment or image, not both")
+        if not self.image:
+            for name, value in (
+                ("ports", self.ports),
+                ("entrypoint", self.entrypoint),
+                ("cmd", self.cmd),
+            ):
+                if value:
+                    out.append(f"{name} requires image")
+        if len(self.ports) > 10:
+            out.append("at most 10 ports")
+        if any(int(p.port) == 22 for p in self.ports):
+            out.append("port 22 is reserved for SSH")
+        if any(p.protocol not in {"http", "tcp"} for p in self.ports):
+            out.append("a port's protocol is http or tcp")
+        primaries = [p for p in self.ports if p.primary]
+        if len(primaries) > 1:
+            out.append("at most one primary port")
+        if primaries and primaries[0].protocol != "http":
+            out.append("the primary port must be http")
+        reserved = sorted(k for k in self.env if k == "PUBLIC_KEY" or k.startswith("GPUAI_"))
+        if reserved:
+            out.append(f"env names reserved by gpu.ai: {', '.join(reserved)}")
+        if self.disk_gb is not None and int(self.disk_gb) <= 0:
+            out.append("disk_gb must be positive")
+        hours = self.auto_terminate_hours
+        low, high = _AUTO_TERMINATE_RANGE
+        if hours is not None and not low <= int(hours) <= high:
+            out.append(f"auto_terminate_hours must be between {low} and {high}")
+        for name in ("max_price_per_hour", "viewed_price_per_hour"):
+            value = getattr(self, name)
+            if value is not None and float(value) <= 0:
+                out.append(f"{name} must be positive")
+        return out
+
+    def to_body(self, *, name: str, auto_terminate_hours: int | None) -> dict[str, Any]:
+        """The ``POST /instances`` body."""
+        body: dict[str, Any] = {
+            "gpu_type": self.gpu_type,
+            "gpu_count": int(self.gpu_count),
+            "tier": TIER,
+            "name": name,
+        }
+        optional: dict[str, Any] = {
+            "environment": self.environment,
+            "image": self.image,
+            "entrypoint": list(self.entrypoint) if self.entrypoint is not None else None,
+            "cmd": list(self.cmd) if self.cmd is not None else None,
+            "disk_gb": int(self.disk_gb) if self.disk_gb is not None else None,
+            "ssh_key_ids": list(self.ssh_key_ids) or None,
+            "ports": [p.to_api() for p in self.ports] or None,
+            "env": dict(self.env) or None,
+            "auto_terminate_hours": auto_terminate_hours,
+            "offering_id": self.offering_id,
+            "region": self.region,
+            "max_price_per_hour": self.max_price_per_hour,
+            "viewed_price_per_hour": self.viewed_price_per_hour,
+        }
+        body.update({k: v for k, v in optional.items() if v is not None})
+        return body
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -857,6 +1038,125 @@ class GpuAiRuntime:
             handle.error = f"the create did not succeed: {detail}"
         self._state.save(handle)
 
+    # ------------------------------------------------------------------
+    # Bare instances — for callers that drive the machine themselves
+    # ------------------------------------------------------------------
+
+    async def rent(
+        self,
+        request: InstanceRequest,
+        *,
+        name: str,
+        idempotency_key: str | None = None,
+    ) -> RuntimeHandle:
+        """Rent a bare instance and wait until it is SSH-ready. **Spends money.**
+
+        Unlike :meth:`up`, nothing is served: no template, no ``MODEL``, no
+        wait for an app URL. The instance is ready when gpu.ai says
+        ``running``, which is when its SSH path works. The handle carries the
+        connection in ``metadata``: ``ssh_command``, ``hostname`` and ``port``
+        (gpu.ai's tunnel endpoint, user ``root``), plus ``terminal_url`` and
+        ``auto_terminate_at``.
+
+        Same guarantees as :meth:`up`: the record is saved before the create
+        call; the create is idempotency-keyed; any failure after the instance
+        exists terminates it; and the platform's ``auto_terminate_hours`` is
+        set unless the config disables lifetimes.
+
+        Args:
+            request: What to rent. Validated before anything is sent.
+            name: Record name, also sent as the instance name, so tools that
+                list the account can tell whose it is.
+            idempotency_key: Pass one recorded before calling to make a retry
+                after a crash return the same instance rather than a second
+                one. Generated when omitted; recorded on the handle either way.
+
+        Raises:
+            RuntimeError_: When the request is invalid, *name* already records
+                a live instance, or the launch fails (after terminating it).
+        """
+        problems = request.problems()
+        if not name:
+            problems.append("a name is required")
+        if problems:
+            raise RuntimeError_(f"Refusing to rent '{name}': " + "; ".join(problems) + ".")
+        existing = self._state.load(name)
+        if existing is not None and existing.phase.is_billing:
+            raise RuntimeError_(
+                f"Refusing to rent '{name}': that name already records a "
+                f"{existing.phase} instance ({existing.external_id or 'create in flight'}). "
+                f"Overwriting the record would lose track of it. down({name!r}) first, "
+                f"or use another name."
+            )
+        self._require_key("rent a gpu.ai instance")
+        if request.max_price_per_hour is None:
+            logger.warning(
+                "gpu.ai: renting '%s' with no max_price_per_hour, so placement "
+                "may land on any price.",
+                name,
+            )
+
+        hours = (
+            int(request.auto_terminate_hours)
+            if request.auto_terminate_hours is not None
+            else self._auto_terminate_hours()
+        )
+        body = request.to_body(name=name, auto_terminate_hours=hours)
+        handle = await self._create(
+            body,
+            name=name,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+            served_model="",
+            recipe="instance",
+            sku=f"{int(request.gpu_count)}x{request.gpu_type}",
+            serving=False,
+            # Nothing to attach as a provider: the machine is reached by SSH.
+            api_style="ssh",
+        )
+        if not handle.metadata.get("ssh_command") and not handle.metadata.get("hostname"):
+            logger.warning(
+                "gpu.ai instance %s ('%s') is running but reported no SSH "
+                "coordinates. Was an SSH key attached? The web console is %s.",
+                handle.external_id,
+                name,
+                handle.metadata.get("terminal_url") or "not available either",
+            )
+        return handle
+
+    async def get(self, instance_id: str, *, credentials: bool = False) -> dict[str, Any]:
+        """One instance as gpu.ai reports it, raw.
+
+        Args:
+            credentials: Include ``connection.app_password``. Off by default
+                so an ordinary read can be logged without leaking it.
+
+        Raises:
+            RuntimeError_: If the read fails, including a 404 for no such
+                instance.
+        """
+        return await self._instance(instance_id, credentials=credentials)
+
+    async def terminate(self, instance_id: str) -> None:
+        """Terminate *instance_id*. Idempotent: an instance already gone is fine.
+
+        Unlike the internal fail-closed path, a failure here **raises** -- the
+        caller asked for the billing to stop and needs to know it did not. Any
+        record of this instance in the state store is marked STOPPED.
+
+        Raises:
+            RuntimeError_: If gpu.ai refused or the call failed. The instance
+                may still be billing.
+        """
+        if not instance_id:
+            raise RuntimeError_("terminate() needs an instance id.")
+        await self._call("DELETE", f"/instances/{instance_id}", allow=(404, 409))
+        for handle in self._state.load_all():
+            if handle.runtime == self.name and handle.external_id == instance_id:
+                handle.spend_used = self._accrued(handle)
+                handle.phase = RuntimePhase.STOPPED
+                self._state.save(handle)
+        logger.info("Terminated gpu.ai instance %s.", instance_id)
+
     def _split_shape(self, plan: Plan) -> tuple[str, int]:
         """Recover ``(gpu_type, gpu_count)`` from a catalogue SKU name."""
         sku = plan.sku
@@ -993,8 +1293,16 @@ class GpuAiRuntime:
             "price_per_hour": instance.get("price_per_hour"),
             "instance_status": instance.get("status"),
             "ssh_command": connection.get("ssh_command"),
+            # The tunnel endpoint, not a machine address; the user is root.
+            "hostname": connection.get("hostname"),
+            "port": connection.get("port"),
             "terminal_url": connection.get("terminal_url"),
             "auto_terminate_at": instance.get("auto_terminate_at"),
+            "auto_terminate_hours": instance.get("auto_terminate_hours"),
+            "ready_at": instance.get("ready_at"),
+            "disk_gb": instance.get("disk_gb"),
+            "image": instance.get("image"),
+            "instance_name": instance.get("name"),
         }
         secrets = self._secrets_from(connection)
         if not secrets and app_url:

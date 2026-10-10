@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — rent a bare gpu.ai instance
+
+`GpuAiRuntime.up()` always deploys the vllm template with `env.MODEL` and
+waits for its HTTPS app URL. A caller that runs its own code on the GPU — its
+own environments, models and server, reached over SSH — had no way to rent
+the machine.
+
+- `GpuAiRuntime.rent(InstanceRequest, *, name, idempotency_key=None)` rents a
+  bare instance and waits for `running` (SSH-ready), not for an app URL. The
+  handle (`api_style="ssh"`, `recipe="instance"`, no `base_url`) carries
+  `ssh_command`, `hostname`, `port`, `terminal_url`, `auto_terminate_at` and
+  the price in `metadata`.
+- `InstanceRequest` maps `POST /instances` field for field: `environment` or
+  `image` (with `entrypoint`/`cmd`/`ports`), `disk_gb`, `ssh_key_ids`, `env`,
+  `auto_terminate_hours`, a pinned `offering_id`/`region`, and the
+  `max_price_per_hour`/`viewed_price_per_hour` ceilings.
+  `InstanceRequest.from_offer(offer, disk_gb=...)` pins a `GpuOffer` with its
+  price, rounded up to the cent, as both ceilings. `problems()` finds what
+  gpu.ai would refuse (image vs environment, port 22, reserved env names,
+  lifetime bounds…) and `rent()` refuses before sending anything.
+- Same guarantees as `up()`: recorded before the create, idempotency-keyed
+  (pass your own key to make a post-crash retry return the same instance),
+  fail-closed, and `auto_terminate_hours` defaults to the configured lifetime
+  rounded up. `env` values are never recorded, only their names. A name that
+  already records a live instance is refused rather than overwritten.
+- Public `GpuAiRuntime.get(id, credentials=False)` and
+  `GpuAiRuntime.terminate(id)`. `terminate` is idempotent (404/409 are
+  "already gone") but, unlike the internal fail-closed path, **raises** when
+  the DELETE fails, and marks any record of that instance STOPPED.
+
 ### Added — gpu.ai's market as raw offers
 
 `GpuAiRuntime.catalogue()` keeps one rung per shape, the cheapest, and drops

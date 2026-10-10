@@ -151,3 +151,211 @@ class TestOffers:
         payload = GpuOffer.from_api(VM_ROW, vram_gb=48).to_dict()
         assert json.loads(json.dumps(payload))["environment"]["cuda"] == "12.4"
         assert "raw" not in payload
+
+
+# ---------------------------------------------------------------------------
+# Bare instances
+# ---------------------------------------------------------------------------
+
+from llmcore.runtimes import RuntimePhase  # noqa: E402
+from llmcore.runtimes.gpuai import InstancePort, InstanceRequest  # noqa: E402
+from llmcore.runtimes.manager import RuntimeError_  # noqa: E402
+
+BARE_RUNNING = {
+    "id": "inst-9", "name": "bellavox-ws-r1", "status": "running",
+    "gpu_type": "rtx_6000_ada", "gpu_count": 1, "region": "us-central",
+    "tier": "on_demand", "price_per_hour": 0.65,
+    "created_at": "2026-10-10T00:00:00Z", "ready_at": "2026-10-10T00:04:00Z",
+    "auto_terminate_hours": 2, "auto_terminate_at": "2026-10-10T02:04:00Z",
+    # No app_url: nothing is served, and nothing should be waited for.
+    "connection": {
+        "ssh_command": "ssh root@frp.gpu.ai -p 41022",
+        "hostname": "frp.gpu.ai", "port": 41022,
+        "terminal_url": "https://inst-9-term.apps.gpu.ai",
+    },
+}
+
+
+def rent_routes(over: dict | None = None):
+    routes = {
+        ("POST", "/instances"): FakeResponse(202, {"operation_id": "op-9"}),
+        ("GET", "/operations/op-9"): FakeResponse(
+            200, {"state": "succeeded", "resource_id": "inst-9"}
+        ),
+        ("GET", "/instances/inst-9"): FakeResponse(200, BARE_RUNNING),
+        ("DELETE", "/instances/inst-9"): FakeResponse(204),
+        ("GET", "/instances"): FakeResponse(200, {"data": [], "next_cursor": None}),
+    }
+    routes.update(over or {})
+    return routes
+
+
+def bare_request(**over) -> InstanceRequest:
+    fields = {"environment": "certified", "ssh_key_ids": ("key-1",), "auto_terminate_hours": 2}
+    fields.update(over)
+    return InstanceRequest.from_offer(GpuOffer.from_api(VM_ROW, vram_gb=48), **fields)
+
+
+class TestRent:
+    async def test_the_body_is_a_bare_launch_pinned_and_capped(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        await runtime.rent(
+            bare_request(env={"BELLAVOX_ROOT": "/root/bv"}), name="bellavox-ws-r1"
+        )
+        body = runtime._client.sent("POST", "/instances")[0]["json"]
+        assert "template_id" not in body, "a bare instance serves nothing"
+        assert "MODEL" not in body.get("env", {})
+        assert body["environment"] == "certified"
+        assert body["offering_id"] == "vm-1" and body["region"] == "us-central"
+        assert body["max_price_per_hour"] == 0.65
+        assert body["viewed_price_per_hour"] == 0.65
+        assert body["auto_terminate_hours"] == 2
+        assert body["ssh_key_ids"] == ["key-1"]
+        assert body["name"] == "bellavox-ws-r1"
+        assert body["tier"] == "on_demand"
+        assert body["env"] == {"BELLAVOX_ROOT": "/root/bv"}
+
+    async def test_it_waits_for_running_not_for_an_app_url(self, tmp_path):
+        """A bare box has no app URL. Waiting for one would time out and then
+        terminate a perfectly good instance."""
+        runtime = runtime_with(tmp_path, rent_routes())
+        handle = await runtime.rent(bare_request(), name="r")
+        assert handle.phase is RuntimePhase.READY
+        assert handle.base_url == ""
+        assert handle.api_style == "ssh" and handle.recipe == "instance"
+        # And the plain read: a bare box has no tunnel password to fetch.
+        reads = runtime._client.sent("GET", "/instances/inst-9")
+        assert all(call["params"] is None for call in reads)
+
+    async def test_the_handle_says_how_to_reach_it(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        handle = await runtime.rent(bare_request(), name="r")
+        assert handle.external_id == "inst-9"
+        assert handle.metadata["ssh_command"] == "ssh root@frp.gpu.ai -p 41022"
+        assert handle.metadata["hostname"] == "frp.gpu.ai"
+        assert handle.metadata["port"] == 41022
+        assert handle.metadata["auto_terminate_at"] == "2026-10-10T02:04:00Z"
+        assert handle.metadata["price_per_hour"] == 0.65
+        assert handle.sku == "1xrtx_6000_ada"
+        assert handle.secrets == {}
+
+    async def test_an_idempotency_key_given_is_the_one_sent_and_recorded(self, tmp_path):
+        """A caller that records the key before renting can replay the create
+        after a crash and get the same instance back, not a second one."""
+        runtime = runtime_with(tmp_path, rent_routes())
+        handle = await runtime.rent(bare_request(), name="r", idempotency_key="rent-42")
+        sent = runtime._client.sent("POST", "/instances")[0]["headers"]
+        assert sent["Idempotency-Key"] == "rent-42"
+        assert handle.metadata["idempotency_key"] == "rent-42"
+        assert handle.metadata["operation_id"] == "op-9"
+
+    async def test_env_values_are_not_recorded(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        handle = await runtime.rent(bare_request(env={"TOKEN_X": "s3cr3t"}), name="r")
+        text = handle.state_path.read_text()
+        assert "s3cr3t" not in text
+        assert "TOKEN_X" in text
+
+    async def test_the_lifetime_defaults_to_the_config_rounded_up(self, tmp_path):
+        runtime = runtime_with(
+            tmp_path, rent_routes(), **{"runtimes.defaults.max_lifetime_minutes": 150}
+        )
+        await runtime.rent(bare_request(auto_terminate_hours=None), name="r")
+        assert runtime._client.sent("POST", "/instances")[0]["json"]["auto_terminate_hours"] == 3
+
+    async def test_a_failure_after_create_terminates_the_instance(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes({
+            ("GET", "/instances/inst-9"): FakeResponse(
+                200, dict(BARE_RUNNING, status="error", status_reason="stalled")
+            ),
+        }))
+        with pytest.raises(RuntimeError_, match="released rather than left billing"):
+            await runtime.rent(bare_request(), name="r")
+        assert runtime._client.sent("DELETE", "/instances/inst-9")
+        assert runtime._state.load("r").phase is RuntimePhase.STOPPED
+
+    @pytest.mark.parametrize(
+        ("over", "problem"),
+        [
+            ({"image": "pytorch/pytorch:2.4.1"}, "not both"),
+            ({"ports": (InstancePort(8775),)}, "ports requires image"),
+            ({"environment": None, "image": "x/y:1", "ports": (InstancePort(22),)},
+             "port 22 is reserved"),
+            ({"environment": None, "image": "x/y:1",
+              "ports": (InstancePort(80, "tcp", primary=True),)},
+             "primary port must be http"),
+            ({"env": {"GPUAI_TOKEN": "x"}}, "reserved by gpu.ai"),
+            ({"auto_terminate_hours": 0}, "between 1 and 720"),
+            ({"auto_terminate_hours": 721}, "between 1 and 720"),
+            ({"gpu_count": 0}, "at least 1"),
+        ],
+    )
+    async def test_what_gpuai_would_refuse_is_refused_before_spending(
+        self, tmp_path, over, problem
+    ):
+        runtime = runtime_with(tmp_path, rent_routes())
+        with pytest.raises(RuntimeError_, match=problem):
+            await runtime.rent(bare_request(**over), name="r")
+        assert runtime._client.calls == []
+
+    async def test_a_name_that_records_a_live_instance_is_not_overwritten(self, tmp_path):
+        """Overwriting the record of a billing instance loses the only local
+        trace of it."""
+        runtime = runtime_with(tmp_path, rent_routes())
+        await runtime.rent(bare_request(), name="r")
+        with pytest.raises(RuntimeError_, match="already records"):
+            await runtime.rent(bare_request(), name="r")
+        assert len(runtime._client.sent("POST", "/instances")) == 1
+
+    async def test_no_key_no_create(self, tmp_path):
+        from llmcore.exceptions import ConfigError
+
+        runtime = GpuAiRuntime(
+            config=config(), state_store=RuntimeStateStore(tmp_path), api_key=None,
+            client=FakeHttp(rent_routes()),
+        )
+        with pytest.raises(ConfigError):
+            await runtime.rent(bare_request(), name="r")
+        assert runtime._client.calls == []
+
+    async def test_from_offer_rounds_the_ceiling_up_to_the_cent(self):
+        """gpu.ai folds extra disk into a cent-rounded price; a ceiling below
+        that would refuse the very offer it came from."""
+        request = InstanceRequest.from_offer(GpuOffer.from_api(CONTAINER_ROW), disk_gb=300)
+        assert request.max_price_per_hour == pytest.approx(0.77)
+        assert request.disk_gb == 300
+        exact = InstanceRequest.from_offer(GpuOffer.from_api(VM_ROW))
+        assert exact.max_price_per_hour == pytest.approx(0.65)
+
+
+class TestGetAndTerminate:
+    async def test_get_reads_without_credentials_by_default(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        instance = await runtime.get("inst-9")
+        assert instance["id"] == "inst-9"
+        assert runtime._client.sent("GET", "/instances/inst-9")[0]["params"] is None
+        await runtime.get("inst-9", credentials=True)
+        assert runtime._client.sent("GET", "/instances/inst-9")[1]["params"] == {
+            "include": "credentials"
+        }
+
+    async def test_get_of_a_missing_instance_raises(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        with pytest.raises(RuntimeError_, match="404"):
+            await runtime.get("nope")
+
+    async def test_terminate_is_idempotent_and_marks_the_record(self, tmp_path):
+        runtime = runtime_with(tmp_path, rent_routes())
+        await runtime.rent(bare_request(), name="r")
+        await runtime.terminate("inst-9")
+        runtime._client.routes[("DELETE", "/instances/inst-9")] = FakeResponse(404)
+        await runtime.terminate("inst-9")
+        assert runtime._state.load("r").phase is RuntimePhase.STOPPED
+
+    async def test_a_terminate_that_fails_raises(self, tmp_path):
+        """The caller asked for billing to stop. If it did not, they must know."""
+        runtime = runtime_with(tmp_path, rent_routes({
+            ("DELETE", "/instances/inst-9"): FakeResponse(500, text="boom"),
+        }))
+        with pytest.raises(RuntimeError_, match="500"):
+            await runtime.terminate("inst-9")
