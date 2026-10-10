@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — account balance, spending-limit and usage reads
+
+The runtimes subsystem could rent, price and terminate, but not answer "how
+much money is left, and how fast is it going". All in
+`llmcore.runtimes.accounts`, exported from `llmcore.runtimes`:
+
+- `GpuAiRuntime.balance()` → `AccountBalance` from `GET /billing/balance`:
+  balance, live **burn rate** (every live instance, provisioning included),
+  auto-pay, and `runway_hours` (balance ÷ burn, `None` where undefined).
+- `GpuAiRuntime.spending_limit()` → `SpendingLimit` from
+  `GET /billing/spending-limit`: monthly/daily caps and spend, percent used,
+  enforcement. A 404 is reported as `configured=False`.
+- `GpuAiRuntime.usage(bucket="day", group_by="instance_id", start=, end=)`
+  → `UsageReport` from `GET /usage`, all pages: **the real meter**, with
+  `total_cost_usd` and `by_instance()`. `status()`'s accrued spend is rate ×
+  elapsed and over-counts (provisioning is unbilled, unreachable windows are
+  credited back); this is what was charged.
+- `DeepInfraRuntime.balance()` from `GET /payment/checklist`: DeepInfra's
+  inverted `stripe_balance` (negative = funds) is turned the right way up;
+  usage since the last invoice, the account cap, suspension, and model-scoped
+  credit reported apart. Billing address and payment-method details are not
+  carried. `DeepInfraRuntime.spending_limit()` from `GET /payment/config`
+  (negative = none).
+- `openrouter_balance(api_key=None, api_key_env_var="OPENROUTER_API_KEY")`
+  from OpenRouter's `GET /credits`: credit bought minus credit used.
+
+**These reads never raise.** A failed read — no key, an HTTP error, a dropped
+connection — comes back with `error` set and every figure `None`, so a panel
+that shows three vendors does not go blank because one timed out. Every figure
+is in dollars, and `None` always means unknown: gpu.ai's `null` burn rate is
+kept as `None`, never shown as zero.
+
 ### Added — SSH keys for rented instances
 
 A bare instance is reached over SSH, and a gpu.ai launch installs keys by id.

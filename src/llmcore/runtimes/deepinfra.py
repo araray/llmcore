@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
-from .accounts import SshKey
+from .accounts import AccountBalance, SpendingLimit, SshKey, _number
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -205,6 +205,71 @@ class DeepInfraRuntime:
             )
         self._owner = owner
         return owner
+
+    async def balance(self) -> AccountBalance:
+        """The account's credit (``GET /payment/checklist``). Never raises.
+
+        DeepInfra reports ``stripe_balance`` with the sign inverted -- negative
+        is money ready to spend, positive is money owed -- so it is negated
+        here into ``balance_usd``. ``spent_usd`` is usage since the last
+        invoice. Credit that only some models may spend is reported apart, in
+        ``scoped_credit_usd``. The contract does not state the unit of
+        ``stripe_balance``; it is read as dollars, like ``limit``.
+        """
+        try:
+            payload = await self._call("GET", "/payment/checklist") or {}
+            raw = _number(payload.get("stripe_balance"))
+            limit = _number(payload.get("limit"))
+            scoped = [
+                row
+                for row in payload.get("scoped_credits") or []
+                if isinstance(row, Mapping) and not row.get("expired")
+            ]
+            scoped_usd = (
+                sum(float(row.get("remaining_cents") or 0) for row in scoped) / 100.0
+                if scoped
+                else None
+            )
+            notes: list[str] = []
+            if payload.get("suspended"):
+                reason = payload.get("suspend_reason")
+                notes.append(f"account suspended{f': {reason}' if reason else ''}")
+            return AccountBalance(
+                provider=self.name,
+                balance_usd=-raw if raw is not None else None,
+                spent_usd=_number(payload.get("recent")),
+                limit_usd=limit if limit is not None and limit >= 0 else None,
+                scoped_credit_usd=scoped_usd,
+                suspended=(
+                    bool(payload["suspended"]) if payload.get("suspended") is not None else None
+                ),
+                auto_pay=bool(payload["topup"]) if payload.get("topup") is not None else None,
+                notes=tuple(notes),
+            )
+        except Exception as exc:
+            logger.debug("DeepInfra: balance read failed: %s", exc)
+            return AccountBalance.failed(self.name, exc)
+
+    async def spending_limit(self) -> SpendingLimit:
+        """The account's spending cap (``GET /payment/config``). Never raises.
+
+        DeepInfra's ``limit`` is in dollars and negative means none is set.
+        Its period is not stated in the API, so it is reported as
+        ``limit_usd`` rather than as a monthly figure.
+        """
+        try:
+            payload = await self._call("GET", "/payment/config") or {}
+            limit = _number(payload.get("limit"))
+            if limit is None or limit < 0:
+                return SpendingLimit(
+                    provider=self.name,
+                    configured=False,
+                    notes=("DeepInfra reports no spending limit for this account",),
+                )
+            return SpendingLimit(provider=self.name, configured=True, limit_usd=limit)
+        except Exception as exc:
+            logger.debug("DeepInfra: spending-limit read failed: %s", exc)
+            return SpendingLimit.failed(self.name, exc)
 
     async def ssh_keys(self) -> list[SshKey]:
         """SSH keys registered on the account (``GET /v1/ssh_keys``).

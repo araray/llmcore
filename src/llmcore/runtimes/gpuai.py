@@ -35,7 +35,16 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
-from .accounts import SshKey, check_public_key
+from .accounts import (
+    AccountBalance,
+    SpendingLimit,
+    SshKey,
+    UsageBucket,
+    UsageReport,
+    _dollars,
+    _parse_ts,
+    check_public_key,
+)
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -1157,6 +1166,151 @@ class GpuAiRuntime:
                 handle.phase = RuntimePhase.STOPPED
                 self._state.save(handle)
         logger.info("Terminated gpu.ai instance %s.", instance_id)
+
+    # ------------------------------------------------------------------
+    # Account: balance, spending limit, usage -- read-only, never raise
+    # ------------------------------------------------------------------
+
+    async def balance(self) -> AccountBalance:
+        """The account's credit and live burn rate (``GET /billing/balance``).
+
+        Never raises: a failed read comes back with ``error`` set. The burn
+        rate counts every live instance from launch, including ones still
+        provisioning; gpu.ai reports ``null`` when it cannot tell, which is
+        kept as ``None`` -- unknown, never zero.
+        """
+        try:
+            payload = await self._call("GET", "/billing/balance") or {}
+            burn_cents = payload.get("burn_cents_per_hour")
+            notes: list[str] = []
+            if burn_cents is None:
+                notes.append(
+                    "gpu.ai could not determine the burn rate: unknown, not zero"
+                )
+            balance = _dollars(payload.get("balance_cents"))
+            if balance is None and payload.get("balance_dollars") is not None:
+                balance = float(payload["balance_dollars"])
+            return AccountBalance(
+                provider=self.name,
+                balance_usd=balance,
+                burn_usd_per_hour=_dollars(burn_cents),
+                auto_pay=(
+                    bool(payload["auto_pay_enabled"])
+                    if payload.get("auto_pay_enabled") is not None
+                    else None
+                ),
+                notes=tuple(notes),
+            )
+        except Exception as exc:
+            logger.debug("gpu.ai: balance read failed: %s", exc)
+            return AccountBalance.failed(self.name, exc)
+
+    async def spending_limit(self) -> SpendingLimit:
+        """The account's spending cap and use of it (``GET /billing/spending-limit``).
+
+        Never raises. A 404, which the contract lists for this read, is taken
+        as "no cap is set" and reported with ``configured=False``.
+        """
+        try:
+            payload = await self._call("GET", "/billing/spending-limit", allow=(404,))
+            if payload is None:
+                return SpendingLimit(
+                    provider=self.name,
+                    configured=False,
+                    notes=("gpu.ai reports no spending limit for this account",),
+                )
+            hours = payload.get("auto_terminate_hours")
+            percent = payload.get("percent_used")
+            return SpendingLimit(
+                provider=self.name,
+                configured=True,
+                monthly_limit_usd=_dollars(payload.get("monthly_limit_cents")),
+                month_spend_usd=_dollars(payload.get("current_month_spend_cents")),
+                daily_limit_usd=_dollars(payload.get("daily_limit_cents")),
+                day_spend_usd=_dollars(payload.get("current_day_spend_cents")),
+                percent_used=float(percent) if percent is not None else None,
+                enforcement=str(payload["enforcement"]) if payload.get("enforcement") else None,
+                auto_terminate_hours=int(hours) if hours else None,
+                billing_cycle_start=_parse_ts(payload.get("billing_cycle_start")),
+            )
+        except Exception as exc:
+            logger.debug("gpu.ai: spending-limit read failed: %s", exc)
+            return SpendingLimit.failed(self.name, exc)
+
+    async def usage(
+        self,
+        *,
+        bucket: str | None = "day",
+        group_by: str | None = "instance_id",
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
+    ) -> UsageReport:
+        """What gpu.ai metered and billed (``GET /usage``), every page.
+
+        This is the real meter. :meth:`status`'s accrued spend is ``rate x
+        elapsed`` and over-counts, since provisioning is not billed and
+        unreachable windows are credited back; this is what was charged.
+        Never raises.
+
+        Args:
+            bucket: ``"hour"``, ``"day"``, ``"week"`` or ``"month"``; ``None``
+                for the API's default.
+            group_by: ``"instance_id"`` (the default, for per-rental spend) or
+                ``"gpu_type"``; ``None`` for no grouping.
+            start: Window start, a datetime or an RFC 3339 string.
+            end: Window end.
+        """
+
+        def stamp(value: datetime | str | None) -> str | None:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                return moment.isoformat().replace("+00:00", "Z")
+            return str(value)
+
+        asked = {
+            "bucket": bucket,
+            "group_by": group_by,
+            "start": _parse_ts(stamp(start)),
+            "end": _parse_ts(stamp(end)),
+        }
+        query = {
+            k: v
+            for k, v in {
+                "bucket": bucket,
+                "group_by": group_by,
+                "start": stamp(start),
+                "end": stamp(end),
+            }.items()
+            if v is not None
+        }
+        try:
+            rows: list[dict[str, Any]] = []
+            cursor: str | None = None
+            for _ in range(200):
+                params = dict(query, cursor=cursor) if cursor else (dict(query) or None)
+                page = await self._call("GET", "/usage", params=params) or {}
+                rows.extend(page.get("data") or [])
+                cursor = page.get("next_cursor")
+                if not cursor:
+                    break
+            buckets = tuple(
+                UsageBucket(
+                    start=_parse_ts(row.get("bucket_start")),
+                    cost_usd=_dollars(row.get("cost_cents")) or 0.0,
+                    gpu_seconds=(
+                        int(row["gpu_seconds"]) if row.get("gpu_seconds") is not None else None
+                    ),
+                    instance_id=str(row["instance_id"]) if row.get("instance_id") else None,
+                    gpu_type=str(row["gpu_type"]) if row.get("gpu_type") else None,
+                )
+                for row in rows
+            )
+            return UsageReport(provider=self.name, buckets=buckets, **asked)
+        except Exception as exc:
+            logger.debug("gpu.ai: usage read failed: %s", exc)
+            return UsageReport.failed(self.name, exc, **asked)
 
     # ------------------------------------------------------------------
     # SSH keys
