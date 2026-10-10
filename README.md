@@ -509,68 +509,7 @@ pip install -e ".[dev]"
 
 ## 🏗️ Architecture
 
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                              LLMCore API Facade                           │
-│                          (llmcore.api.LLMCore)                            │
-├───────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │   Provider   │  │   Session    │  │   Memory     │  │  Embedding   │   │
-│  │   Manager    │  │   Manager    │  │   Manager    │  │   Manager    │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
-│         │                 │                 │                 │           │
-│  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐   │
-│  │  Providers   │  │   Storage    │  │    RAG       │  │  Embeddings  │   │
-│  │  23 vendors  │  │  • SQLite    │  │  • ChromaDB  │  │  • Sentence  │   │
-│  │  direct REST │  │  • Postgres  │  │  • pgvector  │  │    Transform │   │
-│  │  + SDK       │  │  • JSON      │  │  • external  │  │  • OpenAI    │   │
-│  │  fallbacks   │  │              │  │    bridge    │  │  • Google    │   │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘   │
-│                                                                           │
-│  ┌──────────────┐  ┌──────────────┐                                       │
-│  │    Media     │  │   Runtimes   │   optional subsystems, off until       │
-│  │   Manager    │  │   Manager    │   configured                          │
-│  └──────┬───────┘  └──────┬───────┘                                       │
-│         │                 │                                               │
-│  ┌──────┴───────┐  ┌──────┴───────┐                                       │
-│  │ image/audio/ │  │ size → up →  │                                       │
-│  │ video router │  │ attach as a  │                                       │
-│  │ jobs+webhook │  │ provider     │                                       │
-│  │ artifacts    │  │ reap/ceiling │                                       │
-│  └──────────────┘  └──────────────┘                                       │
-│                                                                           │
-├───────────────────────────────────────────────────────────────────────────┤
-│                            Agent System (Darwin Layer 2)                  │
-│  ┌──────────────────────────────────────────────────────────────────────┐ │
-│  │                         Cognitive Cycle                              │ │
-│  │ PERCEIVE → PLAN → THINK → VALIDATE → ACT → OBSERVE → REFLECT → UPDATE│ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-│                                                                           │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │    Goal     │ │  Fast-Path  │ │   Circuit   │ │    HITL     │          │
-│  │ Classifier  │ │  Executor   │ │  Breaker    │ │   Manager   │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                           │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │   Persona   │ │   Prompt    │ │  Activity   │ │ Capability  │          │
-│  │   Manager   │ │   Library   │ │   System    │ │   Checker   │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                           │
-├───────────────────────────────────────────────────────────────────────────┤
-│                              Sandbox System                               │
-│  ┌──────────────────────────────────────────────────────────────────────┐ │
-│  │  Docker Provider  │  VM Provider  │  Registry  │  Output Tracker     │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-│                                                                           │
-├───────────────────────────────────────────────────────────────────────────┤
-│                           Supporting Systems                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │ Model Card  │ │Observability│ │   Tracing   │ │   Logging   │          │
-│  │  Registry   │ │   System    │ │   System    │ │   Config    │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+![llmcore architecture: the LLMCore facade over its managers, the agent system, the sandbox system and the supporting registries](docs/diagrams/architecture.svg)
 
 ---
 
@@ -815,28 +754,7 @@ The agent system implements an advanced cognitive architecture for autonomous ta
 
 The 8-phase cognitive cycle enables sophisticated reasoning:
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                        COGNITIVE CYCLE                            │
-│                                                                   │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐     │
-│  │ PERCEIVE │ →  │   PLAN   │ →  │  THINK   │ →  │ VALIDATE │     │
-│  │          │    │          │    │          │    │          │     │
-│  │ Analyze  │    │ Generate │    │ Reason & │    │ Check    │     │
-│  │ goal &   │    │ strategy │    │ decide   │    │ validity │     │
-│  │ context  │    │          │    │ action   │    │          │     │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘     │
-│       ↑                                               │           │
-│       │                                               ↓           │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐     │
-│  │  UPDATE  │ ←  │ REFLECT  │ ←  │ OBSERVE  │ ←  │   ACT    │     │
-│  │          │    │          │    │          │    │          │     │
-│  │ Update   │    │ Learn &  │    │ Analyze  │    │ Execute  │     │
-│  │ state &  │    │ improve  │    │ results  │    │ action   │     │
-│  │ memory   │    │          │    │          │    │          │     │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘     │
-└───────────────────────────────────────────────────────────────────┘
-```
+![The cognitive cycle: perceive, plan, think, validate, act, observe, reflect, update](docs/diagrams/cognitive-cycle.svg)
 
 **Phase Descriptions:**
 
@@ -992,30 +910,7 @@ Secure, isolated execution environments for agent-generated code.
 
 ### Architecture
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                         Sandbox Registry                           │
-│                    (Manages sandbox lifecycle)                     │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  ┌─────────────────────────┐    ┌─────────────────────────┐        │
-│  │    Docker Provider      │    │     VM Provider         │        │
-│  │                         │    │                         │        │
-│  │  • Container isolation  │    │  • SSH-based access     │        │
-│  │  • Image management     │    │  • Full VM isolation    │        │
-│  │  • Resource limits      │    │  • Network separation   │        │
-│  │  • Output capture       │    │  • Persistent storage   │        │
-│  └─────────────────────────┘    └─────────────────────────┘        │
-│                                                                    │
-│  ┌─────────────────────────┐    ┌─────────────────────────┐        │
-│  │    Output Tracker       │    │   Ephemeral Manager     │        │
-│  │                         │    │                         │        │
-│  │  • File lineage         │    │  • Resource cleanup     │        │
-│  │  • Execution logs       │    │  • Timeout handling     │        │
-│  │  • Artifact collection  │    │  • State management     │        │
-│  └─────────────────────────┘    └─────────────────────────┘        │
-└────────────────────────────────────────────────────────────────────┘
-```
+![Sandbox registry: Docker and VM providers, output tracker and ephemeral manager](docs/diagrams/sandbox-registry.svg)
 
 ### Usage
 

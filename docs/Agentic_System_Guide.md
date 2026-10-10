@@ -65,79 +65,11 @@ Unlike simple chat applications, agents operate in a loop, making decisions and 
 
 ### 2.1 Component Hierarchy
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Your Application                            │
-├─────────────────────────────────────────────────────────────────┤
-│                         LLMCore                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │   LLMCore    │  │   Storage    │  │      Memory          │  │
-│  │   (chat)     │  │   Manager    │  │      Manager         │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                      Agent System                               │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    AgentManager                           │  │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────────────┐  │  │
-│  │  │  Cognitive │  │    Tool    │  │     Sandbox        │  │  │
-│  │  │   Cycle    │  │   Manager  │  │   Integration      │  │  │
-│  │  └────────────┘  └────────────┘  └────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                     Sandbox Layer                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │   Sandbox    │  │   Docker     │  │       VM             │  │
-│  │   Registry   │  │   Provider   │  │     Provider         │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Component hierarchy: your application, LLMCore, the agent system and the sandbox layer](diagrams/component-hierarchy.svg)
 
 ### 2.2 Data Flow
 
-```
-User Goal
-    │
-    ▼
-┌─────────────────┐
-│  AgentManager   │
-│  .run_agent_    │
-│   loop()        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│   Plan Step     │────▶│  Create high-   │
-│                 │     │  level strategy │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│   Think Step    │────▶│  Decide next    │
-│                 │     │  action/tool    │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│    Act Step     │────▶│  Execute tool   │
-│                 │     │  in sandbox     │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Observe Step   │────▶│  Process tool   │
-│                 │     │  result         │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Reflect Step   │────▶│  Update state,  │
-│                 │     │  log episode    │
-└────────┬────────┘     └─────────────────┘
-         │
-         │ Loop until finished or max iterations
-         ▼
-    Final Result
-```
+![Agent run data flow, from a user goal through plan, think, act, observe and reflect to a final result](diagrams/agent-data-flow.svg)
 
 ### 2.3 Key Classes
 
@@ -619,46 +551,7 @@ async def run_with_database():
 
 The cognitive cycle is the heart of the agent system. It implements a structured approach to problem-solving:
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      COGNITIVE CYCLE                         │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌─────────┐                                                │
-│   │  PLAN   │  Create high-level strategy (once at start)   │
-│   └────┬────┘                                                │
-│        │                                                     │
-│        ▼                                                     │
-│   ┌─────────┐                                                │
-│   │  THINK  │◀─────────────────────────────────────────┐    │
-│   └────┬────┘                                          │    │
-│        │  Decide next action based on state            │    │
-│        ▼                                               │    │
-│   ┌─────────┐                                          │    │
-│   │   ACT   │  Execute chosen tool                     │    │
-│   └────┬────┘                                          │    │
-│        │                                               │    │
-│        ▼                                               │    │
-│   ┌─────────┐                                          │    │
-│   │ OBSERVE │  Process tool result                     │    │
-│   └────┬────┘                                          │    │
-│        │                                               │    │
-│        ▼                                               │    │
-│   ┌─────────┐                                          │    │
-│   │ REFLECT │  Update understanding, log episode       │    │
-│   └────┬────┘                                          │    │
-│        │                                               │    │
-│        │  Not finished?                                │    │
-│        └───────────────────────────────────────────────┘    │
-│                                                              │
-│   Finished or max iterations reached                         │
-│        │                                                     │
-│        ▼                                                     │
-│   ┌──────────┐                                               │
-│   │  RESULT  │                                               │
-│   └──────────┘                                               │
-└──────────────────────────────────────────────────────────────┘
-```
+![The cognitive cycle in detail: plan once, then loop think, act, observe and reflect until finished](diagrams/cognitive-cycle-detail.svg)
 
 ### 6.2 Plan Step
 
@@ -768,33 +661,7 @@ Agents generate and execute code. Without isolation, this code runs on your host
 **The Solution:**
 The sandbox system ensures ALL agent-generated code executes in isolated environments (Docker containers or VMs), never on the host.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      HOST SYSTEM                            │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                  Your Application                    │   │
-│  │                                                      │   │
-│  │  agent.execute_python("import os; os.remove('/')")  │   │
-│  └──────────────────────────┬───────────────────────────┘   │
-│                             │                               │
-│                             │ Routed to sandbox             │
-│                             ▼                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              SANDBOX (Docker/VM)                     │   │
-│  │  ┌───────────────────────────────────────────────┐  │   │
-│  │  │  Isolated filesystem                          │  │   │
-│  │  │  No access to host files                      │  │   │
-│  │  │  Limited resources (CPU, memory)              │  │   │
-│  │  │  Optional network isolation                   │  │   │
-│  │  │                                               │  │   │
-│  │  │  Code executes HERE, fails safely             │  │   │
-│  │  └───────────────────────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Host system remains UNTOUCHED                              │
-└─────────────────────────────────────────────────────────────┘
-```
+![Sandbox isolation: code is routed from the host application into a Docker or VM sandbox and fails there](diagrams/sandbox-isolation.svg)
 
 ### 7.2 Sandbox Providers
 
