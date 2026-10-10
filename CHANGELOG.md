@@ -2083,6 +2083,18 @@ font is not the one it was drawn with.
 the same search, but an image of a directory listing is worse than the
 listing: it cannot be copied, searched or diffed.
 
+The generator lives in `tools/diagrams/`, so the pictures can be regenerated
+rather than hand-edited: `python -m tools.diagrams` writes them and
+`--check` fails if the committed files have drifted from the source. That
+check is a test, so a forgotten regeneration fails the suite instead of
+shipping a diagram that no longer matches the code that drew it.
+
+`docs/Diagrams_usage.md` covers adding one, the layout DSL, the design
+system, and how to look at a change before committing it — including the
+`--krita` mode, which emits font-substituted fragments for the av-krita-mcp
+server. Geometry bugs are invisible in markup and obvious on screen, which is
+how all of the above were found.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

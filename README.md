@@ -1327,6 +1327,7 @@ from llmcore import (
 | Remote runtime spec | Runtime safety model and the Colab backend design |
 | [Routing usage guide](docs/Routing_usage.md) | How to use routing: dynamic targets, pools, lanes, cascades, the privacy path, proxy mode, and what it does not claim |
 | Routing subsystem spec | The design: five layers, the failure taxonomy, prior art borrowed, and the measured corrections to it |
+| [Diagrams usage guide](docs/Diagrams_usage.md) | How the diagrams in these docs are generated, and how to add or change one |
 
 **Per-provider guides**
 
