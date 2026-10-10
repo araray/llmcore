@@ -155,6 +155,99 @@ Two DeepInfra-specific behaviours worth knowing:
   not paying for it. `down(release=False)` stops it instead and records the
   runtime as `detached`, meaning llmcore has let go but the cost may continue.
 
+### Renting a bare gpu.ai machine
+
+Everything above serves one model on a template. When you want the machine
+instead — your own code, environments and server, reached over SSH — rent a
+bare instance. It is a direct backend call, not a `RuntimeManager` verb: there
+is no endpoint to attach as a provider, and you drive the box yourself.
+
+```python
+from llmcore.runtimes import Ownership, RuntimeStateStore
+from llmcore.runtimes.gpuai import GpuAiRuntime, InstanceRequest
+
+rt = GpuAiRuntime(
+    state_store=RuntimeStateStore("/path/to/your/ledger"),   # not ~/.llmcore
+    ownership=Ownership(name_prefix="myapp-"),
+)
+
+offers = await rt.offers(gpu_type="rtx_6000_ada")   # free, no key, cheapest first
+for o in offers:
+    print(o.offering_id, o.region, o.deployment_type, o.instant_boot,
+          o.cost_per_hour(), o.environment and o.environment.cuda)
+
+keys = await rt.ssh_keys()                         # or: await rt.create_ssh_key(name, pub)
+
+request = InstanceRequest.from_offer(
+    offers[0],
+    environment="certified",          # or image="ghcr.io/you/img:tag"
+    ssh_key_ids=(keys[0].id,),
+    auto_terminate_hours=2,           # gpu.ai kills it even if you crash
+    env={"MYAPP_ROOT": "/root/app"},  # values are never written to state
+)
+handle = await rt.rent(request, name="myapp-run-1", idempotency_key="run-1")
+handle.metadata["ssh_command"]        # e.g. "ssh root@frp.gpu.ai -p 41022"
+handle.metadata["hostname"], handle.metadata["port"]
+
+await rt.terminate(handle.external_id)   # or: await rt.down("myapp-run-1")
+```
+
+- **What `offers()` keeps that the catalogue drops:** VM or container, boot
+  class (`instant_boot`), capacity class, disk allowance and price, host
+  specs, and the image's CUDA version and minimum driver. The cheapest row is
+  often a VM that boots in 3–5 minutes; the next one up may boot in one.
+- **`from_offer` pins the offering and uses its price as both ceilings**,
+  rounded up to the cent. `rent()` refuses an invalid request (image *and*
+  environment, port 22, reserved env names, a lifetime outside 1–720 h) before
+  sending anything, and refuses a name that already records a live instance.
+- **`rent()` waits for `running`**, which is gpu.ai's SSH-ready — not for an
+  app URL, which a bare box never gets.
+- **Pass your own `idempotency_key`** if you keep your own record of rentals:
+  write it down before calling, and a retry after a crash returns the same
+  instance rather than a second one.
+- **The record is written before the create**, then updated with the operation
+  id and the instance id. If the process dies mid-wait, `status()` and
+  `down(name)` resolve the recorded operation and find the instance.
+- **`terminate(id)` raises if the DELETE fails.** It is idempotent otherwise.
+
+### Reading the account
+
+```python
+from llmcore.runtimes import openrouter_balance
+from llmcore.runtimes.deepinfra import DeepInfraRuntime
+
+balance = await rt.balance()                    # gpu.ai /billing/balance
+balance.balance_usd, balance.burn_usd_per_hour, balance.runway_hours
+await rt.spending_limit()                       # cap, spend, enforcement
+report = await rt.usage(start="2026-10-01T00:00:00Z")
+report.by_instance()                            # dollars per instance, from the meter
+
+await DeepInfraRuntime().balance()              # /payment/checklist
+await openrouter_balance()                      # OPENROUTER_API_KEY
+```
+
+**None of these raise.** A failed read returns the same type with `error` set
+and every figure `None`, so a panel showing three vendors shows "could not
+read" for one instead of failing. `None` always means unknown: gpu.ai reports
+a `null` burn rate when it cannot tell, and that is never shown as zero.
+
+### Shared accounts: whose instance is it?
+
+`status()` reports any instance the state store does not know as an **orphan**
+with an adopt hint. If the same account is also used by hand or by another
+tool, give the backend an `Ownership` rule (`name_prefix` and/or `known_ids`,
+or `runtimes.gpuai.owned_name_prefix` / `owned_ids`): strays it claims stay
+orphans, and everything else is reported as **not ours** (`owned=False`), with
+no adopt hint.
+
+### Credentials are never in state files
+
+A handle's credentials — DeepInfra's account key, a gpu.ai template's tunnel
+password — live in `handle.secrets`, in memory only. A handle read back from a
+state file has none; `await backend.credentials(handle)` re-derives them.
+State files written by older versions are scrubbed the next time they are
+saved.
+
 ---
 
 ## 1. Size it first (free)
@@ -384,11 +477,11 @@ The two backends get the figure differently, and the difference matters:
 - **DeepInfra** has a meter (`/payment/usage/rent`), so llmcore reads metered
   seconds. A deployment that was stopped and restarted has billed for less time
   than it has existed, and only the meter knows that.
-- **gpu.ai** publishes no per-instance running total, so llmcore derives
-  `rate × elapsed` from the instance's creation time. Allocation time is not
-  free, so the clock starts at `created_at` rather than at the moment it became
-  ready — which over-estimates slightly, so a ceiling fires early rather than
-  late.
+- **gpu.ai** publishes no per-instance running total on the instance, so
+  `status` derives `rate × elapsed` from its creation time — which
+  over-estimates (provisioning is not billed, and unreachable windows are
+  credited back), so a ceiling fires early rather than late. What was actually
+  billed is on the account meter: `await rt.usage(group_by="instance_id")`.
 
 `max_spend` is compared against this figure, in the backend's own unit:
 
