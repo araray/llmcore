@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — rental backends record a runtime before they rent it
+
+The manager's docstring promised "state is written before provisioning
+begins". The rental backends wrote it only after `up()` returned, and the wait
+inside `up()` is up to 35 minutes. A crash there left an instance billing with
+no record; only orphan detection or gpu.ai's `auto_terminate_hours` would ever
+catch it.
+
+- **gpu.ai** saves a STARTING handle carrying the create's `Idempotency-Key`
+  *before* `POST /instances`, then adds the operation id, then the instance id
+  the moment the operation names it. The request is recorded as a summary
+  (`metadata["requested"]`) with `env` reduced to its key names, so an
+  `HF_TOKEN` sent to the template is not written down.
+- If the poll is lost before the operation names an instance, the record stays
+  STARTING with the operation id. `status()` and `down()` resolve the operation
+  to its instance (or to "made nothing"), so `down(name)` terminates what the
+  create made. `down()` on a create still in flight says so and keeps the
+  record rather than marking it stopped. A record saved before the operation id
+  came back is matched to a live instance by the name it was sent with.
+- A create that fails outright is recorded FAILED (with the idempotency key to
+  retry safely); one that failed after its instance existed is terminated and
+  recorded STOPPED with the cause.
+- **DeepInfra** saves a STARTING handle before `POST /deploy/llm` and records
+  the `deploy_id` before waiting.
+
 ### Fixed — runtime state files no longer hold credentials
 
 A runtime state file is meant to be read with `cat`, which is exactly why it

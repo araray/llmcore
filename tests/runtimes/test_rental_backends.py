@@ -687,6 +687,168 @@ class TestDeepInfraTeardown:
         assert handle.metadata["price_per_hour"] == 0.89
 
 
+class _Spy(FakeHttp):
+    """A FakeHttp that snapshots the state store as each call is made, and can
+    raise on a path the way a dropped connection does."""
+
+    def __init__(self, routes, store, name, *, raise_on=None):
+        super().__init__(routes)
+        self.store, self.name, self.raise_on = store, name, raise_on
+        self.snapshots: list[tuple[str, str, object]] = []
+
+    async def request(self, method, url, json=None, params=None, headers=None):
+        handle = self.store.load(self.name)
+        self.snapshots.append(
+            (method.upper(), url, handle.to_dict() if handle is not None else None)
+        )
+        if self.raise_on and self.raise_on in url and method.upper() == "GET":
+            raise ConnectionError("connection reset")
+        return await super().request(method, url, json, params, headers)
+
+    def at(self, method: str, fragment: str) -> dict | None:
+        for m, url, snapshot in self.snapshots:
+            if m == method and fragment in url:
+                return snapshot
+        raise AssertionError(f"no {method} {fragment} call")
+
+
+def spied_gpuai(tmp_path, routes, *, raise_on=None, **cfg):
+    store = RuntimeStateStore(tmp_path)
+    return GpuAiRuntime(
+        config=config(**cfg), state_store=store, api_key="test-key",
+        client=_Spy(routes, store, "r", raise_on=raise_on),
+    )
+
+
+class TestStateBeforeCompute:
+    """The wait for a rental can take half an hour. A crash inside it used to
+    leave an unrecorded, billing instance; the record now exists first."""
+
+    async def test_a_starting_record_with_the_idempotency_key_precedes_the_create(
+        self, tmp_path
+    ):
+        runtime = spied_gpuai(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        before = runtime._client.at("POST", "/instances")
+        assert before is not None, "nothing was recorded before the create"
+        assert before["phase"] == "starting"
+        sent = runtime._client.sent("POST", "/instances")[0]["headers"]["Idempotency-Key"]
+        assert before["metadata"]["idempotency_key"] == sent
+
+    async def test_the_operation_id_is_recorded_before_polling(self, tmp_path):
+        runtime = spied_gpuai(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._client.at("GET", "/operations/op-1")["metadata"]["operation_id"] == "op-1"
+
+    async def test_the_final_handle_keeps_the_create_keys(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert handle.metadata["operation_id"] == "op-1"
+        assert handle.metadata["idempotency_key"]
+        assert handle.metadata["requested"]["gpu_type"] == "a100_80gb"
+
+    async def test_the_hf_token_sent_in_env_is_not_recorded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HF_TOKEN", "hf_secret_value")
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._client.sent("POST", "/instances")[0]["json"]["env"]["HF_TOKEN"]
+        text = handle.state_path.read_text()
+        assert "hf_secret_value" not in text
+        assert "HF_TOKEN" in text  # the key name, so a reader knows one was sent
+
+    async def test_a_create_request_that_fails_is_recorded_as_failed(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes({
+            ("POST", "/instances"): FakeResponse(422, text="disk_unavailable"),
+        }))
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.FAILED
+        assert "idempotency key" in handle.error
+
+    async def test_losing_track_mid_create_leaves_a_record_down_can_act_on(self, tmp_path):
+        """The case the record exists for: the poll dies before the operation
+        names an instance. The create may still finish and bill."""
+        runtime = spied_gpuai(tmp_path, up_routes(), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_, match="nothing could be terminated yet"):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STARTING
+        assert handle.metadata["operation_id"] == "op-1"
+        assert runtime._client.sent("DELETE", "/instances/inst-1") == []
+
+        # Later -- another process, the connection back -- down() resolves the
+        # operation to its instance and terminates it.
+        runtime._client.raise_on = None
+        await runtime.down("r")
+        assert runtime._client.sent("DELETE", "/instances/inst-1")
+        assert runtime._state.load("r").phase is RuntimePhase.STOPPED
+
+    async def test_status_resolves_a_recorded_create_to_its_instance(self, tmp_path):
+        runtime = spied_gpuai(tmp_path, up_routes({
+            ("GET", "/instances"): FakeResponse(200, {
+                "data": [INSTANCE_RUNNING], "next_cursor": None,
+            }),
+        }), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        runtime._client.raise_on = None
+        statuses = await runtime.status()
+        assert [s.name for s in statuses] == ["r"], "resolved, not reported as an orphan"
+        assert statuses[0].phase is RuntimePhase.READY
+        assert runtime._state.load("r").external_id == "inst-1"
+
+    async def test_down_on_a_create_still_in_flight_says_so_and_keeps_the_record(
+        self, tmp_path
+    ):
+        runtime = spied_gpuai(tmp_path, up_routes(), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        runtime._client.raise_on = None
+        runtime._client.routes[("GET", "/operations/op-1")] = FakeResponse(
+            200, {"state": "in_progress"}
+        )
+        await runtime.down("r")  # must not raise: down is the recovery path
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STARTING
+        assert "Run down('r') again" in handle.error
+
+    async def test_a_failed_operation_with_nothing_made_is_failed_not_starting(
+        self, tmp_path
+    ):
+        runtime = gpuai_runtime(tmp_path, up_routes({
+            ("GET", "/operations/op-1"): FakeResponse(200, {
+                "state": "failed", "error": {"message": "no capacity"},
+            }),
+        }))
+        with pytest.raises(RuntimeError_, match="no capacity"):
+            await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._state.load("r").phase is RuntimePhase.FAILED
+
+    async def test_deepinfra_records_before_reserving_and_the_id_after(self, tmp_path):
+        store = RuntimeStateStore(tmp_path)
+        runtime = DeepInfraRuntime(
+            config=config(), state_store=store, api_key="test-key",
+            client=_Spy(di_routes(), store, "r"),
+        )
+        await runtime.up(await plan_for(runtime), name="r")
+        before = runtime._client.at("POST", "/deploy/llm")
+        assert before["phase"] == "starting" and before["external_id"] == ""
+        assert runtime._client.at("GET", "/deploy/dep-1")["external_id"] == "dep-1"
+
+    async def test_a_failed_deepinfra_reservation_is_recorded_as_stopped(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes({
+            ("GET", "/deploy/dep-1"): FakeResponse(200, dict(
+                DEPLOY_RUNNING, status="failed", fail_reason="weights not found"
+            )),
+        }))
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STOPPED
+        assert "weights not found" in handle.error
+
+
 class TestNoSecretsInStateFiles:
     """A state file is meant to be read with ``cat`` -- and so it gets copied,
     backed up and pasted into bug reports. Neither the DeepInfra account key

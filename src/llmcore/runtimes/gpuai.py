@@ -29,7 +29,7 @@ import logging
 import math
 import os
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
@@ -75,6 +75,37 @@ _PHASES: Mapping[str, RuntimePhase] = {
     "unreachable": RuntimePhase.DEGRADED,
     "error": RuntimePhase.FAILED,
 }
+
+
+#: Operation states after which the operation will make nothing more.
+_OPERATION_ENDED = frozenset({"failed", "cancelled"})
+
+#: Create-body fields safe to keep in a state file. ``env`` is deliberately
+#: absent -- it may carry an ``HF_TOKEN`` -- and is recorded by key name only.
+_SUMMARY_FIELDS = (
+    "gpu_type",
+    "gpu_count",
+    "tier",
+    "region",
+    "offering_id",
+    "template_id",
+    "environment",
+    "image",
+    "disk_gb",
+    "ports",
+    "ssh_key_ids",
+    "auto_terminate_hours",
+    "max_price_per_hour",
+    "viewed_price_per_hour",
+)
+
+
+def _request_summary(body: Mapping[str, Any]) -> dict[str, Any]:
+    """What was asked for, minus anything secret, for the state file."""
+    summary = {k: body[k] for k in _SUMMARY_FIELDS if body.get(k) is not None}
+    if body.get("env"):
+        summary["env_keys"] = sorted(body["env"])
+    return summary
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -392,44 +423,199 @@ class GpuAiRuntime:
         if keys:
             body["ssh_key_ids"] = list(keys)
 
-        accepted = await self._call(
-            "POST",
-            "/instances",
-            json=body,
+        return await self._create(
+            body,
+            name=name,
             # Retried creates must not rent a second GPU.
-            headers={"Idempotency-Key": str(uuid.uuid4())},
+            idempotency_key=str(uuid.uuid4()),
+            served_model=plan.spec.repo_id,
+            recipe=self._template(),
+            sku=plan.sku,
+            plan=plan,
+            serving=True,
         )
+
+    async def _create(
+        self,
+        body: dict[str, Any],
+        *,
+        name: str,
+        idempotency_key: str,
+        served_model: str,
+        recipe: str,
+        sku: str,
+        plan: Plan | None = None,
+        serving: bool,
+        api_style: str = "openai",
+    ) -> RuntimeHandle:
+        """Create an instance and follow it to ``running``, recording it first.
+
+        **State before compute.** A STARTING handle carrying the idempotency
+        key is saved *before* the create call, and updated with the operation
+        id and then the instance id as each becomes known. The wait can take
+        half an hour; a crash inside it used to leave an unrecorded, billing
+        instance that only orphan detection or ``auto_terminate_hours`` would
+        ever catch. Now ``status`` and ``down`` resolve the recorded operation
+        and find it.
+
+        Fails closed: once an instance id is known, any failure terminates it
+        before raising.
+
+        Args:
+            serving: Whether this launch serves an HTTP endpoint (a template).
+                A serving launch waits for ``connection.app_url`` and fetches
+                the tunnel login; a bare instance waits for ``running`` only.
+        """
+        requested = _request_summary(body)
+        pending = RuntimeHandle(
+            name=name,
+            runtime=self.name,
+            external_id="",
+            base_url="",
+            served_model=served_model,
+            api_style=api_style,
+            recipe=recipe,
+            sku=sku,
+            phase=RuntimePhase.STARTING,
+            spend_unit=CostUnit.USD,
+            metadata={
+                "idempotency_key": idempotency_key,
+                "requested": requested,
+                # The quoted rate, until the instance reports its own, so a
+                # status taken mid-create can still estimate what it costs.
+                "price_per_hour": body.get("viewed_price_per_hour")
+                or body.get("max_price_per_hour"),
+            },
+        )
+        pending.metadata = {k: v for k, v in pending.metadata.items() if v is not None}
+        self._state.save(pending)
+
+        try:
+            accepted = await self._call(
+                "POST",
+                "/instances",
+                json=body,
+                headers={"Idempotency-Key": idempotency_key},
+            )
+        except Exception as exc:
+            pending.phase = RuntimePhase.FAILED
+            pending.error = (
+                f"the create request failed: {exc}. If it reached gpu.ai anyway, "
+                f"a retry with idempotency key {idempotency_key} returns the same "
+                f"operation instead of renting a second instance."
+            )
+            self._state.save(pending)
+            raise
         operation_id = str((accepted or {}).get("operation_id") or "")
         for warning in (accepted or {}).get("warnings") or []:
             logger.warning("gpu.ai create advisory for '%s': %s", name, warning)
         if not operation_id:
+            pending.phase = RuntimePhase.DEGRADED
+            pending.error = (
+                "gpu.ai accepted the create but returned no operation_id; check "
+                "https://gpu.ai for a stray instance"
+            )
+            self._state.save(pending)
             raise RuntimeError_(
                 f"gpu.ai accepted the create for '{name}' but returned no "
                 f"operation_id, so the instance cannot be followed or stopped. "
                 f"Check https://gpu.ai for a stray instance before retrying."
             )
+        pending.metadata["operation_id"] = operation_id
+        self._state.save(pending)
+
+        def seen(operation: Mapping[str, Any]) -> None:
+            pending.metadata["operation_state"] = str(operation.get("state") or "")
+            resource = str(operation.get("resource_id") or "")
+            if resource and not pending.external_id:
+                pending.external_id = resource
+                self._state.save(pending)
 
         instance_id = ""
         try:
-            instance_id = await self._await_operation(operation_id, name=name)
-            instance = await self._instance(instance_id, credentials=True)
-            instance = await self._await_running(instance_id, instance, name=name)
+            instance_id = await self._await_operation(operation_id, name=name, on_poll=seen)
+            if pending.external_id != instance_id:
+                pending.external_id = instance_id
+                self._state.save(pending)
+            instance = await self._instance(instance_id, credentials=serving)
+            instance = await self._await_running(
+                instance_id, instance, name=name, need_app_url=serving
+            )
             handle = self._handle_for(instance, name=name, plan=plan)
         except Exception as exc:
-            if instance_id:
+            target = instance_id or pending.external_id
+            if target:
                 logger.error(
                     "gpu.ai: '%s' failed to come up; terminating %s so it stops billing.",
                     name,
-                    instance_id,
+                    target,
                 )
-                await self._terminate(instance_id)
+                await self._terminate(target)
+                pending.phase = RuntimePhase.STOPPED
+                pending.error = f"failed to come up and was terminated: {exc}"
+            elif pending.metadata.get("operation_state") in _OPERATION_ENDED:
+                pending.phase = RuntimePhase.FAILED
+                pending.error = f"the create did not succeed: {exc}"
+            else:
+                # The create may still finish and start billing. The record
+                # stays STARTING, with the operation id, so status() and down()
+                # can find what it makes and kill it.
+                pending.error = (
+                    f"lost track of the create (operation {operation_id}) before it "
+                    f"named an instance: {exc}. status() or down({name!r}) resolves it."
+                )
+                self._state.save(pending)
+                raise RuntimeError_(
+                    f"Renting '{name}' from gpu.ai failed before the create named an "
+                    f"instance, so nothing could be terminated yet. Operation "
+                    f"{operation_id} is recorded: down({name!r}) resolves and "
+                    f"terminates whatever it made. Cause: {exc}"
+                ) from exc
+            self._state.save(pending)
             raise RuntimeError_(
                 f"Renting '{name}' from gpu.ai failed and the instance was "
                 f"released rather than left billing. Cause: {exc}"
             ) from exc
 
+        handle.api_style = api_style
+        handle.recipe = recipe
+        if not serving:
+            handle.served_model = served_model
+        handle.metadata.update(
+            {
+                "idempotency_key": idempotency_key,
+                "operation_id": operation_id,
+                "requested": requested,
+            }
+        )
         self._state.save(handle)
         return handle
+
+    async def _resolve_pending(self, handle: RuntimeHandle) -> None:
+        """Find the instance a create was recorded for before it named one.
+
+        A STARTING handle with an operation id and no instance id is what a
+        crash during :meth:`_create`'s wait leaves behind. The operation says
+        which instance it made, or that it made none.
+        """
+        operation_id = handle.metadata.get("operation_id")
+        if handle.external_id or not operation_id or not handle.phase.is_billing:
+            return
+        try:
+            operation = await self._call("GET", f"/operations/{operation_id}") or {}
+        except Exception as exc:
+            logger.debug("gpu.ai: could not read operation %s: %s", operation_id, exc)
+            return
+        state = str(operation.get("state") or "")
+        resource = str(operation.get("resource_id") or "")
+        handle.metadata["operation_state"] = state
+        if resource:
+            handle.external_id = resource
+        elif state in _OPERATION_ENDED:
+            detail = (operation.get("error") or {}).get("message") or state
+            handle.phase = RuntimePhase.FAILED
+            handle.error = f"the create did not succeed: {detail}"
+        self._state.save(handle)
 
     def _split_shape(self, plan: Plan) -> tuple[str, int]:
         """Recover ``(gpu_type, gpu_count)`` from a catalogue SKU name."""
@@ -450,13 +636,26 @@ class GpuAiRuntime:
             return None
         return max(1, math.ceil(minutes / 60.0))
 
-    async def _await_operation(self, operation_id: str, *, name: str) -> str:
-        """Poll an async operation to a terminal state; return the resource id."""
+    async def _await_operation(
+        self,
+        operation_id: str,
+        *,
+        name: str,
+        on_poll: Callable[[Mapping[str, Any]], None] | None = None,
+    ) -> str:
+        """Poll an async operation to a terminal state; return the resource id.
+
+        Args:
+            on_poll: Called with every operation read, so the caller can record
+                the instance id the moment the operation names one.
+        """
         deadline = asyncio.get_running_loop().time() + float(
             self._get("runtimes.gpuai.create_timeout_seconds", 900) or 900
         )
         while True:
             operation = await self._call("GET", f"/operations/{operation_id}") or {}
+            if on_poll is not None:
+                on_poll(operation)
             state = str(operation.get("state") or "")
             resource = str(operation.get("resource_id") or "")
             if state == "succeeded":
@@ -484,14 +683,21 @@ class GpuAiRuntime:
             await asyncio.sleep(5.0)
 
     async def _await_running(
-        self, instance_id: str, instance: dict[str, Any], *, name: str
+        self,
+        instance_id: str,
+        instance: dict[str, Any],
+        *,
+        name: str,
+        need_app_url: bool = True,
     ) -> dict[str, Any]:
         """Wait for the served endpoint to exist, not merely the instance.
 
         An instance reports ``running`` before the template's server has
         finished loading weights, so this waits for the tunnel URL as well --
         attaching a provider to a URL that is not there yet would fail the
-        attach and tear down a healthy rental.
+        attach and tear down a healthy rental. A bare instance has no URL to
+        wait for (``need_app_url=False``): ``running`` is what gpu.ai calls
+        SSH-ready.
         """
         deadline = asyncio.get_running_loop().time() + float(
             self._get("runtimes.gpuai.ready_timeout_seconds", 1200) or 1200
@@ -499,7 +705,7 @@ class GpuAiRuntime:
         while True:
             status = str(instance.get("status") or "")
             url = ((instance.get("connection") or {}).get("app_url")) or ""
-            if status == "running" and url:
+            if status == "running" and (url or not need_app_url):
                 return instance
             if _PHASES.get(status) in {RuntimePhase.FAILED, RuntimePhase.STOPPED}:
                 raise RuntimeError_(
@@ -512,7 +718,7 @@ class GpuAiRuntime:
                     f"endpoint (status {status!r})."
                 )
             await asyncio.sleep(10.0)
-            instance = await self._instance(instance_id, credentials=True)
+            instance = await self._instance(instance_id, credentials=need_app_url)
 
     async def _instance(self, instance_id: str, *, credentials: bool = False) -> dict[str, Any]:
         params = {"include": "credentials"} if credentials else None
@@ -657,8 +863,27 @@ class GpuAiRuntime:
 
         out: list[RuntimeStatus] = []
         for handle in handles:
-            instance = live.get(handle.external_id)
-            if instance is None and handle.phase.is_billing:
+            if not handle.external_id and handle.phase.is_billing:
+                await self._resolve_pending(handle)
+                if not handle.external_id:
+                    # A crash before the operation id was recorded: the create
+                    # is still findable by the name it was sent with.
+                    named = [i for i, row in live.items() if row.get("name") == handle.name]
+                    if len(named) == 1:
+                        handle.external_id = named[0]
+                        self._state.save(handle)
+            instance = live.get(handle.external_id) if handle.external_id else None
+            in_flight = (
+                not handle.external_id
+                and handle.phase.is_billing
+                and bool(handle.metadata.get("operation_id"))
+            )
+            if in_flight:
+                handle.error = (
+                    f"create still in flight (operation "
+                    f"{handle.metadata.get('operation_id')}); no instance named yet"
+                )
+            elif instance is None and handle.phase.is_billing:
                 # Only trusted when the listing actually succeeded: treating a
                 # failed list call as "everything is gone" would mark live,
                 # billing rentals as stopped and stop watching them.
@@ -773,6 +998,22 @@ class GpuAiRuntime:
                 name,
                 handle.external_id,
             )
+            return
+
+        await self._resolve_pending(handle)
+        if (
+            not handle.external_id
+            and handle.phase.is_billing
+            and handle.metadata.get("operation_id")
+        ):
+            # The create has not named its instance yet, so there is nothing to
+            # DELETE. Saying so beats marking it stopped while it may yet bill.
+            handle.error = (
+                f"could not terminate yet: operation {handle.metadata['operation_id']} "
+                f"has not named an instance. Run down({name!r}) again shortly."
+            )
+            self._state.save(handle)
+            logger.warning("gpu.ai: '%s' %s", name, handle.error)
             return
 
         handle.phase = RuntimePhase.STOPPING

@@ -339,14 +339,53 @@ class DeepInfraRuntime:
         if token:
             body["hf"]["token"] = token
 
-        created = await self._call("POST", "/deploy/llm", json=body) or {}
+        # State before compute: recorded before the create call, so a crash
+        # anywhere in the wait below leaves a record ``down`` can act on.
+        pending = RuntimeHandle(
+            name=name,
+            runtime=self.name,
+            external_id="",
+            base_url=f"{self._base}{OPENAI_ROUTE}",
+            served_model=model_name,
+            api_style="openai",
+            recipe="vllm",
+            sku=plan.sku,
+            phase=RuntimePhase.STARTING,
+            spend_unit=CostUnit.USD,
+            metadata={
+                k: v
+                for k, v in {
+                    "gpu": gpu,
+                    "num_gpus": count,
+                    "price_per_hour": plan.estimated_cost_per_hour,
+                }.items()
+                if v is not None
+            },
+        )
+        self._state.save(pending)
+
+        try:
+            created = await self._call("POST", "/deploy/llm", json=body) or {}
+        except Exception as exc:
+            pending.phase = RuntimePhase.FAILED
+            pending.error = f"the create request failed: {exc}"
+            self._state.save(pending)
+            raise
         deploy_id = str(created.get("deploy_id") or "")
         if not deploy_id:
+            pending.phase = RuntimePhase.DEGRADED
+            pending.error = (
+                "DeepInfra accepted the deployment but returned no deploy_id; check "
+                "https://deepinfra.com/dash/deployments for a stray"
+            )
+            self._state.save(pending)
             raise RuntimeError_(
                 f"DeepInfra accepted the deployment for '{name}' but returned no "
                 f"deploy_id, so it cannot be followed or stopped. Check "
                 f"https://deepinfra.com/dash/deployments before retrying."
             )
+        pending.external_id = deploy_id
+        self._state.save(pending)
 
         try:
             deployment = await self._await_running(deploy_id, name=name)
@@ -358,6 +397,9 @@ class DeepInfraRuntime:
                 deploy_id,
             )
             await self._delete(deploy_id)
+            pending.phase = RuntimePhase.STOPPED
+            pending.error = f"failed to come up and was deleted: {exc}"
+            self._state.save(pending)
             raise RuntimeError_(
                 f"Reserving '{name}' on DeepInfra failed and the deployment was "
                 f"deleted rather than left billing. Cause: {exc}"
