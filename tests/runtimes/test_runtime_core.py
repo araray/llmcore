@@ -959,3 +959,36 @@ class TestOrphansReachThePublicApi:
             assert [s.name for s in await mgr.status()] == ["mine"]
         finally:
             await mgr.stop_supervisor()
+
+
+class TestStatusUnitCoercion:
+    """``RuntimeStatus`` is a plain dataclass, so nothing validates its fields.
+
+    A backend author hand-building one can pass ``spend_unit="usd"`` — which
+    is exactly what the string value of ``CostUnit.USD`` looks like — and the
+    mistake would not surface until ``spend_so_far`` tried to call
+    ``.amount()`` on a ``str``, one layer away from the cause. Found while
+    writing the diagnostics tests, by making it.
+    """
+
+    def test_a_string_unit_is_coerced(self):
+        status = RuntimeStatus(
+            name="r", runtime="gpuai", phase=RuntimePhase.READY,
+            spend_used=4.2, spend_unit="usd",
+        )
+        assert status.spend_unit is CostUnit.USD
+        assert status.spend_so_far == "$4.20"
+
+    def test_an_unknown_unit_falls_back_rather_than_raising(self):
+        """A status describes something that may be billing. Refusing to build
+        it over a bad unit would hide the runtime entirely."""
+        status = RuntimeStatus(
+            name="r", runtime="x", phase=RuntimePhase.READY, spend_unit="galleons"
+        )
+        assert status.spend_unit is CostUnit.COMPUTE_UNIT
+
+    def test_a_real_enum_is_untouched(self):
+        status = RuntimeStatus(
+            name="r", runtime="x", phase=RuntimePhase.READY, spend_unit=CostUnit.USD
+        )
+        assert status.spend_unit is CostUnit.USD

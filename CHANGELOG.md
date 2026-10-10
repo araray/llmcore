@@ -1883,6 +1883,98 @@ that wire format already spells unset.
 A sweep of every other provider's listing found no further dead code: the seven
 that fail without a network genuinely call their vendor's API.
 
+### Fixed — a failed `LLMCore.create()` left the process unable to exit
+
+`StorageManager` is constructed *before* the providers, and its aiosqlite
+backend starts a **non-daemon** worker thread. When provider setup then failed,
+that thread outlived the exception — so a caller that caught the `ConfigError`
+and carried on could never exit, because interpreter shutdown blocks forever
+joining it.
+
+Not hypothetical: it is why `llmcore-runtimes estimate` computed the right
+answer and then hung until killed, with stdout never flushed. Nothing in the
+error message pointed at storage. Initialization now releases what it opened
+before raising, best-effort, and never lets a cleanup error replace the failure
+worth reporting. The `ConfigError` also now chains its cause.
+
+### Fixed — the commands that stop you spending no longer need the whole library
+
+`runtimes/cli.py` exists because, in its own words, *"the commands that matter
+most here are the ones you need when something has gone wrong... the thing you
+are trying to do is stop paying for a VM."* It then built a full `LLMCore` for
+every command — every provider SDK, the prompt pack, storage, embeddings — so
+one missing vendor library, or a `default_provider` that no longer loads, took
+`status` and `down` down with it.
+
+`estimate`, `status`, `down`, `logs`, `bake`, `cache`, `doctor` and `spend` now
+fall back to a `RuntimeManager` built straight from config, printing what
+degraded. `up` and `adopt` still require the full stack, because they attach
+the runtime as a provider instance.
+
+### Added — `llmcore-runtimes doctor`
+
+Preflight checks, which llmcore had no answer to. Subsystem state, whether the
+state directory is writable, today's spend, anything currently billing, and
+each backend's own preconditions: credential present, catalogue reachable, CLI
+executable, SSH keys registered.
+
+Exit code is the worst finding — `2` blocks, `1` billing or degraded, `0` clean
+— so `doctor && up` will not provision into a broken state. Severity is graded
+by *consequence* rather than state, and `$$$` outranks everything: a broken
+backend costs nothing, a forgotten instance costs money every hour.
+
+The first live run found a real problem. llmcore's default Colab `cli_path` is
+a bare `colab`, so where that CLI lives in a venv llmcore could not drive Colab
+at all — and would only have said so at provision time, after the decision to
+spend. Credential checks report whether a variable is set, never its value.
+
+Backends opt in with `async def diagnose()`, discovered structurally like the
+backend protocol itself; all three shipped backends publish checks.
+
+### Added — a daily spend ledger and cap for provisioned compute
+
+`max_spend` bounds one runtime and `[routing.budget]` bounds one turn. Neither
+bounded a **day**, so ten runtimes each under its own ceiling could spend ten
+times the intent with nothing objecting. Found by writing the agent-lens
+migration guide, which has had a ledger and a daily cap all along.
+
+```toml
+[runtimes.budget]
+max_usd_per_day = 20.00
+max_compute_units_per_day = 150
+```
+
+**Two dials, because one cap cannot span two units** — there is no defensible
+rate between Colab's compute units and dollars, and inventing one to produce a
+single tidy number would be this cost model's recurring bug in a new place.
+
+The cap is checked **before** `up()` contacts the backend, because a cap
+applied after compute is assigned is not a cap; there is a test asserting the
+backend is never asked. It raises `DailyBudgetExceededError`, its own type so
+"cannot afford this" can be caught apart from "this is broken". A plan with no
+known unit is *not* blocked: refusing it would turn "we do not know the price"
+into "you may not have it".
+
+`llmcore-runtimes spend` reports per day and per unit. The ledger is
+append-only JSON lines at `<state_dir>/spend.jsonl`, written when a runtime is
+released — the moment its cost stops moving — and a write failure never fails
+the release, since a ledger that could block a teardown would be a way to keep
+paying for something.
+
+**Unknown spend is not zero.** A run whose cost could not be determined is
+recorded as *unpriced*, and every total containing one says so; when the cap
+refuses it states that the real figure is higher than the one quoted.
+
+### Fixed — `RuntimeStatus` accepted a string where a `CostUnit` belongs
+
+It is a plain dataclass, so nothing validated it: a backend author passing
+`spend_unit="usd"` — the exact string value of `CostUnit.USD` — got an
+`AttributeError` from `spend_so_far` much later, one layer from the cause. The
+unit is now coerced, with an unrecognised one falling back rather than raising,
+since a status describes something that may be billing and refusing to build it
+would hide the runtime entirely. Found by making the mistake while writing the
+diagnostics tests.
+
 ## v0.53.0
 
 ### Added — TypeSafe.ai (System One) provider

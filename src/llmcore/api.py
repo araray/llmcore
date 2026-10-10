@@ -10,6 +10,7 @@ accepting pre-constructed context via explicitly_staged_items parameter.
 """
 
 import importlib.resources
+import inspect
 import logging
 import pathlib
 import time
@@ -729,7 +730,52 @@ class LLMCore:
 
         except Exception as e:
             logger.error(f"Failed to initialize LLMCore: {e}", exc_info=True)
-            raise ConfigError(f"Initialization failed: {e}")
+            await self._abort_initialization()
+            raise ConfigError(f"Initialization failed: {e}") from e
+
+    async def _abort_initialization(self) -> None:
+        """Release whatever initialization opened, before the error propagates.
+
+        A half-built instance is not merely wasted memory. ``StorageManager``
+        is constructed *before* the providers, and its aiosqlite backend starts
+        a **non-daemon** worker thread — so when provider setup then fails,
+        that thread outlives the exception. A caller that catches the
+        ``ConfigError`` and carries on therefore cannot exit: interpreter
+        shutdown blocks forever joining it.
+
+        That was not hypothetical. ``llmcore-runtimes estimate`` falls back to
+        a runtimes-only path when the full library cannot start, and it
+        produced its answer and then hung until killed — with the work done and
+        stdout never flushed.
+
+        Every close here is best-effort, and nothing raised during cleanup is
+        allowed to replace the original failure, which is the one worth
+        reporting.
+        """
+        for attribute, method in (
+            ("_media_manager", "close"),
+            ("_runtime_manager", "close"),
+            ("_provider_manager", "close_all"),
+            ("_search_provider_manager", "close_all"),
+            ("_storage_manager", "close"),
+        ):
+            manager = getattr(self, attribute, None)
+            if manager is None:
+                continue
+            closer = getattr(manager, method, None)
+            if not callable(closer):
+                continue
+            try:
+                result = closer()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as cleanup_error:  # pragma: no cover - defensive
+                logger.debug(
+                    "Ignoring %s while aborting initialization of %s: %s",
+                    type(cleanup_error).__name__,
+                    attribute,
+                    cleanup_error,
+                )
 
     @staticmethod
     def _resolve_observability_event_logger(observability: Any | None) -> Any | None:

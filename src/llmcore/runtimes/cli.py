@@ -20,6 +20,14 @@ That shapes which commands exist:
     did not start** — orphans are listed with the command that adopts them.
 ``down`` / ``down-all``
     Stop paying.
+``doctor``
+    What would stop a provision, and what is costing money right now. Free,
+    read-only, and exits non-zero on anything that blocks — so ``doctor && up``
+    does not provision into a broken state.
+``spend``
+    What provisioned compute has cost, per day and per unit — across every
+    runtime, including released ones. ``status`` can only speak for what is
+    still running.
 ``logs``, ``bake``, ``cache``
     The rest.
 """
@@ -46,14 +54,86 @@ def _fmt_minutes(seconds: float | None) -> str:
     return f"{minutes:.0f}m" if minutes < 120 else f"{minutes / 60:.1f}h"
 
 
-async def _llm(args: argparse.Namespace) -> Any:
+def _standalone_config(args: argparse.Namespace) -> Any:
+    """Load configuration without constructing an :class:`LLMCore`.
+
+    Mirrors what ``LLMCore.create()`` does for config alone, so the commands
+    below can read ``[runtimes]`` without initialising storage, embeddings,
+    prompt packs or a single provider.
+    """
+    import pathlib as _pathlib
+
+    from confy.loader import Config
+
+    from llmcore.api import LLMCore as _LLMCore
+
+    paths: list[str] = []
+    user_config = _pathlib.Path("~/.config/llmcore/config.toml").expanduser()
+    if user_config.exists():
+        paths.append(str(user_config))
+    if args.config:
+        paths.append(str(args.config))
+    return Config(
+        defaults=_LLMCore._load_package_defaults(),
+        file_paths=paths or None,
+        prefix="LLMCORE",
+    )
+
+
+class _BareRuntimes:
+    """Just enough of ``LLMCore`` for the commands that must always work.
+
+    Carries a :class:`RuntimeManager` built straight from config, with **no
+    provider manager** -- so a runtime cannot be attached through it, which is
+    why ``up`` and ``adopt`` never get one of these.
+    """
+
+    def __init__(self, manager: Any) -> None:
+        self.runtimes = manager
+
+    async def close(self) -> None:
+        """Nothing was opened."""
+        return None
+
+
+async def _llm(args: argparse.Namespace, *, degrade: bool = False) -> Any:
+    """Build an ``LLMCore``, or a bare stand-in when that is impossible.
+
+    The module docstring explains why this matters: the commands here are the
+    ones you need *when something has gone wrong*, and the thing you are trying
+    to do is stop paying for a VM. A full ``LLMCore`` pulls in every provider,
+    the prompt pack, storage and embeddings -- so a missing vendor SDK or a
+    default provider that no longer loads used to make ``status`` and ``down``
+    fail, exactly when they were needed.
+
+    Args:
+        degrade: Whether this command can run without providers. ``up`` and
+            ``adopt`` cannot: they attach the runtime as a provider instance,
+            so for them a failure to initialise is a real failure.
+    """
     from llmcore import LLMCore
 
-    return await LLMCore.create(config_file_path=args.config)
+    try:
+        return await LLMCore.create(config_file_path=args.config)
+    except Exception as exc:
+        if not degrade:
+            raise
+        from .manager import RuntimeManager
+
+        config = _standalone_config(args)
+        print(
+            f"warning: llmcore could not fully initialise ({type(exc).__name__}: "
+            f"{exc}).\n"
+            f"         Continuing with runtimes only -- provisioning and "
+            f"attaching are unavailable,\n"
+            f"         but sizing, status and teardown work.",
+            file=sys.stderr,
+        )
+        return _BareRuntimes(RuntimeManager(config_get=config.get))
 
 
 async def _cmd_estimate(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         plan = await llm.runtimes.estimate(
             args.repo_id,
@@ -131,7 +211,7 @@ async def _cmd_up(args: argparse.Namespace) -> int:
 
 
 async def _cmd_status(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         statuses = await llm.runtimes.status(args.name)
     finally:
@@ -161,7 +241,7 @@ async def _cmd_status(args: argparse.Namespace) -> int:
 
 
 async def _cmd_down(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         if args.all:
             stopped = await llm.runtimes.down_all()
@@ -178,7 +258,7 @@ async def _cmd_down(args: argparse.Namespace) -> int:
 
 
 async def _cmd_logs(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         async for line in llm.runtimes.logs(
             args.name, component=args.component, tail=args.tail
@@ -203,7 +283,7 @@ async def _cmd_adopt(args: argparse.Namespace) -> int:
 
 
 async def _cmd_bake(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         backend = llm.runtimes._backend_for(args.backend)
         if not hasattr(backend, "bake"):
@@ -217,8 +297,73 @@ async def _cmd_bake(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _cmd_spend(args: argparse.Namespace) -> int:
+    """Per-day totals from the spend ledger, per unit.
+
+    The figure no other command can give: ``status`` shows what one runtime
+    has cost, and this shows what all of them have, including the ones that
+    have already been released.
+    """
+    llm = await _llm(args, degrade=True)
+    try:
+        ledger = llm.runtimes.ledger
+        days = ledger.days(limit=args.days)
+    finally:
+        await llm.close()
+
+    if not days:
+        print(
+            "No spend recorded. The ledger fills as runtimes are released, so "
+            "this stays empty until the first one is stopped."
+        )
+        return 0
+
+    print(f"{'DAY':12} {'UNIT':14} {'RUNS':>5} {'SPENT':>18}")
+    for day in sorted(days, reverse=True):
+        for unit, total in sorted(days[day].items(), key=lambda kv: str(kv[0])):
+            print(
+                f"{day.isoformat():12} {unit!s:14} {total.runs:>5} "
+                f"{total.rendered():>18}"
+            )
+    return 0
+
+
+async def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Report what would stop a provision, and what is costing money now.
+
+    Exit code is the worst finding: ``2`` if anything blocks, ``1`` if
+    something is billing or degraded, ``0`` if clean. That ordering is so a
+    script can gate on it -- ``doctor && up`` should not provision into a
+    broken state.
+    """
+    from .diagnostics import Severity, run_diagnostics
+
+    llm = await _llm(args, degrade=True)
+    try:
+        checks = await run_diagnostics(llm.runtimes, backend=args.backend)
+    finally:
+        await llm.close()
+
+    marks = {
+        Severity.OK: "ok  ",
+        Severity.DEGRADES: "warn",
+        Severity.BLOCKS: "FAIL",
+        Severity.MONEY: "$$$ ",
+    }
+    for check in checks:
+        print(f"[{marks.get(check.severity, '?')}] {check.name:26} {check.detail}")
+        if check.fix and not check.ok:
+            print(f"                                  -> {check.fix}")
+
+    if any(c.severity == Severity.BLOCKS for c in checks):
+        return 2
+    if any(c.severity in (Severity.DEGRADES, Severity.MONEY) for c in checks):
+        return 1
+    return 0
+
+
 async def _cmd_cache(args: argparse.Namespace) -> int:
-    llm = await _llm(args)
+    llm = await _llm(args, degrade=True)
     try:
         backend = llm.runtimes._backend_for(args.backend)
         if not hasattr(backend, "cache_inventory"):
@@ -304,6 +449,20 @@ def _build_parser() -> argparse.ArgumentParser:
     bake.add_argument("--recipe", default="vllm")
     add_backend(bake)
     bake.set_defaults(func=_cmd_bake)
+
+    spend = sub.add_parser(
+        "spend", help="what provisioned compute has cost, per day and per unit"
+    )
+    spend.add_argument("--days", type=int, default=7)
+    spend.set_defaults(func=_cmd_spend)
+
+    doctor = sub.add_parser(
+        "doctor", help="check what would stop a provision, and what is billing now"
+    )
+    doctor.add_argument(
+        "--backend", default=None, help="only check this backend (default: all)"
+    )
+    doctor.set_defaults(func=_cmd_doctor)
 
     cache = sub.add_parser("cache", help="list what is in the Drive cache")
     add_backend(cache)

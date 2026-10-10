@@ -26,7 +26,7 @@ from llmcore.runtimes.deepinfra import DeepInfraRuntime
 from llmcore.runtimes.gpuai import GpuAiRuntime
 from llmcore.runtimes.manager import RuntimeError_
 from llmcore.runtimes.protocols import ComputeRuntime
-from llmcore.runtimes.sizing import GpuSku, Sizer
+from llmcore.runtimes.sizing import Sizer
 
 pytestmark = pytest.mark.asyncio
 

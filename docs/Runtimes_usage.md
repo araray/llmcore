@@ -411,6 +411,94 @@ It is the only guard against the expensive failure mode: a runtime that is
 
 ---
 
+## Before you spend: `doctor`
+
+```bash
+llmcore-runtimes doctor            # every backend
+llmcore-runtimes doctor --backend gpuai
+```
+
+```
+[ok  ] subsystem                  runtimes.enabled is true
+[ok  ] state: directory           ~/.llmcore/runtimes is writable
+[ok  ] billing                    nothing is running, as far as llmcore sees
+[ok  ] spend: usd today           $17.50 plus 1 unpriced run(s) of $20.00
+[FAIL] colab: cli                 'colab' was not found on PATH
+                                  -> install it, or set the backend's cli_path
+[ok  ] gpuai: catalogue           19 priced shapes, cheapest 1xa40 at $0.60/hour
+[ok  ] gpuai: credential          GPUAI_API_KEY is set
+[ok  ] gpuai: instances           no instances on the account
+```
+
+Free, read-only, and it works when the rest of llmcore does not. The exit code
+is the worst finding — **2** if something blocks, **1** if something is billing
+or degraded, **0** if clean — so `doctor && up` will not provision into a
+broken state.
+
+Severity is graded by *consequence*, not by state:
+
+| | meaning |
+|---|---|
+| `FAIL` | provisioning cannot work |
+| `warn` | it can, but something will be missing |
+| `$$$` | something may be costing money **right now** — outranks both |
+
+The first live run of this found a real problem: llmcore's default Colab
+`cli_path` is a bare `colab`, so on a machine where that CLI lives in a venv
+llmcore could not drive Colab at all — and would only have said so at
+provision time, after the decision to spend.
+
+A credential check never prints the value, only whether the variable is set.
+
+---
+
+## A daily budget
+
+`max_spend` bounds **one runtime**. `[routing.budget]` bounds **one turn**.
+Neither bounds a day — so ten runtimes, each politely under its own ceiling,
+could spend ten times what you intended and nothing would object.
+
+```toml
+[runtimes.budget]
+max_usd_per_day = 20.00              # gpu.ai, DeepInfra
+max_compute_units_per_day = 150      # Colab
+```
+
+**Two dials, because one cap cannot span two units.** Colab bills compute units
+with no published dollar value; the rental backends bill dollars. There is no
+defensible rate between them, so there is no single number.
+
+The cap is checked **before** `up()` contacts the backend — a cap applied after
+compute is assigned is not a cap — and refuses with
+`DailyBudgetExceededError`, its own type so you can catch "cannot afford this"
+separately from "this is broken".
+
+```bash
+llmcore-runtimes spend              # per day, per unit, last 7 days
+```
+
+```
+DAY          UNIT            RUNS              SPENT
+2026-10-10   usd                3 $17.50 plus 1 unpriced run(s)
+2026-10-09   compute-unit       1    42.00 compute units
+```
+
+The ledger is append-only JSON lines at `<state_dir>/spend.jsonl` — readable
+with `cat`, and a crash mid-write costs you the last line rather than the file.
+An entry is added when a runtime is **released**, which is the moment its cost
+stops moving.
+
+**Unknown spend is not zero.** A run whose cost could not be determined is
+recorded as *unpriced*, never as `0.00`, and every total that contains one says
+so. A day of unpriceable runtimes must not read as a free day — and when the
+cap refuses, it tells you the real figure is higher than the one it quoted.
+
+Start with no cap and read `spend` for a week. A number nobody chose is worse
+than no number: the agent circuit breaker shipped with a `$1.00` default that
+would have cut off half of this project's normal turns.
+
+---
+
 ## What this does not claim
 
 - **The end-to-end path has been run once against a real Colab T4** (2026-10-01,

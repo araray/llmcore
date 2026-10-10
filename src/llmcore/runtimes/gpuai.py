@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .diagnostics import Check
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -334,6 +335,70 @@ class GpuAiRuntime:
 
     def _template(self) -> str:
         return str(self._get("runtimes.gpuai.template", DEFAULT_TEMPLATE) or DEFAULT_TEMPLATE)
+
+    # ------------------------------------------------------------------
+    # doctor
+    # ------------------------------------------------------------------
+
+    async def diagnose(self) -> list[Check]:
+        """Read-only checks: credential, catalogue, SSH keys, live instances.
+
+        The catalogue check is deliberately first and needs no credential,
+        because that is the half of gpu.ai that makes ``estimate`` free.
+        """
+        from .diagnostics import Check, Severity, key_check, reachable_check
+
+        checks: list[Check] = []
+
+        async def catalogue() -> str:
+            rungs = await self.catalogue(refresh=True)
+            cheapest = min(
+                (r for r in rungs.values() if r.cost_per_hour),
+                key=lambda r: r.cost_per_hour or 0,
+                default=None,
+            )
+            summary = f"{len(rungs)} priced shapes"
+            if cheapest is not None:
+                summary += (
+                    f", cheapest {cheapest.name} at "
+                    f"${cheapest.cost_per_hour:.2f}/hour in {cheapest.region}"
+                )
+            return summary
+
+        checks.append(await reachable_check(self.name, "catalogue", catalogue))
+        checks.append(key_check(self.name, "GPUAI_API_KEY", value=self.api_key))
+        if not self.api_key:
+            # Everything below needs one; saying so once beats four copies of
+            # the same failure.
+            return checks
+
+        async def keys() -> str:
+            payload = await self._call("GET", "/ssh-keys") or {}
+            rows = payload.get("data") or []
+            if not rows:
+                return "none registered (a launch will have no shell access)"
+            return ", ".join(str(row.get("name") or row.get("id")) for row in rows)
+
+        checks.append(await reachable_check(self.name, "ssh keys", keys))
+
+        async def instances() -> str:
+            rows = await self.instances()
+            if not rows:
+                return "no instances on the account"
+            return f"{len(rows)} instance(s): " + ", ".join(
+                f"{row.get('id')} ({row.get('status')})" for row in rows[:5]
+            )
+
+        live = await reachable_check(self.name, "instances", instances)
+        if live.ok and "no instances" not in live.detail:
+            live = Check(
+                live.name,
+                Severity.MONEY,
+                live.detail,
+                "anything running is billing by the hour",
+            )
+        checks.append(live)
+        return checks
 
     # ------------------------------------------------------------------
     # up — this spends money
