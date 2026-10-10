@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .diagnostics import Check
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
@@ -301,6 +302,60 @@ class DeepInfraRuntime:
             "stopping it is the only thing that stops the cost"
         )
         return plan.with_notes(*notes)
+
+    # ------------------------------------------------------------------
+    # doctor
+    # ------------------------------------------------------------------
+
+    async def diagnose(self) -> list[Check]:
+        """Read-only checks: credential, owner name, availability, deployments.
+
+        Unlike gpu.ai, every one of these needs the key -- DeepInfra's GPU
+        catalogue is behind it too.
+        """
+        from .diagnostics import Check, Severity, key_check, reachable_check
+
+        checks: list[Check] = [
+            key_check(self.name, "DEEPINFRA_API_KEY", value=self.api_key)
+        ]
+        if not self.api_key:
+            return checks
+
+        async def owner() -> str:
+            name = await self.owner()
+            return f"deployments will be named {name}/<model>"
+
+        checks.append(await reachable_check(self.name, "account", owner))
+
+        async def availability() -> str:
+            rungs = await self.catalogue(refresh=True)
+            return f"{len(rungs)} available GPU configuration(s)"
+
+        checks.append(await reachable_check(self.name, "capacity", availability))
+
+        async def deployments() -> str:
+            rows = await self.deployments()
+            rentals = [r for r in rows if str(r.get("type") or "") in BILLED_TYPES]
+            serverless = len(rows) - len(rentals)
+            if not rentals:
+                return (
+                    "no dedicated deployments"
+                    + (f" ({serverless} serverless, not billed hourly)" if serverless else "")
+                )
+            return f"{len(rentals)} dedicated deployment(s): " + ", ".join(
+                str(r.get("model_name") or r.get("deploy_id")) for r in rentals[:5]
+            )
+
+        live = await reachable_check(self.name, "deployments", deployments)
+        if live.ok and live.detail.startswith("no dedicated") is False:
+            live = Check(
+                live.name,
+                Severity.MONEY,
+                live.detail,
+                "a dedicated deployment reserves hardware by the hour",
+            )
+        checks.append(live)
+        return checks
 
     # ------------------------------------------------------------------
     # up — this spends money

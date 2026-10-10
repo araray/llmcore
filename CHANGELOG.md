@@ -1934,6 +1934,129 @@ caller sends `user` or `llmcore.session_id`. Without it every request gets a
 fresh synthetic session, so "steps so far" would always be zero; the proxy
 declines to track the turn rather than enforce something meaningless, and
 omits the `budget` block so the difference is visible.
+### Fixed — a failed `LLMCore.create()` left the process unable to exit
+
+`StorageManager` is constructed *before* the providers, and its aiosqlite
+backend starts a **non-daemon** worker thread. When provider setup then failed,
+that thread outlived the exception — so a caller that caught the `ConfigError`
+and carried on could never exit, because interpreter shutdown blocks forever
+joining it.
+
+Not hypothetical: it is why `llmcore-runtimes estimate` computed the right
+answer and then hung until killed, with stdout never flushed. Nothing in the
+error message pointed at storage. Initialization now releases what it opened
+before raising, best-effort, and never lets a cleanup error replace the failure
+worth reporting. The `ConfigError` also now chains its cause.
+
+### Fixed — the commands that stop you spending no longer need the whole library
+
+`runtimes/cli.py` exists because, in its own words, *"the commands that matter
+most here are the ones you need when something has gone wrong... the thing you
+are trying to do is stop paying for a VM."* It then built a full `LLMCore` for
+every command — every provider SDK, the prompt pack, storage, embeddings — so
+one missing vendor library, or a `default_provider` that no longer loads, took
+`status` and `down` down with it.
+
+`estimate`, `status`, `down`, `logs`, `bake`, `cache`, `doctor` and `spend` now
+fall back to a `RuntimeManager` built straight from config, printing what
+degraded. `up` and `adopt` still require the full stack, because they attach
+the runtime as a provider instance.
+
+### Added — `llmcore-runtimes doctor`
+
+Preflight checks, which llmcore had no answer to. Subsystem state, whether the
+state directory is writable, today's spend, anything currently billing, and
+each backend's own preconditions: credential present, catalogue reachable, CLI
+executable, SSH keys registered.
+
+Exit code is the worst finding — `2` blocks, `1` billing or degraded, `0` clean
+— so `doctor && up` will not provision into a broken state. Severity is graded
+by *consequence* rather than state, and `$$$` outranks everything: a broken
+backend costs nothing, a forgotten instance costs money every hour.
+
+The first live run found a real problem. llmcore's default Colab `cli_path` is
+a bare `colab`, so where that CLI lives in a venv llmcore could not drive Colab
+at all — and would only have said so at provision time, after the decision to
+spend. Credential checks report whether a variable is set, never its value.
+
+Backends opt in with `async def diagnose()`, discovered structurally like the
+backend protocol itself; all three shipped backends publish checks.
+
+### Added — a daily spend ledger and cap for provisioned compute
+
+`max_spend` bounds one runtime and `[routing.budget]` bounds one turn. Neither
+bounded a **day**, so ten runtimes each under its own ceiling could spend ten
+times the intent with nothing objecting. Found by writing the agent-lens
+migration guide, which has had a ledger and a daily cap all along.
+
+```toml
+[runtimes.budget]
+max_usd_per_day = 20.00
+max_compute_units_per_day = 150
+```
+
+**Two dials, because one cap cannot span two units** — there is no defensible
+rate between Colab's compute units and dollars, and inventing one to produce a
+single tidy number would be this cost model's recurring bug in a new place.
+
+The cap is checked **before** `up()` contacts the backend, because a cap
+applied after compute is assigned is not a cap; there is a test asserting the
+backend is never asked. It raises `DailyBudgetExceededError`, its own type so
+"cannot afford this" can be caught apart from "this is broken". A plan with no
+known unit is *not* blocked: refusing it would turn "we do not know the price"
+into "you may not have it".
+
+`llmcore-runtimes spend` reports per day and per unit. The ledger is
+append-only JSON lines at `<state_dir>/spend.jsonl`, written when a runtime is
+released — the moment its cost stops moving — and a write failure never fails
+the release, since a ledger that could block a teardown would be a way to keep
+paying for something.
+
+**Unknown spend is not zero.** A run whose cost could not be determined is
+recorded as *unpriced*, and every total containing one says so; when the cap
+refuses it states that the real figure is higher than the one quoted.
+
+### Fixed — `RuntimeStatus` accepted a string where a `CostUnit` belongs
+
+It is a plain dataclass, so nothing validated it: a backend author passing
+`spend_unit="usd"` — the exact string value of `CostUnit.USD` — got an
+`AttributeError` from `spend_so_far` much later, one layer from the cause. The
+unit is now coerced, with an unrecognised one falling back rather than raising,
+since a status describes something that may be billing and refusing to build it
+would hide the runtime entirely. Found by making the mistake while writing the
+diagnostics tests.
+
+### Fixed — CI was red on `main`, in two ways this work was responsible for
+
+Found by reading this branch's own CI logs rather than trusting a local run.
+Both failures were already on `main`, and neither was visible locally — the
+first because a local pricewatch override masked it, the second because the
+local run was a subset that skipped `tests/tools`.
+
+**`cardctl` had no gpu.ai adapter.** PR #49 registered `gpuai` in
+`PROVIDER_MAP`, and `tests/tools/test_cardctl_coverage.py` exists to catch
+exactly that: a provider whose cards can never be generated. It had been
+failing ever since. `tools/cardctl/adapters/gpuai_adapter.py` now reads the
+catalogue, verified live against all 49 models.
+
+gpu.ai prices four modalities four different ways, so the adapter converts
+cents-per-1M-tokens for chat and embedding, and routes images
+(`per_mpxl_microcents`) and video (`per_video_microcents`,
+`per_video_second_cents`) through unit pricing instead of coercing them into a
+per-token rate they do not have. Media models get **no** context window rather
+than a defaulted one, and `supported_parameters` is read as a real negative —
+gpu.ai enumerates what each endpoint accepts.
+
+**Six Claude cards had `pricing: null`.** `claude-opus-5-5`,
+`claude-sonnet-5-5`, `claude-fable-5-1` and their predecessors carried no
+pricing at all, so `get_cost()` on llmcore's most-used model returned nothing
+and four cache-accounting tests failed on `NoneType`. The rates now come from
+Anthropic's own published pricing page, via the same `scrape:anthropic` feed
+that supplied the 1M context windows — not inferred.
+
+A lesson worth recording: a locally installed pricewatch override set makes the
+packaged cards look more complete than they are. Tests that read the registry
+pass on a developer's machine and fail in CI, which is the wrong way round.
 
 ## v0.53.0
 

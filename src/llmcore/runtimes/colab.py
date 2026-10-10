@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from ..exceptions import ConfigError
+from .diagnostics import Check
 from .models import (
     CostUnit,
     ModelSpec,
@@ -846,6 +847,55 @@ class ColabRuntime:
     # ------------------------------------------------------------------
     # bake (R5)
     # ------------------------------------------------------------------
+
+    async def diagnose(self) -> list[Check]:
+        """Read-only checks: the CLI, its authentication, and live sessions.
+
+        agent-lens's ``colab doctor`` existed because every one of these fails
+        at a different and inconvenient moment otherwise -- and the CLI's
+        authentication in particular fails at provision time, which is after
+        the decision to spend has been made.
+        """
+        from .diagnostics import Check, Severity, binary_check, reachable_check
+
+        checks: list[Check] = [binary_check(self.name, self._cli_path)]
+        if not checks[0].ok:
+            return checks
+
+        async def sessions() -> str:
+            rows = await self.sessions()
+            if not rows:
+                return "authenticated; no sessions assigned"
+            return f"{len(rows)} session(s): " + ", ".join(
+                str(row.get("name")) for row in rows[:5]
+            )
+
+        live = await reachable_check(self.name, "sessions", sessions)
+        if not live.ok:
+            live = Check(
+                live.name,
+                Severity.BLOCKS,
+                live.detail + " -- the CLI may need `colab auth`",
+                "run the Colab CLI's own auth flow once, then re-check",
+            )
+        elif "no sessions" not in live.detail:
+            live = Check(
+                live.name,
+                Severity.MONEY,
+                live.detail,
+                "an assigned session burns compute units whether or not it is used",
+            )
+        checks.append(live)
+
+        checks.append(
+            Check(
+                f"{self.name}: drive cache",
+                Severity.OK,
+                f"configured at {self._drive_cache}",
+                "run `llmcore-runtimes cache` to list what is in it",
+            )
+        )
+        return checks
 
     async def bake(self, recipe: str = "vllm", *, session: str = "llmcore-bake") -> str:
         """Pre-build an environment tarball on a **CPU** VM.

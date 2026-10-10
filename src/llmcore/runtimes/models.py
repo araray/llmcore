@@ -499,6 +499,17 @@ class RuntimeStatus:
     spend_unit: CostUnit = CostUnit.COMPUTE_UNIT
     error: str | None = None
 
+    def __post_init__(self) -> None:
+        # Coerced because this is a plain dataclass, not a validating model:
+        # a backend author hand-building a status can pass ``"usd"`` and the
+        # error would not surface until ``spend_so_far`` tried to format it,
+        # one layer away from the mistake.
+        if not isinstance(self.spend_unit, CostUnit):
+            try:
+                object.__setattr__(self, "spend_unit", CostUnit(str(self.spend_unit)))
+            except ValueError:
+                object.__setattr__(self, "spend_unit", CostUnit.COMPUTE_UNIT)
+
     @property
     def spend_so_far(self) -> str | None:
         """Accrued spend rendered in its own unit, or ``None`` if unreported.

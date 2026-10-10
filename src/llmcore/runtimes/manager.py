@@ -25,14 +25,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import pathlib
 import warnings
 from collections.abc import Callable
-from importlib import import_module
 from datetime import datetime, timedelta, timezone
+from importlib import import_module
 from typing import Any
 
 from ..exceptions import ConfigError, LLMCoreError
-from .models import ModelSpec, Plan, Quantization, RuntimeHandle, RuntimePhase, RuntimeStatus
+from .ledger import SpendEntry, SpendLedger
+from .models import (
+    CostUnit,
+    ModelSpec,
+    Plan,
+    Quantization,
+    RuntimeHandle,
+    RuntimePhase,
+    RuntimeStatus,
+)
 from .protocols import ComputeRuntime
 from .state import DEFAULT_STATE_DIR, RuntimeStateStore
 
@@ -56,6 +66,16 @@ class SpendNotConfirmedError(RuntimeError_):
 
     Deliberately its own type so a caller can catch exactly this and prompt,
     rather than string-matching a generic error.
+    """
+
+
+class DailyBudgetExceededError(RuntimeError_):
+    """Today's provisioning budget is already spent.
+
+    Its own type, like :class:`SpendNotConfirmedError`, so a caller can catch
+    exactly this and decide — wait for tomorrow, raise the cap deliberately,
+    or do without. String-matching a generic error to tell "you cannot afford
+    this" apart from "this is broken" is how a cap gets bypassed by accident.
     """
 
 
@@ -105,6 +125,25 @@ class RuntimeManager:
         )
         self._recipe = str(get("runtimes.defaults.recipe", "vllm"))
         self.state = RuntimeStateStore(get("runtimes.state_dir", DEFAULT_STATE_DIR))
+
+        #: Append-only record of what provisioned compute has cost, and the
+        #: only thing that can see across runtimes. ``max_spend`` bounds one
+        #: runtime and ``[routing.budget]`` bounds one turn; without this, ten
+        #: runtimes each under its own ceiling spend ten times the intent.
+        self.ledger = SpendLedger(
+            pathlib.Path(str(self.state.directory)) / "spend.jsonl"
+        )
+        self._daily_caps: dict[CostUnit, float] = {}
+        for unit, key in (
+            (CostUnit.USD, "runtimes.budget.max_usd_per_day"),
+            (CostUnit.COMPUTE_UNIT, "runtimes.budget.max_compute_units_per_day"),
+        ):
+            # One cap cannot span both units -- there is no defensible rate
+            # between Colab's compute units and dollars -- so each is its own
+            # dial, and an unset one is unbounded.
+            value = get(key, None)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                self._daily_caps[unit] = float(value)
 
         #: Runtimes this process started or adopted, by name.
         self._handles: dict[str, RuntimeHandle] = {}
@@ -312,6 +351,8 @@ class RuntimeManager:
             )
             max_spend = max_compute_units
 
+        self._enforce_daily_budget(plan)
+
         handle = await runtime.up(plan, name=name)
         self._apply_limits(handle, idle=idle, hard=hard, spend=max_spend)
         # Persisted immediately: the dangerous window is a crash between
@@ -340,6 +381,63 @@ class RuntimeManager:
         # forgot to start the reaper would discover that from a bill.
         self.start_supervisor()
         return handle
+
+    def _enforce_daily_budget(self, plan: Plan) -> None:
+        """Refuse to provision if today's budget for this unit is spent.
+
+        Checked **before** ``up()``, because a cap enforced after compute is
+        assigned is not a cap. Unknown-unit plans are not blocked: a plan that
+        could not be priced cannot be charged against a dollar cap, and
+        refusing it would turn "we do not know the price" into "you may not
+        have it", which is a different policy than the one configured.
+
+        Raises:
+            DailyBudgetExceededError: If the cap for ``plan.cost_unit`` is
+                already reached.
+        """
+        unit = plan.cost_unit
+        if unit is None:
+            return
+        cap = self._daily_caps.get(unit)
+        if cap is None:
+            return
+        total = self.ledger.total(unit)
+        if total.amount < cap:
+            return
+        detail = (
+            f"today's provisioning budget is spent: {total.rendered()} of "
+            f"{unit.amount(cap)} since {total.since:%Y-%m-%d %H:%M} UTC, "
+            f"across {total.runs} runtime(s)"
+        )
+        if total.is_partial:
+            detail += (
+                " -- and some of today's runs could not be priced, so the real "
+                "figure is higher than that"
+            )
+        raise DailyBudgetExceededError(
+            f"Refusing to provision: {detail}. Raise "
+            f"runtimes.budget.max_{'usd' if unit is CostUnit.USD else 'compute_units'}"
+            f"_per_day, or wait for the window to roll over."
+        )
+
+    def record_spend(self, handle: RuntimeHandle) -> None:
+        """Add a stopped runtime's cost to the ledger.
+
+        Called from teardown, and deliberately tolerant: ``handle.spend_used``
+        is ``None`` whenever the backend could not price the run, and that is
+        recorded as *unpriced* rather than as zero. A day of unpriceable
+        runtimes must not read as a free day.
+        """
+        self.ledger.record(
+            SpendEntry(
+                at=datetime.now(timezone.utc),
+                runtime=handle.runtime,
+                name=handle.name,
+                amount=handle.spend_used,
+                unit=handle.spend_unit,
+                external_id=handle.external_id,
+            )
+        )
 
     def _apply_limits(
         self,
@@ -574,6 +672,11 @@ class RuntimeManager:
                         name,
                         e,
                     )
+
+        if handle is not None and released:
+            # Recorded on release rather than continuously: this is the moment
+            # the figure stops moving, and the only moment it is final.
+            self.record_spend(handle)
 
         if handle is not None:
             handle.phase = RuntimePhase.STOPPED if released else handle.phase

@@ -33,6 +33,7 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     # Alias: "jev" (the model family) → TypeSafe.
     "jev": "typesafe_adapter.TypeSafeAdapter",
     "deepinfra": "deepinfra_adapter.DeepInfraAdapter",
+    "gpuai": "gpuai_adapter.GpuAiAdapter",
     "ollama": "ollama_adapter.OllamaAdapter",
     "openrouter": "openrouter_adapter.OpenRouterAdapter",
     "poe": "poe_adapter.PoeAdapter",

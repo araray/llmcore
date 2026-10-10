@@ -12,7 +12,14 @@ whether or not anyone calls it, so `LLMCore.create()` cannot start one no matter
 what the config says.
 """
 
-from .manager import RuntimeError_, RuntimeManager, SpendNotConfirmedError
+from .diagnostics import Check, Severity, run_diagnostics
+from .ledger import DailyTotal, SpendEntry, SpendLedger
+from .manager import (
+    DailyBudgetExceededError,
+    RuntimeError_,
+    RuntimeManager,
+    SpendNotConfirmedError,
+)
 from .models import (
     CostUnit,
     ModelSpec,
@@ -27,8 +34,11 @@ from .state import DEFAULT_STATE_DIR, RuntimeStateStore
 
 __all__ = [
     "DEFAULT_STATE_DIR",
+    "Check",
     "ComputeRuntime",
     "CostUnit",
+    "DailyBudgetExceededError",
+    "DailyTotal",
     "ModelSpec",
     "Plan",
     "Quantization",
@@ -38,5 +48,9 @@ __all__ = [
     "RuntimePhase",
     "RuntimeStateStore",
     "RuntimeStatus",
+    "Severity",
+    "SpendEntry",
+    "SpendLedger",
     "SpendNotConfirmedError",
+    "run_diagnostics",
 ]
