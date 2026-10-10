@@ -30,6 +30,7 @@ import math
 import os
 import uuid
 from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -48,7 +49,7 @@ from .state import RuntimeStateStore
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DEFAULT_GPUAI_API_BASE", "GpuAiRuntime"]
+__all__ = ["DEFAULT_GPUAI_API_BASE", "GpuAiRuntime", "GpuOffer", "OfferEnvironment"]
 
 #: Public developer API root. ``/pricing``, ``/gpu-types`` and ``/environments``
 #: under it need no credentials, which is what lets ``estimate`` stay free.
@@ -106,6 +107,174 @@ def _request_summary(body: Mapping[str, Any]) -> dict[str, Any]:
     if body.get("env"):
         summary["env_keys"] = sorted(body["env"])
     return summary
+
+
+def _known(value: Any) -> int | None:
+    """gpu.ai writes ``0`` for an unreported spec. That is unknown, not zero."""
+    try:
+        number = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return number or None
+
+
+@dataclass(frozen=True, slots=True)
+class OfferEnvironment:
+    """The certified image an offering boots, and what it needs of the host.
+
+    Attributes:
+        image: Image reference, e.g. ``ghcr.io/gpuai-dev/base-cuda124:2026-07``.
+        image_digest: The same, pinned to its digest.
+        cuda: CUDA runtime version in the image, e.g. ``"12.4"``.
+        driver_min: Minimum NVIDIA driver on the host, e.g. ``"550.54.14"``.
+    """
+
+    image: str | None = None
+    image_digest: str | None = None
+    cuda: str | None = None
+    driver_min: str | None = None
+
+    @classmethod
+    def from_api(cls, payload: Any) -> OfferEnvironment | None:
+        if not isinstance(payload, Mapping) or not payload:
+            return None
+        return cls(
+            image=payload.get("image") or None,
+            image_digest=payload.get("image_digest") or None,
+            cuda=str(payload["cuda"]) if payload.get("cuda") else None,
+            driver_min=str(payload["driver_min"]) if payload.get("driver_min") else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GpuOffer:
+    """One row of gpu.ai's market: a priced, placeable offering.
+
+    Unlike a catalogue rung, which keeps only the cheapest row per shape, an
+    offer keeps what *kind* of machine it is. Those differences are real: the
+    cheapest RTX 6000 Ada is a VM that boots in three to five minutes with a
+    fixed 350 GB disk, while the next one up is a container that boots in about
+    one, with a configurable disk and no nested Docker. Choosing between them
+    is the caller's decision, so none of it is collapsed here.
+
+    Attributes:
+        offering_id: Pin a launch to this row with it.
+        gpu_type: e.g. ``"rtx_6000_ada"``.
+        gpu_count: GPUs in the configuration; the price covers all of them.
+        region: Canonical region code.
+        tier: ``"on_demand"`` (``"spot"`` is soft-deprecated upstream).
+        price_per_hour: Whole-instance price in dollars, disk allowance included.
+        available: Units available now (a count, not a flag).
+        instant_boot: Reachable in about a minute (else ~3-5 minutes).
+        deployment_type: ``"vm"`` (root, Docker works) or ``"container"``
+            (unprivileged; SSH lands inside it), or ``None`` if unreported.
+        capacity_class: ``"secure"`` (datacenter) or ``"community"``.
+        community: Community-supplied capacity, with a softer SLA.
+        certified_image: Whether the certified base image runs here.
+        instance_disk_gb: Disk a launch receives by default, ``None`` if unknown.
+        disk_configurable: Whether ``disk_gb`` may be chosen at launch.
+        disk_price_per_gb_hour: Price of each GB *beyond* ``instance_disk_gb``.
+        storage_gb: Host storage, the ceiling for a pinned ``disk_gb``.
+        cpu_cores: Host vCPUs, ``None`` if unreported.
+        ram_gb: Host RAM, ``None`` if unreported.
+        vram_gb: VRAM **per GPU**, from ``/gpu-types``; ``None`` if unknown.
+        environment: The certified image and its CUDA/driver requirements.
+        raw: The row as the API returned it, for fields not modelled here.
+    """
+
+    offering_id: str
+    gpu_type: str
+    gpu_count: int
+    region: str
+    tier: str
+    price_per_hour: float
+    available: int = 0
+    instant_boot: bool | None = None
+    deployment_type: str | None = None
+    capacity_class: str | None = None
+    community: bool | None = None
+    certified_image: bool | None = None
+    instance_disk_gb: int | None = None
+    disk_configurable: bool | None = None
+    disk_price_per_gb_hour: float = 0.0
+    storage_gb: int | None = None
+    cpu_cores: int | None = None
+    ram_gb: int | None = None
+    vram_gb: float | None = None
+    environment: OfferEnvironment | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    @property
+    def shape(self) -> str:
+        """``"<count>x<gpu_type>"``, the catalogue's name for this shape."""
+        return f"{self.gpu_count}x{self.gpu_type}"
+
+    @property
+    def total_vram_gb(self) -> float | None:
+        """VRAM across every GPU in the configuration."""
+        return self.vram_gb * self.gpu_count if self.vram_gb is not None else None
+
+    def cost_per_hour(self, disk_gb: int | None = None) -> float:
+        """Dollars per hour for a launch of this offering with *disk_gb*.
+
+        Only disk **beyond** the offering's included allowance is billed, per
+        the contract; gpu.ai folds it into one cent-rounded hourly price, so
+        this can differ from the billed rate by under a cent.
+        """
+        extra = 0.0
+        if disk_gb is not None and self.instance_disk_gb is not None:
+            extra = max(0, int(disk_gb) - self.instance_disk_gb) * self.disk_price_per_gb_hour
+        return float(self.price_per_hour) + extra
+
+    @classmethod
+    def from_api(cls, row: Mapping[str, Any], *, vram_gb: float | None = None) -> GpuOffer:
+        def flag(key: str) -> bool | None:
+            value = row.get(key)
+            return bool(value) if value is not None else None
+
+        return cls(
+            offering_id=str(row.get("offering_id") or ""),
+            gpu_type=str(row.get("gpu_type") or ""),
+            gpu_count=int(row.get("gpu_count") or 0),
+            region=str(row.get("region") or ""),
+            tier=str(row.get("tier") or ""),
+            price_per_hour=float(row.get("price_per_hour") or 0.0),
+            available=int(row.get("available") or 0),
+            instant_boot=flag("instant_boot"),
+            deployment_type=str(row["deployment_type"]) if row.get("deployment_type") else None,
+            capacity_class=str(row["capacity_class"]) if row.get("capacity_class") else None,
+            community=flag("community"),
+            certified_image=flag("certified_image"),
+            instance_disk_gb=_known(row.get("instance_disk_gb")),
+            disk_configurable=flag("disk_configurable"),
+            disk_price_per_gb_hour=float(row.get("disk_price_per_gb_hour") or 0.0),
+            storage_gb=_known(row.get("storage_gb")),
+            cpu_cores=_known(row.get("cpu_cores")),
+            ram_gb=_known(row.get("ram_gb")),
+            vram_gb=vram_gb,
+            environment=OfferEnvironment.from_api(row.get("environment")),
+            raw=dict(row),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """A JSON-safe mapping, without ``raw``."""
+        out = {
+            name: getattr(self, name)
+            for name in self.__dataclass_fields__
+            if name not in {"raw", "environment"}
+        }
+        env = self.environment
+        out["environment"] = (
+            {
+                "image": env.image,
+                "image_digest": env.image_digest,
+                "cuda": env.cuda,
+                "driver_min": env.driver_min,
+            }
+            if env
+            else None
+        )
+        return out
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -242,18 +411,9 @@ class GpuAiRuntime:
         if self._catalogue is not None and not refresh:
             return self._catalogue
 
-        vram: dict[str, float] = {}
-        try:
-            types = await self._call("GET", "/gpu-types", authenticated=False)
-            for row in (types or {}).get("data", []):
-                if row.get("gpu_type") and row.get("vram_gb"):
-                    vram[str(row["gpu_type"])] = float(row["vram_gb"])
-        except Exception as exc:
-            logger.debug("gpu.ai: could not read /gpu-types: %s", exc)
-
-        pricing = await self._call("GET", "/pricing", authenticated=False)
+        vram = await self._vram()
         best: dict[str, GpuSku] = {}
-        for row in (pricing or {}).get("data", []):
+        for row in await self._pricing_rows():
             gpu_type = str(row.get("gpu_type") or "")
             count = int(row.get("gpu_count") or 0)
             price = row.get("price_per_hour")
@@ -308,6 +468,86 @@ class GpuAiRuntime:
             )
         self._catalogue = best
         return best
+
+    async def _vram(self) -> dict[str, float]:
+        """VRAM per GPU type, from the public ``/gpu-types``; empty on failure."""
+        vram: dict[str, float] = {}
+        try:
+            types = await self._call("GET", "/gpu-types", authenticated=False)
+            for row in (types or {}).get("data", []):
+                if row.get("gpu_type") and row.get("vram_gb"):
+                    vram[str(row["gpu_type"])] = float(row["vram_gb"])
+        except Exception as exc:
+            logger.debug("gpu.ai: could not read /gpu-types: %s", exc)
+        return vram
+
+    async def _pricing_rows(self, params: Mapping[str, Any] | None = None) -> list[dict]:
+        """Every ``/pricing`` row, following the cursor to the end.
+
+        ``/pricing`` is paged like every other listing. Reading only the first
+        page would quietly drop offerings -- possibly the cheapest one.
+        """
+        rows: list[dict[str, Any]] = []
+        query = {k: v for k, v in (params or {}).items() if v is not None}
+        cursor: str | None = None
+        for _ in range(50):
+            page_query = dict(query, cursor=cursor) if cursor else (query or None)
+            page = await self._call("GET", "/pricing", authenticated=False, params=page_query)
+            rows.extend((page or {}).get("data") or [])
+            cursor = (page or {}).get("next_cursor")
+            if not cursor:
+                break
+        return rows
+
+    async def offers(
+        self,
+        *,
+        gpu_type: str | None = None,
+        region: str | None = None,
+        tier: str | None = TIER,
+        include_unavailable: bool = False,
+    ) -> list[GpuOffer]:
+        """Every matching offering on gpu.ai's market, one :class:`GpuOffer` each.
+
+        Free and keyless, like :meth:`catalogue`, but nothing is collapsed:
+        every region, boot class, deployment type and capacity class keeps its
+        own row, cheapest first. :meth:`catalogue` answers "what is the
+        cheapest way to fit this model"; this answers "what exactly could I
+        rent", which is the question to ask before pinning one.
+
+        Args:
+            gpu_type: Only this GPU type, e.g. ``"rtx_6000_ada"``.
+            region: Only this region code.
+            tier: Only this tier; ``None`` for all. Defaults to on-demand, the
+                only tier that places today.
+            include_unavailable: Include rows with no units available now.
+        """
+        vram = await self._vram()
+        rows = await self._pricing_rows(
+            {
+                "gpu_type": gpu_type,
+                "region": region,
+                "tier": tier,
+                "include_unavailable": "true" if include_unavailable else None,
+            }
+        )
+        offers = [
+            GpuOffer.from_api(row, vram_gb=vram.get(str(row.get("gpu_type") or "")))
+            for row in rows
+            if row.get("gpu_type") and row.get("price_per_hour") is not None
+        ]
+        # Filtered here as well as in the query: a server that ignored a
+        # filter would otherwise hand the caller rows they excluded.
+        offers = [
+            offer
+            for offer in offers
+            if (gpu_type is None or offer.gpu_type == gpu_type)
+            and (region is None or offer.region == region)
+            and (tier is None or offer.tier == tier)
+            and (include_unavailable or offer.available > 0)
+        ]
+        offers.sort(key=lambda o: (o.cost_per_hour(), not o.instant_boot, o.offering_id))
+        return offers
 
     async def _build_sizer(self) -> Sizer:
         catalogue = await self.catalogue()

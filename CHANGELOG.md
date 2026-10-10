@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — gpu.ai's market as raw offers
+
+`GpuAiRuntime.catalogue()` keeps one rung per shape, the cheapest, and drops
+what kind of machine it is. For RTX 6000 Ada that silently picks a $0.65 VM
+that boots in 3–5 minutes with a fixed 350 GB disk over a $0.74 container that
+boots in about one.
+
+`GpuAiRuntime.offers(gpu_type=, region=, tier="on_demand",
+include_unavailable=False)` returns every matching row as a `GpuOffer`,
+cheapest first: `offering_id`, region, price, units available,
+`instant_boot`, `deployment_type` (`vm`/`container`), `capacity_class`,
+disk allowance and price, host specs, per-GPU VRAM and the certified
+image's CUDA and minimum driver (`OfferEnvironment`). Unreported specs (the
+API's `0`) are `None`, not zero. `GpuOffer.cost_per_hour(disk_gb)` prices
+only disk beyond the included allowance, as the contract bills it. Free and
+keyless, like `catalogue()`.
+
+**Fixed:** `/pricing` is paged and `catalogue()` read only the first page,
+which could drop the cheapest offering. Both now follow the cursor.
+
 ### Fixed — rental backends record a runtime before they rent it
 
 The manager's docstring promised "state is written before provisioning
