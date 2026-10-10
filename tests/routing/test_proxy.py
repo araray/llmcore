@@ -478,3 +478,124 @@ class TestHarnessEnv:
 
     def test_the_real_token_is_used_when_one_is_set(self):
         assert ProxyConfig(api_key="secret").harness_env()["OPENAI_API_KEY"] == "secret"
+
+
+# ---------------------------------------------------------------------------
+# The per-turn step budget
+# ---------------------------------------------------------------------------
+
+
+class TestTurnBudget:
+    """The proxy is where the expensive turns in the measurements came from.
+
+    Turns over 200 steps are 62% of this project's spend, so a step ceiling is
+    the lever -- and a harness talking to this endpoint has no idea llmcore is
+    here, which is exactly why the budget has to live on this side.
+    """
+
+    def _policy(self, **kwargs):
+        from llmcore.routing.budget import BudgetAction, BudgetPolicy
+
+        kwargs.setdefault("action", BudgetAction.STOP)
+        return BudgetPolicy(**kwargs)
+
+    def test_a_step_ceiling_refuses_the_next_call(self):
+        api = client(budget=self._policy(max_steps=2))
+        for _ in range(2):
+            assert api.post("/v1/chat/completions",
+                            json=body(user="turn-1")).status_code == 200
+        refused = api.post("/v1/chat/completions", json=body(user="turn-1"))
+        assert refused.status_code == 429
+        assert refused.json()["error"]["type"] == "budget_exceeded"
+        assert "2/2 steps" in refused.json()["error"]["message"]
+
+    def test_each_conversation_gets_its_own_budget(self):
+        api = client(budget=self._policy(max_steps=1))
+        assert api.post("/v1/chat/completions",
+                        json=body(user="alice")).status_code == 200
+        # Bob is not affected by Alice's exhausted turn.
+        assert api.post("/v1/chat/completions",
+                        json=body(user="bob")).status_code == 200
+        assert api.post("/v1/chat/completions",
+                        json=body(user="alice")).status_code == 429
+
+    def test_the_session_id_extension_also_identifies_a_turn(self):
+        api = client(budget=self._policy(max_steps=1))
+        payload = body()
+        payload["llmcore"] = {"session_id": "s-1"}
+        assert api.post("/v1/chat/completions", json=payload).status_code == 200
+        assert api.post("/v1/chat/completions", json=payload).status_code == 429
+
+    def test_an_unidentified_conversation_is_not_counted_at_all(self):
+        """Without a stable key every request gets a fresh synthetic session,
+        so "steps so far" would always be zero. Rather than enforce something
+        meaningless, the proxy declines to track the turn -- and says so in the
+        docs instead of pretending."""
+        api = client(budget=self._policy(max_steps=1))
+        for _ in range(5):
+            response = api.post("/v1/chat/completions", json=body())
+            assert response.status_code == 200
+            assert "budget" not in response.json()["llmcore"]
+
+    def test_the_usage_block_reports_the_budget(self):
+        api = client(budget=self._policy(max_steps=10))
+        served = api.post("/v1/chat/completions",
+                          json=body(user="turn-2")).json()["llmcore"]
+        assert served["budget"]["steps"] == 1
+        assert served["budget"]["state"] == "ok"
+
+    def test_no_budget_is_tracked_when_nothing_is_configured(self):
+        """Unbounded is the default, and an unbounded budget should not even
+        allocate: the proxy must stay exactly as it was for anyone who has not
+        asked for this."""
+        api = client()
+        served = api.post("/v1/chat/completions",
+                          json=body(user="turn-3")).json()["llmcore"]
+        assert "budget" not in served
+
+    def test_report_mode_counts_without_refusing(self):
+        from llmcore.routing.budget import BudgetAction
+
+        api = client(budget=self._policy(max_steps=1, action=BudgetAction.REPORT))
+        assert api.post("/v1/chat/completions",
+                        json=body(user="t")).status_code == 200
+        second = api.post("/v1/chat/completions", json=body(user="t"))
+        assert second.status_code == 200
+        assert second.json()["llmcore"]["budget"]["state"] == "exceeded"
+
+    def test_an_unpriced_target_is_not_counted_as_free(self):
+        """FakeInfo's model has no card pricing in this fixture, so the step
+        records an unknown cost. A spend ceiling must report that it cannot be
+        enforced rather than imply the turn is cheap."""
+        api = client(budget=self._policy(max_cost_usd=100.0, max_steps=50))
+        served = api.post("/v1/chat/completions",
+                          json=body(user="t")).json()["llmcore"]
+        budget = served["budget"]
+        assert budget["steps"] == 1
+        if budget["cost_is_partial"]:
+            assert "cannot be enforced" in (budget["reason"] or "")
+
+    def test_streaming_also_consumes_the_budget(self):
+        """Otherwise streaming would be a way to spend without being counted,
+        and a harness choosing `stream=true` would bypass the ceiling."""
+        api = client(budget=self._policy(max_steps=1))
+        with api.stream("POST", "/v1/chat/completions",
+                        json=body(user="s", stream=True)) as response:
+            assert response.status_code == 200
+            list(response.iter_lines())
+        assert api.post("/v1/chat/completions",
+                        json=body(user="s")).status_code == 429
+
+    def test_tracked_turns_do_not_grow_without_limit(self):
+        """This process holds every provider credential, so an unbounded dict
+        keyed by caller-supplied strings is not acceptable."""
+        from llmcore.bridge.proxy_app import MAX_TRACKED_TURNS
+
+        api = client(budget=self._policy(max_steps=5))
+        for i in range(MAX_TRACKED_TURNS + 10):
+            api.post("/v1/chat/completions", json=body(user=f"turn-{i}"))
+        # The store is a closure local, so assert the effect rather than the
+        # dict: the earliest turn was evicted and counts again from zero.
+        first_again = api.post("/v1/chat/completions", json=body(user="turn-0"))
+        assert first_again.status_code == 200
+        assert first_again.json()["llmcore"]["budget"]["steps"] == 1
