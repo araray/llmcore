@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — an ownership rule for strays on a shared account
+
+Every instance a rental backend's state store did not know was reported as an
+**orphan**, with the command to adopt it. On an account shared between tools —
+the same gpu.ai key used by hand from a CLI and by an application built on
+llmcore — that offers to take over, and so to terminate, someone else's
+running job.
+
+- `llmcore.runtimes.Ownership(name_prefix=..., known_ids=...)` says which
+  untracked compute is the caller's. Pass it to `GpuAiRuntime(...,
+  ownership=)` / `DeepInfraRuntime(..., ownership=)`, per call to
+  `status(ownership=)`, or set `runtimes.<backend>.owned_name_prefix` /
+  `owned_ids`.
+- With a rule, a stray the rule claims is still an orphan (ours, record
+  lost). One it does not claim is reported as **"not ours"**, with its real
+  phase, and no adopt hint.
+- `RuntimeStatus.owned` says which: `True` for anything in the state store or
+  claimed, `False` for compute started elsewhere, `None` when no rule was given.
+  Without a rule nothing changes.
+
 ### Added — account balance, spending-limit and usage reads
 
 The runtimes subsystem could rent, price and terminate, but not answer "how

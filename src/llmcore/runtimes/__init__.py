@@ -24,6 +24,7 @@ from .manager import RuntimeError_, RuntimeManager, SpendNotConfirmedError
 from .models import (
     CostUnit,
     ModelSpec,
+    Ownership,
     Plan,
     Quantization,
     RuntimeHandle,
@@ -39,6 +40,7 @@ __all__ = [
     "ComputeRuntime",
     "CostUnit",
     "ModelSpec",
+    "Ownership",
     "Plan",
     "Quantization",
     "RuntimeError_",

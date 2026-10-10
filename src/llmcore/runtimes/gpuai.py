@@ -49,6 +49,7 @@ from .manager import RuntimeError_
 from .models import (
     CostUnit,
     ModelSpec,
+    Ownership,
     Plan,
     RuntimeHandle,
     RuntimePhase,
@@ -494,6 +495,7 @@ class GpuAiRuntime:
         api_key: str | None = None,
         base_url: str | None = None,
         client: Any = None,
+        ownership: Ownership | None = None,
     ) -> None:
         get = getattr(config, "get", None) if config is not None else None
         self._get = get or (lambda _k, d=None: d)
@@ -502,6 +504,10 @@ class GpuAiRuntime:
             base_url or self._get("runtimes.gpuai.base_url", DEFAULT_GPUAI_API_BASE)
             or DEFAULT_GPUAI_API_BASE
         ).rstrip("/")
+        self._ownership = ownership or Ownership(
+            name_prefix=self._get("runtimes.gpuai.owned_name_prefix", None) or None,
+            known_ids=frozenset(self._get("runtimes.gpuai.owned_ids", None) or ()),
+        )
         self._api_key = api_key
         self._client = client
         self._sizer = sizer
@@ -1588,14 +1594,25 @@ class GpuAiRuntime:
     # status / logs / down / adopt
     # ------------------------------------------------------------------
 
-    async def status(self, name: str | None = None) -> list[RuntimeStatus]:
+    async def status(
+        self, name: str | None = None, *, ownership: Ownership | None = None
+    ) -> list[RuntimeStatus]:
         """Report on runtimes, reconciled against what gpu.ai says exists.
 
         The reconciliation matters more here than on Colab. A forgotten Colab
         session expires by itself; a forgotten rental bills by the hour until
         someone terminates it, so an instance gpu.ai has that llmcore does not
         know about is reported as an orphan with the command to adopt it.
+
+        Unless an :class:`~llmcore.runtimes.models.Ownership` rule says it is
+        someone else's. On a shared account an untracked instance may be a
+        job started by hand or by another tool, and offering to adopt it is
+        offering to kill it. With a rule (*ownership*, else the constructor's,
+        else ``runtimes.gpuai.owned_name_prefix``/``owned_ids``), instances it
+        does not claim are reported with ``owned=False`` as "not ours", with
+        no adopt hint.
         """
+        rule = ownership if ownership is not None else self._ownership
         handles = [self._state.load(name)] if name else self._state.load_all()
         handles = [handle for handle in handles if handle is not None]
         handles = [handle for handle in handles if handle.runtime == self.name]
@@ -1658,6 +1675,27 @@ class GpuAiRuntime:
                 instance = live[instance_id]
                 label = str(instance.get("name") or instance_id)
                 rate = instance.get("price_per_hour")
+                if not rule.claims(external_id=instance_id, name=instance.get("name")):
+                    out.append(
+                        RuntimeStatus(
+                            name=label,
+                            runtime=self.name,
+                            phase=_PHASES.get(
+                                str(instance.get("status") or ""), RuntimePhase.DEGRADED
+                            ),
+                            sku=f"{instance.get('gpu_count') or 1}x{instance.get('gpu_type') or ''}",
+                            spend_unit=CostUnit.USD,
+                            owned=False,
+                            error=(
+                                f"not ours: gpu.ai instance {instance_id} is "
+                                f"{instance.get('status')}"
+                                + (f" at ${float(rate):.2f}/hour" if rate else "")
+                                + "; it was started elsewhere on this account and "
+                                "is left alone"
+                            ),
+                        )
+                    )
+                    continue
                 out.append(
                     RuntimeStatus(
                         name=label,
@@ -1665,6 +1703,7 @@ class GpuAiRuntime:
                         phase=RuntimePhase.DEGRADED,
                         sku=f"{instance.get('gpu_count') or 1}x{instance.get('gpu_type') or ''}",
                         spend_unit=CostUnit.USD,
+                        owned=True if rule.active else None,
                         error=(
                             f"orphan: gpu.ai instance {instance_id} is "
                             f"{instance.get('status')}"

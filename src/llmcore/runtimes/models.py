@@ -22,6 +22,7 @@ __all__ = [
     "SECRET_METADATA_KEYS",
     "CostUnit",
     "ModelSpec",
+    "Ownership",
     "Plan",
     "Quantization",
     "RuntimeHandle",
@@ -496,6 +497,48 @@ class RuntimeHandle:
 
 
 @dataclass(frozen=True, slots=True)
+class Ownership:
+    """Which compute on a shared account belongs to this caller.
+
+    A rental account is often shared between tools: the same gpu.ai key may
+    rent boxes from llmcore, from a CLI used by hand, and from an application
+    built on llmcore. Without a rule, everything a backend's state store does
+    not know is an *orphan* with an "adopt it" hint -- and adopting someone
+    else's running job is how it gets terminated by the wrong tool.
+
+    With a rule, untracked compute splits in two: what the rule claims is a
+    genuine orphan (ours, record lost), and everything else is reported as
+    **not ours** -- visible, never offered for adoption.
+
+    Attributes:
+        name_prefix: Compute whose name starts with this is ours.
+        known_ids: Vendor ids known to be ours (e.g. from the caller's own
+            records of what it rented).
+    """
+
+    name_prefix: str | None = None
+    known_ids: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.known_ids, frozenset):
+            object.__setattr__(self, "known_ids", frozenset(str(i) for i in self.known_ids))
+
+    @property
+    def active(self) -> bool:
+        """Whether there is any rule at all. An empty one claims everything,
+        which is the behaviour before ownership existed."""
+        return bool(self.name_prefix or self.known_ids)
+
+    def claims(self, *, external_id: str, name: str | None = None) -> bool:
+        """Whether compute with this id and name is ours."""
+        if not self.active:
+            return True
+        if external_id and str(external_id) in self.known_ids:
+            return True
+        return bool(self.name_prefix and name and str(name).startswith(self.name_prefix))
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeStatus:
     """A point-in-time view of one runtime, for display.
 
@@ -521,6 +564,10 @@ class RuntimeStatus:
         max_spend: The ceiling it is being compared against, when set.
         spend_unit: What both are denominated in.
         error: Failure detail.
+        owned: Whether this is the caller's compute: ``True`` for anything in
+            the state store or claimed by an :class:`Ownership` rule,
+            ``False`` for compute on the account that was started elsewhere,
+            ``None`` when no rule was given to tell.
     """
 
     name: str
@@ -537,6 +584,7 @@ class RuntimeStatus:
     max_spend: float | None = None
     spend_unit: CostUnit = CostUnit.COMPUTE_UNIT
     error: str | None = None
+    owned: bool | None = None
 
     @property
     def spend_so_far(self) -> str | None:
@@ -577,4 +625,6 @@ class RuntimeStatus:
             max_spend=handle.max_spend,
             spend_unit=handle.spend_unit,
             error=handle.error,
+            # In the state store means llmcore started or adopted it.
+            owned=True,
         )

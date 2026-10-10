@@ -359,3 +359,91 @@ class TestGetAndTerminate:
         }))
         with pytest.raises(RuntimeError_, match="500"):
             await runtime.terminate("inst-9")
+
+
+# ---------------------------------------------------------------------------
+# Ownership: strays on a shared account
+# ---------------------------------------------------------------------------
+
+from llmcore.runtimes import Ownership  # noqa: E402
+from llmcore.runtimes.deepinfra import DeepInfraRuntime  # noqa: E402
+
+MINE = dict(BARE_RUNNING, id="inst-mine", name="bellavox-ws-r7")
+THEIRS = dict(BARE_RUNNING, id="inst-theirs", name="ada-finetune")
+KNOWN = dict(BARE_RUNNING, id="inst-known", name="renamed-by-hand")
+
+
+def account(*rows):
+    return {("GET", "/instances"): FakeResponse(200, {"data": list(rows), "next_cursor": None})}
+
+
+class TestOwnership:
+    async def test_without_a_rule_every_stray_is_an_orphan(self, tmp_path):
+        """The behaviour before ownership existed, kept as the default."""
+        statuses = await runtime_with(tmp_path, account(MINE, THEIRS)).status()
+        assert all("orphan" in s.error for s in statuses)
+        assert all(s.owned is None for s in statuses)
+
+    async def test_someone_elses_instance_is_not_ours_and_not_offered(self, tmp_path):
+        """A job the owner started with another tool must never be offered for
+        adoption: adopting it is the first step to killing it."""
+        runtime = GpuAiRuntime(
+            config=config(), state_store=RuntimeStateStore(tmp_path), api_key="k",
+            client=FakeHttp(account(MINE, THEIRS, KNOWN)),
+            ownership=Ownership(name_prefix="bellavox-", known_ids={"inst-known"}),
+        )
+        rows = {s.name: s for s in await runtime.status()}
+        theirs = rows["ada-finetune"]
+        assert theirs.owned is False
+        assert theirs.error.startswith("not ours")
+        assert "adopt" not in theirs.error
+        assert theirs.phase is RuntimePhase.READY, "its real phase, not a fault"
+
+        assert rows["bellavox-ws-r7"].owned is True
+        assert "adopt" in rows["bellavox-ws-r7"].error, "ours, record lost: an orphan"
+        assert rows["renamed-by-hand"].owned is True, "claimed by id"
+
+    async def test_a_rule_can_be_given_per_call(self, tmp_path):
+        runtime = runtime_with(tmp_path, account(THEIRS))
+        [row] = await runtime.status(ownership=Ownership(name_prefix="bellavox-"))
+        assert row.owned is False
+
+    async def test_a_rule_can_come_from_config(self, tmp_path):
+        runtime = runtime_with(
+            tmp_path, account(MINE, THEIRS),
+            **{"runtimes.gpuai.owned_name_prefix": "bellavox-"},
+        )
+        owned = {s.name: s.owned for s in await runtime.status()}
+        assert owned == {"bellavox-ws-r7": True, "ada-finetune": False}
+
+    async def test_tracked_rentals_are_always_ours(self, tmp_path):
+        routes = rent_routes()
+        routes.update(account(BARE_RUNNING))
+        runtime = runtime_with(tmp_path, routes)
+        await runtime.rent(bare_request(), name="r")
+        [row] = await runtime.status(ownership=Ownership(name_prefix="nothing-matches"))
+        assert row.name == "r" and row.owned is True
+
+    async def test_an_empty_rule_claims_everything(self):
+        assert Ownership().claims(external_id="x", name="y")
+        assert not Ownership(name_prefix="a").claims(external_id="x", name="y")
+        assert Ownership(known_ids=["x"]).claims(external_id="x")
+
+    async def test_deepinfra_applies_the_same_rule(self, tmp_path):
+        from .test_rental_backends import DEPLOY_RUNNING
+
+        runtime = DeepInfraRuntime(
+            config=config(), state_store=RuntimeStateStore(tmp_path), api_key="k",
+            client=FakeHttp({
+                ("GET", "/deploy/list"): FakeResponse(200, [
+                    dict(DEPLOY_RUNNING, deploy_id="d-theirs", model_name="araray/other"),
+                    dict(DEPLOY_RUNNING, deploy_id="d-mine", model_name="araray/bv-qwen"),
+                ]),
+                ("GET", "/payment/usage/rent"): FakeResponse(200, {"id_to_duration": {}}),
+            }),
+            ownership=Ownership(known_ids={"d-mine"}),
+        )
+        rows = {s.name: s for s in await runtime.status()}
+        assert rows["araray/other"].owned is False
+        assert "not ours" in rows["araray/other"].error
+        assert rows["araray/bv-qwen"].owned is True

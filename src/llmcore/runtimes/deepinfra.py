@@ -43,6 +43,7 @@ from .manager import RuntimeError_
 from .models import (
     CostUnit,
     ModelSpec,
+    Ownership,
     Plan,
     RuntimeHandle,
     RuntimePhase,
@@ -99,6 +100,7 @@ class DeepInfraRuntime:
         api_key: str | None = None,
         base_url: str | None = None,
         client: Any = None,
+        ownership: Ownership | None = None,
     ) -> None:
         get = getattr(config, "get", None) if config is not None else None
         self._get = get or (lambda _k, d=None: d)
@@ -113,6 +115,10 @@ class DeepInfraRuntime:
         self._sizer = sizer
         self._catalogue: dict[str, GpuSku] | None = None
         self._owner: str | None = None
+        self._ownership = ownership or Ownership(
+            name_prefix=self._get("runtimes.deepinfra.owned_name_prefix", None) or None,
+            known_ids=frozenset(self._get("runtimes.deepinfra.owned_ids", None) or ()),
+        )
 
     # ------------------------------------------------------------------
     # Config and transport
@@ -634,8 +640,15 @@ class DeepInfraRuntime:
     # status / logs / down / adopt
     # ------------------------------------------------------------------
 
-    async def status(self, name: str | None = None) -> list[RuntimeStatus]:
+    async def status(
+        self, name: str | None = None, *, ownership: Ownership | None = None
+    ) -> list[RuntimeStatus]:
         """Report on runtimes, reconciled against DeepInfra's deployment list.
+
+        With an :class:`~llmcore.runtimes.models.Ownership` rule, untracked
+        deployments it does not claim (by ``deploy_id``, or by a
+        ``model_name`` prefix) are reported as "not ours" with
+        ``owned=False`` instead of as orphans to adopt.
 
         Only deployments in :data:`BILLED_TYPES` are reconciled. A ``legacy``
         entry is a serverless, per-token model reference -- it appears in the
@@ -679,10 +692,30 @@ class DeepInfraRuntime:
             out.append(RuntimeStatus.from_handle(handle))
 
         if name is None and listed:
+            rule = ownership if ownership is not None else self._ownership
             known = {handle.external_id for handle in handles}
             for deploy_id in sorted(set(live) - known):
                 deployment = live[deploy_id]
                 label = str(deployment.get("model_name") or deploy_id)
+                if not rule.claims(external_id=deploy_id, name=deployment.get("model_name")):
+                    out.append(
+                        RuntimeStatus(
+                            name=label,
+                            runtime=self.name,
+                            phase=_PHASES.get(
+                                str(deployment.get("status") or ""), RuntimePhase.DEGRADED
+                            ),
+                            sku=str((deployment.get("config") or {}).get("gpu") or ""),
+                            spend_unit=CostUnit.USD,
+                            owned=False,
+                            error=(
+                                f"not ours: DeepInfra deployment {deploy_id} is "
+                                f"{deployment.get('status')}; it was started elsewhere "
+                                f"on this account and is left alone"
+                            ),
+                        )
+                    )
+                    continue
                 out.append(
                     RuntimeStatus(
                         name=label,
@@ -690,6 +723,7 @@ class DeepInfraRuntime:
                         phase=RuntimePhase.DEGRADED,
                         sku=str((deployment.get("config") or {}).get("gpu") or ""),
                         spend_unit=CostUnit.USD,
+                        owned=True if rule.active else None,
                         error=(
                             f"orphan: DeepInfra deployment {deploy_id} "
                             f"({deployment.get('type')}) is "
