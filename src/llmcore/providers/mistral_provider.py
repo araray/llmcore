@@ -27,6 +27,7 @@ import io
 import json
 import logging
 import os
+import secrets
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -1119,10 +1120,14 @@ class MistralProvider(BaseProvider):
             form_data["temperature"] = str(temperature)
         if diarize:
             form_data["diarize"] = "true"
+        # Array fields go as repeated form fields (what Mistral's own SDK sends),
+        # not as one JSON-encoded string.
         if context_bias:
-            form_data["context_bias"] = json.dumps(context_bias)
+            form_data["context_bias"] = (
+                [context_bias] if isinstance(context_bias, str) else list(context_bias)
+            )
         if timestamp_granularities:
-            form_data["timestamp_granularities"] = json.dumps(timestamp_granularities)
+            form_data["timestamp_granularities"] = list(timestamp_granularities)
 
         logger.debug(
             "Mistral STT: model=%s, language=%s, diarize=%s",
@@ -1132,10 +1137,18 @@ class MistralProvider(BaseProvider):
         )
 
         try:
-            # Use a separate request without the default JSON content-type
+            # The client's default "Content-Type: application/json" survives
+            # httpx's header merge and would label this multipart body as JSON
+            # (with no boundary), so set the form content type explicitly; httpx
+            # takes the multipart boundary from this header.
+            if files_param:
+                content_type = f"multipart/form-data; boundary={secrets.token_hex(16)}"
+            else:
+                content_type = "application/x-www-form-urlencoded"
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
+                "Content-Type": content_type,
             }
             resp = await self._client.post(
                 "/audio/transcriptions",
@@ -1155,14 +1168,19 @@ class MistralProvider(BaseProvider):
 
             text = result.get("text", "")
             detected_lang = result.get("language")
+            # Segments (present only when timestamp_granularities was sent) carry
+            # text, start, end, an optional score and, when diarized, speaker_id.
+            # The response schema has no separate word list (mistralai SDK
+            # TranscriptionResponse: text, language, segments, usage).
             segments: list[TranscriptionSegment] = []
-            for seg in result.get("segments", []):
+            for seg in result.get("segments") or []:
+                speaker = seg.get("speaker_id")
                 segments.append(
                     TranscriptionSegment(
-                        text=seg.get("text", ""),
-                        start=seg.get("start", 0.0),
-                        end=seg.get("end", 0.0),
-                        speaker=seg.get("speaker_id"),
+                        text=seg.get("text", "") or "",
+                        start=float(seg.get("start") or 0.0),
+                        end=float(seg.get("end") or 0.0),
+                        speaker=str(speaker) if speaker is not None else None,
                     )
                 )
 

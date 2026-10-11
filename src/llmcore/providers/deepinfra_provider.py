@@ -580,10 +580,11 @@ class DeepInfraProvider(OpenAIProvider):
             model: TTS model; defaults to :data:`DEFAULT_DEEPINFRA_TTS_MODEL`.
             response_format: One of ``mp3``, ``opus``, ``flac``, ``wav``, ``pcm``.
             speed: Playback speed multiplier (0.25-4.0).
-            instructions: Ignored by most DeepInfra TTS models; forwarded via
-                ``extra_body`` for forward compatibility.
+            instructions: Ignored by most DeepInfra TTS models; sent as a
+                top-level ``instructions`` field for those that read it.
             service_tier: ``"default"`` or ``"priority"``.
-            **kwargs: Extra model-specific parameters (forwarded in ``extra_body``).
+            **kwargs: Extra model-specific parameters, sent as top-level body
+                fields (an ``extra_body`` dict is flattened the same way).
 
         Returns:
             A :class:`~llmcore.models_multimodal.SpeechResult` with raw audio.
@@ -609,12 +610,16 @@ class DeepInfraProvider(OpenAIProvider):
         if service_tier is not None:
             payload["service_tier"] = service_tier
 
-        extra_body = dict(kwargs.pop("extra_body", None) or {})
+        # This is a raw JSON request, not an OpenAI SDK call: ``extra_body`` is
+        # an SDK kwarg whose fields the SDK merges into the top level of the
+        # body. Do the same here; a literal "extra_body" key is not an API field.
+        # Named arguments win over a clashing extra field.
+        extras = dict(kwargs.pop("extra_body", None) or {})
+        extras.update(kwargs)
         if instructions is not None:
-            extra_body["instructions"] = instructions
-        extra_body.update(kwargs)
-        if extra_body:
-            payload["extra_body"] = extra_body
+            extras["instructions"] = instructions
+        for key, value in extras.items():
+            payload.setdefault(key, value)
 
         logger.debug(
             "DeepInfra TTS: model=%s voice=%s format=%s len=%d",
@@ -678,6 +683,7 @@ class DeepInfraProvider(OpenAIProvider):
             temperature: Sampling temperature (default 0 server-side).
             timestamp_granularities: ``["segment"]`` and/or ``["word"]`` —
                 forces ``verbose_json`` when set with the default ``json`` format.
+                Whisper models default to both when neither is given.
             **kwargs: Extra form fields forwarded to the endpoint.
 
         Returns:
@@ -765,7 +771,12 @@ class DeepInfraProvider(OpenAIProvider):
         Returns:
             A :class:`~llmcore.models_multimodal.TranscriptionResult`.
         """
-        from ..models_multimodal import TranscriptionResult, TranscriptionSegment
+        from ..models_multimodal import (
+            TranscriptionResult,
+            TranscriptionSegment,
+            TranscriptionWord,
+            attach_words_to_segments,
+        )
 
         self._require_httpx()
         stt_model = model or DEFAULT_DEEPINFRA_STT_MODEL
@@ -780,6 +791,16 @@ class DeepInfraProvider(OpenAIProvider):
         else:
             content = audio_data
             filename = "audio.wav"
+
+        # Whisper returns word + segment timings at no extra cost with
+        # verbose_json, so a plain transcription asks for them by default.
+        if (
+            endpoint == "transcriptions"
+            and response_format == "json"
+            and timestamp_granularities is None
+            and "whisper" in stt_model.lower()
+        ):
+            timestamp_granularities = ["word", "segment"]
 
         # ``timestamp_granularities`` requires verbose_json.
         if timestamp_granularities and response_format == "json":
@@ -832,22 +853,41 @@ class DeepInfraProvider(OpenAIProvider):
             logger.error("DeepInfra STT request failed: %s", e, exc_info=True)
             raise ProviderError(self.get_name(), f"STT error: {e}") from e
 
-        text = body.get("text", "") if isinstance(body, dict) else str(body)
+        if not isinstance(body, dict):
+            body = {"text": str(body)}
+        text = body.get("text", "") or ""
+
+        def _word(w: dict[str, Any]) -> TranscriptionWord:
+            return TranscriptionWord(
+                word=w.get("word", "") or "",
+                start=float(w.get("start", 0.0) or 0.0),
+                end=float(w.get("end", 0.0) or 0.0),
+                probability=w.get("probability"),
+            )
+
+        # Words may come nested in each segment (Whisper's native shape) or as
+        # one flat top-level list (OpenAI's verbose_json shape); keep both.
         segments: list[TranscriptionSegment] = []
-        for seg in (body.get("segments") or []) if isinstance(body, dict) else []:
+        for seg in body.get("segments") or []:
             if isinstance(seg, dict):
                 segments.append(
                     TranscriptionSegment(
                         text=seg.get("text", ""),
                         start=float(seg.get("start", 0.0) or 0.0),
                         end=float(seg.get("end", 0.0) or 0.0),
+                        words=[_word(w) for w in seg.get("words") or [] if isinstance(w, dict)],
                     )
                 )
+        flat_words = [_word(w) for w in body.get("words") or [] if isinstance(w, dict)]
+        if not any(seg.words for seg in segments):
+            segments = attach_words_to_segments(segments, flat_words, text=text)
 
         return TranscriptionResult(
             text=text,
-            language=(body.get("language") if isinstance(body, dict) else None) or language,
-            duration_seconds=(body.get("duration") if isinstance(body, dict) else None),
+            # A caller's hint forces the decoding language, so it wins; else the
+            # provider's value is kept as given (may be a full name, not ISO).
+            language=language or body.get("language"),
+            duration_seconds=body.get("duration"),
             segments=segments,
             model=stt_model,
             metadata={},

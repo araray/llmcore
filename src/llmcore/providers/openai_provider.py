@@ -1112,12 +1112,20 @@ class OpenAIProvider(BaseProvider):
             response_format: json, text, srt, verbose_json, vtt.
             temperature: Sampling temperature.
             timestamp_granularities: ``["word"]`` and/or ``["segment"]``.
+                Whisper models default to both (with ``verbose_json``) when
+                neither is given, so segments carry word timings.
             **kwargs: Extra API parameters (e.g. ``chunking_strategy``).
 
         Returns:
-            ``TranscriptionResult`` with transcribed text and segments.
+            ``TranscriptionResult`` with transcribed text and segments (with
+            their words when word timestamps were returned).
         """
-        from ..models_multimodal import TranscriptionResult, TranscriptionSegment
+        from ..models_multimodal import (
+            TranscriptionResult,
+            TranscriptionSegment,
+            TranscriptionWord,
+            attach_words_to_segments,
+        )
 
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
@@ -1153,15 +1161,24 @@ class OpenAIProvider(BaseProvider):
             api_kwargs["language"] = language
         if prompt is not None:
             api_kwargs["prompt"] = prompt
+        # Whisper models return word and segment timings at no extra cost when
+        # asked for verbose_json, so a plain request gets them by default; the
+        # gpt-4o-*-transcribe models accept only json (diarize: diarized_json).
+        if (
+            response_format == "json"
+            and timestamp_granularities is None
+            and "whisper" in stt_model.lower()
+        ):
+            timestamp_granularities = ["word", "segment"]
+        if timestamp_granularities and response_format == "json":
+            # verbose_json needed for timestamps
+            response_format = "verbose_json"
         if response_format != "json":
             api_kwargs["response_format"] = response_format
         if temperature is not None:
             api_kwargs["temperature"] = temperature
         if timestamp_granularities:
             api_kwargs["timestamp_granularities"] = timestamp_granularities
-            # verbose_json needed for timestamps
-            if response_format == "json":
-                api_kwargs["response_format"] = "verbose_json"
         api_kwargs.update(kwargs)
 
         logger.debug(
@@ -1186,35 +1203,48 @@ class OpenAIProvider(BaseProvider):
             else:
                 text = str(response)
 
-            # Extract segments if available (verbose_json format)
+            def _field(obj: Any, key: str, default: Any = None) -> Any:
+                if isinstance(obj, dict):
+                    return obj.get(key, default)
+                return getattr(obj, key, default)
+
+            # Extract segments if available (verbose_json / diarized_json).
             segments: list[TranscriptionSegment] = []
-            if hasattr(response, "segments") and response.segments:
-                for seg in response.segments:
-                    segments.append(
-                        TranscriptionSegment(
-                            text=seg.get("text", "")
-                            if isinstance(seg, dict)
-                            else getattr(seg, "text", ""),
-                            start=seg.get("start", 0.0)
-                            if isinstance(seg, dict)
-                            else getattr(seg, "start", 0.0),
-                            end=seg.get("end", 0.0)
-                            if isinstance(seg, dict)
-                            else getattr(seg, "end", 0.0),
-                        )
+            for seg in getattr(response, "segments", None) or []:
+                speaker = _field(seg, "speaker")
+                segments.append(
+                    TranscriptionSegment(
+                        text=_field(seg, "text", "") or "",
+                        start=float(_field(seg, "start", 0.0) or 0.0),
+                        end=float(_field(seg, "end", 0.0) or 0.0),
+                        speaker=str(speaker) if speaker is not None else None,
                     )
+                )
+
+            # Word timings (verbose_json with the "word" granularity) come as a
+            # separate flat list; place each word in its segment.
+            words = [
+                TranscriptionWord(
+                    word=_field(w, "word", "") or "",
+                    start=float(_field(w, "start", 0.0) or 0.0),
+                    end=float(_field(w, "end", 0.0) or 0.0),
+                )
+                for w in getattr(response, "words", None) or []
+            ]
+            segments = attach_words_to_segments(segments, words, text=text)
 
             duration = None
             if hasattr(response, "duration"):
                 duration = response.duration
 
-            detected_lang = None
-            if hasattr(response, "language"):
-                detected_lang = response.language
+            # verbose_json reports a full language name ("portuguese"), not an
+            # ISO-639-1 code. A caller's hint forces the decoding language, so
+            # it wins; otherwise the provider's value is kept as given.
+            detected_lang = getattr(response, "language", None)
 
             return TranscriptionResult(
                 text=text,
-                language=detected_lang or language,
+                language=language or detected_lang,
                 duration_seconds=duration,
                 segments=segments,
                 model=stt_model,

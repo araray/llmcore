@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — transcription keeps word timings, speakers and language
+
+`transcribe_audio` threw away most of what OpenAI, DeepInfra, Mistral and
+Deepgram return. `TranscriptionSegment` gains `words: list[TranscriptionWord]`
+(`word`, `start`, `end`, `probability`, `speaker`; empty by default), and the
+four providers fill it:
+
+- **OpenAI / DeepInfra (Whisper):** a plain request to a Whisper model now asks
+  for `verbose_json` with `["word", "segment"]` granularities (free for
+  Whisper); words are placed in the segment that contains them
+  (`attach_words_to_segments`). `gpt-4o-*-transcribe` stays on `json`; a
+  `diarized_json` response keeps its speaker labels. A caller's language hint
+  wins; otherwise the provider's value is kept as given (Whisper's
+  `verbose_json` says `"portuguese"`, not `"pt"`).
+- **Deepgram:** words (punctuated form, confidence, speaker) from utterances,
+  else paragraph sentences, else one segment over all words; the detected
+  language (`detected_language`, or the dominant `languages` entry for
+  `multi`) instead of only the hint.
+- **Mistral:** the request was a multipart body labelled
+  `application/json` (the client's default header won), and array fields
+  (`timestamp_granularities`, `context_bias`) went as one JSON string; both
+  now match Mistral's own SDK. Segments keep `speaker_id`.
+
+### Fixed — DeepInfra TTS sends its extra fields
+
+`generate_speech` put `instructions` and extra kwargs under a literal
+`"extra_body"` key in a raw httpx JSON body, so the API never saw them. They
+are now top-level body fields (named arguments win on a clash).
+
 ### Added — the artifact cache can actually be collected
 
 `ArtifactStore.gc()` existed and had **no callers**, for two reasons. It
