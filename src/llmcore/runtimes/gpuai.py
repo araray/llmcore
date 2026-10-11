@@ -23,22 +23,36 @@ than a bearer token.
 
 from __future__ import annotations
 
+import json
+
 import asyncio
 import base64
 import logging
 import math
 import os
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .accounts import (
+    AccountBalance,
+    SpendingLimit,
+    SshKey,
+    UsageBucket,
+    UsageReport,
+    _dollars,
+    _parse_ts,
+    check_public_key,
+)
 from .diagnostics import Check
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
     ModelSpec,
+    Ownership,
     Plan,
     RuntimeHandle,
     RuntimePhase,
@@ -49,7 +63,14 @@ from .state import RuntimeStateStore
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DEFAULT_GPUAI_API_BASE", "GpuAiRuntime"]
+__all__ = [
+    "DEFAULT_GPUAI_API_BASE",
+    "GpuAiRuntime",
+    "GpuOffer",
+    "InstancePort",
+    "InstanceRequest",
+    "OfferEnvironment",
+]
 
 #: Public developer API root. ``/pricing``, ``/gpu-types`` and ``/environments``
 #: under it need no credentials, which is what lets ``estimate`` stay free.
@@ -78,6 +99,379 @@ _PHASES: Mapping[str, RuntimePhase] = {
 }
 
 
+#: Operation states after which the operation will make nothing more.
+_OPERATION_ENDED = frozenset({"failed", "cancelled"})
+
+#: Create-body fields safe to keep in a state file. ``env`` is deliberately
+#: absent -- it may carry an ``HF_TOKEN`` -- and is recorded by key name only.
+_SUMMARY_FIELDS = (
+    "gpu_type",
+    "gpu_count",
+    "tier",
+    "region",
+    "offering_id",
+    "template_id",
+    "environment",
+    "image",
+    "disk_gb",
+    "ports",
+    "ssh_key_ids",
+    "auto_terminate_hours",
+    "max_price_per_hour",
+    "viewed_price_per_hour",
+)
+
+
+def _request_summary(body: Mapping[str, Any]) -> dict[str, Any]:
+    """What was asked for, minus anything secret, for the state file."""
+    summary = {k: body[k] for k in _SUMMARY_FIELDS if body.get(k) is not None}
+    if body.get("env"):
+        summary["env_keys"] = sorted(body["env"])
+    return summary
+
+
+def _known(value: Any) -> int | None:
+    """gpu.ai writes ``0`` for an unreported spec. That is unknown, not zero."""
+    try:
+        number = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return number or None
+
+
+@dataclass(frozen=True, slots=True)
+class OfferEnvironment:
+    """The certified image an offering boots, and what it needs of the host.
+
+    Attributes:
+        image: Image reference, e.g. ``ghcr.io/gpuai-dev/base-cuda124:2026-07``.
+        image_digest: The same, pinned to its digest.
+        cuda: CUDA runtime version in the image, e.g. ``"12.4"``.
+        driver_min: Minimum NVIDIA driver on the host, e.g. ``"550.54.14"``.
+    """
+
+    image: str | None = None
+    image_digest: str | None = None
+    cuda: str | None = None
+    driver_min: str | None = None
+
+    @classmethod
+    def from_api(cls, payload: Any) -> OfferEnvironment | None:
+        if not isinstance(payload, Mapping) or not payload:
+            return None
+        return cls(
+            image=payload.get("image") or None,
+            image_digest=payload.get("image_digest") or None,
+            cuda=str(payload["cuda"]) if payload.get("cuda") else None,
+            driver_min=str(payload["driver_min"]) if payload.get("driver_min") else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GpuOffer:
+    """One row of gpu.ai's market: a priced, placeable offering.
+
+    Unlike a catalogue rung, which keeps only the cheapest row per shape, an
+    offer keeps what *kind* of machine it is. Those differences are real: the
+    cheapest RTX 6000 Ada is a VM that boots in three to five minutes with a
+    fixed 350 GB disk, while the next one up is a container that boots in about
+    one, with a configurable disk and no nested Docker. Choosing between them
+    is the caller's decision, so none of it is collapsed here.
+
+    Attributes:
+        offering_id: Pin a launch to this row with it.
+        gpu_type: e.g. ``"rtx_6000_ada"``.
+        gpu_count: GPUs in the configuration; the price covers all of them.
+        region: Canonical region code.
+        tier: ``"on_demand"`` (``"spot"`` is soft-deprecated upstream).
+        price_per_hour: Whole-instance price in dollars, disk allowance included.
+        available: Units available now (a count, not a flag).
+        instant_boot: Reachable in about a minute (else ~3-5 minutes).
+        deployment_type: ``"vm"`` (root, Docker works) or ``"container"``
+            (unprivileged; SSH lands inside it), or ``None`` if unreported.
+        capacity_class: ``"secure"`` (datacenter) or ``"community"``.
+        community: Community-supplied capacity, with a softer SLA.
+        certified_image: Whether the certified base image runs here.
+        instance_disk_gb: Disk a launch receives by default, ``None`` if unknown.
+        disk_configurable: Whether ``disk_gb`` may be chosen at launch.
+        disk_price_per_gb_hour: Price of each GB *beyond* ``instance_disk_gb``.
+        storage_gb: Host storage, the ceiling for a pinned ``disk_gb``.
+        cpu_cores: Host vCPUs, ``None`` if unreported.
+        ram_gb: Host RAM, ``None`` if unreported.
+        vram_gb: VRAM **per GPU**, from ``/gpu-types``; ``None`` if unknown.
+        environment: The certified image and its CUDA/driver requirements.
+        raw: The row as the API returned it, for fields not modelled here.
+    """
+
+    offering_id: str
+    gpu_type: str
+    gpu_count: int
+    region: str
+    tier: str
+    price_per_hour: float
+    available: int = 0
+    instant_boot: bool | None = None
+    deployment_type: str | None = None
+    capacity_class: str | None = None
+    community: bool | None = None
+    certified_image: bool | None = None
+    instance_disk_gb: int | None = None
+    disk_configurable: bool | None = None
+    disk_price_per_gb_hour: float = 0.0
+    storage_gb: int | None = None
+    cpu_cores: int | None = None
+    ram_gb: int | None = None
+    vram_gb: float | None = None
+    environment: OfferEnvironment | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    @property
+    def shape(self) -> str:
+        """``"<count>x<gpu_type>"``, the catalogue's name for this shape."""
+        return f"{self.gpu_count}x{self.gpu_type}"
+
+    @property
+    def total_vram_gb(self) -> float | None:
+        """VRAM across every GPU in the configuration."""
+        return self.vram_gb * self.gpu_count if self.vram_gb is not None else None
+
+    def cost_per_hour(self, disk_gb: int | None = None) -> float:
+        """Dollars per hour for a launch of this offering with *disk_gb*.
+
+        Only disk **beyond** the offering's included allowance is billed, per
+        the contract; gpu.ai folds it into one cent-rounded hourly price, so
+        this can differ from the billed rate by under a cent.
+        """
+        extra = 0.0
+        if disk_gb is not None and self.instance_disk_gb is not None:
+            extra = max(0, int(disk_gb) - self.instance_disk_gb) * self.disk_price_per_gb_hour
+        return float(self.price_per_hour) + extra
+
+    @classmethod
+    def from_api(cls, row: Mapping[str, Any], *, vram_gb: float | None = None) -> GpuOffer:
+        def flag(key: str) -> bool | None:
+            value = row.get(key)
+            return bool(value) if value is not None else None
+
+        return cls(
+            offering_id=str(row.get("offering_id") or ""),
+            gpu_type=str(row.get("gpu_type") or ""),
+            gpu_count=int(row.get("gpu_count") or 0),
+            region=str(row.get("region") or ""),
+            tier=str(row.get("tier") or ""),
+            price_per_hour=float(row.get("price_per_hour") or 0.0),
+            available=int(row.get("available") or 0),
+            instant_boot=flag("instant_boot"),
+            deployment_type=str(row["deployment_type"]) if row.get("deployment_type") else None,
+            capacity_class=str(row["capacity_class"]) if row.get("capacity_class") else None,
+            community=flag("community"),
+            certified_image=flag("certified_image"),
+            instance_disk_gb=_known(row.get("instance_disk_gb")),
+            disk_configurable=flag("disk_configurable"),
+            disk_price_per_gb_hour=float(row.get("disk_price_per_gb_hour") or 0.0),
+            storage_gb=_known(row.get("storage_gb")),
+            cpu_cores=_known(row.get("cpu_cores")),
+            ram_gb=_known(row.get("ram_gb")),
+            vram_gb=vram_gb,
+            environment=OfferEnvironment.from_api(row.get("environment")),
+            raw=dict(row),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """A JSON-safe mapping, without ``raw``."""
+        out = {
+            name: getattr(self, name)
+            for name in self.__dataclass_fields__
+            if name not in {"raw", "environment"}
+        }
+        env = self.environment
+        out["environment"] = (
+            {
+                "image": env.image,
+                "image_digest": env.image_digest,
+                "cuda": env.cuda,
+                "driver_min": env.driver_min,
+            }
+            if env
+            else None
+        )
+        return out
+
+
+#: gpu.ai's bounds on ``auto_terminate_hours``.
+_AUTO_TERMINATE_RANGE = (1, 720)
+
+#: Env names the platform refuses on a custom-image launch.
+_RESERVED_ENV = ("PUBLIC_KEY", "GPUAI_")
+
+
+@dataclass(frozen=True, slots=True)
+class InstancePort:
+    """A container port to expose on a custom-image launch.
+
+    Attributes:
+        port: Port inside the container (22 is reserved for SSH).
+        protocol: ``"http"`` or ``"tcp"``.
+        primary: Serve this port at the instance's app URL, behind the
+            per-instance Basic login. At most one, and it must be http.
+    """
+
+    port: int
+    protocol: str = "tcp"
+    primary: bool = False
+
+    def to_api(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"port": int(self.port), "protocol": self.protocol}
+        if self.primary:
+            body["primary"] = True
+        return body
+
+
+@dataclass(frozen=True, slots=True)
+class InstanceRequest:
+    """What to rent: a bare gpu.ai instance, reached over SSH.
+
+    The counterpart of a :class:`~llmcore.runtimes.models.Plan` for callers
+    that drive the machine themselves -- their own code, environments and
+    models -- rather than having llmcore serve one model on gpu.ai's vllm
+    template. Every field maps to one field of ``POST /instances``.
+
+    Attributes:
+        gpu_type: e.g. ``"rtx_6000_ada"``.
+        gpu_count: GPUs on the instance.
+        environment: ``"certified"``, ``"certified:<framework>[@<ver>]"``,
+            ``"raw_vm[:<os>]"`` or ``"provider_template"``. Omit both this and
+            *image* for the provider default (the certified image).
+        image: A public linux/amd64 image to launch instead.
+        entrypoint: Override the image's ENTRYPOINT (requires *image*).
+        cmd: Override the image's CMD (requires *image*).
+        disk_gb: Instance filesystem size. Narrows placement; omit for 100 GB.
+        ssh_key_ids: Registered keys to install (see ``ssh_keys()``). Without
+            any, gpu.ai installs the keys flagged attach-on-provision, and
+            without those the only way in is the web console.
+        ports: Ports to expose (requires *image*; at most 10).
+        env: Environment variables (requires nothing reserved: ``PUBLIC_KEY``,
+            ``GPUAI_*``). **Not** recorded in state -- only their names are.
+        auto_terminate_hours: Server-side lifetime, 1-720, counted from
+            ``running``. ``None`` uses ``runtimes.defaults.max_lifetime_minutes``
+            rounded up, so a launch is bounded unless the config says not to.
+        offering_id: Pin the launch to one exact offering.
+        region: Region code.
+        max_price_per_hour: Refuse placement above this whole-instance rate.
+        viewed_price_per_hour: The rate shown to whoever approved the launch.
+            gpu.ai fails the launch with ``price_changed`` if it rose by more
+            than a cent, instead of charging more.
+    """
+
+    gpu_type: str
+    gpu_count: int = 1
+    environment: str | None = None
+    image: str | None = None
+    entrypoint: tuple[str, ...] | None = None
+    cmd: tuple[str, ...] | None = None
+    disk_gb: int | None = None
+    ssh_key_ids: tuple[str, ...] = ()
+    ports: tuple[InstancePort, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+    auto_terminate_hours: int | None = None
+    offering_id: str | None = None
+    region: str | None = None
+    max_price_per_hour: float | None = None
+    viewed_price_per_hour: float | None = None
+
+    @classmethod
+    def from_offer(
+        cls, offer: GpuOffer, *, disk_gb: int | None = None, **fields: Any
+    ) -> InstanceRequest:
+        """A request pinned to *offer*, with its price as both ceilings.
+
+        The rate is rounded **up** to the cent, because gpu.ai folds extra disk
+        into one cent-rounded hourly price; a ceiling below that would refuse
+        the very offer it was built from. Any field can be overridden.
+        """
+        rate = math.ceil(offer.cost_per_hour(disk_gb) * 100 - 1e-9) / 100
+        values: dict[str, Any] = {
+            "gpu_type": offer.gpu_type,
+            "gpu_count": offer.gpu_count,
+            "region": offer.region or None,
+            "offering_id": offer.offering_id or None,
+            "disk_gb": disk_gb,
+            "max_price_per_hour": rate,
+            "viewed_price_per_hour": rate,
+        }
+        values.update(fields)
+        return cls(**values)
+
+    def problems(self) -> list[str]:
+        """What gpu.ai would refuse, found before anything is sent."""
+        out: list[str] = []
+        if not self.gpu_type:
+            out.append("gpu_type is required")
+        if int(self.gpu_count) < 1:
+            out.append("gpu_count must be at least 1")
+        if self.environment and self.image:
+            out.append("pass environment or image, not both")
+        if not self.image:
+            for name, value in (
+                ("ports", self.ports),
+                ("entrypoint", self.entrypoint),
+                ("cmd", self.cmd),
+            ):
+                if value:
+                    out.append(f"{name} requires image")
+        if len(self.ports) > 10:
+            out.append("at most 10 ports")
+        if any(int(p.port) == 22 for p in self.ports):
+            out.append("port 22 is reserved for SSH")
+        if any(p.protocol not in {"http", "tcp"} for p in self.ports):
+            out.append("a port's protocol is http or tcp")
+        primaries = [p for p in self.ports if p.primary]
+        if len(primaries) > 1:
+            out.append("at most one primary port")
+        if primaries and primaries[0].protocol != "http":
+            out.append("the primary port must be http")
+        reserved = sorted(k for k in self.env if k == "PUBLIC_KEY" or k.startswith("GPUAI_"))
+        if reserved:
+            out.append(f"env names reserved by gpu.ai: {', '.join(reserved)}")
+        if self.disk_gb is not None and int(self.disk_gb) <= 0:
+            out.append("disk_gb must be positive")
+        hours = self.auto_terminate_hours
+        low, high = _AUTO_TERMINATE_RANGE
+        if hours is not None and not low <= int(hours) <= high:
+            out.append(f"auto_terminate_hours must be between {low} and {high}")
+        for name in ("max_price_per_hour", "viewed_price_per_hour"):
+            value = getattr(self, name)
+            if value is not None and float(value) <= 0:
+                out.append(f"{name} must be positive")
+        return out
+
+    def to_body(self, *, name: str, auto_terminate_hours: int | None) -> dict[str, Any]:
+        """The ``POST /instances`` body."""
+        body: dict[str, Any] = {
+            "gpu_type": self.gpu_type,
+            "gpu_count": int(self.gpu_count),
+            "tier": TIER,
+            "name": name,
+        }
+        optional: dict[str, Any] = {
+            "environment": self.environment,
+            "image": self.image,
+            "entrypoint": list(self.entrypoint) if self.entrypoint is not None else None,
+            "cmd": list(self.cmd) if self.cmd is not None else None,
+            "disk_gb": int(self.disk_gb) if self.disk_gb is not None else None,
+            "ssh_key_ids": list(self.ssh_key_ids) or None,
+            "ports": [p.to_api() for p in self.ports] or None,
+            "env": dict(self.env) or None,
+            "auto_terminate_hours": auto_terminate_hours,
+            "offering_id": self.offering_id,
+            "region": self.region,
+            "max_price_per_hour": self.max_price_per_hour,
+            "viewed_price_per_hour": self.viewed_price_per_hour,
+        }
+        body.update({k: v for k, v in optional.items() if v is not None})
+        return body
+
+
 def _parse_dt(value: Any) -> datetime | None:
     """Parse an API timestamp, tolerating ``Z`` and absence."""
     if not value:
@@ -104,6 +498,7 @@ class GpuAiRuntime:
         api_key: str | None = None,
         base_url: str | None = None,
         client: Any = None,
+        ownership: Ownership | None = None,
     ) -> None:
         get = getattr(config, "get", None) if config is not None else None
         self._get = get or (lambda _k, d=None: d)
@@ -112,6 +507,10 @@ class GpuAiRuntime:
             base_url or self._get("runtimes.gpuai.base_url", DEFAULT_GPUAI_API_BASE)
             or DEFAULT_GPUAI_API_BASE
         ).rstrip("/")
+        self._ownership = ownership or Ownership(
+            name_prefix=self._get("runtimes.gpuai.owned_name_prefix", None) or None,
+            known_ids=frozenset(self._get("runtimes.gpuai.owned_ids", None) or ()),
+        )
         self._api_key = api_key
         self._client = client
         self._sizer = sizer
@@ -212,18 +611,9 @@ class GpuAiRuntime:
         if self._catalogue is not None and not refresh:
             return self._catalogue
 
-        vram: dict[str, float] = {}
-        try:
-            types = await self._call("GET", "/gpu-types", authenticated=False)
-            for row in (types or {}).get("data", []):
-                if row.get("gpu_type") and row.get("vram_gb"):
-                    vram[str(row["gpu_type"])] = float(row["vram_gb"])
-        except Exception as exc:
-            logger.debug("gpu.ai: could not read /gpu-types: %s", exc)
-
-        pricing = await self._call("GET", "/pricing", authenticated=False)
+        vram = await self._vram()
         best: dict[str, GpuSku] = {}
-        for row in (pricing or {}).get("data", []):
+        for row in await self._pricing_rows():
             gpu_type = str(row.get("gpu_type") or "")
             count = int(row.get("gpu_count") or 0)
             price = row.get("price_per_hour")
@@ -278,6 +668,86 @@ class GpuAiRuntime:
             )
         self._catalogue = best
         return best
+
+    async def _vram(self) -> dict[str, float]:
+        """VRAM per GPU type, from the public ``/gpu-types``; empty on failure."""
+        vram: dict[str, float] = {}
+        try:
+            types = await self._call("GET", "/gpu-types", authenticated=False)
+            for row in (types or {}).get("data", []):
+                if row.get("gpu_type") and row.get("vram_gb"):
+                    vram[str(row["gpu_type"])] = float(row["vram_gb"])
+        except Exception as exc:
+            logger.debug("gpu.ai: could not read /gpu-types: %s", exc)
+        return vram
+
+    async def _pricing_rows(self, params: Mapping[str, Any] | None = None) -> list[dict]:
+        """Every ``/pricing`` row, following the cursor to the end.
+
+        ``/pricing`` is paged like every other listing. Reading only the first
+        page would quietly drop offerings -- possibly the cheapest one.
+        """
+        rows: list[dict[str, Any]] = []
+        query = {k: v for k, v in (params or {}).items() if v is not None}
+        cursor: str | None = None
+        for _ in range(50):
+            page_query = dict(query, cursor=cursor) if cursor else (query or None)
+            page = await self._call("GET", "/pricing", authenticated=False, params=page_query)
+            rows.extend((page or {}).get("data") or [])
+            cursor = (page or {}).get("next_cursor")
+            if not cursor:
+                break
+        return rows
+
+    async def offers(
+        self,
+        *,
+        gpu_type: str | None = None,
+        region: str | None = None,
+        tier: str | None = TIER,
+        include_unavailable: bool = False,
+    ) -> list[GpuOffer]:
+        """Every matching offering on gpu.ai's market, one :class:`GpuOffer` each.
+
+        Free and keyless, like :meth:`catalogue`, but nothing is collapsed:
+        every region, boot class, deployment type and capacity class keeps its
+        own row, cheapest first. :meth:`catalogue` answers "what is the
+        cheapest way to fit this model"; this answers "what exactly could I
+        rent", which is the question to ask before pinning one.
+
+        Args:
+            gpu_type: Only this GPU type, e.g. ``"rtx_6000_ada"``.
+            region: Only this region code.
+            tier: Only this tier; ``None`` for all. Defaults to on-demand, the
+                only tier that places today.
+            include_unavailable: Include rows with no units available now.
+        """
+        vram = await self._vram()
+        rows = await self._pricing_rows(
+            {
+                "gpu_type": gpu_type,
+                "region": region,
+                "tier": tier,
+                "include_unavailable": "true" if include_unavailable else None,
+            }
+        )
+        offers = [
+            GpuOffer.from_api(row, vram_gb=vram.get(str(row.get("gpu_type") or "")))
+            for row in rows
+            if row.get("gpu_type") and row.get("price_per_hour") is not None
+        ]
+        # Filtered here as well as in the query: a server that ignored a
+        # filter would otherwise hand the caller rows they excluded.
+        offers = [
+            offer
+            for offer in offers
+            if (gpu_type is None or offer.gpu_type == gpu_type)
+            and (region is None or offer.region == region)
+            and (tier is None or offer.tier == tier)
+            and (include_unavailable or offer.available > 0)
+        ]
+        offers.sort(key=lambda o: (o.cost_per_hour(), not o.instant_boot, o.offering_id))
+        return offers
 
     async def _build_sizer(self) -> Sizer:
         catalogue = await self.catalogue()
@@ -457,44 +927,518 @@ class GpuAiRuntime:
         if keys:
             body["ssh_key_ids"] = list(keys)
 
-        accepted = await self._call(
-            "POST",
-            "/instances",
-            json=body,
+        return await self._create(
+            body,
+            name=name,
             # Retried creates must not rent a second GPU.
-            headers={"Idempotency-Key": str(uuid.uuid4())},
+            idempotency_key=str(uuid.uuid4()),
+            served_model=plan.spec.repo_id,
+            recipe=self._template(),
+            sku=plan.sku,
+            plan=plan,
+            serving=True,
         )
+
+    async def _create(
+        self,
+        body: dict[str, Any],
+        *,
+        name: str,
+        idempotency_key: str,
+        served_model: str,
+        recipe: str,
+        sku: str,
+        plan: Plan | None = None,
+        serving: bool,
+        api_style: str = "openai",
+    ) -> RuntimeHandle:
+        """Create an instance and follow it to ``running``, recording it first.
+
+        **State before compute.** A STARTING handle carrying the idempotency
+        key is saved *before* the create call, and updated with the operation
+        id and then the instance id as each becomes known. The wait can take
+        half an hour; a crash inside it used to leave an unrecorded, billing
+        instance that only orphan detection or ``auto_terminate_hours`` would
+        ever catch. Now ``status`` and ``down`` resolve the recorded operation
+        and find it.
+
+        Fails closed: once an instance id is known, any failure terminates it
+        before raising.
+
+        Args:
+            serving: Whether this launch serves an HTTP endpoint (a template).
+                A serving launch waits for ``connection.app_url`` and fetches
+                the tunnel login; a bare instance waits for ``running`` only.
+        """
+        requested = _request_summary(body)
+        pending = RuntimeHandle(
+            name=name,
+            runtime=self.name,
+            external_id="",
+            base_url="",
+            served_model=served_model,
+            api_style=api_style,
+            recipe=recipe,
+            sku=sku,
+            phase=RuntimePhase.STARTING,
+            spend_unit=CostUnit.USD,
+            metadata={
+                "idempotency_key": idempotency_key,
+                "requested": requested,
+                # The quoted rate, until the instance reports its own, so a
+                # status taken mid-create can still estimate what it costs.
+                "price_per_hour": body.get("viewed_price_per_hour")
+                or body.get("max_price_per_hour"),
+            },
+        )
+        pending.metadata = {k: v for k, v in pending.metadata.items() if v is not None}
+        self._state.save(pending)
+
+        try:
+            accepted = await self._call(
+                "POST",
+                "/instances",
+                json=body,
+                headers={"Idempotency-Key": idempotency_key},
+            )
+        except Exception as exc:
+            pending.phase = RuntimePhase.FAILED
+            pending.error = (
+                f"the create request failed: {exc}. If it reached gpu.ai anyway, "
+                f"a retry with idempotency key {idempotency_key} returns the same "
+                f"operation instead of renting a second instance."
+            )
+            self._state.save(pending)
+            raise
         operation_id = str((accepted or {}).get("operation_id") or "")
         for warning in (accepted or {}).get("warnings") or []:
             logger.warning("gpu.ai create advisory for '%s': %s", name, warning)
         if not operation_id:
+            pending.phase = RuntimePhase.DEGRADED
+            pending.error = (
+                "gpu.ai accepted the create but returned no operation_id; check "
+                "https://gpu.ai for a stray instance"
+            )
+            self._state.save(pending)
             raise RuntimeError_(
                 f"gpu.ai accepted the create for '{name}' but returned no "
                 f"operation_id, so the instance cannot be followed or stopped. "
                 f"Check https://gpu.ai for a stray instance before retrying."
             )
+        pending.metadata["operation_id"] = operation_id
+        self._state.save(pending)
+
+        def seen(operation: Mapping[str, Any]) -> None:
+            pending.metadata["operation_state"] = str(operation.get("state") or "")
+            resource = str(operation.get("resource_id") or "")
+            if resource and not pending.external_id:
+                pending.external_id = resource
+                self._state.save(pending)
 
         instance_id = ""
         try:
-            instance_id = await self._await_operation(operation_id, name=name)
-            instance = await self._instance(instance_id, credentials=True)
-            instance = await self._await_running(instance_id, instance, name=name)
+            instance_id = await self._await_operation(operation_id, name=name, on_poll=seen)
+            if pending.external_id != instance_id:
+                pending.external_id = instance_id
+                self._state.save(pending)
+            instance = await self._instance(instance_id, credentials=serving)
+            instance = await self._await_running(
+                instance_id, instance, name=name, need_app_url=serving
+            )
             handle = self._handle_for(instance, name=name, plan=plan)
         except Exception as exc:
-            if instance_id:
+            target = instance_id or pending.external_id
+            if target:
                 logger.error(
                     "gpu.ai: '%s' failed to come up; terminating %s so it stops billing.",
                     name,
-                    instance_id,
+                    target,
                 )
-                await self._terminate(instance_id)
+                await self._terminate(target)
+                pending.phase = RuntimePhase.STOPPED
+                pending.error = f"failed to come up and was terminated: {exc}"
+            elif pending.metadata.get("operation_state") in _OPERATION_ENDED:
+                pending.phase = RuntimePhase.FAILED
+                pending.error = f"the create did not succeed: {exc}"
+            else:
+                # The create may still finish and start billing. The record
+                # stays STARTING, with the operation id, so status() and down()
+                # can find what it makes and kill it.
+                pending.error = (
+                    f"lost track of the create (operation {operation_id}) before it "
+                    f"named an instance: {exc}. status() or down({name!r}) resolves it."
+                )
+                self._state.save(pending)
+                raise RuntimeError_(
+                    f"Renting '{name}' from gpu.ai failed before the create named an "
+                    f"instance, so nothing could be terminated yet. Operation "
+                    f"{operation_id} is recorded: down({name!r}) resolves and "
+                    f"terminates whatever it made. Cause: {exc}"
+                ) from exc
+            self._state.save(pending)
             raise RuntimeError_(
                 f"Renting '{name}' from gpu.ai failed and the instance was "
                 f"released rather than left billing. Cause: {exc}"
             ) from exc
 
+        handle.api_style = api_style
+        handle.recipe = recipe
+        if not serving:
+            handle.served_model = served_model
+        handle.metadata.update(
+            {
+                "idempotency_key": idempotency_key,
+                "operation_id": operation_id,
+                "requested": requested,
+            }
+        )
         self._state.save(handle)
         return handle
+
+    async def _resolve_pending(self, handle: RuntimeHandle) -> None:
+        """Find the instance a create was recorded for before it named one.
+
+        A STARTING handle with an operation id and no instance id is what a
+        crash during :meth:`_create`'s wait leaves behind. The operation says
+        which instance it made, or that it made none.
+        """
+        operation_id = handle.metadata.get("operation_id")
+        if handle.external_id or not operation_id or not handle.phase.is_billing:
+            return
+        try:
+            operation = await self._call("GET", f"/operations/{operation_id}") or {}
+        except Exception as exc:
+            logger.debug("gpu.ai: could not read operation %s: %s", operation_id, exc)
+            return
+        state = str(operation.get("state") or "")
+        resource = str(operation.get("resource_id") or "")
+        handle.metadata["operation_state"] = state
+        if resource:
+            handle.external_id = resource
+        elif state in _OPERATION_ENDED:
+            detail = (operation.get("error") or {}).get("message") or state
+            handle.phase = RuntimePhase.FAILED
+            handle.error = f"the create did not succeed: {detail}"
+        self._state.save(handle)
+
+    # ------------------------------------------------------------------
+    # Bare instances — for callers that drive the machine themselves
+    # ------------------------------------------------------------------
+
+    async def rent(
+        self,
+        request: InstanceRequest,
+        *,
+        name: str,
+        idempotency_key: str | None = None,
+    ) -> RuntimeHandle:
+        """Rent a bare instance and wait until it is SSH-ready. **Spends money.**
+
+        Unlike :meth:`up`, nothing is served: no template, no ``MODEL``, no
+        wait for an app URL. The instance is ready when gpu.ai says
+        ``running``, which is when its SSH path works. The handle carries the
+        connection in ``metadata``: ``ssh_command``, ``hostname`` and ``port``
+        (gpu.ai's tunnel endpoint, user ``root``), plus ``terminal_url`` and
+        ``auto_terminate_at``.
+
+        Same guarantees as :meth:`up`: the record is saved before the create
+        call; the create is idempotency-keyed; any failure after the instance
+        exists terminates it; and the platform's ``auto_terminate_hours`` is
+        set unless the config disables lifetimes.
+
+        Args:
+            request: What to rent. Validated before anything is sent.
+            name: Record name, also sent as the instance name, so tools that
+                list the account can tell whose it is.
+            idempotency_key: Pass one recorded before calling to make a retry
+                after a crash return the same instance rather than a second
+                one. Generated when omitted; recorded on the handle either way.
+
+        Raises:
+            RuntimeError_: When the request is invalid, *name* already records
+                a live instance, or the launch fails (after terminating it).
+        """
+        problems = request.problems()
+        if not name:
+            problems.append("a name is required")
+        if problems:
+            raise RuntimeError_(f"Refusing to rent '{name}': " + "; ".join(problems) + ".")
+        existing = self._state.load(name)
+        if existing is not None and existing.phase.is_billing:
+            raise RuntimeError_(
+                f"Refusing to rent '{name}': that name already records a "
+                f"{existing.phase} instance ({existing.external_id or 'create in flight'}). "
+                f"Overwriting the record would lose track of it. down({name!r}) first, "
+                f"or use another name."
+            )
+        self._require_key("rent a gpu.ai instance")
+        if request.max_price_per_hour is None:
+            logger.warning(
+                "gpu.ai: renting '%s' with no max_price_per_hour, so placement "
+                "may land on any price.",
+                name,
+            )
+
+        hours = (
+            int(request.auto_terminate_hours)
+            if request.auto_terminate_hours is not None
+            else self._auto_terminate_hours()
+        )
+        body = request.to_body(name=name, auto_terminate_hours=hours)
+        handle = await self._create(
+            body,
+            name=name,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+            served_model="",
+            recipe="instance",
+            sku=f"{int(request.gpu_count)}x{request.gpu_type}",
+            serving=False,
+            # Nothing to attach as a provider: the machine is reached by SSH.
+            api_style="ssh",
+        )
+        if not handle.metadata.get("ssh_command") and not handle.metadata.get("hostname"):
+            logger.warning(
+                "gpu.ai instance %s ('%s') is running but reported no SSH "
+                "coordinates. Was an SSH key attached? The web console is %s.",
+                handle.external_id,
+                name,
+                handle.metadata.get("terminal_url") or "not available either",
+            )
+        return handle
+
+    async def get(self, instance_id: str, *, credentials: bool = False) -> dict[str, Any]:
+        """One instance as gpu.ai reports it, raw.
+
+        Args:
+            credentials: Include ``connection.app_password``. Off by default
+                so an ordinary read can be logged without leaking it.
+
+        Raises:
+            RuntimeError_: If the read fails, including a 404 for no such
+                instance.
+        """
+        return await self._instance(instance_id, credentials=credentials)
+
+    async def terminate(self, instance_id: str) -> None:
+        """Terminate *instance_id*. Idempotent: an instance already gone is fine.
+
+        Unlike the internal fail-closed path, a failure here **raises** -- the
+        caller asked for the billing to stop and needs to know it did not. Any
+        record of this instance in the state store is marked STOPPED.
+
+        Raises:
+            RuntimeError_: If gpu.ai refused or the call failed. The instance
+                may still be billing.
+        """
+        if not instance_id:
+            raise RuntimeError_("terminate() needs an instance id.")
+        await self._call("DELETE", f"/instances/{instance_id}", allow=(404, 409))
+        for handle in self._state.load_all():
+            if handle.runtime == self.name and handle.external_id == instance_id:
+                handle.spend_used = self._accrued(handle)
+                handle.phase = RuntimePhase.STOPPED
+                self._state.save(handle)
+        logger.info("Terminated gpu.ai instance %s.", instance_id)
+
+    # ------------------------------------------------------------------
+    # Account: balance, spending limit, usage -- read-only, never raise
+    # ------------------------------------------------------------------
+
+    async def balance(self) -> AccountBalance:
+        """The account's credit and live burn rate (``GET /billing/balance``).
+
+        Never raises: a failed read comes back with ``error`` set. The burn
+        rate counts every live instance from launch, including ones still
+        provisioning; gpu.ai reports ``null`` when it cannot tell, which is
+        kept as ``None`` -- unknown, never zero.
+        """
+        try:
+            payload = await self._call("GET", "/billing/balance") or {}
+            burn_cents = payload.get("burn_cents_per_hour")
+            notes: list[str] = []
+            if burn_cents is None:
+                notes.append(
+                    "gpu.ai could not determine the burn rate: unknown, not zero"
+                )
+            balance = _dollars(payload.get("balance_cents"))
+            if balance is None and payload.get("balance_dollars") is not None:
+                balance = float(payload["balance_dollars"])
+            return AccountBalance(
+                provider=self.name,
+                balance_usd=balance,
+                burn_usd_per_hour=_dollars(burn_cents),
+                auto_pay=(
+                    bool(payload["auto_pay_enabled"])
+                    if payload.get("auto_pay_enabled") is not None
+                    else None
+                ),
+                notes=tuple(notes),
+            )
+        except Exception as exc:
+            logger.debug("gpu.ai: balance read failed: %s", exc)
+            return AccountBalance.failed(self.name, exc)
+
+    async def spending_limit(self) -> SpendingLimit:
+        """The account's spending cap and use of it (``GET /billing/spending-limit``).
+
+        Never raises. A 404, which the contract lists for this read, is taken
+        as "no cap is set" and reported with ``configured=False``.
+        """
+        try:
+            payload = await self._call("GET", "/billing/spending-limit", allow=(404,))
+            if payload is None:
+                return SpendingLimit(
+                    provider=self.name,
+                    configured=False,
+                    notes=("gpu.ai reports no spending limit for this account",),
+                )
+            hours = payload.get("auto_terminate_hours")
+            percent = payload.get("percent_used")
+            return SpendingLimit(
+                provider=self.name,
+                configured=True,
+                monthly_limit_usd=_dollars(payload.get("monthly_limit_cents")),
+                month_spend_usd=_dollars(payload.get("current_month_spend_cents")),
+                daily_limit_usd=_dollars(payload.get("daily_limit_cents")),
+                day_spend_usd=_dollars(payload.get("current_day_spend_cents")),
+                percent_used=float(percent) if percent is not None else None,
+                enforcement=str(payload["enforcement"]) if payload.get("enforcement") else None,
+                auto_terminate_hours=int(hours) if hours else None,
+                billing_cycle_start=_parse_ts(payload.get("billing_cycle_start")),
+            )
+        except Exception as exc:
+            logger.debug("gpu.ai: spending-limit read failed: %s", exc)
+            return SpendingLimit.failed(self.name, exc)
+
+    async def usage(
+        self,
+        *,
+        bucket: str | None = "day",
+        group_by: str | None = "instance_id",
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
+    ) -> UsageReport:
+        """What gpu.ai metered and billed (``GET /usage``), every page.
+
+        This is the real meter. :meth:`status`'s accrued spend is ``rate x
+        elapsed`` and over-counts, since provisioning is not billed and
+        unreachable windows are credited back; this is what was charged.
+        Never raises.
+
+        Args:
+            bucket: ``"hour"``, ``"day"``, ``"week"`` or ``"month"``; ``None``
+                for the API's default.
+            group_by: ``"instance_id"`` (the default, for per-rental spend) or
+                ``"gpu_type"``; ``None`` for no grouping.
+            start: Window start, a datetime or an RFC 3339 string.
+            end: Window end.
+        """
+
+        def stamp(value: datetime | str | None) -> str | None:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                return moment.isoformat().replace("+00:00", "Z")
+            return str(value)
+
+        asked = {
+            "bucket": bucket,
+            "group_by": group_by,
+            "start": _parse_ts(stamp(start)),
+            "end": _parse_ts(stamp(end)),
+        }
+        query = {
+            k: v
+            for k, v in {
+                "bucket": bucket,
+                "group_by": group_by,
+                "start": stamp(start),
+                "end": stamp(end),
+            }.items()
+            if v is not None
+        }
+        try:
+            rows: list[dict[str, Any]] = []
+            cursor: str | None = None
+            seen_cursors: set[str] = set()
+            seen_rows: set[str] = set()
+            for _ in range(200):
+                params = dict(query, cursor=cursor) if cursor else (dict(query) or None)
+                page = await self._call("GET", "/usage", params=params) or {}
+                fresh = 0
+                for row in page.get("data") or []:
+                    key = json.dumps(row, sort_keys=True, default=str)
+                    if key not in seen_rows:       # a page served twice is counted once
+                        seen_rows.add(key)
+                        rows.append(row)
+                        fresh += 1
+                cursor = page.get("next_cursor")
+                # the live API (2026-10-10) can hand back the same cursor and page: stop
+                # instead of summing one page 200 times
+                if not cursor or cursor in seen_cursors or not fresh:
+                    break
+                seen_cursors.add(cursor)
+            buckets = tuple(
+                UsageBucket(
+                    start=_parse_ts(row.get("bucket_start")),
+                    cost_usd=_dollars(row.get("cost_cents")) or 0.0,
+                    gpu_seconds=(
+                        int(row["gpu_seconds"]) if row.get("gpu_seconds") is not None else None
+                    ),
+                    instance_id=str(row["instance_id"]) if row.get("instance_id") else None,
+                    gpu_type=str(row["gpu_type"]) if row.get("gpu_type") else None,
+                )
+                for row in rows
+            )
+            return UsageReport(provider=self.name, buckets=buckets, **asked)
+        except Exception as exc:
+            logger.debug("gpu.ai: usage read failed: %s", exc)
+            return UsageReport.failed(self.name, exc, **asked)
+
+    # ------------------------------------------------------------------
+    # SSH keys
+    # ------------------------------------------------------------------
+
+    async def ssh_keys(self) -> list[SshKey]:
+        """Every SSH key registered on the account, following the cursor.
+
+        A launch installs keys by id (``InstanceRequest.ssh_key_ids``); without
+        one there is no shell access except gpu.ai's web console.
+        """
+        keys: list[SshKey] = []
+        cursor: str | None = None
+        for _ in range(50):
+            params = {"cursor": cursor} if cursor else None
+            page = await self._call("GET", "/ssh-keys", params=params) or {}
+            keys.extend(SshKey.from_api(self.name, row) for row in page.get("data") or [])
+            cursor = page.get("next_cursor")
+            if not cursor:
+                break
+        return keys
+
+    async def create_ssh_key(
+        self, name: str, public_key: str, *, idempotency_key: str | None = None
+    ) -> SshKey:
+        """Register an OpenSSH **public** key under *name* and return it.
+
+        Refuses a private key, or anything that is not an OpenSSH public key,
+        before contacting gpu.ai. Idempotency-keyed like every mutation here.
+
+        Raises:
+            ValueError: If *public_key* is not a public key.
+            RuntimeError_: If gpu.ai refuses it.
+        """
+        if not name:
+            raise ValueError("An SSH key needs a name.")
+        material = check_public_key(public_key)
+        created = await self._call(
+            "POST",
+            "/ssh-keys",
+            json={"name": name, "public_key": material},
+            headers={"Idempotency-Key": idempotency_key or str(uuid.uuid4())},
+        )
+        return SshKey.from_api(self.name, created or {})
 
     def _split_shape(self, plan: Plan) -> tuple[str, int]:
         """Recover ``(gpu_type, gpu_count)`` from a catalogue SKU name."""
@@ -515,13 +1459,26 @@ class GpuAiRuntime:
             return None
         return max(1, math.ceil(minutes / 60.0))
 
-    async def _await_operation(self, operation_id: str, *, name: str) -> str:
-        """Poll an async operation to a terminal state; return the resource id."""
+    async def _await_operation(
+        self,
+        operation_id: str,
+        *,
+        name: str,
+        on_poll: Callable[[Mapping[str, Any]], None] | None = None,
+    ) -> str:
+        """Poll an async operation to a terminal state; return the resource id.
+
+        Args:
+            on_poll: Called with every operation read, so the caller can record
+                the instance id the moment the operation names one.
+        """
         deadline = asyncio.get_running_loop().time() + float(
             self._get("runtimes.gpuai.create_timeout_seconds", 900) or 900
         )
         while True:
             operation = await self._call("GET", f"/operations/{operation_id}") or {}
+            if on_poll is not None:
+                on_poll(operation)
             state = str(operation.get("state") or "")
             resource = str(operation.get("resource_id") or "")
             if state == "succeeded":
@@ -549,14 +1506,21 @@ class GpuAiRuntime:
             await asyncio.sleep(5.0)
 
     async def _await_running(
-        self, instance_id: str, instance: dict[str, Any], *, name: str
+        self,
+        instance_id: str,
+        instance: dict[str, Any],
+        *,
+        name: str,
+        need_app_url: bool = True,
     ) -> dict[str, Any]:
         """Wait for the served endpoint to exist, not merely the instance.
 
         An instance reports ``running`` before the template's server has
         finished loading weights, so this waits for the tunnel URL as well --
         attaching a provider to a URL that is not there yet would fail the
-        attach and tear down a healthy rental.
+        attach and tear down a healthy rental. A bare instance has no URL to
+        wait for (``need_app_url=False``): ``running`` is what gpu.ai calls
+        SSH-ready.
         """
         deadline = asyncio.get_running_loop().time() + float(
             self._get("runtimes.gpuai.ready_timeout_seconds", 1200) or 1200
@@ -564,7 +1528,7 @@ class GpuAiRuntime:
         while True:
             status = str(instance.get("status") or "")
             url = ((instance.get("connection") or {}).get("app_url")) or ""
-            if status == "running" and url:
+            if status == "running" and (url or not need_app_url):
                 return instance
             if _PHASES.get(status) in {RuntimePhase.FAILED, RuntimePhase.STOPPED}:
                 raise RuntimeError_(
@@ -577,7 +1541,7 @@ class GpuAiRuntime:
                     f"endpoint (status {status!r})."
                 )
             await asyncio.sleep(10.0)
-            instance = await self._instance(instance_id, credentials=True)
+            instance = await self._instance(instance_id, credentials=need_app_url)
 
     async def _instance(self, instance_id: str, *, credentials: bool = False) -> dict[str, Any]:
         params = {"include": "credentials"} if credentials else None
@@ -612,19 +1576,19 @@ class GpuAiRuntime:
             "price_per_hour": instance.get("price_per_hour"),
             "instance_status": instance.get("status"),
             "ssh_command": connection.get("ssh_command"),
+            # The tunnel endpoint, not a machine address; the user is root.
+            "hostname": connection.get("hostname"),
+            "port": connection.get("port"),
             "terminal_url": connection.get("terminal_url"),
             "auto_terminate_at": instance.get("auto_terminate_at"),
+            "auto_terminate_hours": instance.get("auto_terminate_hours"),
+            "ready_at": instance.get("ready_at"),
+            "disk_gb": instance.get("disk_gb"),
+            "image": instance.get("image"),
+            "instance_name": instance.get("name"),
         }
-        user = connection.get("app_user")
-        password = connection.get("app_password")
-        if user and password:
-            # The tunnel authenticates with HTTP Basic, not a bearer token, so
-            # the credential has to travel as a header. ``api_key`` is still set
-            # because vLLM wants *some* bearer and the provider layer requires
-            # one; the Basic header is what actually gets past the tunnel.
-            token = base64.b64encode(f"{user}:{password}".encode()).decode()
-            metadata["default_headers"] = {"Authorization": f"Basic {token}"}
-        elif app_url:
+        secrets = self._secrets_from(connection)
+        if not secrets and app_url:
             logger.warning(
                 "gpu.ai instance %s served %s but returned no basic-auth "
                 "credentials, so requests to it will probably be rejected. "
@@ -651,7 +1615,42 @@ class GpuAiRuntime:
             started_at=started,
             spend_unit=CostUnit.USD,
             metadata={k: v for k, v in metadata.items() if v is not None},
+            secrets=secrets,
         )
+
+    @staticmethod
+    def _secrets_from(connection: Mapping[str, Any]) -> dict[str, Any]:
+        """The tunnel's Basic-auth header, when the payload carries its login.
+
+        The tunnel authenticates with HTTP Basic, not a bearer token, so the
+        credential has to travel as a header. ``api_key`` is still set by the
+        manager because vLLM wants *some* bearer and the provider layer
+        requires one; the Basic header is what actually gets past the tunnel.
+        Returned as secrets, never metadata: it is a password, and the handle's
+        metadata is written to a state file meant to be read with ``cat``.
+        """
+        user = connection.get("app_user")
+        password = connection.get("app_password")
+        if not (user and password):
+            return {}
+        token = base64.b64encode(f"{user}:{password}".encode()).decode()
+        return {"default_headers": {"Authorization": f"Basic {token}"}}
+
+    async def credentials(self, handle: RuntimeHandle) -> dict[str, Any]:
+        """Re-derive *handle*'s credentials from gpu.ai and attach them.
+
+        A handle read back from a state file has no secrets, by design. This
+        fetches the instance's tunnel login again (``?include=credentials``,
+        the only read that returns it) and returns what was found, which is
+        empty for an instance with no app URL -- a bare SSH box has nothing to
+        authenticate to over HTTP.
+        """
+        if not handle.external_id:
+            return {}
+        instance = await self._instance(handle.external_id, credentials=True)
+        secrets = self._secrets_from(instance.get("connection") or {})
+        handle.secrets.update(secrets)
+        return secrets
 
     def _accrued(self, handle: RuntimeHandle, now: datetime | None = None) -> float | None:
         """Dollars this runtime has cost so far, derived from its rate.
@@ -673,14 +1672,25 @@ class GpuAiRuntime:
     # status / logs / down / adopt
     # ------------------------------------------------------------------
 
-    async def status(self, name: str | None = None) -> list[RuntimeStatus]:
+    async def status(
+        self, name: str | None = None, *, ownership: Ownership | None = None
+    ) -> list[RuntimeStatus]:
         """Report on runtimes, reconciled against what gpu.ai says exists.
 
         The reconciliation matters more here than on Colab. A forgotten Colab
         session expires by itself; a forgotten rental bills by the hour until
         someone terminates it, so an instance gpu.ai has that llmcore does not
         know about is reported as an orphan with the command to adopt it.
+
+        Unless an :class:`~llmcore.runtimes.models.Ownership` rule says it is
+        someone else's. On a shared account an untracked instance may be a
+        job started by hand or by another tool, and offering to adopt it is
+        offering to kill it. With a rule (*ownership*, else the constructor's,
+        else ``runtimes.gpuai.owned_name_prefix``/``owned_ids``), instances it
+        does not claim are reported with ``owned=False`` as "not ours", with
+        no adopt hint.
         """
+        rule = ownership if ownership is not None else self._ownership
         handles = [self._state.load(name)] if name else self._state.load_all()
         handles = [handle for handle in handles if handle is not None]
         handles = [handle for handle in handles if handle.runtime == self.name]
@@ -695,8 +1705,27 @@ class GpuAiRuntime:
 
         out: list[RuntimeStatus] = []
         for handle in handles:
-            instance = live.get(handle.external_id)
-            if instance is None and handle.phase.is_billing:
+            if not handle.external_id and handle.phase.is_billing:
+                await self._resolve_pending(handle)
+                if not handle.external_id:
+                    # A crash before the operation id was recorded: the create
+                    # is still findable by the name it was sent with.
+                    named = [i for i, row in live.items() if row.get("name") == handle.name]
+                    if len(named) == 1:
+                        handle.external_id = named[0]
+                        self._state.save(handle)
+            instance = live.get(handle.external_id) if handle.external_id else None
+            in_flight = (
+                not handle.external_id
+                and handle.phase.is_billing
+                and bool(handle.metadata.get("operation_id"))
+            )
+            if in_flight:
+                handle.error = (
+                    f"create still in flight (operation "
+                    f"{handle.metadata.get('operation_id')}); no instance named yet"
+                )
+            elif instance is None and handle.phase.is_billing:
                 # Only trusted when the listing actually succeeded: treating a
                 # failed list call as "everything is gone" would mark live,
                 # billing rentals as stopped and stop watching them.
@@ -724,6 +1753,27 @@ class GpuAiRuntime:
                 instance = live[instance_id]
                 label = str(instance.get("name") or instance_id)
                 rate = instance.get("price_per_hour")
+                if not rule.claims(external_id=instance_id, name=instance.get("name")):
+                    out.append(
+                        RuntimeStatus(
+                            name=label,
+                            runtime=self.name,
+                            phase=_PHASES.get(
+                                str(instance.get("status") or ""), RuntimePhase.DEGRADED
+                            ),
+                            sku=f"{instance.get('gpu_count') or 1}x{instance.get('gpu_type') or ''}",
+                            spend_unit=CostUnit.USD,
+                            owned=False,
+                            error=(
+                                f"not ours: gpu.ai instance {instance_id} is "
+                                f"{instance.get('status')}"
+                                + (f" at ${float(rate):.2f}/hour" if rate else "")
+                                + "; it was started elsewhere on this account and "
+                                "is left alone"
+                            ),
+                        )
+                    )
+                    continue
                 out.append(
                     RuntimeStatus(
                         name=label,
@@ -731,6 +1781,7 @@ class GpuAiRuntime:
                         phase=RuntimePhase.DEGRADED,
                         sku=f"{instance.get('gpu_count') or 1}x{instance.get('gpu_type') or ''}",
                         spend_unit=CostUnit.USD,
+                        owned=True if rule.active else None,
                         error=(
                             f"orphan: gpu.ai instance {instance_id} is "
                             f"{instance.get('status')}"
@@ -811,6 +1862,22 @@ class GpuAiRuntime:
                 name,
                 handle.external_id,
             )
+            return
+
+        await self._resolve_pending(handle)
+        if (
+            not handle.external_id
+            and handle.phase.is_billing
+            and handle.metadata.get("operation_id")
+        ):
+            # The create has not named its instance yet, so there is nothing to
+            # DELETE. Saying so beats marking it stopped while it may yet bill.
+            handle.error = (
+                f"could not terminate yet: operation {handle.metadata['operation_id']} "
+                f"has not named an instance. Run down({name!r}) again shortly."
+            )
+            self._state.save(handle)
+            logger.warning("gpu.ai: '%s' %s", name, handle.error)
             return
 
         handle.phase = RuntimePhase.STOPPING

@@ -19,14 +19,27 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "SECRET_METADATA_KEYS",
     "CostUnit",
     "ModelSpec",
+    "Ownership",
     "Plan",
     "Quantization",
     "RuntimeHandle",
     "RuntimePhase",
     "RuntimeStatus",
 ]
+
+
+#: Metadata keys that hold credentials. A backend that needs one at use time
+#: keeps it in :attr:`RuntimeHandle.secrets`, which is never written to disk;
+#: these names are also scrubbed from ``metadata`` on serialization, so a
+#: backend that puts one in the wrong place still cannot leak it into a state
+#: file. A state file is meant to be read with ``cat`` -- and copied, backed up
+#: and pasted into bug reports, which is why it must hold nothing secret.
+SECRET_METADATA_KEYS: frozenset[str] = frozenset(
+    {"api_key", "default_headers", "app_password", "authorization", "token"}
+)
 
 
 class Quantization(StrEnum):
@@ -307,7 +320,11 @@ class RuntimeHandle:
             same unit it accepts the ceiling in.
         state_path: Where this handle is persisted.
         error: Why it failed or degraded.
-        metadata: Backend-specific extras.
+        metadata: Backend-specific extras. Persisted, so never a credential.
+        secrets: Credentials needed to *use* the runtime (a bearer, a tunnel's
+            Basic header). Held in memory only: :meth:`to_dict` leaves them
+            out, and a handle read back from disk has none until its backend
+            re-derives them (``await backend.credentials(handle)``).
     """
 
     name: str
@@ -329,6 +346,19 @@ class RuntimeHandle:
     state_path: Path | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    secrets: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    # --- credentials ---------------------------------------------------
+
+    def credential(self, key: str, default: Any = None) -> Any:
+        """Return the credential *key*, from :attr:`secrets` first.
+
+        Falls back to ``metadata`` for handles a third-party backend built the
+        old way; such a value is still scrubbed when the handle is saved.
+        """
+        if key in self.secrets:
+            return self.secrets[key]
+        return self.metadata.get(key, default)
 
     # --- spend ceilings ------------------------------------------------
 
@@ -395,7 +425,11 @@ class RuntimeHandle:
             "spend_used": self.spend_used,
             "spend_unit": str(self.spend_unit),
             "error": self.error,
-            "metadata": dict(self.metadata),
+            # Secrets never reach the file: ``secrets`` is not serialized at
+            # all, and a credential left in metadata is dropped here too.
+            "metadata": {
+                k: v for k, v in self.metadata.items() if k not in SECRET_METADATA_KEYS
+            },
         }
 
     def to_json(self) -> str:
@@ -430,6 +464,11 @@ class RuntimeHandle:
             unit = CostUnit.COMPUTE_UNIT
 
         started = _dt(payload.get("started_at")) or datetime.now(timezone.utc)
+        metadata = dict(payload.get("metadata") or {})
+        # State files written before secrets were split out carry them in
+        # metadata. They are moved to ``secrets`` so this process can still
+        # use them, and the next save rewrites the file without them.
+        secrets = {k: metadata.pop(k) for k in list(metadata) if k in SECRET_METADATA_KEYS}
         return cls(
             name=str(payload.get("name", "")),
             runtime=str(payload.get("runtime", "")),
@@ -452,8 +491,51 @@ class RuntimeHandle:
             spend_unit=unit,
             state_path=state_path,
             error=payload.get("error"),
-            metadata=dict(payload.get("metadata") or {}),
+            metadata=metadata,
+            secrets=secrets,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class Ownership:
+    """Which compute on a shared account belongs to this caller.
+
+    A rental account is often shared between tools: the same gpu.ai key may
+    rent boxes from llmcore, from a CLI used by hand, and from an application
+    built on llmcore. Without a rule, everything a backend's state store does
+    not know is an *orphan* with an "adopt it" hint -- and adopting someone
+    else's running job is how it gets terminated by the wrong tool.
+
+    With a rule, untracked compute splits in two: what the rule claims is a
+    genuine orphan (ours, record lost), and everything else is reported as
+    **not ours** -- visible, never offered for adoption.
+
+    Attributes:
+        name_prefix: Compute whose name starts with this is ours.
+        known_ids: Vendor ids known to be ours (e.g. from the caller's own
+            records of what it rented).
+    """
+
+    name_prefix: str | None = None
+    known_ids: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.known_ids, frozenset):
+            object.__setattr__(self, "known_ids", frozenset(str(i) for i in self.known_ids))
+
+    @property
+    def active(self) -> bool:
+        """Whether there is any rule at all. An empty one claims everything,
+        which is the behaviour before ownership existed."""
+        return bool(self.name_prefix or self.known_ids)
+
+    def claims(self, *, external_id: str, name: str | None = None) -> bool:
+        """Whether compute with this id and name is ours."""
+        if not self.active:
+            return True
+        if external_id and str(external_id) in self.known_ids:
+            return True
+        return bool(self.name_prefix and name and str(name).startswith(self.name_prefix))
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,6 +564,10 @@ class RuntimeStatus:
         max_spend: The ceiling it is being compared against, when set.
         spend_unit: What both are denominated in.
         error: Failure detail.
+        owned: Whether this is the caller's compute: ``True`` for anything in
+            the state store or claimed by an :class:`Ownership` rule,
+            ``False`` for compute on the account that was started elsewhere,
+            ``None`` when no rule was given to tell.
     """
 
     name: str
@@ -498,6 +584,7 @@ class RuntimeStatus:
     max_spend: float | None = None
     spend_unit: CostUnit = CostUnit.COMPUTE_UNIT
     error: str | None = None
+    owned: bool | None = None
 
     def __post_init__(self) -> None:
         # Coerced because this is a plain dataclass, not a validating model:
@@ -549,4 +636,6 @@ class RuntimeStatus:
             max_spend=handle.max_spend,
             spend_unit=handle.spend_unit,
             error=handle.error,
+            # In the state store means llmcore started or adopted it.
+            owned=True,
         )

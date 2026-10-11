@@ -490,12 +490,13 @@ class RuntimeManager:
             # vLLM servers accept any bearer token. On a local tunnel there is
             # no secret to carry; on a hosted tunnel the real credential is the
             # header below, and vLLM still wants *a* bearer.
-            "api_key": handle.metadata.get("api_key", "runtime-local"),
+            "api_key": handle.credential("api_key") or "runtime-local",
         }
         # A rental backend may serve through a tunnel whose authentication is a
         # header rather than a bearer token -- gpu.ai's is HTTP Basic. Without
         # this the endpoint would be attached and every request to it rejected.
-        headers = handle.metadata.get("default_headers")
+        # Both come from the handle's in-memory secrets, never its state file.
+        headers = handle.credential("default_headers")
         if headers:
             instance_config["default_headers"] = dict(headers)
 
@@ -786,9 +787,16 @@ class RuntimeManager:
                 continue
             url = handle.base_url.rstrip("/") + "/models"
             alive = False
+            # The probe has to get past the same tunnel auth a request would;
+            # without the header every probe of a gpu.ai template is a 401 and
+            # a healthy rental is marked DEGRADED after three of them.
+            headers = dict(handle.credential("default_headers") or {})
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    alive = (await client.get(url)).status_code == 200
+                    response = await (
+                        client.get(url, headers=headers) if headers else client.get(url)
+                    )
+                    alive = response.status_code == 200
             except Exception as exc:
                 handle.error = f"liveness probe failed: {type(exc).__name__}"
             results[handle.name] = alive

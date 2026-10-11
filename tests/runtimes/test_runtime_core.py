@@ -627,6 +627,21 @@ class TestProviderAttachment:
         mgr.attach(handle)
         assert providers.registered["custom"][0] == "vllm"
 
+    async def test_credentials_come_from_the_handles_secrets(self, wired):
+        """Secrets live in memory only. Attaching must still send them, or the
+        endpoint is attached and every request to it rejected."""
+        mgr, _, providers = wired
+        handle = _handle("tunnelled")
+        handle.secrets = {
+            "api_key": "k",
+            "default_headers": {"Authorization": "Basic dTpw"},
+        }
+        mgr.attach(handle)
+        config = providers.registered["tunnelled"][1]
+        assert config["api_key"] == "k"
+        assert config["default_headers"] == {"Authorization": "Basic dTpw"}
+        assert "Basic" not in handle.to_json()
+
     async def test_an_unknown_api_style_is_refused(self, wired):
         mgr, _, _ = wired
         with pytest.raises(RuntimeError_, match="maps to no provider type"):
@@ -803,6 +818,41 @@ class TestSupervision:
                 await mgr.probe_liveness()
             assert handle.phase is RuntimePhase.DEGRADED
             assert mgr.state.load("r") is not None, "the handle must still be tracked"
+        finally:
+            await mgr.stop_supervisor()
+
+    async def test_the_probe_sends_the_tunnels_auth_header(self, monkeypatch):
+        """A gpu.ai template sits behind HTTP Basic. A probe without the header
+        is a 401 every time, and a healthy rental would be marked DEGRADED."""
+        mgr = RuntimeManager({"fake": FakeRuntime()}, config_get=_config())
+        handle = await mgr.up(
+            REPO, name="r", confirm_spend=True, backend="fake", attach=False
+        )
+        handle.phase = RuntimePhase.READY
+        handle.base_url = "https://gpu-x.apps.gpu.ai/v1"
+        handle.secrets["default_headers"] = {"Authorization": "Basic dTpw"}
+        seen: list[dict] = []
+
+        class Ok:
+            status_code = 200
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def get(self, url, headers=None):
+                seen.append(dict(headers or {}))
+                return Ok()
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: Client())
+        try:
+            assert await mgr.probe_liveness() == {"r": True}
+            assert seen == [{"Authorization": "Basic dTpw"}]
         finally:
             await mgr.stop_supervisor()
 

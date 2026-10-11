@@ -38,11 +38,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import ConfigError
+from .accounts import AccountBalance, SpendingLimit, SshKey, _number
 from .diagnostics import Check
 from .manager import RuntimeError_
 from .models import (
     CostUnit,
     ModelSpec,
+    Ownership,
     Plan,
     RuntimeHandle,
     RuntimePhase,
@@ -99,6 +101,7 @@ class DeepInfraRuntime:
         api_key: str | None = None,
         base_url: str | None = None,
         client: Any = None,
+        ownership: Ownership | None = None,
     ) -> None:
         get = getattr(config, "get", None) if config is not None else None
         self._get = get or (lambda _k, d=None: d)
@@ -113,6 +116,10 @@ class DeepInfraRuntime:
         self._sizer = sizer
         self._catalogue: dict[str, GpuSku] | None = None
         self._owner: str | None = None
+        self._ownership = ownership or Ownership(
+            name_prefix=self._get("runtimes.deepinfra.owned_name_prefix", None) or None,
+            known_ids=frozenset(self._get("runtimes.deepinfra.owned_ids", None) or ()),
+        )
 
     # ------------------------------------------------------------------
     # Config and transport
@@ -205,6 +212,82 @@ class DeepInfraRuntime:
             )
         self._owner = owner
         return owner
+
+    async def balance(self) -> AccountBalance:
+        """The account's credit (``GET /payment/checklist``). Never raises.
+
+        DeepInfra reports ``stripe_balance`` with the sign inverted -- negative
+        is money ready to spend, positive is money owed -- so it is negated
+        here into ``balance_usd``. ``spent_usd`` is usage since the last
+        invoice. Credit that only some models may spend is reported apart, in
+        ``scoped_credit_usd``. The contract does not state the unit of
+        ``stripe_balance``; it is read as dollars, like ``limit``.
+        """
+        try:
+            payload = await self._call("GET", "/payment/checklist") or {}
+            raw = _number(payload.get("stripe_balance"))
+            limit = _number(payload.get("limit"))
+            scoped = [
+                row
+                for row in payload.get("scoped_credits") or []
+                if isinstance(row, Mapping) and not row.get("expired")
+            ]
+            scoped_usd = (
+                sum(float(row.get("remaining_cents") or 0) for row in scoped) / 100.0
+                if scoped
+                else None
+            )
+            notes: list[str] = []
+            if payload.get("suspended"):
+                reason = payload.get("suspend_reason")
+                notes.append(f"account suspended{f': {reason}' if reason else ''}")
+            return AccountBalance(
+                provider=self.name,
+                balance_usd=-raw if raw is not None else None,
+                spent_usd=_number(payload.get("recent")),
+                limit_usd=limit if limit is not None and limit >= 0 else None,
+                scoped_credit_usd=scoped_usd,
+                suspended=(
+                    bool(payload["suspended"]) if payload.get("suspended") is not None else None
+                ),
+                auto_pay=bool(payload["topup"]) if payload.get("topup") is not None else None,
+                notes=tuple(notes),
+            )
+        except Exception as exc:
+            logger.debug("DeepInfra: balance read failed: %s", exc)
+            return AccountBalance.failed(self.name, exc)
+
+    async def spending_limit(self) -> SpendingLimit:
+        """The account's spending cap (``GET /payment/config``). Never raises.
+
+        DeepInfra's ``limit`` is in dollars and negative means none is set.
+        Its period is not stated in the API, so it is reported as
+        ``limit_usd`` rather than as a monthly figure.
+        """
+        try:
+            payload = await self._call("GET", "/payment/config") or {}
+            limit = _number(payload.get("limit"))
+            if limit is None or limit < 0:
+                return SpendingLimit(
+                    provider=self.name,
+                    configured=False,
+                    notes=("DeepInfra reports no spending limit for this account",),
+                )
+            return SpendingLimit(provider=self.name, configured=True, limit_usd=limit)
+        except Exception as exc:
+            logger.debug("DeepInfra: spending-limit read failed: %s", exc)
+            return SpendingLimit.failed(self.name, exc)
+
+    async def ssh_keys(self) -> list[SshKey]:
+        """SSH keys registered on the account (``GET /v1/ssh_keys``).
+
+        Read-only here: they are what a DeepInfra *container* rental installs,
+        and this backend does not rent containers yet.
+        """
+        rows = await self._call("GET", "/v1/ssh_keys")
+        if isinstance(rows, Mapping):
+            rows = rows.get("data") or rows.get("ssh_keys") or []
+        return [SshKey.from_api(self.name, row) for row in rows or []]
 
     # ------------------------------------------------------------------
     # Catalogue
@@ -394,14 +477,53 @@ class DeepInfraRuntime:
         if token:
             body["hf"]["token"] = token
 
-        created = await self._call("POST", "/deploy/llm", json=body) or {}
+        # State before compute: recorded before the create call, so a crash
+        # anywhere in the wait below leaves a record ``down`` can act on.
+        pending = RuntimeHandle(
+            name=name,
+            runtime=self.name,
+            external_id="",
+            base_url=f"{self._base}{OPENAI_ROUTE}",
+            served_model=model_name,
+            api_style="openai",
+            recipe="vllm",
+            sku=plan.sku,
+            phase=RuntimePhase.STARTING,
+            spend_unit=CostUnit.USD,
+            metadata={
+                k: v
+                for k, v in {
+                    "gpu": gpu,
+                    "num_gpus": count,
+                    "price_per_hour": plan.estimated_cost_per_hour,
+                }.items()
+                if v is not None
+            },
+        )
+        self._state.save(pending)
+
+        try:
+            created = await self._call("POST", "/deploy/llm", json=body) or {}
+        except Exception as exc:
+            pending.phase = RuntimePhase.FAILED
+            pending.error = f"the create request failed: {exc}"
+            self._state.save(pending)
+            raise
         deploy_id = str(created.get("deploy_id") or "")
         if not deploy_id:
+            pending.phase = RuntimePhase.DEGRADED
+            pending.error = (
+                "DeepInfra accepted the deployment but returned no deploy_id; check "
+                "https://deepinfra.com/dash/deployments for a stray"
+            )
+            self._state.save(pending)
             raise RuntimeError_(
                 f"DeepInfra accepted the deployment for '{name}' but returned no "
                 f"deploy_id, so it cannot be followed or stopped. Check "
                 f"https://deepinfra.com/dash/deployments before retrying."
             )
+        pending.external_id = deploy_id
+        self._state.save(pending)
 
         try:
             deployment = await self._await_running(deploy_id, name=name)
@@ -413,6 +535,9 @@ class DeepInfraRuntime:
                 deploy_id,
             )
             await self._delete(deploy_id)
+            pending.phase = RuntimePhase.STOPPED
+            pending.error = f"failed to come up and was deleted: {exc}"
+            self._state.save(pending)
             raise RuntimeError_(
                 f"Reserving '{name}' on DeepInfra failed and the deployment was "
                 f"deleted rather than left billing. Cause: {exc}"
@@ -508,9 +633,6 @@ class DeepInfraRuntime:
             "deploy_type": deployment.get("type"),
             "deploy_status": deployment.get("status"),
             "price_per_hour": rate,
-            # The endpoint is DeepInfra's gateway, so unlike a tunnelled
-            # runtime this one needs the account's real credential.
-            "api_key": self.api_key,
         }
         return RuntimeHandle(
             name=name,
@@ -527,7 +649,23 @@ class DeepInfraRuntime:
             started_at=created,
             spend_unit=CostUnit.USD,
             metadata={k: v for k, v in metadata.items() if v is not None},
+            # The endpoint is DeepInfra's gateway, so unlike a tunnelled
+            # runtime this one needs the account's real credential. In
+            # memory only: it is the account key, and the handle is persisted.
+            secrets={"api_key": self.api_key} if self.api_key else {},
         )
+
+    async def credentials(self, handle: RuntimeHandle) -> dict[str, Any]:
+        """Re-derive *handle*'s credential: the account key, read at use time.
+
+        Nothing is fetched -- the gateway takes the same key this backend
+        authenticates with -- but it is resolved now, from the environment or
+        the constructor, rather than from a state file that must not hold it.
+        """
+        key = self.api_key
+        secrets = {"api_key": key} if key else {}
+        handle.secrets.update(secrets)
+        return secrets
 
     async def _rented_seconds(self) -> dict[str, float]:
         """Seconds of reservation per deploy id, from DeepInfra's own meter.
@@ -557,8 +695,15 @@ class DeepInfraRuntime:
     # status / logs / down / adopt
     # ------------------------------------------------------------------
 
-    async def status(self, name: str | None = None) -> list[RuntimeStatus]:
+    async def status(
+        self, name: str | None = None, *, ownership: Ownership | None = None
+    ) -> list[RuntimeStatus]:
         """Report on runtimes, reconciled against DeepInfra's deployment list.
+
+        With an :class:`~llmcore.runtimes.models.Ownership` rule, untracked
+        deployments it does not claim (by ``deploy_id``, or by a
+        ``model_name`` prefix) are reported as "not ours" with
+        ``owned=False`` instead of as orphans to adopt.
 
         Only deployments in :data:`BILLED_TYPES` are reconciled. A ``legacy``
         entry is a serverless, per-token model reference -- it appears in the
@@ -602,10 +747,30 @@ class DeepInfraRuntime:
             out.append(RuntimeStatus.from_handle(handle))
 
         if name is None and listed:
+            rule = ownership if ownership is not None else self._ownership
             known = {handle.external_id for handle in handles}
             for deploy_id in sorted(set(live) - known):
                 deployment = live[deploy_id]
                 label = str(deployment.get("model_name") or deploy_id)
+                if not rule.claims(external_id=deploy_id, name=deployment.get("model_name")):
+                    out.append(
+                        RuntimeStatus(
+                            name=label,
+                            runtime=self.name,
+                            phase=_PHASES.get(
+                                str(deployment.get("status") or ""), RuntimePhase.DEGRADED
+                            ),
+                            sku=str((deployment.get("config") or {}).get("gpu") or ""),
+                            spend_unit=CostUnit.USD,
+                            owned=False,
+                            error=(
+                                f"not ours: DeepInfra deployment {deploy_id} is "
+                                f"{deployment.get('status')}; it was started elsewhere "
+                                f"on this account and is left alone"
+                            ),
+                        )
+                    )
+                    continue
                 out.append(
                     RuntimeStatus(
                         name=label,
@@ -613,6 +778,7 @@ class DeepInfraRuntime:
                         phase=RuntimePhase.DEGRADED,
                         sku=str((deployment.get("config") or {}).get("gpu") or ""),
                         spend_unit=CostUnit.USD,
+                        owned=True if rule.active else None,
                         error=(
                             f"orphan: DeepInfra deployment {deploy_id} "
                             f"({deployment.get('type')}) is "

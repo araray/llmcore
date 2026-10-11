@@ -36,6 +36,174 @@ four providers fill it:
 `"extra_body"` key in a raw httpx JSON body, so the API never saw them. They
 are now top-level body fields (named arguments win on a clash).
 
+### Added — an ownership rule for strays on a shared account
+
+Every instance a rental backend's state store did not know was reported as an
+**orphan**, with the command to adopt it. On an account shared between tools —
+the same gpu.ai key used by hand from a CLI and by an application built on
+llmcore — that offers to take over, and so to terminate, someone else's
+running job.
+
+- `llmcore.runtimes.Ownership(name_prefix=..., known_ids=...)` says which
+  untracked compute is the caller's. Pass it to `GpuAiRuntime(...,
+  ownership=)` / `DeepInfraRuntime(..., ownership=)`, per call to
+  `status(ownership=)`, or set `runtimes.<backend>.owned_name_prefix` /
+  `owned_ids`.
+- With a rule, a stray the rule claims is still an orphan (ours, record
+  lost). One it does not claim is reported as **"not ours"**, with its real
+  phase, and no adopt hint.
+- `RuntimeStatus.owned` says which: `True` for anything in the state store or
+  claimed, `False` for compute started elsewhere, `None` when no rule was given.
+  Without a rule nothing changes.
+
+### Added — account balance, spending-limit and usage reads
+
+The runtimes subsystem could rent, price and terminate, but not answer "how
+much money is left, and how fast is it going". All in
+`llmcore.runtimes.accounts`, exported from `llmcore.runtimes`:
+
+- `GpuAiRuntime.balance()` → `AccountBalance` from `GET /billing/balance`:
+  balance, live **burn rate** (every live instance, provisioning included),
+  auto-pay, and `runway_hours` (balance ÷ burn, `None` where undefined).
+- `GpuAiRuntime.spending_limit()` → `SpendingLimit` from
+  `GET /billing/spending-limit`: monthly/daily caps and spend, percent used,
+  enforcement. A 404 is reported as `configured=False`.
+- `GpuAiRuntime.usage(bucket="day", group_by="instance_id", start=, end=)`
+  → `UsageReport` from `GET /usage`, all pages: **the real meter**, with
+  `total_cost_usd` and `by_instance()`. `status()`'s accrued spend is rate ×
+  elapsed and over-counts (provisioning is unbilled, unreachable windows are
+  credited back); this is what was charged.
+- `DeepInfraRuntime.balance()` from `GET /payment/checklist`: DeepInfra's
+  inverted `stripe_balance` (negative = funds) is turned the right way up;
+  usage since the last invoice, the account cap, suspension, and model-scoped
+  credit reported apart. Billing address and payment-method details are not
+  carried. `DeepInfraRuntime.spending_limit()` from `GET /payment/config`
+  (negative = none).
+- `openrouter_balance(api_key=None, api_key_env_var="OPENROUTER_API_KEY")`
+  from OpenRouter's `GET /credits`: credit bought minus credit used.
+
+**These reads never raise.** A failed read — no key, an HTTP error, a dropped
+connection — comes back with `error` set and every figure `None`, so a panel
+that shows three vendors does not go blank because one timed out. Every figure
+is in dollars, and `None` always means unknown: gpu.ai's `null` burn rate is
+kept as `None`, never shown as zero.
+
+### Added — SSH keys for rented instances
+
+A bare instance is reached over SSH, and a gpu.ai launch installs keys by id.
+llmcore could pass `runtimes.gpuai.ssh_key_ids` but not find or register one.
+
+- `GpuAiRuntime.ssh_keys()` lists the account's keys (all pages) and
+  `GpuAiRuntime.create_ssh_key(name, public_key, idempotency_key=None)`
+  registers one. `DeepInfraRuntime.ssh_keys()` reads DeepInfra's
+  (`GET /v1/ssh_keys`), for its container rentals.
+- Both return `llmcore.runtimes.SshKey` (`id`, `name`, `fingerprint`,
+  `public_key`, `created_at`).
+- `create_ssh_key` refuses anything that is not a single OpenSSH **public**
+  key, and refuses a private key outright, before contacting gpu.ai
+  (`llmcore.runtimes.accounts.check_public_key`).
+
+### Added — rent a bare gpu.ai instance
+
+`GpuAiRuntime.up()` always deploys the vllm template with `env.MODEL` and
+waits for its HTTPS app URL. A caller that runs its own code on the GPU — its
+own environments, models and server, reached over SSH — had no way to rent
+the machine.
+
+- `GpuAiRuntime.rent(InstanceRequest, *, name, idempotency_key=None)` rents a
+  bare instance and waits for `running` (SSH-ready), not for an app URL. The
+  handle (`api_style="ssh"`, `recipe="instance"`, no `base_url`) carries
+  `ssh_command`, `hostname`, `port`, `terminal_url`, `auto_terminate_at` and
+  the price in `metadata`.
+- `InstanceRequest` maps `POST /instances` field for field: `environment` or
+  `image` (with `entrypoint`/`cmd`/`ports`), `disk_gb`, `ssh_key_ids`, `env`,
+  `auto_terminate_hours`, a pinned `offering_id`/`region`, and the
+  `max_price_per_hour`/`viewed_price_per_hour` ceilings.
+  `InstanceRequest.from_offer(offer, disk_gb=...)` pins a `GpuOffer` with its
+  price, rounded up to the cent, as both ceilings. `problems()` finds what
+  gpu.ai would refuse (image vs environment, port 22, reserved env names,
+  lifetime bounds…) and `rent()` refuses before sending anything.
+- Same guarantees as `up()`: recorded before the create, idempotency-keyed
+  (pass your own key to make a post-crash retry return the same instance),
+  fail-closed, and `auto_terminate_hours` defaults to the configured lifetime
+  rounded up. `env` values are never recorded, only their names. A name that
+  already records a live instance is refused rather than overwritten.
+- Public `GpuAiRuntime.get(id, credentials=False)` and
+  `GpuAiRuntime.terminate(id)`. `terminate` is idempotent (404/409 are
+  "already gone") but, unlike the internal fail-closed path, **raises** when
+  the DELETE fails, and marks any record of that instance STOPPED.
+
+### Added — gpu.ai's market as raw offers
+
+`GpuAiRuntime.catalogue()` keeps one rung per shape, the cheapest, and drops
+what kind of machine it is. For RTX 6000 Ada that silently picks a $0.65 VM
+that boots in 3–5 minutes with a fixed 350 GB disk over a $0.74 container that
+boots in about one.
+
+`GpuAiRuntime.offers(gpu_type=, region=, tier="on_demand",
+include_unavailable=False)` returns every matching row as a `GpuOffer`,
+cheapest first: `offering_id`, region, price, units available,
+`instant_boot`, `deployment_type` (`vm`/`container`), `capacity_class`,
+disk allowance and price, host specs, per-GPU VRAM and the certified
+image's CUDA and minimum driver (`OfferEnvironment`). Unreported specs (the
+API's `0`) are `None`, not zero. `GpuOffer.cost_per_hour(disk_gb)` prices
+only disk beyond the included allowance, as the contract bills it. Free and
+keyless, like `catalogue()`.
+
+**Fixed:** `/pricing` is paged and `catalogue()` read only the first page,
+which could drop the cheapest offering. Both now follow the cursor.
+
+### Fixed — rental backends record a runtime before they rent it
+
+The manager's docstring promised "state is written before provisioning
+begins". The rental backends wrote it only after `up()` returned, and the wait
+inside `up()` is up to 35 minutes. A crash there left an instance billing with
+no record; only orphan detection or gpu.ai's `auto_terminate_hours` would ever
+catch it.
+
+- **gpu.ai** saves a STARTING handle carrying the create's `Idempotency-Key`
+  *before* `POST /instances`, then adds the operation id, then the instance id
+  the moment the operation names it. The request is recorded as a summary
+  (`metadata["requested"]`) with `env` reduced to its key names, so an
+  `HF_TOKEN` sent to the template is not written down.
+- If the poll is lost before the operation names an instance, the record stays
+  STARTING with the operation id. `status()` and `down()` resolve the operation
+  to its instance (or to "made nothing"), so `down(name)` terminates what the
+  create made. `down()` on a create still in flight says so and keeps the
+  record rather than marking it stopped. A record saved before the operation id
+  came back is matched to a live instance by the name it was sent with.
+- A create that fails outright is recorded FAILED (with the idempotency key to
+  retry safely); one that failed after its instance existed is terminated and
+  recorded STOPPED with the cause.
+- **DeepInfra** saves a STARTING handle before `POST /deploy/llm` and records
+  the `deploy_id` before waiting.
+
+### Fixed — runtime state files no longer hold credentials
+
+A runtime state file is meant to be read with `cat`, which is exactly why it
+gets copied, backed up and pasted into bug reports. Two backends wrote a
+credential into one: `DeepInfraRuntime` stored the **account API key** in the
+handle's metadata, and `GpuAiRuntime` stored the vllm tunnel's **HTTP Basic
+header** (the instance's app password). Both files are mode 0600, which does
+not survive a copy.
+
+- `RuntimeHandle.secrets` holds credentials **in memory only**. `to_dict()`
+  never serializes it, and also drops any key in `SECRET_METADATA_KEYS`
+  (`api_key`, `default_headers`, `app_password`, `authorization`, `token`)
+  from `metadata`, so a third-party backend that puts one in the wrong place
+  still cannot leak it.
+- State files written before this change still load: a credential found in
+  their metadata is moved to `secrets` for this process, and the next save
+  rewrites the file without it.
+- Each rental backend re-derives credentials at use time with
+  `await backend.credentials(handle)`: DeepInfra resolves its key from the
+  environment again; gpu.ai re-reads the tunnel login with
+  `GET /instances/{id}?include=credentials`, the only read that returns it.
+- `RuntimeManager.attach()` and the liveness probe read
+  `handle.credential(...)`. The probe also now **sends** the tunnel's Basic
+  header: without it every probe of a gpu.ai template was a 401, and a healthy
+  rental would have been marked DEGRADED after three of them.
+
 ### Added — the artifact cache can actually be collected
 
 `ArtifactStore.gc()` existed and had **no callers**, for two reasons. It

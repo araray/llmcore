@@ -303,7 +303,7 @@ class TestGpuAiUp:
         runtime = gpuai_runtime(tmp_path, up_routes())
         handle = await runtime.up(await plan_for(runtime), name="r")
         assert handle.base_url == "https://gpu-abcd.apps.gpu.ai/v1"
-        assert handle.metadata["default_headers"]["Authorization"].startswith("Basic ")
+        assert handle.secrets["default_headers"]["Authorization"].startswith("Basic ")
         assert handle.spend_unit is CostUnit.USD
 
     async def test_a_failure_after_create_terminates_the_instance(self, tmp_path):
@@ -577,7 +577,7 @@ class TestDeepInfraUp:
         handle = await runtime.up(await plan_for(runtime), name="r")
         assert handle.base_url.endswith("/v1/openai")
         assert handle.served_model == "araray/Qwen2.5-7B-Instruct"
-        assert handle.metadata["api_key"] == "test-key"
+        assert handle.secrets["api_key"] == "test-key"
         assert handle.spend_unit is CostUnit.USD
 
     async def test_a_failed_deployment_is_deleted_not_left_reserved(self, tmp_path):
@@ -685,6 +685,235 @@ class TestDeepInfraTeardown:
         )
         handle = await runtime.adopt("dep-1", name="rescued")
         assert handle.metadata["price_per_hour"] == 0.89
+
+
+class _Spy(FakeHttp):
+    """A FakeHttp that snapshots the state store as each call is made, and can
+    raise on a path the way a dropped connection does."""
+
+    def __init__(self, routes, store, name, *, raise_on=None):
+        super().__init__(routes)
+        self.store, self.name, self.raise_on = store, name, raise_on
+        self.snapshots: list[tuple[str, str, object]] = []
+
+    async def request(self, method, url, json=None, params=None, headers=None):
+        handle = self.store.load(self.name)
+        self.snapshots.append(
+            (method.upper(), url, handle.to_dict() if handle is not None else None)
+        )
+        if self.raise_on and self.raise_on in url and method.upper() == "GET":
+            raise ConnectionError("connection reset")
+        return await super().request(method, url, json, params, headers)
+
+    def at(self, method: str, fragment: str) -> dict | None:
+        for m, url, snapshot in self.snapshots:
+            if m == method and fragment in url:
+                return snapshot
+        raise AssertionError(f"no {method} {fragment} call")
+
+
+def spied_gpuai(tmp_path, routes, *, raise_on=None, **cfg):
+    store = RuntimeStateStore(tmp_path)
+    return GpuAiRuntime(
+        config=config(**cfg), state_store=store, api_key="test-key",
+        client=_Spy(routes, store, "r", raise_on=raise_on),
+    )
+
+
+class TestStateBeforeCompute:
+    """The wait for a rental can take half an hour. A crash inside it used to
+    leave an unrecorded, billing instance; the record now exists first."""
+
+    async def test_a_starting_record_with_the_idempotency_key_precedes_the_create(
+        self, tmp_path
+    ):
+        runtime = spied_gpuai(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        before = runtime._client.at("POST", "/instances")
+        assert before is not None, "nothing was recorded before the create"
+        assert before["phase"] == "starting"
+        sent = runtime._client.sent("POST", "/instances")[0]["headers"]["Idempotency-Key"]
+        assert before["metadata"]["idempotency_key"] == sent
+
+    async def test_the_operation_id_is_recorded_before_polling(self, tmp_path):
+        runtime = spied_gpuai(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._client.at("GET", "/operations/op-1")["metadata"]["operation_id"] == "op-1"
+
+    async def test_the_final_handle_keeps_the_create_keys(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert handle.metadata["operation_id"] == "op-1"
+        assert handle.metadata["idempotency_key"]
+        assert handle.metadata["requested"]["gpu_type"] == "a100_80gb"
+
+    async def test_the_hf_token_sent_in_env_is_not_recorded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HF_TOKEN", "hf_secret_value")
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._client.sent("POST", "/instances")[0]["json"]["env"]["HF_TOKEN"]
+        text = handle.state_path.read_text()
+        assert "hf_secret_value" not in text
+        assert "HF_TOKEN" in text  # the key name, so a reader knows one was sent
+
+    async def test_a_create_request_that_fails_is_recorded_as_failed(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes({
+            ("POST", "/instances"): FakeResponse(422, text="disk_unavailable"),
+        }))
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.FAILED
+        assert "idempotency key" in handle.error
+
+    async def test_losing_track_mid_create_leaves_a_record_down_can_act_on(self, tmp_path):
+        """The case the record exists for: the poll dies before the operation
+        names an instance. The create may still finish and bill."""
+        runtime = spied_gpuai(tmp_path, up_routes(), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_, match="nothing could be terminated yet"):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STARTING
+        assert handle.metadata["operation_id"] == "op-1"
+        assert runtime._client.sent("DELETE", "/instances/inst-1") == []
+
+        # Later -- another process, the connection back -- down() resolves the
+        # operation to its instance and terminates it.
+        runtime._client.raise_on = None
+        await runtime.down("r")
+        assert runtime._client.sent("DELETE", "/instances/inst-1")
+        assert runtime._state.load("r").phase is RuntimePhase.STOPPED
+
+    async def test_status_resolves_a_recorded_create_to_its_instance(self, tmp_path):
+        runtime = spied_gpuai(tmp_path, up_routes({
+            ("GET", "/instances"): FakeResponse(200, {
+                "data": [INSTANCE_RUNNING], "next_cursor": None,
+            }),
+        }), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        runtime._client.raise_on = None
+        statuses = await runtime.status()
+        assert [s.name for s in statuses] == ["r"], "resolved, not reported as an orphan"
+        assert statuses[0].phase is RuntimePhase.READY
+        assert runtime._state.load("r").external_id == "inst-1"
+
+    async def test_down_on_a_create_still_in_flight_says_so_and_keeps_the_record(
+        self, tmp_path
+    ):
+        runtime = spied_gpuai(tmp_path, up_routes(), raise_on="/operations/op-1")
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        runtime._client.raise_on = None
+        runtime._client.routes[("GET", "/operations/op-1")] = FakeResponse(
+            200, {"state": "in_progress"}
+        )
+        await runtime.down("r")  # must not raise: down is the recovery path
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STARTING
+        assert "Run down('r') again" in handle.error
+
+    async def test_a_failed_operation_with_nothing_made_is_failed_not_starting(
+        self, tmp_path
+    ):
+        runtime = gpuai_runtime(tmp_path, up_routes({
+            ("GET", "/operations/op-1"): FakeResponse(200, {
+                "state": "failed", "error": {"message": "no capacity"},
+            }),
+        }))
+        with pytest.raises(RuntimeError_, match="no capacity"):
+            await runtime.up(await plan_for(runtime), name="r")
+        assert runtime._state.load("r").phase is RuntimePhase.FAILED
+
+    async def test_deepinfra_records_before_reserving_and_the_id_after(self, tmp_path):
+        store = RuntimeStateStore(tmp_path)
+        runtime = DeepInfraRuntime(
+            config=config(), state_store=store, api_key="test-key",
+            client=_Spy(di_routes(), store, "r"),
+        )
+        await runtime.up(await plan_for(runtime), name="r")
+        before = runtime._client.at("POST", "/deploy/llm")
+        assert before["phase"] == "starting" and before["external_id"] == ""
+        assert runtime._client.at("GET", "/deploy/dep-1")["external_id"] == "dep-1"
+
+    async def test_a_failed_deepinfra_reservation_is_recorded_as_stopped(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes({
+            ("GET", "/deploy/dep-1"): FakeResponse(200, dict(
+                DEPLOY_RUNNING, status="failed", fail_reason="weights not found"
+            )),
+        }))
+        with pytest.raises(RuntimeError_):
+            await runtime.up(await plan_for(runtime), name="r")
+        handle = runtime._state.load("r")
+        assert handle.phase is RuntimePhase.STOPPED
+        assert "weights not found" in handle.error
+
+
+class TestNoSecretsInStateFiles:
+    """A state file is meant to be read with ``cat`` -- and so it gets copied,
+    backed up and pasted into bug reports. Neither the DeepInfra account key
+    nor gpu.ai's tunnel password may be in one."""
+
+    async def test_the_gpuai_basic_header_is_not_persisted(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        text = handle.state_path.read_text()
+        assert "Basic " not in text
+        assert "default_headers" not in text
+        assert '"p"' not in text  # the app_password in the fixture
+
+    async def test_the_deepinfra_key_is_not_persisted(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes())
+        handle = await runtime.up(await plan_for(runtime), name="r")
+        assert "test-key" not in handle.state_path.read_text()
+
+    async def test_a_reloaded_handle_has_no_secrets_until_rederived(self, tmp_path):
+        runtime = deepinfra(tmp_path, di_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        reloaded = runtime._state.load("r")
+        assert reloaded.secrets == {}
+        assert await runtime.credentials(reloaded) == {"api_key": "test-key"}
+        assert reloaded.credential("api_key") == "test-key"
+
+    async def test_gpuai_rederives_the_tunnel_login_from_the_api(self, tmp_path):
+        runtime = gpuai_runtime(tmp_path, up_routes())
+        await runtime.up(await plan_for(runtime), name="r")
+        reloaded = runtime._state.load("r")
+        assert reloaded.credential("default_headers") is None
+        secrets = await runtime.credentials(reloaded)
+        assert secrets["default_headers"]["Authorization"].startswith("Basic ")
+        last = runtime._client.sent("GET", "/instances/inst-1")[-1]
+        assert last["params"] == {"include": "credentials"}
+
+    async def test_an_old_state_file_with_a_key_loads_and_is_scrubbed_on_save(self, tmp_path):
+        """Files written before the split still describe something billing, so
+        they must load -- and the next save must drop the key."""
+        from llmcore.runtimes import RuntimeHandle
+
+        store = RuntimeStateStore(tmp_path)
+        path = store.path_for("old")
+        path.write_text(jsonlib.dumps({
+            "name": "old", "runtime": "deepinfra", "external_id": "dep-1",
+            "base_url": "https://api.deepinfra.com/v1/openai", "served_model": "m",
+            "phase": "ready", "metadata": {"api_key": "leaked", "gpu": "A100-80GB"},
+        }))
+        handle = store.load("old")
+        assert handle.credential("api_key") == "leaked"
+        assert "api_key" not in handle.metadata
+        store.save(handle)
+        assert "leaked" not in path.read_text()
+        assert isinstance(handle, RuntimeHandle)
+
+    async def test_a_credential_left_in_metadata_is_scrubbed_anyway(self, tmp_path):
+        from llmcore.runtimes import RuntimeHandle
+
+        handle = RuntimeHandle(
+            name="x", runtime="third-party", external_id="1", base_url="", served_model="",
+            metadata={"default_headers": {"Authorization": "Basic c2VjcmV0"}, "region": "r"},
+        )
+        payload = handle.to_dict()
+        assert payload["metadata"] == {"region": "r"}
+        assert "secrets" not in payload
 
 
 class TestBothSatisfyTheProtocol:
