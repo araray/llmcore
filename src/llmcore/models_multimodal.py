@@ -76,6 +76,30 @@ class SpeechResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class TranscriptionWord(BaseModel):
+    """A single word of a transcription with timing information.
+
+    Attributes:
+        word: The word as the provider returned it (punctuated when available).
+        start: Start time in seconds.
+        end: End time in seconds.
+        probability: Provider confidence for the word (0-1), if given.
+        speaker: Speaker label (if diarization is available).
+    """
+
+    word: str = Field(description="Word text.")
+    start: float = Field(description="Start time in seconds.")
+    end: float = Field(description="End time in seconds.")
+    probability: float | None = Field(
+        default=None,
+        description="Word confidence (0-1), if the provider gives one.",
+    )
+    speaker: str | None = Field(
+        default=None,
+        description="Speaker label (for diarized transcription).",
+    )
+
+
 class TranscriptionSegment(BaseModel):
     """A segment of a transcription with timing information.
 
@@ -84,6 +108,7 @@ class TranscriptionSegment(BaseModel):
         start: Start time in seconds.
         end: End time in seconds.
         speaker: Speaker label (if diarization is available).
+        words: Word timings inside this segment (if the provider returned them).
     """
 
     text: str = Field(description="Segment text.")
@@ -93,6 +118,56 @@ class TranscriptionSegment(BaseModel):
         default=None,
         description="Speaker label (for diarized transcription).",
     )
+    words: list[TranscriptionWord] = Field(
+        default_factory=list,
+        description="Word timings within the segment (if available).",
+    )
+
+
+def attach_words_to_segments(
+    segments: list[TranscriptionSegment],
+    words: list[TranscriptionWord],
+    *,
+    text: str = "",
+) -> list[TranscriptionSegment]:
+    """Distribute a flat list of timed *words* over their *segments*.
+
+    Providers such as OpenAI's ``verbose_json`` return words and segments as
+    two separate lists. Each word goes to the segment whose ``[start, end]``
+    contains the word's midpoint; a word that falls in a gap between segments
+    goes to the nearest one, so no word is ever dropped. When the provider
+    returned words but no segments, a single segment spanning all words (with
+    the full *text*) is created to hold them.
+
+    Args:
+        segments: Segments in time order; their ``words`` lists are extended.
+        words: Words in time order.
+        text: Full transcript, used only for the fallback single segment.
+
+    Returns:
+        The segments (the same list, or the fallback single segment).
+    """
+    if not words:
+        return segments
+    if not segments:
+        return [
+            TranscriptionSegment(
+                text=text,
+                start=words[0].start,
+                end=words[-1].end,
+                words=list(words),
+            )
+        ]
+
+    def _distance(seg: TranscriptionSegment, t: float) -> float:
+        if seg.start <= t <= seg.end:
+            return 0.0
+        return min(abs(t - seg.start), abs(t - seg.end))
+
+    for w in words:
+        mid = (w.start + w.end) / 2.0
+        min(segments, key=lambda s: _distance(s, mid)).words.append(w)
+    return segments
 
 
 class TranscriptionResult(BaseModel):

@@ -79,9 +79,11 @@ from ..models_multimodal import (
     TranscriptionResult,
     TranscriptionSegment,
     TranscriptionStreamEvent,
+    TranscriptionWord,
     VoiceAgentEvent,
     VoiceAgentEventType,
     VoiceAgentFunctionCall,
+    attach_words_to_segments,
 )
 from .base import BaseProvider, ContextPayload
 
@@ -1233,14 +1235,35 @@ class DeepgramProvider(BaseProvider):
         # Primary transcript: channel 0, alternative 0.
         transcript = ""
         confidence = None
+        channel: dict[str, Any] = {}
+        alt: dict[str, Any] = {}
         channels = results.get("channels") or []
         if channels:
-            alts = channels[0].get("alternatives") or []
+            channel = channels[0] or {}
+            alts = channel.get("alternatives") or []
             if alts:
-                transcript = alts[0].get("transcript", "") or ""
-                confidence = alts[0].get("confidence")
+                alt = alts[0] or {}
+                transcript = alt.get("transcript", "") or ""
+                confidence = alt.get("confidence")
 
-        # Segments from utterances (when requested); speaker-labelled if diarized.
+        def _speaker(item: dict[str, Any]) -> str | None:
+            return str(item["speaker"]) if item.get("speaker") is not None else None
+
+        def _words(items: list[dict[str, Any]]) -> list[TranscriptionWord]:
+            return [
+                TranscriptionWord(
+                    word=w.get("punctuated_word") or w.get("word", "") or "",
+                    start=float(w.get("start", 0.0) or 0.0),
+                    end=float(w.get("end", 0.0) or 0.0),
+                    probability=w.get("confidence"),
+                    speaker=_speaker(w),
+                )
+                for w in items or []
+            ]
+
+        # Segments, best source first: utterances (when requested; they carry
+        # their own words), else paragraph sentences (smart_format/paragraphs),
+        # else one segment holding every word. Speaker-labelled if diarized.
         segments: list[TranscriptionSegment] = []
         for utt in results.get("utterances") or []:
             segments.append(
@@ -1248,11 +1271,32 @@ class DeepgramProvider(BaseProvider):
                     text=utt.get("transcript", "") or "",
                     start=float(utt.get("start", 0.0) or 0.0),
                     end=float(utt.get("end", 0.0) or 0.0),
-                    speaker=(
-                        str(utt["speaker"]) if utt.get("speaker") is not None else None
-                    ),
+                    speaker=_speaker(utt),
+                    words=_words(utt.get("words") or []),
                 )
             )
+        if not segments:
+            for para in (alt.get("paragraphs") or {}).get("paragraphs") or []:
+                for sent in para.get("sentences") or []:
+                    segments.append(
+                        TranscriptionSegment(
+                            text=sent.get("text", "") or "",
+                            start=float(sent.get("start", 0.0) or 0.0),
+                            end=float(sent.get("end", 0.0) or 0.0),
+                            speaker=_speaker(para),
+                        )
+                    )
+        if not any(seg.words for seg in segments):
+            segments = attach_words_to_segments(
+                segments, _words(alt.get("words") or []), text=transcript
+            )
+
+        # Detected language (detect_language=true), else the dominant one of a
+        # multilingual ("multi") request, else the language that was asked for.
+        alt_languages = alt.get("languages") or []
+        detected_language = channel.get("detected_language") or (
+            alt_languages[0] if alt_languages else None
+        )
 
         duration = metadata.get("duration")
         result_metadata: dict[str, Any] = {
@@ -1265,9 +1309,12 @@ class DeepgramProvider(BaseProvider):
             if results.get(key) is not None:
                 result_metadata[key] = results[key]
 
+        if channel.get("language_confidence") is not None:
+            result_metadata["language_confidence"] = channel["language_confidence"]
+
         return TranscriptionResult(
             text=transcript,
-            language=language,
+            language=detected_language or language,
             duration_seconds=float(duration) if duration is not None else None,
             segments=segments,
             model=model,
