@@ -10,15 +10,15 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
+    "video_input": true,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -46,5 +46,20 @@
   "aliases": [],
   "description": "Perceptron Mk1.5 is Perceptron's embodied reasoning model for physical agents. It accepts text, image, video, and audio input, and answers with text plus optional structured annotations: points, boxes, polygons, tracks,...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/perceptron/perceptron-mk1.5",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/perceptron/perceptron-mk1.5",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
+  }
 }

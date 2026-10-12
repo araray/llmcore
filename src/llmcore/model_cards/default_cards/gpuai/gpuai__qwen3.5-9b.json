@@ -24,5 +24,13 @@
   },
   "context": {
     "max_input_tokens": 262144
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/qwen3.5-9b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:07+00:00"
   }
 }

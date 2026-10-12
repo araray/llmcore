@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 40960,
-    "max_output_tokens": 40960
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -38,7 +38,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.06,
+      "input": 0.12,
       "output": 0.24
     }
   },
@@ -73,5 +73,20 @@
     "is_moderated": false,
     "instruct_type": "qwen3",
     "tokenizer": "Qwen3"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/qwen/qwen3-14b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen3-14b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -14,7 +14,7 @@
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
-    "json_mode": false,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
@@ -64,5 +64,20 @@
     "is_moderated": false,
     "instruct_type": "vicuna",
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/microsoft/wizardlm-2-8x22b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/microsoft/wizardlm-2-8x22b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,7 +7,7 @@
     "family": "qwen"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": false,
@@ -34,5 +34,12 @@
     "multimodal",
     "vision"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "unsloth/Qwen3.5-9B",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

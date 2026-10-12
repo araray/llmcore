@@ -7,7 +7,7 @@
     "family": "Meta-Llama"
   },
   "context": {
-    "max_input_tokens": 327680,
+    "max_input_tokens": 1310720,
     "max_output_tokens": 16384
   },
   "capabilities": {
@@ -38,7 +38,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.08,
+      "input": 0.1,
       "output": 0.3
     }
   },
@@ -70,5 +70,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Llama4"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/meta-llama/llama-4-scout",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/meta-llama/llama-4-scout",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

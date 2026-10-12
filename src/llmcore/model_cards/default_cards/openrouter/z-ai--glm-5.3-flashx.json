@@ -10,15 +10,15 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": true,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
+    "video_input": true,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.37,
-      "output": 1.25
+      "output": 1.25,
+      "cached_input": 0.09
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "GLM-5.3-FlashX is the high-speed variant of Z.ai's GLM-5.3-Flash, a native multimodal model delivering inference speeds of up to 200 tokens/s. Built on the same hybrid sparse and linear attention architecture...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/z-ai/glm-5.3-flashx",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/z-ai/glm-5.3-flashx",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
+  }
 }

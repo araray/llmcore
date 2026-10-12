@@ -9,15 +9,15 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": true,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
+    "video_input": true,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -39,5 +39,12 @@
   "aliases": [],
   "description": "The experimental version of our Auto Router where we test new improvements. Use it to get the latest and greatest version of our general purpose auto router, but expect beta...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openrouter/auto-beta",
+    "fetched_at": "2026-10-12T01:52:26+00:00"
+  }
 }

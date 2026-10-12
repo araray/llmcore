@@ -7,7 +7,8 @@
     "family": "Perplexity"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 128000,
+    "max_output_tokens": 115200
   },
   "capabilities": {
     "streaming": true,
@@ -37,8 +38,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 2.0,
-      "output": 8.0,
-      "reasoning_output": 3.0
+      "output": 8.0
     }
   },
   "provider_extension": {
@@ -63,5 +63,20 @@
     "is_moderated": false,
     "instruct_type": "deepseek-r1",
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/perplexity/sonar-deep-research",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/perplexity/sonar-deep-research",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

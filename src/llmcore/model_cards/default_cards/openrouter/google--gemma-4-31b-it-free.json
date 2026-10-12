@@ -58,5 +58,12 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Gemma"
+  },
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemma-4-31b-it:free",
+    "fetched_at": "2026-10-12T01:52:26+00:00"
   }
 }

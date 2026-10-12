@@ -7,14 +7,15 @@
     "family": "Google"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
     "json_mode": true,
-    "structured_output": false,
+    "structured_output": true,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
@@ -37,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.04,
-      "output": 0.08
+      "input": 0.05,
+      "output": 0.1
     }
   },
   "provider_extension": {
@@ -66,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": "gemma",
     "tokenizer": "Gemini"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemma-3-4b-it",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemma-3-4b-it",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

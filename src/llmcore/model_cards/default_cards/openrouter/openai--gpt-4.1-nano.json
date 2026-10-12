@@ -32,7 +32,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "For tasks that demand low latency, GPT\u20114.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
+  "description": "For tasks that demand low latency, GPT‑4.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -67,5 +67,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "GPT"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-4.1-nano",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-4.1-nano",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

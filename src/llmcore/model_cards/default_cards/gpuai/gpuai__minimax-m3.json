@@ -25,5 +25,13 @@
   },
   "context": {
     "max_input_tokens": 524288
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/minimax-m3",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:07+00:00"
   }
 }

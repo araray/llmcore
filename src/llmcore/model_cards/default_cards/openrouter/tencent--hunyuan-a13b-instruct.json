@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 131072,
-    "max_output_tokens": 131072
+    "max_output_tokens": 117964
   },
   "capabilities": {
     "streaming": true,
@@ -63,5 +63,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/tencent/hunyuan-a13b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/tencent/hunyuan-a13b-instruct",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

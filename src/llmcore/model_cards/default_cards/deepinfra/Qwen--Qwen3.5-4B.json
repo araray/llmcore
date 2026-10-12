@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true
   },
   "pricing": {
@@ -59,6 +59,24 @@
     ],
     "datacenters": [
       "US"
+    ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/Qwen/Qwen3.5-4B",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/Qwen/Qwen3.5-4B",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    },
+    "preserved_context_fields": [
+      "max_output_tokens"
     ]
   }
 }

@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 65536,
-    "max_output_tokens": 65536
+    "max_output_tokens": 58982
   },
   "capabilities": {
     "streaming": true,
@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Gemini 3.1 Flash Image Preview, a.k.a. \"Nano Banana 2,\" is Google\u2019s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines...",
+  "description": "Gemini 3.1 Flash Image Preview, a.k.a. \"Nano Banana 2,\" is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -65,5 +65,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Gemini"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-3.1-flash-image-preview",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-3.1-flash-image-preview",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

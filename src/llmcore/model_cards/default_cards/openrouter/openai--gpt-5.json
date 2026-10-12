@@ -32,7 +32,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GPT-5 is OpenAI\u2019s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy...",
+  "description": "GPT-5 is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -67,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "GPT"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-5",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-5",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

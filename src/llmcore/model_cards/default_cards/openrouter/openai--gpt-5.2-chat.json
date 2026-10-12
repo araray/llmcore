@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GPT-5.2 Chat (AKA Instant) is the fast, lightweight member of the 5.2 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively \u201cthink\u201d on...",
+  "description": "GPT-5.2 Chat (AKA Instant) is the fast, lightweight member of the 5.2 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively “think” on...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -64,5 +64,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "GPT"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-5.2-chat",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-5.2-chat",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,7 +7,8 @@
     "family": "Perplexity"
   },
   "context": {
-    "max_input_tokens": 127072
+    "max_input_tokens": 127072,
+    "max_output_tokens": 114364
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Sonar is lightweight, affordable, fast, and simple to use \u2014 now featuring citations and the ability to customize sources. It is designed for companies seeking to integrate lightweight question-and-answer features...",
+  "description": "Sonar is lightweight, affordable, fast, and simple to use — now featuring citations and the ability to customize sources. It is designed for companies seeking to integrate lightweight question-and-answer features...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -61,5 +62,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/perplexity/sonar",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/perplexity/sonar",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

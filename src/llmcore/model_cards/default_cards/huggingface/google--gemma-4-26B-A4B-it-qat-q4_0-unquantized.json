@@ -8,7 +8,7 @@
     "parameter_count": "4B"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": false,
@@ -45,5 +45,12 @@
     "multimodal",
     "vision"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "google/gemma-4-26B-A4B-it-qat-q4_0-unquantized",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

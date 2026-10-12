@@ -10,15 +10,15 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": true,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
+    "video_input": true,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -34,7 +34,9 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.75,
-      "output": 3.75
+      "output": 3.75,
+      "cached_input": 0.075,
+      "cache_write": 0.041667
     }
   },
   "lifecycle": {
@@ -46,5 +48,20 @@
   "aliases": [],
   "description": "This model always redirects to the latest model in the Gemini Flash family.",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/~google/gemini-flash-latest",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/~google/gemini-flash-latest",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
+  }
 }

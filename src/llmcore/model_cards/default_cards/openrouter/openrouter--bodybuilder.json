@@ -45,5 +45,12 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Router"
+  },
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openrouter/bodybuilder",
+    "fetched_at": "2026-10-12T01:52:26+00:00"
   }
 }

@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 8000,
-    "max_output_tokens": 2000
+    "max_output_tokens": 6000
   },
   "capabilities": {
     "streaming": true,
@@ -38,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.75,
-      "output": 1.0
+      "input": 0.4,
+      "output": 0.75
     }
   },
   "provider_extension": {
@@ -70,5 +70,20 @@
     "is_moderated": false,
     "instruct_type": "alpaca",
     "tokenizer": "Llama2"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/mancer/weaver",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mancer/weaver",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

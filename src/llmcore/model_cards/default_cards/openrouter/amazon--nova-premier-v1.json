@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Amazon Nova Premier is the most capable of Amazon\u2019s multimodal models for complex reasoning tasks and for use as the best teacher for distilling custom models.",
+  "description": "Amazon Nova Premier is the most capable of Amazon’s multimodal models for complex reasoning tasks and for use as the best teacher for distilling custom models.",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -62,5 +62,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "Nova"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/amazon/nova-premier-v1",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/amazon/nova-premier-v1",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

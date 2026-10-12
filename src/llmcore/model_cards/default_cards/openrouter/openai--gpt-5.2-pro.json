@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GPT-5.2 Pro is OpenAI\u2019s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
+  "description": "GPT-5.2 Pro is OpenAI’s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -64,5 +64,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "GPT"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-5.2-pro",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-5.2-pro",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

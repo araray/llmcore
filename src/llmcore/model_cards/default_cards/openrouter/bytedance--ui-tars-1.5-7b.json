@@ -15,7 +15,7 @@
     "function_calling": false,
     "tool_use": false,
     "json_mode": false,
-    "structured_output": false,
+    "structured_output": true,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
@@ -39,7 +39,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.1,
-      "output": 0.2
+      "output": 0.2,
+      "cached_input": 0.1
     }
   },
   "provider_extension": {
@@ -66,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/bytedance/ui-tars-1.5-7b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/bytedance/ui-tars-1.5-7b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

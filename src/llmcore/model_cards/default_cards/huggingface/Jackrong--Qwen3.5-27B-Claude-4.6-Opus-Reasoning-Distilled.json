@@ -8,7 +8,7 @@
     "parameter_count": "27B"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 262144
   },
   "capabilities": {
     "streaming": false,
@@ -36,5 +36,12 @@
     "vision",
     "reasoning"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

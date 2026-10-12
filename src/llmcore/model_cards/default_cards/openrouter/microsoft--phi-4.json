@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 16384,
-    "max_output_tokens": 16384
+    "max_output_tokens": 14745
   },
   "capabilities": {
     "streaming": true,
@@ -38,7 +38,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.065,
+      "input": 0.07,
       "output": 0.14
     }
   },
@@ -69,5 +69,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/microsoft/phi-4",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/microsoft/phi-4",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

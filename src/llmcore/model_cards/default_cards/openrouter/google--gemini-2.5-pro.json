@@ -32,7 +32,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Gemini 2.5 Pro is Google\u2019s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs \u201cthinking\u201d capabilities, enabling it to reason through responses with enhanced accuracy...",
+  "description": "Gemini 2.5 Pro is Google’s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs “thinking” capabilities, enabling it to reason through responses with enhanced accuracy...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -41,7 +41,7 @@
       "input": 1.25,
       "output": 10.0,
       "cached_input": 0.125,
-      "reasoning_output": 10.0
+      "cache_write": 0.375
     }
   },
   "provider_extension": {
@@ -72,5 +72,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Gemini"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-2.5-pro",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-2.5-pro",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,7 +7,8 @@
     "family": "Mistralai"
   },
   "context": {
-    "max_input_tokens": 256000
+    "max_input_tokens": 256000,
+    "max_output_tokens": 204800
   },
   "capabilities": {
     "streaming": true,
@@ -66,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/mistralai/codestral-2508",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/codestral-2508",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

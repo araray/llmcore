@@ -7,7 +7,8 @@
     "family": "Openai"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 117964
   },
   "capabilities": {
     "streaming": true,
@@ -37,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.039,
-      "output": 0.19
+      "input": 0.037,
+      "output": 0.17
     }
   },
   "provider_extension": {
@@ -74,5 +75,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "GPT"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-oss-120b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-oss-120b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

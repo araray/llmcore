@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 6144,
-    "max_output_tokens": 4096
+    "max_output_tokens": 5529
   },
   "capabilities": {
     "streaming": true,
@@ -38,7 +38,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.45,
+      "input": 0.35,
       "output": 0.65
     }
   },
@@ -71,5 +71,20 @@
     "is_moderated": false,
     "instruct_type": "alpaca",
     "tokenizer": "Llama2"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/undi95/remm-slerp-l2-13b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/undi95/remm-slerp-l2-13b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

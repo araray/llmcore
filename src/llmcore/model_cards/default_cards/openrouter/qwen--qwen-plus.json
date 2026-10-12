@@ -15,7 +15,7 @@
     "function_calling": true,
     "tool_use": true,
     "json_mode": true,
-    "structured_output": false,
+    "structured_output": true,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
@@ -40,7 +40,8 @@
     "per_million_tokens": {
       "input": 0.26,
       "output": 0.78,
-      "cached_input": 0.052
+      "cached_input": 0.052,
+      "cache_write": 0.325
     }
   },
   "provider_extension": {
@@ -64,5 +65,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Qwen"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/qwen/qwen-plus",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen-plus",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

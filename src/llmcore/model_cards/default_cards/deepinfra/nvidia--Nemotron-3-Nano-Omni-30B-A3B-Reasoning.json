@@ -15,7 +15,7 @@
     "json_mode": true,
     "structured_output": true,
     "vision": true,
-    "audio_input": false,
+    "audio_input": true,
     "audio_output": false,
     "video_input": false,
     "reasoning": true
@@ -59,6 +59,24 @@
     ],
     "datacenters": [
       "US"
+    ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    },
+    "preserved_context_fields": [
+      "max_output_tokens"
     ]
   }
 }

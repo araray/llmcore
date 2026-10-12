@@ -29,9 +29,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 3.00,
-      "output": 15.00,
-      "cached_input": 0.30
+      "input": 3.0,
+      "output": 15.0,
+      "cached_input": 0.3,
+      "cache_write": 3.75
     },
     "batch_discount_percent": 50
   },
@@ -42,13 +43,24 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["claude-4.5-sonnet", "claude-sonnet-4.5"],
+  "aliases": [
+    "claude-4.5-sonnet",
+    "claude-sonnet-4.5"
+  ],
   "description": "Claude Sonnet 4.5 is Anthropic's balanced mainline model with extended context. Excels at coding, structured analysis, and extended dialogues with extended thinking mode for step-by-step solutions.",
-  "tags": ["balanced", "extended-context", "coding", "vision"],
+  "tags": [
+    "balanced",
+    "extended-context",
+    "coding",
+    "vision"
+  ],
   "provider_anthropic": {
     "extended_thinking": {
       "supported": true,
-      "budget_tokens_range": [1024, 128000]
+      "budget_tokens_range": [
+        1024,
+        128000
+      ]
     },
     "computer_use": true,
     "prompt_caching": {
@@ -56,7 +68,20 @@
       "cache_write_1h_multiplier": 2.0,
       "cache_read_multiplier": 0.1
     },
-    "beta_features": ["context-1m-2025-08-07"]
+    "beta_features": [
+      "context-1m-2025-08-07"
+    ]
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:anthropic",
+    "method": "scrape",
+    "url": "https://docs.claude.com/en/docs/about-claude/pricing",
+    "matched_key": "claude-sonnet-4-5",
+    "match": "display-name slug match",
+    "fetched_at": "2026-10-12T01:49:07+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
+  }
 }

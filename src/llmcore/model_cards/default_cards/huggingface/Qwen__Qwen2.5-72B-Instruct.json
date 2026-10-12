@@ -9,7 +9,7 @@
     "parameter_count": "72B"
   },
   "context": {
-    "max_input_tokens": 131072,
+    "max_input_tokens": 32768,
     "max_output_tokens": 8192,
     "default_output_tokens": 2048
   },
@@ -32,6 +32,21 @@
   "open_weights": true,
   "aliases": [],
   "description": "Qwen 2.5 72B Instruct: high-performance open-weight model by Alibaba with 128K context and strong tool-use support.",
-  "tags": ["open-weights", "instruct", "tool-calling"],
-  "source": "builtin"
+  "tags": [
+    "open-weights",
+    "instruct",
+    "tool-calling"
+  ],
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "Qwen/Qwen2.5-72B-Instruct",
+    "fetched_at": "2026-10-12T01:52:17+00:00",
+    "preserved_context_fields": [
+      "max_output_tokens",
+      "default_output_tokens"
+    ]
+  }
 }

@@ -8,7 +8,7 @@
     "parameter_count": "7B"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 10485760
   },
   "capabilities": {
     "streaming": false,
@@ -45,5 +45,12 @@
     "multimodal",
     "vision"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

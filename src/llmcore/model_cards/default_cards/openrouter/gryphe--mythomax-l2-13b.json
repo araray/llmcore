@@ -7,8 +7,8 @@
     "family": "Gryphe"
   },
   "context": {
-    "max_input_tokens": 4096,
-    "max_output_tokens": 4096
+    "max_input_tokens": 8192,
+    "max_output_tokens": 3686
   },
   "capabilities": {
     "streaming": true,
@@ -38,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.06,
-      "output": 0.06
+      "input": 0.08,
+      "output": 0.11
     }
   },
   "provider_extension": {
@@ -71,5 +71,20 @@
     "is_moderated": false,
     "instruct_type": "alpaca",
     "tokenizer": "Llama2"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/gryphe/mythomax-l2-13b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/gryphe/mythomax-l2-13b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,8 +7,8 @@
     "family": "Qwen"
   },
   "context": {
-    "max_input_tokens": 32768,
-    "max_output_tokens": 32768
+    "max_input_tokens": 128000,
+    "max_output_tokens": 115200
   },
   "capabilities": {
     "streaming": true,
@@ -39,7 +39,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.8,
-      "output": 0.8
+      "output": 1.0,
+      "cached_input": 0.4
     }
   },
   "provider_extension": {
@@ -68,5 +69,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Qwen"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/qwen/qwen2.5-vl-72b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen2.5-vl-72b-instruct",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

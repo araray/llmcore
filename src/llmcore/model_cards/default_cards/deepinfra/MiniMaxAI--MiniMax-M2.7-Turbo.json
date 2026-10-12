@@ -5,21 +5,27 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 196608
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
     "structured_output": false,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false
+    "reasoning": true
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.38,
+      "output": 1.7
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -44,5 +50,20 @@
     "datacenters": [
       "US"
     ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/MiniMaxAI/MiniMax-M2.7-Turbo",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/MiniMaxAI/MiniMax-M2.7-Turbo",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

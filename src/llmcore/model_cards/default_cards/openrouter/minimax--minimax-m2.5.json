@@ -7,8 +7,8 @@
     "family": "Minimax"
   },
   "context": {
-    "max_input_tokens": 196608,
-    "max_output_tokens": 65536
+    "max_input_tokens": 204800,
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -37,9 +37,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.118,
-      "output": 0.99,
-      "cached_input": 0.059
+      "input": 0.27,
+      "output": 1.08,
+      "cached_input": 0.027
     }
   },
   "provider_extension": {
@@ -76,5 +76,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/minimax/minimax-m2.5",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/minimax/minimax-m2.5",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

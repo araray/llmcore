@@ -7,14 +7,15 @@
     "family": "Nvidia"
   },
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
     "json_mode": true,
-    "structured_output": false,
+    "structured_output": true,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
@@ -36,9 +37,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.1,
-      "output": 0.5,
-      "cached_input": 0.1
+      "input": 0.08,
+      "output": 0.45
     }
   },
   "provider_extension": {
@@ -69,5 +69,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/nvidia/nemotron-3-super-120b-a12b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/nvidia/nemotron-3-super-120b-a12b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,7 +7,8 @@
     "family": "Deepseek"
   },
   "context": {
-    "max_input_tokens": 163840
+    "max_input_tokens": 163840,
+    "max_output_tokens": 115200
   },
   "capabilities": {
     "streaming": true,
@@ -21,7 +22,7 @@
     "video_input": false,
     "image_generation": false,
     "web_search": false,
-    "reasoning": true,
+    "reasoning": false,
     "file_processing": false
   },
   "lifecycle": {
@@ -37,9 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.2,
-      "output": 0.77,
-      "cached_input": 0.135
+      "input": 0.29,
+      "output": 1.14,
+      "cached_input": 0.11
     }
   },
   "provider_extension": {
@@ -73,5 +74,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "DeepSeek"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/deepseek/deepseek-chat-v3-0324",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/deepseek/deepseek-chat-v3-0324",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

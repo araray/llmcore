@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Claude Haiku 4.5 is Anthropic\u2019s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4\u2019s performance...",
+  "description": "Claude Haiku 4.5 is Anthropic’s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4’s performance...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -39,7 +39,8 @@
     "per_million_tokens": {
       "input": 1.0,
       "output": 5.0,
-      "cached_input": 0.1
+      "cached_input": 0.1,
+      "cache_write": 1.25
     }
   },
   "provider_extension": {
@@ -67,5 +68,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "Claude"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/anthropic/claude-haiku-4.5",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/anthropic/claude-haiku-4.5",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

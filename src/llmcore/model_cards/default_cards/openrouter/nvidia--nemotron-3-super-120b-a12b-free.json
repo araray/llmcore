@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 262144
+    "max_output_tokens": 235929
   },
   "capabilities": {
     "streaming": true,
@@ -57,5 +57,12 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+    "fetched_at": "2026-10-12T01:52:26+00:00"
   }
 }

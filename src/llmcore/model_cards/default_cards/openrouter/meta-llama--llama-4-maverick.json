@@ -38,8 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.15,
-      "output": 0.6
+      "input": 0.1875,
+      "output": 0.6525,
+      "cached_input": 0.05
     }
   },
   "provider_extension": {
@@ -71,5 +72,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Llama4"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/meta-llama/llama-4-maverick",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/meta-llama/llama-4-maverick",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -54,5 +54,16 @@
     "batch_api": true,
     "citations": true,
     "pdf_input": true
+  },
+  "x_pricewatch": {
+    "feed": "scrape:anthropic",
+    "method": "scrape",
+    "url": "https://docs.claude.com/en/docs/about-claude/pricing",
+    "matched_key": "claude-fable-5",
+    "match": "display-name slug match",
+    "fetched_at": "2026-10-12T01:49:07+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
   }
 }

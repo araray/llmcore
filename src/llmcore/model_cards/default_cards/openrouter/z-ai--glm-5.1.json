@@ -7,8 +7,8 @@
     "family": "Z-Ai"
   },
   "context": {
-    "max_input_tokens": 202752,
-    "max_output_tokens": 65535
+    "max_input_tokens": 204800,
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -37,9 +37,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.95,
-      "output": 3.15,
-      "cached_input": 0.475
+      "input": 0.966,
+      "output": 3.036,
+      "cached_input": 0.1794
     }
   },
   "provider_extension": {
@@ -74,5 +74,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/z-ai/glm-5.1",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/z-ai/glm-5.1",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

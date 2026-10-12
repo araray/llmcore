@@ -24,8 +24,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.09,
-      "output": 0.3,
-      "cached_input": 0.02
+      "output": 0.3
     }
   },
   "lifecycle": {
@@ -55,6 +54,24 @@
     ],
     "datacenters": [
       "US"
+    ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/stepfun-ai/Step-3.5-Flash",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/stepfun-ai/Step-3.5-Flash",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    },
+    "preserved_context_fields": [
+      "max_output_tokens"
     ]
   }
 }

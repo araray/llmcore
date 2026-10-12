@@ -7,15 +7,15 @@
     "family": "Anthracite-Org"
   },
   "context": {
-    "max_input_tokens": 16384,
-    "max_output_tokens": 2048
+    "max_input_tokens": 32768,
+    "max_output_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
     "function_calling": false,
     "tool_use": false,
     "json_mode": true,
-    "structured_output": false,
+    "structured_output": true,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
@@ -38,7 +38,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 3.0,
+      "input": 2.5,
       "output": 5.0
     }
   },
@@ -70,5 +70,20 @@
     "is_moderated": false,
     "instruct_type": "chatml",
     "tokenizer": "Qwen"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/anthracite-org/magnum-v4-72b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/anthracite-org/magnum-v4-72b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -7,14 +7,14 @@
     "family": "Thedrummer"
   },
   "context": {
-    "max_input_tokens": 32768,
-    "max_output_tokens": 32768
+    "max_input_tokens": 1024000,
+    "max_output_tokens": 819200
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
-    "json_mode": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
     "structured_output": true,
     "vision": false,
     "audio_input": false,
@@ -69,5 +69,20 @@
     "is_moderated": false,
     "instruct_type": "mistral",
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/thedrummer/unslopnemo-12b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/thedrummer/unslopnemo-12b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

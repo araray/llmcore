@@ -6,7 +6,9 @@
   "architecture": {
     "parameter_count": "3B"
   },
-  "context": null,
+  "context": {
+    "max_input_tokens": 131072
+  },
   "capabilities": {
     "streaming": false,
     "function_calling": false,
@@ -32,5 +34,12 @@
     "audio",
     "tts"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "canopylabs/orpheus-3b-0.1-ft",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

@@ -15,7 +15,7 @@
     "function_calling": false,
     "tool_use": false,
     "json_mode": true,
-    "structured_output": false,
+    "structured_output": true,
     "vision": false,
     "audio_input": false,
     "audio_output": false,
@@ -66,5 +66,20 @@
     "is_moderated": false,
     "instruct_type": "chatml",
     "tokenizer": "Llama3"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/nousresearch/hermes-3-llama-3.1-405b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/nousresearch/hermes-3-llama-3.1-405b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

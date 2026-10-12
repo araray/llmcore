@@ -7,7 +7,8 @@
     "family": "Mistralai"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 104857
   },
   "capabilities": {
     "streaming": true,
@@ -31,7 +32,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8\u00d7 lower cost...",
+  "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8× lower cost...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -67,5 +68,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/mistralai/mistral-medium-3",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/mistral-medium-3",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

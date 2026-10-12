@@ -7,8 +7,8 @@
     "family": "Meta-Llama"
   },
   "context": {
-    "max_input_tokens": 16384,
-    "max_output_tokens": 16384
+    "max_input_tokens": 131072,
+    "max_output_tokens": 117964
   },
   "capabilities": {
     "streaming": true,
@@ -38,8 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.02,
-      "output": 0.05
+      "input": 0.05,
+      "output": 0.08,
+      "cached_input": 0.025
     }
   },
   "provider_extension": {
@@ -71,5 +72,20 @@
     "is_moderated": false,
     "instruct_type": "llama3",
     "tokenizer": "Llama3"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/meta-llama/llama-3.1-8b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/meta-llama/llama-3.1-8b-instruct",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

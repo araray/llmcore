@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Opus 4.6 is Anthropic\u2019s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
+  "description": "Opus 4.6 is Anthropic’s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -39,7 +39,8 @@
     "per_million_tokens": {
       "input": 5.0,
       "output": 25.0,
-      "cached_input": 0.5
+      "cached_input": 0.5,
+      "cache_write": 6.25
     }
   },
   "provider_extension": {
@@ -69,5 +70,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "Claude"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/anthropic/claude-opus-4.6",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/anthropic/claude-opus-4.6",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

@@ -45,5 +45,12 @@
     "multimodal",
     "vision"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

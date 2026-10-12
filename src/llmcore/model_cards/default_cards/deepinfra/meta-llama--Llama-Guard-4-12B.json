@@ -5,7 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 163840
   },
   "capabilities": {
     "streaming": true,
@@ -13,7 +13,7 @@
     "tool_use": false,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
@@ -29,7 +29,13 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.18,
+      "output": 0.18
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -56,5 +62,20 @@
     "datacenters": [
       "US"
     ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/meta-llama/Llama-Guard-4-12B",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/meta-llama/Llama-Guard-4-12B",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

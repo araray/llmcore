@@ -29,9 +29,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 5.00,
-      "output": 25.00,
-      "cached_input": 0.50
+      "input": 5.0,
+      "output": 25.0,
+      "cached_input": 0.5,
+      "cache_write": 6.25
     },
     "batch_discount_percent": 50
   },
@@ -42,13 +43,24 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["claude-4.6-opus"],
+  "aliases": [
+    "claude-4.6-opus"
+  ],
   "description": "Claude Opus 4.6 is Anthropic's most advanced and intelligent model, designed for frontier intelligence in long-running agents and complex coding tasks.",
-  "tags": ["flagship", "frontier", "agents", "coding", "reasoning"],
+  "tags": [
+    "flagship",
+    "frontier",
+    "agents",
+    "coding",
+    "reasoning"
+  ],
   "provider_anthropic": {
     "extended_thinking": {
       "supported": true,
-      "budget_tokens_range": [1024, 128000]
+      "budget_tokens_range": [
+        1024,
+        128000
+      ]
     },
     "computer_use": true,
     "prompt_caching": {
@@ -58,5 +70,16 @@
     },
     "beta_features": []
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:anthropic",
+    "method": "scrape",
+    "url": "https://docs.claude.com/en/docs/about-claude/pricing",
+    "matched_key": "claude-opus-4-6",
+    "match": "display-name slug match",
+    "fetched_at": "2026-10-12T01:49:07+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
+  }
 }

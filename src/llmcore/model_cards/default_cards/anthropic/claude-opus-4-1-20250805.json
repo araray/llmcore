@@ -29,9 +29,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 5.00,
-      "output": 25.00,
-      "cached_input": 0.50
+      "input": 15.0,
+      "output": 75.0,
+      "cached_input": 1.5,
+      "cache_write": 18.75
     },
     "batch_discount_percent": 50
   },
@@ -42,13 +43,24 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["claude-opus-4-1", "claude-4.1-opus"],
+  "aliases": [
+    "claude-opus-4-1",
+    "claude-4.1-opus"
+  ],
   "description": "Claude Opus 4.1 is an exceptional model for specialized complex tasks with extended thinking capabilities.",
-  "tags": ["premium", "complex-tasks", "reasoning", "multimodal"],
+  "tags": [
+    "premium",
+    "complex-tasks",
+    "reasoning",
+    "multimodal"
+  ],
   "provider_anthropic": {
     "extended_thinking": {
       "supported": true,
-      "budget_tokens_range": [1024, 128000]
+      "budget_tokens_range": [
+        1024,
+        128000
+      ]
     },
     "computer_use": true,
     "prompt_caching": {
@@ -58,5 +70,16 @@
     },
     "beta_features": []
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:anthropic",
+    "method": "scrape",
+    "url": "https://docs.claude.com/en/docs/about-claude/pricing",
+    "matched_key": "claude-opus-4-1",
+    "match": "display-name slug match",
+    "fetched_at": "2026-10-12T01:49:07+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
+  }
 }

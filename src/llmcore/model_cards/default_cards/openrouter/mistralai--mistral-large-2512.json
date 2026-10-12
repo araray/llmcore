@@ -7,7 +7,8 @@
     "family": "Mistralai"
   },
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 209715
   },
   "capabilities": {
     "streaming": true,
@@ -30,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Mistral Large 3 2512 is Mistral\u2019s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
+  "description": "Mistral Large 3 2512 is Mistral’s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -66,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/mistralai/mistral-large-2512",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/mistral-large-2512",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

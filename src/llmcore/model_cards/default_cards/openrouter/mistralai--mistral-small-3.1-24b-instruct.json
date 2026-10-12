@@ -7,14 +7,15 @@
     "family": "Mistralai"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 128000,
+    "max_output_tokens": 102400
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
-    "structured_output": false,
+    "structured_output": true,
     "vision": true,
     "audio_input": false,
     "audio_output": false,
@@ -37,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.35,
-      "output": 0.56
+      "input": 0.351,
+      "output": 0.555
     }
   },
   "provider_extension": {
@@ -63,5 +64,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Mistral"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/mistralai/mistral-small-3.1-24b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/mistral-small-3.1-24b-instruct",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

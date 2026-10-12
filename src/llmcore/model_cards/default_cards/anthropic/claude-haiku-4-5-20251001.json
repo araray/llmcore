@@ -27,9 +27,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.00,
-      "output": 5.00,
-      "cached_input": 0.10
+      "input": 1.0,
+      "output": 5.0,
+      "cached_input": 0.1,
+      "cache_write": 1.25
     },
     "batch_discount_percent": 50
   },
@@ -40,13 +41,24 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["claude-4.5-haiku", "claude-haiku-4.5"],
+  "aliases": [
+    "claude-4.5-haiku",
+    "claude-haiku-4.5"
+  ],
   "description": "Claude Haiku 4.5 is Anthropic's ultra-fast, budget-friendly model for everyday tasks. Shares 200K context and 64K output capacity, prioritizing low latency and efficiency.",
-  "tags": ["fast", "low-cost", "vision", "multilingual"],
+  "tags": [
+    "fast",
+    "low-cost",
+    "vision",
+    "multilingual"
+  ],
   "provider_anthropic": {
     "extended_thinking": {
       "supported": true,
-      "budget_tokens_range": [1024, 128000]
+      "budget_tokens_range": [
+        1024,
+        128000
+      ]
     },
     "computer_use": true,
     "prompt_caching": {
@@ -54,5 +66,16 @@
     },
     "beta_features": []
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:anthropic",
+    "method": "scrape",
+    "url": "https://docs.claude.com/en/docs/about-claude/pricing",
+    "matched_key": "claude-haiku-4-5",
+    "match": "display-name slug match",
+    "fetched_at": "2026-10-12T01:49:07+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
+  }
 }

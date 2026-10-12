@@ -30,9 +30,20 @@
   "open_weights": true,
   "aliases": [],
   "description": "all-MiniLM-L6-v2: compact sentence embedding model (384 dimensions). Ideal for semantic search and similarity.",
-  "tags": ["open-weights", "embedding", "sentence-transformer"],
+  "tags": [
+    "open-weights",
+    "embedding",
+    "sentence-transformer"
+  ],
   "provider_huggingface": {
     "embedding_dimensions": 384
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "sentence-transformers/all-MiniLM-L6-v2",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 32768,
-    "max_output_tokens": 32768
+    "max_output_tokens": 29491
   },
   "capabilities": {
     "streaming": true,
@@ -32,7 +32,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Aion-RP-Llama-3.1-8B ranks the highest in the character evaluation portion of the RPBench-Auto benchmark, a roleplaying-specific variant of Arena-Hard-Auto, where LLMs evaluate each other\u2019s responses. It is a fine-tuned base model...",
+  "description": "Aion-RP-Llama-3.1-8B ranks the highest in the character evaluation portion of the RPBench-Auto benchmark, a roleplaying-specific variant of Arena-Hard-Auto, where LLMs evaluate each other’s responses. It is a fine-tuned base model...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -58,5 +58,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

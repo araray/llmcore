@@ -41,7 +41,7 @@
       "input": 0.3,
       "output": 2.5,
       "cached_input": 0.03,
-      "reasoning_output": 2.5
+      "cache_write": 0.083333
     }
   },
   "provider_extension": {
@@ -72,5 +72,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Gemini"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-2.5-flash",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-2.5-flash",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

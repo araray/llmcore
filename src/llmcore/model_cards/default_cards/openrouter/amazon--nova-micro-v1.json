@@ -61,5 +61,20 @@
     "is_moderated": true,
     "instruct_type": null,
     "tokenizer": "Nova"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/amazon/nova-micro-v1",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/amazon/nova-micro-v1",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

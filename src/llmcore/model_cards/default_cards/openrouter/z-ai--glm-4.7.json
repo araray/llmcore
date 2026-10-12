@@ -7,8 +7,8 @@
     "family": "Z-Ai"
   },
   "context": {
-    "max_input_tokens": 202752,
-    "max_output_tokens": 65535
+    "max_input_tokens": 204800,
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -31,15 +31,15 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "GLM-4.7 is Z.ai\u2019s latest flagship model, featuring upgrades in two key areas: enhanced programming capabilities and more stable multi-step reasoning/execution. It demonstrates significant improvements in executing complex agent tasks while...",
+  "description": "GLM-4.7 is Z.ai’s latest flagship model, featuring upgrades in two key areas: enhanced programming capabilities and more stable multi-step reasoning/execution. It demonstrates significant improvements in executing complex agent tasks while...",
   "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.39,
-      "output": 1.75,
-      "cached_input": 0.195
+      "input": 0.6,
+      "output": 2.2,
+      "cached_input": 0.11
     }
   },
   "provider_extension": {
@@ -74,5 +74,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Other"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/z-ai/glm-4.7",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/z-ai/glm-4.7",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

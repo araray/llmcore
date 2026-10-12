@@ -31,7 +31,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Nano Banana Pro is Google\u2019s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
+  "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
   "tags": [],
   "source": "builtin",
   "pricing": {
@@ -40,7 +40,7 @@
       "input": 2.0,
       "output": 12.0,
       "cached_input": 0.2,
-      "reasoning_output": 12.0
+      "cache_write": 0.375
     }
   },
   "provider_extension": {
@@ -67,5 +67,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Gemini"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-3-pro-image-preview",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-3-pro-image-preview",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

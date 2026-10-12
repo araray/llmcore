@@ -4,7 +4,9 @@
   "provider": "huggingface",
   "model_type": "image-generation",
   "architecture": null,
-  "context": null,
+  "context": {
+    "max_input_tokens": 22800
+  },
   "capabilities": {
     "streaming": false,
     "function_calling": false,
@@ -29,5 +31,12 @@
     "open-weights",
     "image-generation"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "tencent/HunyuanImage-3.0",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

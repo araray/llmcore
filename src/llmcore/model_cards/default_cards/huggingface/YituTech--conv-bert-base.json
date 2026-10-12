@@ -7,7 +7,7 @@
     "family": "bert"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 512
   },
   "capabilities": {
     "streaming": false,
@@ -43,5 +43,12 @@
     "open-weights",
     "embedding"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "YituTech/conv-bert-base",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

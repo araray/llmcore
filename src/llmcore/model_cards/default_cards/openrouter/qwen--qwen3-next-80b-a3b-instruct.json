@@ -7,7 +7,8 @@
     "family": "Qwen"
   },
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
   },
   "capabilities": {
     "streaming": true,
@@ -31,14 +32,15 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without \u201cthinking\u201d traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
+  "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without “thinking” traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
   "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.09,
-      "output": 1.1
+      "input": 0.1,
+      "output": 1.1,
+      "cached_input": 0.07
     }
   },
   "provider_extension": {
@@ -69,5 +71,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "Qwen3"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
+      "fetched_at": "2026-10-12T01:52:26+00:00"
+    }
   }
 }

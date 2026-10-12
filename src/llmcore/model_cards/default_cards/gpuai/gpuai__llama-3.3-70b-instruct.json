@@ -40,5 +40,13 @@
   },
   "context": {
     "max_input_tokens": 32768
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/llama-3.3-70b-instruct",
+    "match": "exact key match",
+    "fetched_at": "2026-10-12T01:49:07+00:00"
   }
 }
