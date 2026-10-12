@@ -77,13 +77,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/openai/gpt-3.5-turbo-16k",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T07:17:00+00:00",
+    "fetched_at": "2026-10-12T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/openai/gpt-3.5-turbo-16k",
-      "fetched_at": "2026-10-12T07:18:12+00:00"
+      "fetched_at": "2026-10-12T11:18:11+00:00"
     }
   }
 }

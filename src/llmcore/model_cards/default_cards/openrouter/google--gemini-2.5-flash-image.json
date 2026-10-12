@@ -73,13 +73,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/google/gemini-2.5-flash-image",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T07:17:00+00:00",
+    "fetched_at": "2026-10-12T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/google/gemini-2.5-flash-image",
-      "fetched_at": "2026-10-12T07:18:12+00:00"
+      "fetched_at": "2026-10-12T11:18:11+00:00"
     }
   }
 }
