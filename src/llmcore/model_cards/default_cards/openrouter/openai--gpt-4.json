@@ -77,13 +77,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/openai/gpt-4",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T01:49:05+00:00",
+    "fetched_at": "2026-10-12T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/openai/gpt-4",
-      "fetched_at": "2026-10-12T01:52:26+00:00"
+      "fetched_at": "2026-10-12T03:17:08+00:00"
     }
   }
 }
