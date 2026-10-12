@@ -64,13 +64,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/morph/morph-v3-fast",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T19:17:00+00:00",
+    "fetched_at": "2026-10-12T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/morph/morph-v3-fast",
-      "fetched_at": "2026-10-12T19:17:09+00:00"
+      "fetched_at": "2026-10-12T23:17:08+00:00"
     }
   }
 }
