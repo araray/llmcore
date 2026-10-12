@@ -69,13 +69,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/anthropic/claude-sonnet-5-5",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T11:17:00+00:00",
+    "fetched_at": "2026-10-12T15:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/anthropic/claude-sonnet-5-5",
-      "fetched_at": "2026-10-12T11:18:12+00:00"
+      "fetched_at": "2026-10-12T15:17:08+00:00"
     }
   }
 }
