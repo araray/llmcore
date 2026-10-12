@@ -75,13 +75,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/mistralai/mistral-medium-3.1",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T15:17:00+00:00",
+    "fetched_at": "2026-10-12T19:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/mistralai/mistral-medium-3.1",
-      "fetched_at": "2026-10-12T15:17:08+00:00"
+      "fetched_at": "2026-10-12T19:17:09+00:00"
     }
   }
 }
