@@ -1,6 +1,7 @@
 # workflows/pricewatch.yaml
 #
-# Daily refresh of llmcore's model pricing from vendor sources.
+# Refresh of llmcore's model pricing from vendor sources, plus the gpu.ai
+# hourly GPU market index.
 #
 # This is a machine-neutral copy: it invokes `pricewatch` from PATH and lets
 # the tool locate llmcore's card tree itself. A deployment may prefer
@@ -10,12 +11,12 @@
 # `jobs` is a mapping keyed by job name. The list form shown in kairos's own
 # USAGE.md is rejected by its loader.
 name: pricewatch
-description: "Refresh llmcore model pricing from vendor APIs and pricing pages"
+description: "Refresh llmcore model pricing and the gpu.ai GPU market index"
 tags: [llmcore, pricing]
 
 triggers:
   - type: cron
-    spec: "17 4 * * *"
+    spec: "17 */4 * * *"         # every 4h at :17
 
 jobs:
   fetch:
@@ -23,17 +24,31 @@ jobs:
       - name: refresh-prices
         command: pricewatch fetch
 
-  apply:
+  publish:
     # `needs` alone is the intra-run gate: kairos skips a job whose
     # dependency failed in this run.
     #
     # Do not add `condition: 'job("fetch").last_success'`. That expression
     # asks about the *previous completed run* of fetch, not this one, so a
-    # single held run would keep skipping apply even after fetch recovered.
+    # single held run would keep skipping publish even after fetch recovered.
     needs: [fetch]
     steps:
-      - name: write-override-cards
+      - name: update-packaged-cards-commit-push
+        # Updates llmcore's packaged cards in place and pushes the result to
+        # origin (`modelcards update: ...`), so pricing travels with the
+        # repository instead of a machine's ~/.config overlay. Cards whose
+        # values did not move are not rewritten, so a quiet market leaves a
+        # clean tree and the git step is a no-op.
+        #
         # Refuse to publish from a price file older than two days, so a
         # silently wedged fetch stops updating cards instead of serving
         # stale prices indefinitely.
-        command: pricewatch apply --max-age-days 2
+        command: pricewatch publish --max-age-days 2
+
+  gpu-index:
+    # No dependency on fetch, deliberately: a held index must not block
+    # card publishing, and a held fetch must not stop the market being
+    # recorded.
+    steps:
+      - name: refresh-gpu-market-index
+        command: pricewatch gpu-index
