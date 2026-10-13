@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-5.3",
     "match": "exact key match",
-    "fetched_at": "2026-10-13T03:17:00+00:00",
+    "fetched_at": "2026-10-13T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-5.3",
-      "fetched_at": "2026-10-13T03:17:09+00:00"
+      "fetched_at": "2026-10-13T07:18:11+00:00"
     }
   }
 }
