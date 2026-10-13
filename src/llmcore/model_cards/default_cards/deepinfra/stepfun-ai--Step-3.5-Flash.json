@@ -62,13 +62,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/stepfun-ai/Step-3.5-Flash",
     "match": "exact key match",
-    "fetched_at": "2026-10-13T07:17:00+00:00",
+    "fetched_at": "2026-10-13T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/stepfun-ai/Step-3.5-Flash",
-      "fetched_at": "2026-10-13T07:18:11+00:00"
+      "fetched_at": "2026-10-13T11:17:31+00:00"
     },
     "preserved_context_fields": [
       "max_output_tokens"

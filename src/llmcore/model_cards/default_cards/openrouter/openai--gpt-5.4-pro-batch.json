@@ -53,13 +53,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/openai/gpt-5.4-pro:batch",
     "match": "exact key match",
-    "fetched_at": "2026-10-13T07:17:00+00:00",
+    "fetched_at": "2026-10-13T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/openai/gpt-5.4-pro:batch",
-      "fetched_at": "2026-10-13T07:18:11+00:00"
+      "fetched_at": "2026-10-13T11:17:30+00:00"
     }
   }
 }
