@@ -65,13 +65,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/zai-org/GLM-4.7-Flash",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T23:17:00+00:00",
+    "fetched_at": "2026-10-13T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/zai-org/GLM-4.7-Flash",
-      "fetched_at": "2026-10-12T23:17:08+00:00"
+      "fetched_at": "2026-10-13T03:17:09+00:00"
     },
     "preserved_context_fields": [
       "max_output_tokens"

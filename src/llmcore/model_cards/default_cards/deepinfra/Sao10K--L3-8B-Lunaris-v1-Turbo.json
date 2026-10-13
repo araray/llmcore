@@ -67,13 +67,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/Sao10K/L3-8B-Lunaris-v1-Turbo",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T23:17:00+00:00",
+    "fetched_at": "2026-10-13T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/Sao10K/L3-8B-Lunaris-v1-Turbo",
-      "fetched_at": "2026-10-12T23:17:08+00:00"
+      "fetched_at": "2026-10-13T03:17:09+00:00"
     }
   }
 }

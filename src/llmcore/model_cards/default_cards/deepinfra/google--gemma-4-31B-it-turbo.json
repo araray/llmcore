@@ -69,13 +69,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/google/gemma-4-31B-it-turbo",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T23:17:00+00:00",
+    "fetched_at": "2026-10-13T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/google/gemma-4-31B-it-turbo",
-      "fetched_at": "2026-10-12T23:17:08+00:00"
+      "fetched_at": "2026-10-13T03:17:09+00:00"
     }
   }
 }
