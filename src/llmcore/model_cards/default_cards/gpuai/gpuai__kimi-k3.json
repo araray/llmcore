@@ -11,9 +11,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 2.7,
-      "output": 13.5,
-      "cached_input": 0.27
+      "input": 3.0,
+      "output": 15.0,
+      "cached_input": 0.3
     }
   },
   "provider_metadata": {
@@ -32,6 +32,6 @@
     "url": "https://api.gpu.ai/v1/models",
     "matched_key": "gpuai/gpuai/kimi-k3",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T01:49:07+00:00"
+    "fetched_at": "2026-10-14T03:17:01+00:00"
   }
 }

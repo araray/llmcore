@@ -5,7 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 262144,
+    "max_input_tokens": 131072,
     "max_output_tokens": 32768
   },
   "capabilities": {
@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.021,
-      "output": 0.0616,
-      "cached_input": 0.0042
+      "input": 0.06,
+      "output": 0.18,
+      "cached_input": 0.012
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/inclusionai/ling-3.0-flash-vl",
     "match": "exact key match",
-    "fetched_at": "2026-10-13T11:17:00+00:00",
+    "fetched_at": "2026-10-14T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/inclusionai/ling-3.0-flash-vl",
-      "fetched_at": "2026-10-13T11:17:30+00:00"
+      "fetched_at": "2026-10-14T03:18:11+00:00"
     }
   }
 }
