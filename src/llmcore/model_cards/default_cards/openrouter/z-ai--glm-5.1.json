@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 204800,
-    "max_output_tokens": 131072
+    "max_output_tokens": 128000
   },
   "capabilities": {
     "streaming": true,
@@ -37,9 +37,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.33,
-      "output": 4.18,
-      "cached_input": 0.247
+      "input": 0.966,
+      "output": 3.036,
+      "cached_input": 0.1794
     }
   },
   "provider_extension": {
@@ -81,6 +81,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-5.1",
     "match": "exact key match",
-    "fetched_at": "2026-10-14T11:17:00+00:00"
+    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/z-ai/glm-5.1",
+      "fetched_at": "2026-10-15T07:17:08+00:00"
+    }
   }
 }

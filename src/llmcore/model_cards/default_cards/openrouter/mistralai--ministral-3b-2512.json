@@ -77,6 +77,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/mistralai/ministral-3b-2512",
     "match": "exact key match",
-    "fetched_at": "2026-10-14T11:17:00+00:00"
+    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/ministral-3b-2512",
+      "fetched_at": "2026-10-15T07:17:08+00:00"
+    }
   }
 }

@@ -34,9 +34,9 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 2.0,
-      "output": 12.0,
-      "cached_input": 0.2,
-      "cache_write": 0.375
+      "output": 10.0,
+      "cached_input": 0.1,
+      "cache_write": 0.1875
     }
   },
   "lifecycle": {
@@ -55,6 +55,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~google/gemini-pro-latest",
     "match": "exact key match",
-    "fetched_at": "2026-10-14T11:17:00+00:00"
+    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/~google/gemini-pro-latest",
+      "fetched_at": "2026-10-15T07:17:08+00:00"
+    }
   }
 }

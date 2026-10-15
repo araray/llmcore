@@ -73,6 +73,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/nousresearch/hermes-3-llama-3.1-405b",
     "match": "exact key match",
-    "fetched_at": "2026-10-14T11:17:00+00:00"
+    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/nousresearch/hermes-3-llama-3.1-405b",
+      "fetched_at": "2026-10-15T07:17:08+00:00"
+    }
   }
 }
