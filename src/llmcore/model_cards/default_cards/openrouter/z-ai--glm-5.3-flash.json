@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 943717
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.15,
-      "output": 0.5,
-      "cached_input": 0.03
+      "input": 0.01692,
+      "output": 0.9,
+      "cached_input": 0.01125
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-5.3-flash",
     "match": "exact key match",
-    "fetched_at": "2026-10-15T11:17:00+00:00",
+    "fetched_at": "2026-10-16T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-5.3-flash",
-      "fetched_at": "2026-10-15T11:17:07+00:00"
+      "fetched_at": "2026-10-16T07:17:09+00:00"
     }
   }
 }
