@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 204800,
-    "max_output_tokens": 32768
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -37,8 +37,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.27,
-      "output": 0.95,
+      "input": 0.3,
+      "output": 1.2,
       "cached_input": 0.03
     }
   },
@@ -83,13 +83,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/minimax/minimax-m2.5",
     "match": "exact key match",
-    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "fetched_at": "2026-10-25T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/minimax/minimax-m2.5",
-      "fetched_at": "2026-10-15T07:17:08+00:00"
+      "fetched_at": "2026-10-25T03:17:13+00:00"
     }
   }
 }

@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 65536
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -55,13 +55,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~google/gemini-pro-latest",
     "match": "exact key match",
-    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "fetched_at": "2026-10-25T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/~google/gemini-pro-latest",
-      "fetched_at": "2026-10-15T07:17:08+00:00"
+      "fetched_at": "2026-10-25T03:17:13+00:00"
     }
   }
 }
