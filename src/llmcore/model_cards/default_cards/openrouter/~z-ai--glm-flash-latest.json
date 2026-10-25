@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.0287,
-      "output": 0.0914,
-      "cached_input": 0.0287
+      "input": 0.0418,
+      "output": 0.077,
+      "cached_input": 0.03
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~z-ai/glm-flash-latest",
     "match": "exact key match",
-    "fetched_at": "2026-10-25T03:17:00+00:00",
+    "fetched_at": "2026-10-25T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/~z-ai/glm-flash-latest",
-      "fetched_at": "2026-10-25T03:17:13+00:00"
+      "fetched_at": "2026-10-25T07:17:11+00:00"
     }
   }
 }
