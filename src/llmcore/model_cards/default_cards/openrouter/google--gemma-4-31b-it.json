@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 235929
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -37,9 +37,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.1,
-      "output": 0.34,
-      "cached_input": 0.1
+      "input": 0.2,
+      "output": 0.4
     }
   },
   "provider_extension": {
@@ -80,13 +79,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/google/gemma-4-31b-it",
     "match": "exact key match",
-    "fetched_at": "2026-10-26T03:17:00+00:00",
+    "fetched_at": "2026-10-26T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/google/gemma-4-31b-it",
-      "fetched_at": "2026-10-26T03:17:10+00:00"
+      "fetched_at": "2026-10-26T11:17:09+00:00"
     }
   }
 }
