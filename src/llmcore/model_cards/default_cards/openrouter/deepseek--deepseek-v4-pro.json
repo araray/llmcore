@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.88044,
-      "output": 1.76088,
-      "cached_input": 0.07337
+      "input": 0.875394,
+      "output": 1.750788,
+      "cached_input": 0.07295
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/deepseek/deepseek-v4-pro",
     "match": "exact key match",
-    "fetched_at": "2026-10-27T15:17:00+00:00",
+    "fetched_at": "2026-10-27T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/deepseek/deepseek-v4-pro",
-      "fetched_at": "2026-10-27T15:21:16+00:00"
+      "fetched_at": "2026-10-27T23:17:09+00:00"
     }
   }
 }
