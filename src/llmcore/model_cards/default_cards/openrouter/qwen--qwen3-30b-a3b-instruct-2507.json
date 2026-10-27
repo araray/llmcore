@@ -39,7 +39,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.1,
-      "output": 0.3
+      "output": 0.3,
+      "cached_input": 0.1
     }
   },
   "provider_extension": {
@@ -77,13 +78,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3-30b-a3b-instruct-2507",
     "match": "exact key match",
-    "fetched_at": "2026-10-26T11:17:00+00:00",
+    "fetched_at": "2026-10-27T15:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen3-30b-a3b-instruct-2507",
-      "fetched_at": "2026-10-26T11:17:09+00:00"
+      "fetched_at": "2026-10-27T15:21:16+00:00"
     }
   }
 }
