@@ -33,7 +33,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.6725,
+      "input": 0.56,
       "output": 3.1,
       "cached_input": 0.15
     }
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/moonshotai/kimi-k2.7-code",
     "match": "exact key match",
-    "fetched_at": "2026-10-28T11:17:00+00:00",
+    "fetched_at": "2026-10-28T15:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/moonshotai/kimi-k2.7-code",
-      "fetched_at": "2026-10-28T11:18:10+00:00"
+      "fetched_at": "2026-10-28T15:20:14+00:00"
     }
   }
 }
