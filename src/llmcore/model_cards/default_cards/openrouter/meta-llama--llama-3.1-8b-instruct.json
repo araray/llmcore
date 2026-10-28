@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 131072,
-    "max_output_tokens": 117964
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -38,9 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.05,
-      "output": 0.08,
-      "cached_input": 0.025
+      "input": 0.02,
+      "output": 0.04
     }
   },
   "provider_extension": {
@@ -79,13 +78,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/meta-llama/llama-3.1-8b-instruct",
     "match": "exact key match",
-    "fetched_at": "2026-10-15T07:17:00+00:00",
+    "fetched_at": "2026-10-28T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/meta-llama/llama-3.1-8b-instruct",
-      "fetched_at": "2026-10-15T07:17:08+00:00"
+      "fetched_at": "2026-10-28T03:18:10+00:00"
     }
   }
 }
