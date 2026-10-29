@@ -65,6 +65,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
     "match": "exact key match",
-    "fetched_at": "2026-10-29T03:17:00+00:00"
+    "fetched_at": "2026-10-29T07:17:01+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
+      "fetched_at": "2026-10-29T07:18:44+00:00"
+    }
   }
 }

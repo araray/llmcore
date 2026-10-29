@@ -54,6 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/sakana/fugu-max",
     "match": "exact key match",
-    "fetched_at": "2026-10-29T03:17:00+00:00"
+    "fetched_at": "2026-10-29T07:17:01+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/sakana/fugu-max",
+      "fetched_at": "2026-10-29T07:18:44+00:00"
+    }
   }
 }

@@ -37,9 +37,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.0765,
-      "output": 0.255,
-      "cached_input": 0.0425
+      "input": 0.09,
+      "output": 0.3,
+      "cached_input": 0.05
     }
   },
   "provider_extension": {
@@ -80,6 +80,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/google/gemma-4-26b-a4b-it",
     "match": "exact key match",
-    "fetched_at": "2026-10-29T03:17:00+00:00"
+    "fetched_at": "2026-10-29T07:17:01+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemma-4-26b-a4b-it",
+      "fetched_at": "2026-10-29T07:18:44+00:00"
+    }
   }
 }
