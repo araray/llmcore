@@ -78,13 +78,6 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3-30b-a3b-instruct-2507",
     "match": "exact key match",
-    "fetched_at": "2026-10-27T15:17:00+00:00",
-    "capabilities": {
-      "feed": "caps:openrouter",
-      "method": "api",
-      "url": "https://openrouter.ai/api/v1/models",
-      "matched_key": "openrouter/qwen/qwen3-30b-a3b-instruct-2507",
-      "fetched_at": "2026-10-27T15:21:16+00:00"
-    }
+    "fetched_at": "2026-10-29T03:17:00+00:00"
   }
 }
