@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1000000,
-    "max_output_tokens": 65536
+    "max_output_tokens": 64000
   },
   "capabilities": {
     "streaming": true,
@@ -46,6 +46,6 @@
     "method": "api",
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/typesafe/jev-router",
-    "fetched_at": "2026-10-25T03:17:13+00:00"
+    "fetched_at": "2026-10-29T11:18:10+00:00"
   }
 }
