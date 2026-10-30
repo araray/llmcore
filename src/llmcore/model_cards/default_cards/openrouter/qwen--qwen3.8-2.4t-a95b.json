@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 909000
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3.8-2.4t-a95b",
     "match": "exact key match",
-    "fetched_at": "2026-10-29T07:17:01+00:00",
+    "fetched_at": "2026-10-30T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen3.8-2.4t-a95b",
-      "fetched_at": "2026-10-29T07:18:44+00:00"
+      "fetched_at": "2026-10-30T03:18:10+00:00"
     }
   }
 }
