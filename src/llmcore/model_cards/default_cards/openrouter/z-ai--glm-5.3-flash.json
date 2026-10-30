@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 131072
+    "max_output_tokens": 943717
   },
   "capabilities": {
     "streaming": true,
@@ -60,7 +60,7 @@
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-5.3-flash",
-      "fetched_at": "2026-10-30T03:18:10+00:00"
+      "fetched_at": "2026-10-30T11:20:46+00:00"
     }
   }
 }
