@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.1539,
-      "output": 10.1489,
-      "cached_input": 0.15
+      "input": 0.1495,
+      "output": 7.15,
+      "cached_input": 0.07475
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~moonshotai/kimi-latest",
     "match": "exact key match",
-    "fetched_at": "2026-10-31T03:17:00+00:00",
+    "fetched_at": "2026-10-31T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/~moonshotai/kimi-latest",
-      "fetched_at": "2026-10-31T03:17:09+00:00"
+      "fetched_at": "2026-10-31T07:17:08+00:00"
     }
   }
 }
