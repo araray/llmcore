@@ -17,7 +17,7 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -67,13 +67,13 @@
     "url": "https://api.deepinfra.com/models/list",
     "matched_key": "deepinfra/deepseek-ai/DeepSeek-V4-Pro",
     "match": "exact key match",
-    "fetched_at": "2026-10-13T11:17:00+00:00",
+    "fetched_at": "2026-11-02T19:17:00+00:00",
     "capabilities": {
       "feed": "caps:deepinfra",
       "method": "api",
       "url": "https://api.deepinfra.com/models/list",
       "matched_key": "deepinfra/deepseek-ai/DeepSeek-V4-Pro",
-      "fetched_at": "2026-10-13T11:17:31+00:00"
+      "fetched_at": "2026-11-02T19:17:40+00:00"
     }
   }
 }
