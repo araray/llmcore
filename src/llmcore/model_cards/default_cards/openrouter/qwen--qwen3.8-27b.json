@@ -5,7 +5,7 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1000000,
+    "max_input_tokens": 1024000,
     "max_output_tokens": 235929
   },
   "capabilities": {
@@ -60,7 +60,7 @@
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen3.8-27b",
-      "fetched_at": "2026-10-30T11:20:46+00:00"
+      "fetched_at": "2026-11-02T15:18:43+00:00"
     }
   }
 }
