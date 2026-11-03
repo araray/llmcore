@@ -38,8 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.05,
-      "output": 0.33
+      "input": 0.0509,
+      "output": 0.335
     }
   },
   "provider_extension": {
@@ -70,13 +70,6 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/meta-llama/llama-3.2-3b-instruct",
     "match": "exact key match",
-    "fetched_at": "2026-11-02T19:17:00+00:00",
-    "capabilities": {
-      "feed": "caps:openrouter",
-      "method": "api",
-      "url": "https://openrouter.ai/api/v1/models",
-      "matched_key": "openrouter/meta-llama/llama-3.2-3b-instruct",
-      "fetched_at": "2026-11-02T19:17:08+00:00"
-    }
+    "fetched_at": "2026-11-03T07:17:00+00:00"
   }
 }
