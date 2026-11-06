@@ -11,8 +11,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.17,
-      "output": 0.25
+      "input": 0.21,
+      "output": 0.31
     }
   },
   "provider_metadata": {
@@ -31,6 +31,6 @@
     "url": "https://api.gpu.ai/v1/models",
     "matched_key": "gpuai/gpuai/qwen3.5-9b",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T01:49:07+00:00"
+    "fetched_at": "2026-11-06T03:17:01+00:00"
   }
 }

@@ -11,9 +11,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.15,
-      "output": 0.5,
-      "cached_input": 0.03
+      "input": 0.19,
+      "output": 0.63,
+      "cached_input": 0.04
     }
   },
   "provider_metadata": {
@@ -32,6 +32,6 @@
     "url": "https://api.gpu.ai/v1/models",
     "matched_key": "gpuai/gpuai/glm-5.3-flash",
     "match": "exact key match",
-    "fetched_at": "2026-10-12T01:49:07+00:00"
+    "fetched_at": "2026-11-06T03:17:01+00:00"
   }
 }
