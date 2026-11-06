@@ -254,6 +254,25 @@ class TestDualImagePath:
         assert result.raw["transport"] == "generate_content"
         assert result.model == "gemini-2.5-flash-image"
 
+    async def test_developer_path_puts_the_shape_in_image_config(self, provider):
+        part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
+        provider._client.aio.models.generate_content = AsyncMock(
+            return_value=MagicMock(candidates=[MagicMock(content=MagicMock(parts=[part]))])
+        )
+        await provider.generate_image_media("x", aspect_ratio="9:16", size="2k")
+        config = provider._client.aio.models.generate_content.call_args.kwargs["config"]
+        assert config.image_config.aspect_ratio == "9:16"
+        assert config.image_config.image_size == "2K"
+
+    async def test_developer_path_drops_a_pixel_size(self, provider):
+        part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
+        provider._client.aio.models.generate_content = AsyncMock(
+            return_value=MagicMock(candidates=[MagicMock(content=MagicMock(parts=[part]))])
+        )
+        await provider.generate_image_media("x", size="1024x1024")
+        config = provider._client.aio.models.generate_content.call_args.kwargs["config"]
+        assert config.image_config is None
+
     async def test_vertex_uses_the_imagen_endpoint(self, vertex_provider):
         vertex_provider._client.aio.models.generate_images = AsyncMock(
             return_value=_image_response()

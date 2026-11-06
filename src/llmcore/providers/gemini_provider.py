@@ -1633,7 +1633,7 @@ class GeminiProvider(BaseProvider):
             # image-capable Gemini models generate through generate_content with
             # an IMAGE response modality. Same capability, different transport.
             return await self._generate_image_via_generate_content(
-                prompt, model=model, n=n, **kwargs
+                prompt, model=model, n=n, size=size, **kwargs
             )
 
         img_model = self._media_model("image", model)
@@ -1676,6 +1676,7 @@ class GeminiProvider(BaseProvider):
         *,
         model: str | None = None,
         n: int = 1,
+        size: str | None = None,
         **kwargs: Any,
     ) -> "MediaResult":
         """Generate images on the Gemini Developer API.
@@ -1705,6 +1706,19 @@ class GeminiProvider(BaseProvider):
                 "requested n=%d is advisory.",
                 n,
             )
+        # The shape and resolution belong in ``image_config``: GenerateContentConfig
+        # rejects a top-level ``aspect_ratio``. ``size`` is Gemini's "1K"/"2K"/"4K";
+        # a pixel size such as "1024x1024" means nothing here and is dropped.
+        image_config = {k: kwargs.pop(k) for k in ("aspect_ratio", "image_size") if kwargs.get(k) is not None}
+        for k in ("aspect_ratio", "image_size"):
+            kwargs.pop(k, None)
+        if size is not None and "image_size" not in image_config:
+            if str(size).upper() in ("1K", "2K", "4K"):
+                image_config["image_size"] = str(size).upper()
+            else:
+                logger.debug("Gemini image size is 1K, 2K or 4K; ignoring size=%r.", size)
+        if image_config:
+            kwargs["image_config"] = genai_types.ImageConfig(**image_config)
         try:
             response = await self._client.aio.models.generate_content(
                 model=img_model,
