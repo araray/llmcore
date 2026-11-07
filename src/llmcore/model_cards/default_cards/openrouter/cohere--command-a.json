@@ -12,8 +12,8 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": true,
     "structured_output": true,
     "vision": false,
@@ -72,13 +72,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/cohere/command-a",
     "match": "exact key match",
-    "fetched_at": "2026-11-03T11:17:00+00:00",
+    "fetched_at": "2026-11-07T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/cohere/command-a",
-      "fetched_at": "2026-11-03T11:17:08+00:00"
+      "fetched_at": "2026-11-07T07:18:42+00:00"
     }
   }
 }

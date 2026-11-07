@@ -39,7 +39,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 2.5,
-      "output": 5.0
+      "output": 5.0,
+      "cached_input": 2.5
     }
   },
   "provider_extension": {
@@ -77,13 +78,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/anthracite-org/magnum-v4-72b",
     "match": "exact key match",
-    "fetched_at": "2026-11-03T11:17:00+00:00",
+    "fetched_at": "2026-11-07T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/anthracite-org/magnum-v4-72b",
-      "fetched_at": "2026-11-03T11:17:08+00:00"
+      "fetched_at": "2026-11-07T07:18:42+00:00"
     }
   }
 }
