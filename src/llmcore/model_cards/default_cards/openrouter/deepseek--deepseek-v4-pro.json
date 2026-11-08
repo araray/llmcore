@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 384000
+    "max_output_tokens": 393216
   },
   "capabilities": {
     "streaming": true,
@@ -60,7 +60,7 @@
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/deepseek/deepseek-v4-pro",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-08T03:17:08+00:00"
     }
   }
 }
