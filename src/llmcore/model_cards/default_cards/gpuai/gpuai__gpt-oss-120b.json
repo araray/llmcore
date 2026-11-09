@@ -13,8 +13,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.19,
-      "output": 0.75
+      "input": 0.17,
+      "output": 0.66
     }
   },
   "provider_metadata": {
@@ -45,6 +45,6 @@
     "url": "https://api.gpu.ai/v1/models",
     "matched_key": "gpuai/gpuai/gpt-oss-120b",
     "match": "exact key match",
-    "fetched_at": "2026-11-06T03:17:01+00:00"
+    "fetched_at": "2026-11-09T07:17:02+00:00"
   }
 }
