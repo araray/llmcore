@@ -7,7 +7,7 @@
     "family": "Minimax"
   },
   "context": {
-    "max_input_tokens": 204800,
+    "max_input_tokens": 200000,
     "max_output_tokens": 58982
   },
   "capabilities": {
@@ -83,13 +83,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/minimax/minimax-m2.5",
     "match": "exact key match",
-    "fetched_at": "2026-11-07T19:17:00+00:00",
+    "fetched_at": "2026-11-09T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/minimax/minimax-m2.5",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-09T23:18:12+00:00"
     }
   }
 }

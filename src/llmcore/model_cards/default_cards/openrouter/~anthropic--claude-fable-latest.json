@@ -33,10 +33,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 10.0,
-      "output": 50.0,
-      "cached_input": 0.25,
-      "cache_write": 12.5
+      "input": 8.0,
+      "output": 40.0,
+      "cached_input": 0.2,
+      "cache_write": 10.0
     }
   },
   "lifecycle": {
@@ -55,13 +55,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~anthropic/claude-fable-latest",
     "match": "exact key match",
-    "fetched_at": "2026-11-07T19:17:00+00:00",
+    "fetched_at": "2026-11-09T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/~anthropic/claude-fable-latest",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-09T23:18:12+00:00"
     }
   }
 }
