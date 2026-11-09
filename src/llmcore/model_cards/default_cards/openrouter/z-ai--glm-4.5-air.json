@@ -38,9 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.13,
-      "output": 0.85,
-      "cached_input": 0.025
+      "input": 0.2,
+      "output": 1.1,
+      "cached_input": 0.03
     }
   },
   "provider_extension": {
@@ -78,13 +78,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-4.5-air",
     "match": "exact key match",
-    "fetched_at": "2026-11-07T19:17:00+00:00",
+    "fetched_at": "2026-11-09T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-4.5-air",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-09T11:17:07+00:00"
     }
   }
 }
