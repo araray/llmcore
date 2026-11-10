@@ -38,9 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.4,
-      "output": 0.75,
-      "cached_input": 0.4
+      "input": 0.3,
+      "output": 0.5,
+      "cached_input": 0.3
     }
   },
   "provider_extension": {
@@ -78,13 +78,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/mancer/weaver",
     "match": "exact key match",
-    "fetched_at": "2026-11-07T19:17:00+00:00",
+    "fetched_at": "2026-11-10T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/mancer/weaver",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-10T23:18:47+00:00"
     }
   }
 }
