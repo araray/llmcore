@@ -7,7 +7,7 @@
     "family": "Nvidia"
   },
   "context": {
-    "max_input_tokens": 1048576,
+    "max_input_tokens": 262144,
     "max_output_tokens": 16384
   },
   "capabilities": {
@@ -76,13 +76,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/nvidia/nemotron-3-super-120b-a12b",
     "match": "exact key match",
-    "fetched_at": "2026-11-07T19:17:00+00:00",
+    "fetched_at": "2026-11-11T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/nvidia/nemotron-3-super-120b-a12b",
-      "fetched_at": "2026-11-07T19:20:15+00:00"
+      "fetched_at": "2026-11-11T11:17:08+00:00"
     }
   }
 }
