@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 65536
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -33,10 +33,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.75,
-      "output": 3.75,
+      "input": 1.5,
+      "output": 7.5,
       "cached_input": 0.075,
-      "cache_write": 0.041667
+      "cache_write": 0.083333
     }
   },
   "lifecycle": {
@@ -55,6 +55,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~google/gemini-flash-latest",
     "match": "exact key match",
-    "fetched_at": "2026-11-12T11:17:00+00:00"
+    "fetched_at": "2026-11-12T19:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/~google/gemini-flash-latest",
+      "fetched_at": "2026-11-12T19:17:08+00:00"
+    }
   }
 }
