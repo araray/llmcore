@@ -12,8 +12,8 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
+    "function_calling": true,
+    "tool_use": true,
     "json_mode": false,
     "structured_output": false,
     "vision": false,
@@ -75,13 +75,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/meta-llama/llama-3.1-70b-instruct",
     "match": "exact key match",
-    "fetched_at": "2026-11-12T19:17:00+00:00",
+    "fetched_at": "2026-11-13T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/meta-llama/llama-3.1-70b-instruct",
-      "fetched_at": "2026-11-12T19:17:08+00:00"
+      "fetched_at": "2026-11-13T07:17:09+00:00"
     }
   }
 }
