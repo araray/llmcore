@@ -54,6 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3.8-27b",
     "match": "exact key match",
-    "fetched_at": "2026-10-30T03:17:00+00:00"
+    "fetched_at": "2026-10-30T03:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen3.8-27b",
+      "fetched_at": "2026-11-14T19:18:47+00:00"
+    }
   }
 }

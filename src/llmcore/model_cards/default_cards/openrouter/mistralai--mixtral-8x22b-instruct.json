@@ -74,6 +74,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/mistralai/mixtral-8x22b-instruct",
     "match": "exact key match",
-    "fetched_at": "2026-11-14T15:17:00+00:00"
+    "fetched_at": "2026-11-14T19:17:02+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/mistralai/mixtral-8x22b-instruct",
+      "fetched_at": "2026-11-14T19:18:47+00:00"
+    }
   }
 }
