@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 384000
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -54,6 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/deepseek/deepseek-v4-flash-0731",
     "match": "exact key match",
-    "fetched_at": "2026-10-26T23:17:00+00:00"
+    "fetched_at": "2026-10-26T23:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/deepseek/deepseek-v4-flash-0731",
+      "fetched_at": "2026-11-15T11:17:21+00:00"
+    }
   }
 }
