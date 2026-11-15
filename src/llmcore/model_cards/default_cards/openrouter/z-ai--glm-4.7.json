@@ -81,13 +81,6 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-4.7",
     "match": "exact key match",
-    "fetched_at": "2026-11-15T03:17:00+00:00",
-    "capabilities": {
-      "feed": "caps:openrouter",
-      "method": "api",
-      "url": "https://openrouter.ai/api/v1/models",
-      "matched_key": "openrouter/z-ai/glm-4.7",
-      "fetched_at": "2026-11-15T03:18:50+00:00"
-    }
+    "fetched_at": "2026-11-15T07:17:07+00:00"
   }
 }
