@@ -1,0 +1,56 @@
+{
+  "model_id": "tencent/hy4-preview",
+  "display_name": "Tencent Hy4 Preview",
+  "provider": "commandcode",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.834,
+      "output": 2.501,
+      "cached_input": 0.042
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Tencent Hy4 Preview via Command Code's Provider API (/chat/completions).",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "routes": [
+      "/chat/completions"
+    ],
+    "upstream_org": "tencent",
+    "capabilities_from": "family-defaults"
+  }
+}

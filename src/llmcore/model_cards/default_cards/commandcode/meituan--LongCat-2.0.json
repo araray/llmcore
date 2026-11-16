@@ -1,0 +1,56 @@
+{
+  "model_id": "meituan/LongCat-2.0",
+  "display_name": "LongCat 2.0",
+  "provider": "commandcode",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.006
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "LongCat 2.0 via Command Code's Provider API (/chat/completions).",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "routes": [
+      "/chat/completions"
+    ],
+    "upstream_org": "meituan",
+    "capabilities_from": "family-defaults"
+  }
+}
