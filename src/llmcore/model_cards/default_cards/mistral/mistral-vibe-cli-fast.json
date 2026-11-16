@@ -19,7 +19,7 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,

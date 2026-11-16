@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — DeepSeek: V4.1-Flash, low effort, reasoning replay in streams, built-in tools, Responses
+
+Audited against api-docs.deepseek.com and the live `GET /models` on 2026-11-16.
+The test account had no balance (every chat call returned 402), so chat
+behaviour follows the documentation; discovery, balance and the 402 mapping
+were checked live.
+
+- **Default `deepseek-flash`** (DeepSeek-V4.1-Flash: image input, 1M
+  context). V4 Flash was retired on 2026-09-10; `deepseek-v4-flash` is still
+  accepted and served by V4.1-Flash. `deepseek-chat` and `deepseek-reasoner`
+  were retired on 2026-07-24, and their cards say so.
+- **Effort**: the levels are now low/high/max. `low` used to be folded into
+  `high`. llmcore's `effort=` maps as DeepSeek documents (minimal/low → low,
+  medium/high/xhigh → high, max → max), and `effort="none"` turns thinking off.
+- **Tool loops while streaming**: DeepSeek returns a 400 unless every earlier
+  assistant turn carries its `reasoning_content`, which a stream only sends in
+  pieces. The finish chunk now carries the whole of it, and
+  `assistant_replay_metadata()` returns it. A 400 about it explains the fix.
+- **Built-in tools** on `deepseek-flash`: `native_search=True` adds
+  `deepseek_web_search`, `extra_tools` passes `deepseek_read_url`, and
+  `safety_check` is supported.
+- **`responses_api = "always"`** uses DeepSeek's native `/responses`.
+- Discovery reads the listing's context window, image input and effort
+  levels. A 402 is not retryable. `get_balance()` was added.
+
+### Changed — Mistral: reasoning chunks and replay, per-model effort, learned parameters, Responses, fixed streaming
+
+Audited against the live API and mistralai 3.7 on 2026-11-16. On the test
+plan, Small, Medium and TTS-3 have a quota of 0 requests per minute, so
+reasoning follows docs.mistral.ai. Everything else was verified live on both
+transports.
+
+- **Streaming was broken.** `chat_completion(stream=True)` and
+  `fim_completion(stream=True)` returned an un-awaited coroutine instead of an
+  iterator. Streams are now primed, so HTTP errors raise from the call, with
+  the server's message instead of only the status code.
+- **Reasoning** (Small 4, Medium 3.5, Large 4): `content` arrives as thinking
+  and text chunks. It is flattened to `content` plus `reasoning_content`, and
+  the raw chunks are kept as `mistral_content`, which
+  `assistant_replay_metadata()` returns. Mistral requires the thinking chunk
+  to be replayed. Reasoning support comes from `/v1/models` capabilities, not
+  from the `magistral` name (Small and Medium reason now; `magistral-*` are
+  their aliases). `effort=` maps per family: none/high on Small and Medium,
+  low/medium/high on Large 4.
+- **New parameters**: `top_k`, `min_tokens`, `repetition_penalty`,
+  `logprobs`, `prompt_cache_key`, `service_tier`. Mistral rejects some per
+  model ("… is not enabled for this model"). Such a parameter is dropped, the
+  request retried, and the rejection remembered.
+- **Errors**: a plan without access to a model gets a 429 with a 0 req/min
+  limit. That is now reported as "no quota" and is not retryable. SDK errors
+  map exactly like REST errors.
+- **`responses_api = "always"`** routes chat through Mistral's stateless
+  `/v1/responses`, with tool loops and streaming (verified live).
+- **Media**: TTS no longer sends OpenAI's "alloy" voice; it requires `voice`
+  or `ref_audio`, and new options pass through. STT forwards extra fields,
+  sends the right MIME type, and no longer leaks the file handle. SDK
+  embeddings keep `output_dimension` and friends.
+- Default `mistral-small-latest`; `mistral-large-latest` is not offered to
+  every plan. The context table comes from the live listing. The cardctl
+  adapter reads `reasoning` from the API, and 13 cards were corrected.
+  `mistralai>=3.7,<4`.
+
+### Fixed — shared Responses builder posted `extra_body` verbatim
+
+`build_responses_request` sent a caller's `extra_body` as a literal field.
+Servers that ignore unknown fields, such as vLLM, answered 200 without the
+vendor parameters. It is now merged into the body. `OpenAIProvider` also
+implements `assistant_replay_metadata()` (Responses reasoning items).
+
 ### Fixed — Gemini: tool calling, thought signatures, SDK 3.x, retired models
 
 Audited against the live Developer API and `google-genai` 3.3 (2026-11-16).

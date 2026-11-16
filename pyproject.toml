@@ -72,10 +72,9 @@ ollama = ["ollama>=0.6.3"]
 # DeepInfra reuses the OpenAI SDK (OpenAI-compatible API) plus httpx for the
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
 deepinfra = ["openai>=3.38,<4", "httpx>=0.27.0"]
-# Mistral: the provider talks to the REST API over httpx directly (no vendor
-# SDK today — `mistralai` v3.x is a candidate second backend, see
-# the provider modernization plan).
-mistral = ["httpx>=0.27.0", "mistralai>=3.0.0"]
+# Mistral: direct REST over httpx by default; `mistralai` 3.x is the optional
+# second transport (backend = "sdk") for chat, models and embeddings.
+mistral = ["httpx>=0.27.0", "mistralai>=3.7,<4"]
 # Kimi (Moonshot AI): OpenAI-compatible chat plus httpx for the Moonshot-only
 # REST endpoints (token estimate, balance, file upload) and tiktoken for the
 # local token-count fallback. Moonshot publishes no Python SDK.

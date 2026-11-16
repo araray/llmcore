@@ -82,7 +82,9 @@ class MistralAdapter(BaseAdapter):
             supports_audio_input=caps.get("audio", False) or caps.get("audio_transcription", False),
             supports_audio_output=caps.get("audio_generation", False),
             supports_json_mode=caps.get("json_mode", False),
-            supports_reasoning=model_id.startswith("magistral"),
+            # /v1/models reports reasoning itself now (Mistral Small 4 and
+            # Medium 3.5 reason; the magistral-* ids are their aliases).
+            supports_reasoning=bool(caps.get("reasoning")) or model_id.startswith("magistral"),
             supports_fim=caps.get("completion_fim", False),
             architecture_family="mistral",
             aliases=m.get("aliases", []) or [],

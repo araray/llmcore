@@ -13,20 +13,31 @@ Provides a dedicated provider for the Mistral AI platform, supporting:
 - Classification and Moderation endpoints
 - Dynamic model discovery via /v1/models
 
-Uses ``httpx.AsyncClient`` directly for a lightweight, zero-dependency
-implementation (no ``mistralai`` SDK required).
+Uses ``httpx.AsyncClient`` directly; the ``mistralai`` SDK (v3.7) is an
+optional second transport (``backend = "sdk"``) for chat, models and embeddings.
 
-Tested against the Mistral API as of April 2026 (OpenAPI spec v2.4.0).
+Reasoning (Mistral Small 4, Medium 3.5, Large 4, the hosted GLM models):
+``effort=`` maps to ``reasoning_effort`` within each model's accepted values.
+A reasoning answer's ``content`` is a list of thinking and text chunks; this
+provider returns the text as ``content``, the thinking as
+``reasoning_content``, and the raw chunks as ``mistral_content``, which
+:meth:`assistant_replay_metadata` hands back so the next turn replays them
+(Mistral: "do not strip ThinkChunk from assistant messages").
+
+``responses_api = "always"`` routes chat through Mistral's stateless
+``/v1/responses`` instead of ``/v1/chat/completions``.
+
+Audited against the live API and mistralai 3.7 on 2026-11-16.
 """
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import io
 import json
 import logging
 import os
+import re
 import secrets
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -52,7 +63,9 @@ from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
+from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
+from .openai_provider import nearest_effort
 
 try:
     from mistralai.client import Mistral as _MistralSDK
@@ -78,89 +91,84 @@ _SDK_CAPABILITIES: frozenset[str] = frozenset(
     {"chat", "chat_stream", "models", "embeddings"}
 )
 
-# Default model if none is configured.
-DEFAULT_MODEL = "mistral-large-latest"
+# Default model if none is configured. mistral-large-latest is not offered to
+# every plan (it is absent from /v1/models for some keys); Small 4 is the
+# general-purpose default Mistral documents, with reasoning and vision.
+DEFAULT_MODEL = "mistral-small-latest"
 
 # Fallback context lengths keyed by model-id prefix (longest prefix wins).
 # These are used when the model card registry has no entry and the /v1/models
 # endpoint was not queried yet.
 DEFAULT_MISTRAL_TOKEN_LIMITS: dict[str, int] = {
-    # Frontier
-    "mistral-large-latest": 262144,
-    "mistral-large-3": 262144,
-    "mistral-large-2512": 262144,
-    "mistral-large-2411": 131072,
-    "mistral-large-2407": 131072,
-    # Medium
-    "mistral-medium-latest": 262144,
-    "mistral-medium-3": 262144,
-    "mistral-medium-2508": 262144,
-    "mistral-medium-2505": 262144,
-    # Small
-    "mistral-small-latest": 131072,
-    "mistral-small-3": 131072,
-    "mistral-small-2506": 131072,
-    "mistral-small-2503": 131072,
-    "mistral-small-2501": 131072,
-    # Ministral
-    "ministral-3-14b": 262144,
-    "ministral-3-8b": 262144,
-    "ministral-3-3b": 131072,
-    "ministral-8b-latest": 131072,
-    "ministral-3b-latest": 131072,
-    # Magistral (reasoning)
+    # From the live /v1/models listing (2026-11-16).
+    "codestral-2508": 256000,
+    "codestral-embed": 8192,
+    "codestral-embed-2505": 8192,
+    "codestral-latest": 256000,
+    "labs-leanstral-1-5": 262144,
+    "labs-leanstral-1-5-1": 262144,
     "magistral-medium-latest": 262144,
-    "magistral-small-latest": 131072,
-    "magistral-medium-2509": 262144,
-    "magistral-small-2509": 131072,
-    # Codestral
-    "codestral-latest": 262144,
-    "codestral-2508": 262144,
-    "codestral-2501": 262144,
-    # Devstral
-    "devstral-2-latest": 262144,
-    "devstral-small-latest": 262144,
-    "devstral-medium-latest": 262144,
-    # Pixtral
-    "pixtral-large-latest": 131072,
-    "pixtral-large-2411": 131072,
-    "pixtral-12b-2409": 131072,
-    # Voxtral (audio)
-    "voxtral-mini-latest": 32768,
-    "voxtral-small-latest": 32768,
-    # OCR
-    "mistral-ocr-latest": 0,  # OCR models don't use chat context
-    "mistral-ocr-2505": 0,
-    "mistral-ocr-2512": 0,
-    # Moderation
-    "mistral-moderation-latest": 8192,
-    "mistral-moderation-2411": 8192,
-    "mistral-moderation-2603": 8192,
-    # Embedding
+    "magistral-small-latest": 262144,
+    "ministral-14b-2512": 262144,
+    "ministral-14b-latest": 262144,
+    "ministral-3b-2512": 131072,
+    "ministral-3b-latest": 131072,
+    "ministral-8b-2512": 262144,
+    "ministral-8b-latest": 262144,
+    "mistral-code-fim-latest": 256000,
+    "mistral-code-latest": 256000,
     "mistral-embed": 8192,
     "mistral-embed-2312": 8192,
-    "mistral-embed-dim128-2510": 8192,
-    "mistral-embed-dim256-2510": 8192,
-    "codestral-embed-2505": 32768,
-    "codestral-embed": 32768,
-    # Nemo
-    "open-mistral-nemo": 131072,
-    "open-mistral-nemo-2407": 131072,
+    "mistral-medium": 262144,
+    "mistral-medium-2604": 262144,
+    "mistral-medium-3": 262144,
+    "mistral-medium-3-5": 262144,
+    "mistral-medium-3.5": 262144,
+    "mistral-medium-latest": 262144,
+    "mistral-moderation-2603": 131071,
+    "mistral-ocr-2512": 16384,
+    "mistral-ocr-3": 16384,
+    "mistral-ocr-3-0": 16384,
+    "mistral-ocr-4": 16384,
+    "mistral-ocr-4-1": 16384,
+    "mistral-ocr-latest": 16384,
+    "mistral-small-2603": 262144,
+    "mistral-small-latest": 262144,
+    "mistral-vibe-cli-fast": 262144,
+    "mistral-vibe-cli-latest": 262144,
+    "mistral-vibe-cli-with-tools": 262144,
+    "voxtral-mini-2602": 16384,
+    "voxtral-mini-latest": 16384,
+    "voxtral-mini-realtime-2602": 32768,
+    "voxtral-mini-realtime-latest": 32768,
+    "voxtral-mini-transcribe-3": 65536,
+    "voxtral-mini-transcribe-3-0": 65536,
+    "voxtral-mini-transcribe-realtime-2602": 32768,
+    "voxtral-mini-transcribe-realtime-3": 65536,
+    "voxtral-mini-transcribe-realtime-3-0": 65536,
+    "voxtral-mini-tts-2603": 4096,
+    "voxtral-mini-tts-3": 4096,
+    "voxtral-mini-tts-3-0": 4096,
+    "voxtral-mini-tts-latest": 4096,
+    "voxtral-small-2507": 32768,
+    "voxtral-small-latest": 32768,
+    "voxtral-small-transcribe-3": 65536,
+    "voxtral-small-transcribe-3-0": 65536,
 }
 
 # Prefix-based heuristic for future model snapshots not yet in the map.
 _MISTRAL_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
     ("mistral-large", 262144),
     ("mistral-medium", 262144),
-    ("mistral-small", 131072),
+    ("mistral-small", 262144),
     ("mistral-moderation", 8192),
     ("mistral-ocr", 0),
     ("mistral-embed", 8192),
     ("ministral-3", 262144),
     ("ministral", 131072),
     ("magistral-medium", 262144),
-    ("magistral-small", 131072),
-    ("magistral", 131072),
+    ("magistral-small", 262144),
+    ("magistral", 262144),
     ("codestral-embed", 32768),
     ("codestral", 262144),
     ("devstral", 262144),
@@ -170,24 +178,70 @@ _MISTRAL_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
     ("labs-mistral", 131072),
 ]
 
-# Models that support extended reasoning / thinking mode.
-_MISTRAL_REASONING_MODELS = frozenset(
-    {
-        "magistral-medium-latest",
-        "magistral-small-latest",
-        "magistral-medium-2509",
-        "magistral-small-2509",
-        "magistral-medium-2507",
-        "magistral-small-2507",
-        "magistral-medium-2506",
-        "magistral-small-2506",
-    }
+#: ``reasoning_effort`` values each reasoning family accepts, longest prefix
+#: first. From docs.mistral.ai/capabilities/reasoning (2026-11-16): Small 4 and
+#: Medium 3.5 take only "none"/"high"; Large 4 refuses "none"; the hosted GLM
+#: models never turn thinking off. The magistral-* ids are aliases of Small
+#: and Medium now.
+_REASONING_EFFORTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("mistral-large-4", ("low", "medium", "high")),
+    ("zai-glm", ("low", "high", "max")),
+    ("mistral-small", ("none", "high")),
+    ("mistral-medium", ("none", "high")),
+    ("magistral", ("none", "high")),
+    ("mistral-vibe-cli", ("none", "high")),
+    ("labs-leanstral", ("none", "high")),
+)
+
+#: "min_tokens support is not enabled for this model", "top_k sampling is
+#: not enabled ...", "reasoning_effort is not enabled ...": a parameter this
+#: model does not take (code 3051, all three measured live 2026-11-16).
+_RX_NOT_ENABLED = re.compile(
+    r"\b([a-z_]+)(?: support| sampling)? is not enabled for this model", re.I
 )
 
 
+def _reasoning_efforts(model: str) -> tuple[str, ...] | None:
+    """Accepted ``reasoning_effort`` values for *model*, or None if unknown."""
+    for prefix, efforts in _REASONING_EFFORTS:
+        if model.startswith(prefix):
+            return efforts
+    return None
+
+
 def _is_mistral_reasoning_model(model: str) -> bool:
-    """Check whether *model* is a Mistral reasoning model (Magistral)."""
-    return model in _MISTRAL_REASONING_MODELS or model.startswith("magistral")
+    """Whether *model* is known to accept ``reasoning_effort``."""
+    return _reasoning_efforts(model) is not None
+
+
+def _chunk_texts(chunks: Any) -> tuple[str, str]:
+    """(answer text, thinking text) from a content list of Mistral chunks."""
+    text: list[str] = []
+    thinking: list[str] = []
+    for chunk in chunks or []:
+        if not isinstance(chunk, dict):
+            continue
+        kind = chunk.get("type")
+        if kind == "text":
+            text.append(chunk.get("text") or "")
+        elif kind == "thinking":
+            for inner in chunk.get("thinking") or []:
+                if isinstance(inner, dict) and inner.get("type", "text") == "text":
+                    thinking.append(inner.get("text") or "")
+    return "".join(text), "".join(thinking)
+
+
+def _normalize_message_content(message: dict[str, Any]) -> None:
+    """Flatten a chunked ``content`` in place, keeping the chunks for replay."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return
+    text, thinking = _chunk_texts(content)
+    if any(isinstance(c, dict) and c.get("type") == "thinking" for c in content):
+        message["mistral_content"] = content
+    message["content"] = text
+    if thinking:
+        message["reasoning_content"] = thinking
 
 
 class MistralProvider(BaseProvider):
@@ -206,6 +260,10 @@ class MistralProvider(BaseProvider):
     _client: Any  # httpx.AsyncClient
     _encoding: Any | None = None
     _discovered_context_lengths: dict[str, int]
+
+    #: Parameters a model answered "not enabled for this model" to, per model.
+    #: Learned once per process; the request is retried without them.
+    _REJECTED_PARAMS: dict[str, set[str]] = {}
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         super().__init__(config, log_raw_payloads)
@@ -230,6 +288,14 @@ class MistralProvider(BaseProvider):
         self.timeout = float(config.get("timeout", 120.0))
         self.max_retries = int(config.get("max_retries", 2))
         self._discovered_context_lengths = {}
+        #: model id (and every alias) -> its /v1/models capabilities
+        self._discovered_capabilities: dict[str, dict[str, Any]] = {}
+        responses_api = str(config.get("responses_api", "never")).lower()
+        if responses_api not in ("never", "always"):
+            raise ConfigError(
+                f"Mistral responses_api must be 'never' or 'always', not {responses_api!r}."
+            )
+        self.responses_api = responses_api
 
         # --- Transport: direct REST first, official SDK as the fallback ------
         self._backend = self._resolve_backend(config.get("backend"))
@@ -382,8 +448,10 @@ class MistralProvider(BaseProvider):
             caps = m.get("capabilities", {})
             ctx_len = m.get("max_context_length", 32768)
 
-            # Cache discovered context length
-            self._discovered_context_lengths[mid] = ctx_len
+            # Cache discovered context length and capabilities, aliases too.
+            for name in [mid, *(m.get("aliases") or [])]:
+                self._discovered_context_lengths.setdefault(name, ctx_len)
+                self._discovered_capabilities.setdefault(name, caps)
 
             supports_tools = caps.get("function_calling", False)
             supports_vision = caps.get("vision", False)
@@ -406,11 +474,13 @@ class MistralProvider(BaseProvider):
                     supports_tools=supports_tools,
                     supports_vision=supports_vision,
                     provider_name=provider_name,
+                    supports_reasoning=bool(caps.get("reasoning")),
                     metadata={
                         "owned_by": m.get("owned_by", "mistralai"),
                         "created": m.get("created"),
                         "type": m.get("type", "base"),
                         "capabilities": caps,
+                        "supports_audio": supports_audio,
                         "aliases": m.get("aliases", []),
                         "description": m.get("description"),
                         "default_model_temperature": m.get("default_model_temperature"),
@@ -420,9 +490,15 @@ class MistralProvider(BaseProvider):
             )
         return result
 
+    def _supports_reasoning(self, model: str) -> bool:
+        caps = self._discovered_capabilities.get(model)
+        if caps is not None:
+            return bool(caps.get("reasoning"))
+        return _is_mistral_reasoning_model(model)
+
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         model_name = model or self.default_model
-        is_reasoning = _is_mistral_reasoning_model(model_name)
+        is_reasoning = self._supports_reasoning(model_name)
 
         params: dict[str, Any] = {
             "temperature": {"type": "number", "minimum": 0.0, "maximum": 1.5},
@@ -438,12 +514,30 @@ class MistralProvider(BaseProvider):
             "parallel_tool_calls": {"type": "boolean"},
             "prediction": {"type": "object"},
             "metadata": {"type": "object"},
+            # Added to the API in 2026 (mistralai 3.7). Not every model takes
+            # every one: a "not enabled for this model" 400 drops the
+            # parameter, retries, and is remembered for that model.
+            "top_k": {"type": "integer", "minimum": 1},
+            "min_tokens": {"type": "integer", "minimum": 0},
+            "repetition_penalty": {"type": "number"},
+            "logprobs": {"type": "boolean"},
+            "top_logprobs": {"type": "integer", "minimum": 0},
+            "prompt_logprobs": {"type": "boolean"},
+            "top_prompt_logprobs": {"type": "integer", "minimum": 0},
+            "prompt_cache_key": {"type": "string"},
+            "service_tier": {"type": "string", "enum": ["auto", "standard_only"]},
+            # llmcore's cross-provider reasoning knob; mapped per model below.
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
+            # Sent verbatim. Accepted values depend on the model.
+            "reasoning_effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
         }
         if is_reasoning:
-            params["reasoning_effort"] = {
-                "type": "string",
-                "enum": ["low", "medium", "high"],
-            }
             params["prompt_mode"] = {
                 "type": "string",
                 "enum": ["reasoning", "default"],
@@ -535,10 +629,14 @@ class MistralProvider(BaseProvider):
         # (R-2) takes precedence over the legacy metadata["tool_calls"] channel
         # so a native tool-role result has its preceding assistant tool_calls.
         if role_str == "assistant":
+            # A reasoning turn goes back exactly as it came: thinking chunk
+            # included ("do not strip ThinkChunk", docs.mistral.ai).
+            if metadata.get("mistral_content"):
+                msg_dict["content"] = list(metadata["mistral_content"])
             tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
             if tool_calls:
                 msg_dict["tool_calls"] = tool_calls
-                if not msg.content:
+                if not msg_dict["content"]:
                     msg_dict["content"] = ""
 
         name = metadata.get("name")
@@ -572,30 +670,34 @@ class MistralProvider(BaseProvider):
 
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
-
-        messages_payload = [self._build_message_payload(msg, model_name) for msg in context]
-        if not messages_payload:
+        if not context:
             raise ProviderError(self.get_name(), "No valid messages.")
 
-        # Build tools payload
-        tools_payload = None
-        if tools:
-            tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
+        params = dict(kwargs)
+        self._apply_effort(params, model_name)
 
-        # Build request body
+        if self.responses_api == "always":
+            return await self._responses_completion(
+                context, model_name, stream=stream, tools=tools, tool_choice=tool_choice, params=params
+            )
+
+        messages_payload = [self._build_message_payload(msg, model_name) for msg in context]
+
         body: dict[str, Any] = {
             "model": model_name,
             "messages": messages_payload,
             "stream": stream,
         }
-
-        if tools_payload:
-            body["tools"] = tools_payload
+        if tools:
+            body["tools"] = [{"type": "function", "function": t.model_dump()} for t in tools]
         if tool_choice:
             body["tool_choice"] = tool_choice
 
-        # Merge kwargs (Mistral-specific params like random_seed, safe_prompt, etc.)
-        body.update(kwargs)
+        # Mistral-specific params (random_seed, safe_prompt, ...) go in as-is,
+        # minus whatever this model has already refused.
+        body.update(params)
+        for name in self._REJECTED_PARAMS.get(model_name, ()):
+            body.pop(name, None)
 
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
             logger.debug(
@@ -604,38 +706,151 @@ class MistralProvider(BaseProvider):
                 json.dumps(body, indent=2, default=str),
             )
 
+        while True:
+            try:
+                return await self._chat_once(body, model_name, stream=stream)
+            except ProviderError as e:
+                if not self._learn_rejection(e, body, model_name):
+                    raise
+
+    async def _chat_once(
+        self, body: dict[str, Any], model_name: str, *, stream: bool
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """One request on the configured transport; a stream is primed, so an
+        HTTP error surfaces here rather than on the caller's first iteration."""
         if self._use_sdk_for("chat_stream" if stream else "chat"):
-            return await self._chat_via_sdk(body, model_name, stream=stream)
+            result = await self._chat_via_sdk(body, model_name, stream=stream)
+        else:
+            try:
+                if stream:
+                    result = await self._stream_completion(body, model_name)
+                else:
+                    resp = await self._client.post("/chat/completions", json=body)
+                    self._raise_for_status(resp, model_name)
+                    result = resp.json()
+                    if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            "RAW LLM RESPONSE (%s): %s",
+                            self.get_name(),
+                            json.dumps(result, indent=2, default=str),
+                        )
+            except ProviderError:
+                raise
+            except httpx.TimeoutException as e:
+                raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+            except httpx.HTTPError as e:
+                raise ProviderError(
+                    self.get_name(), f"Connection error: {e}", model_name=model_name
+                ) from e
+            except Exception as e:
+                logger.error("Unexpected error: %s", e, exc_info=True)
+                raise ProviderError(self.get_name(), f"Unexpected error: {e}") from e
+        if stream:
+            return await self._primed(self._normalize_stream(result))
+        for choice in result.get("choices") or []:
+            if isinstance(choice.get("message"), dict):
+                _normalize_message_content(choice["message"])
+        return result
 
+    def _apply_effort(self, params: dict[str, Any], model_name: str) -> None:
+        """Map llmcore's ``effort`` onto this model's ``reasoning_effort``.
+
+        Each family takes its own values (Small 4: none/high; Large 4:
+        low/medium/high; GLM: low/high/max), so the nearest accepted value is
+        sent. A model without reasoning ignores ``effort``; an explicit
+        ``reasoning_effort`` is sent as given.
+        """
+        effort = params.pop("effort", None)
+        if effort is None or "reasoning_effort" in params:
+            return
+        if not self._supports_reasoning(model_name):
+            logger.debug("Mistral model %s has no reasoning; effort=%r ignored.", model_name, effort)
+            return
+        requested = str(effort).strip().lower()
+        accepted = _reasoning_efforts(model_name) or ("none", "high")
+        value = requested if requested in accepted else nearest_effort(requested, accepted)
+        if value:
+            params["reasoning_effort"] = value
+
+    def _learn_rejection(self, error: ProviderError, body: dict[str, Any], model_name: str) -> bool:
+        """Drop a parameter the model said it does not take; True to retry."""
+        match = _RX_NOT_ENABLED.search(str(error))
+        if not match:
+            return False
+        name = match.group(1).lower()
+        if name in ("model", "messages") or name not in body:
+            return False
+        body.pop(name)
+        self._REJECTED_PARAMS.setdefault(model_name, set()).add(name)
+        logger.warning(
+            "Mistral model %s does not take '%s'; retrying without it (remembered).",
+            model_name,
+            name,
+        )
+        return True
+
+    @staticmethod
+    async def _primed(
+        stream: AsyncGenerator[dict[str, Any], None],
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Pull the first chunk now, so connection and HTTP errors raise from
+        ``chat_completion`` (where they can be retried) instead of mid-iteration."""
         try:
-            if stream:
-                return self._stream_completion(body, model_name)
-            else:
-                resp = await self._client.post("/chat/completions", json=body)
-                self._raise_for_status(resp, model_name)
-                response_dict = resp.json()
-                if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        "RAW LLM RESPONSE (%s): %s",
-                        self.get_name(),
-                        json.dumps(response_dict, indent=2, default=str),
-                    )
-                return response_dict
+            first: dict[str, Any] | None = await stream.__anext__()
+        except StopAsyncIteration:
+            first = None
 
-        except ProviderError:
-            raise
-        except httpx.TimeoutException as e:
-            raise ProviderError(self.get_name(), f"Timeout: {e}")
-        except httpx.ConnectError as e:
-            raise ProviderError(self.get_name(), f"Connection error: {e}")
-        except httpx.HTTPStatusError as e:
-            raise ProviderError(
-                self.get_name(),
-                f"API Error ({e.response.status_code}): {e.response.text}",
-            )
-        except Exception as e:
-            logger.error("Unexpected error: %s", e, exc_info=True)
-            raise ProviderError(self.get_name(), f"Unexpected error: {e}")
+        async def _gen() -> AsyncGenerator[dict[str, Any], None]:
+            if first is not None:
+                yield first
+            async for chunk in stream:
+                yield chunk
+
+        return _gen()
+
+    @staticmethod
+    async def _normalize_stream(
+        stream: AsyncGenerator[dict[str, Any], None],
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Flatten chunked deltas and attach the turn's chunks at the end.
+
+        A reasoning stream's ``delta.content`` is a list (thinking, then the
+        transition with the first text) and later a plain string. Each delta
+        becomes text ``content`` plus ``reasoning_content``; the chunk with the
+        finish reason carries ``mistral_content``, the whole turn to replay.
+        """
+        thinking: list[str] = []
+        text: list[str] = []
+        signature: str | None = None
+        saw_thinking = False
+        async for chunk in stream:
+            for choice in chunk.get("choices") or []:
+                delta = choice.get("delta")
+                if not isinstance(delta, dict) or choice.get("index", 0) != 0:
+                    continue
+                content = delta.get("content")
+                if isinstance(content, list):
+                    piece, thought = _chunk_texts(content)
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "thinking":
+                            saw_thinking = True
+                            signature = part.get("signature") or signature
+                    delta["content"] = piece
+                    if thought:
+                        delta["reasoning_content"] = thought
+                    thinking.append(thought)
+                    text.append(piece)
+                elif isinstance(content, str):
+                    text.append(content)
+                if choice.get("finish_reason") and saw_thinking:
+                    block: dict[str, Any] = {
+                        "type": "thinking",
+                        "thinking": [{"type": "text", "text": "".join(thinking)}],
+                    }
+                    if signature:
+                        block["signature"] = signature
+                    delta["mistral_content"] = [block, {"type": "text", "text": "".join(text)}]
+            yield chunk
 
     async def _chat_via_sdk(
         self, body: dict[str, Any], model_name: str, *, stream: bool
@@ -656,9 +871,7 @@ class MistralProvider(BaseProvider):
                 **payload,
             )
         except Exception as e:
-            raise ProviderError(
-                self.get_name(), f"Mistral SDK error: {e}", model_name=model_name
-            ) from e
+            raise self._sdk_error(e, model_name) from e
         return self._sdk_dump(result)
 
     async def _stream_via_sdk(
@@ -666,12 +879,9 @@ class MistralProvider(BaseProvider):
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Return an async generator of chunk dicts from the SDK.
 
-        Deliberately an ``async def`` that *returns* a generator rather than an
-        async-generator function, because that is the shape
-        :meth:`_stream_completion` already has: callers await
-        ``chat_completion(stream=True)`` to obtain the iterator. Returning the
-        iterator directly here would make the two transports behave differently
-        at the call site, which defeats the point of having both.
+        Deliberately an ``async def`` that *returns* a generator, the shape
+        :meth:`_stream_completion` has, so both transports are awaited the same
+        way by :meth:`_chat_once`.
         """
 
         async def _generator() -> AsyncGenerator[dict[str, Any], None]:
@@ -690,13 +900,24 @@ class MistralProvider(BaseProvider):
             except ProviderError:
                 raise
             except Exception as e:
-                raise ProviderError(
-                    self.get_name(),
-                    f"Mistral SDK stream error: {e}",
-                    model_name=model_name,
-                ) from e
+                raise self._sdk_error(e, model_name) from e
 
         return _generator()
+
+    def _sdk_error(self, error: Exception, model_name: str) -> ProviderError:
+        """An SDK exception mapped exactly like a REST error.
+
+        ``mistralai`` errors keep the HTTP response; running it through
+        :meth:`_raise_for_status` gives the same status codes, retryability,
+        zero-quota and context-overflow handling as the direct transport.
+        """
+        response = getattr(error, "raw_response", None)
+        if response is not None and getattr(response, "status_code", 0) >= 400:
+            try:
+                self._raise_for_status(response, model_name)
+            except ProviderError as mapped:
+                return mapped
+        return ProviderError(self.get_name(), f"Mistral SDK error: {error}", model_name=model_name)
 
     async def _stream_completion(
         self, body: dict[str, Any], model_name: str
@@ -709,30 +930,115 @@ class MistralProvider(BaseProvider):
                 "/chat/completions",
                 json=body,
             ) as resp:
-                self._raise_for_status_stream(resp, model_name)
-
-                buffer = ""
+                await self._raise_for_status_stream(resp, model_name)
                 async for line in resp.aiter_lines():
                     line = line.strip()
-                    if not line:
+                    if not line.startswith("data:"):
                         continue
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str == "[DONE]":
-                            return
-                        try:
-                            chunk = json.loads(data_str)
-                            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                                logger.debug(
-                                    "RAW STREAM CHUNK (%s): %s",
-                                    self.get_name(),
-                                    json.dumps(chunk, default=str),
-                                )
-                            yield chunk
-                        except json.JSONDecodeError:
-                            logger.warning("Failed to parse SSE chunk: %s", data_str[:200])
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        return
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse SSE chunk: %s", data_str[:200])
+                        continue
+                    if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            "RAW STREAM CHUNK (%s): %s",
+                            self.get_name(),
+                            json.dumps(chunk, default=str),
+                        )
+                    yield chunk
 
         return _generator()
+
+    # ------------------------------------------------------------------
+    # Responses API (stateless /v1/responses)
+    # ------------------------------------------------------------------
+
+    async def _responses_completion(
+        self,
+        context: list[Message],
+        model_name: str,
+        *,
+        stream: bool,
+        tools: list[Tool] | None,
+        tool_choice: Any,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat through ``/v1/responses``, normalised to the Chat Completions shape.
+
+        Mistral's Responses API is stateless (``store`` must be false and there
+        is no ``previous_response_id``), so the whole history goes in ``input``
+        each time, reasoning items included via ``metadata["reasoning_items"]``.
+        Chat-only parameters (``safe_prompt``, ``random_seed``, ``prediction``,
+        ``guardrails``) are not part of it.
+        """
+        for name in ("safe_prompt", "random_seed", "prediction", "guardrails", "prompt_mode", "n"):
+            if name in params:
+                raise ValueError(f"'{name}' is not available on Mistral's Responses API.")
+        body = rsp.build_responses_request(
+            model_name, context, stream=stream, tools=tools, tool_choice=tool_choice, **params
+        )
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("RAW RESPONSES REQUEST (%s): %s", self.get_name(), json.dumps(body, default=str))
+        if stream:
+            return await self._primed(self._responses_stream(body, model_name))
+        try:
+            resp = await self._client.post("/responses", json=body)
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
+        self._raise_for_status(resp, model_name)
+        data = resp.json()
+        if data.get("error"):
+            raise self._responses_failed(rsp.ResponsesFailed(data["error"]), model_name)
+        return rsp.normalize_response(data)
+
+    async def _responses_stream(
+        self, body: dict[str, Any], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        normalizer = rsp.ResponsesStreamNormalizer()
+        try:
+            async with self._client.stream("POST", "/responses", json=body) as resp:
+                await self._raise_for_status_stream(resp, model_name)
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue  # `event:` lines repeat the payload's own `type`
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(payload)
+                    except ValueError:
+                        logger.warning("Skipping unparseable Responses event from Mistral.")
+                        continue
+                    try:
+                        chunks = normalizer.feed(event)
+                    except rsp.ResponsesFailed as exc:
+                        raise self._responses_failed(exc, model_name) from None
+                    for chunk in chunks:
+                        yield chunk
+        except ProviderError:
+            raise
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
+
+    def _responses_failed(self, exc: Any, model_name: str) -> ProviderError:
+        error = getattr(exc, "error", None) or {}
+        message = str(error.get("message") or exc)
+        if self._is_context_overflow(message):
+            return ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=message,
+            )
+        return ProviderError(self.get_name(), f"Response failed: {message}", model_name=model_name)
 
     # ------------------------------------------------------------------
     # Fill-in-the-Middle (FIM)
@@ -791,7 +1097,7 @@ class MistralProvider(BaseProvider):
 
         try:
             if stream:
-                return self._stream_fim(body, model_name)
+                return await self._stream_fim(body, model_name)
             else:
                 resp = await self._client.post("/fim/completions", json=body)
                 self._raise_for_status(resp, model_name)
@@ -808,7 +1114,7 @@ class MistralProvider(BaseProvider):
 
         async def _generator() -> AsyncGenerator[dict[str, Any], None]:
             async with self._client.stream("POST", "/fim/completions", json=body) as resp:
-                self._raise_for_status_stream(resp, model_name)
+                await self._raise_for_status_stream(resp, model_name)
                 async for line in resp.aiter_lines():
                     line = line.strip()
                     if not line or not line.startswith("data: "):
@@ -864,8 +1170,13 @@ class MistralProvider(BaseProvider):
 
         try:
             if self._use_sdk_for("embeddings"):
+                options = {
+                    k: body[k]
+                    for k in ("output_dimension", "output_dtype", "encoding_format", "metadata")
+                    if k in body
+                }
                 result = await self._sdk.embeddings.create_async(
-                    model=body.get("model"), inputs=body.get("input")
+                    model=body.get("model"), inputs=body.get("input"), **options
                 )
                 return self._sdk_dump(result)
             resp = await self._client.post("/embeddings", json=body)
@@ -885,18 +1196,55 @@ class MistralProvider(BaseProvider):
             choices = response.get("choices", [])
             if not choices:
                 return ""
-            return choices[0].get("message", {}).get("content") or ""
-        except (KeyError, IndexError, TypeError):
+            content = choices[0].get("message", {}).get("content")
+        except (KeyError, IndexError, TypeError, AttributeError):
             return ""
+        return _chunk_texts(content)[0] if isinstance(content, list) else content or ""
 
     def extract_delta_content(self, chunk: dict[str, Any]) -> str:
         try:
             choices = chunk.get("choices", [])
             if not choices:
                 return ""
-            return choices[0].get("delta", {}).get("content") or ""
-        except (KeyError, IndexError, TypeError):
+            content = choices[0].get("delta", {}).get("content")
+        except (KeyError, IndexError, TypeError, AttributeError):
             return ""
+        return _chunk_texts(content)[0] if isinstance(content, list) else content or ""
+
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """The model's thinking (reasoning models with ``reasoning_effort`` on)."""
+        try:
+            message = (response.get("choices") or [{}])[0].get("message") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        if isinstance(message.get("content"), list):
+            return _chunk_texts(message["content"])[1] or None
+        return message.get("reasoning_content") or message.get("reasoning") or None
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        """Streaming counterpart of :meth:`extract_reasoning_content`."""
+        try:
+            delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        if isinstance(delta.get("content"), list):
+            return _chunk_texts(delta["content"])[1] or None
+        return delta.get("reasoning_content") or delta.get("reasoning") or None
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """What the next assistant turn needs to carry: the thinking chunks
+        (chat) or the reasoning items (``responses_api = "always"``). For a
+        stream, pass the last chunk."""
+        try:
+            choice = (response.get("choices") or [{}])[0]
+            source = choice.get("message") or choice.get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        if source.get("mistral_content"):
+            return {"mistral_content": list(source["mistral_content"])}
+        if source.get("reasoning_items"):
+            return {"reasoning_items": list(source["reasoning_items"])}
+        return {}
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
         """Extract tool calls from a Mistral response, normalized to ToolCall objects."""
@@ -977,7 +1325,7 @@ class MistralProvider(BaseProvider):
         self,
         text: str,
         *,
-        voice: str = "alloy",
+        voice: str | None = None,
         model: str | None = None,
         response_format: str = "mp3",
         speed: float = 1.0,
@@ -986,21 +1334,23 @@ class MistralProvider(BaseProvider):
     ) -> Any:
         """Generate speech via POST /v1/audio/speech.
 
-        Mistral TTS supports:
-        - ``voice_id``: preset or custom voice ID
-        - ``ref_audio``: base64-encoded audio for zero-shot voice cloning
-        - Streaming SSE response (via ``stream=True``)
-
-        The ``voice`` parameter maps to Mistral's ``voice_id`` field.
+        Mistral TTS needs a voice: a ``voice`` (``voice_id``: a preset or saved
+        voice, listed by ``GET /v1/audio/voices``) or ``ref_audio`` (base64
+        audio for zero-shot cloning). Without either it answers 400.
+        ``voxtral-mini-tts-latest`` (2603, "speech v1") takes ``ref_audio``
+        only and rejects preset voices; ``voxtral-mini-tts-3`` takes both
+        (measured 2026-11-16). Newer
+        options pass through as keyword arguments: ``expressiveness``,
+        ``phoneme_hints``, ``conversation_history``, ``prompt_cache_key``.
 
         Args:
             text: Text to convert to speech.
-            voice: Voice identifier (maps to Mistral ``voice_id``).
-            model: TTS model (e.g. ``mistral-tts-latest``).
+            voice: Voice id (Mistral ``voice_id``).
+            model: TTS model (e.g. ``voxtral-mini-tts-latest``).
             response_format: Output format (mp3, wav, pcm, flac, opus).
             speed: Not directly supported by Mistral; ignored.
             instructions: Not supported by Mistral; ignored.
-            **kwargs: Extra params (``ref_audio`` for voice cloning).
+            **kwargs: ``ref_audio`` for cloning, plus any other body field.
 
         Returns:
             ``SpeechResult`` with raw audio bytes.
@@ -1022,6 +1372,14 @@ class MistralProvider(BaseProvider):
         ref_audio = kwargs.pop("ref_audio", None)
         if ref_audio:
             body["ref_audio"] = ref_audio
+        if not voice and not ref_audio:
+            raise ProviderError(
+                self.get_name(),
+                "Mistral TTS needs voice= (a voice id from GET /v1/audio/voices) or "
+                "ref_audio= (base64 audio to clone).",
+            )
+        # expressiveness, phoneme_hints, conversation_history, metadata, ...
+        body.update(kwargs)
 
         logger.debug(
             "Mistral TTS: model=%s, voice=%s, format=%s, len=%d",
@@ -1043,7 +1401,7 @@ class MistralProvider(BaseProvider):
                 audio_data=audio_bytes,
                 format=response_format,
                 model=tts_model or "mistral-tts",
-                voice=voice,
+                voice=voice or "ref_audio",  # a cloned voice has no id
                 metadata={},
             )
         except ProviderError:
@@ -1106,11 +1464,14 @@ class MistralProvider(BaseProvider):
         elif file_id:
             form_data["file_id"] = file_id
         elif isinstance(audio_data, str):
-            # File path
+            # File path. Read it whole: the handle used to stay open whenever
+            # the request failed.
+            import mimetypes
             import pathlib
 
             file_path = pathlib.Path(audio_data)
-            files_param = {"file": (file_path.name, open(file_path, "rb"), "audio/wav")}
+            mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+            files_param = {"file": (file_path.name, file_path.read_bytes(), mime)}
         elif isinstance(audio_data, bytes):
             files_param = {"file": ("audio.wav", io.BytesIO(audio_data), "audio/wav")}
 
@@ -1128,6 +1489,18 @@ class MistralProvider(BaseProvider):
             )
         if timestamp_granularities:
             form_data["timestamp_granularities"] = list(timestamp_granularities)
+        # Anything else (speaker_references, ...) used to be dropped silently.
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                form_data[key] = "true" if value else "false"
+            elif isinstance(value, (list, tuple)):
+                form_data[key] = [v if isinstance(v, str) else json.dumps(v) for v in value]
+            elif isinstance(value, dict):
+                form_data[key] = json.dumps(value)
+            else:
+                form_data[key] = str(value)
 
         logger.debug(
             "Mistral STT: model=%s, language=%s, diarize=%s",
@@ -1158,13 +1531,6 @@ class MistralProvider(BaseProvider):
             )
             self._raise_for_status(resp, stt_model)
             result = resp.json()
-
-            # Close file handle if opened
-            if files_param and hasattr(files_param.get("file", (None,))[1], "close"):
-                try:
-                    files_param["file"][1].close()
-                except Exception:
-                    pass
 
             text = result.get("text", "")
             detected_lang = result.get("language")
@@ -1397,56 +1763,92 @@ class MistralProvider(BaseProvider):
     # Error handling helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _is_context_overflow(message: str) -> bool:
+        text = message.lower()
+        return any(
+            phrase in text
+            for phrase in (
+                "context_length",
+                "context length",
+                "too long",
+                "token limit",
+                "too large for model",
+                "exceeds the maximum",
+                "maximum context",
+            )
+        )
+
     def _raise_for_status(self, resp: Any, model_name: str) -> None:
         """Raise a ProviderError with useful context on HTTP errors."""
-        if resp.status_code >= 400:
-            try:
-                error_body = resp.json()
-                error_msg = error_body.get("message") or error_body.get("detail") or resp.text
-            except Exception:
-                error_msg = resp.text
+        if resp.status_code < 400:
+            return
+        try:
+            error_body = resp.json()
+            nested = error_body.get("error") if isinstance(error_body.get("error"), dict) else {}
+            error_msg = (
+                error_body.get("message")
+                or nested.get("message")
+                or error_body.get("detail")
+                or resp.text
+            )
+        except Exception:
+            error_msg = resp.text
+        error_msg = str(error_msg)
+        status = resp.status_code
+        name = self.get_name()
 
-            status = resp.status_code
-
-            if status == 401:
+        if status == 401:
+            raise ProviderError(
+                name,
+                f"Authentication error: Invalid or missing API key. {error_msg}",
+                status_code=status,
+                retryable=False,
+            )
+        if status == 429:
+            # A plan without access to a model gets a 429 with a per-minute
+            # limit of 0, not a 403. Retrying cannot help, so say what it is.
+            if resp.headers.get("x-ratelimit-limit-req-minute") == "0":
                 raise ProviderError(
-                    self.get_name(),
-                    f"Authentication error: Invalid or missing API key. {error_msg}",
-                )
-            if status == 429:
-                raise ProviderError(
-                    self.get_name(),
-                    f"Rate limit exceeded. {error_msg}",
-                )
-            if status == 400 and any(
-                phrase in str(error_msg).lower()
-                for phrase in ("context_length", "too long", "token limit")
-            ):
-                raise ContextLengthError(
+                    name,
+                    f"Your Mistral plan has no quota for '{model_name}' (its request "
+                    f"limit is 0 per minute). Use another model or upgrade the plan.",
                     model_name=model_name,
-                    limit=self.get_max_context_length(model_name),
-                    actual=0,
-                    message=str(error_msg),
+                    status_code=status,
+                    retryable=False,
                 )
-            if status == 400 and any(
-                phrase in str(error_msg).lower()
-                for phrase in ("model not", "does not exist", "invalid model", "not found")
-            ):
-                raise ProviderError(
-                    self.get_name(),
-                    f"Model '{model_name}' not found. Default is "
-                    f"'{self.default_model}'. Error: {error_msg}",
-                )
-
             raise ProviderError(
-                self.get_name(),
-                f"API Error ({status}): {error_msg}",
+                name, f"Rate limit exceeded. {error_msg}", status_code=status, retryable=True
             )
+        if status in (400, 422) and self._is_context_overflow(error_msg):
+            raise ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=error_msg,
+            )
+        if status in (400, 404) and any(
+            phrase in error_msg.lower()
+            for phrase in ("model not", "does not exist", "invalid model", "not found")
+        ):
+            raise ProviderError(
+                name,
+                f"Model '{model_name}' not found. Default is "
+                f"'{self.default_model}'. Error: {error_msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        raise ProviderError(
+            name,
+            f"API Error ({status}): {error_msg}",
+            model_name=model_name,
+            status_code=status,
+        )
 
-    def _raise_for_status_stream(self, resp: Any, model_name: str) -> None:
-        """Raise on HTTP errors during streaming (before body is consumed)."""
+    async def _raise_for_status_stream(self, resp: Any, model_name: str) -> None:
+        """Raise on HTTP errors before a streamed body is consumed, with the
+        server's message (it used to be dropped, leaving only the status)."""
         if resp.status_code >= 400:
-            raise ProviderError(
-                self.get_name(),
-                f"Streaming API Error ({resp.status_code})",
-            )
+            await resp.aread()
+            self._raise_for_status(resp, model_name)
