@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Deepgram: Flux TTS, SDK transcription parameters, newer fields
+
+Audited against deepgram-sdk 7.19 and the live API on 2026-11-16. Flux TTS
+and transcription were verified live on both transports.
+
+- **Flux TTS** (`flux-<voice>-<lang>`, GA 2026-08-12) goes to `/v2/speak`
+  (`speak.v2`) for synthesis and REST streaming, with `expressivity`,
+  `normalize_volume` and `priority`. Aura stays on `/v1/speak`. WebSocket
+  input with a Flux voice raises a clear error; it uses a different protocol
+  (follow-up).
+- **SDK transcription** forwarded `channels` and `sample_rate`, which the
+  SDK's `transcribe_file`/`transcribe_url` don't take, so it raised
+  `TypeError`. They are now sent on the direct transport only.
+- New fields: `language_hint` (nova-3 `multi` now serves 55 languages),
+  `redact_usage`, `diarize_model` on streaming, and `numerals`,
+  `profanity_filter`, `redact`, `redact_usage` on Flux STT.
+  `deepgram-sdk>=7.19,<8`. Note that 7.18 stopped retrying
+  `RemoteProtocolError`.
+
 ### Changed — ElevenLabs: scribe_v3, SFX v3, SDK backend fidelity, STT list fields
 
 Audited against the live API and elevenlabs 2.78 on 2026-11-16. Verified

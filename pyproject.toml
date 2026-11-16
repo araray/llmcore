@@ -95,7 +95,8 @@ huggingface = ["huggingface-hub>=2.4,<3"]
 # Deepgram is a real-time voice/audio provider.  The official deepgram-sdk is
 # WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
 # and the Voice Agent.  Install with: pip install llmcore[deepgram]
-deepgram = ["deepgram-sdk>=7.11.0", "websockets>=12.0"]
+# deepgram-sdk 7.18 stopped retrying httpx RemoteProtocolError by default.
+deepgram = ["deepgram-sdk>=7.19,<8", "websockets>=12.0"]
 # Z.ai (Zhipu AI / GLM). The provider prefers the official 'zai-sdk' (SDK
 # backend, default), and falls back to the 'openai' SDK (OpenAI-compatibility
 # mode) and/or direct 'httpx' calls (native media endpoints: image/audio/OCR/

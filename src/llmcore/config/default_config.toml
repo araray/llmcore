@@ -1561,11 +1561,18 @@ max_retries = 2
   default_stt_model  = "nova-3"
   default_flux_model = "flux-general-en"
   default_tts_model  = "aura-2-thalia-en"
+  # Flux TTS voices (flux-<voice>-<lang>, e.g. "flux-haley-en"; GA 2026-08)
+  # go to /v2/speak with expressivity (-2..2), normalize_volume and priority.
+  # REST synthesis and REST streaming; WebSocket input is Aura-only for now.
 
   # --- Speech-to-Text: batch + streaming shared defaults ---
   [providers.deepgram.stt]
   model        = "nova-3"
   language     = "en"          # use "multi" for multilingual code-switching (nova-3)
+  # With language = "multi", nova-3 serves a 55-language model since 2026-10-23
+  # (pin the old 10-language one with `version`); hint languages with
+  # language_hint = ["pt", "es"]. channels / sample_rate only reach the API on
+  # backend = "httpx" (the SDK has no such parameters).
   smart_format = true
   punctuate    = true
   # diarize = false

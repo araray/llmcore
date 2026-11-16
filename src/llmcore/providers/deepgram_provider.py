@@ -44,7 +44,7 @@ Design notes
 * **Configuration**: every capability is wired through ``[providers.deepgram]``
   in ``config/default_config.toml`` with safe defaults and per-call overrides.
 
-Tested against ``deepgram-sdk`` v7.3.1.
+Audited against ``deepgram-sdk`` v7.19.0 and the live API (2026-11-16).
 
 References:
     * Deepgram docs: https://developers.deepgram.com/ (append ``.md`` for Markdown)
@@ -156,7 +156,7 @@ except ImportError:  # pragma: no cover - exercised only when SDK is absent
 
 
 # ---------------------------------------------------------------------------
-# Constants (verified against deepgram-sdk v7.3.1)
+# Constants (verified against deepgram-sdk v7.19.0)
 # ---------------------------------------------------------------------------
 
 #: Environment variables searched (in order) for the API key.
@@ -272,10 +272,20 @@ _STT_BATCH_PARAMS = frozenset(
         "utt_split",
         "version",
         "mip_opt_out",
+        # Since SDK 7.15 / 7.19: repeatable language_hint (nova-3 multi), and
+        # redact_usage.
+        "language_hint",
+        "redact_usage",
+        # Raw-audio framing. Only the direct transport can send these: the
+        # SDK's transcribe_file/transcribe_url have no such parameters (a
+        # TypeError, measured on 7.11 and 7.19).
         "channels",
         "sample_rate",
     }
 )
+
+#: Batch STT params the SDK transport cannot send (see above).
+_STT_BATCH_DIRECT_ONLY = frozenset({"channels", "sample_rate"})
 
 #: Accepted keyword params for batch TTS (``speak.v1.audio.generate``).
 _TTS_BATCH_PARAMS = frozenset(
@@ -325,8 +335,21 @@ _STT_STREAM_PARAMS = frozenset(
         "utterance_end_ms",
         "vad_events",
         "version",
+        "diarize_model",
+        "language_hint",
+        "redact_usage",
     }
 )
+
+#: Flux TTS (``speak.v2.audio.generate`` / ``POST /v2/speak``, GA 2026-08-12):
+#: the v1 set plus expressivity, normalize_volume and priority.
+_TTS_V2_PARAMS = _TTS_BATCH_PARAMS | frozenset({"expressivity", "normalize_volume", "priority"})
+
+
+def _is_flux_tts(model: str | None) -> bool:
+    """Flux TTS voices are ``flux-<voice>-<lang>``; ``flux-general-*`` is STT."""
+    return bool(model) and model.startswith("flux-") and not model.startswith("flux-general")
+
 
 #: Accepted keyword params for streaming TTS (``speak.v1.connect``).
 _TTS_STREAM_PARAMS = frozenset(
@@ -347,6 +370,11 @@ _FLUX_PARAMS = frozenset(
         "language_hint",
         "mip_opt_out",
         "tag",
+        # listen.v2.connect (SDK 7.19)
+        "numerals",
+        "profanity_filter",
+        "redact",
+        "redact_usage",
     }
 )
 
@@ -649,13 +677,13 @@ class DeepgramProvider(BaseProvider):
         return _wrap_json(resp.json())
 
     async def _direct_speak(self, text: str, params: dict[str, Any]) -> AsyncIterator[bytes]:
-        """POST ``/v1/speak`` and yield audio bytes, like the SDK generator."""
+        """POST ``/v1/speak`` (``/v2/speak`` for Flux TTS) and yield audio bytes."""
         query = {k: v for k, v in params.items() if v is not None}
         model = query.get("model")
         client = self._get_http()
         async with client.stream(
             "POST",
-            "/v1/speak",
+            "/v2/speak" if _is_flux_tts(model) else "/v1/speak",
             params=query,
             json={"text": text},
             headers={"Content-Type": "application/json"},
@@ -1163,15 +1191,22 @@ class DeepgramProvider(BaseProvider):
                 response = await self._direct_transcribe(
                     params=params, audio_bytes=request_bytes, url=url
                 )
-            elif url is not None:
-                response = await self._client.listen.v1.media.transcribe_url(
-                    url=url, **params
-                )
             else:
-                request_bytes = self._coerce_audio_bytes(audio_data)
-                response = await self._client.listen.v1.media.transcribe_file(
-                    request=request_bytes, **params
-                )
+                sdk_params = {k: v for k, v in params.items() if k not in _STT_BATCH_DIRECT_ONLY}
+                if len(sdk_params) != len(params):
+                    logger.debug(
+                        "Deepgram SDK transport cannot send channels/sample_rate; "
+                        "use backend = 'httpx' for raw audio framing."
+                    )
+                if url is not None:
+                    response = await self._client.listen.v1.media.transcribe_url(
+                        url=url, **sdk_params
+                    )
+                else:
+                    request_bytes = self._coerce_audio_bytes(audio_data)
+                    response = await self._client.listen.v1.media.transcribe_file(
+                        request=request_bytes, **sdk_params
+                    )
         except _DeepgramApiError as exc:
             raise self._map_api_error(exc, model=used_model) from exc
         except (ConfigError, ProviderError, FileNotFoundError):
@@ -1376,7 +1411,7 @@ class DeepgramProvider(BaseProvider):
             self._tts_defaults,
             explicit,
             kwargs,
-            allowed=_TTS_BATCH_PARAMS,
+            allowed=_TTS_V2_PARAMS if _is_flux_tts(resolved_model) else _TTS_BATCH_PARAMS,
             model=resolved_model,
             default_model=self.default_tts_model,
         )
@@ -1385,11 +1420,7 @@ class DeepgramProvider(BaseProvider):
 
         try:
             chunks: list[bytes] = []
-            source = (
-                self._direct_speak(text, params)
-                if self._use_direct_for("speak")
-                else self._client.speak.v1.audio.generate(text=text, **params)
-            )
+            source = self._speak_source(text, params)
             async for chunk in source:
                 if chunk:
                     chunks.append(chunk)
@@ -1413,6 +1444,14 @@ class DeepgramProvider(BaseProvider):
             voice=used_model,  # voice is encoded in the model id
             metadata={"bytes": len(audio)},
         )
+
+    def _speak_source(self, text: str, params: dict[str, Any]) -> AsyncIterator[bytes]:
+        """The audio byte stream for one REST synthesis (v1 Aura, v2 Flux)."""
+        if self._use_direct_for("speak"):
+            return self._direct_speak(text, params)
+        if _is_flux_tts(params.get("model")):
+            return self._client.speak.v2.audio.generate(text=text, **params)
+        return self._client.speak.v1.audio.generate(text=text, **params)
 
     # ------------------------------------------------------------------
     # Shared serialization helper
@@ -1867,15 +1906,13 @@ class DeepgramProvider(BaseProvider):
                 self._tts_defaults,
                 explicit,
                 kwargs,
-                allowed=_TTS_BATCH_PARAMS,
+                allowed=_TTS_V2_PARAMS if _is_flux_tts(resolved_model) else _TTS_BATCH_PARAMS,
                 model=resolved_model,
                 default_model=self.default_tts_model,
             )
             used_model = params.get("model", resolved_model)
             try:
-                async for chunk in self._client.speak.v1.audio.generate(
-                    text=text, **params
-                ):
+                async for chunk in self._speak_source(text, params):
                     if chunk:
                         yield chunk
             except _DeepgramApiError as exc:
@@ -1892,6 +1929,15 @@ class DeepgramProvider(BaseProvider):
             return
 
         # WebSocket path (incremental text in, audio out).
+        if _is_flux_tts(resolved_model):
+            raise ProviderError(
+                "deepgram",
+                f"Incremental (WebSocket) synthesis with Flux TTS ('{resolved_model}') is not "
+                "supported yet: it speaks a different protocol (speak.v2). Pass the text as a "
+                "string for REST streaming, or use an Aura voice for WebSocket input.",
+                model_name=resolved_model,
+                retryable=False,
+            )
         explicit = {
             "encoding": response_format,
             "sample_rate": sample_rate,
