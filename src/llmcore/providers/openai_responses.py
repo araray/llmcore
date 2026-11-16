@@ -288,7 +288,14 @@ def build_responses_request(
     for key in PASSTHROUGH_PARAMS:
         if key in params:
             body[key] = params.pop(key)
+    # extra_body is the SDK's "merge into the JSON body" channel. A raw HTTP
+    # body has no such field, so flatten it; posted as-is it was ignored, and
+    # servers that tolerate unknown fields (vLLM) answered 200 without the
+    # vendor parameters inside it (structured_outputs, chat_template_kwargs).
+    extra_body = params.pop("extra_body", None)
     body.update(params)  # anything else is the caller's business
+    if isinstance(extra_body, Mapping):
+        body.update(extra_body)
 
     body.setdefault("store", False)
     if body.get("store") is False and "reasoning" in body:

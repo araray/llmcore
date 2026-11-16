@@ -1772,11 +1772,23 @@ class OpenAIProvider(BaseProvider):
         to carry the model's chain of thought across a tool loop.
         """
         try:
-            message = (response.get("choices") or [{}])[0].get("message") or {}
+            choice = (response.get("choices") or [{}])[0]
+            # A stream carries them on the final chunk's delta.
+            message = choice.get("message") or choice.get("delta") or {}
         except (AttributeError, IndexError, TypeError):
             return None
         items = message.get("reasoning_items")
         return list(items) if items else None
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Reasoning items to send back with the next assistant turn.
+
+        On the Responses route with ``store: false``, the model's reasoning
+        survives a tool loop only if its encrypted items are replayed. For a
+        stream, pass the last chunk.
+        """
+        items = self.extract_reasoning_items(response)
+        return {"reasoning_items": items} if items else {}
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
         if not text:

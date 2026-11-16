@@ -218,7 +218,9 @@ class TestConfigFileMerging:
         # Ollama model overridden
         assert cfg.get("providers.ollama.default_model") == "custom-model"
         # OpenAI model kept from defaults
-        assert cfg.get("providers.openai.default_model") == "gpt-4o"
+        # The packaged default, whatever it currently is.
+        expected = defaults["providers"]["openai"]["default_model"]
+        assert cfg.get("providers.openai.default_model") == expected
 
     def test_override_dict_takes_highest_precedence(self, tmp_path):
         """overrides_dict must beat both defaults and config file."""
