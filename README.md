@@ -582,6 +582,7 @@ timeout = 300
 # Command Code: 98+ models, one key (CMD_API_KEY). Routed per model from the live catalog.
 default_model = "claude-sonnet-5-5"   # short names work: "kimi-k3", "glm-5.3"
 zdr = false                           # true = zero-data-retention upstreams only
+responses_api = "openai"              # GPT over the Responses API; "all" | "never"
 
 [providers.typesafe]
 # TypeSafe.ai System One (typed judgments, NOT chat). API key via TYPESAFE_API_KEY.

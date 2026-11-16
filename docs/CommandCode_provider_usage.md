@@ -106,12 +106,16 @@ await cc.refresh_catalog()           # re-read /models now
 - **Claude** (`/messages`): the Anthropic provider's own rules apply.
   `output_config.effort` with adaptive thinking on Claude 4.6+, and a thinking
   budget on older models.
+- **GPT** (`/responses`, the default for GPT): `effort` is sent as
+  `reasoning.effort`. Pass `reasoning_summary="auto"` (or
+  `reasoning={"effort": ..., "summary": "auto"}`) to also get a readable
+  summary, when the model offers one.
 - **Everything else** (`/chat/completions`): `effort` is sent as
   `reasoning_effort` (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`,
   `max`). Upstream-specific `reasoning={...}` and `thinking={...}` are also
   accepted and passed through.
 
-Reasoning text is available either way:
+Reasoning text is available the same way on every route:
 
 ```python
 resp = await cc.chat_completion(messages, "deepseek/deepseek-v4-pro")
@@ -119,9 +123,11 @@ cc.extract_reasoning_content(resp)   # open models' `reasoning`, or Claude's thi
 cc.extract_reasoning_details(resp)   # structured reasoning to send back on the next turn
 ```
 
-For multi-turn tool use on reasoning models, put
-`extract_reasoning_details(resp)` in that assistant message's
-`metadata["reasoning_details"]`. llmcore sends it back on the next request.
+For multi-turn tool use on reasoning models, send the model's reasoning back
+on the next request. On `/chat/completions`, put `extract_reasoning_details(resp)`
+in that assistant message's `metadata["reasoning_details"]`. On `/responses`,
+put `extract_reasoning_items(resp)` in `metadata["reasoning_items"]` (see the
+Responses section below).
 
 ### Tools, vision, caching
 
