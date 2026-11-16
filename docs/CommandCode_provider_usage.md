@@ -5,19 +5,21 @@ gateway, the **Provider API**. One key reaches 98+ models: Claude, GPT, Gemini,
 Grok, DeepSeek, Kimi, GLM, Qwen, MiniMax, Muse and more. It also serves
 TypeSafe's Jev decision model.
 
-The gateway speaks **three protocols**, and each model answers on only one of
+The gateway speaks **four protocols**, and each model answers on only some of
 them:
 
 | Models | Route | Wire shape |
 |---|---|---|
 | Claude | `/messages` | Anthropic Messages |
+| GPT (default policy) | `/responses` | OpenAI Responses |
 | everything else | `/chat/completions` | OpenAI Chat Completions |
 | `typesafe/jev` | `/systemone` | TypeSafe System One |
 
-Sending a model to the wrong route returns `400 unsupported_model`. llmcore
-reads each model's route from the live `/models` catalog and sends the call
-there, so you never pick the route yourself. You call `chat()` as with any
-provider.
+Sending a model to a route that does not serve it returns
+`400 unsupported_model`. llmcore reads each model's routes from the live
+`/models` catalog and sends the call there, so you never pick the route
+yourself. You call `chat()` as with any provider. Every route's answer comes
+back in the same Chat Completions shape.
 
 ---
 
@@ -45,6 +47,7 @@ both.
 default_model = "claude-sonnet-5-5"
 transport = "httpx"          # direct HTTP (default) | "sdk": the OpenAI / Anthropic SDKs
 zdr = false                  # zero data retention on every request (or env CMD_ZDR=1)
+responses_api = "openai"     # GPT -> /responses | "all" | "never"
 catalog_ttl = 3600           # seconds the live /models catalog is trusted
 timeout = 120
 max_retries = 2
@@ -127,6 +130,58 @@ by llmcore's own Anthropic or OpenAI implementation. That covers `tools=` and
 `tool_choice=`, images through `metadata["inline_images"]`, and Claude prompt
 caching through `metadata["cache_control"]`. Request bodies are capped at
 32 MiB.
+
+### OpenAI Responses API
+
+Most non-Claude models answer on both `/chat/completions` and `/responses`.
+`responses_api` decides which one is used:
+
+| `responses_api` | GPT models | other models |
+|---|---|---|
+| `"openai"` (default) | `/responses` | `/chat/completions` |
+| `"all"` | `/responses` | `/responses` where offered |
+| `"never"` | `/chat/completions` | `/chat/completions` |
+
+The default is the same split Command Code's official pi provider makes.
+Override it per call with `responses=True` or `responses=False`. A model listed
+on only one of the two routes uses that route whatever the setting.
+
+What the Responses route adds:
+
+- **Reasoning that survives a tool loop.** Requests are stateless
+  (`store: false`) and ask for encrypted reasoning. Take
+  `cc.extract_reasoning_items(resp)` and put it in that assistant turn's
+  `metadata["reasoning_items"]`. llmcore sends it back ahead of the turn, so
+  the model keeps its chain of thought without anything stored server-side:
+
+  ```python
+  first = await cc.chat_completion(history, "gpt-6-sol", tools=[weather])
+  history.append(Message(
+      role=Role.ASSISTANT, content="",
+      tool_calls=first["choices"][0]["message"]["tool_calls"],
+      metadata={"reasoning_items": cc.extract_reasoning_items(first) or []},
+  ))
+  history.append(Message(role=Role.TOOL, content="22C", tool_call_id="call_..."))
+  second = await cc.chat_completion(history, "gpt-6-sol", tools=[weather])
+  ```
+
+- **Parameters in either spelling.** `max_tokens`, `response_format`,
+  `reasoning_effort` and `effort` are translated into `max_output_tokens`,
+  `text.format` and `reasoning.effort`. The Responses fields themselves
+  (`reasoning={"effort": ..., "summary": "auto"}`, `text`, `include`,
+  `previous_response_id`, `store`, `truncation`, …) are accepted and win when
+  both are given.
+- **Raw tool declarations** through `extra_tools=[...]` (`custom`,
+  `local_shell`), next to llmcore `Tool` objects. Command Code forwards built-in
+  tools such as `web_search` upstream, but in testing (2026-11-15) a
+  `web_search` declaration produced no search call and no citations. So
+  `native_search` is not advertised.
+- **Status mapping.** `status: "incomplete"` reports `finish_reason: "length"`
+  (or `content_filter`). `status: "failed"` raises a `ProviderError` with the
+  gateway mapping, retryable where the upstream says so.
+
+The request/response conversion is a standalone module,
+`llmcore.providers.openai_responses`, so other providers can reuse it.
 
 ---
 
@@ -231,8 +286,8 @@ no key.
 
 ## 7. Limits
 
-- `/responses` is not used. Every model served there also answers on
-  `/chat/completions`.
+- Built-in Responses tools (`web_search`) are forwarded by the gateway, but
+  have not been seen to run. See the Responses section.
 - Command Code publishes no rate-limit headers and no usage or balance API.
   Spend is visible in Studio.
 - Token counts are estimates (`o200k_base`). The gateway serves a dozen

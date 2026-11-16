@@ -702,9 +702,9 @@ PYEOF`
 
 ## ⌘ Provider: Command Code
 
-Command Code's Provider API: one key for 98+ models over three protocols. Claude
-goes to `/messages`, every other chat model to `/chat/completions`, and
-`typesafe/jev` to `/systemone`. Each model's route is read from the live
+Command Code's Provider API: one key for 98+ models over four routes. Claude
+goes to `/messages`, GPT to `/responses` (by default), every other chat model to
+`/chat/completions`, and `typesafe/jev` to `/systemone`. Each model's route is read from the live
 `/models` catalog. Aliases: `command_code`, `command-code`. Needs a GOAT plan or
 higher. Guide: [CommandCode_provider_usage.md](CommandCode_provider_usage.md).
 
@@ -716,6 +716,7 @@ higher. Guide: [CommandCode_provider_usage.md](CommandCode_provider_usage.md).
 | `providers.commandcode.default_model` | string |  | `claude-sonnet-5-5` | Model id or short name (`kimi-k3` → `moonshotai/Kimi-K3`) |
 | `providers.commandcode.transport` | enum |  | `httpx` | `httpx` (direct) or `sdk` (official OpenAI / Anthropic SDKs) |
 | `providers.commandcode.zdr` | boolean |  | `false` | Send `x-cmd-zdr: 1` on every request (`CMD_ZDR=1`; per call `zdr=True`) |
+| `providers.commandcode.responses_api` | enum |  | `openai` | Models on both routes: `openai` (GPT → `/responses`), `all`, or `never`; per call `responses=` |
 | `providers.commandcode.catalog_ttl` | integer |  | `3600` | Seconds the live `/models` catalog is trusted |
 | `providers.commandcode.timeout` | integer |  | `120` | Request timeout in seconds |
 | `providers.commandcode.max_retries` | integer |  | `2` | Retries on the SDK transport and for System One |

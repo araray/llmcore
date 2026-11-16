@@ -27,6 +27,13 @@ to `commandcode` and priced from its own cards.
 - A stale catalog heals itself: told a model lives on another route, the
   provider re-reads the catalog and retries once.
 - Zero data retention: config `zdr`, `CMD_ZDR=1`, or per call `zdr=True`.
+- **OpenAI Responses API** on `/responses`. GPT models use it by default
+  (`responses_api = "openai"`; also `"all"` / `"never"`, or per call
+  `responses=True|False`). Requests are stateless with encrypted reasoning, and
+  `extract_reasoning_items()` plus `metadata["reasoning_items"]` carry a
+  reasoning model's chain across tool loops. Answers come back in the Chat
+  Completions shape. The conversion is reusable:
+  `llmcore.providers.openai_responses`.
 - Direct HTTP by default; `transport = "sdk"` uses the official OpenAI and
   Anthropic SDKs.
 - 100 model cards from a new `cardctl` adapter (public catalog, no key).

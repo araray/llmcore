@@ -120,8 +120,9 @@ by trial and error.
   harness routes through llmcore by setting two environment variables. Off by
   default; see [`Routing_usage.md`](docs/Routing_usage.md).
 - **Command Code** — one key for 98+ models (Claude, GPT, Gemini, Grok, DeepSeek,
-  Kimi, GLM, Qwen, MiniMax, …) through a gateway that speaks three protocols.
-  llmcore routes each model to the route that serves it from the live catalog,
+  Kimi, GLM, Qwen, MiniMax, …) through a gateway that speaks several protocols.
+  llmcore routes each model to the route that serves it from the live catalog
+  (Claude over Messages, GPT over the OpenAI Responses API by default),
   raises on the gateway's HTTP-200 upstream failures instead of returning
   partial output, and supports zero data retention per call. See
   [`CommandCode_provider_usage.md`](docs/CommandCode_provider_usage.md).
@@ -669,7 +670,7 @@ the provider support matrix.
 | **FriendliAI** | `zai-org/GLM-5.3`, `deepseek-ai/DeepSeek-V3.2` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
 | **DeepInfra** | `Qwen3-235B-A22B`, DeepSeek, Llama, FLUX, Whisper, Kokoro | direct + SDK | Chat, vision, TTS/ASR, images, embeddings |
 | **OpenRouter** | 620 cards spanning most vendors | direct + SDK | One key, many vendors |
-| **Command Code** | `claude-opus-5-5`, `gpt-6-sol`, `moonshotai/Kimi-K3`, `zai-org/GLM-5.3`, `deepseek/deepseek-v4.1-flash` + 93 more | direct + SDK | One key; three protocols routed per model, ZDR, self-healing routes, Jev via `system_one()` |
+| **Command Code** | `claude-opus-5-5`, `gpt-6-sol`, `moonshotai/Kimi-K3`, `zai-org/GLM-5.3`, `deepseek/deepseek-v4.1-flash` + 93 more | direct + SDK | One key; Messages / Responses / Chat Completions routed per model, ZDR, self-healing routes, Jev via `system_one()` |
 | **Poe** | 497 cards across Anthropic/OpenAI/Google and others | direct + SDK | Aggregated access |
 | **Hugging Face** | 305 cards; any Inference Provider model | SDK + direct | Chat, image, TTS, ASR, **private Inference Endpoints** |
 | **Ollama** | `qwen3-vl:4b`, `llama3.3:70b`, `gemma3:12b`, `qwen3-embedding:8b` | SDK + direct | Local, no API key |
