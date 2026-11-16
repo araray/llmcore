@@ -89,16 +89,17 @@ DEFAULT_DEEPINFRA_BASE_URL = "https://api.deepinfra.com/v1/openai"
 #: working; this constant is the documented default.
 DEFAULT_DEEPINFRA_NATIVE_BASE = "https://api.deepinfra.com/v1"
 
-#: Default chat model.  Matches every example in the DeepInfra docs.  Override
-#: via ``[providers.deepinfra].default_model`` or per-request ``model=``.
-DEFAULT_DEEPINFRA_MODEL = "deepseek-ai/DeepSeek-V3"
+#: Default chat model: DeepSeek V4 Flash (1M context, reasoning, prompt
+#: cache; live 2026-11-16). DeepSeek-V3 is still served but costs more and
+#: does not reason. Override via ``[providers.deepinfra].default_model``.
+DEFAULT_DEEPINFRA_MODEL = "deepseek-ai/DeepSeek-V4-Flash"
 
 #: Default text-to-speech model (DeepInfra TTS docs use Kokoro).
 DEFAULT_DEEPINFRA_TTS_MODEL = "hexgrad/Kokoro-82M"
 
-#: Default speech-to-text model (DeepInfra speech-recognition docs name this as
-#: the "best accuracy" Whisper variant).
-DEFAULT_DEEPINFRA_STT_MODEL = "openai/whisper-large"
+#: Default speech-to-text model. ``openai/whisper-large`` (the old default) is
+#: gone: 404 "model not found" and absent from /v1/models (2026-11-16).
+DEFAULT_DEEPINFRA_STT_MODEL = "openai/whisper-large-v3-turbo"
 
 #: Default image-generation model.  ASSUMPTION (labelled): the image-generation
 #: doc states the default is "FLUX Schnell" without an explicit ID; this is the
@@ -129,14 +130,32 @@ _DEEPINFRA_EXTRA_BODY_KEYS = frozenset(
         "top_k",
         "min_p",
         "repetition_penalty",
+        # Added to the API since (openapi.json, 2026-11-16).
+        "chat_template_kwargs",
+        "prompt_cache_options",
+        "cache_salt",
+        "fail_fast",
+        "models",
+        "stop_token_ids",
+        "media_io_kwargs",
+        "continue_final_message",
+        "ignore_eos",
     }
 )
 
-#: Substrings in a model's ``tags``/``id`` that signal vision/multimodal input.
-_VISION_HINTS = ("vision", "multimodal", "-vl", "vl-", "image-text-to-text")
+#: Substrings in a model's ``tags``/``id`` that signal vision/multimodal input
+#: (the live tags are "vision" and "vlm").
+_VISION_HINTS = ("vision", "vlm", "multimodal", "-vl", "vl-", "image-text-to-text")
 
-#: Tag -> model_type mapping used by :meth:`get_models_details`.
+#: Tag -> model_type mapping used by :meth:`get_models_details`. The live
+#: tags (2026-11-16) are short: embed / tts / stt / image-gen / video-gen;
+#: none of the older long forms matched, so every model was "chat".
 _TAG_TYPE_MAP: dict[str, str] = {
+    "embed": "embedding",
+    "tts": "tts",
+    "stt": "stt",
+    "image-gen": "image-generation",
+    "video-gen": "text-to-video",
     "embeddings": "embedding",
     "embedding": "embedding",
     "reranker": "rerank",
@@ -325,12 +344,15 @@ class DeepInfraProvider(OpenAIProvider):
         params["min_p"] = {"type": "number", "minimum": 0.0, "maximum": 1.0}
         params["repetition_penalty"] = {"type": "number", "minimum": 0.0}
         params["reasoning"] = {"type": "object"}
-        # DeepInfra adds "none" to disable chain-of-thought entirely.
+        # Every level is accepted (verified live on DeepSeek-V4-Flash);
+        # "none" disables chain-of-thought entirely.
         params["reasoning_effort"] = {
             "type": "string",
-            "enum": ["none", "low", "medium", "high"],
+            "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
         }
-        params["service_tier"] = {"type": "string", "enum": ["default", "priority"]}
+        params["service_tier"] = {"type": "string", "enum": ["default", "priority", "flex"]}
+        for key in _DEEPINFRA_EXTRA_BODY_KEYS:
+            params.setdefault(key, {})
         # Internal passthrough container (allowed so pre-flight validation in
         # the parent's chat_completion does not reject it).
         params["extra_body"] = {"type": "object"}
@@ -474,6 +496,7 @@ class DeepInfraProvider(OpenAIProvider):
             max_out = meta.get("max_tokens")
 
             model_type, supports_vision, supports_tools = self._classify_model(model_id, tags)
+            supports_reasoning = "reasoning" in [str(t).lower() for t in tags]
 
             # Prefer an authoritative model card if present.
             if registry is not None:
@@ -500,6 +523,7 @@ class DeepInfraProvider(OpenAIProvider):
                     supports_streaming=True,
                     supports_tools=supports_tools,
                     supports_vision=supports_vision,
+                    supports_reasoning=supports_reasoning,
                     metadata={
                         "owned_by": m.get("owned_by"),
                         "created": m.get("created"),
@@ -953,7 +977,9 @@ class DeepInfraProvider(OpenAIProvider):
     ) -> dict[str, Any]:
         """Create text embeddings via DeepInfra's OpenAI-compatible endpoint.
 
-        DeepInfra supports only ``encoding_format="float"`` (no ``dimensions``).
+        ``dimensions`` (Matryoshka models), ``encoding_format`` ("float" or
+        "base64"), ``input_type`` and ``task`` pass through; those not in the
+        OpenAI SDK's signature travel in ``extra_body``.
 
         Args:
             input_texts: A string or list of strings to embed.
@@ -971,6 +997,9 @@ class DeepInfraProvider(OpenAIProvider):
             raise ProviderError(self.get_name(), "Client not initialized.")
         emb_model = model or DEFAULT_DEEPINFRA_EMBEDDING_MODEL
         kwargs.setdefault("encoding_format", "float")
+        extra = {k: kwargs.pop(k) for k in ("input_type", "task") if k in kwargs}
+        if extra:
+            kwargs["extra_body"] = {**(kwargs.get("extra_body") or {}), **extra}
         try:
             resp = await self._client.embeddings.create(
                 model=emb_model, input=input_texts, **kwargs

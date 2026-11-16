@@ -44,8 +44,8 @@
   "aliases": [],
   "description": "DeepSeek-V3.1 is post-trained on the top of DeepSeek-V3.1-Base, which is built upon the original V3 base checkpoint through a two-phase long context extension approach, following the methodology outlined in the original DeepSeek-V3 report. We have expanded our dataset by collecting additional long documents and substantially extending both training phases. The 32K extension phase has been increased 10-fold to 630B tokens, while the 128K extension phase has been extended by 3.3x to 209B tokens. Additionally, DeepSeek-V3.1 is trained using the UE8M0 FP8 scale data format to ensure compatibility with microscaling data formats.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 163840, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000002500'}, {'type': 'cached_prompt', 'unit': 'token', 'cost_usd': '0.0000001300', 'implicit': true}]}",
-    "output:{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'max': 32768, 'unit': 'token'}, 'tools': {'type': 'boolean'}, 'tool_choice': {'type': 'unknown'}, 'response_format': {'type': 'unknown'}, 'structured_outputs': {'type': 'boolean'}, 'reasoning': {'type': 'boolean'}, 'include_reasoning': {'type': 'boolean'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'max_length': {'value': 32768, 'unit': 'token'}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000009500'}]}"
+    "text",
+    "output:text"
   ],
   "source": "generated",
   "provider_extension": {

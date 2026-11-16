@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "The Qwen3 Embedding model series is the latest proprietary model of the Qwen family, specifically designed for text embedding and ranking tasks. Building upon the dense foundational models of the Qwen3 series, it provides a comprehensive range of text embeddings and reranking models in various sizes (0.6B, 4B, and 8B)",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000000500'}]}",
-    "output:{'type': 'rerank', 'supported_parameters': {'instruction': {'type': 'unknown'}}, 'pricing': []}"
+    "text",
+    "output:rerank"
   ],
   "source": "generated",
   "provider_extension": {

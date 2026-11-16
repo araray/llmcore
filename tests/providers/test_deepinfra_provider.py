@@ -122,8 +122,8 @@ def test_supported_parameters_superset(provider):
         "temperature",
     ):
         assert key in params, f"missing supported parameter: {key}"
-    assert params["reasoning_effort"]["enum"] == ["none", "low", "medium", "high"]
-    assert params["service_tier"]["enum"] == ["default", "priority"]
+    assert params["reasoning_effort"]["enum"] == ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+    assert params["service_tier"]["enum"] == ["default", "priority", "flex"]
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ async def test_transcribe_audio(provider):
         )
     )
     result = await provider.transcribe_audio(
-        b"\x00\x01audio", model="openai/whisper-large", language="en"
+        b"\x00\x01audio", model="openai/whisper-large-v3-turbo", language="en"
     )
     assert route.called
     assert result.text == "hello there"
@@ -347,7 +347,7 @@ async def test_transcribe_audio(provider):
     assert len(result.segments) == 2
     assert result.segments[0].text == "hello"
     assert result.segments[1].end == 2.5
-    assert result.model == "openai/whisper-large"
+    assert result.model == "openai/whisper-large-v3-turbo"
 
 
 @respx.mock

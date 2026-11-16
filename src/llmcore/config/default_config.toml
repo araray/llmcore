@@ -1349,16 +1349,19 @@ max_retries = 2
 
   # Default chat model. Pick any model from https://deepinfra.com/models.
   # Model addressing also supports "MODEL_NAME:VERSION" and "deploy_id:DEPLOY_ID".
-  # Examples (May 2026):
-  #   Chat:       deepseek-ai/DeepSeek-V3, meta-llama/Llama-3.3-70B-Instruct,
-  #               Qwen/Qwen3-235B-A22B, mistralai/Mistral-Small-3.2-24B-Instruct
-  #   Reasoning:  deepseek-ai/DeepSeek-R1 (use reasoning_effort / reasoning)
-  #   Vision:     Qwen/Qwen2.5-VL-32B-Instruct, meta-llama/Llama-3.2-11B-Vision-Instruct
-  #   Embedding:  Qwen/Qwen3-Embedding-8B, BAAI/bge-m3   (see [embedding.deepinfra])
+  # Examples (live /v1/models, 2026-11-16; 178 models):
+  #   Chat:       deepseek-ai/DeepSeek-V4-Flash (1M, reasoning, prompt cache),
+  #               deepseek-ai/DeepSeek-V4-Pro, openai/gpt-oss-120b,
+  #               zai-org/GLM-5.3, moonshotai/Kimi-K3
+  #   Vision:     models tagged "vlm" (get_models_details() reports them)
+  #   Embedding:  Qwen/Qwen3-Embedding-8B (dimensions=), BAAI/bge-m3
   #   TTS:        hexgrad/Kokoro-82M
-  #   STT:        openai/whisper-large
+  #   STT:        openai/whisper-large-v3-turbo (openai/whisper-large is gone)
   #   Image:      black-forest-labs/FLUX-1-schnell
-  default_model = "deepseek-ai/DeepSeek-V3"
+  default_model = "deepseek-ai/DeepSeek-V4-Flash"
+
+  # responses_api = "always" routes chat through DeepInfra's stateless
+  # /v1/openai/responses (function tools and reasoning; default "never").
 
   # Base URL (normally no need to change).
   # OpenAI-compatible surface (chat/embeddings/images): https://api.deepinfra.com/v1/openai
@@ -1376,13 +1379,19 @@ max_retries = 2
   # --- DeepInfra-specific request parameters ---
   # Passed as kwargs to chat_completion() and delivered via the OpenAI SDK
   # extra_body mechanism (version-independent):
-  #   reasoning_effort: "none" | "low" | "medium" | "high"  (reasoning models)
+  #   reasoning_effort: "none" | "minimal" | "low" | "medium" | "high" |
+  #                     "xhigh" | "max"  (reasoning models; effort= maps here)
   #   reasoning:        object  — fine-grained reasoning control
-  #   service_tier:     "default" | "priority"  (priority = +20% surcharge, faster)
+  #   service_tier:     "default" | "priority" | "flex"
   #   prompt_cache_key: str  — session-scoped explicit prompt-cache key
   #   top_k:            int   — top-k sampling
   #   min_p:            float — min-p sampling
   #   repetition_penalty: float
+  #   chat_template_kwargs, prompt_cache_options, cache_salt, fail_fast,
+  #   models (fallbacks), stop_token_ids, media_io_kwargs,
+  #   continue_final_message, ignore_eos
+  # Tool loops: put provider.assistant_replay_metadata(response) into the next
+  # assistant Message's metadata (carries reasoning_content back).
   # Standard OpenAI params (temperature, top_p, max_tokens, response_format,
   # tools, tool_choice, logprobs, top_logprobs, seed, stop, n, ...) are supported.
   #
@@ -1395,7 +1404,7 @@ max_retries = 2
   #
   # --- Speech / Image (provider methods) ---
   #   await provider.generate_speech(text, model="hexgrad/Kokoro-82M", response_format="mp3")
-  #   await provider.transcribe_audio(audio_bytes_or_path, model="openai/whisper-large")
+  #   await provider.transcribe_audio(audio_bytes_or_path, model="openai/whisper-large-v3-turbo")
   #   await provider.translate_audio(audio_bytes_or_path)
   #   await provider.generate_image("an astronaut on Mars", model="black-forest-labs/FLUX-1-schnell")
   #   await provider.create_embeddings(["text"], model="Qwen/Qwen3-Embedding-8B")
@@ -2680,7 +2689,7 @@ affinity = "session"
   #   Examples: "Qwen/Qwen3-Embedding-8B", "BAAI/bge-m3", "intfloat/e5-large-v2"
   default_model = "Qwen/Qwen3-Embedding-8B"
   # base_url = "https://api.deepinfra.com/v1/openai"
-  # NOTE: DeepInfra supports only encoding_format="float" (no `dimensions`).
+  # dimensions = 256   # Matryoshka models (e.g. Qwen3-Embedding-8B)
 
   [embedding.sentence_transformer]
   # Additional configuration for local `sentence-transformers` models.

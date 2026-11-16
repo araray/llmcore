@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "FLUX.1 Kontext [dev] is a 12-billion-parameter image editing model that transforms visuals based on natural language instructions. It allows highly consistent, multi-step edits and is released with open weights under a non-commercial license to empower artists and researchers.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'image', 'supported_parameters': {'width': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'height': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'num_inference_steps': {'type': 'integer', 'min': 1, 'max': 50}, 'guidance_scale': {'type': 'range', 'min': 0, 'max': 20}, 'n': {'type': 'integer', 'min': 1, 'max': 4}, 'seed': {'type': 'boolean'}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0100000000'}]}"
+    "text",
+    "output:image"
   ],
   "source": "generated",
   "provider_extension": {

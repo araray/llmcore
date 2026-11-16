@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — DeepInfra: dead STT default, model types, schema-2.4 cards, effort levels, dimensions
+
+Audited against the live API on 2026-11-16. Verified live through llmcore:
+discovery, embeddings with `dimensions`, the TTS→STT round trip, tool loops
+with reasoning replay (plain and streamed), and the Responses route.
+
+- **STT default** `openai/whisper-large` returned 404 and has left the
+  catalogue. It is now `openai/whisper-large-v3-turbo`.
+- **Model types**: the live tags are short (`embed`, `tts`, `stt`,
+  `image-gen`, `video-gen`, `vlm`). None matched, so all 178 models were "chat
+  with tools". The classifier now recognises them and reports `reasoning`.
+- **cardctl**: the `/openrouter/models` feed moved to schema 2.4, which nests
+  modalities, context, parameters and prices. Every model parsed with no
+  context, tools, reasoning or price, and 210 cards carried stringified dicts
+  as tags. The adapter now reads 2.4 (and still reads the flat shape) and
+  dedupes the feed (519 rows, 352 ids); the 210 card tags are repaired.
+- **Parameters**: `reasoning_effort` takes none through max (all verified),
+  `service_tier` takes `flex`, and the newer body fields are accepted
+  (`chat_template_kwargs`, `prompt_cache_options`, `cache_salt`, `fail_fast`,
+  `models`, `stop_token_ids`, `media_io_kwargs`, `continue_final_message`,
+  `ignore_eos`).
+- **Embeddings** keep `dimensions`, live-verified; it was dropped after older
+  docs. `input_type` and `task` pass through.
+- Default chat model `deepseek-ai/DeepSeek-V4-Flash`.
+
 ### Changed — Poe: effort per bot, live context windows, working native backend, retired bots
 
 Audited against the live API and fastapi_poe 0.0.83 on 2026-11-16. Verified

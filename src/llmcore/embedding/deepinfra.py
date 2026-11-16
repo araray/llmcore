@@ -9,9 +9,11 @@ thin subclass of :class:`~llmcore.embedding.openai.OpenAIEmbedding` that:
 * defaults ``base_url`` to the DeepInfra OpenAI-compatible endpoint,
 * resolves the API key from ``DEEPINFRA_TOKEN`` / ``DEEPINFRA_API_KEY`` (or the
   configured ``api_key`` / ``api_key_env_var``),
-* defaults the model to ``Qwen/Qwen3-Embedding-8B``, and
-* never sends a ``dimensions`` parameter — DeepInfra supports only
-  ``encoding_format="float"``.
+* defaults the model to ``Qwen/Qwen3-Embedding-8B``.
+
+``dimensions`` is sent when configured: DeepInfra accepts it for Matryoshka
+models (Qwen3-Embedding-8B with ``dimensions=256`` returned 256-dimensional
+vectors, live 2026-11-16). It used to be dropped, after older docs.
 
 Reference: https://docs.deepinfra.com/apis/embeddings
 """
@@ -41,8 +43,7 @@ class DeepInfraEmbedding(OpenAIEmbedding):
 
     All request/response handling is inherited from
     :class:`OpenAIEmbedding`; only the credential resolution and DeepInfra
-    defaults differ.  The ``dimensions`` parameter is intentionally dropped
-    because DeepInfra does not support it.
+    defaults differ.
     """
 
     def __init__(self, config: dict[str, Any]):
@@ -67,9 +68,6 @@ class DeepInfraEmbedding(OpenAIEmbedding):
                         break
             if resolved:
                 cfg["api_key"] = resolved
-
-        # DeepInfra does not accept a ``dimensions`` parameter.
-        cfg.pop("dimensions", None)
 
         super().__init__(cfg)
         logger.info(

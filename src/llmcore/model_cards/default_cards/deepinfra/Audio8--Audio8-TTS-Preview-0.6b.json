@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "A 0.6B-parameter multilingual text-to-speech model with zero-shot voice cloning, supporting 11 languages.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'character', 'cost_usd': '0.0000050000'}]}"
+    "text",
+    "output:speech"
   ],
   "source": "generated",
   "provider_extension": {
