@@ -153,7 +153,7 @@ from ..models_multimodal import (
 )
 from ..tokens import EstimateCounter as _EstimateCounter
 from . import openai_responses as rsp
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 from ._media_bridge import ZaiVideoJobs, LegacyMediaBridge
 from .openai_provider import nearest_effort
 
@@ -856,6 +856,7 @@ class ZaiProvider(ZaiVideoJobs, LegacyMediaBridge, BaseProvider):
         (as ``replay_reasoning_content``) for :meth:`assistant_replay_metadata`."""
         reasoning: list[str] = []
         try:
+            _replay_tail: dict[str, Any] = {}
             async for chunk in stream:
                 for choice in chunk.get("choices") or []:
                     if choice.get("index", 0) != 0:
@@ -865,6 +866,7 @@ class ZaiProvider(ZaiVideoJobs, LegacyMediaBridge, BaseProvider):
                         reasoning.append(delta["reasoning_content"])
                     if choice.get("finish_reason") and reasoning:
                         delta["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk, _replay_tail)
                 yield chunk
         except (ProviderError, ContextLengthError):
             raise

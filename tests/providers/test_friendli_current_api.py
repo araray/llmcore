@@ -72,7 +72,9 @@ def test_non_stream_replay_metadata():
     [("zai-org/GLM-5.3", {"effort": "medium"}, {"reasoning_effort": "high"}),
      ("zai-org/GLM-5.3", {"effort": "minimal"}, {"reasoning_effort": "low"}),
      ("zai-org/GLM-5.1", {"effort": "high"}, {}),  # toggle only: no effort level
-     ("zai-org/GLM-5.1", {"effort": "none"}, {"enable_thinking": False})],
+     ("zai-org/GLM-5.1", {"effort": "none"}, {"enable_thinking": False}),
+     # no toggle: "none" is the lowest level, not a disable (reasoning leaked, live)
+     ("zai-org/GLM-5.3", {"effort": "none"}, {"reasoning_effort": "low"})],
 )
 def test_effort_follows_the_catalogue(model, kwargs, expected):
     p = FriendliProvider({"api_key": "flp_test", "backend": "httpx"})
@@ -81,3 +83,22 @@ def test_effort_follows_the_catalogue(model, kwargs, expected):
         "zai-org/GLM-5.1": {"reasoning_options": [{"type": "toggle"}]},
     }
     assert p._map_effort(model, dict(kwargs)) == expected
+
+
+@respx.mock
+async def test_replay_survives_a_trailing_usage_chunk():
+    """Live (2026-11-16): with usage on, GLM-5.3 ends with a usage-only chunk,
+    and assistant_replay_metadata(chunks[-1]) returned nothing."""
+    usage_only = {"id": "x", "object": "chat.completion.chunk", "created": 1, "model": "zai-org/GLM-5.3",
+                  "choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}}
+    body = ("".join(f"data: {json.dumps(c)}\n\n" for c in (
+        _chunk({"role": "assistant", "content": "", "reasoning_content": "Thin"}),
+        _chunk({"reasoning_content": "king"}),
+        _chunk({"content": "pong"}, "stop"),
+        usage_only)) + "data: [DONE]\n\n").encode()
+    respx.post(URL).mock(return_value=httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body))
+    p = FriendliProvider({"api_key": "flp_test", "backend": "httpx"})
+    out = [c async for c in await p.chat_completion([Message(role=Role.USER, content="hi")], "zai-org/GLM-5.3", stream=True)]
+    assert out[-1].get("usage")
+    assert p.assistant_replay_metadata(out[-1]) == {"reasoning_content": "Thinking"}
+    assert "".join(p.extract_delta_content(c) for c in out) == "pong"

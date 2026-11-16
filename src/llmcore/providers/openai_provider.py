@@ -89,7 +89,7 @@ from ..models import Role as LLMCoreRole
 from ..tokens import count_tokens as _count_tokens
 from ..tokens import get_counter as _get_token_counter
 from . import openai_responses as rsp
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import AsyncIterator
@@ -1364,6 +1364,7 @@ class OpenAIProvider(BaseProvider):
         check_errors = bool(profile and profile.in_band_errors)
         text: list[str] = []
         details: list[dict[str, Any]] = []
+        _replay_tail: dict[str, Any] = {}
         async for chunk in stream:
             if check_errors and chunk.get("error"):
                 raise self._in_band_error(chunk["error"], model_name)
@@ -1384,6 +1385,7 @@ class OpenAIProvider(BaseProvider):
                         delta["replay_reasoning_content"] = "".join(text)
                     if details:
                         delta["replay_reasoning_details"] = [dict(d) for d in details]
+            carry_replay_to_tail(chunk, _replay_tail)
             yield chunk
 
     # ------------------------------------------------------------------

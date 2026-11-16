@@ -86,7 +86,7 @@ from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
 from . import openai_responses as rsp
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 
 logger = logging.getLogger(__name__)
 
@@ -750,6 +750,7 @@ class DeepSeekProvider(BaseProvider):
                     # send back (assistant_replay_metadata).
                     reasoning: list[str] = []
                     try:
+                        _replay_tail: dict[str, Any] = {}
                         async for chunk in resp:  # type: ignore
                             chunk_dict = chunk.model_dump(exclude_none=True)
                             if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
@@ -767,6 +768,7 @@ class DeepSeekProvider(BaseProvider):
                                     choice.setdefault("delta", delta)["replay_reasoning_content"] = (
                                         "".join(reasoning)
                                     )
+                            carry_replay_to_tail(chunk_dict, _replay_tail)
                             yield chunk_dict
                     except OpenAIError as e:
                         raise self._map_error(e, model_name) from e

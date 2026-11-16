@@ -604,3 +604,26 @@ class BaseProvider(abc.ABC):
                             "llm.success": error is None,
                         },
                     )
+
+
+def carry_replay_to_tail(chunk: dict[str, Any], state: dict[str, Any]) -> None:
+    """Keep stream replay data on the last chunk a caller sees.
+
+    Stream wrappers put the turn's reasoning (``replay_*`` keys) on the delta
+    of the chunk with the finish reason. With usage reporting on, OpenAI-
+    compatible servers send one more chunk after it, usage only and no
+    choices, so ``assistant_replay_metadata(chunks[-1])`` found nothing
+    (Friendli GLM-5.3, live 2026-11-16). Call this on every chunk before
+    yielding it: it remembers the replay keys and copies them into a trailing
+    choice-less chunk (no content, no second finish reason).
+    """
+    choices = chunk.get("choices") or []
+    for choice in choices:
+        delta = choice.get("delta") or {}
+        found = {k: v for k, v in delta.items() if k.startswith("replay_")}
+        if found:
+            state.clear()
+            state.update(found)
+            return
+    if not choices and state:
+        chunk["choices"] = [{"index": 0, "delta": dict(state), "finish_reason": None}]

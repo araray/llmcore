@@ -42,8 +42,9 @@
     }
   },
   "lifecycle": {
-    "status": "deprecated",
-    "release_date": "2026-02-19"
+    "status": "retired",
+    "release_date": "2026-02-19",
+    "notes": "Absent from Friendli's serverless catalogue (GET /models, 2026-11-16)."
   },
   "license": null,
   "open_weights": true,

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — live re-verification after top-ups (DeepSeek, Friendli)
+
+- **Streaming replay survives a trailing usage chunk.** With usage reporting
+  on, OpenAI-compatible servers end a stream with a usage-only chunk, and
+  `assistant_replay_metadata(chunks[-1])` found nothing. Friendli GLM-5.3 hit
+  this live. The replay keys now ride on that chunk too, via
+  `carry_replay_to_tail`, in the shared OpenAI-compatible wrapper and the
+  DeepSeek, Friendli, Kimi, Z.ai and Hugging Face streams.
+- **Friendli:**
+  - `effort="none"` disabled thinking even on GLM-5.3, which has no toggle,
+    so its reasoning leaked into the answer. It now maps to the lowest level
+    on models without a toggle.
+  - The SDK backend's listing failed validation (friendli 0.16.6 requires
+    fields the live API omits); it now falls back to reading `/models` over
+    HTTP.
+  - `DeepSeek-V3.2` and `MiniMax-M2.5` are retired; they are no longer
+    served.
+- **Verified live:**
+  - DeepSeek: chat and streaming with reasoning replay; the tool loop; effort
+    none/low/high/max; native search; the Responses lane; TTS → ASR (exact
+    text); OCR (15 pages).
+  - Friendli, both backends: chat, streaming, tool loop, and effort on
+    GLM-5.3, GLM-5.2 and Gemma 4.
+
 ### Added — DeepSeek: speech, transcription and OCR tool APIs
 
 - `/v1/tools/tts` (voices `stella` and `tide`; WAV or 24 kHz PCM, streamed),

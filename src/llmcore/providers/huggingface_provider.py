@@ -87,7 +87,7 @@ from ..models_multimodal import (
     TranscriptionSegment,
 )
 from ..tokens import EstimateCounter as _EstimateCounter
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..media.models import (
@@ -620,6 +620,7 @@ class HuggingFaceProvider(BaseProvider):
         """
         reasoning: list[str] = []
         try:
+            _replay_tail: dict[str, Any] = {}
             async for chunk in response:
                 chunk_dict = self._normalize_hf_response(chunk)
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(
@@ -639,6 +640,7 @@ class HuggingFaceProvider(BaseProvider):
                         reasoning.append(piece)
                     if choice.get("finish_reason") and reasoning and isinstance(choice.get("delta"), dict):
                         choice["delta"]["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk, _replay_tail)
                 yield chunk_dict
         except ProviderError:
             raise

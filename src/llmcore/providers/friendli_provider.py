@@ -151,7 +151,7 @@ from ..models_multimodal import (
     TranscriptionResult,
 )
 from ..tokens import EstimateCounter as _EstimateCounter
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
@@ -628,17 +628,23 @@ class FriendliProvider(BaseProvider):
         (not fetched yet) values pass through.
         """
         effort = kwargs.pop("effort", None)
+        entry = (self._catalog or {}).get(model_name) if getattr(self, "_catalog", None) else None
+        options = (entry or {}).get("reasoning_options") or []
         if effort is not None and "reasoning_effort" not in kwargs:
             effort = str(effort).strip().lower()
-            if effort == "none":
+            has_toggle = any(o.get("type") == "toggle" for o in options)
+            if effort == "none" and (has_toggle or entry is None):
                 kwargs.setdefault("enable_thinking", False)
+            elif effort == "none":
+                # GLM-5.3 has no toggle and always thinks; disabling it made
+                # the reasoning leak into the answer (live). Least thinking
+                # is its lowest level.
+                kwargs["reasoning_effort"] = "minimal"
             else:
                 kwargs["reasoning_effort"] = effort
-        entry = (self._catalog or {}).get(model_name) if getattr(self, "_catalog", None) else None
         requested = kwargs.get("reasoning_effort")
         if entry is None or requested is None:
             return kwargs
-        options = entry.get("reasoning_options") or []
         levels = next((o.get("values") for o in options if o.get("type") == "effort"), None)
         if not levels:
             logger.debug("Friendli model %s takes no effort level; reasoning_effort dropped.", model_name)
@@ -665,8 +671,17 @@ class FriendliProvider(BaseProvider):
 
         raw: list[dict[str, Any]] = []
         if self._backend == "sdk":
-            resp = await self._run_sdk(lambda: self._sdk_client.serverless.model.models())
-            raw = [self._normalize_obj(m) for m in (getattr(resp, "data", None) or [])]
+            try:
+                resp = await self._run_sdk(lambda: self._sdk_client.serverless.model.models())
+                raw = [self._normalize_obj(m) for m in (getattr(resp, "data", None) or [])]
+            except Exception as exc:
+                # friendli 0.16.6's response models require fields the live
+                # listing omits (pricing.cache_write, deprecation_date ...;
+                # 2026-11-16), so validation fails on every entry. The same
+                # endpoint read over HTTP is complete.
+                logger.debug("Friendli SDK listing failed (%s); reading /models over HTTP.", exc)
+                resp = await self._raw_get("/models")
+                raw = resp.json().get("data", []) or []
         else:
             # Both the openai and httpx backends read the catalog over raw HTTP:
             # the Friendli listing is a superset of the OpenAI /models shape and
@@ -1133,6 +1148,7 @@ class FriendliProvider(BaseProvider):
         ``replay_reasoning_content``) for :meth:`assistant_replay_metadata`."""
         reasoning: list[str] = []
         try:
+            _replay_tail: dict[str, Any] = {}
             async for chunk in stream:
                 for choice in chunk.get("choices") or []:
                     if choice.get("index", 0) != 0:
@@ -1143,6 +1159,7 @@ class FriendliProvider(BaseProvider):
                         reasoning.append(piece)
                     if choice.get("finish_reason") and reasoning:
                         delta["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk, _replay_tail)
                 yield chunk
         except (ProviderError, ContextLengthError):
             raise

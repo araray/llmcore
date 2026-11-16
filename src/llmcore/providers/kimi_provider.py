@@ -136,7 +136,7 @@ from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from . import openai_responses as rsp
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
@@ -926,6 +926,7 @@ class KimiProvider(BaseProvider):
         reasoning as ``replay_reasoning_content`` (for assistant_replay_metadata)."""
         reasoning: list[str] = []
         try:
+            _replay_tail: dict[str, Any] = {}
             async for chunk in resp:
                 chunk_dict = chunk.model_dump(exclude_none=True)
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
@@ -938,6 +939,7 @@ class KimiProvider(BaseProvider):
                         reasoning.append(delta["reasoning_content"])
                     if choice.get("finish_reason") and reasoning:
                         delta["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk_dict, _replay_tail)
                 yield chunk_dict
         except OpenAIError as e:
             raise self._map_error(e, model_name) from e

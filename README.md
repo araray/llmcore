@@ -684,7 +684,7 @@ the provider support matrix.
 | **Qwen** | `qwen3-max`, `qwen3-coder-480b` | direct | Streaming, tools |
 | **Groq** | Llama, Qwen, Whisper, Kimi on LPU hardware | direct + SDK | Low-latency inference |
 | **Together** | Open-weights catalog (Llama, Qwen, DeepSeek, FLUX) | direct + SDK | Chat, images, embeddings |
-| **FriendliAI** | `zai-org/GLM-5.3`, `deepseek-ai/DeepSeek-V3.2` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
+| **FriendliAI** | `zai-org/GLM-5.3`, `zai-org/GLM-5.3-Flash`, `google/gemma-4-31B-it` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
 | **DeepInfra** | `Qwen3-235B-A22B`, DeepSeek, Llama, FLUX, Whisper, Kokoro | direct + SDK | Chat, vision, TTS/ASR, images, embeddings |
 | **OpenRouter** | 620 cards spanning most vendors | direct + SDK | One key, many vendors |
 | **Command Code** | `claude-opus-5-5`, `gpt-6-sol`, `moonshotai/Kimi-K3`, `zai-org/GLM-5.3`, `deepseek/deepseek-v4.1-flash` + 93 more | direct + SDK | One key; Messages / Responses / Chat Completions routed per model, ZDR, self-healing routes, Jev via `system_one()` |
