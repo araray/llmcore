@@ -236,6 +236,21 @@ async for audio in provider.stream_speech(text_pieces(),         # AsyncIterable
 `open_speech_socket(...)` gives the manual `DeepgramSpeechStream`
 (`send_text(str)` / `flush()` / `clear()` / `close()`; iterate for audio bytes).
 
+**Flux TTS voices** (`flux-<voice>-<lang>`, e.g. `flux-haley-en`) work on every
+path. REST uses `/v2/speak`, and the WebSocket uses `speak.v2`, which takes the
+extra `expressivity`, `normalize_volume` and `tag` parameters. Aura voices stay
+on `speak.v1`. On a Flux socket, `clear()` sends `Interrupt`, the v2
+counterpart of `Clear`. An in-band v2 `Error` frame (for example `DATA-0002`,
+an inline pause marker sent over the WebSocket) raises `ProviderError` rather
+than ending the stream silently. Both routes were verified live on 2026-11-16.
+
+```python
+async for audio in provider.stream_speech(llm_tokens(), model="flux-haley-en",
+                                           response_format="linear16", sample_rate=24000,
+                                           expressivity=1):
+    play(audio)
+```
+
 ---
 
 ## 10. Voice Agent — `run_voice_agent` / `open_voice_agent`

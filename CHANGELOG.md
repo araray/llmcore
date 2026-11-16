@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Deepgram: Flux TTS over the WebSocket
+
+- Incremental text into `stream_speech()` and `open_speech_socket()` with a
+  Flux voice used to raise "not supported yet". These calls now use
+  `speak.v2` (Speak / Flush / Interrupt / Close; `expressivity`,
+  `normalize_volume`, `tag`). Aura stays on `speak.v1`.
+- `clear()` sends `Interrupt` on Flux.
+- In-band `Error` frames raise `ProviderError`, with the Deepgram code.
+- Verified live: `flux-haley-en` over v2 and Aura over v1 each returned
+  their own audio.
+
 ### Added — ElevenLabs: realtime transcription (`asr_stream`)
 
 - **`open_transcription_session()`** speaks Realtime Scribe

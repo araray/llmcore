@@ -3,6 +3,8 @@
 
 - Flux TTS (``flux-<voice>-<lang>``) is GA on /v2/speak (speak.v2) with
   expressivity / normalize_volume / priority; Aura stays on /v1/speak;
+- Flux TTS over the WebSocket speaks speak.v2 (Speak/Flush/Interrupt/Close,
+  in-band Error frames); verified live with flux-haley-en;
 - the SDK's transcribe_file/transcribe_url take no channels/sample_rate, so
   passing them (as the documented config allows) raised TypeError.
 """
@@ -39,15 +41,76 @@ async def test_flux_routes_to_speak_v2_with_its_parameters():
     p._client.speak.v1.audio.generate.assert_not_called()
 
 
-async def test_flux_websocket_input_is_refused_clearly():
+class _FakeSpeakSocket:
+    """Stands in for the SDK's AsyncV2SocketClient (speak.v2)."""
+
+    def __init__(self, frames):
+        self.frames = frames
+        self.sent = []
+
+    async def send_speak(self, message):
+        self.sent.append(("Speak", message.text))
+
+    async def send_flush(self, message=None):
+        self.sent.append(("Flush", None))
+
+    async def send_interrupt(self, message=None):
+        self.sent.append(("Interrupt", None))
+
+    async def send_close(self, message=None):
+        self.sent.append(("Close", None))
+
+    def __aiter__(self):
+        async def gen():
+            import asyncio
+
+            for f in self.frames:
+                await asyncio.sleep(0.01)  # a server answers after the text arrives
+                yield f
+        return gen()
+
+
+def _connect_returning(socket, seen):
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def connect(**params):
+        seen.update(params)
+        yield socket
+
+    return connect
+
+
+async def test_flux_websocket_input_uses_speak_v2():
     p = DeepgramProvider({"api_key": "k", "backend": "sdk"})
+    socket = _FakeSpeakSocket([{"type": "Connected"}, b"aud", b"io", {"type": "Flushed", "speech_id": "s1"}])
+    seen: dict = {}
+    p._client = MagicMock()
+    p._client.speak.v2.connect = _connect_returning(socket, seen)
 
     async def text():
-        yield "hi"
+        yield "Hello "
+        yield "there."
 
-    with pytest.raises(ProviderError, match="speak.v2"):
-        async for _ in p.stream_speech(text(), model="flux-haley-en"):
-            pass
+    audio = b"".join([c async for c in p.stream_speech(text(), model="flux-haley-en", expressivity=1, tag="t")])
+    assert audio == b"audio"
+    assert seen["model"] == "flux-haley-en" and seen["expressivity"] == 1 and seen["tag"] == "t"
+    assert [k for k, _ in socket.sent][:3] == ["Speak", "Speak", "Flush"] and socket.sent[-1][0] == "Close"
+    p._client.speak.v1.connect.assert_not_called()
+
+
+async def test_flux_error_frame_raises_and_open_socket_interrupts():
+    p = DeepgramProvider({"api_key": "k", "backend": "sdk"})
+    socket = _FakeSpeakSocket([b"x", {"type": "Error", "code": "DATA-0002", "description": "pause marker over WebSocket"}])
+    p._client = MagicMock()
+    p._client.speak.v2.connect = _connect_returning(socket, {})
+    async with p.open_speech_socket(model="flux-haley-en") as stream:
+        await stream.send_text("hi")
+        await stream.clear()
+        with pytest.raises(ProviderError, match="DATA-0002") as info:
+            async for _ in stream:
+                pass
+    assert ("Interrupt", None) in socket.sent and info.value.retryable is False
 
 
 async def test_sdk_transcription_drops_direct_only_framing():
