@@ -4,13 +4,15 @@
 Fetches models from the DeepSeek ``/models`` endpoint and enriches them
 with V4-specific metadata (MoE architecture, thinking mode, context length).
 
-DeepSeek V4 models (2026-04):
-- ``deepseek-v4-flash`` — 284B total / 13B active, 1M context
-- ``deepseek-v4-pro`` — 1.6T total / 49B active, 1M context
+The listing itself now carries ``context_window``, ``max_output_tokens``,
+``input_modalities`` and ``effort.supported_levels`` (2026-11); those win over
+the static metadata below.
 
-Legacy aliases (retiring 2026-07-24):
-- ``deepseek-chat`` → deepseek-v4-flash (non-thinking)
-- ``deepseek-reasoner`` → deepseek-v4-flash (thinking)
+Models (2026-11-16):
+- ``deepseek-flash`` — DeepSeek-V4.1-Flash, text + image, 1M context
+- ``deepseek-v4-pro`` — 1.6T total / 49B active, 1M context
+Retired: ``deepseek-v4-flash`` (2026-09-10, routed to V4.1-Flash),
+``deepseek-chat`` / ``deepseek-reasoner`` (2026-07-24).
 """
 
 from __future__ import annotations
@@ -23,13 +25,13 @@ from .openai_compat import OpenAICompatAdapter
 # V4 model metadata keyed by model_id.
 _V4_MODELS: dict[str, dict[str, Any]] = {
     "deepseek-v4-flash": {
-        "context_length": 1_000_000,
+        "context_length": 1_048_576,
         "parameter_count": "284B",
         "active_parameters": "13B",
         "architecture_type": "moe",
     },
     "deepseek-v4-pro": {
-        "context_length": 1_000_000,
+        "context_length": 1_048_576,
         "parameter_count": "1.6T",
         "active_parameters": "49B",
         "architecture_type": "moe",
@@ -77,4 +79,13 @@ class DeepSeekAdapter(OpenAICompatAdapter):
         else:
             normalized.architecture_type = "moe"
 
+        # The live listing's own fields (2026-11) are authoritative.
+        if raw.get("context_window"):
+            normalized.context_length = int(raw["context_window"])
+        if raw.get("max_output_tokens"):
+            normalized.max_output_tokens = int(raw["max_output_tokens"])
+        if "image" in (raw.get("input_modalities") or []):
+            normalized.supports_vision = True
+        if (raw.get("effort") or {}).get("supported_levels"):
+            normalized.supports_reasoning = True
         return normalized

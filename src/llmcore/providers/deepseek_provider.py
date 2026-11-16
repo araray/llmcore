@@ -2,21 +2,26 @@
 """
 DeepSeek API provider implementation for the LLMCore library.
 
-Handles interactions with the DeepSeek API (V4-Flash, V4-Pro models).
-Uses the OpenAI-compatible chat completions endpoint with DeepSeek-specific
-extensions:
+Handles interactions with the DeepSeek API (``deepseek-flash`` = V4.1-Flash,
+``deepseek-v4-pro``). Uses the OpenAI-compatible chat completions endpoint with
+DeepSeek-specific extensions:
 
-- **Thinking mode**: ``thinking.type = "enabled" | "disabled"`` toggle plus
-  ``reasoning_effort = "high" | "max"`` control (wire values; canonical
-  ``low``..``max`` inputs are folded via ``_EFFORT_MAP`` below).
-- **Reasoning content**: ``reasoning_content`` field on assistant messages
-  (both streaming delta and non-streaming response).
+- **Thinking mode**: on by default; ``thinking.type = "enabled" | "disabled"``
+  plus ``reasoning_effort = "low" | "high" | "max"``. llmcore's ``effort``
+  maps onto them as DeepSeek documents (minimal/low -> low, medium/high/xhigh
+  -> high, max -> max, none -> thinking off).
+- **Reasoning content**: ``reasoning_content`` on assistant messages. With
+  tools, DeepSeek requires it on every earlier assistant turn (a 400
+  otherwise); :meth:`assistant_replay_metadata` returns it, streams included.
+- **Built-in tools** (``deepseek-flash``): ``native_search=True`` adds
+  ``deepseek_web_search``; ``extra_tools`` passes others such as
+  ``{"type": "deepseek_read_url"}``; ``safety_check={"level": "high"}``.
 - **Cache-aware token accounting**: ``prompt_cache_hit_tokens`` and
   ``prompt_cache_miss_tokens`` in the usage object.
-- **Beta endpoints**: Chat Prefix Completion, FIM Completion, and strict
-  tool schema mode via ``https://api.deepseek.com/beta``.
-- **Tool calls under thinking mode**: preserves ``reasoning_content`` when
-  tool calls are present (required by the DeepSeek API for multi-turn).
+- **Beta endpoint**: Chat Prefix Completion and strict tool schemas via
+  ``https://api.deepseek.com/beta``.
+- **Responses API**: ``responses_api = "always"`` routes chat through
+  DeepSeek's native ``/responses`` (added 2026-08 for Codex).
 
 Transport: Uses the ``openai`` Python SDK (AsyncOpenAI) pointed at the
 DeepSeek base URL.  The SDK handles SSE parsing, keep-alive tolerance,
@@ -26,7 +31,7 @@ References:
   - https://api-docs.deepseek.com/
   - https://api-docs.deepseek.com/guides/thinking_mode
   - https://api-docs.deepseek.com/api/create-chat-completion
-  - DeepSeek-V4 technical report (2026)
+  - https://api-docs.deepseek.com/updates (audited 2026-11-16)
 """
 
 from __future__ import annotations
@@ -80,6 +85,7 @@ from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
+from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -129,34 +135,41 @@ _BASE_URL_STABLE = "https://api.deepseek.com"
 #: Beta endpoint for prefix completion, FIM, and strict tool schema.
 _BASE_URL_BETA = "https://api.deepseek.com/beta"
 
-#: Default model when none configured.
-_DEFAULT_MODEL = "deepseek-v4-pro"
+#: Default model when none configured. ``deepseek-flash`` is V4.1-Flash
+#: (multimodal, the built-in web/URL tools); V4 Flash itself was retired on
+#: 2026-09-10.
+_DEFAULT_MODEL = "deepseek-flash"
 
-#: Hardcoded context length map.  V4 models natively support 1M tokens.
+#: Context windows from GET /models (2026-11-16): ``context_window`` 1048576.
+#: Live discovery (``get_models_details``) refreshes them.
 _CONTEXT_LENGTHS: dict[str, int] = {
-    "deepseek-v4-flash": 1_000_000,
-    "deepseek-v4-pro": 1_000_000,
-    # Legacy compatibility aliases (retiring 2026-07-24)
-    "deepseek-chat": 131_072,
-    "deepseek-reasoner": 131_072,
-    # Older snapshot IDs
-    "deepseek-v3.2": 131_072,
-    "deepseek-r1": 131_072,
+    "deepseek-flash": 1_048_576,
+    "deepseek-v4-pro": 1_048_576,
+    # Retired 2026-09-10; still accepted and served by V4.1-Flash.
+    "deepseek-v4-flash": 1_048_576,
+    "deepseek-v4-flash-vision-exp": 1_048_576,
 }
+
+#: Models whose built-in tools (deepseek_web_search, deepseek_read_url) are
+#: documented (2026-11-13 changelog: V4.1-Flash).
+_BUILTIN_TOOL_MODELS = ("deepseek-flash", "deepseek-v4-flash")
 
 #: Valid thinking mode types.
 ThinkingType = Literal["enabled", "disabled"]
 
-#: Valid reasoning effort levels.
-ReasoningEffort = Literal["high", "max"]
+#: Valid reasoning effort levels (GET /models: supported_levels).
+ReasoningEffort = Literal["low", "high", "max"]
 
-#: Reasoning effort normalization map (DeepSeek folds low/medium → high).
+#: llmcore effort -> DeepSeek effort, as api-docs.deepseek.com/guides/
+#: thinking_mode maps them server-side. "none" turns thinking off instead.
 _EFFORT_MAP: dict[str, str] = {
-    "low": "high",
+    "minimal": "low",
+    "low": "low",
     "medium": "high",
     "high": "high",
-    "xhigh": "max",
+    "xhigh": "high",
     "max": "max",
+    "ultra": "max",
 }
 
 
@@ -173,9 +186,11 @@ class DeepSeekProvider(BaseProvider):
       (default: ``"enabled"``).
     - ``reasoning_effort`` — Default reasoning effort; accepts the canonical
       values ``low | medium | high | xhigh | max`` and folds them to the
-      DeepSeek wire vocabulary via ``_EFFORT_MAP`` (``low``/``medium`` →
-      ``"high"``, ``xhigh`` → ``"max"``; unrecognized values fall back to
+      DeepSeek wire vocabulary via ``_EFFORT_MAP`` (``minimal`` → ``"low"``,
+      ``medium``/``xhigh`` → ``"high"``; unrecognized values fall back to
       ``"high"``; default: ``"high"``).
+    - ``responses_api`` — ``"never"`` (default, Chat Completions) or
+      ``"always"`` (DeepSeek's native ``/responses``).
     """
 
     default_model: str
@@ -229,6 +244,15 @@ class DeepSeekProvider(BaseProvider):
 
         effort_raw = config.get("reasoning_effort", "high")
         self._default_reasoning_effort = _EFFORT_MAP.get(effort_raw, "high")  # type: ignore[assignment]
+
+        responses_api = str(config.get("responses_api", "never")).lower()
+        if responses_api not in ("never", "always"):
+            raise ConfigError(
+                f"DeepSeek responses_api must be 'never' or 'always', not {responses_api!r}."
+            )
+        self.responses_api = responses_api
+        #: model id -> {"context": int, "efforts": [...], "vision": bool} from /models
+        self._discovered: dict[str, dict[str, Any]] = {}
 
         # --- Clients ---
         base_url = config.get("base_url", _BASE_URL_STABLE)
@@ -288,18 +312,29 @@ class DeepSeekProvider(BaseProvider):
                 # Only include deepseek models
                 if not mid.startswith("deepseek"):
                     continue
+                # The listing carries context_window, max_output_tokens,
+                # input_modalities and effort levels (2026-11).
+                extra = getattr(m, "model_extra", None) or {}
+                inputs = extra.get("input_modalities") or []
+                efforts = (extra.get("effort") or {}).get("supported_levels") or []
+                if extra.get("context_window"):
+                    self._discovered[mid] = {
+                        "context": int(extra["context_window"]),
+                        "efforts": list(efforts),
+                        "vision": "image" in inputs,
+                    }
                 ctx = self.get_max_context_length(mid)
 
                 # Check model card for capabilities
                 supports_tools = True  # All V4 models support tools
-                supports_vision = False  # No vision support yet
+                supports_vision = "image" in inputs
                 if registry:
                     card = registry.get(provider, mid)
                     if card and card.capabilities:
                         supports_tools = (
                             card.capabilities.tool_use or card.capabilities.function_calling
                         )
-                        supports_vision = card.capabilities.vision
+                        supports_vision = supports_vision or card.capabilities.vision
 
                 result.append(
                     ModelDetails(
@@ -309,10 +344,14 @@ class DeepSeekProvider(BaseProvider):
                         supports_tools=supports_tools,
                         supports_vision=supports_vision,
                         provider_name=provider,
+                        supports_reasoning=True,
                         metadata={
                             "owned_by": m.owned_by,
                             "created": m.created,
                             "supports_thinking": True,
+                            "name": extra.get("name"),
+                            "max_output_tokens": extra.get("max_output_tokens"),
+                            "effort_levels": efforts,
                         },
                     )
                 )
@@ -340,13 +379,25 @@ class DeepSeekProvider(BaseProvider):
             },
             "reasoning_effort": {
                 "type": "string",
-                "enum": ["low", "medium", "high", "xhigh", "max"],
+                "enum": ["minimal", "low", "medium", "high", "xhigh", "max"],
             },
+            # llmcore's cross-provider knob: "none" turns thinking off.
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
+            # Built-in tools and safety (deepseek-flash, 2026-11-13).
+            "native_search": {"type": "boolean"},
+            "extra_tools": {"type": "array", "items": {"type": "object"}},
+            "safety_check": {"type": "object"},
+            "parallel_tool_calls": {"type": "boolean"},
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
         """Return the maximum context length for a DeepSeek model."""
         model_name = model or self.default_model
+        if model_name in self._discovered:
+            return self._discovered[model_name]["context"]
         limit = _CONTEXT_LENGTHS.get(model_name)
         if limit is not None:
             return limit
@@ -360,9 +411,9 @@ class DeepSeekProvider(BaseProvider):
         except Exception:
             pass
 
-        # V4 models all have 1M context
-        if "v4" in model_name:
-            return 1_000_000
+        # V4 / V4.1 models all have a 1M context
+        if "v4" in model_name or model_name.startswith("deepseek-flash"):
+            return 1_048_576
 
         # Conservative fallback for unknown models
         logger.warning(
@@ -387,6 +438,13 @@ class DeepSeekProvider(BaseProvider):
         # Extract thinking from kwargs (remove so it doesn't go to OpenAI SDK)
         thinking = kwargs.pop("thinking", None)
         reasoning_effort = kwargs.pop("reasoning_effort", None)
+        effort = kwargs.pop("effort", None)
+        if effort is not None:
+            effort = str(effort).strip().lower()
+            if effort == "none":
+                thinking = thinking if thinking is not None else {"type": "disabled"}
+            elif reasoning_effort is None:
+                reasoning_effort = effort
 
         # Build thinking object
         if thinking is None:
@@ -406,7 +464,7 @@ class DeepSeekProvider(BaseProvider):
         if reasoning_effort is None:
             effort = self._default_reasoning_effort
         else:
-            effort = _EFFORT_MAP.get(str(reasoning_effort), "high")
+            effort = _EFFORT_MAP.get(str(reasoning_effort).lower(), "high")
 
         # Only set reasoning_effort when thinking is enabled
         if thinking_obj and thinking_obj.get("type") == "enabled":
@@ -577,16 +635,33 @@ class DeepSeekProvider(BaseProvider):
         if not messages_payload:
             raise ProviderError(self.get_name(), "No valid messages.")
 
+        # --- Built-in tools (deepseek_web_search, deepseek_read_url) ---
+        builtin_tools = [dict(t) for t in kwargs.pop("extra_tools", None) or []]
+        if kwargs.pop("native_search", False):
+            if self.supports_native_search(model_name):
+                if not any(t.get("type") == "deepseek_web_search" for t in builtin_tools):
+                    builtin_tools.append({"type": "deepseek_web_search"})
+            else:
+                logger.debug("DeepSeek model %s has no built-in web search; ignored.", model_name)
+
+        # Thinking mode
+        thinking_obj, effort = self._resolve_thinking_params(kwargs)
+
+        if self.responses_api == "always":
+            return await self._responses_completion(
+                context, model_name, stream=stream, tools=tools, tool_choice=tool_choice,
+                builtin_tools=builtin_tools, thinking=thinking_obj, effort=effort, params=kwargs,
+            )
+
         # --- Tool schema ---
         tools_payload = None
         if tools:
             tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
+        if builtin_tools:
+            tools_payload = (tools_payload or []) + builtin_tools
 
         # --- Build API kwargs ---
         api_kwargs = {}
-
-        # Thinking mode
-        thinking_obj, effort = self._resolve_thinking_params(kwargs)
         if thinking_obj:
             api_kwargs["extra_body"] = api_kwargs.get("extra_body", {})
             api_kwargs["extra_body"]["thinking"] = thinking_obj
@@ -600,6 +675,9 @@ class DeepSeekProvider(BaseProvider):
 
         # Copy remaining kwargs
         use_beta = kwargs.pop("use_beta", False)
+        safety_check = kwargs.pop("safety_check", None)
+        if safety_check is not None:
+            api_kwargs.setdefault("extra_body", {})["safety_check"] = safety_check
         for key, val in kwargs.items():
             if key in ("thinking", "reasoning_effort"):
                 continue  # Already handled
@@ -662,14 +740,32 @@ class DeepSeekProvider(BaseProvider):
             if stream:
 
                 async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
-                    async for chunk in resp:  # type: ignore
-                        chunk_dict = chunk.model_dump(exclude_none=True)
-                        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(
-                                "RAW DEEPSEEK STREAM CHUNK: %s",
-                                json.dumps(chunk_dict, default=str),
-                            )
-                        yield chunk_dict
+                    # The thinking arrives in pieces; the chunk with the
+                    # finish reason gets the whole of it as
+                    # ``replay_reasoning_content``, which a tool loop has to
+                    # send back (assistant_replay_metadata).
+                    reasoning: list[str] = []
+                    try:
+                        async for chunk in resp:  # type: ignore
+                            chunk_dict = chunk.model_dump(exclude_none=True)
+                            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                                logger.debug(
+                                    "RAW DEEPSEEK STREAM CHUNK: %s",
+                                    json.dumps(chunk_dict, default=str),
+                                )
+                            for choice in chunk_dict.get("choices") or []:
+                                if choice.get("index", 0) != 0:
+                                    continue
+                                delta = choice.get("delta") or {}
+                                if delta.get("reasoning_content"):
+                                    reasoning.append(delta["reasoning_content"])
+                                if choice.get("finish_reason") and reasoning:
+                                    choice.setdefault("delta", delta)["replay_reasoning_content"] = (
+                                        "".join(reasoning)
+                                    )
+                            yield chunk_dict
+                    except OpenAIError as e:
+                        raise self._map_error(e, model_name) from e
 
                 return stream_wrapper()
             else:
@@ -684,46 +780,155 @@ class DeepSeekProvider(BaseProvider):
                 # boundary so no consumer ever sees the raw markup.
                 return self._normalize_dsml_tool_calls(response_dict)
 
-        except OpenAIAPIStatusError as e:
-            status = e.status_code
-            msg = str(e)
-            logger.error("DeepSeek status error (%d): %s", status, msg, exc_info=True)
-
-            if status == 400 and "context_length" in msg.lower():
-                raise ContextLengthError(
-                    model_name=model_name,
-                    limit=self.get_max_context_length(model_name),
-                    actual=0,
-                    message=msg,
-                )
-            if status == 400 and any(
-                p in msg.lower() for p in ("model not exist", "does not exist", "model_not_found")
-            ):
-                raise ProviderError(
-                    self.get_name(),
-                    f"Model '{model_name}' not found on DeepSeek. "
-                    f"Current V4 models: deepseek-v4-flash, deepseek-v4-pro. "
-                    f"Legacy aliases deepseek-chat/deepseek-reasoner retire "
-                    f"2026-07-24. Original error: {msg}",
-                )
-            if status == 402:
-                raise ProviderError(
-                    self.get_name(),
-                    f"Insufficient balance on DeepSeek account. "
-                    f"Check balance at https://platform.deepseek.com. Error: {msg}",
-                )
-            raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
-        except OpenAIAPITimeoutError as e:
-            raise ProviderError(self.get_name(), f"Timeout: {e}")
-        except OpenAIAPIConnectionError as e:
-            raise ProviderError(self.get_name(), f"Connection error: {e}")
-        except OpenAIAPIError as e:
-            raise ProviderError(self.get_name(), f"API Error: {e}")
         except OpenAIError as e:
-            raise ProviderError(self.get_name(), f"Error: {e}")
+            raise self._map_error(e, model_name) from e
         except Exception as e:
             logger.error("Unexpected DeepSeek error: %s", e, exc_info=True)
-            raise ProviderError(self.get_name(), f"Unexpected error: {e}")
+            raise ProviderError(self.get_name(), f"Unexpected error: {e}") from e
+
+    def _map_error(self, e: Exception, model_name: str) -> ProviderError:
+        """An SDK error as a ProviderError, with DeepSeek's specific cases."""
+        if isinstance(e, OpenAIAPITimeoutError):
+            return ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name)
+        if isinstance(e, OpenAIAPIConnectionError):
+            return ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name)
+        if not isinstance(e, OpenAIAPIStatusError):
+            return ProviderError(self.get_name(), f"API Error: {e}", model_name=model_name)
+        status = e.status_code
+        msg = str(e)
+        low = msg.lower()
+        if status == 400 and any(
+            p in low for p in ("context_length", "maximum context length", "context window")
+        ):
+            return ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=msg,
+            )
+        if status in (400, 404) and any(
+            p in low for p in ("model not exist", "does not exist", "model_not_found")
+        ):
+            return ProviderError(
+                self.get_name(),
+                f"Model '{model_name}' not found on DeepSeek. Current models: "
+                f"deepseek-flash, deepseek-v4-pro. Original error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        if status == 400 and "reasoning_content" in low:
+            return ProviderError(
+                self.get_name(),
+                "DeepSeek needs every earlier assistant turn's reasoning_content when "
+                "tools are in use: put provider.assistant_replay_metadata(response) in "
+                f"that turn's Message.metadata. Original error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        if status == 402:
+            return ProviderError(
+                self.get_name(),
+                f"Insufficient balance on DeepSeek account. "
+                f"Check balance at https://platform.deepseek.com. Error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        return ProviderError(
+            self.get_name(), f"API Error ({status}): {msg}", model_name=model_name, status_code=status
+        )
+
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """``deepseek_web_search`` is documented for V4.1-Flash (deepseek-flash)."""
+        return (model or self.default_model).startswith(_BUILTIN_TOOL_MODELS)
+
+    async def get_balance(self) -> dict[str, Any]:
+        """``GET /user/balance``: ``is_available`` and per-currency balances."""
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+        try:
+            resp = await self._client.get("/user/balance", cast_to=object)
+        except OpenAIError as e:
+            raise self._map_error(e, "balance") from e
+        return dict(resp) if isinstance(resp, dict) else {}
+
+    # =========================================================================
+    # Responses API
+    # =========================================================================
+
+    async def _responses_completion(
+        self,
+        context: list[Message],
+        model_name: str,
+        *,
+        stream: bool,
+        tools: list[Tool] | None,
+        tool_choice: Any,
+        builtin_tools: list[dict[str, Any]],
+        thinking: dict[str, Any] | None,
+        effort: str | None,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat through DeepSeek's native ``/responses`` (Codex-compatible).
+
+        Thinking maps to ``reasoning.effort`` ("none" when it is off).
+        Reasoning items come back with ``store: false`` and are replayed via
+        ``metadata["reasoning_items"]``.
+        """
+        from .openai_provider import OpenAIProvider
+
+        params = dict(params)
+        params.pop("use_beta", None)
+        params.pop("stream_options", None)
+        safety_check = params.pop("safety_check", None)
+        thinking_off = bool(thinking) and thinking.get("type") == "disabled"
+        body = rsp.build_responses_request(
+            model_name,
+            context,
+            stream=stream,
+            tools=tools,
+            tool_choice=tool_choice,
+            extra_tools=builtin_tools,
+            reasoning={"effort": "none" if thinking_off else (effort or self._default_reasoning_effort)},
+            **params,
+        )
+        if safety_check is not None:
+            body["safety_check"] = safety_check
+        known = OpenAIProvider._SDK_RESPONSES_KWARGS
+        sdk_kwargs = {k: v for k, v in body.items() if k in known}
+        extra = {k: v for k, v in body.items() if k not in known}
+        if extra:
+            sdk_kwargs["extra_body"] = extra
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("RAW DEEPSEEK RESPONSES REQUEST: %s", json.dumps(body, default=str))
+        try:
+            result = await self._client.responses.create(**sdk_kwargs)  # type: ignore[union-attr]
+        except OpenAIError as e:
+            raise self._map_error(e, model_name) from e
+        if not stream:
+            try:
+                return rsp.normalize_response(result.model_dump(exclude_none=True))
+            except rsp.ResponsesFailed as exc:
+                raise ProviderError(self.get_name(), f"Response failed: {exc}", model_name=model_name) from None
+
+        async def _events() -> AsyncGenerator[dict[str, Any], None]:
+            normalizer = rsp.ResponsesStreamNormalizer()
+            try:
+                async for event in result:
+                    try:
+                        chunks = normalizer.feed(event.model_dump(exclude_none=True))
+                    except rsp.ResponsesFailed as exc:
+                        raise ProviderError(
+                            self.get_name(), f"Response failed: {exc}", model_name=model_name
+                        ) from None
+                    for chunk in chunks:
+                        yield chunk
+            except OpenAIError as e:
+                raise self._map_error(e, model_name) from e
+
+        return _events()
 
     # =========================================================================
     # Response extraction
@@ -786,6 +991,26 @@ class DeepSeekProvider(BaseProvider):
             return choices[0].get("delta", {}).get("reasoning_content")
         except (KeyError, IndexError, TypeError):
             return None
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The reasoning to send back with the next assistant turn.
+
+        With tools, DeepSeek requires ``reasoning_content`` on every earlier
+        assistant turn ("must be fully passed back ... the API will return a
+        400 error"). On the Responses route it is the reasoning items. For a
+        stream, pass the chunk that carries the finish reason.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+            source = choice.get("message") or choice.get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        if source.get("reasoning_items"):
+            return {"reasoning_items": list(source["reasoning_items"])}
+        text = source.get("replay_reasoning_content") or (
+            choice.get("message") or {}
+        ).get("reasoning_content")
+        return {"reasoning_content": text} if text else {}
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
         """Extract tool calls from a DeepSeek response."""
