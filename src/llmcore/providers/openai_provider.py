@@ -273,6 +273,81 @@ _RESPONSES_EXTRA_PARAMS: dict[str, Any] = {
 }
 
 
+@dataclass(frozen=True)
+class _VendorProfile:
+    """How one OpenAI-compatible vendor differs from OpenAI itself.
+
+    xAI, Groq and Together are instances of this class, not subclasses, so
+    without a profile they inherited OpenAI's media endpoints, default media
+    models and parameter allowlist, none of which they share.
+    """
+
+    hosts: tuple[str, ...]
+    #: Vendor chat parameters accepted on top of OpenAI's (sent in extra_body
+    #: on the SDK transport, merged into the body on the direct one).
+    extra_params: frozenset[str] = frozenset()
+    #: Media capabilities this vendor serves in OpenAI's shape.
+    media: frozenset[str] = frozenset()
+    default_stt_model: str | None = None
+    default_image_model: str | None = None
+    #: Native search: the tools to add, and the route that carries them.
+    search_tools: tuple[dict[str, Any], ...] = ()
+    search_route: str | None = None  # "chat" | "responses"
+    #: When set, native search exists only for models matching this pattern.
+    search_models: str | None = None
+
+
+#: Vendor profiles, from each vendor's API docs (2026-11-16). No keys were
+#: available for these three, so the profiles follow documentation only.
+_VENDOR_PROFILES: dict[str, _VendorProfile] = {
+    # xAI: Live Search (search_parameters) answers HTTP 410 since 2026-01; search
+    # is now a server-side tool on /responses only. Chat Completions still
+    # serves plain chat. Images use the OpenAI images shape; xAI's /tts and /stt
+    # do not, so they are not declared.
+    "xai": _VendorProfile(
+        hosts=("api.x.ai",),
+        media=frozenset({"image_generate"}),
+        default_image_model="grok-imagine-image",
+        search_tools=({"type": "web_search"}, {"type": "x_search"}),
+        search_route="responses",
+    ),
+    # Groq: reasoning_format / include_reasoning control reasoning output;
+    # browser_search is a built-in tool on the gpt-oss models only. Whisper ASR
+    # is OpenAI-compatible.
+    "groq": _VendorProfile(
+        hosts=("api.groq.com",),
+        extra_params=frozenset(
+            {"reasoning_format", "include_reasoning", "search_settings", "service_tier",
+             "documents", "citation_options"}
+        ),
+        media=frozenset({"asr"}),
+        default_stt_model="whisper-large-v3-turbo",
+        search_tools=({"type": "browser_search"},),
+        search_route="chat",
+        search_models=r"gpt-oss",
+    ),
+    # Together: hybrid-reasoning and sampling extensions. Its media endpoints
+    # differ from OpenAI's, so none are declared until verified.
+    "together": _VendorProfile(
+        hosts=("api.together.ai", "api.together.xyz"),
+        extra_params=frozenset(
+            {"reasoning", "chat_template_kwargs", "top_k", "min_p", "repetition_penalty",
+             "safety_model", "context_length_exceeded_behavior"}
+        ),
+    ),
+}
+
+
+def _vendor_profile(name: str, base_url: str) -> _VendorProfile | None:
+    """The profile for an instance, by name first and then by host."""
+    if name in _VENDOR_PROFILES:
+        return _VENDOR_PROFILES[name]
+    for profile in _VENDOR_PROFILES.values():
+        if any(host in base_url for host in profile.hosts):
+            return profile
+    return None
+
+
 def nearest_effort(requested: str, supported: Sequence[str]) -> str | None:
     """The supported effort level closest to ``requested`` (higher on a tie)."""
     order = {name: i for i, name in enumerate(_EFFORT_ORDER)}
@@ -361,6 +436,7 @@ class OpenAIProvider(BaseProvider):
     #: defaults keep instances built with ``object.__new__`` (as tests do) on
     #: the old behaviour: Chat Completions only, nothing adapted.
     _native_openai: bool = False
+    _vendor: _VendorProfile | None = None
     _responses_policy: str = "never"
     _adaptive_params: bool = False
     _model_rules: dict[str, _ModelRules] | None = None
@@ -464,6 +540,10 @@ class OpenAIProvider(BaseProvider):
         # off unless configured.
         base = str(self.base_url or "")
         self._native_openai = not base or "api.openai.com" in base
+        self._vendor = None if self._native_openai else _vendor_profile(self.get_name(), base)
+        if self._vendor is not None:
+            # Instance-level, so OpenAI's own declaration stays on the class.
+            self._MEDIA_CAPABILITIES = self._vendor.media
         policy = str(
             config.get("responses_api") or ("auto" if self._native_openai else "never")
         ).lower()
@@ -674,43 +754,56 @@ class OpenAIProvider(BaseProvider):
     def get_name(self) -> str:
         return self._provider_instance_name or "openai"
 
+    def _is_openai_itself(self) -> bool:
+        """True for OpenAI's own API (also for test stubs built without __init__)."""
+        if self._native_openai:
+            return True
+        return getattr(self, "base_url", None) is None and self.get_name() == "openai"
+
+    def _profile(self) -> _VendorProfile | None:
+        """This instance's vendor profile (by name when built without __init__)."""
+        if self._vendor is not None or self._is_openai_itself():
+            return self._vendor
+        return _VENDOR_PROFILES.get(self.get_name())
+
     def supports_native_search(self, model: str | None = None) -> bool:
-        """Whether this instance exposes a native web-search surface.
+        """Whether this instance has a native web-search surface for ``model``.
 
-        Only the genuine OpenAI and xAI instances served through this
-        OpenAI-compatible provider have one: OpenAI via the Chat Completions
-        ``web_search_options`` field, xAI via Live Search
-        (``search_parameters`` in ``extra_body``). Other OpenAI-compatible
-        instances (groq, together, openrouter, deepinfra, vllm, poe, …) report
-        ``False`` so ``native_search`` stays a clean no-op for them.
+        OpenAI: the Responses ``web_search`` tool (every model), or Chat
+        Completions search on ``*-search-api`` models. xAI: ``web_search`` and
+        ``x_search`` on its Responses API (Live Search was retired). Groq:
+        ``browser_search`` on the gpt-oss models. Everything else reports
+        ``False``, so ``native_search`` stays a clean no-op.
         """
-        return self.get_name() in ("openai", "xai")
+        if self._is_openai_itself():
+            return True
+        vendor = self._profile()
+        if vendor is None or not vendor.search_tools:
+            return False
+        if vendor.search_models and model and not re.search(vendor.search_models, model):
+            return False
+        return True
 
-    def _apply_native_search(self, api_kwargs: dict[str, Any]) -> None:
-        """Attach the instance's native web-search config to ``api_kwargs``.
+    def _apply_native_search(self, api_kwargs: dict[str, Any], model: str | None = None) -> None:
+        """Attach the instance's Chat Completions search to ``api_kwargs``.
 
-        Additive and non-destructive: any caller-supplied ``web_search_options``
-        or ``extra_body`` is preserved. Unknown instances are a logged no-op so
-        this can never raise even if called directly.
+        Additive: caller-supplied tools and options are preserved. Vendors whose
+        search lives on /responses are routed there by ``chat_completion``
+        instead, so nothing is added here for them.
         """
-        name = self.get_name()
-        if name == "xai":
-            # xAI Live Search: search_parameters is a non-OpenAI body field, so
-            # it must ride along in extra_body. mode="auto" lets the model
-            # decide whether to search.
-            extra_body = dict(api_kwargs.get("extra_body") or {})
-            extra_body.setdefault("search_parameters", {"mode": "auto"})
-            api_kwargs["extra_body"] = extra_body
-        elif name == "openai":
-            # OpenAI Chat Completions native web search: an empty options object
-            # enables it with provider defaults.
+        vendor = self._profile()
+        if vendor is not None and vendor.search_route == "chat":
+            if vendor.search_models and model and not re.search(vendor.search_models, model):
+                return  # e.g. Groq's browser_search exists only on gpt-oss
+            tools = list(api_kwargs.get("tools") or [])
+            tools.extend(dict(t) for t in vendor.search_tools)
+            api_kwargs["tools"] = tools
+        elif self._is_openai_itself():
+            # Reached for *-search-api models (others go to /responses) and
+            # when responses_api = "never".
             api_kwargs.setdefault("web_search_options", {})
         else:  # pragma: no cover - guarded by supports_native_search
-            logger.debug(
-                "native_search requested for OpenAI-compatible instance '%s' "
-                "without a native search surface; ignoring.",
-                name,
-            )
+            logger.debug("native_search ignored for '%s': no search surface.", self.get_name())
 
     async def get_models_details(self) -> list[ModelDetails]:
         if not self._client:
@@ -810,6 +903,10 @@ class OpenAIProvider(BaseProvider):
             params["max_tokens"] = {"type": "integer", "minimum": 1}
         if self._responses_policy != "never":
             params.update(_RESPONSES_EXTRA_PARAMS)
+        params["extra_body"] = {"type": "object", "description": "Extra request-body fields."}
+        if self._vendor is not None:
+            for name in self._vendor.extra_params:
+                params.setdefault(name, {"description": f"{self.get_name()} extension"})
         return params
 
     def get_max_context_length(self, model: str | None = None) -> int:
@@ -959,14 +1056,15 @@ class OpenAIProvider(BaseProvider):
             raise ProviderError(self.get_name(), "Client not initialized.")
         model_name = model or self.default_model
         prefer = kwargs.pop("responses", None)
-        if (
-            native_search
-            and prefer is None
-            and self._native_openai
-            and self._responses_policy != "never"
-            and not _CHAT_PREFERRED.search(model_name)
-        ):
-            prefer = True
+        if native_search and prefer is None:
+            if (
+                self._native_openai
+                and self._responses_policy != "never"
+                and not _CHAT_PREFERRED.search(model_name)
+            ):
+                prefer = True
+            elif (profile := self._profile()) is not None and profile.search_route == "responses":
+                prefer = True  # xAI: search exists only on /responses
         supported = self.get_supported_parameters(model_name)
         unknown = [key for key in kwargs if key not in supported]
         if unknown:
@@ -1199,6 +1297,8 @@ class OpenAIProvider(BaseProvider):
         extra_tools = list(kwargs.pop("extra_tools", None) or [])
         if native_search and self._native_openai:
             extra_tools.append({"type": "web_search"})
+        elif native_search and (profile := self._profile()) is not None and profile.search_route == "responses":
+            extra_tools.extend(dict(t) for t in profile.search_tools)
         kwargs.pop("stream_options", None)
         body = rsp.build_responses_request(
             model_name,
@@ -1393,7 +1493,7 @@ class OpenAIProvider(BaseProvider):
             api_kwargs["tool_choice"] = tool_choice
 
         if native_search:
-            self._apply_native_search(api_kwargs)
+            self._apply_native_search(api_kwargs, model_name)
         if stream and self._native_openai and "stream_options" not in api_kwargs:
             # Without this OpenAI sends no usage on a stream, so streamed calls
             # had no token counts and no cost.
@@ -1426,6 +1526,12 @@ class OpenAIProvider(BaseProvider):
             # the direct path picks up native search, reasoning-model parameter
             # renaming and tool payloads unchanged.
             return await self._chat_via_httpx(model_name, messages_payload, stream, api_kwargs)
+
+        if self._vendor is not None and self._vendor.extra_params:
+            # The OpenAI SDK has no keyword for these; it sends extra_body.
+            moved = {k: api_kwargs.pop(k) for k in list(api_kwargs) if k in self._vendor.extra_params}
+            if moved:
+                api_kwargs["extra_body"] = {**(api_kwargs.get("extra_body") or {}), **moved}
 
         try:
             resp = await self._client.chat.completions.create(
@@ -1845,7 +1951,7 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        stt_model = model or "whisper-1"
+        stt_model = model or (self._vendor.default_stt_model if self._vendor else None) or "whisper-1"
 
         # Build file parameter
         if isinstance(audio_data, str):
@@ -2115,7 +2221,7 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        img_model = model or DEFAULT_IMAGE_MODEL
+        img_model = model or (self._vendor.default_image_model if self._vendor else None) or DEFAULT_IMAGE_MODEL
         api_kwargs: dict[str, Any] = {
             "prompt": prompt,
             "model": img_model,
@@ -2400,7 +2506,7 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        img_model = model or DEFAULT_IMAGE_MODEL
+        img_model = model or (self._vendor.default_image_model if self._vendor else None) or DEFAULT_IMAGE_MODEL
 
         api_kwargs: dict[str, Any] = {
             "prompt": prompt,

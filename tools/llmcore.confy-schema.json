@@ -900,7 +900,7 @@
           "placeholder": "https://api.openai.com/v1",
           "examples": [
             "https://api.groq.com/openai/v1",
-            "https://api.together.xyz/v1"
+            "https://api.together.ai/v1"
           ],
           "validation": {
             "schemes": ["https", "http"]

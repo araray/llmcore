@@ -230,3 +230,45 @@ class TestErrorsAndShapes:
         assert kwargs["model"] == "gpt-image-2" and "response_format" not in kwargs
         await p.generate_image("a red dot", model="dall-e-3")
         assert p._client.images.generate.call_args.kwargs["response_format"] == "b64_json"
+
+
+class TestVendorProfiles:
+    """xAI, Groq and Together are instances of OpenAIProvider. Without a
+    profile they inherited OpenAI's media endpoints and parameter allowlist."""
+
+    def _instance(self, name: str, base_url: str) -> OpenAIProvider:
+        return OpenAIProvider({"api_key": "k", "_instance_name": name, "base_url": base_url})
+
+    def test_media_is_narrowed_to_what_each_vendor_serves(self):
+        assert {c.value for c in self._instance("xai", "https://api.x.ai/v1").media_capabilities()} == {"image_generate"}
+        assert {c.value for c in self._instance("groq", "https://api.groq.com/openai/v1").media_capabilities()} == {"asr"}
+        assert not self._instance("together", "https://api.together.ai/v1").media_capabilities()
+        # OpenAI's own declaration is untouched.
+        assert "tts" in {c.value for c in OpenAIProvider({"api_key": "k"}).media_capabilities()}
+
+    def test_profile_is_found_by_host_too(self):
+        p = self._instance("my-groq", "https://api.groq.com/openai/v1")
+        assert "reasoning_format" in p.get_supported_parameters("openai/gpt-oss-120b")
+
+    async def test_vendor_params_travel_in_extra_body_on_the_sdk(self):
+        p = OpenAIProvider({"api_key": "k", "_instance_name": "together",
+                            "base_url": "https://api.together.ai/v1"})
+        resp = MagicMock()
+        resp.model_dump.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        p._client = MagicMock()
+        p._client.chat.completions.create = AsyncMock(return_value=resp)
+        await p.chat_completion(CTX, "openai/gpt-oss-120b", top_k=40,
+                                chat_template_kwargs={"thinking": True})
+        kwargs = p._client.chat.completions.create.call_args.kwargs
+        assert kwargs["extra_body"] == {"top_k": 40, "chat_template_kwargs": {"thinking": True}}
+        assert "top_k" not in kwargs
+
+    def test_groq_transcription_default(self):
+        from llmcore.providers.openai_provider import _VENDOR_PROFILES
+
+        assert _VENDOR_PROFILES["groq"].default_stt_model == "whisper-large-v3-turbo"
+
+    def test_together_uses_the_host_that_serves_responses(self):
+        from llmcore.providers.manager import _OPENAI_COMPATIBLE_DEFAULTS
+
+        assert _OPENAI_COMPATIBLE_DEFAULTS["together"]["base_url"] == "https://api.together.ai/v1"

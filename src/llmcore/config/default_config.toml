@@ -454,25 +454,32 @@ max_retries = 2
   [providers.xai]
   # API key via XAI_API_KEY. base_url defaults to https://api.x.ai/v1
   # api_key = "..."
-  default_model = "grok-4.1-20251117"
+  default_model = "grok-4.7"
   timeout = 120
   # transport = "sdk"   # "sdk" (default) | "httpx" — see [providers.openai]
-  # Native xAI Live Search is reached with native_search=True on chat().
+  # native_search=True uses xAI's server-side web_search and x_search tools on
+  # its Responses API (Live Search / search_parameters was retired: HTTP 410).
+  # xAI recommends /responses for everything; opt in with:
+  # responses_api = "always"
 
   [providers.groq]
   # API key via GROQ_API_KEY. base_url defaults to
   # https://api.groq.com/openai/v1
   # api_key = "..."
-  default_model = "llama-3.3-70b-versatile"
+  # llama-3.3-70b-versatile was shut down for free/dev tiers on 2026-08-16.
+  default_model = "openai/gpt-oss-120b"
   timeout = 120
   # transport = "sdk"
-  # Groq also serves Whisper (ASR) and PlayAI (TTS) on the same endpoint.
+  # Groq also serves Whisper ASR (default whisper-large-v3-turbo). Vendor
+  # parameters reasoning_format / include_reasoning / search_settings are
+  # accepted; native_search=True adds browser_search on the gpt-oss models.
 
   [providers.together]
   # API key via TOGETHER_API_KEY. base_url defaults to
-  # https://api.together.xyz/v1
+  # https://api.together.ai/v1 (api.together.xyz serves chat but not /responses)
   # api_key = "..."
-  default_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  # Llama 3.3 left Together's serverless catalog on 2026-10-22.
+  default_model = "openai/gpt-oss-120b"
   timeout = 120
   # transport = "sdk"
 

@@ -159,7 +159,9 @@ _OPENAI_COMPATIBLE_DEFAULTS: dict[str, dict[str, str]] = {
     },
     "together": {
         "env_var": "TOGETHER_API_KEY",
-        "base_url": "https://api.together.xyz/v1",
+        # api.together.xyz still serves chat but not /responses (404); the
+        # canonical host is api.together.ai (Together docs and SDK v3).
+        "base_url": "https://api.together.ai/v1",
     },
 }
 

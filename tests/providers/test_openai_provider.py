@@ -1089,7 +1089,7 @@ class TestNativeSearch:
         assert self._make_provider_stub("xai").supports_native_search("grok-4") is True
 
     def test_supports_native_search_false_for_other_instances(self):
-        for name in ("groq", "together", "deepseek"):
+        for name in ("together", "deepseek"):
             assert self._make_provider_stub(name).supports_native_search() is False
 
     @pytest.mark.asyncio
@@ -1131,17 +1131,25 @@ class TestNativeSearch:
         assert "extra_body" not in call_kwargs
 
     @pytest.mark.asyncio
-    async def test_xai_native_search_attaches_live_search_extra_body(self):
+    async def test_xai_native_search_uses_responses_tools(self):
+        """xAI retired Live Search (search_parameters answers HTTP 410); search
+        is now the web_search and x_search tools on its Responses API."""
         from llmcore.models import Message
 
-        provider = self._make_provider_stub("xai", default_model="grok-4")
+        provider = self._make_provider_stub("xai", default_model="grok-4.7")
+        resp = MagicMock()
+        resp.model_dump.return_value = {
+            "status": "completed",
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+        }
+        provider._client.responses.create = AsyncMock(return_value=resp)
         await provider.chat_completion(
             [Message(role="user", content="what happened today?")], native_search=True
         )
-
-        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
-        assert "web_search_options" not in call_kwargs
+        provider._client.chat.completions.create.assert_not_called()
+        kwargs = provider._client.responses.create.call_args.kwargs
+        assert kwargs["tools"] == [{"type": "web_search"}, {"type": "x_search"}]
+        assert "search_parameters" not in repr(kwargs)
 
     @pytest.mark.asyncio
     async def test_unsupported_instance_native_search_is_noop(self):
@@ -1158,16 +1166,21 @@ class TestNativeSearch:
         assert "web_search_options" not in call_kwargs
         assert "extra_body" not in call_kwargs
 
-    def test_apply_native_search_preserves_existing_extra_body(self):
-        # Direct helper check: merging must not clobber caller extra_body keys.
+    def test_xai_chat_path_adds_nothing(self):
+        """Nothing is attached on xAI's Chat Completions path any more: its
+        search lives on /responses, where chat_completion routes it."""
         provider = self._make_provider_stub("xai")
         api_kwargs = {"extra_body": {"foo": "bar"}}
-        provider._apply_native_search(api_kwargs)
-        assert api_kwargs["extra_body"]["foo"] == "bar"
-        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
+        provider._apply_native_search(api_kwargs, "grok-4.7")
+        assert api_kwargs == {"extra_body": {"foo": "bar"}}
 
-    def test_apply_native_search_does_not_override_existing_search_parameters(self):
-        provider = self._make_provider_stub("xai")
-        api_kwargs = {"extra_body": {"search_parameters": {"mode": "on"}}}
-        provider._apply_native_search(api_kwargs)
-        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "on"}
+    def test_groq_browser_search_only_on_gpt_oss(self):
+        provider = self._make_provider_stub("groq")
+        assert provider.supports_native_search("openai/gpt-oss-120b") is True
+        assert provider.supports_native_search("llama-3.1-8b-instant") is False
+        kwargs: dict = {}
+        provider._apply_native_search(kwargs, "openai/gpt-oss-120b")
+        assert kwargs["tools"] == [{"type": "browser_search"}]
+        kwargs = {}
+        provider._apply_native_search(kwargs, "llama-3.1-8b-instant")
+        assert kwargs == {}

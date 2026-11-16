@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — xAI, Groq, Together: retired search, retired defaults, vendor profiles
+
+No keys were available for these three, so this follows their API docs and
+unauthenticated endpoint checks (2026-11-16), not live calls.
+
+- **xAI search was dead.** `search_parameters` (Live Search) answers HTTP 410,
+  and xAI replaced it with the server-side `web_search` and `x_search` tools,
+  which exist only on its Responses API. `native_search=True` now routes there
+  with those tools. Plain chat stays on Chat Completions; `responses_api =
+  "always"` opts in to xAI's recommended route for everything.
+- **Groq:** `native_search=True` adds the built-in `browser_search` tool on the
+  gpt-oss models, which are the only ones that have it.
+- **Together:** base URL `https://api.together.ai/v1`. The old
+  `api.together.xyz` serves chat but answers 404 on `/responses`.
+- **Retired defaults replaced:** xAI `grok-4.1-20251117` → `grok-4.7`; Groq
+  `llama-3.3-70b-versatile` (shut down for free/dev tiers 2026-08-16) and
+  Together `Llama-3.3-70B-Instruct-Turbo` (left serverless 2026-10-22) →
+  `openai/gpt-oss-120b`.
+- **Vendor profiles.** These vendors are instances of `OpenAIProvider`, so
+  they inherited OpenAI's media endpoints and default media models. Routing
+  could then send them TTS, image-edit or Whisper calls they do not serve.
+  Each now declares only what it serves in OpenAI's shape: xAI image
+  generation (`grok-imagine-image`), Groq ASR (`whisper-large-v3-turbo`),
+  Together none yet. Their documented chat extensions are accepted and sent in
+  `extra_body`: Groq `reasoning_format`, `include_reasoning` and
+  `search_settings`; Together `reasoning`, `chat_template_kwargs`, `top_k` and
+  `min_p`. They used to raise `ValueError`.
+- `extra_body` is accepted on every OpenAI-compatible instance.
+
 ### Changed — OpenAI: Responses API, per-model parameter rules, current models
 
 Audited against the live API and `openai` 3.51 (2026-11-16). Several things
