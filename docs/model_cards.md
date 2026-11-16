@@ -182,7 +182,8 @@ src/llmcore/model_cards/default_cards/
 ├── openai/
 ├── qwen/
 ├── typesafe/
-│   └── jev-1.13.0.json      # model_type "decision"; aliases jev-latest, jev-preview
+│   ├── jev-1.13.0.json      # model_type "decision"
+│   └── jev-1.14.0.json      # model_type "decision"; aliases jev-latest, jev-preview
 └── xai/
 ```
 

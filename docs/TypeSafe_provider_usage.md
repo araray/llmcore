@@ -19,7 +19,7 @@ parallel — batching many questions into one call is the intended (and cheapest
 ## 1. Install & configure
 
 ```bash
-pip install "llmcore[typesafe]"          # only pulls in httpx; no vendor SDK
+pip install "llmcore[typesafe]"          # httpx (default transport) + typesafe-sdk>=0.7.5 (backend = "sdk")
 export TYPESAFE_API_KEY="..."            # https://console.typesafe.ai/settings/keys
 ```
 
@@ -36,6 +36,7 @@ max_retries = 2                   # 408/429/5xx/529 + timeouts; honours Retry-Af
 retry_backoff_initial = 0.5
 retry_backoff_max = 5.0
 fallback_context_length = 65536   # 64k tokens/request; 32k for state + longest question
+# long_context = false            # true: TypeSafe-Danger-Zone-Long-Context header, 262k budget
 ```
 
 Precedence for `base_url` / `default_model`: config value → `TYPESAFE_*` env var → built-in
@@ -74,10 +75,11 @@ shared `httpx.AsyncClient`.
 
 ```python
 system_one(
-    state: str | dict | list,                      # the content to evaluate (text only)
-    questions: Mapping[str, Noul | Choice | Score | dict],
+    state: str | dict | list,                      # the content to evaluate
+    questions: Mapping[str, Noul | Choice | Score | Box | dict],
     *,
     model: str | None = None,                      # default: provider.default_model
+    assets: Mapping[str, bytes | str | dict] | None = None,  # images, see "Images and Box"
     timeout: float | None = None,                  # per-call override, seconds
     extra_headers: Mapping[str, str] | None = None,
     extra_body: Mapping[str, Any] | None = None,   # extra top-level request fields
@@ -112,7 +114,7 @@ result = await provider.system_one(
     },
 )
 
-result.model                                  # "jev-1.13.0" — the versioned id that answered
+result.model                                  # "jev-1.14.0" — the versioned id that answered
 result.choices["department"].choice           # "billing"
 result.choices["department"].probabilities    # {"billing": 0.66, "technical": 0.34, "sales": 0.0}
 result.choices["department"].confidence       # 0.49
@@ -132,6 +134,7 @@ result.raw                                    # the decoded JSON body
 | `Noul(instructions, criteria=None)` | — | `criteria={"true": ..., "false": ...}` | describe what a yes / no means |
 | `Choice(criteria, instructions=None)` | `criteria`: `{option: description \| None}` | `instructions` | ≥1 option; add a "none of the above" option when nothing may fit |
 | `Score(criteria, instructions=None)` | `criteria`: ordered list of level descriptions | `instructions` | position = score, starting at 0; use ≥2 levels |
+| `Box(instructions)` | `instructions` naming an image in `state` | — | Jev 1.14+; needs image `assets` |
 
 `instructions` and every description accept a string, a JSON object, or an array
 (see [Advanced: structure](https://docs.typesafe.ai/primitives/advanced)). Raw dicts with a
@@ -147,10 +150,33 @@ empty map, an unknown `type`, missing/empty `choice`/`score` criteria, or a wron
 shape. Question ids are for your code only — they are not shown to the model, so put the full
 meaning in `instructions`.
 
+### Images and Box (Jev 1.14)
+
+```python
+result = await provider.system_one(
+    state={"photo": "img-1"},                    # a string equal to an asset key is that image
+    questions={
+        "has_dog": Noul(instructions="Is there a dog in `photo`?"),
+        "dog": Box(instructions="The dog in `photo`."),
+    },
+    assets={"img-1": png_bytes},                 # bytes, a file path, or {"format", "data_base64"}
+)
+result.boxes["dog"].box          # {"top": 0.11, "bottom": 0.51, "left": 0.67, "right": 0.92}
+result.boxes["dog"].confidence   # 0.95
+```
+
+* PNG or JPEG, 280–1568 px per side, 16 MiB each; every asset must be referenced in `state`.
+* llmcore adds `TypeSafe-Danger-Zone-Images: true`, which images and Box questions
+  require (a 400 without it).
+* Box coordinates are fractions (0–1) of the image. Live check on 2026-11-16: a red square
+  at x 400–550 / 600 and y 50–200 / 400 came back as left 0.67, right 0.92, top 0.11,
+  bottom 0.51 on both transports.
+* Command Code's gateway serves text-only Jev, so use this provider for images and Box.
+
 ### Answers
 
 * `SystemOneResult.answers` — every answer keyed by your ids; `.nouls` / `.choices` /
-  `.scores` filter by type.
+  `.scores` / `.boxes` filter by type.
 * `ScoreAnswer.legend` / `.probabilities` are keyed by **integer** level (the wire format
   uses strings); `answers_dict()` / `answers_json()` give the wire shape back.
 * Answer kinds a future API adds are dropped from `answers` with a warning but stay in
@@ -246,7 +272,7 @@ that points you to `system_one()`.
 | `401` | missing/invalid key — message names `TYPESAFE_API_KEY` | `False` |
 | `403` / `404` | permission denied / unknown route | `False` |
 | `422` | request failed validation — message carries the server's field path + reason (e.g. `questions.q.choice.criteria: Field required`) | `False` |
-| `429` | rate limit (250k tokens/s, 1200 requests/min) | `True` (retried in-provider) |
+| `429` | rate limit (set per organization in tokens/s and requests/s; see the console) | `True` (retried in-provider) |
 | `529` | TypeSafe temporarily overloaded | `True` (retried in-provider) |
 | `408` / `5xx` | timeout / server error | `True` (retried in-provider) |
 | timeout / connection error | no response | `True` (retried in-provider) |
@@ -258,32 +284,35 @@ with exponential backoff (`retry_backoff_initial` → `retry_backoff_max`, with 
 always preferring the server's requested wait (capped at 60 s). A retry attempt sends
 `X-TypeSafe-Retry-Count`. Set `max_retries = 0` to disable.
 
-Invalid inputs (`state=None`, bad questions) raise `ValueError` locally; an unexpected
-response body raises a non-retryable `ProviderError` naming the offending field.
+Invalid inputs (`state=None`, bad questions, a non-PNG/JPEG asset) raise `ValueError`
+locally; an unexpected response body raises a non-retryable `ProviderError` naming the
+offending field. On `backend = "sdk"` the SDK owns retries, and its exceptions are mapped to
+the same statuses and `retryable` flags; a 400/401/422 is no longer retried.
 
 ---
 
 ## 7. Limits, pricing, tokens
 
-* **Model**: Jev 1.13 (`jev-1.13.0`). Aliases `jev-latest` (stable) and `jev-preview`
-  (newest build) currently both resolve to it; responses echo the versioned id. Pin the
-  version if you tuned thresholds.
+* **Model**: Jev 1.14 (`jev-1.14.0`, released 2026-10-14). Aliases `jev-latest` (stable)
+  and `jev-preview` (newest build) both resolve to it; responses echo the versioned id.
+  `jev-1.13.0` keeps its own card. Pin the version if you tuned thresholds.
 * **Budget**: 64k tokens per request (state + all questions); 32k for the state plus the
-  single longest question. `get_max_context_length()` reports 64k from the model card.
+  single longest question. `long_context = true` raises both to 262k.
+  `get_max_context_length()` reports 64k from the model card, or 262k with `long_context`.
 * **Price**: $0.042 per 1M input tokens ($42 per billion); output tokens are free.
-* **Input**: text only (string / JSON object / array of text). Pre-process images, audio
-  and binaries into text or structured fields first. English is the primary training
+* **Input**: text (string / JSON object / array) and PNG/JPEG images as `assets`. Audio
+  and video are not accepted natively. English is the primary training
   language; other languages work with lower accuracy — watch `confidence`.
 * **Tokens**: `count_tokens()` uses tiktoken `cl100k_base` when available (else `len/4`) —
   an approximation for budgeting; TypeSafe does not publish its tokenizer.
-* **Model card**: `src/llmcore/model_cards/default_cards/typesafe/jev-1.13.0.json`
+* **Model card**: `src/llmcore/model_cards/default_cards/typesafe/jev-1.14.0.json`
   (`model_type: "decision"`, aliases, context, pricing, rate limits, question types).
   Regenerate with `python -m tools.cardctl generate typesafe` (adapter collapses the
   listed aliases onto the versioned id; `tools/cardctl/enrichments/typesafe.toml` pins
   the static facts).
 
 Known model quirks (counting, arithmetic, date comparison, indirection, very large states)
-are documented at [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+are documented per version at [model jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
 
 ---
 

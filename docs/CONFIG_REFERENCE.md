@@ -737,7 +737,7 @@ the call is retried once.
 
 ## 🎯 Provider: TypeSafe.ai (System One)
 
-TypeSafe.ai System One typed-judgment provider (Jev models). **Not a chat API**: `POST /v1/systemone` evaluates a state (string / JSON object / array) against typed questions — `noul` (yes/no probability), `choice` (pick one option; per-option probabilities + confidence), `score` (rubric level; per-level probabilities + confidence) — and returns structured, calibrated answers. Use `provider.system_one(...)` or the chat bridge `llm.chat(..., provider_name="typesafe", questions={...})`. Streaming and tool calling are not supported. Alias: `jev`. Install with `pip install llmcore[typesafe]` (httpx only). See [TypeSafe provider usage](TypeSafe_provider_usage.md).
+TypeSafe.ai System One typed-judgment provider (Jev models). **Not a chat API**: `POST /v1/systemone` evaluates a state (string / JSON object / array) against typed questions — `noul` (yes/no probability), `choice` (pick one option; per-option probabilities + confidence), `score` (rubric level; per-level probabilities + confidence), `box` (where something is in an image; Jev 1.14+) — and returns structured, calibrated answers. PNG/JPEG images go in `system_one(..., assets=...)`. Use `provider.system_one(...)` or the chat bridge `llm.chat(..., provider_name="typesafe", questions={...})`. Streaming and tool calling are not supported. Alias: `jev`. Install with `pip install llmcore[typesafe]` (httpx, plus `typesafe-sdk` for `backend = "sdk"`). See [TypeSafe provider usage](TypeSafe_provider_usage.md).
 
 | Key | Type | Required | Default | Description |
 |-----|------|----------|---------|-------------|
@@ -749,7 +749,8 @@ TypeSafe.ai System One typed-judgment provider (Jev models). **Not a chat API**:
 | `providers.typesafe.max_retries` | integer |  | `2` | In-provider retries for 408 / 429 / 5xx / 529, timeouts and connection errors. |
 | `providers.typesafe.retry_backoff_initial` | number |  | `0.5` | First retry delay in seconds (doubles up to `retry_backoff_max`, with jitter). |
 | `providers.typesafe.retry_backoff_max` | number |  | `5.0` | Maximum backoff delay in seconds. |
-| `providers.typesafe.fallback_context_length` | integer |  | `65536` | Token budget reported when no model card matches. |
+| `providers.typesafe.fallback_context_length` | integer |  | `65536` | Token budget reported when no model card matches (262144 with `long_context`). |
+| `providers.typesafe.long_context` | boolean |  | `false` | Send `TypeSafe-Danger-Zone-Long-Context: true`: the request budget rises from 64k to 262k tokens. |
 
 ### `providers.typesafe.api_key`
 
@@ -757,7 +758,7 @@ TypeSafe.ai API key from https://console.typesafe.ai/settings/keys. Prefer `TYPE
 
 ### `providers.typesafe.default_model`
 
-Aliases move with releases (`jev-latest` / `jev-preview` → `jev-1.13.0` today) and `/v1/systemone` responses echo the versioned id that answered. Pin the versioned id if you tuned confidence thresholds against it.
+Aliases move with releases (`jev-latest` / `jev-preview` → `jev-1.14.0` since 2026-10-14) and `/v1/systemone` responses echo the versioned id that answered. Pin the versioned id if you tuned confidence thresholds against it.
 
 **Options:**
 

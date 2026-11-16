@@ -875,6 +875,11 @@ max_retries = 2
   # whole catalog. Disable only to send canonical names literally.
   # use_schema = true
 
+  # Maximum runtime per prediction, sent as the Cancel-After header ("30s",
+  # "5m", "1h30m" or seconds; minimum 5 s): a stuck prediction is cancelled
+  # and stops billing. httpx backend only. Per call: cancel_after=...
+  # cancel_after = "10m"
+
   # --- Per-capability models ---
   # References are "owner/name" or "owner/name:version". Replicate's catalog is
   # enormous and moves constantly, so llmcore ships a small starting set rather
