@@ -689,6 +689,25 @@ def classify_failure(exc: BaseException) -> tuple[FailureKind, float | None]:
     if isinstance(exc, ContextLengthError):
         return FailureKind.CONTEXT_LENGTH, None
 
+    # A provider that knows exactly why a call failed says so, and that beats
+    # any inference from status and text. Command Code needs this: its 403s
+    # mean anything from "this model is not served in your region" (fail over)
+    # to "your plan has no API access" (do not), and status alone cannot tell
+    # them apart.
+    hinted = getattr(exc, "failure_kind", None)
+    if hinted:
+        try:
+            kind = FailureKind(str(hinted))
+        except ValueError:
+            kind = None
+        if kind is not None:
+            hinted_after = getattr(exc, "retry_after_seconds", None)
+            try:
+                hinted_after = float(hinted_after) if hinted_after is not None else None
+            except (TypeError, ValueError):
+                hinted_after = None
+            return kind, hinted_after
+
     status = getattr(exc, "status_code", None)
     text = str(exc).lower()
     retry_after = getattr(exc, "retry_after", None)
