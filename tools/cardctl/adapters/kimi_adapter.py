@@ -78,12 +78,20 @@ class KimiAdapter(OpenAICompatAdapter):
             {
                 "supports_video_in": normalized.supports_video_input,
                 "thinking_mode": _model_supports_thinking(mid),
+                # K3 (2026-11): {"type": "only", "effort": {"valid": [...], "default": ...}}
+                "reasoning_type": (raw.get("reasoning") or {}).get("type"),
+                "reasoning_efforts": ((raw.get("reasoning") or {}).get("effort") or {}).get("valid"),
+                "dynamic_tools": bool((raw.get("tools") or {}).get("dynamic_load")),
             }
         )
         return normalized
 
 
 def _model_supports_thinking(mid: str) -> bool:
-    """Whether the ``thinking`` request field applies to *mid* (k2.5/k2.6)."""
+    """Whether the ``thinking`` request field applies to *mid*.
+
+    k2.5/k2.6 take enabled/disabled; k2.7-code only "enabled". K3 does not
+    use it (its depth is ``reasoning_effort``).
+    """
     m = mid.lower()
-    return m.startswith("kimi-k2.5") or m.startswith("kimi-k2.6")
+    return m.startswith(("kimi-k2.5", "kimi-k2.6", "kimi-k2.7"))

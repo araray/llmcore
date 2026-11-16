@@ -23,8 +23,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("openai")
-httpx2 = pytest.importorskip("httpx2")
-from openai import AsyncOpenAI  # noqa: E402
+from .httpx2_wire import R, Wire  # noqa: E402
 
 from llmcore.exceptions import ProviderError  # noqa: E402
 from llmcore.models import Message, Role, Tool  # noqa: E402
@@ -36,36 +35,9 @@ WEATHER = Tool(name="get_weather", description="w",
                parameters={"type": "object", "properties": {"city": {"type": "string"}}})
 
 
-class Wire:
-    """Queued responses in, recorded requests out."""
-
-    def __init__(self) -> None:
-        self.responses: dict[str, list[Any]] = {}
-        self.requests: list[Any] = []
-
-    def on(self, path: str, *responses: Any) -> Wire:
-        self.responses.setdefault(path, []).extend(responses)
-        return self
-
-    def handler(self, request: Any) -> Any:
-        self.requests.append(request)
-        queue = self.responses[request.url.path]
-        return queue.pop(0) if len(queue) > 1 else queue[0]
-
-    def sent(self, i: int = -1) -> dict[str, Any]:
-        return json.loads(self.requests[i].content)
-
-
-def R(status: int, **kw: Any) -> Any:  # noqa: N802
-    return httpx2.Response(status, **kw)
-
-
 def _provider(wire: Wire, **cfg: Any) -> DeepSeekProvider:
     p = DeepSeekProvider({"api_key": "k", **cfg})
-    p._client = AsyncOpenAI(
-        api_key="k", base_url=BASE, max_retries=0,
-        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(wire.handler)),
-    )
+    p._client = wire.client(BASE)
     return p
 
 

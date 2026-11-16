@@ -1379,18 +1379,8 @@ class OpenAIProvider(BaseProvider):
         except httpx.HTTPError as e:
             raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
 
-    #: ``responses.create`` keywords the OpenAI SDK knows; anything else rides in
-    #: ``extra_body`` (an unknown keyword is a TypeError in the SDK).
-    _SDK_RESPONSES_KWARGS: ClassVar[frozenset[str]] = frozenset(
-        {
-            "model", "input", "instructions", "tools", "tool_choice", "stream",
-            "max_output_tokens", "temperature", "top_p", "reasoning", "text", "include",
-            "store", "metadata", "user", "service_tier", "truncation",
-            "parallel_tool_calls", "previous_response_id", "prompt_cache_key",
-            "prompt_cache_retention", "max_tool_calls", "top_logprobs",
-            "safety_identifier", "background", "stream_options", "conversation",
-        }
-    )
+    #: ``responses.create`` keywords the OpenAI SDK knows (shared table).
+    _SDK_RESPONSES_KWARGS: ClassVar[frozenset[str]] = rsp.SDK_RESPONSES_KWARGS
 
     async def _responses_sdk(
         self, body: dict[str, Any], model_name: str, stream: bool

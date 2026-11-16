@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Kimi: K3 family, reasoning replay, learned fixed values, dynamic tools, Responses
+
+Audited against the live Moonshot API on 2026-11-16 (funded account; every
+item below verified live through llmcore).
+
+- **K3** (`kimi-k3`, `kimi-k3.1-pro`, `-highspeed`; 1M context) is
+  supported. It always reasons, and its depth is `reasoning_effort`
+  (low/high/max). `effort=` maps onto it, and "none" turns reasoning off.
+  `kimi-k2.7-code` refuses `thinking: disabled` (a 400); llmcore warns and
+  keeps it enabled. Fixed sampling values (temperature 1, top_p 0.95) are
+  stripped for K3 and k2.7. A new "invalid X: only Y is allowed" rejection is
+  dropped, retried and remembered.
+- **Reasoning replay**: `assistant_replay_metadata()` returns
+  `reasoning_content`, and for streams the finish chunk carries all of it.
+  Measured: without it, a K3 tool loop stops reasoning after the first call.
+- **Default `kimi-k3.1-pro`**. The moonshot-v1 series, kimi-k2.5 and the k2
+  previews now return 404; their cards are marked retired, and K3.1 Pro
+  cards were added.
+- **Responses API**: `responses_api = "always"` routes chat through
+  `/v1/responses` (plain, tool loop and stream verified).
+- **Dynamic tools** (K3): a system message with `metadata["tools"]` becomes
+  `{"role": "system", "tools": [...]}`.
+- `max_tokens` is sent as `max_completion_tokens` (the former is deprecated).
+  New parameters: `prompt_cache_options`, `prediction`, `logprobs`.
+- Usage reads `prompt_tokens_details.cached_tokens` and `cache_write_tokens`.
+- Kimi Code: with `base_url = "https://api.kimi.com/coding/v1"`, the key
+  defaults to `KIMI_API_KEY`.
+- DeepSeek, Kimi and OpenAI share one SDK `/responses` helper
+  (`openai_responses.sdk_create`).
+
 ### Changed — DeepSeek: V4.1-Flash, low effort, reasoning replay in streams, built-in tools, Responses
 
 Audited against api-docs.deepseek.com and the live `GET /models` on 2026-11-16.

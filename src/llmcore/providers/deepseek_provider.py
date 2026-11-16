@@ -877,8 +877,6 @@ class DeepSeekProvider(BaseProvider):
         Reasoning items come back with ``store: false`` and are replayed via
         ``metadata["reasoning_items"]``.
         """
-        from .openai_provider import OpenAIProvider
-
         params = dict(params)
         params.pop("use_beta", None)
         params.pop("stream_options", None)
@@ -896,37 +894,27 @@ class DeepSeekProvider(BaseProvider):
         )
         if safety_check is not None:
             body["safety_check"] = safety_check
-        known = OpenAIProvider._SDK_RESPONSES_KWARGS
-        sdk_kwargs = {k: v for k, v in body.items() if k in known}
-        extra = {k: v for k, v in body.items() if k not in known}
-        if extra:
-            sdk_kwargs["extra_body"] = extra
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
             logger.debug("RAW DEEPSEEK RESPONSES REQUEST: %s", json.dumps(body, default=str))
         try:
-            result = await self._client.responses.create(**sdk_kwargs)  # type: ignore[union-attr]
+            result = await rsp.sdk_create(self._client, body, stream=stream)
         except OpenAIError as e:
             raise self._map_error(e, model_name) from e
+        except rsp.ResponsesFailed as exc:
+            raise ProviderError(self.get_name(), f"Response failed: {exc}", model_name=model_name) from None
         if not stream:
-            try:
-                return rsp.normalize_response(result.model_dump(exclude_none=True))
-            except rsp.ResponsesFailed as exc:
-                raise ProviderError(self.get_name(), f"Response failed: {exc}", model_name=model_name) from None
+            return result
 
         async def _events() -> AsyncGenerator[dict[str, Any], None]:
-            normalizer = rsp.ResponsesStreamNormalizer()
             try:
-                async for event in result:
-                    try:
-                        chunks = normalizer.feed(event.model_dump(exclude_none=True))
-                    except rsp.ResponsesFailed as exc:
-                        raise ProviderError(
-                            self.get_name(), f"Response failed: {exc}", model_name=model_name
-                        ) from None
-                    for chunk in chunks:
-                        yield chunk
+                async for chunk in result:  # type: ignore[union-attr]
+                    yield chunk
             except OpenAIError as e:
                 raise self._map_error(e, model_name) from e
+            except rsp.ResponsesFailed as exc:
+                raise ProviderError(
+                    self.get_name(), f"Response failed: {exc}", model_name=model_name
+                ) from None
 
         return _events()
 

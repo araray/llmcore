@@ -1382,37 +1382,49 @@ max_retries = 2
   #
   # NOTE: Keys from platform.kimi.ai (api.moonshot.ai) and platform.kimi.com
   # (api.moonshot.cn) are NOT interchangeable — mixing them yields a 401.
+  # Kimi Code (coding plan) keys only work with
+  #   base_url = "https://api.kimi.com/coding/v1"  (model "kimi-for-coding");
+  # with that base URL the key defaults to KIMI_API_KEY.
   # api_key_env_var = "MOONSHOT_API_KEY"
 
   # Default model for this provider instance.
-  # Current models (May 2026):
-  #   kimi-k2.6          — flagship; text+image+video, thinking by default, 256K
-  #   kimi-k2.5          — multimodal; thinking toggle, 256K
-  #   moonshot-v1-8k/32k/128k                 — text generation
-  #   moonshot-v1-8k/32k/128k-vision-preview  — image understanding
-  # Deprecated (retired 2026-05-25): kimi-k2-0905/0711-preview,
-  #   kimi-k2-turbo-preview, kimi-k2-thinking[-turbo].
-  default_model = "kimi-k2.6"
+  # Current models (live GET /v1/models, 2026-11-16):
+  #   kimi-k3.1-pro[-highspeed]  — flagship; text+image+video, 1M, always reasons
+  #   kimi-k3                    — 1M, always reasons
+  #   kimi-k2.7-code[-highspeed] — coding; 256K, always thinks
+  #   kimi-k2.6                  — 256K, thinking toggle (deprecated)
+  # The moonshot-v1 series, kimi-k2.5 and the kimi-k2 previews are gone (404).
+  default_model = "kimi-k3.1-pro"
 
   # Request timeout in seconds.  Thinking + multimodal responses can be large;
   # 300s avoids network timeouts on long reasoning streams.
   timeout = 300
 
-  # --- Thinking Mode (kimi-k2.5 / kimi-k2.6 only) ---
-  # Controls whether the model emits internal reasoning (reasoning_content)
-  # before the final answer.  Ignored for moonshot-v1 models.
+  # "never" (default): Chat Completions. "always": Moonshot's /v1/responses.
+  # responses_api = "never"
+
+  # --- Reasoning ---
+  # effort= maps per family:
+  #   K3: reasoning_effort "low" | "high" | "max" (default max); "none" = off
+  #   kimi-k2.6: "none" disables thinking, anything else enables it
+  #   kimi-k2.7-code: always thinks (thinking="disabled" is ignored with a
+  #   warning; the API would answer 400)
+  # K3 and k2.x fix temperature/top_p/n/penalties; those are dropped.
   #
-  # thinking: "enabled" or "disabled" (default: "enabled")
-  #   - "enabled":  Model returns reasoning_content + content.
-  #   - "disabled": Model returns content only (faster, cheaper).
+  # Multi-turn and tool loops: put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata. It carries reasoning_content
+  # back (streams included); without it a K3 tool loop stops reasoning after
+  # the first call.
+  #
+  # K3 dynamic tools: Message(role=SYSTEM, content="", metadata={"tools": [...]})
+  # declares tools for the turns that follow.
+
+  # --- Thinking Mode (kimi-k2.6 / kimi-k2.7-code) ---
+  # thinking: "enabled" or "disabled" (default: "enabled"). Not used by K3.
   thinking = "enabled"
 
-  # --- Preserved Thinking (kimi-k2.6 only) ---
+  # --- Preserved Thinking (kimi-k2.6 only; K3 and k2.7 always preserve) ---
   # thinking_keep: "all" or empty/null (default: null)
-  #   - "all":  Historical reasoning_content is forwarded across turns, so the
-  #             model can continue a prior chain of thought.  Increases context
-  #             cost.  Only effective with thinking = "enabled".
-  #   - null:   Historical reasoning_content is ignored (shorter, cheaper).
   # Per-request override via chat_completion(thinking=..., thinking_keep=...).
   # thinking_keep = "all"
 
@@ -1426,8 +1438,8 @@ max_retries = 2
   #   metadata["inline_images"] = ["data:image/png;base64,...", "ms://<file_id>"]
   #   metadata["inline_videos"] = ["ms://<file_id>"]
   # Large videos should be uploaded first (provider.upload_file(...)) and
-  # referenced as ms://<file_id>.  kimi-k2.6 supports video; moonshot-v1
-  # *-vision-preview models support images only.
+  # referenced as ms://<file_id>.  Every current Kimi model takes images and
+  # video.
 
   # --- Deepgram Provider (speech / audio) ---
   # Deepgram is a real-time VOICE/AUDIO provider, not a text-completion provider.
