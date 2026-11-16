@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — vLLM: guided decoding silently ignored, discovery behind tunnels, newer parameters
+
+Audited against the vLLM source (v0.34.0rc0, `c02ebf136e`). No live server
+was available, so this follows the source.
+
+- **`guided_json` / `guided_regex` / `guided_choice` / `guided_grammar` were
+  removed in vLLM 0.12**, and the server now treats them as unknown extras:
+  HTTP 200 with unconstrained output. llmcore forwarded them as-is. They are
+  now translated into `structured_outputs`, with a deprecation warning.
+- **Discovery** used its own HTTP client without the configured
+  `default_headers`, so behind an authenticated tunnel (the gpu.ai runtime's
+  Basic auth) it failed and the context fell back to 4096. It uses the
+  provider's client now. Without a configured `default_model`, the first
+  served model becomes the default.
+- **Embeddings** default to `default_embedding_model` or the served model.
+  The inherited default was OpenAI's `text-embedding-3-small`.
+- The newer chat fields are accepted: `thinking_token_budget`,
+  `include_reasoning`, `stop_token_ids`, `truncate_prompt_tokens`,
+  `bad_words`, `allowed_token_ids`, `cache_salt`, `priority`,
+  `media_io_kwargs`, `documents`, `vllm_xargs`, `repetition_detection`,
+  `return_token_ids`.
+- Reasoning replay works through the shared OpenAI-compatible layer (vLLM
+  renames `reasoning_content` to `reasoning` on input).
+
 ### Fixed — gpu.ai: streaming flags, refused parameters, embeddings contract
 
 Audited against the live API on 2026-11-16 (verified on both transports).

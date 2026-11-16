@@ -56,8 +56,18 @@ section with ``type = "vllm"`` is mapped to this class by
 :class:`ProviderManager`, and ``get_name()`` returns the section name
 (via ``_instance_name``) so metrics and logs remain distinguishable.
 
-Tested against vLLM commit ``219bb5b8c`` (any vLLM ≥ v0.8 with the
-OpenAI-compatible entrypoint should work).
+Audited against vLLM ``c02ebf136e`` (v0.34.0rc0, 2026-11-16) from source; no
+live server was available. Notes from that audit:
+
+* The ``guided_*`` request fields were removed in v0.12 and are now accepted as
+  unknown extras -- HTTP 200 with *unconstrained* output. They are translated
+  to ``structured_outputs`` here (with a deprecation warning).
+* Reasoning comes back as ``message.reasoning``; on the way in vLLM renames
+  ``reasoning_content`` to ``reasoning``, so the shared replay
+  (``assistant_replay_metadata``) works as is.
+* Without a configured ``default_model``, the first model the server lists is
+  used once :meth:`get_models_details` has run (a vLLM server usually serves
+  one model).
 """
 
 from __future__ import annotations
@@ -98,11 +108,8 @@ DEFAULT_VLLM_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 _VLLM_EXTRA_BODY_KEYS: frozenset[str] = frozenset(
     {
         "structured_outputs",
-        "guided_json",
-        "guided_regex",
-        "guided_choice",
-        "guided_grammar",
-        "guided_decoding_backend",
+        # guided_* are not here: vLLM removed them, and chat_completion
+        # translates them into structured_outputs (_GUIDED_TO_STRUCTURED).
         "prompt_logprobs",
         "kv_transfer_params",
         "min_p",
@@ -120,8 +127,32 @@ _VLLM_EXTRA_BODY_KEYS: frozenset[str] = frozenset(
         "chat_template",
         "chat_template_kwargs",
         "mm_processor_kwargs",
+        # Present in the chat request schema at v0.34 (source audit).
+        "thinking_token_budget",
+        "include_reasoning",
+        "stop_token_ids",
+        "truncate_prompt_tokens",
+        "bad_words",
+        "allowed_token_ids",
+        "cache_salt",
+        "priority",
+        "media_io_kwargs",
+        "documents",
+        "vllm_xargs",
+        "repetition_detection",
+        "return_token_ids",
     }
 )
+
+#: Removed request fields (v0.12) -> their ``structured_outputs`` key. vLLM
+#: now ignores the old names silently (200, unconstrained output).
+_GUIDED_TO_STRUCTURED: dict[str, str] = {
+    "guided_json": "json",
+    "guided_regex": "regex",
+    "guided_choice": "choice",
+    "guided_grammar": "grammar",
+    "guided_whitespace_pattern": "whitespace_pattern",
+}
 
 #: OpenAI-only parameters that vLLM silently ignores or rejects.
 #: Stripped from the inherited ``get_supported_parameters`` output so
@@ -327,6 +358,9 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
                     raw_fallback,
                 )
         self._vllm_model_cache = {}
+        #: Whether default_model came from config; if not, discovery picks
+        #: the server's own model.
+        self._default_model_configured = bool(config.get("default_model"))
 
         logger.info(
             "VLLMProvider initialised: base_url=%s, default_model=%s, instance=%s",
@@ -370,18 +404,14 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
                 non-2xx status, or emits malformed JSON.
         """
         url = f"{self.base_url.rstrip('/')}/models"
-        headers: dict[str, str] = {}
-        # Only send the Authorization header when a real token is set;
-        # sending ``Bearer EMPTY`` to a no-auth server is harmless but
-        # sending any header to a strictly-validated proxy may not be.
-        if self.api_key and self.api_key != "EMPTY":
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as http:
-                resp = await http.get(url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            # The shared direct client carries the configured default_headers
+            # (e.g. the Basic auth of a tunnelled runtime); the separate
+            # client used here before did not, so discovery failed behind
+            # one and context fell back to 4096.
+            resp = await self._get_http().get("/models")
+            resp.raise_for_status()
+            data = resp.json()
         except httpx.HTTPStatusError as e:
             raise ProviderError(
                 self.get_name(),
@@ -442,6 +472,8 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
                     },
                 )
             )
+        if results and not getattr(self, "_default_model_configured", True):
+            self.default_model = results[0].id
         return results
 
     @staticmethod
@@ -567,17 +599,19 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
                     "json_object (bool), structural_tag."
                 ),
             },
-            # Legacy flat guided_* knobs still accepted by vLLM.
+            # Legacy guided_* knobs: removed by vLLM in v0.12 and translated
+            # into structured_outputs by chat_completion.
             "guided_json": {
                 "type": ["object", "string"],
-                "description": "JSON schema (dict or stringified) for constrained decoding.",
+                "description": "Deprecated: becomes structured_outputs.json.",
             },
             "guided_regex": {"type": "string"},
             "guided_choice": {"type": "array", "items": {"type": "string"}},
             "guided_grammar": {"type": "string"},
+            "guided_whitespace_pattern": {"type": "string"},
             "guided_decoding_backend": {
                 "type": "string",
-                "enum": ["xgrammar", "guidance", "outlines", "lm-format-enforcer"],
+                "description": "Deprecated and ignored: the backend is a server setting now.",
             },
             # Advanced sampling.
             "prompt_logprobs": {
@@ -605,6 +639,20 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
             "mm_processor_kwargs": {"type": "object"},
             # Disaggregated-serving hint (advanced).
             "kv_transfer_params": {"type": "object"},
+            # Request fields added since (chat request schema, v0.34).
+            "thinking_token_budget": {"type": "integer"},
+            "include_reasoning": {"type": "boolean"},
+            "stop_token_ids": {"type": "array", "items": {"type": "integer"}},
+            "truncate_prompt_tokens": {"type": "integer", "minimum": -1},
+            "bad_words": {"type": "array", "items": {"type": "string"}},
+            "allowed_token_ids": {"type": "array", "items": {"type": "integer"}},
+            "cache_salt": {"type": "string"},
+            "priority": {"type": "integer"},
+            "media_io_kwargs": {"type": "object"},
+            "documents": {"type": "array", "items": {"type": "object"}},
+            "vllm_xargs": {"type": "object"},
+            "repetition_detection": {"type": "object"},
+            "return_token_ids": {"type": "boolean"},
         }
         params.update(vllm_extensions)
         return params
@@ -659,6 +707,7 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
         if isinstance(caller_extra, dict):
             extra_body.update(caller_extra)
 
+        self._translate_guided(kwargs, extra_body)
         for key in list(kwargs.keys()):
             if key in _VLLM_EXTRA_BODY_KEYS:
                 extra_body[key] = kwargs.pop(key)
@@ -674,6 +723,49 @@ class VLLMProvider(OpenAIProvider):  # type: ignore[misc,valid-type]
             tool_choice=tool_choice,
             **kwargs,
         )
+
+    @staticmethod
+    def _translate_guided(kwargs: dict[str, Any], extra_body: dict[str, Any]) -> None:
+        """Move removed ``guided_*`` fields into ``structured_outputs``.
+
+        vLLM dropped them in v0.12 and now answers 200 with unconstrained
+        output when they are sent, so passing them through was a silent
+        loss of the constraint.
+        """
+        found = [k for k in (*_GUIDED_TO_STRUCTURED, "guided_decoding_backend") if k in kwargs]
+        found += [k for k in (*_GUIDED_TO_STRUCTURED, "guided_decoding_backend") if k in extra_body]
+        if not found:
+            return
+        current = extra_body.get("structured_outputs") or kwargs.pop("structured_outputs", None) or {}
+        structured = dict(current) if isinstance(current, dict) else {}
+        for source in (kwargs, extra_body):
+            for old, new in _GUIDED_TO_STRUCTURED.items():
+                if old in source:
+                    structured.setdefault(new, source.pop(old))
+            source.pop("guided_decoding_backend", None)
+        logger.warning(
+            "vLLM removed %s in v0.12 (they are ignored, not enforced); sent as "
+            "structured_outputs instead. Use structured_outputs={...} directly.",
+            ", ".join(sorted(set(found))),
+        )
+        if structured:
+            extra_body["structured_outputs"] = structured
+
+    async def create_embeddings(
+        self,
+        input_texts: str | list[str],
+        *,
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Embeddings from the served model (``/v1/embeddings``).
+
+        The model defaults to ``default_embedding_model`` from config, else
+        the provider's model: the inherited default (OpenAI's
+        ``text-embedding-3-small``) does not exist on a vLLM server.
+        """
+        target = model or self.config.get("default_embedding_model") or self.default_model
+        return await super().create_embeddings(input_texts, model=target, **kwargs)
 
     # ------------------------------------------------------------------
     # Token counting (approximation)

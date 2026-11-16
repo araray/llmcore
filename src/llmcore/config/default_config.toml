@@ -1102,9 +1102,9 @@ max_retries = 2
   # subclasses OpenAIProvider. It additionally:
   #   - Discovers `max_model_len` from /v1/models (authoritative context
   #     length; kills the 4096 fallback for local models).
-  #   - Accepts vLLM-specific params: structured_outputs, guided_json,
-  #     guided_regex, guided_choice, guided_grammar, prompt_logprobs,
-  #     min_p, top_k, repetition_penalty, kv_transfer_params, and more.
+  #   - Accepts vLLM-specific params: structured_outputs, prompt_logprobs,
+  #     min_p, top_k, repetition_penalty, kv_transfer_params, and more
+  #     (guided_* are translated into structured_outputs).
   #     See `docs/providers/vllm.md` for the full list.
   #   - Strips OpenAI-only params (service_tier, prompt_cache_key,
   #     web_search_options, verbosity) that vLLM ignores.
@@ -1129,7 +1129,21 @@ max_retries = 2
 
   # Default model name — HuggingFace repo id or whatever name you passed
   # to `vllm serve ...`.  Override per-request via chat_completion(model=...).
-  default_model = "meta-llama/Llama-3.1-8B-Instruct"
+  # Left unset, the first model the server lists becomes the default once
+  # get_models_details() has run (a vLLM server usually serves one model).
+  # default_model = "meta-llama/Llama-3.1-8B-Instruct"
+  #
+  # Embeddings default to default_embedding_model, else the served model.
+  # default_embedding_model = "Qwen/Qwen3-Embedding-0.6B"
+  #
+  # Structured output: structured_outputs={"json": schema} (or regex,
+  # choice, grammar, json_object, structural_tag). The old guided_* fields
+  # were removed in vLLM 0.12 and are silently ignored by the server; llmcore
+  # translates them into structured_outputs with a warning.
+  # Also accepted (vLLM 0.34): thinking_token_budget, include_reasoning,
+  # stop_token_ids, truncate_prompt_tokens, bad_words, allowed_token_ids,
+  # cache_salt, priority, media_io_kwargs, documents, vllm_xargs,
+  # repetition_detection, return_token_ids.
 
   # Request timeout in seconds.  Local cold-starts and large models can
   # be slow; 240s covers most practical cases.
