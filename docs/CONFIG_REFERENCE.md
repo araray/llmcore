@@ -700,6 +700,40 @@ PYEOF`
   - Populates: options
   - Merge: replace
 
+## ⌘ Provider: Command Code
+
+Command Code's Provider API: one key for 98+ models over three protocols. Claude
+goes to `/messages`, every other chat model to `/chat/completions`, and
+`typesafe/jev` to `/systemone`. Each model's route is read from the live
+`/models` catalog. Aliases: `command_code`, `command-code`. Needs a GOAT plan or
+higher. Guide: [CommandCode_provider_usage.md](CommandCode_provider_usage.md).
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `providers.commandcode.api_key` | secret |  |  | Key from Studio. Prefer `CMD_API_KEY` (or `COMMAND_CODE_API_KEY` / `COMMANDCODE_API_KEY`) |
+| `providers.commandcode.api_key_env_var` | string |  | `CMD_API_KEY` | Variable holding the key; the three names above are tried when unset |
+| `providers.commandcode.base_url` | url |  | `https://api.commandcode.ai/provider` | Gateway root (`CMD_BASE_URL` when unset); the `.../provider/v1` form is accepted |
+| `providers.commandcode.default_model` | string |  | `claude-sonnet-5-5` | Model id or short name (`kimi-k3` → `moonshotai/Kimi-K3`) |
+| `providers.commandcode.transport` | enum |  | `httpx` | `httpx` (direct) or `sdk` (official OpenAI / Anthropic SDKs) |
+| `providers.commandcode.zdr` | boolean |  | `false` | Send `x-cmd-zdr: 1` on every request (`CMD_ZDR=1`; per call `zdr=True`) |
+| `providers.commandcode.catalog_ttl` | integer |  | `3600` | Seconds the live `/models` catalog is trusted |
+| `providers.commandcode.timeout` | integer |  | `120` | Request timeout in seconds |
+| `providers.commandcode.max_retries` | integer |  | `2` | Retries on the SDK transport and for System One |
+
+### `providers.commandcode.zdr`
+
+Zero data retention. With it on, only upstreams that retain nothing may serve
+a request, and a model without one fails with `422 cmd_zdr_no_providers`
+instead of quietly using one that does. Enforcing it can change which upstream
+serves a request, so it can cost more.
+
+### `providers.commandcode.catalog_ttl`
+
+If the catalog cannot be read, routing falls back to the bundled `commandcode`
+model cards, then to family names (`claude-*` → `/messages`). If the gateway
+says a model is served on a different route, the catalog is re-read early and
+the call is retried once.
+
 ## 🎯 Provider: TypeSafe.ai (System One)
 
 TypeSafe.ai System One typed-judgment provider (Jev models). **Not a chat API**: `POST /v1/systemone` evaluates a state (string / JSON object / array) against typed questions — `noul` (yes/no probability), `choice` (pick one option; per-option probabilities + confidence), `score` (rubric level; per-level probabilities + confidence) — and returns structured, calibrated answers. Use `provider.system_one(...)` or the chat bridge `llm.chat(..., provider_name="typesafe", questions={...})`. Streaming and tool calling are not supported. Alias: `jev`. Install with `pip install llmcore[typesafe]` (httpx only). See [TypeSafe provider usage](TypeSafe_provider_usage.md).
