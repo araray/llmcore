@@ -137,7 +137,8 @@ higgsfield = ["httpx>=0.27.0", "higgsfield-client>=0.2.0"]
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
 # required. Install with: pip install llmcore[typesafe]
-typesafe = ["httpx>=0.27.0", "typesafe-sdk>=0.7.2"]
+# typesafe-sdk 0.7.5: Box, image assets; request bodies zstd-compressed by default.
+typesafe = ["httpx>=0.27.0", "typesafe-sdk>=0.7.5,<0.8"]
 # Command Code: a multi-protocol gateway. Claude goes over the Anthropic wire,
 # the other chat models over the OpenAI wire, and Jev over System One (httpx).
 # Direct HTTP is the default; the OpenAI / Anthropic SDKs are the "sdk" transport.

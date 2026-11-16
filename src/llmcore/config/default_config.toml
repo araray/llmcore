@@ -1707,8 +1707,15 @@ max_retries = 2
   # base_url = "https://api.typesafe.ai"
 
   # Default model (env TYPESAFE_DEFAULT_MODEL is honoured when unset).
-  # Aliases move with releases: jev-latest / jev-preview -> jev-1.13.0 today.
-  # Pin the versioned id (e.g. "jev-1.13.0") if you tuned confidence thresholds.
+  # Aliases move with releases: jev-latest / jev-preview -> jev-1.14.0 today
+  # (since 2026-10-14). Pin the versioned id (e.g. "jev-1.14.0") if you tuned
+  # confidence thresholds.
+  #
+  # Images and Box (1.14): system_one(state, questions, assets={"ref": png_bytes})
+  # with Box(instructions="... `photo` ...") - llmcore adds the
+  # TypeSafe-Danger-Zone-Images header. long_context = true sends the
+  # Long-Context header (64k -> 262k tokens).
+  # long_context = false
   default_model = "jev-latest"
 
   # --- Transport / retries ---

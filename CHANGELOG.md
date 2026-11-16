@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — TypeSafe: Jev 1.14, Box questions, image assets, long context
+
+Audited against typesafe-sdk 0.7.5 and the live API on 2026-11-16. Text,
+image and Box questions were verified live on both transports.
+
+- **Jev 1.14**: `jev-latest` and `jev-preview` point to `jev-1.14.0` (the
+  API answers with that id). There is a new card, cardctl maps the aliases
+  there, and 1.13 keeps its own card. Both take images.
+- **Box questions** locate things in an image (`Box`, `BoxAnswer`,
+  `result.boxes`). Box answers used to be discarded as an unknown type.
+- **Image assets**: `system_one(..., assets={"ref": png_or_jpeg_bytes |
+  path | dict})` with the `TypeSafe-Danger-Zone-Images` header added
+  automatically. `long_context = true` sends the Long-Context header and
+  budgets 262k tokens.
+- **SDK backend**: every failure was `retryable=True`, a 400/401/422
+  included. Failures are now classified by type and status. Headers,
+  timeouts and assets are forwarded.
+  `typesafe-sdk>=0.7.5,<0.8`.
+
 ### Changed — Deepgram: Flux TTS, SDK transcription parameters, newer fields
 
 Audited against deepgram-sdk 7.19 and the live API on 2026-11-16. Flux TTS
