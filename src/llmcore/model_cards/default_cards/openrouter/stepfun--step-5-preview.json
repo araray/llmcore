@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true,
     "image_generation": false,
     "image_edit": false,
@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.0,
-      "output": 2.7
+      "output": 2.7,
+      "cached_input": 0.1
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "Step 5 Preview is StepFun's flagship model for agentic work, built on a sparse Mixture-of-Experts architecture (27B active / 600B total parameters). It performs strongly in software engineering and professional...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/stepfun/step-5-preview",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/stepfun/step-5-preview",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

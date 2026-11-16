@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.08,
-      "output": 0.2
+      "output": 0.2,
+      "cached_input": 0.02
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers. Prompts and outputs may be retained and used...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/liquid/lfm-3-1.7b",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/liquid/lfm-3-1.7b",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

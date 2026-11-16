@@ -29,8 +29,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.50,
-      "output": 3.00,
+      "input": 0.5,
+      "output": 3.0,
       "cached_input": 0.05
     },
     "batch_discount_percent": 50
@@ -42,12 +42,28 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gemini-flash-latest"],
+  "aliases": [
+    "gemini-flash-latest"
+  ],
   "description": "Gemini 3 Flash is Google's default model (as of Apr 2026) with 1M context. Always-on thinking with configurable levels. Supports function calling, code execution, search grounding, computer use, and multimodal inputs including vision and audio.",
-  "tags": ["fast", "cost-effective", "long-context", "agentic", "default"],
+  "tags": [
+    "fast",
+    "cost-effective",
+    "long-context",
+    "agentic",
+    "default"
+  ],
   "provider_google": {
-    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
-    "supported_outputs": ["text"],
+    "supported_inputs": [
+      "text",
+      "image",
+      "video",
+      "audio",
+      "pdf"
+    ],
+    "supported_outputs": [
+      "text"
+    ],
     "grounding": {
       "google_search": true,
       "maps": true
@@ -55,12 +71,28 @@
     "thinking": {
       "supported": true,
       "mode": "always_on",
-      "levels": ["minimal", "low", "medium", "high"],
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
       "default_level": "high"
     },
     "live_api": false,
     "url_context": true,
     "safety_settings": []
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-3-flash-preview",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T09:04:59+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent"
+    ]
+  }
 }

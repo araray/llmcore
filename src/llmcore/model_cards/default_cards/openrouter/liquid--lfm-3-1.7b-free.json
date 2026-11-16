@@ -40,5 +40,12 @@
   "aliases": [],
   "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers. Prompts and outputs may be retained and used...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/liquid/lfm-3-1.7b:free",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

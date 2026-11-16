@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.3,
-      "output": 1.0
+      "output": 1.0,
+      "cached_input": 0.04
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "Beam 1.0 is Reflection's open-weight reasoning model for coding and long-horizon agentic workflows. It uses a sparse mixture-of-experts architecture with 501B total and 23B active parameters per token, and a...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/reflection/beam-1.0-501b-a23b",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/reflection/beam-1.0-501b-a23b",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

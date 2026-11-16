@@ -39,5 +39,12 @@
   "aliases": [],
   "description": "Switchyard is an open-source model routing system that switches between multiple models to optimize the cost of requests. By default it will use OpenRouter market data to select the most...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/nvidia/switchyard",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

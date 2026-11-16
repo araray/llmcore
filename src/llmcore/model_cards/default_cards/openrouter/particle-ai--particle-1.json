@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.06,
-      "output": 0.5
+      "output": 0.5,
+      "cached_input": 0.003
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "Particle-1 is a token-efficient agentic coding model from Particle AI, post-trained on DeepSeek V4.1 Flash. It is suited for software engineering work such as terminal workflows, codebase changes, and data...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/particle-ai/particle-1",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/particle-ai/particle-1",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

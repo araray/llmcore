@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true,
     "image_generation": false,
     "image_edit": false,
@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.6,
-      "output": 3.0
+      "output": 3.0,
+      "cached_input": 0.06
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "Glimpse is a multimodal visual reasoning model from Elorian, built for visual understanding and complex visual reasoning in the physical world. It reasons directly over images and video rather than...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/elorian/glimpse",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/elorian/glimpse",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

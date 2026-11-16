@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.6,
-      "output": 4.8
+      "output": 4.8,
+      "cached_input": 0.4
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "Grok 4.7 is SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/x-ai/grok-4.7:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/x-ai/grok-4.7:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

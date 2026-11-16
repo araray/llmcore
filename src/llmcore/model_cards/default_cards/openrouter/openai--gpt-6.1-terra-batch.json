@@ -34,7 +34,9 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.5,
-      "output": 2.5
+      "output": 2.5,
+      "cached_input": 0.025,
+      "cache_write": 0.625
     }
   },
   "lifecycle": {
@@ -46,5 +48,20 @@
   "aliases": [],
   "description": "GPT-6.1 Terra is the mid-tier model in OpenAI's GPT-6.1 series, priced below GPT-6.1 Sol. It is suited for everyday agentic, coding, and writing work, is particularly strong at understanding screenshots...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/openai/gpt-6.1-terra:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/openai/gpt-6.1-terra:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

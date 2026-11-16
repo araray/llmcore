@@ -40,5 +40,12 @@
   "aliases": [],
   "description": "Flint is an open-weight mixture-of-experts model from Recursive, with about 2.5B active parameters out of 40B total, built by Recursive's autoresearch system Eureka Machine for coding agents. It is suited...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/recursive/flint-v1.0:free",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

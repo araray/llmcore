@@ -40,5 +40,12 @@
   "aliases": [],
   "description": "Inkling 2 Small is an open-weight multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/thinkingmachines/inkling-2-small:free",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

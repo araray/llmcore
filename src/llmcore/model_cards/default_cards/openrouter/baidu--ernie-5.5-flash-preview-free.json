@@ -40,5 +40,12 @@
   "aliases": [],
   "description": "ERNIE 5.5 Flash Preview is the latest foundation model in the ERNIE family, with comprehensive improvements in coding, agentic capabilities, knowledge work, and deep research. It has 280 billion total...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/baidu/ernie-5.5-flash-preview:free",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

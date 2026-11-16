@@ -34,7 +34,7 @@
     "per_million_tokens": {
       "input": 1.38,
       "output": 4.68,
-      "cached_input": 0.165
+      "cached_input": 0.17
     }
   },
   "lifecycle": {
@@ -48,5 +48,13 @@
   "source": "generated",
   "provider_extension": {
     "author": "Meta"
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/muse-spark-open-816b-a42b",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:56+00:00"
   }
 }

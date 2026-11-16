@@ -33,7 +33,14 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.006
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -42,5 +49,13 @@
   "aliases": [],
   "description": "Deepseek model: deepseek-flash",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:deepseek",
+    "method": "scrape",
+    "url": "https://api-docs.deepseek.com/quick_start/pricing",
+    "matched_key": "deepseek-flash",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T09:05:00+00:00"
+  }
 }

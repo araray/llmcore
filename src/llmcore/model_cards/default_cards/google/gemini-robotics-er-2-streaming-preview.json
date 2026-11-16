@@ -33,7 +33,13 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 5.0
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -44,5 +50,13 @@
   "tags": [
     "live"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-robotics-er-2-streaming-preview",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T09:04:59+00:00"
+  }
 }

@@ -22,7 +22,7 @@
     "video_input": true,
     "image_generation": false,
     "web_search": false,
-    "reasoning": true,
+    "reasoning": false,
     "file_processing": false
   },
   "lifecycle": {
@@ -74,13 +74,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/rekaai/reka-edge",
     "match": "exact key match",
-    "fetched_at": "2026-11-15T11:17:11+00:00",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/rekaai/reka-edge",
-      "fetched_at": "2026-11-15T11:17:21+00:00"
+      "fetched_at": "2026-11-16T09:06:07+00:00"
     }
   }
 }

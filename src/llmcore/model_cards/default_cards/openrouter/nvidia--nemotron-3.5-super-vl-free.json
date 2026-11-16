@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true,
     "image_generation": false,
     "image_edit": false,
@@ -40,5 +40,12 @@
   "aliases": [],
   "description": "NVIDIA Nemotron 3.5 Super VL is an open multimodal mixture-of-experts model from NVIDIA, with 12B active parameters out of 120B total. It takes text, images, documents, GUI screenshots, and video...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "caps:openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/nvidia/nemotron-3.5-super-vl:free",
+    "fetched_at": "2026-11-16T09:06:07+00:00"
+  }
 }

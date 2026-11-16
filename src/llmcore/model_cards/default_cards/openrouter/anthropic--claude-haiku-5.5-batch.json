@@ -34,7 +34,9 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.05,
-      "output": 0.25
+      "output": 0.25,
+      "cached_input": 0.005,
+      "cache_write": 0.0625
     }
   },
   "lifecycle": {
@@ -46,5 +48,20 @@
   "aliases": [],
   "description": "Claude Haiku 5.5 is Anthropic's small, fast model for high-volume, cost-sensitive work such as summarization, subagents, and browser use. It succeeds Claude Haiku 4.5 with stronger coding, computer use, and...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/anthropic/claude-haiku-5.5:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/anthropic/claude-haiku-5.5:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

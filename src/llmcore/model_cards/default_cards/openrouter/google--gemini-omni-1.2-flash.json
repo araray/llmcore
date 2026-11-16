@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true,
     "image_generation": false,
     "image_edit": false,
@@ -46,5 +46,20 @@
   "aliases": [],
   "description": "Gemini Omni 1.2 Flash is Google's native multimodal video generation and editing model, the successor to Gemini Omni 1.1 Flash. It generates clips up to 15 seconds long with native...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-omni-1.2-flash",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-omni-1.2-flash",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

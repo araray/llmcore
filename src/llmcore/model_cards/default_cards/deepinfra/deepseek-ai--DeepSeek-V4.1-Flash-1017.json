@@ -34,8 +34,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.2,
-      "output": 0.6,
-      "cached_input": 0.006
+      "output": 0.6
     }
   },
   "lifecycle": {
@@ -84,6 +83,24 @@
     ],
     "datacenters": [
       "US"
+    ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    },
+    "preserved_context_fields": [
+      "max_output_tokens"
     ]
   }
 }

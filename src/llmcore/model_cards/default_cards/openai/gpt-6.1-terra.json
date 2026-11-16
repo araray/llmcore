@@ -32,7 +32,15 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 5.0,
+      "cached_input": 0.05,
+      "cache_write": 1.25
+    }
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-10-13"
@@ -44,5 +52,13 @@
   "tags": [
     "reasoning"
   ],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:openai",
+    "method": "scrape",
+    "url": "https://platform.openai.com/docs/pricing",
+    "matched_key": "gpt-6.1-terra",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T09:04:57+00:00"
+  }
 }

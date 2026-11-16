@@ -34,7 +34,8 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.13,
-      "output": 3.94
+      "output": 3.94,
+      "cached_input": 0.113
     }
   },
   "lifecycle": {
@@ -46,5 +47,20 @@
   "aliases": [],
   "description": "ERNIE-Light-DT-1.0 is based on open-source GLM models and includes research findings from Baidu Search's Lightning large model. It features Baidu Sparse Attention (BSA), a unique sparse attention mechanism developed by...",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/baidu/ernie-light-dt-1.0-intl",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/baidu/ernie-light-dt-1.0-intl",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

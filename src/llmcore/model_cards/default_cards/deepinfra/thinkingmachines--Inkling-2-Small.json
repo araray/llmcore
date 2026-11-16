@@ -33,8 +33,7 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 0.3,
-      "output": 1.0,
-      "cached_input": 0.03
+      "output": 1.0
     }
   },
   "lifecycle": {
@@ -84,5 +83,20 @@
     "datacenters": [
       "US"
     ]
+  },
+  "x_pricewatch": {
+    "feed": "deepinfra",
+    "method": "api",
+    "url": "https://api.deepinfra.com/models/list",
+    "matched_key": "deepinfra/thinkingmachines/Inkling-2-Small",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:deepinfra",
+      "method": "api",
+      "url": "https://api.deepinfra.com/models/list",
+      "matched_key": "deepinfra/thinkingmachines/Inkling-2-Small",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
   }
 }

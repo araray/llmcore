@@ -17,7 +17,7 @@
     "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
+    "video_input": true,
     "reasoning": true,
     "image_generation": false,
     "image_edit": false,
@@ -34,7 +34,9 @@
     "currency": "USD",
     "per_million_tokens": {
       "input": 1.5,
-      "output": 4.5
+      "output": 4.5,
+      "cached_input": 0.075,
+      "cache_write": 1.875
     }
   },
   "lifecycle": {
@@ -46,5 +48,20 @@
   "aliases": [],
   "description": "Qwen4 Max is the flagship model in Alibaba's Qwen4 series. It accepts text, image, and video input and returns text, with a 1M-token context window and reasoning enabled by default....",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/qwen/qwen4-max",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/qwen/qwen4-max",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
 }

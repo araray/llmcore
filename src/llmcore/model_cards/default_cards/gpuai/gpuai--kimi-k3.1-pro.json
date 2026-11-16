@@ -48,5 +48,13 @@
   "source": "generated",
   "provider_extension": {
     "author": "Moonshot AI"
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/kimi-k3.1-pro",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:56+00:00"
   }
 }
