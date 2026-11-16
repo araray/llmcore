@@ -8,7 +8,7 @@ Skipped automatically when no key is set (CI has none). Run locally with::
 
 Cost: chat tests use Command Code's free models where they can
 (``inkling-2-small:free``, 200 requests/day). Claude tests use
-``claude-haiku-5-5`` ($0.10 / $0.50 per 1M). One full run costs well under a
+``claude-haiku-5-5`` and ``gpt-6-luna`` ($0.10 / $0.50 per 1M each). One full run costs well under a
 cent. Both transports are exercised.
 """
 
@@ -34,6 +34,7 @@ pytestmark = [
 
 FREE = "inkling-2-small:free"
 CLAUDE = "claude-haiku-5-5"
+GPT = "gpt-6-luna"  # $0.10 / $0.50 per 1M; served on /responses by default
 CTX = [
     Message(role=Role.SYSTEM, content="Be terse."),
     Message(role=Role.USER, content="What is 17*23? Answer with the number only."),
@@ -58,6 +59,7 @@ async def test_catalog(provider):
     assert provider.route_for(CLAUDE) == "messages"
     assert provider.route_for(FREE) == "chat"
     assert provider.resolve_model("kimi-k3") == "moonshotai/Kimi-K3"
+    assert provider.route_for(GPT) == "responses"
 
 
 async def test_chat_open_model(provider):
@@ -88,6 +90,44 @@ async def test_claude_tools(provider):
     resp = await provider.chat_completion(ctx, CLAUDE, tools=[WEATHER], max_tokens=200)
     calls = provider.extract_tool_calls(resp)
     assert calls and calls[0].name == "get_weather"
+
+
+async def test_gpt_over_responses(provider):
+    resp = await provider.chat_completion(CTX, GPT, effort="low", max_tokens=300)
+    assert "391" in provider.extract_response_content(resp)
+    assert provider.extract_usage_details(resp)["route"] == "responses"
+
+
+async def test_gpt_over_responses_streaming(provider):
+    stream = await provider.chat_completion(CTX, GPT, stream=True, effort="low", max_tokens=300)
+    chunks = [c async for c in stream]
+    assert "391" in "".join(provider.extract_delta_content(c) for c in chunks)
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+
+
+async def test_gpt_tool_loop_with_reasoning_items(provider):
+    question = [Message(role=Role.USER, content="What's the weather in Lisbon? Use the tool.")]
+    first = await provider.chat_completion(question, GPT, tools=[WEATHER], effort="low", max_tokens=300)
+    calls = provider.extract_tool_calls(first)
+    assert calls and calls[0].name == "get_weather"
+    history = [
+        *question,
+        Message(
+            role=Role.ASSISTANT,
+            content="",
+            tool_calls=first["choices"][0]["message"]["tool_calls"],
+            metadata={"reasoning_items": provider.extract_reasoning_items(first) or []},
+        ),
+        Message(role=Role.TOOL, content="22C and sunny", tool_call_id=calls[0].id),
+    ]
+    second = await provider.chat_completion(history, GPT, tools=[WEATHER], effort="low", max_tokens=300)
+    assert "22" in provider.extract_response_content(second)
+
+
+async def test_open_model_forced_onto_responses(provider):
+    resp = await provider.chat_completion(CTX, "stealth/glyph-cluster:free", responses=True, max_tokens=300)
+    assert provider.extract_usage_details(resp)["route"] == "responses"
+    assert provider.extract_response_content(resp)
 
 
 async def test_errors_are_mapped(provider):

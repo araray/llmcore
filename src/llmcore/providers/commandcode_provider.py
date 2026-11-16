@@ -28,6 +28,10 @@ existing llmcore wire implementation:
   tools are inherited rather than re-derived.
 - ``chat``: :class:`OpenAIProvider` pointed at the gateway, plus the gateway's
   quirks (see :class:`_ChatLane`).
+- ``responses``: OpenAI's Responses API (:mod:`.openai_responses`), used for
+  GPT models by default (``responses_api = "openai"``, as Command Code's own
+  pi provider does), for every model that offers it with ``"all"``, or never.
+  Results are normalized to the Chat Completions shape like the other lanes.
 - ``system_one``: :class:`TypeSafeProvider` pointed at the gateway, exposed as
   :meth:`CommandCodeProvider.system_one`.
 
@@ -63,6 +67,7 @@ Configuration (``[providers.commandcode]``)::
     # COMMAND_CODE_API_KEY, COMMANDCODE_API_KEY.
     transport = "httpx"     # or "sdk"
     zdr = false             # send x-cmd-zdr: 1 on every request (env CMD_ZDR=1)
+    responses_api = "openai"  # GPT -> /responses; "all" | "never"
     catalog_ttl = 3600      # seconds the live /models catalog is trusted
     timeout = 120
     max_retries = 2
@@ -100,6 +105,7 @@ except ImportError:  # pragma: no cover
 
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..models import Message, ModelDetails, Tool, ToolCall
+from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
 
 logger = logging.getLogger(__name__)
@@ -131,14 +137,16 @@ TRACE_HEADER = "x-trace-id"
 
 ROUTE_MESSAGES = "messages"
 ROUTE_CHAT = "chat"
+ROUTE_RESPONSES = "responses"
 ROUTE_SYSTEM_ONE = "system_one"
 
-#: ``supported_endpoints`` entry -> lane, in preference order.
-_ENDPOINT_ROUTES: tuple[tuple[str, str], ...] = (
-    ("/messages", ROUTE_MESSAGES),
-    ("/chat/completions", ROUTE_CHAT),
-    ("/systemone", ROUTE_SYSTEM_ONE),
-)
+#: Which models use ``/responses`` when they also answer on Chat Completions.
+#: ``openai`` (default) is what Command Code's official pi provider does: GPT
+#: models get OpenAI's native API, everything else stays on Chat Completions.
+RESPONSES_POLICIES: tuple[str, ...] = ("openai", "all", "never")
+DEFAULT_RESPONSES_POLICY = "openai"
+
+_OPENAI_FAMILY = re.compile(r"^(gpt-|openai/|o\d)", re.IGNORECASE)
 
 _DEFAULT_CATALOG_TTL = 3600.0
 #: How long a failed catalog fetch is remembered before trying again, so an
@@ -207,7 +215,7 @@ class CommandCodeModel:
 
     @property
     def route(self) -> str | None:
-        """The lane that serves this model, or ``None`` if none can."""
+        """The lane that serves this model under the default policy."""
         return route_for_endpoints(self.id, self.endpoints)
 
     @classmethod
@@ -225,17 +233,34 @@ class CommandCodeModel:
         )
 
 
-def route_for_endpoints(model_id: str, endpoints: tuple[str, ...] | list[str]) -> str | None:
+def route_for_endpoints(
+    model_id: str,
+    endpoints: tuple[str, ...] | list[str],
+    policy: str = DEFAULT_RESPONSES_POLICY,
+) -> str | None:
     """Pick the lane for a model from its ``supported_endpoints``.
 
-    A model listed only on ``/responses`` has no lane yet and gets ``None``.
-    None exist today; every model served there also answers on Chat
-    Completions.
+    ``/messages`` and ``/systemone`` are exclusive. A model on both
+    ``/responses`` and ``/chat/completions`` goes to Responses when ``policy``
+    says so (``openai``: GPT models only; ``all``; ``never``). A model listed
+    only on one of the two goes there whatever the policy. ``None`` means no
+    endpoint llmcore can drive.
     """
     eps = set(endpoints)
-    for endpoint, route in _ENDPOINT_ROUTES:
-        if endpoint in eps:
-            return route
+    if "/messages" in eps:
+        return ROUTE_MESSAGES
+    if "/systemone" in eps:
+        return ROUTE_SYSTEM_ONE
+    has_responses = "/responses" in eps
+    has_chat = "/chat/completions" in eps
+    if has_responses and has_chat:
+        if policy == "all" or (policy == "openai" and _OPENAI_FAMILY.search(model_id)):
+            return ROUTE_RESPONSES
+        return ROUTE_CHAT
+    if has_chat:
+        return ROUTE_CHAT
+    if has_responses:
+        return ROUTE_RESPONSES
     if not eps and model_id.startswith("typesafe/"):
         return ROUTE_SYSTEM_ONE
     return None
@@ -756,6 +781,40 @@ _GATEWAY_CHAT_PARAMS: dict[str, Any] = {
     "top_k": {"type": "integer", "minimum": 0},
 }
 
+#: Parameters the ``/responses`` lane accepts: Chat Completions spellings it
+#: translates, plus the Responses fields themselves.
+_RESPONSES_PARAMS: dict[str, Any] = {
+    "max_tokens": {"type": "integer", "minimum": 1},
+    "max_output_tokens": {"type": "integer", "minimum": 1},
+    "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+    "top_p": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "effort": _GATEWAY_CHAT_PARAMS["effort"],
+    "reasoning_effort": _GATEWAY_CHAT_PARAMS["reasoning_effort"],
+    "reasoning": {"type": "object", "description": "Responses {effort, summary}."},
+    "reasoning_summary": {"type": "string", "enum": ["auto", "concise", "detailed"]},
+    "response_format": {"type": "object", "description": "Chat-style; sent as text.format."},
+    "text": {"type": "object", "description": "Responses {format, verbosity}."},
+    "verbosity": {"type": "string", "enum": ["low", "medium", "high"]},
+    "parallel_tool_calls": {"type": "boolean"},
+    "max_tool_calls": {"type": "integer", "minimum": 1},
+    "store": {"type": "boolean", "description": "Default false: nothing kept server-side."},
+    "include": {"type": "array", "items": {"type": "string"}},
+    "previous_response_id": {"type": "string"},
+    "instructions": {"type": "string"},
+    "metadata": {"type": "object"},
+    "user": {"type": "string"},
+    "safety_identifier": {"type": "string"},
+    "service_tier": {"type": "string"},
+    "truncation": {"type": "string", "enum": ["auto", "disabled"]},
+    "prompt_cache_key": {"type": "string"},
+    "prompt_cache_retention": {"type": "string"},
+    "top_logprobs": {"type": "integer", "minimum": 0, "maximum": 20},
+    "extra_tools": {
+        "type": "array",
+        "description": "Raw Responses tool declarations (custom, local_shell, web_search).",
+    },
+}
+
 #: Keys the OpenAI SDK has no keyword for, which must travel in ``extra_body``.
 _SDK_EXTRA_BODY_KEYS = ("reasoning", "thinking", "top_k")
 
@@ -784,6 +843,11 @@ if _openai_lane_available:
         def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False) -> None:
             self._owner_context: Any = config.pop("_context_lookup", None)
             super().__init__(config, log_raw_payloads)
+
+        def _load_tokenizer(self, model_name: str) -> None:
+            # Token counts come from the outer provider; a lane never counts, so
+            # loading (and warning about) a tokenizer for a gateway id is waste.
+            self._encoding = None
 
         # -- request shaping --------------------------------------------
 
@@ -971,8 +1035,214 @@ if _openai_lane_available:
                     self.get_name(), f"Connection error: {e}", model_name=model_name
                 ) from e
 
+    #: Responses create() keywords the OpenAI SDK knows. Anything else travels
+    #: in ``extra_body``, or the SDK raises a TypeError.
+    _SDK_RESPONSES_KWARGS = frozenset(
+        {
+            "model", "input", "instructions", "tools", "tool_choice", "stream",
+            "max_output_tokens", "temperature", "top_p", "reasoning", "text", "include",
+            "store", "metadata", "user", "service_tier", "truncation",
+            "parallel_tool_calls", "previous_response_id", "prompt_cache_key",
+            "prompt_cache_retention", "max_tool_calls", "top_logprobs",
+            "safety_identifier", "background", "stream_options",
+        }
+    )
+
+    class _ResponsesLane(_ChatLane):
+        """``/responses`` lane: OpenAI's Responses API through the gateway.
+
+        Requests are built and responses normalized by
+        :mod:`llmcore.providers.openai_responses`, so callers see the same Chat
+        Completions shape as on the other lanes. Two things are specific to
+        this route:
+
+        - ``store`` defaults to false and encrypted reasoning is requested, so
+          a reasoning model's chain can be carried across turns without
+          server-side state. The items come back as
+          ``message["reasoning_items"]`` and go out again from an assistant
+          message's ``metadata["reasoning_items"]``.
+        - ``extra_tools`` passes raw Responses tool declarations (``custom``,
+          ``local_shell``, ``web_search``) next to llmcore ``Tool`` objects.
+        """
+
+        #: Chat only, like the Chat Completions lane.
+        _MEDIA_CAPABILITIES: frozenset[Any] = frozenset()
+
+        def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
+            return dict(_RESPONSES_PARAMS)
+
+        async def chat_completion(
+            self,
+            context: ContextPayload,
+            model: str | None = None,
+            stream: bool = False,
+            tools: list[Tool] | None = None,
+            tool_choice: str | None = None,
+            native_search: bool = False,
+            **kwargs: Any,
+        ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+            model_name = model or self.default_model
+            if not (isinstance(context, list) and all(isinstance(m, Message) for m in context)):
+                raise ProviderError(self.get_name(), "Unsupported context type.", model_name=model_name)
+            extra_tools = kwargs.pop("extra_tools", None)
+            body = rsp.build_responses_request(
+                model_name,
+                context,
+                stream=stream,
+                tools=tools,
+                tool_choice=tool_choice,
+                extra_tools=extra_tools,
+                **kwargs,
+            )
+            if not body["input"]:
+                raise ProviderError(self.get_name(), "No valid messages.", model_name=model_name)
+            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "RAW LLM REQUEST (%s, responses): %s",
+                    self.get_name(),
+                    json.dumps(body, indent=2, default=str),
+                )
+            if self._transport == "httpx":
+                if stream:
+                    return self._stream_responses_httpx(body, model_name)
+                return await self._responses_httpx(body, model_name)
+            return await self._responses_sdk(body, model_name, stream)
+
+        # -- failures ---------------------------------------------------
+
+        def _failed(self, exc: rsp.ResponsesFailed, model_name: str) -> ProviderError:
+            code = str(exc.error.get("code") or "")
+            status = 429 if "rate_limit" in code else 400 if code.startswith("invalid") else 502
+            return build_inband_error(
+                self.get_name(),
+                {
+                    "code": status,
+                    "message": exc.error.get("message") or code or "response failed",
+                    "metadata": {"error_type": code or "server_error"},
+                },
+                model=model_name,
+                upstream=None,
+                partial=exc.partial,
+            )
+
+        # -- direct transport -------------------------------------------
+
+        async def _responses_httpx(self, body: dict[str, Any], model_name: str) -> dict[str, Any]:
+            try:
+                resp = await self._get_http().post("/responses", json=body)
+            except httpx.TimeoutException as e:
+                raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+            except httpx.HTTPError as e:
+                raise ProviderError(
+                    self.get_name(), f"Connection error: {e}", model_name=model_name
+                ) from e
+            _note_call(resp.headers)
+            if resp.status_code >= 400:
+                raise build_commandcode_error(
+                    self.get_name(),
+                    resp.status_code,
+                    resp.text,
+                    model=model_name,
+                    headers=resp.headers,
+                    route=ROUTE_RESPONSES,
+                )
+            data = resp.json()
+            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "RAW LLM RESPONSE (%s, responses): %s",
+                    self.get_name(),
+                    json.dumps(data, indent=2, default=str),
+                )
+            try:
+                return rsp.normalize_response(data)
+            except rsp.ResponsesFailed as exc:
+                raise self._failed(exc, model_name) from None
+
+        async def _stream_responses_httpx(
+            self, body: dict[str, Any], model_name: str
+        ) -> AsyncGenerator[dict[str, Any], None]:
+            normalizer = rsp.ResponsesStreamNormalizer()
+            try:
+                async with self._get_http().stream("POST", "/responses", json=body) as resp:
+                    _note_call(resp.headers)
+                    if resp.status_code >= 400:
+                        await resp.aread()
+                        raise build_commandcode_error(
+                            self.get_name(),
+                            resp.status_code,
+                            resp.text,
+                            model=model_name,
+                            headers=resp.headers,
+                            route=ROUTE_RESPONSES,
+                        )
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue  # `event:` lines repeat the payload's own `type`
+                        payload = line[5:].strip()
+                        if not payload or payload == "[DONE]":
+                            continue
+                        try:
+                            event = json.loads(payload)
+                        except ValueError:
+                            logger.warning("Skipping unparseable Responses event from %s.", self.get_name())
+                            continue
+                        try:
+                            chunks = normalizer.feed(event)
+                        except rsp.ResponsesFailed as exc:
+                            raise self._failed(exc, model_name) from None
+                        for chunk in chunks:
+                            yield chunk
+            except ProviderError:
+                raise
+            except httpx.TimeoutException as e:
+                raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+            except httpx.HTTPError as e:
+                raise ProviderError(
+                    self.get_name(), f"Connection error: {e}", model_name=model_name
+                ) from e
+
+        # -- SDK transport ----------------------------------------------
+
+        async def _responses_sdk(
+            self, body: dict[str, Any], model_name: str, stream: bool
+        ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+            kwargs = {k: v for k, v in body.items() if k in _SDK_RESPONSES_KWARGS}
+            extra = {k: v for k, v in body.items() if k not in _SDK_RESPONSES_KWARGS}
+            if extra:
+                kwargs["extra_body"] = extra
+            try:
+                result = await self._client.responses.create(**kwargs)  # type: ignore[union-attr]
+            except Exception as exc:  # SDK status errors carry what the mapper needs
+                mapped = _from_sdk_exception(
+                    self.get_name(), exc, model=model_name, route=ROUTE_RESPONSES
+                )
+                if mapped is not None:
+                    raise mapped from exc
+                raise ProviderError(
+                    self.get_name(), f"Responses request failed: {exc}", model_name=model_name
+                ) from exc
+            if not stream:
+                try:
+                    return rsp.normalize_response(result.model_dump(exclude_none=True))
+                except rsp.ResponsesFailed as exc:
+                    raise self._failed(exc, model_name) from None
+            return self._stream_responses_sdk(result, model_name)
+
+        async def _stream_responses_sdk(
+            self, events: Any, model_name: str
+        ) -> AsyncGenerator[dict[str, Any], None]:
+            normalizer = rsp.ResponsesStreamNormalizer()
+            async for event in events:
+                try:
+                    chunks = normalizer.feed(event.model_dump(exclude_none=True))
+                except rsp.ResponsesFailed as exc:
+                    raise self._failed(exc, model_name) from None
+                for chunk in chunks:
+                    yield chunk
+
 else:  # pragma: no cover
     _ChatLane = None  # type: ignore[assignment,misc]
+    _ResponsesLane = None  # type: ignore[assignment,misc]
 
 
 if _anthropic_lane_available:
@@ -1146,6 +1416,16 @@ class CommandCodeProvider(BaseProvider):
             str(k): str(v) for k, v in (config.get("default_headers") or {}).items()
         }
 
+        policy = str(config.get("responses_api") or DEFAULT_RESPONSES_POLICY).lower()
+        if policy not in RESPONSES_POLICIES:
+            logger.warning(
+                "Unknown responses_api '%s' for Command Code; using '%s'.",
+                policy,
+                DEFAULT_RESPONSES_POLICY,
+            )
+            policy = DEFAULT_RESPONSES_POLICY
+        self.responses_policy: str = policy
+
         self.catalog = CommandCodeCatalog(
             base_url=self.base_url,
             ttl=float(config.get("catalog_ttl", _DEFAULT_CATALOG_TTL)),
@@ -1193,32 +1473,37 @@ class CommandCodeProvider(BaseProvider):
         card = self._card(model)
         return card.model_id if card is not None else model
 
-    def route_for(self, model: str | None) -> str:
-        """Which lane serves ``model``: ``messages``, ``chat`` or ``system_one``.
+    def route_for(self, model: str | None, *, responses: bool | None = None) -> str:
+        """Which lane serves ``model``: ``messages``, ``chat``, ``responses`` or ``system_one``.
 
         The live catalog is consulted first, then bundled cards, then family
-        names.
+        names. ``responses`` overrides the instance's ``responses_api`` policy
+        for this lookup: ``True`` prefers ``/responses``, ``False`` avoids it,
+        wherever the model offers the choice.
 
         Raises:
             ProviderError: If the catalog lists the model on no route llmcore
-                can drive (``/responses`` only).
+                can drive.
         """
+        policy = (
+            self.responses_policy if responses is None else ("all" if responses else "never")
+        )
         model_id = self.resolve_model(model)
         entry = self.catalog.get(model_id)
         if entry is not None:
-            route = entry.route
+            route = route_for_endpoints(model_id, entry.endpoints, policy)
             if route is None:
                 raise ProviderError(
                     self.get_name(),
-                    f"Model '{model_id}' is served only on {list(entry.endpoints)}; llmcore's "
-                    "Command Code provider drives /messages, /chat/completions and /systemone.",
+                    f"Model '{model_id}' is served only on {list(entry.endpoints)}, none of "
+                    "which llmcore's Command Code provider drives.",
                     model_name=model_id,
                 )
             return route
         card = self._card(model_id)
         if card is not None:
             routes = (card.provider_extension or {}).get("routes") or []
-            route = route_for_endpoints(model_id, tuple(routes))
+            route = route_for_endpoints(model_id, tuple(routes), policy)
             if route is not None:
                 return route
         return guess_route(model_id)
@@ -1268,12 +1553,29 @@ class CommandCodeProvider(BaseProvider):
         if route == ROUTE_CHAT:
             if _ChatLane is None:  # pragma: no cover
                 raise ConfigError("Command Code chat models need `pip install llmcore[commandcode]`.")
-            chat_default = self.default_model if self.route_for(self.default_model) == ROUTE_CHAT else "gpt-5.4"
+            chat_default = (
+                self.default_model if self.route_for(self.default_model) == ROUTE_CHAT else "gpt-5.4"
+            )
             lane = _ChatLane(
                 {
                     **common,
                     "base_url": f"{self.base_url}/v1",
                     "default_model": chat_default,
+                    "transport": self.transport,
+                    "max_retries": self.max_retries,
+                    "default_headers": headers,
+                    "_context_lookup": self._context_for,
+                },
+                self.log_raw_payloads_enabled,
+            )
+        elif route == ROUTE_RESPONSES:
+            if _ResponsesLane is None:  # pragma: no cover
+                raise ConfigError("Command Code GPT models need `pip install llmcore[commandcode]`.")
+            lane = _ResponsesLane(
+                {
+                    **common,
+                    "base_url": f"{self.base_url}/v1",
+                    "default_model": "gpt-6-sol",
                     "transport": self.transport,
                     "max_retries": self.max_retries,
                     "default_headers": headers,
@@ -1331,12 +1633,16 @@ class CommandCodeProvider(BaseProvider):
 
         - ``zdr``: ``True``/``False`` overrides the instance's zero-data-
           retention setting for this call.
+        - ``responses``: ``True`` sends the call over ``/responses`` and
+          ``False`` over ``/chat/completions``, for models served on both.
+          Overrides ``responses_api`` for this call.
 
         A stale catalog heals itself. If the gateway answers that the model is
         served on another route, the catalog is re-read and the call is retried
         once on the right lane.
         """
         kwargs.pop("native_search", None)  # no native search surface here
+        prefer_responses = kwargs.pop("responses", None)
         zdr_arg = kwargs.pop("zdr", None)
         zdr = self.zdr if zdr_arg is None else _truthy(zdr_arg)
         await self.catalog.ensure()
@@ -1344,7 +1650,7 @@ class CommandCodeProvider(BaseProvider):
         _LAST_CALL.set({})
 
         for attempt in (0, 1):
-            route = self.route_for(model_id)
+            route = self.route_for(model_id, responses=prefer_responses)
             if route == ROUTE_SYSTEM_ONE:
                 raise ProviderError(
                     self.get_name(),
@@ -1373,7 +1679,7 @@ class CommandCodeProvider(BaseProvider):
                         await self.catalog.refresh()
                     except ProviderError:
                         raise exc from None
-                    if self.route_for(model_id) != route:
+                    if self.route_for(model_id, responses=prefer_responses) != route:
                         continue
                 raise
             self._annotate(result, model_id, route)  # type: ignore[arg-type]
@@ -1535,8 +1841,14 @@ class CommandCodeProvider(BaseProvider):
             }
             if self.transport == "sdk":
                 params["extra_body"] = {"type": "object"}
+        elif route == ROUTE_RESPONSES:
+            params = dict(_RESPONSES_PARAMS)
         else:
             params = {}
+        params["responses"] = {
+            "type": "boolean",
+            "description": "True: use /responses; False: use /chat/completions (models on both).",
+        }
         params["zdr"] = {
             "type": "boolean",
             "description": "Require zero-data-retention upstreams for this call (x-cmd-zdr: 1).",
@@ -1595,6 +1907,20 @@ class CommandCodeProvider(BaseProvider):
             return None
         details = message.get("reasoning_details")
         return list(details) if details else None
+
+    def extract_reasoning_items(self, response: dict[str, Any]) -> list[dict[str, Any]] | None:
+        """Encrypted reasoning items from a ``/responses`` answer.
+
+        Put them in the next assistant message's ``metadata["reasoning_items"]``
+        and they are sent back ahead of that turn, so a GPT reasoning model
+        keeps its chain across a tool loop with nothing stored server-side.
+        """
+        try:
+            message = (response.get("choices") or [{}])[0].get("message") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        items = message.get("reasoning_items")
+        return list(items) if items else None
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
         out: list[ToolCall] = []

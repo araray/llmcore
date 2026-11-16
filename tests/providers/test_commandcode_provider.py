@@ -51,6 +51,8 @@ CATALOG = [
      "supported_endpoints": ["/chat/completions", "/responses"]},
     {"id": "deepseek/deepseek-v4-flash-fast", "name": "DeepSeek V4 Flash Fast",
      "context_length": 1000000, "supported_endpoints": ["/chat/completions"]},
+    {"id": "gpt-6-luna", "name": "GPT-6 Luna", "context_length": 1050000,
+     "supported_endpoints": ["/chat/completions", "/responses"]},
 ]
 TRACE = {"x-trace-id": "trace123", "x-powered-by": "Hono"}
 CTX = [Message(role=Role.SYSTEM, content="Be terse."), Message(role=Role.USER, content="hi")]
@@ -133,11 +135,24 @@ class TestRouting:
             (["/chat/completions", "/responses"], "chat"),
             (["/chat/completions"], "chat"),
             (["/systemone"], "system_one"),
-            (["/responses"], None),
+            (["/responses"], "responses"),
+            ([], None),
         ],
     )
     def test_endpoints_pick_the_lane(self, endpoints, route):
         assert route_for_endpoints("x/y", endpoints) == route
+
+    @pytest.mark.parametrize(
+        ("model", "policy", "route"),
+        [
+            ("gpt-6-luna", "openai", "responses"),
+            ("moonshotai/Kimi-K3", "openai", "chat"),
+            ("moonshotai/Kimi-K3", "all", "responses"),
+            ("gpt-6-luna", "never", "chat"),
+        ],
+    )
+    def test_responses_policy(self, model, policy, route):
+        assert route_for_endpoints(model, ["/chat/completions", "/responses"], policy) == route
 
     @pytest.mark.parametrize(
         ("model", "route"),
@@ -152,10 +167,17 @@ class TestRouting:
         assert provider.route_for("claude-haiku-5-5") == "messages"
         assert provider.route_for("moonshotai/Kimi-K3") == "chat"
 
-    async def test_responses_only_model_is_refused_clearly(self, provider):
-        provider.catalog.load_rows([{"id": "x/r", "supported_endpoints": ["/responses"]}])
+    async def test_undrivable_model_is_refused_clearly(self, provider):
+        provider.catalog.load_rows([{"id": "x/r", "supported_endpoints": ["/embeddings"]}])
         with pytest.raises(ProviderError, match="only on"):
             provider.route_for("x/r")
+
+    def test_policy_config_and_per_call_override(self):
+        p = CommandCodeProvider({"api_key": KEY, "responses_api": "never"})
+        p.catalog.load_rows(CATALOG)
+        assert p.route_for("gpt-6-luna") == "chat"
+        assert p.route_for("gpt-6-luna", responses=True) == "responses"
+        assert CommandCodeProvider({"api_key": KEY, "responses_api": "bogus"}).responses_policy == "openai"
 
     async def test_catalog_outage_falls_back_to_cards_then_families(self, provider):
         with respx.mock() as mock:
@@ -240,7 +262,7 @@ class TestConfig:
 
     def test_lanes_report_the_outer_instance_name(self):
         p = CommandCodeProvider({"api_key": KEY, "_instance_name": "cc-work"})
-        for route in ("chat", "messages", "system_one"):
+        for route in ("chat", "responses", "messages", "system_one"):
             assert p._lane(route, False).get_name() == "cc-work"
 
     def test_transports(self):
@@ -642,3 +664,112 @@ class TestRegistration:
         assert key == "k"
         # Tried in order, stopping at the first one that is set.
         assert tried == ["CMD_API_KEY", "COMMAND_CODE_API_KEY"]
+
+
+# ---------------------------------------------------------------------------
+# Responses lane
+# ---------------------------------------------------------------------------
+
+
+def _responses_body(text: str = "No", **extra: Any) -> dict[str, Any]:
+    body = {
+        "id": "resp_1", "object": "response", "model": "gpt-6-luna", "status": "completed",
+        "output": [
+            {"id": "rs_1", "type": "reasoning", "summary": [], "encrypted_content": "enc"},
+            {"type": "message", "role": "assistant",
+             "content": [{"type": "output_text", "text": text, "annotations": []}]},
+        ],
+        "usage": {"input_tokens": 20, "output_tokens": 26, "total_tokens": 46,
+                  "input_tokens_details": {"cached_tokens": 0},
+                  "output_tokens_details": {"reasoning_tokens": 19}},
+    }
+    body.update(extra)
+    return body
+
+
+class TestResponsesLane:
+    async def test_gpt_goes_to_responses_by_default(self, provider, gateway):
+        route = gateway.post(f"{V1}/responses").mock(
+            return_value=httpx.Response(200, json=_responses_body(), headers=TRACE)
+        )
+        resp = await provider.chat_completion(CTX, "gpt-6-luna", effort="low", max_tokens=99)
+        body = json.loads(route.calls.last.request.content)
+        assert body["instructions"] == "Be terse."
+        assert body["input"] == [{"role": "user", "content": "hi"}]
+        assert body["reasoning"] == {"effort": "low"}
+        assert body["max_output_tokens"] == 99
+        assert body["store"] is False
+        assert route.calls.last.request.headers["authorization"] == f"Bearer {KEY}"
+        assert provider.extract_response_content(resp) == "No"
+        assert provider.extract_reasoning_items(resp)[0]["encrypted_content"] == "enc"
+        usage = provider.extract_usage_details(resp)
+        assert usage["reasoning_tokens"] == 19 and usage["route"] == "responses"
+        assert usage["trace_id"] == "trace123"
+
+    async def test_per_call_chat_override(self, provider, gateway):
+        chat = gateway.post(f"{V1}/chat/completions").mock(
+            return_value=httpx.Response(200, json=_chat_body())
+        )
+        await provider.chat_completion(CTX, "gpt-6-luna", responses=False)
+        assert chat.call_count == 1
+
+    async def test_failed_status_raises(self, provider, gateway):
+        gateway.post(f"{V1}/responses").mock(return_value=httpx.Response(200, json=_responses_body(
+            status="failed", error={"code": "server_error", "message": "upstream died"})))
+        with pytest.raises(ProviderError, match="upstream died") as info:
+            await provider.chat_completion(CTX, "gpt-6-luna")
+        assert info.value.retryable is True and info.value.failure_kind == "server"
+
+    async def test_http_errors_use_the_gateway_mapping(self, provider, gateway):
+        gateway.post(f"{V1}/responses").mock(return_value=httpx.Response(429, json={
+            "error": {"message": "slow", "type": "rate_limit_error"}}, headers=TRACE))
+        with pytest.raises(ProviderError) as info:
+            await provider.chat_completion(CTX, "gpt-6-luna")
+        assert info.value.failure_kind == "rate_limit" and info.value.trace_id == "trace123"
+
+    async def test_streaming(self, provider, gateway):
+        events = [
+            {"type": "response.created", "response": {"id": "resp_1", "model": "gpt-6-luna"}},
+            {"type": "response.output_text.delta", "delta": "N"},
+            {"type": "response.output_text.delta", "delta": "o"},
+            {"type": "response.completed", "response": _responses_body()},
+        ]
+        sse = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+        gateway.post(f"{V1}/responses").mock(return_value=httpx.Response(
+            200, content=sse, headers={"content-type": "text/event-stream"}))
+        stream = await provider.chat_completion(CTX, "gpt-6-luna", stream=True)
+        chunks = [c async for c in stream]
+        assert "".join(provider.extract_delta_content(c) for c in chunks) == "No"
+        assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+
+    async def test_tool_loop_round_trip(self, provider, gateway):
+        route = gateway.post(f"{V1}/responses").mock(
+            return_value=httpx.Response(200, json=_responses_body("22C, sunny"))
+        )
+        items = [{"id": "rs_1", "type": "reasoning", "encrypted_content": "enc"}]
+        history = [
+            Message(role=Role.USER, content="Weather in Lisbon?"),
+            Message(role=Role.ASSISTANT, content="", metadata={"reasoning_items": items},
+                    tool_calls=[{"id": "call_1", "type": "function", "function": {
+                        "name": "get_weather", "arguments": "{\"city\":\"Lisbon\"}"}}]),
+            Message(role=Role.TOOL, content="22C sunny", tool_call_id="call_1"),
+        ]
+        tool = Tool(name="get_weather", description="w",
+                    parameters={"type": "object", "properties": {"city": {"type": "string"}}})
+        await provider.chat_completion(history, "gpt-6-luna", tools=[tool])
+        sent = json.loads(route.calls.last.request.content)
+        assert [i.get("type", i.get("role")) for i in sent["input"]] == [
+            "user", "reasoning", "function_call", "function_call_output"]
+        assert sent["tools"][0]["name"] == "get_weather"
+
+    async def test_extra_tools_pass_through(self, provider, gateway):
+        route = gateway.post(f"{V1}/responses").mock(
+            return_value=httpx.Response(200, json=_responses_body())
+        )
+        await provider.chat_completion(CTX, "gpt-6-luna", extra_tools=[{"type": "web_search"}])
+        assert json.loads(route.calls.last.request.content)["tools"] == [{"type": "web_search"}]
+
+    def test_parameters(self, provider):
+        provider.catalog.load_rows(CATALOG)
+        params = provider.get_supported_parameters("gpt-6-luna")
+        assert {"reasoning", "text", "extra_tools", "responses", "zdr"} <= set(params)

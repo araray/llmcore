@@ -2508,6 +2508,28 @@
           "default": false
         },
         {
+          "key": "providers.commandcode.responses_api",
+          "title": "Responses API",
+          "type": "enum",
+          "required": false,
+          "description": "For models served on both /responses and /chat/completions: openai sends GPT models to /responses (OpenAI's native API; carries encrypted reasoning across tool turns) and the rest to /chat/completions; all uses /responses wherever offered; never always uses /chat/completions. Per call: responses=True|False.",
+          "default": "openai",
+          "options": [
+            {
+              "value": "openai",
+              "label": "openai (GPT on /responses, default)"
+            },
+            {
+              "value": "all",
+              "label": "all (every model that offers it)"
+            },
+            {
+              "value": "never",
+              "label": "never (Chat Completions only)"
+            }
+          ]
+        },
+        {
           "key": "providers.commandcode.catalog_ttl",
           "title": "Catalog TTL",
           "type": "integer",
