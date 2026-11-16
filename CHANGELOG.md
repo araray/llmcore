@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Gemini Live: realtime transcription and a voice agent
+
+- `open_transcription_session()` (`asr_stream`, `gemini-3.5-transcribe-live`)
+  and `open_voice_agent()` (`voice_agent`, `gemini-3.8-live`) over the Live
+  API, with the same session surfaces as Deepgram and OpenAI. Live fixes the
+  system instruction at connect time, so `update_prompt` raises.
+- Both are declared on the Developer API, where they were verified live:
+  exact transcription, and a full tool loop with a spoken answer.
+
 ### Added — OpenAI: Realtime voice agent (`voice_agent`)
 
 - `open_voice_agent()` opens a Realtime speech-to-speech session with

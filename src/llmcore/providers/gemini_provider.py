@@ -21,7 +21,8 @@ import json
 import logging
 import os
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
@@ -1853,7 +1854,12 @@ class GeminiProvider(BaseProvider):
     #: Developer-API-only capabilities: ``gemini-3.5-transcribe`` is listed and
     #: verified there (generateContent, 2026-11-16); its Vertex availability
     #: is unverified, so it is not declared in Vertex mode.
-    _DEV_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset({"asr"})
+    _DEV_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
+        # Live API (bidiGenerateContent) sessions, verified on the Developer
+        # API: gemini-3.5-transcribe-live (asr_stream) and gemini-3.8-live
+        # (voice_agent).
+        {"asr", "asr_stream", "voice_agent"}
+    )
 
     #: Default models per media capability, overridable per call and via config.
     _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
@@ -1888,6 +1894,8 @@ class GeminiProvider(BaseProvider):
         """
         from ..media.models import MediaCapability, MediaExecution
 
+        if capability in (MediaCapability.ASR_STREAM, MediaCapability.VOICE_AGENT):
+            return MediaExecution.STREAM
         if capability is MediaCapability.VIDEO_GENERATE:
             return MediaExecution.ASYNC_JOB
         return MediaExecution.REQUEST_RESPONSE
@@ -2368,6 +2376,91 @@ class GeminiProvider(BaseProvider):
             ),
         )
 
+    # --- Live API sessions ---
+
+    @asynccontextmanager
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[GeminiTranscriptionStream]":
+        """Realtime transcription over the Live API (``asr_stream``).
+
+        ``gemini-3.5-transcribe-live`` streams ``interim`` hypotheses and a
+        ``final`` per utterance (live 2026-11-16). Send 16-bit mono PCM at
+        ``sample_rate_hz`` (default 16000); ``finalize()`` ends the audio
+        stream. ``language`` is accepted for parity and passed as a hint.
+        """
+        from google.genai import types as genai_types
+
+        used = model or "gemini-3.5-transcribe-live"
+        config = genai_types.LiveConnectConfig(input_audio_transcription={}, **kwargs)
+        if language:
+            logger.debug("Gemini Live transcription detects the language itself; hint %s noted.", language)
+        try:
+            async with self._client.aio.live.connect(model=used, config=config) as session:
+                yield GeminiTranscriptionStream(session, rate=int(sample_rate_hz or 16000))
+        except ProviderError:
+            raise
+        except Exception as e:
+            self._raise_media_error(e, used, "live transcription")
+
+    @asynccontextmanager
+    async def open_voice_agent(
+        self,
+        *,
+        model: str | None = None,
+        prompt: str | None = None,
+        functions: list[Any] | None = None,
+        greeting: str | None = None,
+        voice: str | None = None,
+        transcribe_user: bool = True,
+        settings: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[GeminiVoiceAgentSession]":
+        """A Live API speech-to-speech agent (``voice_agent``).
+
+        Same session surface as the Deepgram and OpenAI agents. Microphone
+        audio is 16-bit mono PCM at 16 kHz; the agent answers in 24 kHz PCM.
+        Live sessions fix the system instruction at connect time, so
+        ``update_prompt`` raises. Default model ``gemini-3.8-live``.
+        """
+        from google.genai import types as genai_types
+
+        used = model or "gemini-3.8-live"
+        options: dict[str, Any] = {
+            "response_modalities": ["AUDIO"],
+            "output_audio_transcription": {},
+        }
+        if transcribe_user:
+            options["input_audio_transcription"] = {}
+        if prompt:
+            options["system_instruction"] = prompt
+        if functions:
+            options["tools"] = [genai_types.Tool(function_declarations=[
+                genai_types.FunctionDeclaration(**_live_function(f)) for f in functions
+            ])]
+        if voice:
+            options["speech_config"] = genai_types.SpeechConfig(voice_config=genai_types.VoiceConfig(
+                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name=voice)))
+        options.update(kwargs)
+        options.update(settings or {})
+        try:
+            async with self._client.aio.live.connect(
+                model=used, config=genai_types.LiveConnectConfig(**options)
+            ) as session:
+                agent = GeminiVoiceAgentSession(session)
+                if greeting:
+                    await agent.inject_agent_message(greeting)
+                yield agent
+        except ProviderError:
+            raise
+        except Exception as e:
+            self._raise_media_error(e, used, "live voice agent")
+
     # --- video (async job) ---
 
     async def generate_video_media(
@@ -2622,3 +2715,172 @@ class GeminiProvider(BaseProvider):
                 logger.debug(f"Error during Gemini client cleanup: {e}")
         logger.debug("GeminiProvider closed.")
         self._client = None
+
+
+def _live_function(function: Any) -> dict[str, Any]:
+    """FunctionDeclaration kwargs from an llmcore Tool or a plain dict."""
+    if isinstance(function, dict):
+        data = dict(function.get("function") or function)
+    else:
+        params = getattr(function, "parameters", None)
+        data = {
+            "name": getattr(function, "name", None),
+            "description": getattr(function, "description", None),
+            "parameters": params.model_dump(exclude_none=True) if hasattr(params, "model_dump") else params,
+        }
+    return {
+        "name": data.get("name"),
+        "description": data.get("description") or "",
+        "parameters_json_schema": data.get("parameters") or {"type": "object", "properties": {}},
+    }
+
+
+async def _live_messages(session: Any) -> Any:
+    """Every server message of a Live session.
+
+    ``AsyncSession.receive()`` stops after each model turn; a session that
+    yields nothing on a fresh call has closed.
+    """
+    while True:
+        got_any = False
+        async for message in session.receive():
+            got_any = True
+            yield message
+        if not got_any:
+            return
+
+
+class GeminiTranscriptionStream:
+    """Live API transcription session (Deepgram/ElevenLabs/OpenAI surface)."""
+
+    def __init__(self, session: Any, *, rate: int = 16000) -> None:
+        self._session = session
+        self._mime = f"audio/pcm;rate={rate}"
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """16-bit mono PCM at the session's rate."""
+        from google.genai import types as genai_types
+
+        await self._session.send_realtime_input(audio=genai_types.Blob(data=bytes(chunk), mime_type=self._mime))
+
+    async def finalize(self) -> None:
+        """End the audio stream so the last utterance is finalized."""
+        await self._session.send_realtime_input(audio_stream_end=True)
+
+    commit = finalize
+
+    async def keepalive(self) -> None:
+        """No-op: Live sessions need no keepalive."""
+
+    async def close(self) -> None:
+        """Closed by the context manager that opened the session."""
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        from ..models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+        async for message in _live_messages(self._session):
+            content = getattr(message, "server_content", None)
+            if content is None:
+                continue
+            raw = message.model_dump(exclude_none=True, mode="json") if hasattr(message, "model_dump") else {}
+            interim = getattr(content, "interim_input_transcription", None)
+            if interim is not None and getattr(interim, "text", None):
+                yield TranscriptionStreamEvent(type=StreamEventType.INTERIM, text=interim.text,
+                                               is_final=False, provider="gemini", raw=raw)
+            final = getattr(content, "input_transcription", None)
+            if final is not None and getattr(final, "text", None):
+                yield TranscriptionStreamEvent(type=StreamEventType.FINAL, text=final.text.strip(),
+                                               is_final=True, speech_final=True, provider="gemini", raw=raw)
+
+
+class GeminiVoiceAgentSession:
+    """Live API speech-to-speech agent with the shared voice-agent surface."""
+
+    def __init__(self, session: Any) -> None:
+        self._session = session
+        self._call_names: dict[str, str] = {}
+        self._said: list[str] = []
+        self._heard: list[str] = []
+        self._speaking = False
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Microphone audio: 16-bit mono PCM at 16 kHz."""
+        from google.genai import types as genai_types
+
+        await self._session.send_realtime_input(
+            audio=genai_types.Blob(data=bytes(chunk), mime_type="audio/pcm;rate=16000"))
+
+    async def inject_user_message(self, content: str) -> None:
+        """Add a typed user turn; the agent replies."""
+        from google.genai import types as genai_types
+
+        await self._session.send_client_content(
+            turns=genai_types.Content(role="user", parts=[genai_types.Part(text=content)]), turn_complete=True)
+
+    async def inject_agent_message(self, message: str) -> None:
+        """Have the agent say *message* now."""
+        await self.inject_user_message(f"Say exactly this, and nothing else: {message}")
+
+    async def update_prompt(self, prompt: str) -> None:
+        """Not available: Live fixes the system instruction at connect time."""
+        raise ProviderError(
+            "gemini", "Gemini Live sessions cannot change their system instruction; open a new session.",
+            retryable=False,
+        )
+
+    async def respond_to_function_call(self, function_call_id: str, output: Any, name: str | None = None) -> None:
+        """Return a tool result; the agent continues its turn."""
+        from google.genai import types as genai_types
+
+        response = output if isinstance(output, dict) else {"result": output}
+        await self._session.send_tool_response(function_responses=[genai_types.FunctionResponse(
+            id=function_call_id, name=name or self._call_names.get(function_call_id, ""), response=response)])
+
+    async def keepalive(self) -> None:
+        """No-op: Live sessions need no keepalive."""
+
+    async def close(self) -> None:
+        """Closed by the context manager that opened the session."""
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        from ..models_multimodal import VoiceAgentEvent, VoiceAgentEventType, VoiceAgentFunctionCall
+
+        def event(type_: Any, **fields: Any) -> Any:
+            return VoiceAgentEvent(type=type_, provider="gemini", **fields)
+
+        async for message in _live_messages(self._session):
+            if getattr(message, "setup_complete", None) is not None:
+                yield event(VoiceAgentEventType.WELCOME)
+            tool_call = getattr(message, "tool_call", None)
+            for call in getattr(tool_call, "function_calls", None) or []:
+                self._call_names[str(call.id)] = str(call.name)
+                yield event(VoiceAgentEventType.FUNCTION_CALL_REQUEST, function_call=VoiceAgentFunctionCall(
+                    id=str(call.id or ""), name=str(call.name or ""), arguments=dict(call.args or {})))
+            content = getattr(message, "server_content", None)
+            if content is None:
+                continue
+            heard = getattr(content, "input_transcription", None)
+            if heard is not None and getattr(heard, "text", None):
+                self._heard.append(heard.text)
+            if getattr(content, "interrupted", None):
+                yield event(VoiceAgentEventType.USER_STARTED_SPEAKING)
+            for part in getattr(getattr(content, "model_turn", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    if self._heard:
+                        yield event(VoiceAgentEventType.CONVERSATION_TEXT, role="user", content="".join(self._heard).strip())
+                        self._heard = []
+                    if not self._speaking:
+                        self._speaking = True
+                        yield event(VoiceAgentEventType.AGENT_STARTED_SPEAKING)
+                    yield event(VoiceAgentEventType.AUDIO, audio=inline.data)
+            said = getattr(content, "output_transcription", None)
+            if said is not None and getattr(said, "text", None):
+                self._said.append(said.text)
+            if getattr(content, "turn_complete", None):
+                if self._speaking:
+                    self._speaking = False
+                    yield event(VoiceAgentEventType.AGENT_AUDIO_DONE)
+                if self._said:
+                    yield event(VoiceAgentEventType.CONVERSATION_TEXT, role="assistant", content="".join(self._said).strip())
+                    self._said = []

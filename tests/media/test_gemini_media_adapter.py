@@ -126,6 +126,8 @@ class TestConformance:
                 MediaCapability.IMAGE_GENERATE,
                 MediaCapability.TTS,
                 MediaCapability.ASR,
+                MediaCapability.ASR_STREAM,  # Live API: gemini-3.5-transcribe-live
+                MediaCapability.VOICE_AGENT,  # Live API: gemini-3.8-live
             }
         )
 
