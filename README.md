@@ -273,6 +273,7 @@ Which provider serves what (default configuration, 2026-11-16):
 | DeepSeek | `tts`, `tts_stream`, `asr`, `ocr` (tool APIs) |
 | Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |
 | DeepInfra, Hugging Face | `image_generate`, `tts`, `asr` |
+| Together | `tts`, `asr`, `image_generate` (images need third-party data sharing enabled in the Together org) |
 | ElevenLabs | `tts`, `tts_stream`, `asr`, `asr_stream`, `sfx`, `music`, `voice_design` |
 | Deepgram | `tts`, `tts_stream`, `asr`, `asr_stream`, `voice_agent` |
 | fal | `image_generate`, `image_edit`, `image_upscale`, `video_generate`, `video_interpolate`, `sfx`, `music`, `tts`, `asr` |

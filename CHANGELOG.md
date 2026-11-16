@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Together: media capabilities, vendor TTS defaults; verified live
+
+- The Together profile declared no media, yet Together serves `tts`, `asr`
+  and `image_generate` in OpenAI's shape. These are now declared, with
+  Together defaults: Kokoro-82M with voice `af_alloy`, whisper-large-v3, and
+  FLUX.2-dev.
+- Vendor profiles can set a default TTS model and voice. `generate_speech`
+  and `stream_speech_media` used to send OpenAI's `tts-1` and `alloy` to
+  every vendor.
+- **Verified live, both transports:**
+  - chat and streaming on gpt-oss-120b, GLM-5.3 and DeepSeek-V4.1-Flash,
+    with reasoning replay;
+  - the tool loop; effort with `top_k`; the Responses route;
+  - Kokoro and Cartesia Sonic TTS, and TTS → ASR with the exact text.
+- **Images:** every model answers 403 until the organisation enables
+  third-party data sharing in Together's settings.
+
 ### Fixed — live re-verification after top-ups (DeepSeek, Friendli)
 
 - **Streaming replay survives a trailing usage chunk.** With usage reporting

@@ -291,6 +291,8 @@ class _VendorProfile:
     media: frozenset[str] = frozenset()
     default_stt_model: str | None = None
     default_image_model: str | None = None
+    default_tts_model: str | None = None
+    default_tts_voice: str | None = None
     #: Native search: the tools to add, and the route that carries them.
     search_tools: tuple[dict[str, Any], ...] = ()
     search_route: str | None = None  # "chat" | "responses"
@@ -352,8 +354,17 @@ _VENDOR_PROFILES: dict[str, _VendorProfile] = {
     ),
     # Together: hybrid-reasoning and sampling extensions. Its media endpoints
     # differ from OpenAI's, so none are declared until verified.
+    # Together: OpenAI-shaped /audio/speech, /audio/transcriptions and
+    # /images/generations (live 2026-11-16: Kokoro and Cartesia Sonic TTS,
+    # whisper-large-v3 ASR verified; image models answer 403 until the
+    # organisation enables third-party data sharing in Together's settings).
     "together": _VendorProfile(
         hosts=("api.together.ai", "api.together.xyz"),
+        media=frozenset({"tts", "asr", "image_generate"}),
+        default_tts_model="hexgrad/Kokoro-82M",
+        default_tts_voice="af_alloy",
+        default_stt_model="openai/whisper-large-v3",
+        default_image_model="black-forest-labs/FLUX.2-dev",
         extra_params=frozenset(
             {"reasoning", "chat_template_kwargs", "top_k", "min_p", "repetition_penalty",
              "safety_model", "context_length_exceeded_behavior"}
@@ -1996,7 +2007,7 @@ class OpenAIProvider(BaseProvider):
         self,
         text: str,
         *,
-        voice: str = "alloy",
+        voice: str | None = None,
         model: str | None = None,
         response_format: str = "mp3",
         speed: float = 1.0,
@@ -2027,7 +2038,8 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        tts_model = model or "tts-1"
+        tts_model = model or (self._vendor.default_tts_model if self._vendor else None) or "tts-1"
+        voice = voice or (self._vendor.default_tts_voice if self._vendor else None) or "alloy"
 
         api_kwargs: dict[str, Any] = {
             "input": text,
@@ -2694,13 +2706,14 @@ class OpenAIProvider(BaseProvider):
         """
         client = self._client
         provider_name = self.get_name()
+        vendor = self._vendor
 
         async def _stream() -> "AsyncIterator[bytes]":
             if not client:
                 raise ProviderError(provider_name, "Client not initialized.")
             api_kwargs: dict[str, Any] = {
-                "model": model or "gpt-4o-mini-tts",
-                "voice": voice or "alloy",
+                "model": model or (vendor.default_tts_model if vendor else None) or "gpt-4o-mini-tts",
+                "voice": voice or (vendor.default_tts_voice if vendor else None) or "alloy",
                 "input": text,
                 "response_format": audio_format or "mp3",
                 **kwargs,

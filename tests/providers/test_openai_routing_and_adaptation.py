@@ -242,7 +242,9 @@ class TestVendorProfiles:
     def test_media_is_narrowed_to_what_each_vendor_serves(self):
         assert {c.value for c in self._instance("xai", "https://api.x.ai/v1").media_capabilities()} == {"image_generate"}
         assert {c.value for c in self._instance("groq", "https://api.groq.com/openai/v1").media_capabilities()} == {"asr"}
-        assert not self._instance("together", "https://api.together.ai/v1").media_capabilities()
+        # Together serves TTS, ASR and images in OpenAI's shape (live 2026-11-16).
+        together = self._instance("together", "https://api.together.ai/v1")
+        assert {c.value for c in together.media_capabilities()} == {"tts", "asr", "image_generate"}
         # OpenAI's own declaration is untouched.
         assert "tts" in {c.value for c in OpenAIProvider({"api_key": "k"}).media_capabilities()}
 
@@ -272,3 +274,19 @@ class TestVendorProfiles:
         from llmcore.providers.manager import _OPENAI_COMPATIBLE_DEFAULTS
 
         assert _OPENAI_COMPATIBLE_DEFAULTS["together"]["base_url"] == "https://api.together.ai/v1"
+
+
+
+async def test_vendor_tts_defaults_replace_openai_ones():
+    """Together has no tts-1 / alloy; its own default model and voice are sent."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    p = OpenAIProvider({"api_key": "k", "_instance_name": "together", "base_url": "https://api.together.ai/v1"})
+    p._client = MagicMock()
+    p._client.audio.speech.create = AsyncMock(return_value=MagicMock(content=b"RIFF"))
+    try:
+        await p.generate_speech("hi")
+    except Exception:
+        pass  # result shaping is irrelevant here
+    kwargs = p._client.audio.speech.create.await_args.kwargs
+    assert kwargs["model"] == "hexgrad/Kokoro-82M" and kwargs["voice"] == "af_alloy"
