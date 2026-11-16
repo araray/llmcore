@@ -8,12 +8,18 @@ of models (``glm-5.2``, ``glm-5.1``, ``glm-4.7``, the ``glm-*v`` vision models,
 (``POST /chat/completions``), so this provider drives it through the ``openai``
 Python SDK pointed at the Z.ai base URL, mirroring the DeepSeek/Kimi providers.
 
-GLM-specific extensions handled here:
+GLM-specific extensions handled here (audited 2026-11-16; the account was out
+of balance, so chat follows docs.z.ai except the GLM-5.3 rules below, which
+the API's own validation confirmed):
 
-- **Thinking mode**: ``thinking = {"type": "enabled" | "disabled"}`` toggle to
-  switch deep-reasoning on or off.
-- **Reasoning effort**: ``reasoning_effort`` accepting
-  ``none | minimal | low | medium | high | xhigh | max`` (GLM-5.2+).
+- **Thinking mode**: ``thinking = {"type": "enabled" | "disabled"}``, plus
+  ``clear_thinking`` (``false`` keeps earlier turns' reasoning, which then has
+  to be replayed: :meth:`assistant_replay_metadata`). The GLM-5.3 family
+  always thinks: "disabled" is a 400 (code 1210), so it is kept enabled.
+- **Reasoning effort**: ``reasoning_effort`` / llmcore's ``effort``. GLM-5.3
+  takes only ``low | high | max`` (``medium`` is a 400); other values move to
+  the nearest. GLM-5.2 takes ``none | minimal | low | medium | high | xhigh |
+  max``.
 - **Reasoning content**: ``reasoning_content`` field on assistant messages,
   surfaced in both streaming deltas and non-streaming responses.
 - **Sampling control**: ``do_sample`` toggle plus the Z.ai open-interval
@@ -50,6 +56,7 @@ References:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -145,7 +152,9 @@ from ..models_multimodal import (
     TranscriptionResult,
 )
 from ..tokens import EstimateCounter as _EstimateCounter
+from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
+from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +168,9 @@ _BASE_URL_OVERSEAS = "https://api.z.ai/api/paas/v4"
 #: Mainland-China endpoint (Zhipu AI / BigModel).  Selectable via ``region``.
 _BASE_URL_CHINA = "https://open.bigmodel.cn/api/paas/v4"
 
-#: Default model when none configured.
-_DEFAULT_MODEL = "glm-5.2"
+#: Default model when none configured. GLM-5.3 (2026-08-18) is the API
+#: reference's default; 1M context, always thinks.
+_DEFAULT_MODEL = "glm-5.3"
 
 #: Default embedding model.
 _DEFAULT_EMBEDDING_MODEL = "embedding-3"
@@ -175,6 +185,7 @@ _DEFAULT_VIDEO_MODEL = "cogvideox-3"
 #: Hardcoded context length map for the GLM family.
 _CONTEXT_LENGTHS: dict[str, int] = {
     # GLM-5 generation (1M context)
+    "glm-5.3": 1_000_000,
     "glm-5.2": 1_000_000,
     "glm-5.1": 1_000_000,
     "glm-5": 1_000_000,
@@ -196,6 +207,14 @@ _CONTEXT_LENGTHS: dict[str, int] = {
 _VISION_MODELS: frozenset[str] = frozenset(
     {"glm-5v-turbo", "glm-4.6v", "glm-4.5v", "glm-ocr"}
 )
+#: Prefixes of vision model families (GLM-5.3-Flash / FlashX: image, video
+#: and file input).
+_VISION_PREFIXES: tuple[str, ...] = ("glm-5.3-flash",)
+
+#: Families that always think, with the only effort levels they take
+#: ("This model always engages in thinking and cannot be disabled; please use
+#: low, high, or max" - code 1210, measured 2026-11-16).
+_ALWAYS_THINKS: tuple[tuple[str, tuple[str, ...]], ...] = (("glm-5.3", ("low", "high", "max")),)
 
 #: Valid thinking-mode types.
 ThinkingType = Literal["enabled", "disabled"]
@@ -302,6 +321,14 @@ class ZaiProvider(BaseProvider):
             )
             effort_raw = "high"
         self._default_reasoning_effort = effort_raw
+        # Preserved thinking: false keeps earlier turns' reasoning in context
+        # (then every assistant turn has to carry its reasoning_content back).
+        clear = config.get("clear_thinking")
+        self._clear_thinking: bool | None = None if clear is None else bool(clear)
+        responses_api = str(config.get("responses_api", "never")).lower()
+        if responses_api not in ("never", "always"):
+            raise ConfigError(f"Z.ai responses_api must be 'never' or 'always', not {responses_api!r}.")
+        self.responses_api = responses_api
 
         # --- Endpoint / region ---
         region = str(config.get("region", "overseas")).lower()
@@ -475,7 +502,7 @@ class ZaiProvider(BaseProvider):
         ctx = self.get_max_context_length(mid)
 
         supports_tools = not mid.startswith("embedding")
-        supports_vision = mid in _VISION_MODELS
+        supports_vision = mid in _VISION_MODELS or mid.startswith(_VISION_PREFIXES)
         if registry:
             card = registry.get(provider, mid)
             if card and card.capabilities:
@@ -524,6 +551,11 @@ class ZaiProvider(BaseProvider):
             "watermark_enabled": {"type": "boolean"},
             "sensitive_word_check": {"type": "object"},
             "tool_stream": {"type": "boolean"},
+            # Preserved thinking (merged into the thinking object).
+            "clear_thinking": {"type": "boolean"},
+            # llmcore's cross-provider knobs.
+            "effort": {"type": "string", "enum": sorted(_VALID_EFFORTS)},
+            "native_search": {"type": "boolean"},
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
@@ -575,8 +607,8 @@ class ZaiProvider(BaseProvider):
         return v
 
     def _resolve_thinking_params(
-        self, kwargs: dict[str, Any]
-    ) -> tuple[dict[str, str] | None, str | None]:
+        self, kwargs: dict[str, Any], model_name: str | None = None
+    ) -> tuple[dict[str, Any] | None, str | None]:
         """Resolve thinking mode and reasoning effort from kwargs + defaults.
 
         Returns:
@@ -586,6 +618,14 @@ class ZaiProvider(BaseProvider):
         """
         thinking = kwargs.pop("thinking", None)
         reasoning_effort = kwargs.pop("reasoning_effort", None)
+        clear = kwargs.pop("clear_thinking", None)
+        effort_kw = kwargs.pop("effort", None)
+        if effort_kw is not None and reasoning_effort is None:
+            effort_kw = str(effort_kw).strip().lower()
+            if effort_kw == "none" and thinking is None:
+                thinking = "disabled"
+            else:
+                reasoning_effort = effort_kw
 
         # Build thinking object
         if thinking is None:
@@ -605,6 +645,21 @@ class ZaiProvider(BaseProvider):
         else:
             effort_str = str(reasoning_effort).lower()
             effort = effort_str if effort_str in _VALID_EFFORTS else self._default_reasoning_effort
+
+        thinking_obj = dict(thinking_obj) if thinking_obj else thinking_obj
+        always = next(
+            (levels for prefix, levels in _ALWAYS_THINKS if (model_name or "").startswith(prefix)), None
+        )
+        if always is not None:
+            if thinking_obj and thinking_obj.get("type") == "disabled":
+                logger.warning("Z.ai model %s always thinks; thinking='disabled' ignored.", model_name)
+                thinking_obj["type"] = "enabled"
+            if effort not in always:
+                effort = nearest_effort(effort or "high", always) or "high"
+        if thinking_obj is not None:
+            clear = self._clear_thinking if clear is None else clear
+            if clear is not None:
+                thinking_obj.setdefault("clear_thinking", bool(clear))
 
         if thinking_obj and thinking_obj.get("type") == "enabled":
             return thinking_obj, effort
@@ -700,13 +755,29 @@ class ZaiProvider(BaseProvider):
         if not messages_payload:
             raise ProviderError(self.get_name(), "No valid messages.")
 
+        kwargs = dict(kwargs)
+        native_search = kwargs.pop("native_search", False)
+
         # --- Tool schema ---
         tools_payload = None
         if tools:
             tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
+        if native_search:
+            # Built-in web search tool (docs.z.ai); results come back in the
+            # response's top-level `web_search` list.
+            tools_payload = (tools_payload or []) + [
+                {"type": "web_search", "web_search": {"enable": True, "search_engine": "search-prime",
+                                                      "search_result": True}}
+            ]
 
         # --- Resolve thinking + split remaining kwargs ---
-        thinking_obj, effort = self._resolve_thinking_params(kwargs)
+        thinking_obj, effort = self._resolve_thinking_params(kwargs, model_name)
+
+        if self.responses_api == "always":
+            return await self._responses_completion(
+                context, model_name, stream=stream, tools=tools, tool_choice=tool_choice,
+                effort=effort, params=kwargs,
+            )
 
         # ``sampling`` = native chat params; ``extras`` = GLM platform params.
         sampling: dict[str, Any] = {}
@@ -714,7 +785,11 @@ class ZaiProvider(BaseProvider):
         for key, val in kwargs.items():
             if key in ("thinking", "reasoning_effort"):
                 continue  # already handled
-            if key in ("temperature", "top_p"):
+            if key == "temperature" and _is_zero(val):
+                # Greedy decoding is do_sample=false on Z.ai (what zai-sdk
+                # does); clamping 0 to 0.01 kept sampling on.
+                extras["do_sample"] = False
+            elif key in ("temperature", "top_p"):
                 sampling[key] = self._clamp_open_interval(val)
             elif key in self._EXTRA_BODY_KEYS:
                 extras[key] = val
@@ -748,23 +823,118 @@ class ZaiProvider(BaseProvider):
 
         try:
             if self._backend == "sdk":
-                return await self._chat_via_sdk(
+                result = await self._chat_via_sdk(
                     model_name, messages_payload, stream, tools_payload,
                     thinking_obj, effort, sampling, extras,
                 )
-            if self._backend == "openai":
-                return await self._chat_via_openai(
+            elif self._backend == "openai":
+                result = await self._chat_via_openai(
                     model_name, messages_payload, stream, tools_payload,
                     thinking_obj, effort, sampling, extras,
                 )
-            return await self._chat_via_httpx(
-                model_name, messages_payload, stream, tools_payload,
-                thinking_obj, effort, sampling, extras,
-            )
+            else:
+                result = await self._chat_via_httpx(
+                    model_name, messages_payload, stream, tools_payload,
+                    thinking_obj, effort, sampling, extras,
+                )
         except (ProviderError, ContextLengthError, ValueError):
             raise
         except Exception as e:
             self._raise_chat_error(e, model_name)
+        if stream:
+            return self._replayable_stream(result, model_name)  # type: ignore[arg-type]
+        return result  # type: ignore[return-value]
+
+    async def _replayable_stream(
+        self, stream: AsyncGenerator[dict[str, Any], None], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """The finish chunk also carries the turn's whole ``reasoning_content``
+        (as ``replay_reasoning_content``) for :meth:`assistant_replay_metadata`."""
+        reasoning: list[str] = []
+        try:
+            async for chunk in stream:
+                for choice in chunk.get("choices") or []:
+                    if choice.get("index", 0) != 0:
+                        continue
+                    delta = choice.setdefault("delta", {})
+                    if delta.get("reasoning_content"):
+                        reasoning.append(delta["reasoning_content"])
+                    if choice.get("finish_reason") and reasoning:
+                        delta["replay_reasoning_content"] = "".join(reasoning)
+                yield chunk
+        except (ProviderError, ContextLengthError):
+            raise
+        except Exception as e:
+            self._raise_chat_error(e, model_name)
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The reasoning to send back with the next assistant turn.
+
+        Needed with ``clear_thinking = false`` (preserved thinking: "the full,
+        unmodified, in-order reasoning_content must be sent back") and in tool
+        loops. On the Responses route, the reasoning items. For a stream, pass
+        the chunk with the finish reason.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        source = choice.get("message") or choice.get("delta") or {}
+        if source.get("reasoning_items"):
+            return {"reasoning_items": list(source["reasoning_items"])}
+        text = source.get("replay_reasoning_content") or (choice.get("message") or {}).get("reasoning_content")
+        return {"reasoning_content": text} if text else {}
+
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """The built-in ``web_search`` chat tool (docs.z.ai)."""
+        return (model or self.default_model).startswith(("glm-5", "glm-4"))
+
+    async def _responses_completion(
+        self,
+        context: list[Message],
+        model_name: str,
+        *,
+        stream: bool,
+        tools: list[Tool] | None,
+        tool_choice: Any,
+        effort: str | None,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat through ``/api/v1/responses`` (stateful on Z.ai; llmcore sends
+        the full history with ``store: false``)."""
+        params = {k: v for k, v in params.items() if k not in ("stream_options", "do_sample", "user")}
+        if effort:
+            params["reasoning"] = {"effort": effort}
+        body = rsp.build_responses_request(
+            model_name, context, stream=stream, tools=tools, tool_choice=tool_choice, **params
+        )
+        root = self._base_url.split("/api/")[0] + "/api/v1"
+        client = self._get_http()
+        if not stream:
+            resp = await client.post(f"{root}/responses", json=body)
+            if resp.status_code >= 400:
+                self._raise_chat_error(_StatusError(resp.status_code, resp.text), model_name)
+            return rsp.normalize_response(resp.json())
+
+        async def _events() -> AsyncGenerator[dict[str, Any], None]:
+            normalizer = rsp.ResponsesStreamNormalizer()
+            async with client.stream("POST", f"{root}/responses", json=body) as resp:
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    self._raise_chat_error(_StatusError(resp.status_code, resp.text), model_name)
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        for chunk in normalizer.feed(json.loads(data)):
+                            yield chunk
+                    except rsp.ResponsesFailed as exc:
+                        raise ProviderError(self.get_name(), f"Response failed: {exc}", model_name=model_name) from None
+
+        return _events()
 
     async def _chat_via_sdk(
         self,
@@ -785,6 +955,17 @@ class ZaiProvider(BaseProvider):
             call_kwargs["thinking"] = thinking_obj
         if effort:
             call_kwargs["reasoning_effort"] = effort
+        # zai-sdk's create() has a fixed signature (no stream_options, no
+        # user, ...): the streaming default used to raise "unexpected keyword
+        # argument 'stream_options'" on every stream. The rest rides in
+        # extra_body.
+        params = inspect.signature(self._sdk_client.chat.completions.create).parameters
+        if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            extra_body = dict(call_kwargs.pop("extra_body", None) or {})
+            for key in [k for k in call_kwargs if k not in params]:
+                extra_body[key] = call_kwargs.pop(key)
+            if extra_body:
+                call_kwargs["extra_body"] = extra_body
 
         resp = await self._run_sdk(
             lambda: self._sdk_client.chat.completions.create(
@@ -897,7 +1078,11 @@ class ZaiProvider(BaseProvider):
         client = self._get_http()
         try:
             async with client.stream("POST", "/chat/completions", json=body) as resp:
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    # Read the body first: raise_for_status() alone lost the
+                    # message (and with it the balance / 1210 mapping).
+                    await resp.aread()
+                    self._raise_chat_error(_StatusError(resp.status_code, resp.text), body.get("model", ""))
                 async for line in resp.aiter_lines():
                     if not line or not line.startswith("data:"):
                         continue
@@ -938,6 +1123,24 @@ class ZaiProvider(BaseProvider):
                     actual=0,
                     message=msg,
                 )
+            if status == 429 and ("1113" in msg or "balance" in msg.lower()):
+                raise ProviderError(
+                    self.get_name(),
+                    f"Z.ai account has insufficient balance or no resource package (code "
+                    f"1113). Error: {msg}",
+                    model_name=model_name,
+                    status_code=status,
+                    retryable=False,
+                )
+            if status == 400 and "1210" in msg:
+                raise ProviderError(
+                    self.get_name(),
+                    f"Z.ai rejected a parameter value for '{model_name}' (code 1210). "
+                    f"Error: {msg}",
+                    model_name=model_name,
+                    status_code=status,
+                    retryable=False,
+                )
             if status in (401, 403):
                 raise ProviderError(
                     self.get_name(),
@@ -950,7 +1153,7 @@ class ZaiProvider(BaseProvider):
                 raise ProviderError(
                     self.get_name(),
                     f"Model '{model_name}' not found on Z.ai. Known GLM models "
-                    f"include glm-5.2, glm-5.1, glm-4.7, glm-4.6v. Error: {msg}",
+                    f"include glm-5.3, glm-5.3-flash, glm-5.2, glm-4.7. Error: {msg}",
                 )
             raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
         if isinstance(e, (ZaiTimeoutError, OpenAIAPITimeoutError)):
@@ -1048,14 +1251,11 @@ class ZaiProvider(BaseProvider):
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            body = e.response.text
-            if status in (401, 403):
-                raise ProviderError(
-                    self.get_name(),
-                    f"Authentication failed for Z.ai. Check ZAI_API_KEY. Error: {body}",
-                )
-            raise ProviderError(self.get_name(), f"API Error ({status}): {body}")
+            # Same mapping as the other transports (balance, code 1210,
+            # context overflow, authentication).
+            self._raise_chat_error(
+                _StatusError(e.response.status_code, e.response.text), str((json or {}).get("model", ""))
+            )
         except httpx.HTTPError as e:
             raise ProviderError(self.get_name(), f"HTTP error: {e}")
 
@@ -1393,7 +1593,7 @@ class ZaiProvider(BaseProvider):
         self,
         query: str,
         *,
-        search_engine: str = "search_std",
+        search_engine: str = "search-prime",
         count: int | None = None,
         search_domain_filter: str | None = None,
         search_recency_filter: str | None = None,
@@ -1404,7 +1604,8 @@ class ZaiProvider(BaseProvider):
 
         Args:
             query: The search query string.
-            search_engine: Engine id (default ``search_std``).
+            search_engine: Engine id (default ``search-prime``, the one docs.z.ai
+                lists; ``search_std`` still works).
             count: Maximum number of results.
 
         Returns:
@@ -1537,13 +1738,15 @@ class ZaiProvider(BaseProvider):
         """Extract the finish reason from a non-streaming response.
 
         GLM finish reasons: ``stop``, ``length``, ``tool_calls``,
-        ``sensitive``, ``network_error``.
+        ``sensitive``, ``network_error`` and ``model_context_window_exceeded``
+        (reported as ``length``).
         """
         try:
             choices = response.get("choices", [])
             if not choices:
                 return None
-            return choices[0].get("finish_reason")
+            reason = choices[0].get("finish_reason")
+            return "length" if reason == "model_context_window_exceeded" else reason
         except (KeyError, IndexError, TypeError):
             return None
 
@@ -1613,3 +1816,18 @@ class ZaiProvider(BaseProvider):
                 logger.error("Error closing Z.ai media client: %s", e)
             self._http = None
         logger.info("ZaiProvider closed.")
+
+
+def _is_zero(value: Any) -> bool:
+    try:
+        return float(value) <= 0
+    except (TypeError, ValueError):
+        return False
+
+
+class _StatusError(Exception):
+    """A direct-HTTP failure in the shape _raise_chat_error reads."""
+
+    def __init__(self, status_code: int, text: str) -> None:
+        super().__init__(text)
+        self.status_code = status_code

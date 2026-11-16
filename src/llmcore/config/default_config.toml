@@ -584,12 +584,13 @@ max_retries = 2
   # region = "overseas"
 
   # Default model for this provider instance.
-  # Current models (June 2026):
-  #   glm-5.2   — flagship; 1M context, 128K output, thinking + tools
-  #   glm-5.1   — GLM-5 generation; 1M context
-  #   glm-4.7   — GLM-4 generation; 128K context
-  #   glm-4.6v  — vision-language; 64K context
-  default_model = "glm-5.2"
+  # Current models (docs.z.ai, 2026-11-16):
+  #   glm-5.3          — flagship (2026-08-18); 1M context, 128K output,
+  #                      always thinks
+  #   glm-5.3-flash / glm-5.3-flashx (-legal) — vision (image, video, file)
+  #   glm-5.2, glm-5.1 — GLM-5 generation; 1M context, thinking toggle
+  #   glm-4.7, glm-4.6v
+  default_model = "glm-5.3"
 
   # Default models for the optional multimodal media APIs.
   # default_embedding_model = "embedding-3"
@@ -603,16 +604,25 @@ max_retries = 2
   # take longer for large inputs.
   timeout = 300
 
+  # "never" (default): Chat Completions (the full GLM surface). "always":
+  # https://api.z.ai/api/v1/responses (Responses API).
+  # responses_api = "never"
+
   # --- Thinking Mode ---
-  # GLM models support a thinking mode where the model generates internal
-  # reasoning (reasoning_content) before the final answer.
-  #
-  # thinking: "enabled" or "disabled" (default: "enabled")
-  # reasoning_effort: none | minimal | low | medium | high | xhigh | max
-  #                   (default: "high"; effective for glm-5.2 and above)
-  # These can be overridden per-request via chat_completion(thinking=...).
+  # thinking: "enabled" or "disabled" (default: "enabled").
+  # reasoning_effort (or effort=): none | minimal | low | medium | high |
+  #   xhigh | max on glm-5.2; the glm-5.3 family always thinks and takes
+  #   only low | high | max (other values move to the nearest; "disabled"
+  #   is kept enabled - the API answers 400, code 1210).
+  # clear_thinking = false keeps earlier turns' reasoning in context
+  #   ("preserved thinking"); then put provider.assistant_replay_metadata()
+  #   into each assistant Message's metadata - Z.ai requires the full,
+  #   in-order reasoning_content back. Also needed in tool loops.
+  # temperature = 0 is sent as do_sample = false (greedy decoding).
+  # native_search=True adds the built-in web_search tool (search-prime).
   thinking = "enabled"
   reasoning_effort = "high"
+  # clear_thinking = false
 
   # --- Base URL ---
   # Override the endpoint chosen by `region`.

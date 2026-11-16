@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Z.ai: streaming on the default backend, GLM-5.3 rules, preserved thinking
+
+Audited on 2026-11-16 against docs.z.ai and the real zai-sdk 0.2.3
+signature. The account was out of balance. The GLM-5.3 rules below were
+confirmed by the API's own validation, and the error mapping was checked live
+on every transport.
+
+- **Streaming was broken on the default `sdk` backend.** zai-sdk's
+  `create()` has a fixed signature without `stream_options` or `user`, so
+  every stream raised `TypeError`. The old tests mocked `create()` with a
+  bare MagicMock. Unknown keys now go in `extra_body`; verified to reach the
+  server.
+- **GLM-5.3** always thinks: `thinking: "disabled"` is a 400 (code 1210)
+  and is kept enabled with a warning. Its effort levels are low/high/max
+  (`medium` is a 400); other values move to the nearest.
+  Default `glm-5.3`. Flash/FlashX are marked vision, the
+  release dates are corrected, and a `glm-5.3-flashx-legal` card was added.
+- **Preserved thinking**: `clear_thinking` (config or kwarg) and
+  `assistant_replay_metadata()`. Streams accumulate `reasoning_content` onto
+  the finish chunk.
+- **Errors**: the out-of-balance 429 (code 1113) is non-retryable and says
+  so. The direct stream read no error body. `_raw_post` shares the mapping.
+  `model_context_window_exceeded` is reported as `length`.
+- `effort=` (none → thinking off where allowed). `temperature=0` is sent
+  as `do_sample=false`; it used to be clamped to 0.01, so sampling stayed
+  on. `native_search=True` adds the built-in web_search tool, and the search
+  default is `search-prime`. `responses_api = "always"` uses
+  `/api/v1/responses`.
+
 ### Fixed — Ollama: silent context truncation, tool-loop replay, direct-backend listing
 
 Audited against a live server (0.32.14) and ollama-python 0.6.3 on

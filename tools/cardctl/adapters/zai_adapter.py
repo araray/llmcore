@@ -26,6 +26,10 @@ from .openai_compat import OpenAICompatAdapter
 
 # GLM model metadata keyed by model_id prefix (longest match wins).
 _GLM_MODELS: dict[str, dict[str, Any]] = {
+    # GLM-5.3 (2026-08-18) always thinks; the Flash/FlashX models take image,
+    # video and file input (docs.z.ai, 2026-11-16).
+    "glm-5.3-flash": {"architecture_type": "moe", "reasoning": True, "vision": True},
+    "glm-5.3": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5.2": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5.1": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5v-turbo": {"context_length": 65_536, "architecture_type": "moe", "vision": True},

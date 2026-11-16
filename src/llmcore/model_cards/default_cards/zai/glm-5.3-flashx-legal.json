@@ -1,0 +1,50 @@
+{
+  "model_id": "glm-5.3-flashx-legal",
+  "display_name": "GLM-5.3-FlashX-Legal",
+  "provider": "zai",
+  "model_type": "chat",
+  "architecture": {
+    "family": "GLM",
+    "architecture_type": "moe"
+  },
+  "context": {
+    "max_input_tokens": 1000000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-26"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GLM-5.3-FlashX tuned for legal work (Z.ai).",
+  "tags": [
+    "reasoning",
+    "glm-5",
+    "million-context"
+  ],
+  "source": "generated"
+}
