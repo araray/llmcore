@@ -652,6 +652,20 @@ class TestSystemOne:
         assert info.value.failure_kind == "model_not_found"
         assert "trace123" in str(info.value)
 
+    @pytest.mark.parametrize(
+        ("questions", "extra"),
+        [({"q": Noul(instructions="Red in `p`?")}, {"assets": {"img": b"\x89PNG\r\n\x1a\n"}}),
+         ({"q": {"type": "box", "instructions": "The square in `p`."}}, {})],
+    )
+    async def test_images_and_box_are_refused_not_silently_dropped(self, provider, questions, extra):
+        # Measured 2026-11-16: the gateway rejects Box and answers an image
+        # request without the image (0.25 vs 0.99 on the direct provider).
+        with respx.mock(assert_all_called=False) as mock:
+            route = mock.post(f"{V1}/systemone")
+            with pytest.raises(ProviderError, match="'typesafe' provider") as info:
+                await provider.system_one({"p": "img"}, questions, **extra)
+        assert not route.called and info.value.retryable is False
+
     async def test_chat_with_a_decision_model_points_to_system_one(self, provider):
         provider.catalog.load_rows([{"id": "typesafe/jev", "supported_endpoints": ["/systemone"]}])
         with pytest.raises(ProviderError, match="system_one"):

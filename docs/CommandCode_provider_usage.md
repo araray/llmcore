@@ -226,6 +226,13 @@ The arguments and result are those of the
 1M input tokens, and output is free. Calling `chat()` with `typesafe/jev`
 raises an error that points here.
 
+The gateway's Jev is **text only**. Jev 1.14's image `assets` and `Box`
+questions work on the direct `typesafe` provider. Through the gateway,
+measured on 2026-11-16, a Box question is a 400, and an image request is
+accepted but answered without the image: a red-square Noul came back 0.25,
+against 0.99 direct. `cc.system_one` therefore refuses both up front with a
+non-retryable `ProviderError` instead of returning a confidently wrong answer.
+
 ---
 
 ## 5. Errors and tracing

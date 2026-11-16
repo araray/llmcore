@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Command Code: gateway Jev is text only
+
+Re-checked after the lane providers changed (2026-11-16). Messages
+(`claude-haiku-5-5`), Chat (`deepseek/deepseek-v4-flash`) and Responses
+(`gpt-5.4-mini`) all answer live, plain and streaming.
+
+- **`system_one` refuses image `assets` and Box questions.** The gateway
+  rejects Box with a 400. Worse, it accepts an image request and answers
+  without the image: a red-square Noul came back 0.25, against 0.99 on the
+  direct `typesafe` provider. The error points to the `typesafe` provider.
+
 ### Fixed — Higgsfield: live parameter enums, first_frame, SDK errors, request deletion
 
 Audited against openapi.json 2.0.0, the live API and higgsfield-client 0.2.0

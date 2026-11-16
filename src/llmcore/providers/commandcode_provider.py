@@ -1644,7 +1644,30 @@ class CommandCodeProvider(BaseProvider):
         :class:`~llmcore.providers.typesafe_provider.Noul`, ``Choice`` or
         ``Score`` (or the equivalent dicts). Jev has no ZDR upstream, so
         ``zdr=True`` makes the gateway answer 422.
+
+        Text only. Jev 1.14's image ``assets`` and ``Box`` questions work on
+        the direct ``typesafe`` provider, not through the gateway (measured
+        2026-11-16): Box is a 400 ("Expected 'noul' | 'choice' | 'score'"),
+        and an image request is *accepted* but answered without the image
+        (a red-square Noul came back 0.25 here, 0.99 direct). Both are
+        refused here rather than returning a confidently wrong answer.
+
+        Raises:
+            ProviderError: For ``assets`` or a Box question (non-retryable).
         """
+        has_box = any(
+            (q.get("type") if isinstance(q, Mapping) else getattr(q, "type", None)) == "box"
+            for q in questions.values()
+        )
+        if kwargs.get("assets") or has_box:
+            raise ProviderError(
+                self.get_name(),
+                "Command Code's /systemone serves text-only Jev: image assets are "
+                "dropped and Box questions rejected by the gateway. Use the 'typesafe' "
+                "provider (TYPESAFE_API_KEY) for images and Box.",
+                status_code=400,
+                retryable=False,
+            )
         lane = self._lane(ROUTE_SYSTEM_ONE, self.zdr if zdr is None else bool(zdr))
         return await lane.system_one(  # type: ignore[attr-defined]
             state, questions, model=model or SYSTEM_ONE_MODEL, **kwargs
