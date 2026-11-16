@@ -88,7 +88,8 @@ def provider(provider_config):
 class TestDefaults:
     def test_default_model_is_current_gen(self):
         """DEFAULT_MODEL should be gemini-3.1-flash-lite-preview."""
-        assert gp.DEFAULT_MODEL == "gemini-3.1-flash-lite-preview"
+        # gemini-3.1-flash-lite-preview is shut down (only aliased).
+        assert gp.DEFAULT_MODEL == "gemini-3.5-flash-lite"
 
     def test_token_limits_include_current_models(self):
         """Token limits table should include Gemini 3.x and 2.5 models."""
@@ -461,7 +462,11 @@ class TestStreamingChatCompletion:
         async for chunk in result:
             chunks.append(chunk)
 
-        assert chunks == [{"choices": [{"delta": {"content": "hello"}}]}]
+        assert chunks[0] == {"choices": [{"delta": {"content": "hello"}}]}
+        # A final chunk now carries the finish reason and usage, which the
+        # stream used to drop entirely.
+        assert chunks[-1]["choices"][0]["delta"] == {"content": ""}
+        assert "finish_reason" in chunks[-1]["choices"][0]
 
 
 # ---------------------------------------------------------------------------

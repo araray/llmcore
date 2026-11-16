@@ -16,6 +16,7 @@ Supports:
 Tested against google-genai SDK v1.72.0.
 """
 
+import base64
 import json
 import logging
 import os
@@ -62,23 +63,51 @@ logger = logging.getLogger(__name__)
 # Updated for current-generation Gemini models (April 2026).
 # Used as last-resort fallback when neither the model card registry
 # nor dynamic API discovery have context length data.
+#: Input token limits per model, from the Developer API's own models.list
+#: (v1beta, 2026-11-16). Used when neither a card nor live discovery knows a
+#: model.
 DEFAULT_GEMINI_TOKEN_LIMITS = {
-    # Gemini 3.x family (preview)
-    "gemini-3.1-pro-preview": 1048576,
-    "gemini-3-flash-preview": 1048576,
-    "gemini-3.1-flash-lite-preview": 1048576,
-    "gemini-3.1-flash-image-preview": 128000,
-    "gemini-3.1-flash-live-preview": 128000,
-    # Gemini 2.5 family (stable, deprecates Oct 2026)
-    "gemini-2.5-pro": 1048576,
     "gemini-2.5-flash": 1048576,
+    "gemini-2.5-pro": 1048576,
+    "gemini-2.5-flash-preview-tts": 8192,
+    "gemini-2.5-pro-preview-tts": 8192,
+    "gemini-flash-latest": 1048576,
+    "gemini-flash-lite-latest": 1048576,
+    "gemini-pro-latest": 1048576,
     "gemini-2.5-flash-lite": 1048576,
-    "gemini-2.5-flash-image": 65536,
-    # Gemini 2.0 family (deprecated, shutdown June 2026)
-    "gemini-2.0-flash": 1048576,
-    "gemini-2.0-flash-lite": 1048576,
+    "gemini-2.5-flash-image": 32768,
+    "gemini-3-flash-preview": 1048576,
+    "gemini-3.1-pro-preview": 1048576,
+    "gemini-3.1-pro-preview-customtools": 1048576,
+    "gemini-3.1-flash-lite-preview": 1048576,
+    "gemini-3.1-flash-lite": 1048576,
+    "gemini-3-pro-image-preview": 131072,
+    "gemini-3-pro-image": 131072,
+    "gemini-3.1-flash-image-preview": 65536,
+    "gemini-3.1-flash-image": 65536,
+    "gemini-3.1-flash-lite-image": 65536,
+    "gemini-nano-banana-2.1": 65536,
+    "gemini-3.5-flash": 1048576,
+    "gemini-3.5-flash-lite": 1048576,
+    "gemini-omni-flash-preview": 131072,
+    "gemini-omni-1.1-flash": 131072,
+    "gemini-omni-1.2-flash": 131072,
+    "gemini-3.5-transcribe": 98304,
+    "gemini-3.6-flash": 1048576,
+    "gemini-3.7-flash": 1048576,
+    "gemini-3.8-flash": 1048576,
+    "gemini-4-argon": 1048576,
+    "gemini-4-carbon": 1048576,
+    "gemini-4-hydrogen": 1048576,
+    "gemini-3.1-flash-tts-preview": 8192,
+    "gemini-3.8-flash-tts": 8192,
+    "gemini-3.8-flash-lite-tts": 8192,
+    "gemini-robotics-er-2-preview": 131072,
+    "gemini-2.5-computer-use-preview-10-2025": 131072,
 }
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+#: gemini-3.1-flash-lite-preview (the old default) is shut down and only
+#: aliased; gemini-3.5-flash-lite is the current GA lite model.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 LLMCORE_TO_GEMINI_ROLE_MAP = {
     LLMCoreRole.USER: "user",
@@ -102,8 +131,6 @@ def _ensure_google_genai_imported() -> bool:
     _google_genai_import_attempted = True
     try:
         from google import genai as _genai
-        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
-        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
         from google.genai import types as _types
         from google.genai.errors import APIError as _APIError
     except ImportError:
@@ -115,6 +142,16 @@ def _ensure_google_genai_imported() -> bool:
         InvalidArgument = Exception
         return False
 
+    # google-api-core is optional: google-genai raises its own APIError
+    # hierarchy and never these, so they are kept only for callers that still
+    # catch them. Requiring the package made the whole provider unavailable
+    # without it.
+    try:
+        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
+        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
+    except ImportError:
+        _InvalidArgument = _PermissionDenied = _APIError  # type: ignore[assignment,misc]
+
     genai = _genai
     types = _types
     APIError = _APIError
@@ -122,6 +159,102 @@ def _ensure_google_genai_imported() -> bool:
     InvalidArgument = _InvalidArgument
     google_genai_available = True
     return True
+
+
+# ---------------------------------------------------------------------------
+# Parts: the unit Gemini replays, with thought signatures
+# ---------------------------------------------------------------------------
+
+#: The documented placeholder for function calls that did not come from this
+#: model (foreign or hand-built history), as base64. Gemini 3+ rejects a
+#: replayed function call without a signature ("Function call is missing a
+#: thought_signature"), measured live 2026-11-16.
+_SKIP_SIGNATURE = base64.b64encode(b"skip_thought_signature_validator").decode()
+
+
+def _part_dict(part: Any) -> dict[str, Any]:
+    """One response part as a plain dict, signatures as base64 text.
+
+    SDK parts are dumped in JSON mode (``thought_signature`` is bytes on the
+    object and base64 on the wire); direct-transport parts are already wire
+    dicts. Both shapes are accepted back by both transports.
+    """
+    if isinstance(part, _WireValue):
+        return dict(part._data) if isinstance(part._data, dict) else {}
+    if isinstance(part, dict):
+        return dict(part)
+    dump = getattr(part, "model_dump", None)
+    if callable(dump):
+        dumped = dump(mode="json", exclude_none=True)
+        if isinstance(dumped, dict):
+            return dumped
+    # Any other part-like object: read the fields this provider uses.
+    out: dict[str, Any] = {}
+    for name in ("text", "thought", "thought_signature", "function_call", "inline_data"):
+        value = getattr(part, name, None)
+        if value is None:
+            continue
+        if name == "thought_signature" and isinstance(value, (bytes, bytearray)):
+            value = base64.b64encode(bytes(value)).decode()
+        elif name == "function_call":
+            value = {k: getattr(value, k, None) for k in ("name", "args", "id")}
+        out[name] = value
+    return out
+
+
+def _part_signature(part: dict[str, Any]) -> str | None:
+    return part.get("thought_signature") or part.get("thoughtSignature")
+
+
+def _part_function_call(part: dict[str, Any]) -> dict[str, Any] | None:
+    call = part.get("function_call") or part.get("functionCall")
+    return call if isinstance(call, dict) else None
+
+
+def _response_parts(response: Any) -> list[dict[str, Any]]:
+    """The first candidate's parts as dicts."""
+    candidates = getattr(response, "candidates", None) or []
+    if not candidates:
+        return []
+    content = getattr(candidates[0], "content", None)
+    return [_part_dict(p) for p in (getattr(content, "parts", None) or [])]
+
+
+def _tool_call_from_part(part: dict[str, Any], index: int) -> dict[str, Any] | None:
+    """A function-call part as an OpenAI-shaped tool call.
+
+    The signature travels in ``extra_content.google.thought_signature``, which
+    is where Google's own OpenAI-compatible endpoint puts it, so a caller that
+    replays only ``tool_calls`` still sends it back.
+    """
+    call = _part_function_call(part)
+    if call is None:
+        return None
+    tool_call: dict[str, Any] = {
+        "id": call.get("id") or f"call_{index}_{uuid.uuid4().hex[:12]}",
+        "type": "function",
+        "function": {"name": call.get("name"), "arguments": json.dumps(call.get("args") or {})},
+    }
+    signature = _part_signature(part)
+    if signature:
+        tool_call["extra_content"] = {"google": {"thought_signature": signature}}
+    return tool_call
+
+
+def _merge_parts(parts: list[dict[str, Any]], new: dict[str, Any]) -> None:
+    """Append a streamed part, joining plain text fragments into one part."""
+    plain = (
+        "text" in new
+        and not new.get("thought")
+        and not _part_signature(new)
+        and set(new) <= {"text"}
+    )
+    if plain and parts and set(parts[-1]) == {"text"}:
+        parts[-1] = {"text": parts[-1]["text"] + (new.get("text") or "")}
+        return
+    if set(new) <= {"text"} and not new.get("text"):
+        return  # empty keep-alive fragment
+    parts.append(new)
 
 
 #: Developer-API root for the direct transport. Vertex mode keeps using the SDK
@@ -370,6 +503,12 @@ class GeminiProvider(BaseProvider):
                     client_kwargs["location"] = self._location
             else:
                 client_kwargs["api_key"] = self.api_key
+                # google-genai 3.x defaults the Developer API to v1, which lacks
+                # TTS (speechConfig: "Unknown name"), explicit caching, the Live
+                # API and the -latest/-preview aliases. v1beta has all of them.
+                client_kwargs["http_options"] = types.HttpOptions(
+                    api_version=str(config.get("api_version") or "v1beta")
+                )
 
             self._client = genai.Client(**client_kwargs)
             self._backend = self._resolve_backend(config.get("backend"))
@@ -585,6 +724,17 @@ class GeminiProvider(BaseProvider):
             "cached_content": {"type": "string"},
             "routing_config": {"type": "object"},
             "model_selection_config": {"type": "object"},
+            "service_tier": {"type": "string"},
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": "Mapped to thinking_config (thinking_level on Gemini 3+).",
+            },
+            "thinking_display": {
+                "type": "string",
+                "enum": ["summarized", "omitted"],
+                "description": "summarized = include_thoughts (thought summaries).",
+            },
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
@@ -722,19 +872,29 @@ class GeminiProvider(BaseProvider):
             else:
                 system_instruction_text = sys_msg.content
 
+        # Tool results name their function; the call id alone is not a name.
+        call_names: dict[str, str] = {}
+        for msg in processed_messages:
+            for tc in getattr(msg, "tool_calls", None) or (msg.metadata or {}).get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    func = tc.get("function") if isinstance(tc.get("function"), dict) else tc
+                    call_names[str(tc["id"])] = str(func.get("name") or "")
+
         last_role = None
         for msg in processed_messages:
             # Handle tool result messages -> functionResponse parts
             if msg.role == LLMCoreRole.TOOL:
-                tool_name = (msg.metadata or {}).get(
-                    "tool_name", msg.tool_call_id or "unknown"
+                tool_name = (msg.metadata or {}).get("tool_name") or call_names.get(
+                    msg.tool_call_id or "", msg.tool_call_id or "unknown"
                 )
-                function_response_part = {
-                    "function_response": {
-                        "name": tool_name,
-                        "response": {"result": msg.content},
-                    }
+                function_response: dict[str, Any] = {
+                    "name": tool_name,
+                    "response": {"result": msg.content},
                 }
+                if msg.tool_call_id:
+                    # Gemini 3.8 pairs results to calls by id.
+                    function_response["id"] = msg.tool_call_id
+                function_response_part = {"function_response": function_response}
                 if last_role == "user" and genai_history:
                     genai_history[-1]["parts"].append(function_response_part)
                 else:
@@ -749,7 +909,10 @@ class GeminiProvider(BaseProvider):
             if not genai_role:
                 continue
 
-            parts = self._build_multimodal_parts(msg)
+            if genai_role == "model":
+                parts = self._model_turn_parts(msg)
+            else:
+                parts = self._build_multimodal_parts(msg)
 
             if genai_role == last_role and genai_history:
                 genai_history[-1]["parts"].extend(parts)
@@ -759,6 +922,52 @@ class GeminiProvider(BaseProvider):
             last_role = genai_role
 
         return genai_history, system_instruction_text
+
+    def _model_turn_parts(self, msg: Message) -> list[dict[str, Any]]:
+        """Parts for an assistant (``model``) turn, ready to replay.
+
+        Gemini 3+ validates thought signatures on replayed function calls. A
+        call without one is a 400. So, in order of preference:
+
+        1. ``metadata["gemini_parts"]`` (from :meth:`assistant_replay_metadata`)
+           is the turn exactly as the model produced it, and is sent verbatim.
+        2. Otherwise the turn is rebuilt from ``tool_calls``, taking each call's
+           signature from ``extra_content.google.thought_signature``.
+        3. If no call carries one (history from another model, or built by
+           hand), the first call gets Google's documented placeholder.
+        """
+        metadata = msg.metadata or {}
+        replay = metadata.get("gemini_parts")
+        if replay:
+            return [dict(p) for p in replay]
+        tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+        if not tool_calls:
+            return self._build_multimodal_parts(msg)
+        parts: list[dict[str, Any]] = []
+        if msg.content:
+            parts.append({"text": msg.content})
+        calls: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            func = tc.get("function") if isinstance(tc.get("function"), dict) else tc
+            args = func.get("arguments", func.get("args", {}))
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args or "{}")
+                except ValueError:
+                    args = {"_raw": args}
+            call: dict[str, Any] = {"name": func.get("name"), "args": args or {}}
+            if tc.get("id"):
+                call["id"] = tc["id"]
+            part: dict[str, Any] = {"function_call": call}
+            signature = ((tc.get("extra_content") or {}).get("google") or {}).get("thought_signature")
+            if signature:
+                part["thought_signature"] = signature
+            calls.append(part)
+        if calls and not any(_part_signature(c) for c in calls):
+            calls[0]["thought_signature"] = _SKIP_SIGNATURE
+        return parts + calls
 
     # ------------------------------------------------------------------
     # Tool Call Normalization
@@ -816,7 +1025,11 @@ class GeminiProvider(BaseProvider):
         if config is None:
             return {}
         dump = getattr(config, "model_dump", None)
-        raw = dump(exclude_none=True, by_alias=True) if callable(dump) else dict(config or {})
+        raw = (
+            dump(mode="json", exclude_none=True, by_alias=True)
+            if callable(dump)
+            else dict(config or {})
+        )
 
         body: dict[str, Any] = {}
         # These are top-level on the wire rather than inside generationConfig.
@@ -920,7 +1133,8 @@ class GeminiProvider(BaseProvider):
         for item in items:
             dump = getattr(item, "model_dump", None)
             if callable(dump):
-                wire.append(dump(exclude_none=True, by_alias=True))
+                # JSON mode: thought signatures are bytes on SDK objects.
+                wire.append(dump(mode="json", exclude_none=True, by_alias=True))
             elif isinstance(item, dict):
                 wire.append(item)
             else:
@@ -1020,6 +1234,16 @@ class GeminiProvider(BaseProvider):
         # Build GenerateContentConfig kwargs
         generation_config_kwargs: dict[str, Any] = {}
 
+        effort = kwargs.pop("effort", None)
+        display = kwargs.pop("thinking_display", None)
+        if effort or display:
+            thinking = dict(kwargs.pop("thinking_config", None) or {})
+            if effort:
+                thinking.update(self._effort_to_thinking(str(effort).strip().lower(), model_name))
+            if display:
+                thinking["include_thoughts"] = display == "summarized"
+            kwargs["thinking_config"] = thinking
+
         supported = self.get_supported_parameters()
         for key, value in kwargs.items():
             if key not in supported:
@@ -1035,10 +1259,16 @@ class GeminiProvider(BaseProvider):
         if self._safety_settings:
             generation_config_kwargs["safety_settings"] = self._safety_settings
 
-        # Tool definitions
+        # Tool definitions. (This used FunctionDeclaration.from_dict, which
+        # google-genai has never had: every call with tools raised
+        # AttributeError.) parameters_json_schema takes a JSON Schema as-is.
         function_declarations = (
             [
-                types.FunctionDeclaration.from_dict(tool.model_dump())
+                types.FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description or "",
+                    parameters_json_schema=tool.parameters or {"type": "object", "properties": {}},
+                )
                 for tool in tools
             ]
             if tools
@@ -1096,13 +1326,21 @@ class GeminiProvider(BaseProvider):
                     model_name, genai_contents, config
                 )
         except (APIError, InvalidArgument) as e:
-            logger.error(f"Google AI API error: {e}", exc_info=True)
-            err_str = str(e).lower()
-            if "context length" in err_str or "token" in err_str:
+            status = getattr(e, "code", None)
+            status = status if isinstance(status, int) else None
+            logger.debug("Google AI API error (%s): %s", status, e)
+            if self._is_context_overflow(str(e)):
                 raise ContextLengthError(
                     model_name=model_name, message=str(e)
                 ) from e
-            raise ProviderError(self.get_name(), f"Google AI API Error: {e}") from e
+            raise ProviderError(
+                self.get_name(),
+                f"Google AI API Error: {e}",
+                model_name=model_name,
+                status_code=status,
+                retryable=status in (429, 500, 503, 504) if status else None,
+                original_exception=e,
+            ) from e
         except PermissionDenied as e:
             logger.error(
                 f"Permission denied during Gemini chat: {e}", exc_info=True
@@ -1143,22 +1381,16 @@ class GeminiProvider(BaseProvider):
                 config=config,
             )
 
-        # .text property excludes thought parts
-        text_content = response.text or ""
-
-        # Extract thinking content if present
-        thinking_content = None
-        if response.candidates and response.candidates[0].content:
-            thought_parts = [
-                p.text
-                for p in (response.candidates[0].content.parts or [])
-                if getattr(p, "thought", False) and p.text
-            ]
-            if thought_parts:
-                thinking_content = "".join(thought_parts)
-
-        # Extract and normalize tool calls
-        tool_calls = self._normalize_tool_calls_from_response(response)
+        parts = _response_parts(response)
+        text_content = "".join(
+            p.get("text") or "" for p in parts if "text" in p and not p.get("thought")
+        )
+        thinking_content = "".join(
+            p.get("text") or "" for p in parts if p.get("thought")
+        ) or None
+        tool_calls = [
+            tc for i, p in enumerate(parts) if (tc := _tool_call_from_part(p, i)) is not None
+        ] or None
 
         # Finish reason
         finish_reason = None
@@ -1169,31 +1401,18 @@ class GeminiProvider(BaseProvider):
         # Build message dict
         message_dict: dict[str, Any] = {
             "role": "assistant",
-            "content": text_content if not tool_calls else None,
+            "content": text_content if not tool_calls else (text_content or None),
         }
         if tool_calls:
             message_dict["tool_calls"] = tool_calls
         if thinking_content:
             message_dict["thinking"] = thinking_content
+        if tool_calls or any(_part_signature(p) for p in parts):
+            # The turn exactly as produced, signatures included: what a tool
+            # loop must send back (see assistant_replay_metadata).
+            message_dict["gemini_parts"] = parts
 
-        # Build usage dict with OpenAI-compatible aliases
-        usage_dict: dict[str, Any] = {}
-        if response.usage_metadata:
-            um = response.usage_metadata
-            usage_dict = {
-                "prompt_token_count": um.prompt_token_count,
-                "candidates_token_count": um.candidates_token_count,
-                "total_token_count": um.total_token_count,
-                "prompt_tokens": um.prompt_token_count,
-                "completion_tokens": um.candidates_token_count,
-                "total_tokens": um.total_token_count,
-            }
-            if um.thoughts_token_count:
-                usage_dict["thoughts_token_count"] = um.thoughts_token_count
-            if um.cached_content_token_count:
-                usage_dict["cached_content_token_count"] = (
-                    um.cached_content_token_count
-                )
+        usage_dict = self._normalize_usage_metadata(response.usage_metadata)
 
         response_dict: dict[str, Any] = {
             "id": getattr(response, "response_id", None),
@@ -1251,6 +1470,10 @@ class GeminiProvider(BaseProvider):
             )
 
         async def stream_wrapper():
+            parts: list[dict[str, Any]] = []
+            tool_index = 0
+            finish_reason = None
+            usage: dict[str, Any] = {}
             async for chunk in response_stream:
                 if self.log_raw_payloads_enabled:
                     logger.debug(
@@ -1259,20 +1482,139 @@ class GeminiProvider(BaseProvider):
 
                 text_delta = ""
                 thought_delta = ""
-                if chunk.candidates and chunk.candidates[0].content:
-                    for part in chunk.candidates[0].content.parts or []:
-                        if getattr(part, "thought", False):
-                            thought_delta += part.text or ""
-                        elif part.text is not None:
-                            text_delta += part.text
+                calls: list[dict[str, Any]] = []
+                for part in _response_parts(chunk):
+                    _merge_parts(parts, part)
+                    if part.get("thought"):
+                        thought_delta += part.get("text") or ""
+                    elif _part_function_call(part) is not None:
+                        # Gemini streams each function call whole, so it is
+                        # emitted as one complete tool-call delta.
+                        call = _tool_call_from_part(part, tool_index)
+                        if call is not None:
+                            calls.append({"index": tool_index, **call})
+                            tool_index += 1
+                    elif part.get("text") is not None:
+                        text_delta += part.get("text") or ""
 
                 delta: dict[str, Any] = {"content": text_delta}
                 if thought_delta:
                     delta["thinking"] = thought_delta
-
+                if calls:
+                    delta["tool_calls"] = calls
+                candidates = getattr(chunk, "candidates", None) or []
+                reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+                if reason:
+                    finish_reason = getattr(reason, "name", str(reason))
+                if getattr(chunk, "usage_metadata", None):
+                    usage = self._normalize_usage_metadata(chunk.usage_metadata)
                 yield {"choices": [{"delta": delta}]}
 
+            # Final chunk: finish reason, usage (both were dropped before) and,
+            # when the turn has calls or signatures, the parts to replay.
+            final_delta: dict[str, Any] = {"content": ""}
+            if tool_index or any(_part_signature(p) for p in parts):
+                final_delta["gemini_parts"] = parts
+            if tool_index and finish_reason in (None, "STOP"):
+                finish_reason = "tool_calls"
+            yield {"choices": [{"delta": final_delta, "finish_reason": finish_reason}], "usage": usage}
+
         return stream_wrapper()
+
+    @staticmethod
+    def _normalize_usage_metadata(um: Any) -> dict[str, Any]:
+        """Gemini usage with the OpenAI keys llmcore reads.
+
+        Thinking tokens are billed as output, so ``completion_tokens`` counts
+        them. It used to be ``candidates_token_count`` alone, which undercounted
+        every thinking model's cost.
+        """
+        if not um:
+            return {}
+        prompt = getattr(um, "prompt_token_count", None) or 0
+        candidates = getattr(um, "candidates_token_count", None) or 0
+        thoughts = getattr(um, "thoughts_token_count", None) or 0
+        usage: dict[str, Any] = {
+            "prompt_token_count": prompt,
+            "candidates_token_count": candidates,
+            "total_token_count": getattr(um, "total_token_count", None),
+            "prompt_tokens": prompt,
+            "completion_tokens": candidates + thoughts,
+            "total_tokens": getattr(um, "total_token_count", None) or prompt + candidates + thoughts,
+        }
+        if thoughts:
+            usage["thoughts_token_count"] = thoughts
+            usage["completion_tokens_details"] = {"reasoning_tokens": thoughts}
+        cached = getattr(um, "cached_content_token_count", None)
+        if cached:
+            usage["cached_content_token_count"] = cached
+            usage["prompt_tokens_details"] = {"cached_tokens": cached}
+        return usage
+
+    @staticmethod
+    def _effort_to_thinking(effort: str, model: str) -> dict[str, Any]:
+        """llmcore's effort as Gemini's thinking settings for ``model``.
+
+        Gemini 3+ takes ``thinking_level`` (minimal/low/medium/high, xhigh on
+        gemini-4-hydrogen) and cannot switch thinking off; Gemini 4 and 3.8
+        reject ``minimal``. Gemini 2.5 takes a token budget instead.
+        """
+        if model.startswith("gemini-2"):
+            budgets = {"none": 0, "minimal": 512, "low": 1024, "medium": 8192,
+                       "high": 24576, "xhigh": 32768, "max": 32768}
+            return {"thinking_budget": budgets.get(effort, 8192)}
+        no_minimal = model.startswith(("gemini-4", "gemini-3.8"))
+        levels = {
+            "none": "low" if no_minimal else "minimal",
+            "minimal": "low" if no_minimal else "minimal",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh" if "hydrogen" in model else "high",
+            "max": "xhigh" if "hydrogen" in model else "high",
+        }
+        return {"thinking_level": levels.get(effort, "medium")}
+
+    @staticmethod
+    def _is_context_overflow(text: str) -> bool:
+        """Gemini's prompt-too-long error, not just any message about tokens.
+
+        "The input token count (N) exceeds the maximum number of tokens allowed
+        (M)." The old test (``"token" in message``) also caught
+        max_output_tokens and continuation-token errors.
+        """
+        lowered = text.lower()
+        return "exceeds the maximum number of tokens" in lowered or (
+            "input token count" in lowered and "exceed" in lowered
+        ) or "context length" in lowered
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The parts to send back on the next assistant turn of a tool loop.
+
+        Gemini 3+ requires the thought signature that came with a function call
+        to be sent back with it. A replayed call without one is a 400. For a
+        stream, pass the last chunk.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        source = choice.get("message") or choice.get("delta") or {}
+        parts = source.get("gemini_parts")
+        return {"gemini_parts": list(parts)} if parts else {}
+
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """Thought summaries (with ``thinking_display="summarized"``)."""
+        try:
+            return ((response.get("choices") or [{}])[0].get("message") or {}).get("thinking")
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        try:
+            return ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("thinking")
+        except (AttributeError, IndexError, TypeError):
+            return None
 
     # ------------------------------------------------------------------
     # Tool Call Extraction (Public API)
@@ -1493,9 +1835,7 @@ class GeminiProvider(BaseProvider):
     # timeout and cancellation policy — this adapter only reports state.
 
     #: Capabilities available on BOTH the Gemini Developer API and Vertex AI.
-    _MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        {"image_generate", "tts", "video_generate"}
-    )
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"image_generate", "tts"})
 
     #: Capabilities that exist ONLY on Vertex AI. Verified live: the Developer
     #: API rejects ``models.generate_images`` / ``edit_image`` / ``upscale_image``
@@ -1503,15 +1843,18 @@ class GeminiProvider(BaseProvider):
     #: mode". Declaring them unconditionally would make the router call an
     #: endpoint that always errors for Developer-API users.
     _VERTEX_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        {"image_edit", "image_upscale"}
+        # Veo is Vertex-only too: the Developer API shut its Veo previews down
+        # on 2026-10-22 (models 404), and google-genai 3.x refuses
+        # generate_videos outside Vertex before sending anything.
+        {"image_edit", "image_upscale", "video_generate"}
     )
 
     #: Default models per media capability, overridable per call and via config.
     _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
-    _DEFAULT_DEV_IMAGE_MODEL = "gemini-2.5-flash-image"     # Developer API
-    _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-preview"
-    _DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
-    _DEFAULT_EMBED_MODEL = "gemini-embedding-001"
+    _DEFAULT_DEV_IMAGE_MODEL = "gemini-nano-banana-2.1"     # Developer API (GA)
+    _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-001"           # Vertex only
+    _DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+    _DEFAULT_EMBED_MODEL = "gemini-embedding-2"
 
     def media_capabilities(self) -> "frozenset[MediaCapability]":
         """Capabilities Gemini can serve in the CURRENT auth mode.
@@ -2120,7 +2463,7 @@ class GeminiProvider(BaseProvider):
 
         Args:
             input_texts: A string or list of strings to embed.
-            model: Embedding model; defaults to ``gemini-embedding-001``.
+            model: Embedding model; defaults to ``gemini-embedding-2``.
             dimensions: Output dimensionality, where the model supports it.
             task_type: Google's retrieval task hint (e.g.
                 ``RETRIEVAL_DOCUMENT``), which materially changes the vectors.
@@ -2139,10 +2482,15 @@ class GeminiProvider(BaseProvider):
         if task_type is not None:
             config_kwargs["task_type"] = task_type
 
+        texts = [input_texts] if isinstance(input_texts, str) else list(input_texts)
+        # One Content per text. gemini-embedding-2 is multimodal and reads a
+        # plain list of strings as the parts of ONE input, returning a single
+        # aggregated vector for N texts (measured live 2026-11-16).
+        contents = [genai_types.Content(parts=[genai_types.Part(text=t)]) for t in texts]
         try:
             response = await self._client.aio.models.embed_content(
                 model=embed_model,
-                contents=input_texts,
+                contents=contents,
                 config=genai_types.EmbedContentConfig(**config_kwargs)
                 if config_kwargs
                 else None,

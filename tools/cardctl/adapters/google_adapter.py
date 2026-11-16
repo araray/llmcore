@@ -2,7 +2,7 @@
 """Google Gemini model discovery adapter.
 
 Uses the REST API directly (no SDK dependency):
-``GET https://generativelanguage.googleapis.com/v1beta/models?key={key}``
+``GET https://generativelanguage.googleapis.com/v1beta/models`` (key in ``x-goog-api-key``)
 
 Returns rich metadata including context lengths and supported generation
 methods.
@@ -37,12 +37,15 @@ class GoogleAdapter(BaseAdapter):
         self.check_api_key()
         api_key = self.get_api_key()
 
-        url = f"{self.base_url}?key={api_key}&pageSize=200"
+        # The key goes in a header, not the URL: query strings end up in
+        # proxy and server logs.
+        headers = {"x-goog-api-key": api_key}
+        url = f"{self.base_url}?pageSize=200"
         result: list[NormalizedModel] = []
 
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             while url:
-                resp = await client.get(url)
+                resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -54,7 +57,7 @@ class GoogleAdapter(BaseAdapter):
                 # Pagination
                 next_token = data.get("nextPageToken")
                 if next_token:
-                    url = f"{self.base_url}?key={api_key}&pageSize=200&pageToken={next_token}"
+                    url = f"{self.base_url}?pageSize=200&pageToken={next_token}"
                 else:
                     url = None
 

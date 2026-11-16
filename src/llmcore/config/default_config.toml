@@ -919,12 +919,22 @@ max_retries = 2
   # api_key = "..."
 
   # Default model for this provider instance.
-  # Current models (April 2026):
-  #   3.x (preview):  gemini-3.1-pro-preview, gemini-3-flash-preview,
-  #                   gemini-3.1-flash-lite-preview
-  #   2.5 (stable):   gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
-  #   2.0 (deprecated, shutdown June 2026): gemini-2.0-flash, gemini-2.0-flash-lite
-  default_model = "gemini-3.1-flash-lite-preview"
+  # Current models (Developer API, 2026-11-16):
+  #   Gemini 4:   gemini-4-carbon, gemini-4-argon, gemini-4-hydrogen
+  #   3.x GA:     gemini-3.8-flash, gemini-3.6-flash, gemini-3.5-flash-lite,
+  #               gemini-3.1-flash-lite (3.7-flash / 3.5-flash route to newer)
+  #   2.5:        deprecated; auto-routed to 3.x on 2026-12-01
+  default_model = "gemini-3.5-flash-lite"
+
+  # API version for the Developer API. google-genai 3.x defaults to v1, which
+  # lacks TTS, explicit caching, the Live API and the -latest aliases.
+  # api_version = "v1beta"
+
+  # effort= maps to thinking_config (thinking_level on Gemini 3+; Gemini 4 and
+  # 3.8 have no "minimal"); thinking_display = "summarized" returns thought
+  # summaries. Tool loops: put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata - Gemini 3+ rejects a replayed
+  # function call without its thought signature.
   timeout = 120
 
   # Fallback context length when model is not in the card registry or API.
@@ -934,11 +944,12 @@ max_retries = 2
   # --- Media models (image / video / speech / embeddings) ---
   # Gemini is a media provider through `llm.media` as well as a chat provider.
   # Per-capability model overrides (all optional):
-  # default_image_model = "gemini-2.5-flash-image"   # Developer API image path
+  # default_image_model = "gemini-nano-banana-2.1"   # Developer API image path
   #                       "imagen-4.0-generate-001"  # Vertex AI (Imagen)
-  # default_video_model = "veo-3.1-generate-preview"
-  # default_tts_model = "gemini-2.5-flash-preview-tts"
-  # default_embedding_model = "gemini-embedding-001"
+  # default_video_model = "veo-3.1-generate-001"     # Vertex AI only: the
+  #                       Developer API's Veo previews shut down 2026-10-22
+  # default_tts_model = "gemini-3.8-flash-tts"
+  # default_embedding_model = "gemini-embedding-2"
   #
   # IMPORTANT: image EDITING and UPSCALING use Imagen's dedicated endpoints,
   # which exist only on Vertex AI. With a Developer API key those capabilities

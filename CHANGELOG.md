@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Gemini: tool calling, thought signatures, SDK 3.x, retired models
+
+Audited against the live Developer API and `google-genai` 3.3 (2026-11-16).
+Tool use was unusable:
+
+- **Every call with tools raised `AttributeError`.** It used
+  `types.FunctionDeclaration.from_dict`, which google-genai has never had.
+  Declarations now use `parameters_json_schema`.
+- **Tool loops could not continue.** Assistant tool calls were never replayed
+  (so the model re-issued them), and Gemini 3+ rejects a replayed function call
+  without its thought signature ("Function call is missing a
+  thought_signature"). Signatures are now captured: per call in
+  `tool_calls[i].extra_content.google.thought_signature` (Google's own
+  convention), and the whole turn as `message["gemini_parts"]`, returned by
+  `assistant_replay_metadata()`. Turns are replayed with them. Hand-built or
+  foreign history gets Google's documented placeholder. Tool results carry the
+  call `id` and the function name (the id was used as the name).
+- **Streaming** now emits tool calls, the finish reason and usage, and the
+  final chunk carries the parts to replay. All three were dropped.
+- **google-genai 3.x** (`>=3.3,<4`): the Developer API is pinned to `v1beta`
+  (`api_version`), because the SDK's new `v1` default has no TTS ("Unknown name
+  speechConfig"), no explicit caching and no `-latest` aliases. The extra
+  declares `httpx` (3.x installs httpx2 only) and no longer requires
+  `google-api-core`, which made the provider unavailable without it.
+- **Video**: the Developer API shut its Veo previews down on 2026-10-22, and
+  SDK 3.x refuses `generate_videos` outside Vertex. `video_generate` is now
+  declared on Vertex only (`veo-3.1-generate-001`).
+- **Embeddings**: `gemini-embedding-2` returned one aggregated vector for a
+  list of texts. Each text is now its own input. The default is
+  `gemini-embedding-2`.
+- `effort=` maps to `thinking_level` (Gemini 4 and 3.8 have no `minimal`;
+  `xhigh` only on Hydrogen), and to a budget on 2.5. `thinking_display` returns
+  thought summaries. Thinking tokens count as completion tokens; they are
+  billed as output and were left out.
+- `ContextLengthError` only for the input-too-long error. Any message
+  mentioning "token" used to qualify. SDK errors carry status codes.
+- Defaults: `gemini-3.5-flash-lite` (`gemini-3.1-flash-lite-preview` is shut
+  down), TTS `gemini-3.8-flash-tts`, images `gemini-nano-banana-2.1`. The token
+  table is refreshed from the API's own limits. cardctl sends the key in a
+  header instead of the URL.
+
 ### Changed — Anthropic: SDK 2.x / API 2026-10-21, per-model rules, thinking round trip
 
 Audited against the live API and `anthropic` 2.8 (2026-11-16):

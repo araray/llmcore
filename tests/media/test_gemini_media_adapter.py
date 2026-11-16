@@ -118,11 +118,12 @@ class TestConformance:
         assert isinstance(provider, protocol)
 
     def test_declared_capabilities_developer_api(self, provider):
+        # No video on the Developer API: its Veo previews were shut down on
+        # 2026-10-22, and google-genai 3.x refuses generate_videos outside Vertex.
         assert provider.media_capabilities() == frozenset(
             {
                 MediaCapability.IMAGE_GENERATE,
                 MediaCapability.TTS,
-                MediaCapability.VIDEO_GENERATE,
             }
         )
 
@@ -168,8 +169,9 @@ class TestConformance:
         assert MediaCapability.IMAGE_UPSCALE not in caps
         # ...but the capabilities that DO work in both modes are present.
         assert MediaCapability.IMAGE_GENERATE in caps
-        assert MediaCapability.VIDEO_GENERATE in caps
         assert MediaCapability.TTS in caps
+        # Veo is Vertex-only now (Developer API previews shut down 2026-10-22).
+        assert MediaCapability.VIDEO_GENERATE not in caps
 
     def test_vertex_mode_exposes_the_full_image_surface(self, vertex_provider):
         caps = vertex_provider.media_capabilities()
@@ -252,7 +254,7 @@ class TestDualImagePath:
         assert config.response_modalities == ["IMAGE"]
         assert result.artifact.data == b"PNGBYTES"
         assert result.raw["transport"] == "generate_content"
-        assert result.model == "gemini-2.5-flash-image"
+        assert result.model == "gemini-nano-banana-2.1"
 
     async def test_developer_path_puts_the_shape_in_image_config(self, provider):
         part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
@@ -450,58 +452,58 @@ class TestVideoSubmission:
 
 
 class TestVideoJobLifecycle:
-    async def test_poll_transitions_running_to_succeeded(self, provider):
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        job = await provider.generate_video_media("x")
+    async def test_poll_transitions_running_to_succeeded(self, vertex_provider):
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        job = await vertex_provider.generate_video_media("x")
         assert job.status is MediaJobStatus.RUNNING
 
-        provider._client.aio.operations.get = AsyncMock(
+        vertex_provider._client.aio.operations.get = AsyncMock(
             return_value=_video_operation(done=True, videos=1)
         )
-        job = await provider.poll_media_job(job)
+        job = await vertex_provider.poll_media_job(job)
         assert job.succeeded
         assert job.progress == 1.0
         assert job.artifacts[0].kind is MediaKind.VIDEO
         assert job.artifacts[0].provenance.watermarked is True
 
-    async def test_poll_maps_operation_error_to_failure(self, provider):
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        job = await provider.generate_video_media("x")
-        provider._client.aio.operations.get = AsyncMock(
+    async def test_poll_maps_operation_error_to_failure(self, vertex_provider):
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        job = await vertex_provider.generate_video_media("x")
+        vertex_provider._client.aio.operations.get = AsyncMock(
             return_value=_video_operation(error=MagicMock(message="safety block"))
         )
-        job = await provider.poll_media_job(job)
+        job = await vertex_provider.poll_media_job(job)
         assert job.status is MediaJobStatus.FAILED
         assert "safety block" in (job.error or "")
 
-    async def test_poll_on_terminal_job_is_a_noop(self, provider):
-        provider._client.aio.models.generate_videos = AsyncMock(
+    async def test_poll_on_terminal_job_is_a_noop(self, vertex_provider):
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(
             return_value=_video_operation(done=True, videos=1)
         )
-        job = await provider.generate_video_media("x")
-        provider._client.aio.operations.get = AsyncMock()
-        assert (await provider.poll_media_job(job)) is job
-        provider._client.aio.operations.get.assert_not_called()
+        job = await vertex_provider.generate_video_media("x")
+        vertex_provider._client.aio.operations.get = AsyncMock()
+        assert (await vertex_provider.poll_media_job(job)) is job
+        vertex_provider._client.aio.operations.get.assert_not_called()
 
-    async def test_lost_operation_handle_fails_loudly(self, provider):
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        job = await provider.generate_video_media("x")
+    async def test_lost_operation_handle_fails_loudly(self, vertex_provider):
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        job = await vertex_provider.generate_video_media("x")
         job.provider_metadata.pop("operation")
-        job = await provider.poll_media_job(job)
+        job = await vertex_provider.poll_media_job(job)
         assert job.status is MediaJobStatus.FAILED
         assert "cannot be polled" in (job.error or "")
 
-    async def test_cancel_refuses_honestly(self, provider):
+    async def test_cancel_refuses_honestly(self, vertex_provider):
         """Veo cannot be cancelled; reporting success would imply billing stopped."""
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        job = await provider.generate_video_media("x")
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        job = await vertex_provider.generate_video_media("x")
         with pytest.raises(ProviderError, match="cannot be cancelled"):
-            await provider.cancel_media_job(job)
+            await vertex_provider.cancel_media_job(job)
 
-    async def test_full_lifecycle_through_the_job_manager(self, provider):
+    async def test_full_lifecycle_through_the_job_manager(self, vertex_provider):
         """The point of M4: drive a REAL vendor's operation shape end to end."""
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        media = MediaManager({"gemini": provider}, job_policy=FAST)
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        media = MediaManager({"gemini": vertex_provider}, job_policy=FAST)
 
         job = await media.video.generate("a drone shot over dunes", duration_seconds=8)
         assert media.jobs.get(job.id) is job  # tracked on submission
@@ -512,17 +514,17 @@ class TestVideoJobLifecycle:
             calls["n"] += 1
             return _video_operation(done=calls["n"] >= 2, videos=1)
 
-        provider._client.aio.operations.get = _get
+        vertex_provider._client.aio.operations.get = _get
         result = await media.wait(job, timeout=5)
         assert calls["n"] == 2  # polled until done
         assert result.capability is MediaCapability.VIDEO_GENERATE
         assert result.artifacts[0].mime_type == "video/mp4"
 
-    async def test_failed_job_raises_through_the_manager(self, provider):
-        provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
-        media = MediaManager({"gemini": provider}, job_policy=FAST)
+    async def test_failed_job_raises_through_the_manager(self, vertex_provider):
+        vertex_provider._client.aio.models.generate_videos = AsyncMock(return_value=_video_operation())
+        media = MediaManager({"gemini": vertex_provider}, job_policy=FAST)
         job = await media.video.generate("x")
-        provider._client.aio.operations.get = AsyncMock(
+        vertex_provider._client.aio.operations.get = AsyncMock(
             return_value=_video_operation(error=MagicMock(message="blocked"))
         )
         with pytest.raises(MediaJobError, match="blocked"):
@@ -560,10 +562,13 @@ class TestEmbeddings:
 
 
 class TestRouting:
-    def test_gemini_is_the_default_video_route(self, provider):
-        media = MediaManager({"gemini": provider})
+    def test_gemini_is_the_default_video_route_on_vertex(self, vertex_provider):
+        media = MediaManager({"gemini": vertex_provider})
         assert media.who_can(MediaCapability.VIDEO_GENERATE) == ["gemini"]
-        assert media.resolve(MediaCapability.VIDEO_GENERATE) is provider
+        assert media.resolve(MediaCapability.VIDEO_GENERATE) is vertex_provider
+
+    def test_developer_api_does_not_offer_video(self, provider):
+        assert MediaManager({"gemini": provider}).who_can(MediaCapability.VIDEO_GENERATE) == []
 
     def test_gemini_does_not_claim_asr(self, provider):
         media = MediaManager({"gemini": provider})

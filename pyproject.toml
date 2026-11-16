@@ -65,7 +65,9 @@ dependencies = [
 # or behind a TLS-inspecting proxy.
 openai = ["openai>=3.38,<4"]
 anthropic = ["anthropic>=2.8,<3"]
-gemini = ["google-genai>=2,<3", "google-api-core>=2.30.0"]
+# google-genai 3.x installs httpx2 only; the direct transport needs httpx.
+# google-api-core is no longer needed (google-genai raises its own errors).
+gemini = ["google-genai>=3.3,<4", "httpx>=0.27.0"]
 ollama = ["ollama>=0.6.3"]
 # DeepInfra reuses the OpenAI SDK (OpenAI-compatible API) plus httpx for the
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
