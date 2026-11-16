@@ -15,7 +15,6 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
 from typing import Any
@@ -61,7 +60,6 @@ except ImportError:
 from llmcore.exceptions import ConfigError, ProviderError
 from llmcore.models import Message, Role, Tool
 from llmcore.models_multimodal import (
-    ImageGenerationResult,
     SpeechResult,
     TranscriptionResult,
 )
@@ -369,7 +367,7 @@ class TestChatCompletion:
             )
         ]
         context = [Message(role=Role.USER, content="What's the weather?")]
-        result = await provider.chat_completion(
+        await provider.chat_completion(
             context, tools=tools, tool_choice="auto"
         )
 
@@ -655,7 +653,8 @@ class TestTTS:
         provider._client.text_to_speech = AsyncMock(return_value=b"\x00")
 
         result = await provider.generate_speech("Hi")
-        assert result.model == "facebook/mms-tts-eng"
+        # facebook/mms-tts-eng has no inference provider any more.
+        assert result.model == "hexgrad/Kokoro-82M"
 
 
 # ---------------------------------------------------------------------------
@@ -739,13 +738,16 @@ class TestEmbeddings:
         provider = _make_provider()
         import numpy as np
         provider._client.feature_extraction = AsyncMock(
-            return_value=np.array([0.1, 0.2])
+            return_value=np.array([[0.1, 0.2], [0.3, 0.4]])
         )
 
-        result = await provider.create_embeddings(["Hello", "World"])
+        result = await provider.create_embeddings(["Hello", "World"], dimensions=2)
 
-        assert len(result["data"]) == 2
-        assert result["data"][0]["index"] == 0
+        # One request for the batch (it used to be one per text).
+        provider._client.feature_extraction.assert_awaited_once()
+        assert provider._client.feature_extraction.await_args.kwargs["text"] == ["Hello", "World"]
+        assert provider._client.feature_extraction.await_args.kwargs["dimensions"] == 2
+        assert [d["embedding"] for d in result["data"]] == [[0.1, 0.2], [0.3, 0.4]]
         assert result["data"][1]["index"] == 1
 
 
@@ -831,7 +833,7 @@ class TestHuggingFaceCardctlAdapter:
                 str(__import__("pathlib").Path(repo_root) / "tools" / "cardctl" / "adapters")
             ],
         )
-        mod = importlib.util.module_from_spec(spec)
+        importlib.util.module_from_spec(spec)
         # Need base adapter available
         base_spec = importlib.util.spec_from_file_location(
             "tools.cardctl.adapters.base",
@@ -841,7 +843,6 @@ class TestHuggingFaceCardctlAdapter:
         sys.modules["tools.cardctl.adapters.base"] = base_mod
         base_spec.loader.exec_module(base_mod)
         # Now check the registry dict directly from file content
-        import ast
         init_path = __import__("pathlib").Path(repo_root) / "tools" / "cardctl" / "adapters" / "__init__.py"
         source = init_path.read_text()
         assert '"huggingface"' in source or "'huggingface'" in source

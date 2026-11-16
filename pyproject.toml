@@ -90,7 +90,8 @@ openrouter = ["openai>=3.38,<4", "httpx>=0.27.0", "openrouter>=1.3,<2"]
 # client dependency.
 vllm = ["openai>=3.38,<4", "httpx>=0.27.0"]
 # Hugging Face Inference API / Inference Providers routing.
-huggingface = ["huggingface-hub>=1.12.0"]
+# huggingface-hub 2.x moved to httpx2; 2.4 adds the router policies.
+huggingface = ["huggingface-hub>=2.4,<3"]
 # Deepgram is a real-time voice/audio provider.  The official deepgram-sdk is
 # WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
 # and the Voice Agent.  Install with: pip install llmcore[deepgram]

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Hugging Face: router catalogue, reasoning replay, broken config section, hub 2.4
+
+Audited against the live router and huggingface_hub 2.4 on 2026-11-16.
+Verified live through llmcore: discovery and context, effort, tool loops
+with replay (plain and streamed), and batched embeddings.
+
+- **The packaged config section was broken.** Its scalar keys followed the
+  `[providers.huggingface.endpoints]` subtable, so TOML put
+  `api_key_env_var`, `default_model` and `timeout` inside `endpoints`. They
+  never applied, and the provider saw three bogus "dedicated endpoints". The
+  keys now come first.
+- **Discovery** reads the router's own `/v1/models`: the 132 chat models
+  actually served, with each live provider's context window, tools and
+  pricing. Model cards cover the rest. Context follows the route: the
+  smallest live provider's window, or the pinned one's. Llama-3.3-70B is
+  12,288 on one of its providers; the table said 131,072.
+- **Tool loops**: first-class `Message.tool_calls` were ignored (only the
+  legacy metadata channel was read). Reasoning (`message.reasoning`) is
+  extracted, streamed, and replayed as `reasoning`. The router rejects
+  `reasoning_content` on its default route (400), so that spelling is
+  avoided.
+- **Parameters**: `effort` / `reasoning_effort`, `top_k` (advertised but
+  silently dropped), `min_p`, `repetition_penalty` and
+  `chat_template_kwargs` travel in `extra_body`. `logprobs`, `n`,
+  `tool_prompt` and `stream_options` are forwarded. Streams request usage.
+- **Media and embeddings**: the legacy `generate_speech` default
+  `facebook/mms-tts-eng` has no inference provider any more; the served media
+  defaults are used instead. Every SDK failure is wrapped as `ProviderError`
+  (hub 2.x raises httpx2 errors, and even `StopIteration` for an unserved
+  model). Embeddings go out as one batched request with `dimensions`; they
+  used to be one request per text.
+- Default `openai/gpt-oss-120b` (7 live providers, tools, reasoning).
+  `huggingface-hub>=2.4,<3`. The Orpheus TTS cards no longer claim their
+  backbone's 131,072-token window, and cardctl no longer reads a window from
+  a TTS/STT/image model's config.
+
 ### Fixed — vLLM: guided decoding silently ignored, discovery behind tunnels, newer parameters
 
 Audited against the vLLM source (v0.34.0rc0, `c02ebf136e`). No live server

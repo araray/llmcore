@@ -1221,6 +1221,47 @@ max_retries = 2
 
 
   [providers.huggingface]
+  # type = "huggingface"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: HF_TOKEN  (also accepts HUGGING_FACE_HUB_TOKEN)
+  # api_key = "hf_..."
+  #
+  # NOTE: scalar keys must come before the [providers.huggingface.*] subtables
+  # below. They used to follow them, so TOML put api_key_env_var,
+  # default_model and timeout inside `endpoints` and they never applied.
+  api_key_env_var = "HF_TOKEN"
+
+  # Default chat model on the router. get_models_details() lists the 132 chat
+  # models actually served (router /v1/models, 2026-11-16), each with its
+  # providers' context window, tools and pricing. Examples:
+  #   openai/gpt-oss-120b            (7 providers, tools, reasoning)
+  #   Qwen/Qwen3.8-27B               (text + image, 262K-1M context)
+  #   deepseek-ai/DeepSeek-V4.1-Flash, moonshotai/Kimi-K3.1-Pro, zai-org/GLM-5.3
+  # Append :fastest, :cheapest, :preferred or :<provider> to pick the route.
+  # Context windows follow the route: the smallest live provider's window
+  # unless one is pinned (Llama-3.3-70B is served at 12K by one provider).
+  default_model = "openai/gpt-oss-120b"
+
+  # Request timeout in seconds (some models can be slow to warm up).
+  timeout = 120
+
+  # --- Routing provider ---
+  # Unset ("auto") lets the router choose. Or pin one of the providers
+  # serving chat today: deepinfra, featherless-ai, novita, zai-org, cohere,
+  # baseten, publicai, ovhcloud, nscale, groq, cerebras, hf-inference.
+  # (sambanova, nebius, hyperbolic, clarifai and nvidia left the router.)
+  # provider = "cerebras"
+
+  # --- Reasoning and parameters ---
+  # effort= / reasoning_effort, top_k, min_p, repetition_penalty and
+  # chat_template_kwargs travel in extra_body. Reasoning comes back as
+  # `reasoning`; for tool loops put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata.
+
+  # --- Billing ---
+  # bill_to: HF organization namespace to bill usage to.
+  # bill_to = "my-org"
 
   # --- Media subsystem (spec phase M8) ---
   # Transport for media calls:
@@ -1248,58 +1289,6 @@ max_retries = 2
   # no model id in the path, and that capability switches to direct HTTP.
   [providers.huggingface.endpoints]
   # asr = "https://xxxxx.us-east-1.aws.endpoints.huggingface.cloud"
-
-  # type = "huggingface"  # auto-detected from section name
-  #
-  # API Key: Set via environment variable for security.
-  # Environment Variable: HF_TOKEN  (also accepts HUGGING_FACE_HUB_TOKEN)
-  # api_key = "hf_..."
-  api_key_env_var = "HF_TOKEN"
-
-  # Default model — any model hosted on the Hugging Face Hub.
-  # The Inference API supports thousands of models.  Popular choices:
-  #
-  #   Chat/Instruct:
-  #     meta-llama/Llama-3.3-70B-Instruct    (128K context)
-  #     meta-llama/Llama-3.1-8B-Instruct     (128K context)
-  #     Qwen/Qwen2.5-72B-Instruct            (128K context)
-  #     mistralai/Mistral-Small-24B-Instruct-2501  (32K context)
-  #     deepseek-ai/DeepSeek-V3-0324          (128K context)
-  #
-  #   Vision (multimodal):
-  #     meta-llama/Llama-3.2-11B-Vision-Instruct
-  #     Qwen/Qwen2-VL-7B-Instruct
-  #
-  #   Code:
-  #     Qwen/Qwen2.5-Coder-32B-Instruct
-  #     bigcode/starcoder2-15b
-  #
-  #   Embeddings:
-  #     sentence-transformers/all-MiniLM-L6-v2
-  #     BAAI/bge-large-en-v1.5
-  #
-  #   TTS:    facebook/mms-tts-eng, OuteAI/OuteTTS-0.3-500M
-  #   ASR:    openai/whisper-large-v3-turbo
-  #   Image:  black-forest-labs/FLUX.1-dev, stabilityai/stable-diffusion-xl-base-1.0
-  default_model = "meta-llama/Llama-3.3-70B-Instruct"
-
-  # Request timeout in seconds (some models can be slow to warm up).
-  timeout = 120
-
-  # --- HF Routing Provider ---
-  # By default, requests go to HF's own Inference API.
-  # Set to route through a third-party provider:
-  #   "hf-inference"  — HF Inference API (default)
-  #   "together"      — Together AI (billed to your HF account)
-  #   "sambanova"     — SambaNova
-  #   "replicate"     — Replicate
-  #   "fireworks-ai"  — Fireworks AI
-  #   "cerebras"      — Cerebras
-  # provider = "hf-inference"
-
-  # --- Billing ---
-  # bill_to: HF organization namespace to bill usage to.
-  # bill_to = "my-org"
 
   # --- Kimi (Moonshot AI) Provider ---
   # Native provider for the Kimi Open Platform (Moonshot AI).  Uses the
