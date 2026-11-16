@@ -21,10 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--enable-auto-tool-choice --tool-call-parser <name>`. Without them vLLM
   answers 400 even for `required` and named tool choices. Its message
   states the flags, and llmcore passes it through as a `ProviderError`.
-  Restarting the server with those flags through `colab exec` failed twice
-  (the exec channel dropped), so the tool path was not exercised on vLLM; it
-  is the shared OpenAI-compatible path verified live with several other
-  vendors.
+  A second session started with `--tool-call-parser hermes` verified the
+  following on both transports:
+  - `auto`, `required` and named tool choices each return
+    `get_weather({"city": "Lisbon"})`;
+  - the follow-up turn with the tool result answers from it ("22°C");
+  - a streamed `required` call arrives as tool-call deltas (9 across 11
+    chunks).
 
 ### Fixed — Gemini on Vertex, verified live (project `araray-org`)
 
