@@ -260,6 +260,27 @@ class TestConfig:
         assert CommandCodeProvider({"api_key": KEY}).zdr is True
         assert CommandCodeProvider({"api_key": KEY, "zdr": False}).zdr is False
 
+    def test_packaged_defaults_leave_cmd_zdr_in_charge(self, monkeypatch):
+        """Regression (PR #59 review): the packaged section once set `zdr = false`.
+
+        Package defaults are merged into the provider config before it is
+        built, and the provider reads CMD_ZDR only when no `zdr` key is
+        present, so that line silently disabled the documented env switch.
+        Building from the shipped section is the only way to catch it.
+        """
+        import tomllib
+        from pathlib import Path
+
+        import llmcore
+
+        default_config = Path(llmcore.__file__).parent / "config" / "default_config.toml"
+        section = dict(tomllib.loads(default_config.read_text())["providers"]["commandcode"])
+        assert "zdr" not in section
+        monkeypatch.setenv("CMD_ZDR", "1")
+        assert CommandCodeProvider({**section, "api_key": KEY}).zdr is True
+        monkeypatch.delenv("CMD_ZDR")
+        assert CommandCodeProvider({**section, "api_key": KEY}).zdr is False
+
     def test_lanes_report_the_outer_instance_name(self):
         p = CommandCodeProvider({"api_key": KEY, "_instance_name": "cc-work"})
         for route in ("chat", "responses", "messages", "system_one"):

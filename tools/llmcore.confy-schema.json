@@ -2504,8 +2504,7 @@
           "title": "Zero Data Retention",
           "type": "boolean",
           "required": false,
-          "description": "Send x-cmd-zdr: 1 on every request so only zero-data-retention upstreams serve it; a model without one fails with 422 cmd_zdr_no_providers. CMD_ZDR=1 also enables it; per call: zdr=True.",
-          "default": false
+          "description": "Send x-cmd-zdr: 1 on every request so only zero-data-retention upstreams serve it; a model without one fails with 422 cmd_zdr_no_providers. Leave unset to let the CMD_ZDR=1 environment variable decide: an explicit false overrides it. Per call: zdr=True."
         },
         {
           "key": "providers.commandcode.responses_api",

@@ -46,7 +46,8 @@ both.
 # api_key_env_var = "CMD_API_KEY"
 default_model = "claude-sonnet-5-5"
 transport = "httpx"          # direct HTTP (default) | "sdk": the OpenAI / Anthropic SDKs
-zdr = false                  # zero data retention on every request (or env CMD_ZDR=1)
+# zdr = true                 # zero data retention on every request (or env CMD_ZDR=1;
+                             # setting zdr = false here would override that variable)
 responses_api = "openai"     # GPT -> /responses | "all" | "never"
 catalog_ttl = 3600           # seconds the live /models catalog is trusted
 timeout = 120

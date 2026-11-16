@@ -715,7 +715,7 @@ higher. Guide: [CommandCode_provider_usage.md](CommandCode_provider_usage.md).
 | `providers.commandcode.base_url` | url |  | `https://api.commandcode.ai/provider` | Gateway root (`CMD_BASE_URL` when unset); the `.../provider/v1` form is accepted |
 | `providers.commandcode.default_model` | string |  | `claude-sonnet-5-5` | Model id or short name (`kimi-k3` → `moonshotai/Kimi-K3`) |
 | `providers.commandcode.transport` | enum |  | `httpx` | `httpx` (direct) or `sdk` (official OpenAI / Anthropic SDKs) |
-| `providers.commandcode.zdr` | boolean |  | `false` | Send `x-cmd-zdr: 1` on every request (`CMD_ZDR=1`; per call `zdr=True`) |
+| `providers.commandcode.zdr` | boolean |  | *(unset)* | Send `x-cmd-zdr: 1` on every request. When unset, `CMD_ZDR=1` decides; an explicit `false` overrides it. Per call: `zdr=True` |
 | `providers.commandcode.responses_api` | enum |  | `openai` | Models on both routes: `openai` (GPT → `/responses`), `all`, or `never`; per call `responses=` |
 | `providers.commandcode.catalog_ttl` | integer |  | `3600` | Seconds the live `/models` catalog is trusted |
 | `providers.commandcode.timeout` | integer |  | `120` | Request timeout in seconds |

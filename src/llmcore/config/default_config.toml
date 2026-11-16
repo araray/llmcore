@@ -1580,9 +1580,11 @@ max_retries = 2
 
   # --- Zero data retention ---
   # true sends x-cmd-zdr: 1 on every request, so only zero-data-retention
-  # upstreams serve it (422 cmd_zdr_no_providers otherwise). Env CMD_ZDR=1 also
-  # turns it on; per call: llm.chat(..., zdr=True).
-  zdr = false
+  # upstreams serve it (422 cmd_zdr_no_providers otherwise); per call:
+  # llm.chat(..., zdr=True). Left unset here on purpose: CMD_ZDR=1 is read only
+  # when this key is absent, so an explicit `zdr = false` would silently
+  # override it. Off unless one of them turns it on.
+  # zdr = true
 
   # --- OpenAI Responses API ---
   # For models served on both /responses and /chat/completions:
